@@ -3,6 +3,7 @@ import type { AutomationRun } from '../../../shared/automations-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AppState } from '@/store/types'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 export type ReusableAutomationSession = {
   tabId: string
@@ -76,7 +77,7 @@ function findReusableExactRunPane({
 }
 
 function isReusableAgentStatus(entry: AgentStatusEntry, agentId: TuiAgent): boolean {
-  if (entry.state !== 'done') {
+  if (!isAgentStatusTurnComplete(entry)) {
     return false
   }
   return !entry.agentType || entry.agentType === 'unknown' || entry.agentType === agentId

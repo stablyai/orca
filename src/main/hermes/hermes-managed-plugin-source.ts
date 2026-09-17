@@ -133,6 +133,10 @@ def _post_to_orca(payload: dict[str, Any]) -> None:
         "version": env.get("ORCA_AGENT_HOOK_VERSION", ""),
         "payload": payload,
     }
+    if env.get("ORCA_AGENT_STATUS_RUN_ID"):
+        body["runId"] = env["ORCA_AGENT_STATUS_RUN_ID"]
+    if env.get("ORCA_AGENT_STATUS_EXECUTION_ID"):
+        body["executionId"] = env["ORCA_AGENT_STATUS_EXECUTION_ID"]
     data = json.dumps(body, separators=(",", ":")).encode("utf-8")
     request = urllib.request.Request(
         f"http://127.0.0.1:{port}/hook/hermes",

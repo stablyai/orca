@@ -105,10 +105,18 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
             })
           : 'suppress'
         if (normalized.event && statusDisposition !== 'suppress') {
-          const event =
+          const statusEvent =
             statusDisposition === 'restart'
               ? { ...normalized.event, launchToken: undefined }
               : normalized.event
+          const emitterProcess = await this.emitterProcessResolver(
+            source,
+            statusEvent.reportedEmitterProcessId
+          )
+          const event = {
+            ...statusEvent,
+            ...(emitterProcess ? { emitterProcess } : {})
+          }
           if (statusDisposition === 'restart') {
             // Why: a retired pane accepting a new turn is a different agent session behind the
             // same key — later observations must not be ordered against the retired one.

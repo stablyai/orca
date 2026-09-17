@@ -35,6 +35,10 @@ export class RelayAgentHookRuntime {
       // surface, so it — not the client — decides whether a hook post describes a live pane.
       isPaneSurfaceRetired: (paneKey) => ptyHandler.isPaneSurfaceRetired(paneKey)
     })
+    ptyHandler.setAgentDiscoveryProviderIdentityResolver(
+      (paneKey) => this.hookServer.getVerifiedAgentDiscoveryProviderIdentityForPane(paneKey),
+      (paneKey) => this.hookServer.clearPaneState(paneKey)
+    )
   }
 
   async start(): Promise<void> {

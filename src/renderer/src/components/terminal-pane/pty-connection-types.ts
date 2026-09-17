@@ -18,6 +18,7 @@ import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
+import type { AgentSessionExecutionClaim } from '../../../../shared/agent-session-host-authority'
 
 export type PtyPaneStartup = {
   command: string
@@ -31,6 +32,8 @@ export type PtyPaneStartup = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  /** Host-owned fresh-launch reservation forwarded to pty:spawn. */
+  agentSessionClaim?: AgentSessionExecutionClaim
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
   agentArgsOverride?: string | null
   draftPrompt?: string

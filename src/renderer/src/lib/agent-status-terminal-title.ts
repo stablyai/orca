@@ -4,11 +4,15 @@ import {
   getSyntheticAgentTerminalTitle,
   getSyntheticAgentTitleProfile
 } from '../../../shared/synthetic-agent-title'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 export function resolveAgentStatusTerminalTitle(
-  payload: Pick<ParsedAgentStatusPayload, 'agentType' | 'state'>,
+  payload: Pick<ParsedAgentStatusPayload, 'agentType' | 'state' | 'sessionBoundary'>,
   currentTitle: string | undefined
 ): string | undefined {
+  if (payload.state === 'done' && !isAgentStatusTurnComplete(payload)) {
+    return currentTitle
+  }
   const syntheticTitle = getSyntheticAgentTerminalTitle(payload.agentType, payload.state)
   if (!syntheticTitle) {
     return currentTitle
@@ -20,7 +24,7 @@ export function resolveAgentStatusTerminalTitle(
 }
 
 function shouldReplaceCurrentTitle(
-  payload: Pick<ParsedAgentStatusPayload, 'agentType' | 'state'>,
+  payload: Pick<ParsedAgentStatusPayload, 'agentType' | 'state' | 'sessionBoundary'>,
   currentTitle: string | undefined
 ): boolean {
   if (!currentTitle?.trim()) {
@@ -30,7 +34,7 @@ function shouldReplaceCurrentTitle(
   if (currentStatus === 'working') {
     return true
   }
-  if (payload.state === 'done' && currentStatus === 'permission') {
+  if (isAgentStatusTurnComplete(payload) && currentStatus === 'permission') {
     return true
   }
   const profile = getSyntheticAgentTitleProfile(payload.agentType)

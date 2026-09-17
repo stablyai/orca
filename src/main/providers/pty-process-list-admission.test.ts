@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createEphemeralAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
+import type { VerifiedAgentDiscovery } from '../../shared/agent-status-verified-discovery'
 import {
   MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES,
   MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES,
@@ -27,6 +29,72 @@ describe('PtyProcessListAdmission', () => {
     })
     expect(admitted.foregroundProcessEvidence).toEqual(evidence)
     expect(admitted.foregroundProcessEvidence).not.toBe(evidence)
+  })
+
+  it('preserves and clones only a host-verified discovery contract', () => {
+    const signer = createEphemeralAgentSessionClaimSigner('pty-list-admission-test')
+    const verified: VerifiedAgentDiscovery = {
+      claim: signer.createFreshClaim({
+        namespace: {
+          machine: 'native:darwin',
+          principal: 'uid:1',
+          container: 'native',
+          providerRoot: 'profile-default:codex'
+        },
+        agent: 'codex',
+        launchIdentity: 'manual-1',
+        canonicalWorktreeId: 'repo::/tmp/worktree'
+      }),
+      surface: {
+        worktreeId: 'repo::/tmp/worktree',
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        terminalHandle: `term_${'a'.repeat(32)}`
+      },
+      evidence: {
+        verdict: 'live',
+        processName: 'codex',
+        authorityGeneration: 'host-generation-1',
+        observationEpoch: 1,
+        capturedAgeMs: 0,
+        ptyId: 'pty-1',
+        ptyIncarnationId: '22222222-2222-4222-8222-222222222222',
+        fence: {
+          platform: 'posix',
+          shellPid: 100,
+          shellStartTime: 'shell-start-1',
+          tty: '/dev/ttys001',
+          foregroundPgid: 200,
+          process: { pid: 200, startTime: 'agent-start-1' }
+        }
+      },
+      providerIdentity: {
+        agent: 'codex',
+        source: 'provider-session',
+        session: { key: 'session_id', id: 'codex-session-1' },
+        observation: {
+          authorityId: 'hooks-1',
+          incarnation: 1,
+          revision: 1,
+          process: { pid: 200, startTime: 'agent-start' }
+        }
+      },
+      ancestry: {
+        parent: { pid: 100, startTime: 'shell-start-1' },
+        chain: [{ pid: 100, startTime: 'shell-start-1' }],
+        relation: 'direct-child'
+      },
+      process: { pid: 200, startTime: 'agent-start-1', parentPid: 100 }
+    }
+    const admitted = new PtyProcessListAdmission().admit({
+      id: 'pty-1',
+      cwd: '/repo',
+      title: 'shell',
+      verifiedAgentDiscovery: verified
+    })
+    expect(admitted.verifiedAgentDiscovery).toEqual(verified)
+    expect(admitted.verifiedAgentDiscovery).not.toBe(verified)
+    expect(admitted.verifiedAgentDiscovery?.evidence).not.toBe(verified.evidence)
   })
 
   it('rejects malformed foreground evidence instead of stripping it', () => {

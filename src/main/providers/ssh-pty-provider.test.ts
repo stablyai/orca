@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION } from '../../shared/agent-session-host-authority'
+import { createEphemeralAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import {
   createMockMux,
   expectRequest,
@@ -290,6 +291,43 @@ describe('SshPtyProvider', () => {
 
     await expect(provider.supportsForegroundProcessEvidence()).resolves.toBe(true)
     expectRequest(mux.request, 'pty.getCapabilities', undefined, { timeoutMs: 5_000 })
+  })
+
+  it('requests a host-issued claim for a fresh remote launch', async () => {
+    const signer = createEphemeralAgentSessionClaimSigner('relay-test')
+    const expected = signer.createFreshClaim({
+      namespace: {
+        machine: 'relay:linux:x64',
+        principal: 'uid:1',
+        container: 'native',
+        providerRoot: 'profile-default:codex'
+      },
+      agent: 'codex',
+      launchIdentity: 'launch-remote-1',
+      canonicalWorktreeId: 'remote-worktree'
+    })
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.getCapabilities') {
+        return { agentSessionFreshClaimVersion: 1 }
+      }
+      if (method === 'pty.issueAgentSessionClaim') {
+        return expected
+      }
+      return undefined
+    })
+
+    await expect(
+      provider.createFreshAgentSessionClaim({
+        worktreeId: 'remote-worktree',
+        agent: 'codex',
+        launchIdentity: 'launch-remote-1'
+      })
+    ).resolves.toEqual(expected)
+    expectRequest(mux.request, 'pty.issueAgentSessionClaim', {
+      worktreeId: 'remote-worktree',
+      agent: 'codex',
+      launchIdentity: 'launch-remote-1'
+    })
   })
 
   it('serializes scoped app ids using raw relay ids', async () => {

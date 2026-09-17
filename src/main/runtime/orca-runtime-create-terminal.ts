@@ -4,6 +4,7 @@ import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
+import { finalizeBackgroundTerminalCreate } from './orca-runtime-finalize-background-terminal'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -73,6 +74,18 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         const launchToken = launchOpts.launchConfig
           ? (launchOpts.launchToken ?? dependencies.randomUUID())
           : undefined
+        const freshAgentSessionClaim =
+          !launchOpts.agentSessionClaim &&
+          !launchOpts.resumeProviderSession &&
+          launchToken &&
+          launchOpts.launchAgent
+            ? await this.createFreshAgentSessionClaim({
+                worktreeId: workspace.id,
+                connectionId: workspace.connectionId,
+                agent: launchOpts.launchAgent,
+                launchIdentity: launchToken
+              })
+            : null
         const baseEnv = {
           ...launchOpts.env,
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
@@ -148,10 +161,10 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             leafId,
             ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
             ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
-            ...(launchOpts.agentSessionClaim
+            ...((launchOpts.agentSessionClaim ?? freshAgentSessionClaim)
               ? {
                   agentSessionEnsure: {
-                    claim: launchOpts.agentSessionClaim,
+                    claim: launchOpts.agentSessionClaim ?? freshAgentSessionClaim,
                     surface: {
                       worktreeId: workspace.id,
                       tabId,
@@ -176,123 +189,21 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         } finally {
           releaseStablePaneCreate?.()
         }
-        if (!result.stablePaneOwner) {
-          reportPtySpawnCommitted()
-        }
-        const adoptedStablePane = Boolean(result.stablePaneOwner)
-        if (result.agentSessionEnsure) {
-          const canonicalSurface = result.agentSessionEnsure.owner.surface
-          preAllocatedHandle = canonicalSurface.terminalHandle
-          tabId = canonicalSurface.tabId
-          leafId = canonicalSurface.leafId
-          paneKey = dependencies.makePaneKey(tabId, leafId)
-        } else if (result.stablePaneOwner) {
-          preAllocatedHandle = result.stablePaneOwner.handle
-          tabId = result.stablePaneOwner.tabId
-          leafId = result.stablePaneOwner.leafId
-          paneKey = dependencies.makePaneKey(tabId, leafId)
-        }
-        try {
-          this.assertPtyDidNotExitBeforeRegistration(result.id, result.incarnationId)
-        } catch (error) {
-          if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
-            this.releaseRejectedPtyRegistrationFence(result.id, result.incarnationId)
-          }
-          throw error
-        }
-        this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-        if (result.wslDistro) {
-          this.preparePtyExecutionContext(result.id, result.wslDistro)
-        }
-        this.registerPty(result.id, workspace.id, workspace.connectionId, {
+        return finalizeBackgroundTerminalCreate(this, {
+          result,
+          workspace,
+          launchOpts,
+          presentation,
+          cwd,
+          preAllocatedHandle,
           tabId,
           leafId,
-          terminalHandle: preAllocatedHandle,
-          ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
-        })
-        if (launchOpts.structuredAgentSessionId) {
-          dependencies.agentSessionPtyWriteGate.bindPty(
-            result.id,
-            launchOpts.structuredAgentSessionId
-          )
-        }
-        const pty = this.getOrCreatePtyWorktreeRecord(result.id)
-        if (pty) {
-          pty.runtimeSessionOwned = true
-          if (!adoptedStablePane) {
-            if (launchOpts.title) {
-              const observedAt = this.nextTitleObservationSequence()
-              pty.title = launchOpts.title
-              pty.titleUpdatedAt = observedAt
-              this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
-            } else {
-              pty.title = null
-              pty.titleUpdatedAt = null
-            }
-            pty.launchConfig = effectiveLaunchConfig
-              ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)
-              : null
-            pty.launchToken = launchToken ?? null
-            pty.launchIncarnationId = launchToken ? pty.incarnationId : null
-            pty.launchAgent = launchOpts.launchAgent ?? null
-          }
-          pty.tabId = tabId
-          pty.paneKey = paneKey
-        }
-        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
-          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
-            tabId,
-            leafId,
-            title: launchOpts.title ?? null,
-            activate: presentation === 'focused',
-            selectIfNoActiveTab: presentation !== 'background',
-            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-            ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
-          })
-        }
-        let surface: dependencies.RuntimeTerminalCreate['surface'] = 'background'
-        let warning: string | undefined
-        if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
-          try {
-            await this.notifier.revealTerminalSession(workspace.id, {
-              ptyId: result.id,
-              title: launchOpts.title ?? null,
-              ...(cwd !== workspace.path ? { cwd } : {}),
-              ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
-              ...(launchToken ? { launchToken } : {}),
-              ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-              ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-              activate: presentation === 'focused',
-              ...(presentation ? { presentation } : {}),
-              ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),
-              tabId,
-              leafId
-            })
-            surface = 'visible'
-          } catch (err) {
-            console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
-            warning = dependencies.createTerminalRevealWarning(handle, err)
-          }
-        } else if (presentation !== 'background') {
-          warning = dependencies.createTerminalRevealWarning(handle)
-        }
-        return {
-          handle,
-          tabId,
           paneKey,
-          ptyId: result.id,
-          worktreeId: workspace.id,
-          title: pty?.title ?? launchOpts.title ?? null,
-          ...this.getPtyExecutionHostMetadata(result.id),
-          surface,
-          ...(result.pid ? { processId: result.pid } : {}),
-          ...(result.agentSessionEnsure
-            ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
-            : {}),
-          ...(adoptedStablePane ? { isReattach: true as const } : {}),
-          ...(warning ? { warning } : {})
-        }
+          launchToken,
+          effectiveLaunchConfig,
+          reportPtySpawnCommitted,
+          surfaceOwner: opts.surfaceOwner
+        })
       } finally {
         releaseStablePaneCreate()
       }

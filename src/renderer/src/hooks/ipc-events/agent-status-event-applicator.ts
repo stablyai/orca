@@ -240,10 +240,11 @@ export function createAgentStatusEventApplicator(args: {
         ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
       },
       metadata:
-        data.providerSession || data.launchToken
+        data.providerSession || data.launchToken || data.launchMembership
           ? {
               ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-              ...(data.launchToken ? { launchToken: data.launchToken } : {})
+              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+              ...(data.launchMembership ? { launchMembership: data.launchMembership } : {})
             }
           : undefined
     }

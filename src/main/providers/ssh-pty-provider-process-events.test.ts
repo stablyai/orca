@@ -50,6 +50,66 @@ describe('SshPtyProvider process listings and events', () => {
     }
   })
 
+  it('requests verified discovery only after the relay advertises support', async () => {
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.getCapabilities') {
+        return { verifiedAgentDiscoveryVersion: 1 }
+      }
+      if (method === 'pty.listProcesses') {
+        return []
+      }
+      return undefined
+    })
+
+    await expect(
+      provider.listProcesses({ includeVerifiedAgentDiscoveries: true })
+    ).resolves.toEqual([])
+    expect(mux.request.mock.calls).toEqual([
+      ['pty.getCapabilities', undefined, { signal: undefined, timeoutMs: 5_000 }],
+      ['pty.listProcesses', { includeVerifiedAgentDiscoveries: true }, undefined]
+    ])
+  })
+
+  it('keeps legacy relay listings unchanged when verified discovery is unsupported', async () => {
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.getCapabilities') {
+        return {}
+      }
+      if (method === 'pty.listProcesses') {
+        return []
+      }
+      return undefined
+    })
+
+    await expect(
+      provider.listProcesses({ includeVerifiedAgentDiscoveries: true })
+    ).resolves.toEqual([])
+    expect(mux.request.mock.calls).toEqual([
+      ['pty.getCapabilities', undefined, { signal: undefined, timeoutMs: 5_000 }],
+      ['pty.listProcesses', undefined, undefined]
+    ])
+  })
+
+  it('does not infer discovery support when the capability probe loses contact', async () => {
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.getCapabilities') {
+        throw new Error('SSH connection lost')
+      }
+      if (method === 'pty.listProcesses') {
+        throw new Error('SSH connection lost')
+      }
+      return undefined
+    })
+
+    await expect(provider.listProcesses({ includeVerifiedAgentDiscoveries: true })).rejects.toThrow(
+      'SSH connection lost'
+    )
+    expect(mux.request.mock.calls).toEqual([
+      ['pty.getCapabilities', undefined, { signal: undefined, timeoutMs: 5_000 }],
+      ['pty.listProcesses', undefined, undefined]
+    ])
+  })
+
   it('scopes recovered claim owner ids with their SSH connection', async () => {
     mux.request.mockResolvedValue([
       {
@@ -74,6 +134,11 @@ describe('SshPtyProvider process listings and events', () => {
               tabId: 'tab',
               leafId: '11111111-1111-4111-8111-111111111111',
               terminalHandle: 'term_claimed'
+            },
+            statusBinding: {
+              runId: 'run-1',
+              attachment: { executionId: 'execution-1' },
+              role: 'root'
             }
           }
         ]
@@ -112,6 +177,11 @@ describe('SshPtyProvider process listings and events', () => {
               tabId: 'tab',
               leafId: '11111111-1111-4111-8111-111111111111',
               terminalHandle: 'term_claimed'
+            },
+            statusBinding: {
+              runId: 'run-1',
+              attachment: { executionId: 'execution-1' },
+              role: 'root'
             }
           }
         ]

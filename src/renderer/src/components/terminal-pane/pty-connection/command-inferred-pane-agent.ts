@@ -12,6 +12,7 @@ import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { isAgentStatusTurnComplete } from '../../../../../shared/agent-completion-time'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 
@@ -244,7 +245,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
       session.clearSuppressedTitleSideEffects()
       return
     }
-    if (payload.state === 'done') {
+    if (isAgentStatusTurnComplete(payload)) {
       session.applyAgentCompletionSideEffects(pending.title, payload.agentType ?? pending.agentType)
       session.clearSuppressedTitleSideEffects()
       return

@@ -16,6 +16,7 @@ export type {
   AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload
 } from './server/server-types'
+export type { AgentLaunchAdmission, AgentLaunchSettlement } from './server/server-launch-membership'
 export type { AgentHookSource }
 export {
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
@@ -28,6 +29,9 @@ export { isValidPaneKey }
 /** Public composition seam for the loopback hook listener and relay status adapter. */
 export class AgentHookServer extends AgentHookServerLifecycle {}
 
+// The execution-binding resolver is injected by whichever composition root owns a PTY owner
+// registry. Reaching for the main-process one here would pull node-pty into the daemon bundle,
+// which loads this adapter but never populates that registry.
 export const agentHookServer = new AgentHookServer()
 
 // Why: exported for test coverage of the per-agent field extractors.

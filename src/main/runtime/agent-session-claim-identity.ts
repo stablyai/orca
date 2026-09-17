@@ -138,6 +138,51 @@ export class AgentSessionClaimSigner {
       agent: args.identity.agent
     }
   }
+
+  /** Mint an execution claim before a provider session id exists.
+   * Fresh launches use the host-issued launch identity only as a stable
+   * reservation key; hook attribution still requires the status binding
+   * stamped by the owner transaction below this claim. */
+  createFreshClaim(args: {
+    namespace: ProviderExecutionNamespace
+    agent: ResumableTuiAgent
+    launchIdentity: string
+    canonicalWorktreeId: string
+  }): AgentSessionExecutionClaim {
+    if (!isResumableTuiAgent(args.agent) || args.launchIdentity.trim().length === 0) {
+      throw new Error('agent_session_identity_required')
+    }
+    const namespaceFields = [
+      args.namespace.machine,
+      args.namespace.principal,
+      args.namespace.container,
+      args.namespace.providerRoot
+    ]
+    const identityFields = [
+      'orca-agent-fresh-launch-v1',
+      this.authorityDomainId,
+      ...namespaceFields,
+      args.agent,
+      args.launchIdentity
+    ]
+    const worktreeFields = [
+      'orca-agent-session-worktree-v1',
+      this.authorityDomainId,
+      ...namespaceFields,
+      args.canonicalWorktreeId
+    ]
+    return {
+      digestVersion: AGENT_SESSION_CLAIM_DIGEST_VERSION,
+      keyId: this.keyId,
+      identityDigest: createHmac('sha256', this.key)
+        .update(encodeFields(identityFields))
+        .digest('base64url'),
+      worktreeScopeDigest: createHmac('sha256', this.key)
+        .update(encodeFields(worktreeFields))
+        .digest('base64url'),
+      agent: args.agent
+    }
+  }
 }
 
 export function loadAgentSessionClaimSigner(

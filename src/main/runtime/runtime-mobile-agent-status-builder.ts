@@ -114,7 +114,8 @@ export function buildRuntimeMobileAgentStatus(
           : {}),
         tabId: tab.parentTabId,
         terminalTitle,
-        ...providerSession
+        ...providerSession,
+        ...(liveRow.launchMembership ? { launchMembership: liveRow.launchMembership } : {})
       },
       ownerAgent,
       ownerOptions
@@ -153,7 +154,8 @@ export function buildRuntimeMobileAgentStatus(
       tabId: tab.parentTabId,
       terminalTitle,
       stateHistory: [],
-      ...providerSession
+      ...providerSession,
+      ...(hookRow.launchMembership ? { launchMembership: hookRow.launchMembership } : {})
     }
   }
 }

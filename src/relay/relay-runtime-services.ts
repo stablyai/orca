@@ -24,6 +24,7 @@ import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SkillInstallHandler } from './skill-install-handler'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import type { AgentSessionClaimSigner } from '../main/runtime/agent-session-claim-identity'
 
 export class RelayRuntimeServices {
   readonly ptyHandler: PtyHandler
@@ -39,11 +40,12 @@ export class RelayRuntimeServices {
   constructor(
     readonly dispatcher: RelayDispatcher,
     graceTimeMs: number,
-    launchVersion: string
+    launchVersion: string,
+    agentSessionClaimSigner: AgentSessionClaimSigner | null = null
   ) {
     const context = new RelayContext()
     this.registerSessionHandlers(context)
-    this.ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
+    this.ptyHandler = new PtyHandler(dispatcher, graceTimeMs, undefined, agentSessionClaimSigner)
     this.ptyConsumerSessionAdapter = new SshPtyConsumerSessionAdapter(
       dispatcher,
       launchVersion,

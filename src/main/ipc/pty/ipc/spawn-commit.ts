@@ -1,4 +1,5 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
@@ -27,6 +28,30 @@ import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+  const claimedEnsure = ctx.result.agentSessionEnsure
+  const claimedOwner = claimedEnsure?.owner
+  if (claimedOwner) {
+    // Why: a lower execution host may adopt a live owner with a canonical
+    // surface different from this request's provisional tab/leaf/handle.
+    // Every binding and publication below must follow that owner surface.
+    const surface = claimedOwner.surface
+    ctx.args.worktreeId = surface.worktreeId
+    ctx.args.tabId = surface.tabId
+    ctx.args.leafId = surface.leafId
+    ctx.preAllocatedHandle = surface.terminalHandle
+    ctx.metadataLeafId = surface.leafId
+    ctx.metadataPaneKey = makePaneKey(surface.tabId, surface.leafId)
+    ctx.validatedLeafId = surface.leafId
+    ctx.validatedPaneKey = ctx.metadataPaneKey
+    ctx.stablePaneKey = ctx.metadataPaneKey
+    ctx.result = {
+      ...ctx.result,
+      id: claimedOwner.ptyId,
+      ...(ctx.result.agentSessionEnsure?.disposition === 'adopted'
+        ? { isReattach: true as const }
+        : {})
+    }
+  }
   const args = ctx.args
   const { rendererPreSignaled, rendererAlreadyRegistered, committedSize } =
     await persistPtyIpcSpawnCommit(ctx)
@@ -71,6 +96,25 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     } else if (typeof ctx.result.replay === 'string' && ctx.result.replay.length > 0) {
       // Why: relay reattach replay is the only restore main never ingests; skip this seed and park-reveal would replace it with a suffix fragment.
       ctx.deps.runtime.seedHeadlessTerminal(ctx.result.id, ctx.result.replay)
+    }
+  }
+  if (claimedOwner) {
+    try {
+      agentHookServer.admitAgentSessionOwner({
+        owner: claimedOwner,
+        paneKey: makePaneKey(claimedOwner.surface.tabId, claimedOwner.surface.leafId),
+        tabId: claimedOwner.surface.tabId,
+        worktreeId: claimedOwner.surface.worktreeId,
+        connectionId: args.connectionId ?? null,
+        terminalHandle: claimedOwner.surface.terminalHandle,
+        agentType: args.launchAgent ?? claimedOwner.claim.agent,
+        ...(typeof args.launchToken === 'string' ? { launchToken: args.launchToken } : {}),
+        disposition: claimedEnsure.disposition
+      })
+    } catch (error) {
+      // Membership is bookkeeping. A failed status publication must never turn
+      // a committed execution into a failed terminal create.
+      console.warn('[pty] launch membership publication failed:', error)
     }
   }
   // Why after the seed: a seed skips an existing model, and live bytes may have lazily created

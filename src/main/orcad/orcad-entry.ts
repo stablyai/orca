@@ -27,6 +27,10 @@ import { acquireOrcadInstanceLock, OrcadInstanceLockError } from './orcad-instan
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
 import {
+  createAgentSessionMembershipReconciler,
+  publishCommittedAgentSessionMembership
+} from '../runtime/runtime-agent-session-membership'
+import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
@@ -233,6 +237,8 @@ async function startOrcadRuntime(
     // PTY agent on this host, and the store is the only place `worktree.ps` and the mobile
     // projection read from — unwired, orcad lists no PTY agents at all.
     onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
+    onAgentSessionCommitted: publishCommittedAgentSessionMembership,
+    onAgentSessionInventoryReconciled: createAgentSessionMembershipReconciler(),
     // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
     // so without these a headless host publishes its structured chats nowhere and lists no agents.
     getAgentStatusSnapshot: () =>
@@ -240,6 +246,10 @@ async function startOrcadRuntime(
     getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
     getAgentProviderSessionRowsForPane: (paneKey) =>
       agentHookServer.getStatusSnapshotForPane(paneKey),
+    getAgentDiscoveryProviderIdentityForPane: (paneKey) =>
+      agentHookServer.getVerifiedAgentDiscoveryProviderIdentityForPane(paneKey, null),
+    invalidateAgentDiscoveryProviderIdentityForPane: (paneKey) =>
+      agentHookServer.dropStatusEntry(paneKey, { preserveResumeIdentity: false }),
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),

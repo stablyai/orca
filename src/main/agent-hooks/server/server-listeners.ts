@@ -18,13 +18,32 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
+import type { AgentStatusExecutionBindingResolver } from '../agent-status-execution-binding-resolver'
+import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import type { VerifiedAgentDiscovery } from '../../../shared/agent-status-verified-discovery'
+import type { AgentHookEmitterProcessResolver } from '../../../shared/agent-hook-emitter-process'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+
+function isEnrichedAgentHookEventPayload(
+  value: AgentHookEventPayload | undefined
+): value is EnrichedAgentHookEventPayload {
+  return Boolean(value && 'receivedAt' in value && 'stateStartedAt' in value)
+}
 
 // Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  setExecutionBindingResolver(resolver: AgentStatusExecutionBindingResolver | null): void {
+    this.executionBindingResolver = resolver
+  }
+
+  setEmitterProcessResolver(resolver: AgentHookEmitterProcessResolver): void {
+    this.emitterProcessResolver = resolver
+  }
+
   protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
@@ -223,6 +242,42 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       }
     }
     return rows
+  }
+
+  /** Current-runtime provider subject proof for host process discovery. */
+  getVerifiedAgentDiscoveryProviderIdentityForPane(
+    paneKey: string,
+    connectionId: string | null
+  ): VerifiedAgentDiscovery['providerIdentity'] | null {
+    const candidate = this.state.lastStatusByPaneKey.get(paneKey)
+    const entry = isEnrichedAgentHookEventPayload(candidate) ? candidate : undefined
+    const source = entry?.source
+    const observation = entry?.observation
+    if (
+      !entry ||
+      entry.connectionId !== connectionId ||
+      entry.isReplay === true ||
+      entry.restoredUnconfirmed === true ||
+      entry.emitterRole === 'child' ||
+      !isResumableTuiAgent(source) ||
+      entry.payload.agentType !== source ||
+      !entry.providerSession ||
+      observation?.origin !== 'hook' ||
+      !entry.emitterProcess
+    ) {
+      return null
+    }
+    return {
+      agent: source,
+      source: 'provider-session',
+      session: { ...entry.providerSession },
+      observation: {
+        authorityId: observation.authorityId,
+        incarnation: observation.incarnation,
+        revision: observation.revision,
+        process: { ...entry.emitterProcess }
+      }
+    }
   }
 
   getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {

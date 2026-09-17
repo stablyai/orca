@@ -39,6 +39,7 @@ import {
   clearMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtysForPaneKeyMock,
   clearPaneKeyAliasesForPtyMock,
+  admitAgentSessionOwnerMock,
   recordCodexPaneAccountMock,
   forgetCodexPaneAccountMock,
   getCodexPaneAccountMock,
@@ -167,6 +168,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     clearMigrationUnsupportedPtyMock.mockReset()
     clearMigrationUnsupportedPtysForPaneKeyMock.mockReset()
     clearPaneKeyAliasesForPtyMock.mockReset()
+    admitAgentSessionOwnerMock.mockReset()
     recordCodexPaneAccountMock.mockReset()
     forgetCodexPaneAccountMock.mockReset()
     getCodexPaneAccountMock.mockReset()

@@ -21,6 +21,7 @@ import {
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { copyLaunchConfig } from './agent-status-sleeping-records'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
@@ -84,7 +85,9 @@ export function createAgentStatusProviderSessionActions(
         // Why: provider-session heartbeats can arrive after the turn is complete; preserve the
         // completed checkpoint so a late heartbeat cannot make it eligible for ghost resume.
         const preservesCompletedRecoveryRecord =
-          existingRecordMatchesProviderSession && existingRecord?.state === 'done'
+          existingRecordMatchesProviderSession &&
+          existingRecord?.state === 'done' &&
+          (existingStatus === undefined || isAgentStatusTurnComplete(existingStatus))
         // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
         const preservesQuitOrigin =
           existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'

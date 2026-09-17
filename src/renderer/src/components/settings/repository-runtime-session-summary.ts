@@ -1,6 +1,7 @@
 import type { AppState } from '../../store/types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getTabIdToWorktreeId } from '../sidebar/worktree-agent-row-selectors'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export type ProjectRuntimeSessionSummary = {
   liveTerminalCount: number
@@ -55,7 +56,7 @@ function computeProjectRuntimeSessionSummary(
   const tabWorktreeIds = getTabIdToWorktreeId(state.tabsByWorktree)
   let activeTaskCount = 0
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    if (entry.state === 'done') {
+    if (isAgentStatusTurnComplete(entry)) {
       continue
     }
     const tabId = entry.tabId ?? getTabIdFromPaneKey(paneKey)

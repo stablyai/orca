@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export type PetAnimationName =
   | 'idle'
@@ -55,7 +56,7 @@ function agentStateAnimation(
     }
     if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
-    } else if (entry.state === 'done') {
+    } else if (isAgentStatusTurnComplete(entry)) {
       hasDone = true
     }
   }

@@ -2,6 +2,7 @@ import type { AppState } from '../../store'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { pickParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status-field-normalization'
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
@@ -126,7 +127,12 @@ export function applyWebSessionTabsStorePatch(
               }
             }
           }
-          if (!allowCompletionNotification && notificationStatus.state !== 'working') {
+          if (
+            (allowCompletionNotification &&
+              notificationStatus.state === 'done' &&
+              !isAgentStatusTurnComplete(notificationStatus)) ||
+            (!allowCompletionNotification && notificationStatus.state !== 'working')
+          ) {
             continue
           }
           acceptedNotificationStatuses.push({

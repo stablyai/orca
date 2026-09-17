@@ -5,7 +5,8 @@ import type {
 } from '../../../../shared/agent-session-resume'
 import type {
   AgentLaunchPreferences,
-  AgentPromptDelivery
+  AgentPromptDelivery,
+  AgentSessionExecutionClaim
 } from '../../../../shared/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
@@ -82,6 +83,7 @@ export type PtyConnectResult = {
    *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
   isReattach?: boolean
   launchAgent?: TuiAgent
+  agentSessionClaim?: AgentSessionExecutionClaim
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
   snapshotCols?: number
@@ -256,6 +258,7 @@ export type IpcPtyTransportOptions = {
   agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string
   launchAgent?: TuiAgent
+  agentSessionClaim?: AgentSessionExecutionClaim
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null

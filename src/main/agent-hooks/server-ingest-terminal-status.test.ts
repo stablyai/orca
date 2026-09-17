@@ -27,6 +27,117 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  it('retains a verified subject while accepting a mixed-version event without a claim', () => {
+    const server = new AgentHookServer()
+    server.setExecutionBindingResolver((candidate) =>
+      candidate.reported.runId === 'run-a' && candidate.reported.executionId === 'execution-a'
+        ? { runId: 'run-a', attachment: { executionId: 'execution-a' }, role: 'root' }
+        : null
+    )
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        reportedExecutionBinding: { runId: 'run-a', executionId: 'execution-a' },
+        payload: { state: 'working', prompt: 'mixed versions', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        reportedExecutionBinding: { runId: 'run-old', executionId: 'execution-old' },
+        payload: { state: 'done', prompt: 'stale owner', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      runId: 'run-a',
+      executionId: 'execution-a',
+      state: 'working',
+      prompt: 'mixed versions'
+    })
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        payload: { state: 'done', prompt: 'mixed versions', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      runId: 'run-a',
+      executionId: 'execution-a',
+      state: 'done'
+    })
+  })
+
+  it('suppresses an inherited child claim instead of mutating the confirmed root attachment', () => {
+    const server = new AgentHookServer()
+    server.setExecutionBindingResolver((candidate) =>
+      candidate.emitterRole === 'root' &&
+      candidate.reported.runId === 'run-a' &&
+      candidate.reported.executionId === 'execution-a'
+        ? { runId: 'run-a', attachment: { executionId: 'execution-a' }, role: 'root' }
+        : null
+    )
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'codex',
+        worktreeId: 'repo::/tmp/worktree',
+        emitterRole: 'root',
+        reportedExecutionBinding: { runId: 'run-a', executionId: 'execution-a' },
+        payload: { state: 'working', prompt: 'root turn', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'codex',
+        worktreeId: 'repo::/tmp/worktree',
+        emitterRole: 'child',
+        reportedExecutionBinding: { runId: 'run-a', executionId: 'execution-a' },
+        payload: { state: 'working', prompt: 'child progress', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      runId: 'run-a',
+      executionId: 'execution-a',
+      prompt: 'root turn'
+    })
+  })
+
+  it('suppresses an inherited child claim before a root row exists', () => {
+    const server = new AgentHookServer()
+    server.setExecutionBindingResolver(() => null)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'codex',
+        worktreeId: 'repo::/tmp/worktree',
+        emitterRole: 'child',
+        reportedExecutionBinding: { runId: 'run-inherited', executionId: 'execution-root' },
+        payload: { state: 'working', prompt: 'inherited child', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
   it('keeps hook monitoring mode across an equivalent OSC ping until a hook clears it', () => {
     const server = new AgentHookServer()
 

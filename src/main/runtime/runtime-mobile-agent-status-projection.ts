@@ -6,6 +6,7 @@ import {
   type AgentStatusIpcPayload
 } from '../../shared/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentStatusLaunchMembership } from '../../shared/agent-status-launch-membership'
 import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-status-projection'
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -57,7 +58,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    ...(status.providerSession ? { providerSession: status.providerSession } : {}),
+    ...(status.launchMembership ? { launchMembership: status.launchMembership } : {})
   })
   const titleConfirmsState =
     (pty.lastAgentStatus === 'working' && status.state === 'working') ||
@@ -108,6 +110,7 @@ export type RuntimeHookAgentRowLookup = {
   providerSession: AgentProviderSessionMetadata | null
   providerSessionAgentType: string | null
   providerSessionReceivedAt: number | null
+  launchMembership: AgentStatusLaunchMembership | null
   agentType: string | null
   agentIsLive: boolean
   live: HookLiveAgentRow | null
@@ -158,9 +161,12 @@ export function selectRuntimeHookAgentRowForPane(
             ? { evidenceObservedAt: live.evidenceObservedAt }
             : {}),
           stateStartedAt: live.stateStartedAt ?? live.receivedAt,
-          ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
+          ...(live.worktreeId ? { worktreeId: live.worktreeId } : {}),
+          ...(live.launchMembership ? { launchMembership: live.launchMembership } : {})
         }
-      : null
+      : null,
+    launchMembership:
+      live?.launchMembership ?? agent?.launchMembership ?? session?.launchMembership ?? null
   }
 }
 

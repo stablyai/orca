@@ -8,6 +8,7 @@ import {
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { splitWorktreeId, worktreeIdsEqual } from '../../shared/worktree/id'
 import { normalizeLocalBranchName } from './runtime-worktree-selection'
+import type { PtyProcessInfo } from '../providers/pty-process-info'
 
 export type ResolvedWorktree = Worktree & {
   parentWorktreeId: string | null
@@ -91,6 +92,38 @@ export function resolveTerminalSessionWorktreeId(
 
 export function inferWorktreeIdFromPtyId(ptyId: string): string | null {
   return parsePtySessionId(ptyId).worktreeId
+}
+
+export function resolveInventoryPtyWorktreeId(args: {
+  session: Pick<PtyProcessInfo, 'id' | 'cwd' | 'worktreeId'>
+  persistedWorktreeId?: string
+  resolvedWorktrees: ResolvedWorktree[]
+  targetWorktreeId: string | null
+  findResolvedWorktree: (worktreeId: string) => ResolvedWorktree | undefined
+}): string | null {
+  const persistedWorktree = args.persistedWorktreeId
+    ? args.findResolvedWorktree(args.persistedWorktreeId)
+    : undefined
+  const inferredWorktreeId = inferWorktreeIdFromPtyId(args.session.id)
+  if (args.session.worktreeId) {
+    const providerWorktree = args.findResolvedWorktree(args.session.worktreeId)
+    if (providerWorktree) {
+      return providerWorktree.id
+    }
+    if (
+      persistedWorktree &&
+      inferredWorktreeId &&
+      runtimeWorktreeIdsEqual(args.session.worktreeId, inferredWorktreeId)
+    ) {
+      return persistedWorktree.id
+    }
+    return args.session.worktreeId
+  }
+  return (
+    persistedWorktree?.id ??
+    inferredWorktreeId ??
+    findResolvedWorktreeIdForPath(args.resolvedWorktrees, args.session.cwd, args.targetWorktreeId)
+  )
 }
 
 export function parseRuntimeWorktreeId(

@@ -9,6 +9,7 @@ import {
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export function createAgentStatusWorktreeDropActions(
   runtime: AgentStatusRuntime
@@ -61,7 +62,7 @@ export function createAgentStatusWorktreeDropActions(
           for (const [paneKey, entry] of liveEntries) {
             if (
               allowedPaneKeys.has(paneKey) &&
-              entry.state === 'done' &&
+              isAgentStatusTurnComplete(entry) &&
               entry.agentType !== undefined &&
               entry.interrupted !== true
             ) {

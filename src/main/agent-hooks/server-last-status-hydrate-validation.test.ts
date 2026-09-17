@@ -84,6 +84,53 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('keeps a hydrated row whose optional launch facets it cannot parse', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            // A build newer than this parser persisted shapes it does not recognise.
+            runId: { unreadable: true },
+            executionId: 42,
+            launchMembership: { binding: 'not-a-binding', phase: 'some-future-phase' },
+            payload: { state: 'working', prompt: 'still going', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot).toHaveLength(1)
+      const [entry] = snapshot
+      expect(entry.paneKey).toBe(PANE)
+      expect(entry.agentType).toBe('claude')
+      // The unreadable facets drop themselves; the row survives.
+      expect(entry.launchMembership).toBeUndefined()
+      expect(entry.runId).toBeUndefined()
+      expect(entry.executionId).toBeUndefined()
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('last-status hydrate dropped 1 entries')
+      )
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
   it('drops hydrated metadata-only entries without a resumable Pi session', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     const receivedAt = recentTs()

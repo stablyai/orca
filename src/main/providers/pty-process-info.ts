@@ -1,6 +1,7 @@
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
+import type { VerifiedAgentDiscovery } from '../../shared/agent-status-verified-discovery'
 
 export type PtyProcessInfo = {
   id: string
@@ -17,6 +18,8 @@ export type PtyProcessInfo = {
   wslDistro?: string | null
   /** Optional host-side process evidence attached to an inventory seed. */
   foregroundProcessEvidence?: ForegroundProcessEvidence
+  /** Host-verified manual/adopted agent identity; cwd/title/token are never sufficient. */
+  verifiedAgentDiscovery?: VerifiedAgentDiscovery
   agentSessionOwners?: AgentSessionOwnerBinding[]
   /** Age measured on the OWNING host's clock. Absent means the host did not measure it, which is
    *  not the same as "new" or "old" — a reader that needs an age must defer instead of assuming. */

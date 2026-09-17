@@ -6,6 +6,7 @@ import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isLiveResumeAnchorForCompletedAgent } from './live-resume-anchor-record'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 export type EligiblePane = {
   paneKey: string
@@ -88,7 +89,7 @@ export function getEligiblePane(args: {
     tab.worktreeId
   )
   if (
-    entry.state !== 'done' ||
+    !isAgentStatusTurnComplete(entry) ||
     entry.interrupted === true ||
     Boolean(entry.subagents?.length) ||
     hasUnsettledOrUnknownDispatch(entry) ||

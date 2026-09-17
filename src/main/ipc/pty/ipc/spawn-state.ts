@@ -83,6 +83,8 @@ export type PtyIpcSpawnState = {
   sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
   initiallyHidden: boolean
   preSpawnHiddenMarkId: string | null
+  /** Claim/surface prepared for a fresh renderer-backed agent launch. */
+  agentSessionEnsure?: PtySpawnIpcArgs['agentSessionEnsure']
 }
 
 export function createPtyIpcSpawnState(
@@ -156,6 +158,7 @@ export function createPtyIpcSpawnState(
     hadSessionSizeBeforeAttach: false,
     sessionSizeBeforeAttach: undefined,
     initiallyHidden: false,
-    preSpawnHiddenMarkId: null
+    preSpawnHiddenMarkId: null,
+    agentSessionEnsure: undefined
   }
 }

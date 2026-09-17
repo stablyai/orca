@@ -208,6 +208,56 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
+  it('uses the remote execution host claim issuer for a fresh SSH launch', async () => {
+    const claim = {
+      digestVersion: 1 as const,
+      keyId: 'key',
+      identityDigest: 'a'.repeat(43),
+      worktreeScopeDigest: 'b'.repeat(43),
+      agent: 'codex' as const
+    }
+    const createFreshAgentSessionClaim = vi.fn(async () => claim)
+    const provider = {
+      supportsAgentSessionClaims: () => true,
+      supportsAgentSessionCreateOperations: () => true,
+      createFreshAgentSessionClaim
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the provider fixture is intentionally narrowed to the runtime's provider dependency contract.
+    const runtime = createRuntime(provider as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test injects the private provider resolver to exercise the remote-host branch.
+    ;(runtime as unknown as { getSshProviderFn: () => typeof provider }).getSshProviderFn = () =>
+      provider
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only access to the private workspace resolver and claim seam.
+    const internal = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
+      createFreshAgentSessionClaim: (args: {
+        worktreeId: string
+        connectionId: string | null
+        agent: 'codex'
+        launchIdentity: string
+      }) => Promise<typeof claim | null>
+    }
+    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'worktree-1',
+      path: '/remote/worktree-1',
+      connectionId: 'ssh-1'
+    })
+
+    await expect(
+      internal.createFreshAgentSessionClaim({
+        worktreeId: 'worktree-1',
+        connectionId: 'ssh-1',
+        agent: 'codex',
+        launchIdentity: 'launch-1'
+      })
+    ).resolves.toEqual(claim)
+    expect(createFreshAgentSessionClaim).toHaveBeenCalledWith({
+      worktreeId: 'worktree-1',
+      agent: 'codex',
+      launchIdentity: 'launch-1'
+    })
+  })
+
   it('waits for Codex shell launch preparation before a structured resume', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())

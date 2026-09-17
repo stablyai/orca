@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { agentTypeToIconAgent } from './agent-status'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 /**
  * Per-tab index of icon-capable agent panes for the tab-bar resolvers in
@@ -49,7 +50,7 @@ function indexAgentStatus(source: Record<string, AgentStatusEntry>): void {
     if (!parsed) {
       continue
     }
-    appendPane(entry.state === 'done' ? completed : live, parsed.tabId, {
+    appendPane(isAgentStatusTurnComplete(entry) ? completed : live, parsed.tabId, {
       leafId: parsed.leafId,
       agent
     })
@@ -68,7 +69,7 @@ export function selectLiveTabAgentPanes(
   return cachedLiveIndex.get(tabId) ?? NO_PANES
 }
 
-/** Panes of `tabId` whose agent reported `done`. */
+/** Panes of `tabId` whose agent completed a turn (boundary rows are membership-only). */
 export function selectCompletedTabAgentPanes(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string

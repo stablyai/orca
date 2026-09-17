@@ -1,5 +1,6 @@
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type { AgentStatusLaunchMembership } from '../../shared/agent-status-launch-membership'
 
 export type RuntimeWorktreeAgentSource = {
   paneKey: string
@@ -19,4 +20,6 @@ export type RuntimeWorktreeAgentSource = {
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
   structuredHost?: StructuredHostStatus
+  /** Presence proof from the execution host, independent of turn state. */
+  launchMembership?: AgentStatusLaunchMembership
 }

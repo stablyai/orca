@@ -6,13 +6,10 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import {
-  agentProviderSessionsEqual,
-  getAgentResumeArgv,
-  isResumableTuiAgent,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig,
+  SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
   resolveAgentStatusIdentity,
@@ -25,10 +22,10 @@ import type {
   AgentStatusRouting,
   AgentStatusTiming
 } from './agent-status-contract'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
-import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
+import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { deriveAgentStatusLiveEntryLaunchContext } from './agent-status-live-entry-launch-context'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -111,6 +108,7 @@ export function buildAgentStatusLiveEntry(
       ? {
           agentType: existing.agentType,
           state: existing.state,
+          sessionBoundary: existing.sessionBoundary,
           updatedAt: existing.updatedAt,
           restoredUnconfirmed: existing.restoredUnconfirmed
         }
@@ -162,61 +160,26 @@ export function buildAgentStatusLiveEntry(
     payloadMergedOrchestration ??
     runtimeMergedOrchestration ??
     (payload.state === 'done' ? existing?.orchestration : undefined)
-  const canReuseExistingProviderSession =
-    existing?.agentType === identity.agentType &&
-    (existing.state !== 'done' || payload.state === 'done')
-  const providerSession =
-    metadata?.providerSession ??
-    (canReuseExistingProviderSession ? existing.providerSession : undefined)
-  const existingProviderSession = canReuseExistingProviderSession
-    ? existing.providerSession
-    : undefined
-  const providerSessionChanged =
-    Boolean(metadata?.providerSession && existingProviderSession) &&
-    !agentProviderSessionsEqual(
-      identity.agentType,
-      metadata?.providerSession,
-      existingProviderSession
-    )
-  const statusTabId = routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
-  const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
-  const registryEntry = state.agentLaunchConfigByPaneKey[paneKey]
-  const registryMatched = registryEntryMatchesStatus({
-    entry: registryEntry,
+  const launchContext = deriveAgentStatusLiveEntryLaunchContext({
+    state,
     paneKey,
-    agentType: identity.agentType,
-    tabId: statusTabId,
-    terminalHandle: statusTerminalHandle,
-    launchToken: metadata?.launchToken,
-    providerSession,
-    existingProviderSession,
-    providerSessionChanged
+    payload,
+    existing,
+    identity,
+    routing,
+    metadata
   })
-  const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
-  const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const retainsResumableRecoveryIdentity =
-    payload.state === 'done' &&
-    isResumableTuiAgent(identity.agentType) &&
-    providerSession !== undefined &&
-    getAgentResumeArgv(identity.agentType, providerSession) !== null
-  const matchedSleepingLaunchConfig =
-    (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
-    existingSleepingRecord?.launchConfig &&
-    existingSleepingRecord.agent === identity.agentType &&
-    providerSession &&
-    agentProviderSessionsEqual(
-      identity.agentType,
-      existingSleepingRecord.providerSession,
-      providerSession
-    )
-      ? existingSleepingRecord.launchConfig
-      : undefined
-  const launchConfigSource =
-    (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
-      ? metadata?.launchConfig
-      : undefined) ??
-    matchedRegistryLaunchConfig ??
-    matchedSleepingLaunchConfig
+  const {
+    statusTabId,
+    statusTerminalHandle,
+    launchMembership,
+    registryEntry,
+    registryMatched,
+    providerSession,
+    providerSessionChanged,
+    retainsResumableRecoveryIdentity,
+    launchConfigSource
+  } = launchContext
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -264,6 +227,7 @@ export function buildAgentStatusLiveEntry(
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),
+    ...(launchMembership ? { launchMembership } : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,

@@ -1,4 +1,5 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import { isAgentStatusTurnComplete } from '../../../../../shared/agent-completion-time'
 
 /** Start time of the newest completed turn, counting turns already folded into history.
  *  Why: batched publications coalesce done→working→done into a single store notification,
@@ -9,7 +10,7 @@ export function resolveLatestAgentDoneStartedAt(
   if (!entry) {
     return undefined
   }
-  if (entry.state === 'done') {
+  if (isAgentStatusTurnComplete(entry)) {
     return entry.stateStartedAt
   }
   const history = entry.stateHistory ?? []

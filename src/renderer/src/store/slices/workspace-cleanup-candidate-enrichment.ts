@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   applyWorkspaceCleanupPolicy,
@@ -116,7 +117,7 @@ function buildWorkspaceCleanupEnrichmentProjection(
 
   const retainedDoneAgentPaneKeysByWorktreeId = new Map<string, string[]>()
   for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
-    if (!worktreeIds.has(retained.worktreeId) || retained.entry.state !== 'done') {
+    if (!worktreeIds.has(retained.worktreeId) || !isAgentStatusTurnComplete(retained.entry)) {
       continue
     }
     const paneKeys = retainedDoneAgentPaneKeysByWorktreeId.get(retained.worktreeId) ?? []

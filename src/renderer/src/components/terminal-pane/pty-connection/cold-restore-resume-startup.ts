@@ -11,6 +11,7 @@ import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../../shared/agent-session-resume'
+import { isAgentStatusTurnComplete } from '../../../../../shared/agent-completion-time'
 
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
@@ -26,7 +27,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const sleepingRecordEntry = session.getSleepingRecordForPane(state)
     const sleepingRecord = sleepingRecordEntry?.record
 
-    const useLiveEntry = entry && entry.state !== 'done'
+    const useLiveEntry = entry !== undefined && !isAgentStatusTurnComplete(entry)
     const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
     if (!agent || !isResumableTuiAgent(agent)) {
       return null

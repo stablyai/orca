@@ -20,6 +20,7 @@ import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
+import { isResumableTuiAgent } from '../../../../shared/agent-session-resume'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -85,7 +86,14 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     ctx.deps.runtime !== undefined &&
     ((!(ctx.provider instanceof LocalPtyProvider) &&
       !routesFreshSpawnsToLocalProvider(ctx.provider)) ||
-      shouldRefreshAgentTeamsEnv)
+      shouldRefreshAgentTeamsEnv ||
+      // Fresh agent launches need a stable host surface for C5 admission even
+      // when the in-process local provider would normally omit a handle.
+      (isResumableTuiAgent(args.launchAgent) &&
+        args.launchConfig !== undefined &&
+        typeof args.launchToken === 'string' &&
+        args.launchToken.length > 0 &&
+        args.resumeProviderSession === undefined))
   const runtime = ctx.deps.runtime
   ctx.preAllocatedHandle = shouldPreAllocateTerminalHandle
     ? (ctx.preAdoptedStablePane?.owner.handle ??

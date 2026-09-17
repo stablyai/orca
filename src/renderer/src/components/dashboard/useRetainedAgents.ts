@@ -10,6 +10,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -303,9 +304,8 @@ export function collectRetainedAgentsOnDisappear(args: {
     // (state === 'done' and not interrupted). Explicit teardown paths mark
     // pane keys as suppression candidates, so a close/quit/crash cannot
     // resurrect a stale `done` row on the next sync.
-    const lastState = prev.row.state
     const wasInterrupted = prev.row.entry.interrupted === true
-    if (lastState !== 'done' || wasInterrupted) {
+    if (!isAgentStatusTurnComplete(prev.row.entry) || wasInterrupted) {
       continue
     }
     toRetain.push({

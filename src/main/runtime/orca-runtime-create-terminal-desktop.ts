@@ -29,6 +29,11 @@ export async function createDesktopTerminal(
   const cwd = workspace
     ? runtime.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
     : launchOpts.cwd
+  // Keep one launch identity across the renderer's startup queue and every
+  // remount/retry; the main PTY choke point derives the owner claim from it.
+  const launchToken = launchOpts.launchConfig
+    ? (launchOpts.launchToken ?? dependencies.randomUUID())
+    : undefined
   const requestId = dependencies.randomUUID()
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -66,7 +71,7 @@ export async function createDesktopTerminal(
       ...(launchOpts.resumeProviderSession
         ? { resumeProviderSession: launchOpts.resumeProviderSession }
         : {}),
-      ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
+      ...(launchToken ? { launchToken } : {}),
       ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
       ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
       startupCommandDelivery: launchOpts.startupCommandDelivery,

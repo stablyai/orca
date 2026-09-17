@@ -8,6 +8,7 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
@@ -82,7 +83,8 @@ export function registerAgentStatusListeners(args: {
         }
       }
       const store = useAppStore.getState()
-      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+      const entry = store.agentStatusByPaneKey[data.paneKey]
+      if (entry && isAgentStatusTurnComplete(entry)) {
         return
       }
       store.removeAgentStatus(data.paneKey)

@@ -1,5 +1,6 @@
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import {
   mergeAgentStatusOrchestration,
@@ -131,7 +132,7 @@ function getWorktreeAgentActivitySummaries(
       continue
     }
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
-    if (entry.state === 'done') {
+    if (isAgentStatusTurnComplete(entry)) {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
     applyLiveAgentState(summary, entry)
@@ -147,7 +148,9 @@ function getWorktreeAgentActivitySummaries(
 
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
-    summary.hasRetainedDone = true
+    if (isAgentStatusTurnComplete(retained.entry)) {
+      summary.hasRetainedDone = true
+    }
     const paneIdentity = parseAgentStatusPaneIdentity(retained.entry?.paneKey)
     if (paneIdentity) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
@@ -156,7 +159,9 @@ function getWorktreeAgentActivitySummaries(
       retained.entry,
       runtimeAgentOrchestrationByPaneKey?.[retained.entry.paneKey]
     )
-    addParentPaneId(summary, orchestration, retained.worktreeId, tabIdToWorktreeId)
+    if (isAgentStatusTurnComplete(retained.entry)) {
+      addParentPaneId(summary, orchestration, retained.worktreeId, tabIdToWorktreeId)
+    }
   }
 
   // Why: epoch changes rebuild every summary, so reuse structurally equal results
@@ -229,7 +234,7 @@ function agentStatusPaneIdsByTabIdEqual(
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'sessionBoundary'>
 ): void {
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
@@ -242,7 +247,7 @@ function applyLiveAgentState(
     } else {
       summary.hasLiveWorking = true
     }
-  } else if (entry.state === 'done') {
+  } else if (isAgentStatusTurnComplete(entry)) {
     summary.hasLiveDone = true
   }
 }

@@ -2,6 +2,7 @@ export type AgentStatusLegacyIngressDestination = '2B' | '6'
 
 export type AgentStatusLegacyIngressCaller =
   | 'main-status-update'
+  | 'main-launch-membership'
   | 'main-status-cleanup'
   | 'main-pane-alias-transfer'
   | 'main-status-hydration'
@@ -40,6 +41,16 @@ export const AGENT_STATUS_LEGACY_INGRESS_MANIFEST = Object.freeze([
     destination: '2B',
     gate: 'Trusted PTY scope plus owner-atomic producer handover',
     allowedModes: ['current-producer', 'older-peer']
+  }),
+  entry({
+    caller: 'main-launch-membership',
+    sourcePath: 'src/main/agent-hooks/server/server-launch-membership.ts',
+    reason:
+      'Committed or adopted host ownership updates the legacy projection without minting turn evidence.',
+    owner: 'main-agent-hooks',
+    destination: '2B',
+    gate: 'Host-owned run membership projection cutover',
+    allowedModes: ['current-producer']
   }),
   entry({
     caller: 'main-status-cleanup',

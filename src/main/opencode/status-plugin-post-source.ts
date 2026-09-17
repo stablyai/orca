@@ -12,6 +12,8 @@ export function getStatusPluginPostSource(hookPathname: string): string[] {
     '  const body = JSON.stringify({',
     '    paneKey,',
     '    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
+    '    ...(process.env.ORCA_AGENT_STATUS_RUN_ID ? { runId: process.env.ORCA_AGENT_STATUS_RUN_ID } : {}),',
+    '    ...(process.env.ORCA_AGENT_STATUS_EXECUTION_ID ? { executionId: process.env.ORCA_AGENT_STATUS_EXECUTION_ID } : {}),',
     '    tabId: process.env.ORCA_TAB_ID || "",',
     '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '    env: coords.env,',

@@ -1,6 +1,14 @@
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { AgentStatusLaunchMembership } from '../agent-status-launch-membership'
+import type {
+  AgentStatusExecutionId,
+  AgentStatusProviderAlias,
+  AgentStatusReportedExecutionBinding,
+  AgentStatusRunId,
+  AgentStatusRunRole
+} from '../agent-status-run'
 
 export type AgentHookEventPayload = {
   paneKey: string
@@ -8,6 +16,20 @@ export type AgentHookEventPayload = {
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Untrusted emitter claim. Main resolves it against the committed execution owner. */
+  reportedExecutionBinding?: AgentStatusReportedExecutionBinding
+  /** Untrusted parent pid reported by the POSIX hook process. */
+  reportedEmitterProcessId?: number
+  /** Execution-host proof of the provider process that spawned this hook. */
+  emitterProcess?: { pid: number; startTime: string }
+  /** Source-level emitter role; child claims cannot authorize the root attachment. */
+  emitterRole?: Exclude<AgentStatusRunRole, 'unresolved'>
+  /** Host-verified run identity; never copied directly from an emitter. */
+  runId?: AgentStatusRunId
+  /** Host-verified attachment identity; never copied directly from an emitter. */
+  executionId?: AgentStatusExecutionId
+  /** Provider identity attached only after execution binding verification. */
+  providerAlias?: AgentStatusProviderAlias
   tabId?: string
   worktreeId?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
@@ -50,6 +72,8 @@ export type AgentHookEventPayload = {
    *  Lets a reader rejoin the row to its terminal after the pane key moved. Never persisted:
    *  a handle belongs to the runtime that issued it. */
   terminalHandle?: string
+  /** Host-internal launch admission facet. Provider transports cannot author this field. */
+  launchMembership?: AgentStatusLaunchMembership
   payload: ParsedAgentStatusPayload
 }
 

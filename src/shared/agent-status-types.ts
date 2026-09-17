@@ -5,6 +5,7 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { AgentStatusLaunchMembership } from './agent-status-launch-membership'
 import type { TuiAgent } from './tui-agent'
 import {
   normalizeInteractivePromptField,
@@ -141,6 +142,8 @@ export type AgentStatusEntry = {
   interrupted?: boolean
   /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
   sessionBoundary?: boolean
+  /** Host-owned committed/adopted execution membership; not completion evidence. */
+  launchMembership?: AgentStatusLaunchMembership
   /** Orchestration dispatch context for panes spawned by another agent.
    *  Why: parent/child hierarchy is pane-level state, not worktree lineage — workers often share the coordinator's worktree. */
   orchestration?: AgentStatusOrchestrationContext

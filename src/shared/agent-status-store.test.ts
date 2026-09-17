@@ -226,6 +226,48 @@ describe('AgentStatusStore', () => {
     expect(store.getRunAliasIndex().get(aliasKey)).toEqual(new Set(['run-2']))
   })
 
+  it('retains the run and appends a reset alias before a delayed old settlement', () => {
+    const runSubject = makePtyRunAgentStatusSubject(scope(), 'run-reset')
+    const firstAlias = {
+      provider: 'claude' as const,
+      sessionKeyKind: 'session_id' as const,
+      providerId: 'session-before-reset'
+    }
+    const resetAlias = {
+      ...firstAlias,
+      providerId: 'session-after-reset',
+      resetBoundary: true as const
+    }
+    const store = createAgentStatusStore({ epoch: 'epoch-reset', mode: 'authority' })
+    const firstRun = {
+      runId: 'run-reset',
+      paneKey: 'pane-reset',
+      attachment: { executionId: 'execution-reset' },
+      attribution: 'execution-attachment' as const,
+      providerSessions: [firstAlias],
+      role: 'root' as const,
+      verdict: 'live' as const
+    }
+    expect(store.applyMutation({ parent: { subject: runSubject, run: firstRun } })).not.toBeNull()
+    const resetRun = { ...firstRun, providerSessions: [firstAlias, resetAlias] }
+    expect(store.applyMutation({ parent: { subject: runSubject, run: resetRun } })).not.toBeNull()
+    expect(store.getParent(runSubject)?.run).toMatchObject({
+      runId: 'run-reset',
+      providerSessions: [firstAlias, resetAlias]
+    })
+    const firstKey = serializeAgentStatusProviderAliasKey({ ...scope(), ...firstAlias })
+    const { resetBoundary: _resetBoundary, ...resetAliasIdentity } = resetAlias
+    const resetKey = serializeAgentStatusProviderAliasKey({ ...scope(), ...resetAliasIdentity })
+    expect(store.getRunAliasIndex().get(firstKey)).toEqual(new Set(['run-reset']))
+    expect(store.getRunAliasIndex().get(resetKey)).toEqual(new Set(['run-reset']))
+    expect(
+      store.applyMutation({
+        parent: { subject: runSubject, run: { ...resetRun, verdict: 'exited' as const } }
+      })
+    ).not.toBeNull()
+    expect(store.getRunAliasIndex().get(resetKey)).toEqual(new Set(['run-reset']))
+  })
+
   it('allows a removed structured session to be observed again at a later revision', () => {
     const parent = subject()
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })

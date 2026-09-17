@@ -80,6 +80,51 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('derives discovery identity from a live root provider session, not replay metadata', async () => {
+    const server = new RelayAgentHookServer({
+      endpointDir: dir,
+      forward: vi.fn(),
+      emitterProcessResolver: async (_source, pid) =>
+        pid === 4321 ? { pid: 200, startTime: 'agent-start-1' } : null
+    })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token,
+          'X-Orca-Agent-Hook-Meta-Encoding': 'base64',
+          'X-Orca-Agent-Hook-Emitter-Pid': Buffer.from('4321').toString('base64'),
+          'X-Orca-Agent-Hook-Meta': Buffer.from(
+            [PANE_KEY, 'tab-1', '', 'wt-1', 'remote', '1'].join('\x1f')
+          ).toString('base64')
+        },
+        body: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'claude-session-1',
+          prompt: 'prove relay identity'
+        })
+      })
+      expect(response.status).toBe(204)
+      expect(server.getVerifiedAgentDiscoveryProviderIdentityForPane(PANE_KEY)).toMatchObject({
+        agent: 'claude',
+        source: 'provider-session',
+        session: { key: 'session_id', id: 'claude-session-1' },
+        observation: {
+          authorityId: expect.any(String),
+          revision: 1,
+          process: { pid: 200, startTime: 'agent-start-1' }
+        }
+      })
+      server.clearPaneState(PANE_KEY)
+      expect(server.getVerifiedAgentDiscoveryProviderIdentityForPane(PANE_KEY)).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('normalizes and forwards raw spooled hooks on startup', async () => {
     const spoolDir = join(dir, 'spool')
     const spoolFile = join(spoolDir, 'pane-codex.jsonl')

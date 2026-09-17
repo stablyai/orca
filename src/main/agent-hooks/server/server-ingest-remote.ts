@@ -23,9 +23,9 @@ import {
   olderPeerAgentStatusLegacyMode
 } from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
-import { AgentHookServerIngestStructured } from './server-ingest-structured'
+import { AgentHookServerLaunchMembership } from './server-launch-membership'
 
-export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructured {
+export abstract class AgentHookServerIngestRemote extends AgentHookServerLaunchMembership {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
   ingestRemote(
     envelope: {
@@ -35,6 +35,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       env?: string
       version?: string
       launchToken?: string
+      reportedExecutionBinding?: AgentHookEventPayload['reportedExecutionBinding']
+      emitterRole?: AgentHookEventPayload['emitterRole']
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
@@ -270,6 +272,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       paneKey,
       source,
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
+      reportedExecutionBinding: envelope.reportedExecutionBinding,
+      emitterRole:
+        envelope.emitterRole ??
+        (toolAgentId !== undefined || (source === 'claude' && hookEventName === 'TeammateIdle')
+          ? 'child'
+          : undefined),
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,

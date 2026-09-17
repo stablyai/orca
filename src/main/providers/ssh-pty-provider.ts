@@ -1,5 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type { AgentSessionExecutionClaim } from '../../shared/agent-session-host-authority'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
@@ -25,6 +27,7 @@ import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
 import { createSshPtyProviderRpcOperations } from './ssh-pty-provider-rpc-operations'
+import { createFreshSshAgentSessionClaim } from './ssh-pty-provider-fresh-agent-claim'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -189,6 +192,15 @@ export class SshPtyProvider implements IPtyProvider {
     return await this.agentSessionCapabilities.supportsClaims(options)
   }
 
+  async createFreshAgentSessionClaim(args: {
+    worktreeId: string
+    agent: TuiAgent
+    launchIdentity: string
+    signal?: AbortSignal
+  }): Promise<AgentSessionExecutionClaim | null> {
+    return createFreshSshAgentSessionClaim(this.mux, this.agentSessionCapabilities, args)
+  }
+
   providesAgentSessionOwnerListings(_ptyId: string): boolean {
     return this.agentSessionCapabilities.providesOwnerListings()
   }
@@ -269,12 +281,21 @@ export class SshPtyProvider implements IPtyProvider {
   async listProcesses(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
+    includeVerifiedAgentDiscoveries?: boolean
   }): Promise<PtyProcessInfo[]> {
+    const includeVerifiedAgentDiscoveries =
+      opts?.includeVerifiedAgentDiscoveries === true &&
+      (await this.agentSessionCapabilities.supportsVerifiedAgentDiscoveries())
     const result = await this.mux.request(
       'pty.listProcesses',
-      opts?.includeForegroundProcessEvidence === undefined
+      opts?.includeForegroundProcessEvidence === undefined && !includeVerifiedAgentDiscoveries
         ? undefined
-        : { includeForegroundProcessEvidence: opts.includeForegroundProcessEvidence },
+        : {
+            ...(opts?.includeForegroundProcessEvidence === undefined
+              ? {}
+              : { includeForegroundProcessEvidence: opts.includeForegroundProcessEvidence }),
+            ...(includeVerifiedAgentDiscoveries ? { includeVerifiedAgentDiscoveries: true } : {})
+          },
       relayTimeoutOptions(opts?.deadlineMs)
     )
     const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))

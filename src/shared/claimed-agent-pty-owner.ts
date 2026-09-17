@@ -6,70 +6,63 @@ import type {
   AgentSessionSurfaceBinding
 } from './agent-session-host-authority'
 import {
+  agentStatusExecutionBindingsEqual,
   agentSessionClaimKey,
   agentSessionClaimsEqual,
   agentSessionSurfacesEqual,
-  buildClaimedAgentPtyOwnerIndex,
   cloneAgentSessionClaim,
   cloneAgentSessionOwner,
+  cloneAgentSessionOwnerBinding,
   cloneAgentSessionSurface,
-  prepareRegisteredAgentSessionOwner,
-  reconcileClaimedAgentPtyOwnerSnapshot,
+  cloneAgentStatusExecutionBinding,
+  parseSpawnedAgentSessionOwner,
   scopedAgentSessionClaimsEqual,
   type LiveAgentSessionOwner
 } from './claimed-agent-pty-owner-snapshot'
+import type { AgentStatusExecutionBinding } from './agent-status-run'
+import { assertClaimedAgentPtyOwnerCapacity } from './claimed-agent-pty-owner-capacity'
+import {
+  canReplaceDiscoveredProcess,
+  isSameDiscoveredProcess
+} from './claimed-agent-pty-owner-discovery'
+import {
+  ClaimedAgentPtyOwnerRegistryState,
+  type ReservedAgentPtyOwner
+} from './claimed-agent-pty-owner-registry-state'
 
 export { agentSessionOwnerBindingsEqual } from './claimed-agent-pty-owner-snapshot'
-
-export const MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES = 1024
-
-type ReservedOwner = {
-  claim: AgentSessionExecutionClaim
-  worktreeScopeDigest: string
-  generation: string
-  phase: 'reserved'
-  promise: Promise<AgentSessionClaimedSpawnResult>
-}
+export { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from './claimed-agent-pty-owner-capacity'
+export { canRetireDiscoveredProcessFromObservation } from './claimed-agent-pty-owner-discovery'
 
 type LiveOwner = LiveAgentSessionOwner
 
-function cloneClaim(claim: AgentSessionExecutionClaim): AgentSessionExecutionClaim {
-  return cloneAgentSessionClaim(claim)
-}
-
-function cloneSurface(surface: AgentSessionSurfaceBinding): AgentSessionSurfaceBinding {
-  return cloneAgentSessionSurface(surface)
-}
-
-function cloneOwner(owner: LiveOwner): LiveOwner {
-  return cloneAgentSessionOwner(owner)
-}
-
-export class ClaimedAgentPtyOwnerRegistry {
-  private readonly reserved = new Map<string, ReservedOwner>()
-  private readonly live = new Map<string, LiveOwner>()
-  private readonly conflicts = new Map<string, LiveOwner[]>()
-  private keysByPtyId = new Map<string, Set<string>>()
-
+export class ClaimedAgentPtyOwnerRegistry extends ClaimedAgentPtyOwnerRegistryState {
   async ensure(args: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
-    spawn: (reservation: { generation: string }) => Promise<{
+    discoveryProcess?: AgentSessionOwnerBinding['discoveryProcess']
+    /** Replace only earlier discovery-owned processes on this exact PTY. */
+    replaceDiscoveredPtyId?: string
+    spawn: (reservation: {
+      generation: string
+      statusBinding: AgentStatusExecutionBinding
+    }) => Promise<{
       ptyId: string
-      owner?: AgentSessionOwnerBinding
+      owner?: unknown
       disposition?: AgentSessionClaimedSpawnResult['disposition']
     }>
     isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
   }): Promise<AgentSessionClaimedSpawnResult> {
     // Why: callers retain their request objects across retries; snapshot them so
     // mutation during an awaited liveness/spawn check cannot change registry keys.
-    const requestedClaim = cloneClaim(args.claim)
-    const requestedSurface = cloneSurface(args.surface)
+    const requestedClaim = cloneAgentSessionClaim(args.claim)
+    const requestedSurface = cloneAgentSessionSurface(args.surface)
     const key = agentSessionClaimKey(requestedClaim)
     if (this.conflicts.has(key)) {
       throw new Error('agent_session_conflict')
     }
     const live = this.live.get(key)
+    let continuityOf: string | undefined
     if (live) {
       if (!agentSessionClaimsEqual(live.claim, requestedClaim)) {
         throw new Error('agent_session_ownership_unknown')
@@ -77,13 +70,14 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (live.claim.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
         throw new Error('agent_session_conflict')
       }
-      if (!args.isLive || (await args.isLive(cloneOwner(live)))) {
+      if (!args.isLive || (await args.isLive(cloneAgentSessionOwner(live)))) {
         const current = this.live.get(key)
         if (current?.ptyId === live.ptyId && current.generation === live.generation) {
-          return { disposition: 'adopted', owner: cloneOwner(current) }
+          return { disposition: 'adopted', owner: cloneAgentSessionOwner(current) }
         }
         return await this.ensure(args)
       }
+      continuityOf = live.statusBinding.runId
       this.release(live.ptyId, live.generation)
     }
 
@@ -93,11 +87,41 @@ export class ClaimedAgentPtyOwnerRegistry {
         throw new Error('agent_session_conflict')
       }
       const result = await reserved.promise
-      return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
+      if (result.owner.phase !== 'live') {
+        throw new Error('agent_session_ownership_unknown')
+      }
+      return { disposition: 'adopted', owner: cloneAgentSessionOwnerBinding(result.owner) }
     }
 
-    this.assertCapacityForNewOwner()
+    if (args.discoveryProcess && args.replaceDiscoveredPtyId) {
+      const discoveryProcess = args.discoveryProcess
+      const prior = this.listForPty(args.replaceDiscoveredPtyId).filter(
+        (owner) =>
+          owner.discoveryProcess !== undefined &&
+          !isSameDiscoveredProcess(owner.discoveryProcess, discoveryProcess)
+      )
+      if (
+        prior.some(
+          (owner) =>
+            owner.discoveryProcess &&
+            !canReplaceDiscoveredProcess(owner.discoveryProcess, discoveryProcess)
+        )
+      ) {
+        throw new Error('agent_session_observation_stale')
+      }
+      if (prior.length === 1) {
+        continuityOf = prior[0]?.statusBinding.runId
+      }
+    }
+
+    assertClaimedAgentPtyOwnerCapacity(this.live, this.conflicts, this.reserved.size)
     const generation = randomUUID()
+    const statusBinding: AgentStatusExecutionBinding = {
+      runId: randomUUID(),
+      attachment: { executionId: randomUUID() },
+      role: 'root',
+      ...(continuityOf ? { continuityOf } : {})
+    }
     let resolveReservation!: (result: AgentSessionClaimedSpawnResult) => void
     let rejectReservation!: (error: unknown) => void
     const promise = new Promise<AgentSessionClaimedSpawnResult>((resolve, reject) => {
@@ -107,31 +131,96 @@ export class ClaimedAgentPtyOwnerRegistry {
     // Why: the creating caller receives the spawn error directly; keep a
     // no-join reservation rejection from becoming an unhandled promise.
     void promise.catch(() => {})
-    this.reserved.set(key, {
+    const reservation: ReservedAgentPtyOwner = {
       claim: requestedClaim,
       worktreeScopeDigest: requestedClaim.worktreeScopeDigest,
       generation,
       phase: 'reserved',
+      surface: requestedSurface,
+      statusBinding,
       promise
-    })
+    }
+    this.reserved.set(key, reservation)
 
     let promotedOwner: LiveOwner | null = null
     try {
-      const spawned = await args.spawn({ generation })
-      const owner: LiveOwner = spawned.owner
+      const spawned = await args.spawn({ generation, statusBinding })
+      if (args.discoveryProcess && args.replaceDiscoveredPtyId) {
+        const discoveryProcess = args.discoveryProcess
+        const currentPtyOwners = this.listForPty(args.replaceDiscoveredPtyId)
+        if (currentPtyOwners.some((owner) => owner.discoveryProcess === undefined)) {
+          throw new Error('managed_owner_present')
+        }
+        const replaced = currentPtyOwners.filter(
+          (owner) =>
+            owner.discoveryProcess !== undefined &&
+            !isSameDiscoveredProcess(owner.discoveryProcess, discoveryProcess)
+        )
+        if (
+          replaced.some(
+            (owner) =>
+              owner.discoveryProcess &&
+              !canReplaceDiscoveredProcess(owner.discoveryProcess, discoveryProcess)
+          )
+        ) {
+          throw new Error('agent_session_observation_stale')
+        }
+        if (replaced.length === 1) {
+          statusBinding.continuityOf = replaced[0]?.statusBinding.runId
+        }
+        for (const owner of replaced) {
+          this.release(owner.ptyId, owner.generation)
+        }
+      }
+      const canonicalOwner = parseSpawnedAgentSessionOwner(spawned.owner)
+      const owner: LiveOwner = canonicalOwner
         ? {
-            claim: cloneClaim(spawned.owner.claim),
-            generation: spawned.owner.generation,
+            claim: cloneAgentSessionClaim(canonicalOwner.claim),
+            generation: canonicalOwner.generation,
             phase: 'live',
-            ptyId: spawned.owner.ptyId,
-            surface: cloneSurface(spawned.owner.surface)
+            ptyId: canonicalOwner.ptyId,
+            surface: cloneAgentSessionSurface(canonicalOwner.surface),
+            statusBinding: cloneAgentStatusExecutionBinding(canonicalOwner.statusBinding),
+            ...(canonicalOwner.discoveryProcess
+              ? {
+                  discoveryProcess: {
+                    ...canonicalOwner.discoveryProcess,
+                    ...(canonicalOwner.discoveryProcess.providerObservation
+                      ? {
+                          providerObservation: {
+                            ...canonicalOwner.discoveryProcess.providerObservation,
+                            process: {
+                              ...canonicalOwner.discoveryProcess.providerObservation.process
+                            }
+                          }
+                        }
+                      : {})
+                  }
+                }
+              : {})
           }
         : {
             claim: requestedClaim,
             generation,
             phase: 'live',
             ptyId: spawned.ptyId,
-            surface: requestedSurface
+            surface: requestedSurface,
+            statusBinding,
+            ...(args.discoveryProcess
+              ? {
+                  discoveryProcess: {
+                    ...args.discoveryProcess,
+                    ...(args.discoveryProcess.providerObservation
+                      ? {
+                          providerObservation: {
+                            ...args.discoveryProcess.providerObservation,
+                            process: { ...args.discoveryProcess.providerObservation.process }
+                          }
+                        }
+                      : {})
+                  }
+                }
+              : {})
           }
       if (
         owner.ptyId !== spawned.ptyId ||
@@ -140,11 +229,13 @@ export class ClaimedAgentPtyOwnerRegistry {
         throw new Error('agent_session_ownership_unknown')
       }
       if (
-        spawned.disposition !== 'adopted' &&
-        !agentSessionSurfacesEqual(owner.surface, requestedSurface)
+        !spawned.owner &&
+        (!agentSessionSurfacesEqual(owner.surface, requestedSurface) ||
+          owner.generation !== generation ||
+          !agentStatusExecutionBindingsEqual(owner.statusBinding, statusBinding))
       ) {
-        // Why: only an already-reconciled owner may override placement; a fresh
-        // owner returning another surface would let a lower layer forge authority.
+        // Why: a lower host owner is authoritative; without one, a fresh spawn
+        // must retain this reservation's generation, surface, and status binding.
         throw new Error('agent_session_ownership_unknown')
       }
       const reservation = this.reserved.get(key)
@@ -158,7 +249,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       promotedOwner = owner
       // Why: exit can beat spawn completion. Index before the awaited proof so
       // a generation-matched exit can remove this owner instead of being lost.
-      if (args.isLive && !(await args.isLive(cloneOwner(owner)))) {
+      if (args.isLive && !(await args.isLive(cloneAgentSessionOwner(owner)))) {
         throw new Error('agent_session_exited_during_start')
       }
       const current = this.live.get(key)
@@ -167,7 +258,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       }
       const result: AgentSessionClaimedSpawnResult = {
         disposition: spawned.disposition ?? 'created',
-        owner: cloneOwner(owner)
+        owner: cloneAgentSessionOwner(owner)
       }
       resolveReservation(result)
       return result
@@ -183,130 +274,5 @@ export class ClaimedAgentPtyOwnerRegistry {
         this.reserved.delete(key)
       }
     }
-  }
-
-  register(owner: AgentSessionOwnerBinding): void {
-    const key = agentSessionClaimKey(owner.claim)
-    const registered = prepareRegisteredAgentSessionOwner({
-      owner,
-      existing: this.live.get(key),
-      reserved: this.reserved.has(key),
-      conflicted: this.conflicts.has(key)
-    })
-    if (!registered) {
-      return
-    }
-    this.assertCapacityForNewOwner()
-    this.live.set(key, registered)
-    const keys = this.keysByPtyId.get(owner.ptyId) ?? new Set<string>()
-    keys.add(key)
-    this.keysByPtyId.set(owner.ptyId, keys)
-  }
-
-  reconcileAuthoritative(
-    owners: readonly AgentSessionOwnerBinding[],
-    opts: { isInAuthoritativeScope?: (owner: AgentSessionOwnerBinding) => boolean } = {}
-  ): void {
-    if (owners.length > MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES) {
-      throw new Error('execution_owner_unavailable')
-    }
-    const next = reconcileClaimedAgentPtyOwnerSnapshot({
-      live: this.live,
-      conflicts: this.conflicts,
-      reservedKeys: new Set(this.reserved.keys()),
-      incoming: owners,
-      isInAuthoritativeScope: opts.isInAuthoritativeScope ?? (() => true)
-    })
-    if (
-      this.countOwners(next.live, next.conflicts) + this.reserved.size >
-      MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
-    ) {
-      throw new Error('execution_owner_unavailable')
-    }
-
-    // Why: recovery decisions must observe one complete provider snapshot;
-    // mutating only after validation prevents first-provider residue on conflict.
-    this.live.clear()
-    this.conflicts.clear()
-    for (const [key, owner] of next.live) {
-      this.live.set(key, owner)
-    }
-    for (const [key, conflict] of next.conflicts) {
-      this.conflicts.set(key, conflict)
-    }
-    this.rebuildPtyIndex()
-  }
-
-  release(ptyId: string, generation?: string): void {
-    const keys = this.keysByPtyId.get(ptyId)
-    if (!keys) {
-      return
-    }
-    for (const key of keys) {
-      const owner = this.live.get(key)
-      if (!owner || (generation !== undefined && owner.generation !== generation)) {
-        continue
-      }
-      this.live.delete(key)
-    }
-    for (const [key, conflict] of this.conflicts) {
-      const remaining = conflict.filter(
-        (owner) =>
-          owner.ptyId !== ptyId || (generation !== undefined && owner.generation !== generation)
-      )
-      if (remaining.length === 0) {
-        this.conflicts.delete(key)
-      } else if (remaining.length === 1) {
-        this.conflicts.delete(key)
-        this.live.set(key, remaining[0])
-      } else {
-        this.conflicts.set(key, remaining)
-      }
-    }
-    this.rebuildPtyIndex()
-  }
-
-  list(): AgentSessionOwnerBinding[] {
-    return [...this.live.values()].map(cloneOwner)
-  }
-
-  listForPty(ptyId: string): AgentSessionOwnerBinding[] {
-    const keys = this.keysByPtyId.get(ptyId)
-    if (!keys) {
-      return []
-    }
-    return [...keys]
-      .map((key) => this.live.get(key))
-      .filter((owner): owner is LiveOwner => owner !== undefined)
-      .map(cloneOwner)
-  }
-
-  find(claim: AgentSessionExecutionClaim): AgentSessionOwnerBinding | null {
-    const owner = this.live.get(agentSessionClaimKey(claim))
-    return owner && scopedAgentSessionClaimsEqual(owner.claim, claim) ? cloneOwner(owner) : null
-  }
-
-  private rebuildPtyIndex(): void {
-    this.keysByPtyId = buildClaimedAgentPtyOwnerIndex(this.live, this.conflicts)
-  }
-
-  private assertCapacityForNewOwner(): void {
-    if (
-      this.countOwners(this.live, this.conflicts) + this.reserved.size >=
-      MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
-    ) {
-      throw new Error('execution_owner_unavailable')
-    }
-  }
-
-  private countOwners(
-    live: ReadonlyMap<string, LiveOwner>,
-    conflicts: ReadonlyMap<string, readonly LiveOwner[]>
-  ): number {
-    let count = live.size
-    for (const owners of conflicts.values()) {
-      count += owners.length
-    }
-    return count
   }
 }

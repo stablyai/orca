@@ -13,6 +13,12 @@ import {
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
+import { parseAgentStatusLaunchMembership } from '../../../shared/agent-status-launch-membership'
+import {
+  parseAgentStatusProviderAlias,
+  isAgentStatusExecutionId,
+  isAgentStatusRunId
+} from '../../../shared/agent-status-run'
 
 export function dropHydratedIdleClaudeSubagents(
   payload: ParsedAgentStatusPayload
@@ -89,8 +95,18 @@ export function sanitizeHydratedEntry(
     return null
   }
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
+  const runId = isAgentStatusRunId(record.runId) ? record.runId : undefined
+  const executionId = isAgentStatusExecutionId(record.executionId) ? record.executionId : undefined
+  const providerAlias = parseAgentStatusProviderAlias(record.providerAlias) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
   const retainedForLiveness = record.retainedForLiveness === true
+  // These are optional additive facets, so an unreadable one drops itself below rather than the
+  // row: a build that persists a shape this parser predates would otherwise erase a live agent's
+  // whole status row on downgrade, which is the disappearance this membership work exists to fix.
+  const launchMembership =
+    record.launchMembership === undefined
+      ? undefined
+      : parseAgentStatusLaunchMembership(record.launchMembership)
   const validRetainedIdentity = Boolean(
     retainedForLiveness && providerSession && payload.agentType && payload.agentType !== 'unknown'
   )
@@ -115,6 +131,8 @@ export function sanitizeHydratedEntry(
   return {
     paneKey,
     source,
+    ...(runId && executionId ? { runId, executionId } : {}),
+    ...(providerAlias ? { providerAlias } : {}),
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
@@ -131,6 +149,7 @@ export function sanitizeHydratedEntry(
     providerSession,
     providerSessionOnly: providerSessionOnly ? true : undefined,
     retainedForLiveness: retainedForLiveness ? true : undefined,
+    ...(launchMembership ? { launchMembership } : {}),
     payload,
     receivedAt,
     stateStartedAt

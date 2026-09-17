@@ -8,12 +8,19 @@ import { classifyError } from '../../../telemetry/classify-error'
 import { track } from '../../../telemetry/client'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
 import { agentKindSchema } from '../../../../shared/telemetry-events'
-import { normalizeNodePtySpawnError } from '../provider/liveness'
+import { isProviderAgentSessionOwnerLive, normalizeNodePtySpawnError } from '../provider/liveness'
 import { resolveStablePaneOwner, spawnForStablePane } from '../pane/stable-owner'
-import { assertSpawnReplyWasLive } from '../pane/agent-session-owners'
-import { deletePtyOwnership } from '../provider/ownership-state'
+import {
+  agentSessionOwners,
+  assertSpawnReplyWasLive,
+  reconcileAgentSessionOwnerListings
+} from '../pane/agent-session-owners'
+import { deletePtyOwnership, ptyIncarnationById } from '../provider/ownership-state'
+import { tryGetProviderForAgentSessionOwner } from '../provider/registry'
 import { ptySizes } from '../delivery/visibility-state'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { agentStatusExecutionBindingEnv } from '../../../../shared/agent-status-run'
+import type { PtySpawnResult } from '../../../providers/types'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
@@ -23,13 +30,15 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       ctx.deps.trustedTerminalHandleEnv.add(ctx.preAllocatedHandle)
     }
     ctx.spawnTiming.mark('options')
-    const stablePaneOwnerCandidate = resolveStablePaneOwner(
-      ctx.deps.runtime,
-      ctx.deps.store,
-      ctx.reservationPaneKey,
-      args.worktreeId,
-      args.connectionId
-    )
+    const stablePaneOwnerCandidate = ctx.agentSessionEnsure
+      ? null
+      : resolveStablePaneOwner(
+          ctx.deps.runtime,
+          ctx.deps.store,
+          ctx.reservationPaneKey,
+          args.worktreeId,
+          args.connectionId
+        )
     const expectedPtyId =
       stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
     if (expectedPtyId) {
@@ -46,36 +55,107 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
-    const stablePaneSpawn = ctx.preAdoptedStablePane
-      ? ctx.preAdoptedStablePane
-      : await spawnForStablePane({
-          runtime: ctx.deps.runtime,
-          store: ctx.deps.store,
-          provider: ctx.provider,
-          spawnOptions: ctx.spawnOptions,
-          owner: stablePaneOwnerCandidate,
-          worktreeId: args.worktreeId,
-          connectionId: args.connectionId,
-          resolveOwner: () =>
-            resolveStablePaneOwner(
-              ctx.deps.runtime,
-              ctx.deps.store,
-              ctx.reservationPaneKey,
-              args.worktreeId,
-              args.connectionId
-            )
-        })
-    ctx.result = stablePaneSpawn.result
-    ctx.stablePaneOwner = stablePaneSpawn.owner
-    if (
-      ctx.stablePaneOwner &&
-      ctx.isMintedSessionId &&
-      ctx.effectiveSessionAppId &&
-      ctx.effectiveSessionAppId !== ctx.result.id
-    ) {
-      clearProviderPtyState(ctx.effectiveSessionAppId)
+    if (ctx.agentSessionEnsure) {
+      // Why: daemon-backed claims can outlive this controller; import all
+      // proven owners before deciding that an identity is absent.
+      await reconcileAgentSessionOwnerListings()
+      const recoveredOwner = agentSessionOwners.find(ctx.agentSessionEnsure.claim)
+      if (recoveredOwner && ctx.pendingRegistrationPtyId !== recoveredOwner.ptyId) {
+        if (ctx.pendingRegistrationPtyId) {
+          ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.pendingRegistrationPtyId)
+        }
+        ctx.deps.runtime?.beginPtyRegistration?.(
+          recoveredOwner.ptyId,
+          ptyIncarnationById.get(recoveredOwner.ptyId)
+        )
+        ctx.pendingRegistrationPtyId = recoveredOwner.ptyId
+      }
+      let providerResult: PtySpawnResult | null = null
+      const ensured = await agentSessionOwners.ensure({
+        claim: ctx.agentSessionEnsure.claim,
+        surface: ctx.agentSessionEnsure.surface,
+        spawn: async ({ statusBinding }) => {
+          providerResult = await ctx.provider.spawn({
+            ...ctx.spawnOptions,
+            env: {
+              ...ctx.spawnOptions.env,
+              ...agentStatusExecutionBindingEnv(statusBinding)
+            }
+          })
+          ctx.rejectedRegistrationCandidate = providerResult
+          assertSpawnReplyWasLive(providerResult)
+          ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
+            providerResult.id,
+            providerResult.incarnationId
+          )
+          if (providerResult.incarnationId) {
+            // Why: local providers cannot serialize controller claims, so liveness proof
+            // needs the exact incarnation before the registry promotes the new owner.
+            ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
+          }
+          const providerEnsure = providerResult.agentSessionEnsure
+          return {
+            ptyId: providerResult.id,
+            ...(providerEnsure
+              ? {
+                  owner: providerEnsure.owner,
+                  disposition: providerEnsure.disposition
+                }
+              : {})
+          }
+        },
+        isLive: async (owner) => {
+          const ownerProvider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+          if (!ownerProvider) {
+            // Why: a disconnected relay may keep its PTY alive during the
+            // grace window; missing transport is unknown, never absence.
+            throw new Error('execution_owner_unavailable')
+          }
+          return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
+        }
+      })
+      ctx.result = providerResult ?? {
+        id: ensured.owner.ptyId,
+        isReattach: true,
+        // Why: adoption from an authoritative listing must preserve the
+        // incarnation proof used to reject a delayed exit from an older process.
+        incarnationId: ptyIncarnationById.get(ensured.owner.ptyId)
+      }
+      ctx.result.agentSessionEnsure = ensured
+      ctx.stablePaneOwner = null
+    } else {
+      const stablePaneSpawn = ctx.preAdoptedStablePane
+        ? ctx.preAdoptedStablePane
+        : await spawnForStablePane({
+            runtime: ctx.deps.runtime,
+            store: ctx.deps.store,
+            provider: ctx.provider,
+            spawnOptions: ctx.spawnOptions,
+            owner: stablePaneOwnerCandidate,
+            worktreeId: args.worktreeId,
+            connectionId: args.connectionId,
+            resolveOwner: () =>
+              resolveStablePaneOwner(
+                ctx.deps.runtime,
+                ctx.deps.store,
+                ctx.reservationPaneKey,
+                args.worktreeId,
+                args.connectionId
+              )
+          })
+      ctx.result = stablePaneSpawn.result
+      ctx.stablePaneOwner = stablePaneSpawn.owner
+      if (
+        ctx.stablePaneOwner &&
+        ctx.isMintedSessionId &&
+        ctx.effectiveSessionAppId &&
+        ctx.effectiveSessionAppId !== ctx.result.id
+      ) {
+        clearProviderPtyState(ctx.effectiveSessionAppId)
+      }
+      assertSpawnReplyWasLive(ctx.result)
     }
-    ctx.rejectedRegistrationCandidate = ctx.result
+    ctx.rejectedRegistrationCandidate ??= ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
       if (ctx.pendingRegistrationPtyId) {
         ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.pendingRegistrationPtyId)
@@ -83,7 +163,6 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       ctx.deps.runtime?.beginPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
       ctx.pendingRegistrationPtyId = ctx.result.id
     }
-    assertSpawnReplyWasLive(ctx.result)
     ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =

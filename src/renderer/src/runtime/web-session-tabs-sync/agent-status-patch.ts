@@ -2,7 +2,10 @@ import {
   agentStatusAuthorityObservedAt,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import {
+  agentEntryCompletionAt,
+  isAgentStatusTurnComplete
+} from '../../../../shared/agent-completion-time'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
 import { isWebTerminalSurfaceTabId, toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -104,7 +107,7 @@ export function buildMirroredAgentStatusPatch(
     // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
-      entry.state === 'done' &&
+      isAgentStatusTurnComplete(entry) &&
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
     // Why: cross-machine wall clocks are not comparable, so the host frame could
@@ -198,8 +201,10 @@ export function buildMirroredAgentStatusPatch(
     const entryFreshnessChanged =
       !!existing && isAgentStatusFresh(existing, now) !== isAgentStatusFresh(entry, now)
     const doneAttentionChanged =
-      existing?.state === 'done' &&
+      existing !== undefined &&
       entry.state === 'done' &&
+      isAgentStatusTurnComplete(existing) &&
+      isAgentStatusTurnComplete(entry) &&
       agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
     const workingModeChanged = existing?.workingMode !== entry.workingMode
     const entrySortRelevantChange =

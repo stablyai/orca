@@ -28,6 +28,7 @@ import {
 } from './worktree-agent-row-fallback-tab'
 import { resolveRowAgentType } from './worktree-agent-row-type'
 import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -117,7 +118,7 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
 }): void {
   const markEntry = (entry: AgentStatusEntry): void => {
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
-    if (rowEntry.state !== 'done') {
+    if (!isAgentStatusTurnComplete(rowEntry)) {
       return
     }
     // Why: completed worker rows can be attributed to a child pane while the
@@ -180,13 +181,19 @@ export function buildWorktreeAgentRows(args: {
           rowEntry.state === 'blocked' ||
           rowEntry.state === 'waiting')
       const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
+      const state =
+        rowEntry.state === 'done' && !isAgentStatusTurnComplete(rowEntry)
+          ? 'idle'
+          : shouldDecay
+            ? resolveDecayedAgentRowState(rowEntry, hasLivePty)
+            : rowEntry.state
       rows.push({
         paneKey: rowEntry.paneKey,
         entry: rowEntry,
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
-        state: shouldDecay ? resolveDecayedAgentRowState(rowEntry, hasLivePty) : rowEntry.state,
+        state,
         startedAt
       })
       rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
@@ -222,6 +229,12 @@ export function buildWorktreeAgentRows(args: {
     const shouldDecay =
       !isFresh &&
       (rowEntry.state === 'working' || rowEntry.state === 'blocked' || rowEntry.state === 'waiting')
+    const state =
+      rowEntry.state === 'done' && !isAgentStatusTurnComplete(rowEntry)
+        ? 'idle'
+        : shouldDecay
+          ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
+          : rowEntry.state
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
@@ -230,9 +243,7 @@ export function buildWorktreeAgentRows(args: {
       rowSource: 'live',
       // Why: this row's tab is synthesized because no tab for it exists in this renderer,
       // so there is no live-PTY evidence to hold — the decay destination is always `idle`.
-      state: shouldDecay
-        ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
-        : rowEntry.state,
+      state,
       startedAt
     })
     rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
@@ -263,7 +274,7 @@ export function buildWorktreeAgentRows(args: {
       tab,
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'retained',
-      state: 'done',
+      state: isAgentStatusTurnComplete(rowEntry) ? 'done' : 'idle',
       startedAt: ra.startedAt
     })
   }

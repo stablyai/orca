@@ -56,16 +56,19 @@ import type { ProcessTableRow } from '../shared/process-table-snapshot'
 
 type ProcessTableSnapshotModule = typeof processTableSnapshotModule
 import * as ptyShellUtils from './pty-shell-utils'
-import type { PtyHandler } from './pty-handler'
+import { PtyHandler as DiscoveryPtyHandler, type PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createPtyRequestHelpers,
-  endPtyHandlerTest
+  endPtyHandlerTest,
+  TEST_PTY_ID_MINT_EPOCH,
+  type MockDispatcher
 } from './pty-handler-test-harness'
-import type { MockDispatcher } from './pty-handler-test-harness'
+import { createEphemeralAgentSessionClaimSigner } from '../main/runtime/agent-session-claim-identity'
+import type { RelayDispatcher } from './dispatcher'
+import { isAgentSessionOwnerBinding } from '../shared/agent-session-host-authority'
 
 type ProcessSummary = { id: string; title: string }
-
 /** A shell root plus its foreground children, as `ps` reports them. */
 function paneRows(rootPid: number, commands: string[]): ProcessTableRow[] {
   const foregroundPgid = rootPid + 1
@@ -264,5 +267,120 @@ describe('PtyHandler inventory foreground evidence', () => {
 
     expect(result).toHaveLength(1)
     expect(mockGetStrictProcessTableSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('admits a manual remote agent on the relay and replaces its exact process generation', async () => {
+    await handler.dispose({ waitForPhysicalExit: false })
+    const signer = createEphemeralAgentSessionClaimSigner('remote-discovery-test')
+    handler = new DiscoveryPtyHandler(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test dispatcher implements the request surface used by PtyHandler.
+      dispatcher as unknown as RelayDispatcher,
+      undefined,
+      TEST_PTY_ID_MINT_EPOCH,
+      signer
+    )
+    let providerRevision = 1
+    let providerProcess = { pid: 6001, startTime: 'agent-start-1' }
+    const invalidateProviderIdentity = vi.fn()
+    handler.setAgentDiscoveryProviderIdentityResolver(
+      () => ({
+        agent: 'codex',
+        source: 'provider-session',
+        session: { key: 'session_id', id: 'codex-session-1' },
+        observation: {
+          authorityId: 'relay-hooks-1',
+          incarnation: 1,
+          revision: providerRevision,
+          process: providerProcess
+        }
+      }),
+      invalidateProviderIdentity
+    )
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pid: 6000,
+      process: 'zsh',
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      kill: vi.fn()
+    })
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const terminalHandle = `term_${'b'.repeat(32)}`
+    const spawned = await spawnPty({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'repo::/srv/project',
+      env: {
+        ORCA_PANE_KEY: `tab-remote:${leafId}`,
+        ORCA_TAB_ID: 'tab-remote',
+        ORCA_TERMINAL_HANDLE: terminalHandle
+      }
+    })
+    const table = (processPid: number, processStart: string): ProcessTableRow[] => [
+      {
+        pid: 6000,
+        ppid: 1,
+        pgid: 6000,
+        tpgid: processPid,
+        tty: '/dev/pts/8',
+        startTime: 'shell-start',
+        stat: 'Ss',
+        command: '/bin/zsh'
+      },
+      {
+        pid: processPid,
+        ppid: 6000,
+        pgid: processPid,
+        tpgid: processPid,
+        tty: '/dev/pts/8',
+        startTime: processStart,
+        stat: 'S+',
+        command: '/usr/local/bin/codex'
+      }
+    ]
+    mockGetStrictProcessTableSnapshot.mockResolvedValue(table(6001, 'agent-start-1'))
+
+    const first = await dispatcher.callRequest('pty.listProcesses', {
+      includeForegroundProcessEvidence: true,
+      includeVerifiedAgentDiscoveries: true
+    })
+    if (!Array.isArray(first) || typeof first[0] !== 'object' || first[0] === null) {
+      throw new Error('expected process inventory')
+    }
+    const firstOwners =
+      'agentSessionOwners' in first[0] && Array.isArray(first[0].agentSessionOwners)
+        ? first[0].agentSessionOwners.filter(isAgentSessionOwnerBinding)
+        : []
+    expect(firstOwners).toHaveLength(1)
+    expect(firstOwners[0]).toMatchObject({
+      ptyId: spawned.id,
+      claim: { agent: 'codex', keyId: signer.keyId },
+      surface: { terminalHandle },
+      discoveryProcess: { pid: 6001, startTime: 'agent-start-1' }
+    })
+    const firstOwner = firstOwners[0]
+
+    providerRevision = 2
+    providerProcess = { pid: 6002, startTime: 'agent-start-2' }
+    mockGetStrictProcessTableSnapshot.mockResolvedValue(table(6002, 'agent-start-2'))
+    const second = await dispatcher.callRequest('pty.listProcesses', {
+      includeForegroundProcessEvidence: true,
+      includeVerifiedAgentDiscoveries: true
+    })
+    if (!Array.isArray(second) || typeof second[0] !== 'object' || second[0] === null) {
+      throw new Error('expected replacement process inventory')
+    }
+    const secondOwners =
+      'agentSessionOwners' in second[0] && Array.isArray(second[0].agentSessionOwners)
+        ? second[0].agentSessionOwners.filter(isAgentSessionOwnerBinding)
+        : []
+    expect(secondOwners).toHaveLength(1)
+    expect(secondOwners[0]).toMatchObject({
+      discoveryProcess: { pid: 6002, startTime: 'agent-start-2' },
+      statusBinding: {
+        continuityOf: firstOwner?.statusBinding?.runId
+      }
+    })
+    expect(secondOwners[0]?.generation).not.toBe(firstOwner?.generation)
   })
 })

@@ -105,6 +105,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
           entry.restoredUnconfirmed = true
         }
+        if (entry.launchMembership) {
+          // A persisted launch proves only that this host committed an execution in
+          // the prior runtime. The owner inventory must re-admit it before it is
+          // considered live again.
+          entry.launchMembership = { ...entry.launchMembership, phase: 'unconfirmed' }
+        }
         admitLegacyAgentStatus(
           this.state,
           'main-status-hydration',

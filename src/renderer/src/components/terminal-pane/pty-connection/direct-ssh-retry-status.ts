@@ -35,6 +35,7 @@ import {
 import { DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS } from './pty-connect-limits'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
+import { isAgentStatusTurnComplete } from '../../../../../shared/agent-completion-time'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -110,13 +111,13 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       // row, so arm the same Windows stale-focus guard until work starts again.
       session.suppressNativeWindowsIdleCodexFocusReports = true
     }
-    if (initialAgentStatus?.state === 'done') {
+    if (initialAgentStatus && isAgentStatusTurnComplete(initialAgentStatus)) {
       session.setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
     }
     session.unsubscribeWindowsDoneTerminalModeReset = useAppStore.subscribe((nextState) => {
       const nextAgentStatus = nextState.agentStatusByPaneKey[session.cacheKey]
       const nextAgentStatusState = nextAgentStatus?.state
-      if (nextAgentStatusState === 'done') {
+      if (nextAgentStatus && isAgentStatusTurnComplete(nextAgentStatus)) {
         session.setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
       } else if (nextAgentStatusState) {
         session.suppressNativeWindowsIdleCodexFocusReports = false

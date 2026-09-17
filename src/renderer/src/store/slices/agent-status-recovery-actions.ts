@@ -13,6 +13,7 @@ import {
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export function createAgentStatusRecoveryActions(
   runtime: AgentStatusRuntime
@@ -60,7 +61,7 @@ export function createAgentStatusRecoveryActions(
         }
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
-          if (entry.state === 'done') {
+          if (isAgentStatusTurnComplete(entry)) {
             const existing = next[entry.paneKey]
             if (
               !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing) ||

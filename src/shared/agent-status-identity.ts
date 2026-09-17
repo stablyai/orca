@@ -5,11 +5,13 @@ import {
   type AgentType
 } from './agent-status-types'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
+import { isAgentStatusTurnComplete } from './agent-completion-time'
 import type { TuiAgent } from './tui-agent'
 
 type ExistingAgentIdentity = {
   agentType?: AgentType
   state: AgentStatusState
+  sessionBoundary?: boolean
   updatedAt: number
   restoredUnconfirmed?: boolean
 }
@@ -66,9 +68,13 @@ export function resolveAgentStatusIdentity(args: {
     }
   }
   const canonical = resolveCanonicalPaneAgentIdentity({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: normalizedAgentType is an arbitrary AgentType string; the canonical adapter only accepts recognized TUI agent literals and falls back when unknown.
     hookAgent: incomingAgentType as TuiAgent,
     hookIsLive: true,
-    completedHookAgent: args.existing.state === 'done' ? (existingAgentType as TuiAgent) : undefined
+    completedHookAgent: isAgentStatusTurnComplete(args.existing)
+      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: existingAgentType is normalized to a non-empty known AgentType; the canonical adapter uses the TuiAgent literal domain for completed evidence.
+        (existingAgentType as TuiAgent)
+      : undefined
   })
   if (isActiveExistingIdentity(args.existing, args.now, staleAfterMs)) {
     return {

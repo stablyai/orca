@@ -62,7 +62,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       interrupted: source.interrupted,
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
-      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
+      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
+      ...(source.launchMembership ? { launchMembership: source.launchMembership } : {})
     }
     const rows = rowsByWorktree.get(summary.worktreeId)
     if (rows) {
@@ -81,10 +82,16 @@ export function attachRuntimeWorktreeAgentRows(args: {
     let hasForegroundWorkingAgent = false
     const monitoringSources: RuntimeWorktreeAgentSource[] = []
     for (const row of rows) {
-      if (!isFreshNonDoneAgentStatus(row, now)) {
+      const committedLaunch = row.launchMembership?.phase === 'committed'
+      if (!committedLaunch && !isFreshNonDoneAgentStatus(row, now)) {
         continue
       }
       summary.hasHostSidebarActivity = true
+      if (committedLaunch) {
+        // Membership means the host committed an execution; it is neither a
+        // turn nor a pending interaction and must not make the worktree busy.
+        continue
+      }
       if (row.state === 'working') {
         if (row.workingMode === 'monitoring') {
           const source = rowSources.get(row.paneKey)

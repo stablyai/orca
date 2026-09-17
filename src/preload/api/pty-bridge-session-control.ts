@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
+import type { AgentSessionExecutionClaim } from '../../shared/agent-session-host-authority'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type {
@@ -31,6 +32,7 @@ export const ptySessionControlApi = {
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    agentSessionClaim?: AgentSessionExecutionClaim
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string

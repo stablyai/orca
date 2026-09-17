@@ -22,6 +22,11 @@ import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
+import type { AgentStatusExecutionBindingResolver } from '../agent-status-execution-binding-resolver'
+import {
+  resolveAgentHookEmitterProcess,
+  type AgentHookEmitterProcessResolver
+} from '../../../shared/agent-hook-emitter-process'
 import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status-subject'
@@ -115,6 +120,8 @@ export abstract class AgentHookServerState {
   })
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
+  protected executionBindingResolver: AgentStatusExecutionBindingResolver | null = null
+  protected emitterProcessResolver: AgentHookEmitterProcessResolver = resolveAgentHookEmitterProcess
   protected transportInterference = createHookTransportInterferenceTracker(
     (report: HookTransportInterferenceReport) => {
       console.warn(describeHookTransportInterference(report))
@@ -208,7 +215,7 @@ export abstract class AgentHookServerState {
     origin?: AgentStatusObservationOrigin,
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
-  ): EnrichedAgentHookEventPayload | undefined
+  ): EnrichedAgentHookEventPayload | null | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
   protected abstract clearCodexSubagentPoll(paneKey: string): void

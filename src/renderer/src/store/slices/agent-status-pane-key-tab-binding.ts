@@ -7,6 +7,7 @@ import type {
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
   for (const prefix of tabPrefixes) {
@@ -77,7 +78,11 @@ export function findCompletedOrphanPaneKeysForTabClose(
   const openTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
   const paneKeys: string[] = []
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    if (paneKey.startsWith(prefix) || entry.state !== 'done' || entry.worktreeId !== worktreeId) {
+    if (
+      paneKey.startsWith(prefix) ||
+      !isAgentStatusTurnComplete(entry) ||
+      entry.worktreeId !== worktreeId
+    ) {
       continue
     }
     const tabId = getTabIdFromPaneKey(paneKey)

@@ -51,7 +51,8 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
-      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
+      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
+      ...(entry.launchMembership ? { launchMembership: entry.launchMembership } : {})
     })
   }
   const sources: RuntimeWorktreeAgentSource[] = []
@@ -65,6 +66,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     // holds the session drops the row itself on close, so its presence is the liveness evidence.
     if (
       source.structuredHost === undefined &&
+      source.launchMembership?.phase !== 'committed' &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
       (source.connectionId === null || isWslHookRelayConnectionId(source.connectionId)) &&

@@ -1,6 +1,7 @@
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import type {
   AgentLaunchPreferences,
+  AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
@@ -19,6 +20,7 @@ import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
+import type { VerifiedAgentDiscovery } from '../../shared/agent-status-verified-discovery'
 
 export type TerminalCreateOptions = {
   command?: string
@@ -63,6 +65,27 @@ export type TerminalCreateOptions = {
   signal?: AbortSignal
   onPtySpawnCommitted?: () => void
   deferMobileSessionPublish?: boolean
+}
+
+/** Notification emitted after the execution host commits or adopts a claimed owner. */
+export type RuntimeAgentSessionCommit = {
+  result: AgentSessionClaimedSpawnResult
+  paneKey: string
+  tabId: string
+  leafId: string
+  worktreeId: string
+  connectionId: string | null
+  launchToken?: string
+  agentType?: TuiAgent
+}
+
+export type RuntimeAgentSessionInventoryReconciliation = {
+  owners: readonly unknown[]
+  /** Host-verified manual/adopted processes; consumers still admit through the owner registry. */
+  discoveries: readonly VerifiedAgentDiscovery[]
+  complete: boolean
+  /** `undefined` is an aggregate census; null is the local host; a string is one SSH host. */
+  connectionId?: string | null
 }
 
 /** Identity a fenced spawn can be re-found by in the execution host's own inventory. */
@@ -113,7 +136,12 @@ export type RuntimeTerminalAgentStatusEvent = {
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId'
+  | 'payload'
+  | 'updatedAt'
+  | 'evidenceObservedAt'
+  | 'stateStartedAt'
+  | 'worktreeId'
+  | 'launchMembership'
 >
 
 export type RuntimePtyDataAdmission = Readonly<{

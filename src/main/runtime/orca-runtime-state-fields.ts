@@ -3,7 +3,11 @@ import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
 import type { IPtyProvider } from '../providers/types'
-import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
+import type {
+  RuntimeAgentSessionCommit,
+  RuntimeAgentSessionInventoryReconciliation,
+  RuntimeTerminalAgentStatusEvent
+} from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -16,6 +20,7 @@ import type {
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import type { AgentSessionClaimSigner } from './agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from './orchestration/environment-transport'
+import type { VerifiedAgentDiscovery } from '../../shared/agent-status-verified-discovery'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import { installRuntimeFileCommandSurface } from './runtime-file-command-surface'
 import { installRuntimeGitCommandSurface } from './runtime-git-command-surface'
@@ -49,6 +54,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
+      onAgentSessionCommitted?: (commit: RuntimeAgentSessionCommit) => void
+      onAgentSessionInventoryReconciled?: (
+        reconciliation: RuntimeAgentSessionInventoryReconciliation
+      ) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
       // Why: agent status mostly arrives via hooks (agent-hooks/server), not OSC
       // terminal output. worktree.ps reads this at query time so mobile shows the
@@ -66,6 +75,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
        *  only carrier of the provider session a transcript is addressed by. */
       getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
       getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+      getAgentDiscoveryProviderIdentityForPane?: (
+        paneKey: string
+      ) => VerifiedAgentDiscovery['providerIdentity'] | null
+      invalidateAgentDiscoveryProviderIdentityForPane?: (paneKey: string) => void
       attestAgentHookCompatibilityAuthority?: (candidate: {
         paneKey: string
         launchTokenHash: string
@@ -210,6 +223,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
+    this.getAgentDiscoveryProviderIdentityForPaneFn =
+      deps?.getAgentDiscoveryProviderIdentityForPane ?? null
+    this.invalidateAgentDiscoveryProviderIdentityForPaneFn =
+      deps?.invalidateAgentDiscoveryProviderIdentityForPane ?? null
     this.attestAgentHookCompatibilityAuthorityFn =
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
@@ -238,6 +255,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
+    this.onAgentSessionCommitted = deps?.onAgentSessionCommitted ?? null
+    this.onAgentSessionInventoryReconciled = deps?.onAgentSessionInventoryReconciled ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null

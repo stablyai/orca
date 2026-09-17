@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from '../../shared/agent-status-run'
 import {
   registerSshPtyProvider,
   clearPtyOwnershipForConnection,
@@ -53,6 +54,14 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
+function statusBinding(suffix: string): AgentStatusExecutionBinding {
+  return {
+    runId: `run-${suffix}`,
+    attachment: { executionId: `execution-${suffix}` },
+    role: 'root'
+  }
+}
+
 describe('registerPtyHandlers', () => {
   const {
     createAgentClaimProvider,
@@ -73,7 +82,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-remote',
       phase: 'live',
       ptyId: ownerPtyId,
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('remote')
     }
     const remoteProvider = createAgentClaimProvider({
       sessions: [
@@ -125,7 +135,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-conflict',
       phase: 'live',
       ptyId: 'pty-conflict-local',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('conflict')
     }
     const remoteOwner: AgentSessionOwnerBinding = {
       ...localOwner,
@@ -186,7 +197,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-a',
       phase: 'live',
       ptyId: 'pty-conflict-a',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('converge')
     }
     const ownerB: AgentSessionOwnerBinding = {
       ...ownerA,
@@ -247,7 +259,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-old',
       phase: 'live',
       ptyId: 'pty-reused',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('old')
     }
     const sessions = [
       {
@@ -271,7 +284,8 @@ describe('registerPtyHandlers', () => {
           generation: 'generation-new',
           phase: 'live',
           ptyId: 'pty-new-owner',
-          surface: ensured.surface
+          surface: ensured.surface,
+          statusBinding: statusBinding('new')
         }
         sessions.push({
           id: owner.ptyId,
@@ -318,7 +332,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-reconnect',
       phase: 'live',
       ptyId: `ssh:${connectionId}@@pty-owner`,
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('reconnect')
     }
     const sessions = [
       {

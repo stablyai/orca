@@ -132,6 +132,13 @@ export type IPtyProvider = {
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   /** Explicit false selects pre-claim legacy spawn for a preserved old daemon. */
   supportsAgentSessionClaims?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
+  /** Host-issued reservation identity for a fresh launch on a remote provider. */
+  createFreshAgentSessionClaim?: (args: {
+    worktreeId: string
+    agent: TuiAgent
+    launchIdentity: string
+    signal?: AbortSignal
+  }) => Promise<AgentSessionExecutionClaim | null>
   /** Whether missing claim metadata in this PTY's process listing proves absence. */
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
@@ -237,6 +244,7 @@ export type IPtyProvider = {
   listProcesses(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
+    includeVerifiedAgentDiscoveries?: boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>

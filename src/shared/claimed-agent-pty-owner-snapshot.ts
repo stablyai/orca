@@ -1,8 +1,10 @@
-import type {
-  AgentSessionExecutionClaim,
-  AgentSessionOwnerBinding,
-  AgentSessionSurfaceBinding
+import {
+  isAgentSessionOwnerBinding,
+  type AgentSessionExecutionClaim,
+  type AgentSessionOwnerBinding,
+  type AgentSessionSurfaceBinding
 } from './agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from './agent-status-run'
 
 export type LiveAgentSessionOwner = AgentSessionOwnerBinding & { phase: 'live' }
 
@@ -29,6 +31,29 @@ export function cloneAgentSessionSurface(
   }
 }
 
+export function cloneAgentStatusExecutionBinding(
+  binding: AgentStatusExecutionBinding
+): AgentStatusExecutionBinding {
+  return {
+    runId: binding.runId,
+    attachment: { executionId: binding.attachment.executionId },
+    role: binding.role,
+    ...(binding.continuityOf ? { continuityOf: binding.continuityOf } : {})
+  }
+}
+
+export function agentStatusExecutionBindingsEqual(
+  left: AgentStatusExecutionBinding,
+  right: AgentStatusExecutionBinding
+): boolean {
+  return (
+    left.runId === right.runId &&
+    left.attachment.executionId === right.attachment.executionId &&
+    left.role === right.role &&
+    left.continuityOf === right.continuityOf
+  )
+}
+
 export function cloneAgentSessionOwnerBinding(
   owner: AgentSessionOwnerBinding
 ): AgentSessionOwnerBinding {
@@ -37,7 +62,23 @@ export function cloneAgentSessionOwnerBinding(
     generation: owner.generation,
     phase: owner.phase,
     ptyId: owner.ptyId,
-    surface: cloneAgentSessionSurface(owner.surface)
+    surface: cloneAgentSessionSurface(owner.surface),
+    statusBinding: cloneAgentStatusExecutionBinding(owner.statusBinding),
+    ...(owner.discoveryProcess
+      ? {
+          discoveryProcess: {
+            ...owner.discoveryProcess,
+            ...(owner.discoveryProcess.providerObservation
+              ? {
+                  providerObservation: {
+                    ...owner.discoveryProcess.providerObservation,
+                    process: { ...owner.discoveryProcess.providerObservation.process }
+                  }
+                }
+              : {})
+          }
+        }
+      : {})
   }
 }
 
@@ -87,13 +128,71 @@ export function agentSessionOwnerBindingsEqual(
     right.phase === 'live' &&
     left.generation === right.generation &&
     left.ptyId === right.ptyId &&
+    agentStatusExecutionBindingsEqual(left.statusBinding, right.statusBinding) &&
     scopedAgentSessionClaimsEqual(left.claim, right.claim) &&
-    agentSessionSurfacesEqual(left.surface, right.surface)
+    agentSessionSurfacesEqual(left.surface, right.surface) &&
+    discoveredProcessesEqual(left.discoveryProcess, right.discoveryProcess)
+  )
+}
+
+function discoveredProcessesEqual(
+  left: AgentSessionOwnerBinding['discoveryProcess'],
+  right: AgentSessionOwnerBinding['discoveryProcess']
+): boolean {
+  if (!left || !right) {
+    return left === right
+  }
+  return (
+    left.ptyIncarnationId === right.ptyIncarnationId &&
+    left.pid === right.pid &&
+    left.startTime === right.startTime &&
+    left.authorityGeneration === right.authorityGeneration &&
+    left.observationEpoch === right.observationEpoch &&
+    providerObservationsEqual(left.providerObservation, right.providerObservation)
+  )
+}
+
+function providerObservationsEqual(
+  left: NonNullable<AgentSessionOwnerBinding['discoveryProcess']>['providerObservation'],
+  right: NonNullable<AgentSessionOwnerBinding['discoveryProcess']>['providerObservation']
+): boolean {
+  if (!left || !right) {
+    return left === right
+  }
+  return (
+    left.authorityId === right.authorityId &&
+    left.incarnation === right.incarnation &&
+    left.revision === right.revision &&
+    left.process.pid === right.process.pid &&
+    left.process.startTime === right.process.startTime
   )
 }
 
 export function cloneAgentSessionOwner(owner: LiveAgentSessionOwner): LiveAgentSessionOwner {
   return cloneAgentSessionOwnerBinding(owner) as LiveAgentSessionOwner
+}
+
+export function parseSpawnedAgentSessionOwner(
+  value: unknown
+): AgentSessionOwnerBinding | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!isAgentSessionOwnerBinding(value) || value.phase !== 'live') {
+    throw new Error('agent_session_ownership_unknown')
+  }
+  return value
+}
+
+export function countClaimedAgentPtyOwners(
+  live: ReadonlyMap<string, LiveAgentSessionOwner>,
+  conflicts: ReadonlyMap<string, readonly LiveAgentSessionOwner[]>
+): number {
+  let count = live.size
+  for (const owners of conflicts.values()) {
+    count += owners.length
+  }
+  return count
 }
 
 export function prepareRegisteredAgentSessionOwner(args: {

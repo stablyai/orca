@@ -14,6 +14,10 @@ import {
   restrictWindowsRelayEndpointCredential
 } from './relay-endpoint-credential-publication'
 import { SKILL_RELAY_CAPABILITIES } from './skill-install-handler'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { RELAY_REMOTE_DIR } from '../main/ssh/relay-protocol'
+import { loadAgentSessionClaimSigner } from '../main/runtime/agent-session-claim-identity'
 
 export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void> {
   if (options.detached && options.logFile) {
@@ -45,7 +49,11 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
   const runtime = new RelayRuntimeServices(
     primaryChannel.dispatcher,
     options.graceTimeMs,
-    launchVersion
+    launchVersion,
+    loadAgentSessionClaimSigner(
+      join(homedir(), RELAY_REMOTE_DIR),
+      `relay:${process.platform}:${process.arch}`
+    )
   )
   fatalPtyHandler = runtime.ptyHandler
   let reconnectListener: RelayReconnectListener | null = null

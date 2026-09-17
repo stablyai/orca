@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
-  piClearPtyMock
+  piClearPtyMock,
+  admitAgentSessionOwnerMock
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from '../../shared/agent-status-run'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   registerPtyHandlers,
@@ -14,6 +16,14 @@ import {
   isCurrentPtyExit,
   restorePtyIncarnation
 } from './pty'
+
+function statusBinding(suffix: string): AgentStatusExecutionBinding {
+  return {
+    runId: `run-${suffix}`,
+    attachment: { executionId: `execution-${suffix}` },
+    role: 'root'
+  }
+}
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -113,6 +123,81 @@ describe('registerPtyHandlers', () => {
     }
     expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
+    clearProviderPtyState(ptyId)
+  })
+  it('derives and admits a fresh renderer agent launch before the first hook', async () => {
+    const ptyId = 'pty-fresh-renderer-agent'
+    const incarnationId = 'incarnation-fresh-renderer-agent'
+    const sessions: {
+      id: string
+      incarnationId: string
+      cwd: string
+      title: string
+    }[] = []
+    const physicalSpawn = vi.fn(async (options: { agentSessionEnsure?: unknown }) => {
+      const result = { id: ptyId, incarnationId }
+      sessions.push({ ...result, cwd: '/tmp/fresh-renderer-agent', title: 'Codex' })
+      expect(options.agentSessionEnsure).toMatchObject({
+        claim: recoveredAgentClaim,
+        surface: {
+          worktreeId: recoveredAgentSurface.worktreeId,
+          tabId: recoveredAgentSurface.tabId,
+          leafId: recoveredAgentSurface.leafId,
+          terminalHandle: expect.stringMatching(/^term_/)
+        }
+      })
+      return result
+    })
+    const provider = createAgentClaimProvider({
+      sessions,
+      spawn: physicalSpawn,
+      authoritativeOwnerListings: false
+    })
+    setLocalPtyProvider(provider as never)
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'createFreshAgentSessionClaim').mockResolvedValue(recoveredAgentClaim)
+    const store = { persistPtyBinding: vi.fn() }
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/fresh-renderer-agent',
+        worktreeId: recoveredAgentSurface.worktreeId,
+        tabId: recoveredAgentSurface.tabId,
+        leafId: recoveredAgentSurface.leafId,
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        launchToken: 'fresh-launch-token',
+        launchAgent: 'codex'
+      })
+    ).resolves.toMatchObject({
+      id: ptyId,
+      agentSessionEnsure: { disposition: 'created' }
+    })
+
+    expect(physicalSpawn).toHaveBeenCalledOnce()
+    expect(admitAgentSessionOwnerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: expect.objectContaining({
+          ptyId,
+          statusBinding: expect.objectContaining({
+            runId: expect.any(String),
+            attachment: { executionId: expect.any(String) }
+          })
+        }),
+        paneKey: `${recoveredAgentSurface.tabId}:${recoveredAgentSurface.leafId}`,
+        disposition: 'created',
+        launchToken: 'fresh-launch-token'
+      })
+    )
     clearProviderPtyState(ptyId)
   })
   it('adopts a live controller-owned local fallback when listings cannot serialize claims', async () => {
@@ -306,7 +391,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-recovered',
       phase: 'live',
       ptyId: 'pty-recovered-owner',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('recovered')
     }
     const provider = createAgentClaimProvider({
       sessions: [
@@ -348,7 +434,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-adopted-exit',
       phase: 'live',
       ptyId: 'pty-adopted-exit',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('adopted-exit')
     }
     const runtime = new OrcaRuntimeService()
     const provider = createAgentClaimProvider({
@@ -416,7 +503,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-no-incarnation',
       phase: 'live',
       ptyId: 'pty-owner-without-incarnation',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('without-incarnation')
     }
     const provider = createAgentClaimProvider({
       sessions: [

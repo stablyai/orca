@@ -10,6 +10,7 @@ import {
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { isAgentStatusTurnComplete } from '../../../../../shared/agent-completion-time'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -140,7 +141,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     const normalizedPrompt = prompt.trim()
     if (
       currentEntry?.agentType === 'command-code' &&
-      currentEntry.state === 'done' &&
+      isAgentStatusTurnComplete(currentEntry) &&
       (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
     ) {
       return

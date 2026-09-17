@@ -17,6 +17,7 @@ import {
   isSshPtyIdentityMismatchError
 } from '../../../providers/ssh-pty-errors'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { agentStatusExecutionBindingEnv } from '../../../../shared/agent-status-run'
 
 export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
   const args = ctx.args
@@ -80,9 +81,15 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       const ensured = await agentSessionOwners.ensure({
         claim: args.agentSessionEnsure.claim,
         surface: args.agentSessionEnsure.surface,
-        spawn: async () => {
+        spawn: async ({ statusBinding }) => {
           assertClientStillConnected()
-          providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+          providerResult = await ctx.provider.spawn({
+            ...ctx.spawnOptions,
+            env: {
+              ...ctx.spawnOptions.env,
+              ...agentStatusExecutionBindingEnv(statusBinding)
+            }
+          })
           ctx.rejectedRegistrationCandidate = providerResult
           // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
           ctx.reportPtySpawnCommitted()

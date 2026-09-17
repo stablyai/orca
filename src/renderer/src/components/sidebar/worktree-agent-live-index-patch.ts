@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export type LiveEntriesByWorktreeCache = {
   tabsByWorktree: AppState['tabsByWorktree']
@@ -30,7 +31,7 @@ export function liveEntryWorktreeId(
     return undefined
   }
   const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
-  return tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
+  return tabWorktreeId ?? (isAgentStatusTurnComplete(entry) ? undefined : entry.worktreeId)
 }
 
 /**
@@ -72,7 +73,7 @@ export function patchLiveEntriesByWorktree(
     if (
       previous === undefined ||
       previous.worktreeId !== entry.worktreeId ||
-      (previous.state === 'done') !== (entry.state === 'done')
+      isAgentStatusTurnComplete(previous) !== isAgentStatusTurnComplete(entry)
     ) {
       return null
     }

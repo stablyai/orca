@@ -9,7 +9,9 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  'ORCA_AGENT_STATUS_RUN_ID',
+  'ORCA_AGENT_STATUS_EXECUTION_ID'
 ] as const
 
 export function getDefaultCwd(): string {

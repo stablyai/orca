@@ -19,6 +19,9 @@ import {
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { isResumableTuiAgent } from '../../../../shared/agent-session-resume'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import type { AgentSessionSurfaceBinding } from '../../../../shared/agent-session-host-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function buildPtyIpcSpawnOptions(
@@ -49,6 +52,56 @@ export async function buildPtyIpcSpawnOptions(
   }
   deleteRequestedEnvKeys(ctx.spawnEnv, ctx.combinedEnvToDelete)
   promoteAgentTeamsShimPath(ctx.spawnEnv, ctx.requestedAgentTeamsPath)
+  const canonicalWorktreeId =
+    typeof args.worktreeId === 'string' &&
+    args.worktreeId.length > 0 &&
+    args.worktreeId.length <= 4096
+      ? args.worktreeId
+      : null
+  const canonicalTabId =
+    typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512
+      ? args.tabId
+      : null
+  const canonicalSurface: AgentSessionSurfaceBinding | null =
+    canonicalWorktreeId &&
+    canonicalTabId &&
+    isValidTerminalTabId(canonicalTabId) &&
+    ctx.metadataLeafId !== null &&
+    ctx.preAllocatedHandle !== null
+      ? {
+          worktreeId: canonicalWorktreeId,
+          tabId: canonicalTabId,
+          leafId: ctx.metadataLeafId,
+          terminalHandle: ctx.preAllocatedHandle
+        }
+      : null
+  const freshAgentSessionClaim =
+    !args.agentSessionEnsure &&
+    !args.agentSessionClaim &&
+    !args.resumeProviderSession &&
+    args.launchConfig !== undefined &&
+    typeof args.launchToken === 'string' &&
+    args.launchToken.length > 0 &&
+    isResumableTuiAgent(args.launchAgent) &&
+    canonicalWorktreeId &&
+    ctx.deps.runtime?.createFreshAgentSessionClaim
+      ? await ctx.deps.runtime.createFreshAgentSessionClaim({
+          worktreeId: canonicalWorktreeId,
+          connectionId: args.connectionId ?? null,
+          agent: args.launchAgent,
+          launchIdentity: args.launchToken
+        })
+      : null
+  if (!ctx.preAdoptedStablePane) {
+    const claim = args.agentSessionEnsure?.claim ?? args.agentSessionClaim ?? freshAgentSessionClaim
+    if (claim) {
+      const surface = canonicalSurface
+      if (!surface) {
+        throw new Error('agent_session_identity_required')
+      }
+      ctx.agentSessionEnsure = { claim, surface }
+    }
+  }
   ctx.spawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -125,6 +178,12 @@ export async function buildPtyIpcSpawnOptions(
       colors: startupTerminalColorQueryReplyColors,
       deadlineMs: 5_000
     }
+  }
+  if (ctx.agentSessionEnsure && (await ctx.provider.supportsAgentSessionClaims?.()) === false) {
+    throw new Error('agent_session_claim_unavailable')
+  }
+  if (ctx.agentSessionEnsure) {
+    ctx.spawnOptions.agentSessionEnsure = ctx.agentSessionEnsure
   }
   const resolvedPaneSpawnReservationKey = makePaneSpawnReservationKey(
     args.worktreeId,

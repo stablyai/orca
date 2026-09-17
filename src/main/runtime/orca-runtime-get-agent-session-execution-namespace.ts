@@ -5,11 +5,13 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type {
   AgentLaunchPreferences,
+  AgentSessionExecutionClaim,
   RuntimeAgentSessionRpcCaller,
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
+import { isResumableTuiAgent } from '../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
@@ -72,6 +74,53 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       // Why: this read-only check has not launched anything, so the old route remains safe.
       return false
     }
+  }
+
+  /**
+   * Build the host-owned reservation identity for a fresh launch before the
+   * provider has emitted a resumable session id. The returned claim is only a
+   * key for the existing owner transaction; status attribution comes from its
+   * committed execution binding, never from this launch identity.
+   */
+  async createFreshAgentSessionClaim(args: {
+    worktreeId: string
+    connectionId: string | null
+    agent: TuiAgent
+    launchIdentity: string
+  }): Promise<AgentSessionExecutionClaim | null> {
+    if (!isResumableTuiAgent(args.agent) || args.launchIdentity.trim().length === 0) {
+      return null
+    }
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${args.worktreeId}`)
+    if (workspace.connectionId) {
+      const provider = this.getSshProviderFn?.(workspace.connectionId)
+      if (!provider?.createFreshAgentSessionClaim) {
+        return null
+      }
+      try {
+        // The execution host mints this claim. Client-side keys must never authorize a remote PTY.
+        return await provider.createFreshAgentSessionClaim({
+          worktreeId: workspace.id,
+          agent: args.agent,
+          launchIdentity: args.launchIdentity
+        })
+      } catch {
+        return null
+      }
+    }
+    const namespace = this.getAgentSessionExecutionNamespace(workspace, args.agent)
+    if (
+      !namespace ||
+      !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume'))
+    ) {
+      return null
+    }
+    return this.agentSessionClaimSigner.createFreshClaim({
+      namespace,
+      agent: args.agent,
+      launchIdentity: args.launchIdentity,
+      canonicalWorktreeId: workspace.id
+    })
   }
 
   protected toAgentSessionOptions(

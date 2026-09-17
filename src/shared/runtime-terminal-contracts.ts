@@ -12,6 +12,14 @@ import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type { AgentSessionExecutionClaim } from './agent-session-host-authority'
+import type { RuntimeTerminalWaitBlockedReason } from './runtime-terminal-wait-contracts'
+
+export type {
+  RuntimeTerminalWait,
+  RuntimeTerminalWaitBlockedReason,
+  RuntimeTerminalWaitCondition
+} from './runtime-terminal-wait-contracts'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -257,6 +265,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  agentSessionClaim?: AgentSessionExecutionClaim
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
@@ -328,34 +337,4 @@ export type RuntimeTerminalClose = {
   ptyKilled: boolean
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
-}
-
-export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
-
-// Why both spellings: the codex-* members were published by every host before the agent-neutral
-// rename, so they are permanent — a client still has to read them off an older host. This build
-// keeps a codex-* reason only where the matched wording is plausibly Codex's own; every matcher
-// that inspects no agent publishes the agent-* spelling.
-export type RuntimeTerminalWaitBlockedReason =
-  | 'codex-update-prompt'
-  | 'codex-trust-workspace'
-  | 'codex-cwd-prompt'
-  | 'codex-model-migration-prompt'
-  | 'codex-hooks-review-prompt'
-  | 'codex-interactive-prompt'
-  | 'agent-update-prompt'
-  | 'agent-trust-workspace'
-  | 'agent-cwd-prompt'
-  | 'agent-hooks-review-prompt'
-  | 'agent-interactive-prompt'
-  | 'agent-approval-prompt'
-
-export type RuntimeTerminalWait = {
-  handle: string
-  condition: RuntimeTerminalWaitCondition
-  satisfied: boolean
-  status: RuntimeTerminalState
-  exitCode: number | null
-  exitCause?: TerminalExitCause
-  blockedReason?: RuntimeTerminalWaitBlockedReason
 }

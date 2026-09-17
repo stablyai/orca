@@ -113,9 +113,13 @@ export class AgentHookResultRetryScheduler {
     }
     const subagentsChanged =
       JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
-    const next = subagentsChanged ? event : original
+    const retried = {
+      ...event,
+      ...(original.emitterProcess ? { emitterProcess: original.emitterProcess } : {})
+    }
+    const next = subagentsChanged ? retried : original
     if (subagentsChanged) {
-      this.host.applyEvent(event, source, env, version)
+      this.host.applyEvent(retried, source, env, version)
     }
     this.scheduleCodexSubagentPoll(source, body, next, env, version)
   }
@@ -211,6 +215,11 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    this.host.applyEvent(event, source, env, version)
+    this.host.applyEvent(
+      { ...event, ...(original.emitterProcess ? { emitterProcess: original.emitterProcess } : {}) },
+      source,
+      env,
+      version
+    )
   }
 }

@@ -22,7 +22,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     ) {
       return null
     }
-    const { launchToken: _launchToken, ...resumeIdentity } = entry
+    const {
+      launchToken: _launchToken,
+      launchMembership: _launchMembership,
+      ...resumeIdentity
+    } = entry
     return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
   }
 

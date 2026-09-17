@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentStatusLaunchMembership } from './agent-status-launch-membership'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -28,6 +29,8 @@ export type RuntimeWorktreeAgentRow = {
   /** The structured session host still runs this row's provider child, so it is fresh regardless
    *  of age. Optional on the wire: old hosts never send it. */
   structuredHostOwned?: true
+  /** Host-owned committed/adopted execution membership; not completion evidence. */
+  launchMembership?: AgentStatusLaunchMembership
 }
 
 export type RuntimeWorktreePsSummary = {

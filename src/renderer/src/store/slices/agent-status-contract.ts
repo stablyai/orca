@@ -8,6 +8,7 @@ import type {
   ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import type { AgentStatusLaunchMembership } from '../../../../shared/agent-status-launch-membership'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
@@ -115,6 +116,7 @@ export type AgentStatusMetadata = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   terminalResumeEligible?: false
+  launchMembership?: AgentStatusLaunchMembership
 }
 
 export type AgentStatusUpdate = {

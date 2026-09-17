@@ -31,7 +31,16 @@ export function normalizeHookPayload(
   if (!envelope) {
     return null
   }
-  const { record, paneKey, hookPayloadRecord, tabId, worktreeId, launchToken } = envelope
+  const {
+    record,
+    paneKey,
+    hookPayloadRecord,
+    tabId,
+    worktreeId,
+    launchToken,
+    reportedExecutionBinding,
+    reportedEmitterProcessId
+  } = envelope
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   }
@@ -139,6 +148,12 @@ export function normalizeHookPayload(
     paneKey,
     source,
     launchToken,
+    reportedExecutionBinding,
+    reportedEmitterProcessId,
+    ...(readString(hookPayloadRecord, 'agent_id') !== undefined ||
+    (source === 'claude' && eventName === 'TeammateIdle')
+      ? { emitterRole: 'child' as const }
+      : {}),
     tabId,
     worktreeId,
     // Normalization is transport-agnostic; only ingestRemote knows the mux identity to stamp.

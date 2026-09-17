@@ -136,6 +136,10 @@ function activeOrQueuedResumeClaimsProviderSession(
     ) {
       return true
     }
+    // Deliberately `state`, not the turn-complete predicate: a launch-membership row carries no
+    // provider session, so the equality guard above already excludes it and widening this arm to
+    // boundary rows would only reach SessionStart/compact rows — whose records this claim then
+    // clears, turning a pending auto-resume into a deleted one.
     if (
       entry.state !== 'done' &&
       worktreeTabIds.has(tabId ?? '') &&

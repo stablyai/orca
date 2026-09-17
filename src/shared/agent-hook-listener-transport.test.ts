@@ -102,7 +102,9 @@ describe('shared agent-hook-listener', () => {
           worktreeId,
           'production',
           '1'
-        )
+        ),
+        'x-orca-agent-status-run-id': b64('run-a'),
+        'x-orca-agent-status-execution-id': b64('execution-a')
       }
     )
 
@@ -112,6 +114,7 @@ describe('shared agent-hook-listener', () => {
       paneKey,
       tabId: 'tab-1',
       worktreeId,
+      reportedExecutionBinding: { runId: 'run-a', executionId: 'execution-a' },
       payload: { state: 'working', prompt: 'hello' }
     })
   })

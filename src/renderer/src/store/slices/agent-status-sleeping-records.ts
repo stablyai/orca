@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
@@ -79,14 +80,14 @@ export function normalizeSleepingAgentSessionCollectOptions(
 }
 
 export function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
-  return entry.state === 'done' && entry.interrupted !== true
+  return isAgentStatusTurnComplete(entry) && entry.interrupted !== true
 }
 
 // Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
 // record's tab. Sleeping a workspace must not become "one phone tap respawns all of it" — the pane
 // issues its own `--resume` cold restore when its tab is opened instead (#11598).
 export function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): void {
-  if (record.state === 'done') {
+  if (record.state === 'done' && record.interrupted !== true) {
     record.restoreOnTabOpenOnly = true
   }
 }

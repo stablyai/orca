@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deserializeAgentStatusPtyRunRecord,
+  parseAgentStatusExecutionBinding,
   parseAgentStatusProviderAlias,
   parseAgentStatusPtyRunRecord,
   serializeAgentStatusPtyRunRecord,
@@ -12,7 +13,7 @@ function runRecord(overrides: Partial<AgentStatusPtyRunRecord> = {}): AgentStatu
     runId: 'run-a',
     paneKey: 'tab-1:pane-1',
     attachment: { executionId: 'execution-a' },
-    attribution: 'token',
+    attribution: 'execution-attachment',
     providerSessions: [
       {
         provider: 'claude',
@@ -42,9 +43,9 @@ describe('agent status PTY run records', () => {
     )
   })
 
-  it('supports an id-less pane-attributed run without inventing a provider alias', () => {
+  it('supports an unresolved run without inventing a provider alias', () => {
     const record = runRecord({
-      attribution: 'pane',
+      attribution: 'unresolved',
       providerSessions: [],
       role: 'unresolved',
       verdict: 'unverifiable'
@@ -54,6 +55,52 @@ describe('agent status PTY run records', () => {
     expect(deserializeAgentStatusPtyRunRecord(serializeAgentStatusPtyRunRecord(record))).toEqual(
       record
     )
+  })
+
+  it('accepts legacy attribution labels while keeping new emissions explicit', () => {
+    expect(parseAgentStatusPtyRunRecord(runRecord({ attribution: 'token' }))?.attribution).toBe(
+      'token'
+    )
+    expect(parseAgentStatusPtyRunRecord(runRecord({ attribution: 'pane' }))?.attribution).toBe(
+      'pane'
+    )
+  })
+
+  it('parses the execution binding committed with a live owner', () => {
+    expect(
+      parseAgentStatusExecutionBinding({
+        runId: 'run-a',
+        attachment: { executionId: 'execution-a' },
+        role: 'root',
+        continuityOf: 'run-before-a'
+      })
+    ).toEqual({
+      runId: 'run-a',
+      attachment: { executionId: 'execution-a' },
+      role: 'root',
+      continuityOf: 'run-before-a'
+    })
+  })
+
+  it.each([
+    { runId: '', attachment: { executionId: 'execution-a' }, role: 'root' },
+    { runId: 'run-a', attachment: { executionId: '' }, role: 'root' },
+    { runId: 'run-a', attachment: { executionId: 'execution-a', pid: 123 }, role: 'root' },
+    { runId: 'run-a', attachment: { executionId: 'execution-a' }, role: 'unresolved' },
+    {
+      runId: 'run-a',
+      attachment: { executionId: 'execution-a' },
+      role: 'root',
+      continuityOf: 'run-a'
+    },
+    {
+      runId: 'run-a',
+      attachment: { executionId: 'execution-a' },
+      role: 'root',
+      extra: true
+    }
+  ])('rejects malformed execution binding %#', (value) => {
+    expect(parseAgentStatusExecutionBinding(value)).toBeNull()
   })
 
   it('preserves repeated provider ids when reset evidence reports them in order', () => {
@@ -68,6 +115,37 @@ describe('agent status PTY run records', () => {
 
     expect(deserializeAgentStatusPtyRunRecord(serializeAgentStatusPtyRunRecord(record))).toEqual(
       record
+    )
+  })
+
+  it('retains one attachment while appending a provider alias after reset', () => {
+    const before = runRecord({
+      providerSessions: [
+        { provider: 'claude', sessionKeyKind: 'session_id', providerId: 'session-before-reset' }
+      ]
+    })
+    const after = {
+      ...before,
+      providerSessions: [
+        ...before.providerSessions,
+        {
+          provider: 'claude' as const,
+          sessionKeyKind: 'session_id' as const,
+          providerId: 'session-after-reset',
+          resetBoundary: true as const
+        }
+      ],
+      verdict: 'exited' as const
+    }
+    expect(after.runId).toBe(before.runId)
+    expect(after.attachment).toEqual(before.attachment)
+    expect(after.providerSessions).toHaveLength(2)
+    expect(after.providerSessions[1]).toMatchObject({
+      providerId: 'session-after-reset',
+      resetBoundary: true
+    })
+    expect(deserializeAgentStatusPtyRunRecord(serializeAgentStatusPtyRunRecord(after))).toEqual(
+      after
     )
   })
 

@@ -1,5 +1,17 @@
 import type { AgentStateHistoryEntry, AgentStatusEntry } from './agent-status-types'
 
+/**
+ * Whether a status row represents a completed agent turn.
+ *
+ * A `done` + `sessionBoundary` row is the compatibility projection for a
+ * connected/admitted session and carries no completion evidence of its own.
+ */
+export function isAgentStatusTurnComplete(
+  entry: Pick<AgentStatusEntry, 'sessionBoundary'> & { state: string }
+): boolean {
+  return entry.state === 'done' && entry.sessionBoundary !== true
+}
+
 /** The subset of a hook entry a completion time is derived from. */
 export type AgentCompletionSource = Pick<
   AgentStatusEntry,

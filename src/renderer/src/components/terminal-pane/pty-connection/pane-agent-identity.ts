@@ -17,6 +17,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { isAgentStatusTurnComplete } from '../../../../../shared/agent-completion-time'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -27,7 +28,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // can't drift and silently reintroduce the icon bug this fix closes.
   session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
     const entry = state.agentStatusByPaneKey[session.cacheKey]
-    return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
+    return (
+      (entry === undefined || !isAgentStatusTurnComplete(entry)) &&
+      Boolean(agentTypeToIconAgent(entry?.agentType))
+    )
   }
   // Why: one ladder for both launch-agent signals; a second copy could drift.
   const resolveLaunchAgentCandidate = (

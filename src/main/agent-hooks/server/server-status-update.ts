@@ -11,7 +11,10 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  admitLegacyAgentStatus,
+  deleteLegacyAgentStatus
+} from '../../../shared/agent-hook-listener/listener-state'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
@@ -21,6 +24,9 @@ import {
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
 import { AgentHookServerStatusApplication } from './server-status-application'
+import { prepareLaunchMembershipPayload } from './server-launch-membership-payload'
+import { resolveAgentStatusBinding } from './server-status-binding'
+import { preserveCodexRootContext } from './server-status-context'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
@@ -29,9 +35,25 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
-  ): EnrichedAgentHookEventPayload | undefined {
+  ): EnrichedAgentHookEventPayload | null | undefined {
+    const binding = resolveAgentStatusBinding({
+      payload,
+      previousCandidate: this.state.lastStatusByPaneKey.get(payload.paneKey),
+      resolver: this.executionBindingResolver
+    })
+    if (binding.suppress) {
+      // A suppressed first event has no row to return; callers must not schedule
+      // retries or project a synthetic status for an unadmitted child.
+      return binding.previous ?? null
+    }
+    payload = binding.payload
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
+    }
+    const previousBeforeIdentity = binding.previous
+    if (binding.replacement) {
+      // A replacement run is a new subject even when the pane slot is reused.
+      deleteLegacyAgentStatus(this.state, payload.paneKey)
     }
     if (payload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
@@ -40,21 +62,20 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     let previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const rowBefore = mutationBefore ?? previous
-    const terminalHandle =
-      payload.terminalHandle ??
-      (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)
-        ? previous.terminalHandle
-        : undefined)
-    const terminalOwnedPayload =
-      terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle }
-    if (previous && isStaleGrokTurnEnd(previous, terminalOwnedPayload)) {
+    const rowBefore = mutationBefore ?? previousBeforeIdentity ?? previous
+    const membershipOwnedPayload = prepareLaunchMembershipPayload({
+      payload,
+      origin,
+      previous,
+      sameTerminalOwner: (existing, incoming) => this.sameTerminalOwner(existing, incoming)
+    })
+    if (previous && isStaleGrokTurnEnd(previous, membershipOwnedPayload)) {
       // Why: Grok turn-end hooks may arrive after the next prompt, including across relay restart.
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const connectionClearWatermark = terminalOwnedPayload.connectionId
-      ? this.connectionTimestampWatermarkById.get(terminalOwnedPayload.connectionId)
+    const connectionClearWatermark = membershipOwnedPayload.connectionId
+      ? this.connectionTimestampWatermarkById.get(membershipOwnedPayload.connectionId)
       : undefined
     // Why: renderer ordering rejects older rows; live evidence must sort after reconnect clears and restored rows across clock rollback.
     const restoredStatusWatermark = previous?.restoredUnconfirmed ? previous.receivedAt : undefined
@@ -63,15 +84,15 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       (connectionClearWatermark ?? -1) + 1,
       (restoredStatusWatermark ?? -1) + 1
     )
-    if (terminalOwnedPayload.connectionId) {
-      this.connectionTimestampWatermarkById.set(terminalOwnedPayload.connectionId, now)
+    if (membershipOwnedPayload.connectionId) {
+      this.connectionTimestampWatermarkById.set(membershipOwnedPayload.connectionId, now)
     }
-    if (terminalOwnedPayload.providerSessionOnly) {
+    if (membershipOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
       const enriched = {
-        ...this.attachStatusTiming(terminalOwnedPayload, now),
-        observation: this.stampObservation(terminalOwnedPayload, origin, now)
+        ...this.attachStatusTiming(membershipOwnedPayload, now),
+        observation: this.stampObservation(membershipOwnedPayload, origin, now)
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -85,44 +106,22 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return enriched
     }
     const stateReconciledPayload =
-      terminalOwnedPayload.connectionId &&
-      terminalOwnedPayload.payload.agentType === 'codex' &&
-      terminalOwnedPayload.hookEventName
+      membershipOwnedPayload.connectionId &&
+      membershipOwnedPayload.payload.agentType === 'codex' &&
+      membershipOwnedPayload.hookEventName
         ? {
-            ...terminalOwnedPayload,
+            ...membershipOwnedPayload,
             payload: reconcileRemoteCodexState(
               this.state,
-              terminalOwnedPayload.paneKey,
-              terminalOwnedPayload.hookEventName,
-              terminalOwnedPayload.toolAgentId,
-              terminalOwnedPayload.payload,
+              membershipOwnedPayload.paneKey,
+              membershipOwnedPayload.hookEventName,
+              membershipOwnedPayload.toolAgentId,
+              membershipOwnedPayload.payload,
               previous?.payload
             )
           }
-        : terminalOwnedPayload
-    const previousCodexRoot =
-      stateReconciledPayload.payload.agentType === 'codex' &&
-      stateReconciledPayload.toolAgentId &&
-      previous?.payload.agentType === 'codex'
-        ? previous
-        : undefined
-    const preservedProviderSession = !stateReconciledPayload.providerSession
-      ? previousCodexRoot?.providerSession
-      : undefined
-    const preservedRootModel = !stateReconciledPayload.payload.model
-      ? previousCodexRoot?.payload.model
-      : undefined
-    // Why: an SSH relay restart forgets root-only fields; child hooks must not erase durable resume/model identity.
-    const rootContextPreservingPayload =
-      preservedProviderSession || preservedRootModel
-        ? {
-            ...stateReconciledPayload,
-            ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
-            payload: preservedRootModel
-              ? { ...stateReconciledPayload.payload, model: preservedRootModel }
-              : stateReconciledPayload.payload
-          }
-        : stateReconciledPayload
+        : membershipOwnedPayload
+    const rootContextPreservingPayload = preserveCodexRootContext(stateReconciledPayload, previous)
     const boundaryReconciledPrevious = invalidateClaudeChildOnlyBoundary(
       previous,
       rootContextPreservingPayload
@@ -141,6 +140,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         ? {
             agentType: previous.payload.agentType,
             state: previous.payload.state,
+            sessionBoundary: previous.payload.sessionBoundary,
             updatedAt: previous.receivedAt,
             restoredUnconfirmed: previous.restoredUnconfirmed
           }

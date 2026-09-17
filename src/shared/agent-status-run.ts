@@ -16,6 +16,43 @@ export type AgentStatusExecutionAttachment = {
   executionId: AgentStatusExecutionId
 }
 
+/** Identity minted atomically with one committed execution owner. */
+export type AgentStatusExecutionBinding = {
+  runId: AgentStatusRunId
+  attachment: AgentStatusExecutionAttachment
+  role: Exclude<AgentStatusRunRole, 'unresolved'>
+  continuityOf?: AgentStatusRunId
+}
+
+/** Minimal execution claim carried by an emitter; the host resolves the canonical binding. */
+export type AgentStatusReportedExecutionBinding = {
+  runId: AgentStatusRunId
+  executionId: AgentStatusExecutionId
+}
+
+export const ORCA_AGENT_STATUS_RUN_ID_ENV = 'ORCA_AGENT_STATUS_RUN_ID' as const
+export const ORCA_AGENT_STATUS_EXECUTION_ID_ENV = 'ORCA_AGENT_STATUS_EXECUTION_ID' as const
+
+export function parseAgentStatusReportedExecutionBinding(
+  value: unknown
+): AgentStatusReportedExecutionBinding | null {
+  if (!isRecord(value)) {
+    return null
+  }
+  return isAgentStatusRunId(value.runId) && isAgentStatusExecutionId(value.executionId)
+    ? { runId: value.runId, executionId: value.executionId }
+    : null
+}
+
+export function agentStatusExecutionBindingEnv(
+  binding: AgentStatusExecutionBinding
+): Record<typeof ORCA_AGENT_STATUS_RUN_ID_ENV | typeof ORCA_AGENT_STATUS_EXECUTION_ID_ENV, string> {
+  return {
+    [ORCA_AGENT_STATUS_RUN_ID_ENV]: binding.runId,
+    [ORCA_AGENT_STATUS_EXECUTION_ID_ENV]: binding.attachment.executionId
+  }
+}
+
 export type AgentStatusProviderAlias = {
   provider: AgentHookSource
   sessionKeyKind: AgentProviderSessionKey
@@ -28,7 +65,14 @@ export type AgentStatusProviderSession = AgentStatusProviderAlias & {
   resetBoundary?: true
 }
 
-export type AgentStatusRunAttribution = 'token' | 'pane'
+export type AgentStatusRunAttribution =
+  | 'execution-attachment'
+  | 'provider-alias'
+  | 'unresolved'
+  /** @deprecated Legacy persisted records; never use for newly emitted rows. */
+  | 'token'
+  /** @deprecated Legacy pane-key fallback; never use for newly emitted rows. */
+  | 'pane'
 export type AgentStatusRunRole = 'root' | 'child' | 'unresolved'
 export type AgentStatusRunVerdict = 'live' | 'unverifiable' | 'exited'
 
@@ -95,6 +139,36 @@ function parseExecutionAttachment(value: unknown): AgentStatusExecutionAttachmen
     return null
   }
   return { executionId: value.executionId }
+}
+
+export function parseAgentStatusExecutionBinding(
+  value: unknown
+): AgentStatusExecutionBinding | null {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ['runId', 'attachment', 'role'], ['continuityOf']) ||
+    !isAgentStatusRunId(value.runId) ||
+    (value.role !== 'root' && value.role !== 'child')
+  ) {
+    return null
+  }
+  const attachment = parseExecutionAttachment(value.attachment)
+  const hasContinuity = Object.hasOwn(value, 'continuityOf')
+  if (
+    !attachment ||
+    (hasContinuity &&
+      (!isAgentStatusRunId(value.continuityOf) || value.continuityOf === value.runId))
+  ) {
+    return null
+  }
+  return {
+    runId: value.runId,
+    attachment,
+    role: value.role,
+    ...(hasContinuity && isAgentStatusRunId(value.continuityOf)
+      ? { continuityOf: value.continuityOf }
+      : {})
+  }
 }
 
 export function parseAgentStatusProviderAlias(value: unknown): AgentStatusProviderAlias | null {
@@ -164,7 +238,11 @@ export function parseAgentStatusPtyRunRecord(value: unknown): AgentStatusPtyRunR
     ) ||
     !isAgentStatusRunId(value.runId) ||
     !isBoundedIdentity(value.paneKey, MAX_PANE_KEY_LENGTH) ||
-    (value.attribution !== 'token' && value.attribution !== 'pane') ||
+    (value.attribution !== 'execution-attachment' &&
+      value.attribution !== 'provider-alias' &&
+      value.attribution !== 'unresolved' &&
+      value.attribution !== 'token' &&
+      value.attribution !== 'pane') ||
     (value.role !== 'root' && value.role !== 'child' && value.role !== 'unresolved') ||
     (value.verdict !== 'live' && value.verdict !== 'unverifiable' && value.verdict !== 'exited')
   ) {

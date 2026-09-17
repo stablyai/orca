@@ -76,6 +76,10 @@ import {
   toForegroundProcessEvidence,
   type BatchedForegroundProcessResult
 } from '../main/providers/agent-foreground-process'
+import {
+  buildVerifiedAgentProcessDiscovery,
+  processTableContainsDiscoveredOwner
+} from '../main/providers/verified-agent-process-discovery'
 import type { ProcessTableRow } from '../shared/process-table-snapshot'
 import { getStrictProcessTableSnapshotWithAge } from '../shared/process-table-snapshot-reader'
 import type {
@@ -86,8 +90,10 @@ import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environ
 import { pruneRetiredPtyIncarnations } from '../shared/retired-pty-incarnations'
 import {
   agentSessionOwnerBindingsEqual,
+  canRetireDiscoveredProcessFromObservation,
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
+import { agentStatusExecutionBindingEnv } from '../shared/agent-status-run'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
 import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
@@ -100,10 +106,19 @@ import type { PtySourceReceivingActivation } from '../shared/pty-source-receivin
 import {
   AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
   AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
+  AGENT_SESSION_FRESH_CLAIM_PROTOCOL_VERSION,
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+import type { AgentSessionClaimSigner } from '../main/runtime/agent-session-claim-identity'
+import { isResumableTuiAgent } from '../shared/agent-session-resume'
+import {
+  admitVerifiedAgentDiscovery,
+  verifiedAgentProviderIdentitiesEqual,
+  type VerifiedAgentDiscovery
+} from '../shared/agent-status-verified-discovery'
+import { parsePaneKey } from '../shared/stable-pane-id'
 import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
 import {
@@ -406,6 +421,7 @@ function resolveRevivedShellOverride(shellOverride: string): string {
 type PtyProcessSummary = {
   id: string
   incarnationId: string
+  rootProcessId?: number
   cwd: string
   title: string
   worktreeId?: string
@@ -538,15 +554,22 @@ export class PtyHandler {
     string,
     Promise<RelayAgentSessionCreateResult>
   >()
+  private readonly agentSessionClaimSigner: AgentSessionClaimSigner | null
+  private agentDiscoveryProviderIdentityResolver:
+    | ((paneKey: string) => VerifiedAgentDiscovery['providerIdentity'] | null)
+    | null = null
+  private agentDiscoveryProviderIdentityInvalidator: ((paneKey: string) => void) | null = null
 
   constructor(
     dispatcher: RelayDispatcher,
     graceTimeMs = DEFAULT_GRACE_TIME_MS,
-    ptyIdMintEpoch: string = randomUUID()
+    ptyIdMintEpoch: string = randomUUID(),
+    agentSessionClaimSigner: AgentSessionClaimSigner | null = null
   ) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
     this.ptyIdMintEpoch = ptyIdMintEpoch
+    this.agentSessionClaimSigner = agentSessionClaimSigner
     this.registerHandlers()
     this.removeLegacyCapacityListener =
       this.dispatcher.onLegacyPtyCapacity?.(() => this.handleLegacyCapacity()) ?? null
@@ -709,6 +732,14 @@ export class PtyHandler {
    *  surviving shell may never produce). */
   setSurfaceRetiredListener(listener: PtySurfaceRetiredListener | null): void {
     this.surfaceRetiredListener = listener
+  }
+
+  setAgentDiscoveryProviderIdentityResolver(
+    resolve: ((paneKey: string) => VerifiedAgentDiscovery['providerIdentity'] | null) | null,
+    invalidate: ((paneKey: string) => void) | null
+  ): void {
+    this.agentDiscoveryProviderIdentityResolver = resolve
+    this.agentDiscoveryProviderIdentityInvalidator = invalidate
   }
 
   /** True when the client has told this host the pane's tab is gone and no PTY has re-bound the
@@ -1064,6 +1095,42 @@ export class PtyHandler {
     }
   }
 
+  private async issueAgentSessionClaim(params: Record<string, unknown>): Promise<unknown> {
+    const worktreeId = typeof params.worktreeId === 'string' ? params.worktreeId.trim() : ''
+    const launchIdentity =
+      typeof params.launchIdentity === 'string' ? params.launchIdentity.trim() : ''
+    const agent = params.agent
+    if (
+      !this.agentSessionClaimSigner ||
+      worktreeId.length === 0 ||
+      worktreeId.length > 4096 ||
+      launchIdentity.length === 0 ||
+      launchIdentity.length > 512 ||
+      !isResumableTuiAgent(agent)
+    ) {
+      throw new Error('agent_session_claim_unavailable')
+    }
+    return this.agentSessionClaimSigner.createFreshClaim({
+      namespace: this.agentSessionExecutionNamespace(agent),
+      agent,
+      launchIdentity,
+      canonicalWorktreeId: worktreeId
+    })
+  }
+
+  private agentSessionExecutionNamespace(agent: TuiAgent) {
+    const principal =
+      typeof process.getuid === 'function'
+        ? `uid:${process.getuid()}`
+        : `user:${process.env.USERNAME ?? process.env.USER ?? ''}`
+    return {
+      machine: `relay:${process.platform}:${process.arch}`,
+      principal,
+      container: 'native',
+      providerRoot: `profile-default:${agent}`
+    }
+  }
+
   private registerHandlers(): void {
     this.dispatcher.onRequest('pty.spawn', (p, context) => this.spawn(p, context))
     this.dispatcher.onRequest('pty.attach', (p, context) => this.attach(p, context))
@@ -1080,10 +1147,17 @@ export class PtyHandler {
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      ...(this.agentSessionClaimSigner
+        ? { agentSessionFreshClaimVersion: AGENT_SESSION_FRESH_CLAIM_PROTOCOL_VERSION }
+        : {}),
       // Additive capability: clients may request the no-process-table inventory
       // projection and consume fenced inspect evidence on this host.
-      foregroundProcessEvidenceVersion: 1
+      foregroundProcessEvidenceVersion: 1,
+      verifiedAgentDiscoveryVersion: 1
     }))
+    this.dispatcher.onRequest('pty.issueAgentSessionClaim', (params) =>
+      this.issueAgentSessionClaim(params)
+    )
     this.dispatcher.onRequest('pty.listProcesses', (params) => this.listProcesses(params))
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
@@ -1752,9 +1826,12 @@ export class PtyHandler {
       const result = await this.agentSessionOwners.ensure({
         claim,
         surface,
-        spawn: async ({ generation }) => {
+        spawn: async ({ generation, statusBinding }) => {
           const created = await this.spawnAfterAdmission(
-            params,
+            {
+              ...params,
+              env: { ...env, ...agentStatusExecutionBindingEnv(statusBinding) }
+            },
             context,
             markPhysicalSpawnCommitted
           )
@@ -1766,7 +1843,8 @@ export class PtyHandler {
                 generation,
                 phase: 'live',
                 ptyId: created.id,
-                surface
+                surface,
+                statusBinding
               }
             ]
           }
@@ -2772,6 +2850,7 @@ export class PtyHandler {
     // shape/cost; automatic inventory callers pass false explicitly to skip
     // process-table work on the host.
     const includeForegroundProcessEvidence = params.includeForegroundProcessEvidence !== false
+    const includeVerifiedAgentDiscoveries = params.includeVerifiedAgentDiscoveries === true
     let evidenceRows: readonly ProcessTableRow[] | null = null
     // Same reason as `inspectProcess`: once the budgeted read has given up, the per-PTY title
     // fallback below must not re-enter the same capture without a budget -- and here it would do
@@ -2784,7 +2863,7 @@ export class PtyHandler {
     // stamp is exact rather than assuming the full staleness window.
     let evidenceCapturedAtMs = Date.now()
     if (
-      includeForegroundProcessEvidence &&
+      (includeForegroundProcessEvidence || includeVerifiedAgentDiscoveries) &&
       process.platform !== 'win32' &&
       managedEntries.length > 0
     ) {
@@ -2835,9 +2914,93 @@ export class PtyHandler {
               }
             )
           : undefined
+      const discoverySigner = this.agentSessionClaimSigner
+      if (includeVerifiedAgentDiscoveries && evidenceRows && discoverySigner) {
+        const staleDiscoveredOwners = this.agentSessionOwners.listForPty(id).filter(
+          (owner) =>
+            owner.discoveryProcess &&
+            canRetireDiscoveredProcessFromObservation(owner.discoveryProcess, {
+              authorityGeneration: this.ptyIdMintEpoch,
+              observationEpoch: evidenceEpoch
+            }) &&
+            (owner.discoveryProcess.ptyIncarnationId !== managed.incarnationId ||
+              !processTableContainsDiscoveredOwner(evidenceRows, owner.discoveryProcess))
+        )
+        const parsedPane = managed.paneKey ? parsePaneKey(managed.paneKey) : null
+        const providerIdentity = managed.paneKey
+          ? this.agentDiscoveryProviderIdentityResolver?.(managed.paneKey)
+          : null
+        if (parsedPane && managed.worktreeId && managed.terminalHandle && providerIdentity) {
+          const surface = {
+            worktreeId: managed.worktreeId,
+            tabId: parsedPane.tabId,
+            leafId: parsedPane.leafId,
+            terminalHandle: managed.terminalHandle
+          }
+          const discovery = buildVerifiedAgentProcessDiscovery({
+            ptyId: id,
+            ptyIncarnationId: managed.incarnationId,
+            rootProcessId: managed.pty.pid,
+            authorityGeneration: this.ptyIdMintEpoch,
+            observationEpoch: evidenceEpoch,
+            capturedAgeMs: Math.max(0, Date.now() - evidenceCapturedAtMs),
+            surface,
+            providerIdentity,
+            createClaim: ({ agent, launchIdentity, canonicalWorktreeId }) =>
+              discoverySigner.createFreshClaim({
+                namespace: this.agentSessionExecutionNamespace(agent),
+                agent,
+                launchIdentity,
+                canonicalWorktreeId
+              }),
+            rows: evidenceRows,
+            platform: process.platform
+          })
+          if (discovery) {
+            const result = await admitVerifiedAgentDiscovery({
+              owners: this.agentSessionOwners,
+              discovery,
+              isLive: () => {
+                const current = this.ptys.get(id)
+                return Boolean(
+                  current &&
+                  !current.disposed &&
+                  current.incarnationId === managed.incarnationId &&
+                  verifiedAgentProviderIdentitiesEqual(
+                    providerIdentity,
+                    managed.paneKey
+                      ? (this.agentDiscoveryProviderIdentityResolver?.(managed.paneKey) ?? null)
+                      : null
+                  ) &&
+                  processTableContainsDiscoveredOwner(evidenceRows, {
+                    pid: discovery.process.pid,
+                    startTime: discovery.process.startTime
+                  })
+                )
+              }
+            })
+            if (result.admitted) {
+              managed.agentSessionOwners = this.agentSessionOwners.listForPty(id)
+            } else {
+              if (result.reason === 'agent_session_observation_stale' && managed.paneKey) {
+                this.agentDiscoveryProviderIdentityInvalidator?.(managed.paneKey)
+              }
+              for (const owner of staleDiscoveredOwners) {
+                this.agentSessionOwners.release(id, owner.generation)
+              }
+            }
+          } else {
+            for (const owner of staleDiscoveredOwners) {
+              this.agentSessionOwners.release(id, owner.generation)
+            }
+          }
+        }
+        managed.agentSessionOwners = this.agentSessionOwners.listForPty(id)
+      }
       results.push({
         id,
         incarnationId: managed.incarnationId,
+        ...(managed.pty.pid > 0 ? { rootProcessId: managed.pty.pid } : {}),
         cwd: managed.initialCwd,
         title,
         hostAgeMs: Math.max(0, Date.now() - managed.createdAt),

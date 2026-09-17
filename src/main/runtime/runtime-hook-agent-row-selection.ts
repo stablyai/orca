@@ -6,6 +6,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentStatusLaunchMembership } from '../../shared/agent-status-launch-membership'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
 
@@ -20,6 +21,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  launchMembership?: AgentStatusLaunchMembership
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
@@ -128,6 +130,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     stateStartedAt: match.stateStartedAt ?? match.receivedAt,
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
+    ...(match.launchMembership ? { launchMembership: match.launchMembership } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }
       : {})

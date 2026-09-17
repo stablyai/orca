@@ -30,7 +30,8 @@ afterEach(() => {
 
 async function postClaudeHook(
   server: AgentHookServer,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  emitterProcessId?: number
 ): Promise<Response> {
   const env = server.buildPtyEnv()
   return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
@@ -39,11 +40,50 @@ async function postClaudeHook(
       'Content-Type': 'application/json',
       'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
     },
-    body: JSON.stringify(buildBody(payload))
+    body: JSON.stringify({
+      ...buildBody(payload),
+      ...(emitterProcessId ? { emitterProcessId: String(emitterProcessId) } : {})
+    })
   })
 }
 
 describe('AgentHookServer listener replay', () => {
+  it('exposes only current root hook provider-session identity for process discovery', async () => {
+    const server = new AgentHookServer()
+    server.setEmitterProcessResolver(async (_source, pid) =>
+      pid === 1234 ? { pid: 200, startTime: 'agent-start-1' } : null
+    )
+    await server.start({ env: 'production' })
+    try {
+      expect(server.getVerifiedAgentDiscoveryProviderIdentityForPane(PANE, null)).toBeNull()
+      await postClaudeHook(
+        server,
+        {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'claude-session-1',
+          prompt: 'prove this provider subject'
+        },
+        1234
+      )
+
+      expect(server.getVerifiedAgentDiscoveryProviderIdentityForPane(PANE, null)).toMatchObject({
+        agent: 'claude',
+        source: 'provider-session',
+        session: { key: 'session_id', id: 'claude-session-1' },
+        observation: {
+          authorityId: expect.any(String),
+          revision: expect.any(Number),
+          process: { pid: 200, startTime: 'agent-start-1' }
+        }
+      })
+      expect(server.getVerifiedAgentDiscoveryProviderIdentityForPane(PANE, 'ssh-1')).toBeNull()
+      server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+      expect(server.getVerifiedAgentDiscoveryProviderIdentityForPane(PANE, null)).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('accepts raw JSON hook bodies with base64 metadata headers', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

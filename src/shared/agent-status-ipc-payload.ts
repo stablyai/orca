@@ -15,6 +15,7 @@ import type {
   AgentStatusOrchestrationContext,
   ParsedAgentStatusPayload
 } from './agent-status-types'
+import type { AgentStatusLaunchMembership } from './agent-status-launch-membership'
 
 /** A PTY the pane-key migration could not move, reported for operator triage. */
 export type MigrationUnsupportedPtyEntry = {
@@ -39,6 +40,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
   launchToken?: string
   terminalHandle?: string
+  /** Host-owned committed/adopted execution membership, independent of turn state. */
+  launchMembership?: AgentStatusLaunchMembership
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.

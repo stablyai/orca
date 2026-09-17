@@ -6,6 +6,7 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { isPiCompatibleAgentType } from '../../../shared/pi-agent-kind'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 /**
  * True when `record` is nothing more than this completed pane's own live resume
@@ -21,7 +22,8 @@ export function isLiveResumeAnchorForCompletedAgent(
   worktreeId?: string
 ): record is SleepingAgentSessionRecord {
   if (
-    entry?.state !== 'done' ||
+    !entry ||
+    !isAgentStatusTurnComplete(entry) ||
     !isResumableTuiAgent(entry.agentType) ||
     !entry.providerSession ||
     record?.agent !== entry.agentType ||

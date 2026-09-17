@@ -13,6 +13,7 @@ import {
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 function removeAcknowledgement(
   acknowledgements: Record<string, number>,
@@ -160,7 +161,8 @@ export function createAgentStatusDropActions(
           }
         }
         if (
-          liveEntry?.state === 'done' &&
+          liveEntry !== undefined &&
+          isAgentStatusTurnComplete(liveEntry) &&
           liveEntry.agentType !== undefined &&
           liveEntry.interrupted !== true
         ) {

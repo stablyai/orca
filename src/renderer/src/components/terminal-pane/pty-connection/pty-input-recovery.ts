@@ -104,6 +104,9 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.agentSessionClaim
+      ? { agentSessionClaim: session.paneStartup.agentSessionClaim }
+      : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,

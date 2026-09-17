@@ -8,6 +8,8 @@ export class SshAgentSessionCapabilities {
   private claimSupported = false
   private createOperationProbe: Promise<boolean> | null = null
   private foregroundEvidenceProbe: Promise<boolean> | null = null
+  private verifiedDiscoveryProbe: Promise<boolean> | null = null
+  private freshClaimProbe: Promise<boolean> | null = null
 
   constructor(private readonly mux: SshChannelMultiplexer) {}
 
@@ -49,6 +51,38 @@ export class SshAgentSessionCapabilities {
     return supported
   }
 
+  async supportsFreshClaims(options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    const probe =
+      this.freshClaimProbe ??
+      this.mux
+        .request('pty.getCapabilities', undefined, {
+          signal: options.signal,
+          timeoutMs: 5_000
+        })
+        .then((value) => {
+          if (typeof value !== 'object' || value === null) {
+            return false
+          }
+          return (
+            'agentSessionFreshClaimVersion' in value && value.agentSessionFreshClaimVersion === 1
+          )
+        })
+        .catch(() => false)
+    this.freshClaimProbe = probe
+    try {
+      const supported = await waitForSshCapabilityProbe(probe, options.signal)
+      if (!supported && this.freshClaimProbe === probe) {
+        this.freshClaimProbe = null
+      }
+      return supported
+    } catch {
+      if (!options.signal?.aborted && this.freshClaimProbe === probe) {
+        this.freshClaimProbe = null
+      }
+      return false
+    }
+  }
+
   /** Whether this relay understands the opt-in no-evidence inventory projection. */
   async supportsForegroundProcessEvidence(
     options: { signal?: AbortSignal } = {}
@@ -75,6 +109,38 @@ export class SshAgentSessionCapabilities {
     } catch {
       if (!options.signal?.aborted && this.foregroundEvidenceProbe === probe) {
         this.foregroundEvidenceProbe = null
+      }
+      return false
+    }
+  }
+
+  async supportsVerifiedAgentDiscoveries(options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    const probe =
+      this.verifiedDiscoveryProbe ??
+      this.mux
+        .request('pty.getCapabilities', undefined, {
+          signal: options.signal,
+          timeoutMs: 5_000
+        })
+        .then((value) => {
+          return (
+            typeof value === 'object' &&
+            value !== null &&
+            'verifiedAgentDiscoveryVersion' in value &&
+            value.verifiedAgentDiscoveryVersion === 1
+          )
+        })
+        .catch(() => false)
+    this.verifiedDiscoveryProbe = probe
+    try {
+      const supported = await waitForSshCapabilityProbe(probe, options.signal)
+      if (!supported && this.verifiedDiscoveryProbe === probe) {
+        this.verifiedDiscoveryProbe = null
+      }
+      return supported
+    } catch {
+      if (!options.signal?.aborted && this.verifiedDiscoveryProbe === probe) {
+        this.verifiedDiscoveryProbe = null
       }
       return false
     }

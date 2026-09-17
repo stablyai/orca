@@ -7,6 +7,7 @@ import type {
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { AgentStatusLaunchMembership } from '../../../shared/agent-status-launch-membership'
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
@@ -25,12 +26,17 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   retainedForLiveness?: true
   /** Persisted proof that a lead boundary was held working only by child agents. */
   claudeLeadBoundaryChildOnly?: true
+  /** Host-owned launch/adoption membership. This facet is not a turn or readiness claim. */
+  launchMembership?: AgentStatusLaunchMembership
 }
 
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'claudeRunningNonAgentTask'
   | 'launchToken'
+  | 'reportedExecutionBinding'
+  | 'reportedEmitterProcessId'
+  | 'emitterProcess'
   | 'promptInteractionKey'
   | 'restoredUnconfirmed'
   // Why: revision counters are in-memory and the authority id is regenerated per process, so

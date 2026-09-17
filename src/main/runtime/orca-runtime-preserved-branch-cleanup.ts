@@ -6,6 +6,8 @@ import type {
   AgentSessionCreateOperation,
   OrchestrationCompatibilitySshAttachmentAuthority,
   RestoredOrchestrationAuthorityReceipt,
+  RuntimeAgentSessionCommit,
+  RuntimeAgentSessionInventoryReconciliation,
   RuntimeTerminalAgentStatusEvent
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
@@ -20,6 +22,7 @@ import type {
 } from '../../shared/ai-vault-resume-preparation'
 import type { AgentSessionClaimSigner } from './agent-session-claim-identity'
 import type { AgentStatus } from '../../shared/agent-detection'
+import type { VerifiedAgentDiscovery } from '../../shared/agent-status-verified-discovery'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from './runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
@@ -59,6 +62,14 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | ((event: RuntimeTerminalAgentStatusEvent) => void)
     | null
 
+  /** C10 admission callback; bookkeeping failures never gate terminal creation. */
+  protected readonly onAgentSessionCommitted: ((commit: RuntimeAgentSessionCommit) => void) | null
+
+  /** Complete owner inventories are the only restart-retirement authority. */
+  protected readonly onAgentSessionInventoryReconciled:
+    | ((reconciliation: RuntimeAgentSessionInventoryReconciliation) => void)
+    | null
+
   protected readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
 
   protected terminalSideEffectLocalConsumerAvailable = false
@@ -77,6 +88,14 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly getAgentProviderSessionRowsForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
+    | null
+
+  protected readonly getAgentDiscoveryProviderIdentityForPaneFn:
+    | ((paneKey: string) => VerifiedAgentDiscovery['providerIdentity'] | null)
+    | null
+
+  protected readonly invalidateAgentDiscoveryProviderIdentityForPaneFn:
+    | ((paneKey: string) => void)
     | null
 
   protected readonly attestAgentHookCompatibilityAuthorityFn:

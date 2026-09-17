@@ -152,6 +152,17 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('done')
   })
 
+  it('does not classify a session-boundary launch row as done', () => {
+    const boundary = entry(FIRST_LEAF_ID, 'done', { sessionBoundary: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [boundary.paneKey]: boundary },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
   it('reports an interrupted done as interrupted, matching the worktree card', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     expect(

@@ -6,6 +6,7 @@ import { observeExistingAutomationSession } from '@/lib/automation-session-obser
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult
@@ -117,12 +118,19 @@ export async function handleAutomationDispatchRequest({
               completion.cleanupRunObservers()
             } else {
               let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
+              const handleReusableAgentStatus = (payload: {
+                state: string
+                sessionBoundary?: boolean
+              }): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
                   return
                 }
-                if (payload.state === 'done' && reuseSawWorking) {
+                if (
+                  payload.state === 'done' &&
+                  isAgentStatusTurnComplete(payload) &&
+                  reuseSawWorking
+                ) {
                   completion.handleAgentDone()
                 }
               }

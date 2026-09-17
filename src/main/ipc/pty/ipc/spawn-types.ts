@@ -20,6 +20,10 @@ import type {
 } from '../host-env/types'
 import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
+import type {
+  AgentSessionExecutionClaim,
+  AgentSessionSurfaceBinding
+} from '../../../../shared/agent-session-host-authority'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -56,6 +60,15 @@ export type PtySpawnIpcArgs = {
     launch_source?: unknown
     request_kind?: unknown
   }
+  /** Optional host-issued claim for an explicit C5 launch; fresh renderer
+   * launches derive one at the main choke point when omitted. */
+  agentSessionEnsure?: {
+    claim: AgentSessionExecutionClaim
+    surface: AgentSessionSurfaceBinding
+  }
+  /** Claim minted by the runtime for a renderer-backed fresh launch. Main
+   * resolves its canonical surface and executes the owner transaction. */
+  agentSessionClaim?: AgentSessionExecutionClaim
 }
 
 export type AdoptStablePaneArgs = {

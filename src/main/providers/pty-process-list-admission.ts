@@ -7,6 +7,10 @@ import {
   isForegroundProcessEvidence
 } from '../../shared/foreground-process-evidence'
 import type { PtyProcessInfo } from './types'
+import {
+  cloneVerifiedAgentDiscovery,
+  isVerifiedAgentDiscovery
+} from '../../shared/agent-status-verified-discovery'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024
@@ -35,7 +39,29 @@ function retainedOwnerBytes(owner: unknown, ptyId: string): number | null {
     owner.surface.worktreeId,
     owner.surface.tabId,
     owner.surface.leafId,
-    owner.surface.terminalHandle
+    owner.surface.terminalHandle,
+    owner.statusBinding.runId,
+    owner.statusBinding.attachment.executionId,
+    owner.statusBinding.role,
+    ...(owner.statusBinding.continuityOf ? [owner.statusBinding.continuityOf] : []),
+    ...(owner.discoveryProcess
+      ? [
+          owner.discoveryProcess.ptyIncarnationId,
+          String(owner.discoveryProcess.pid),
+          owner.discoveryProcess.startTime,
+          owner.discoveryProcess.authorityGeneration,
+          String(owner.discoveryProcess.observationEpoch),
+          ...(owner.discoveryProcess.providerObservation
+            ? [
+                owner.discoveryProcess.providerObservation.authorityId,
+                String(owner.discoveryProcess.providerObservation.incarnation),
+                String(owner.discoveryProcess.providerObservation.revision),
+                String(owner.discoveryProcess.providerObservation.process.pid),
+                owner.discoveryProcess.providerObservation.process.startTime
+              ]
+            : [])
+        ]
+      : [])
   ].reduce((total, value) => total + Buffer.byteLength(value, 'utf8'), 0)
 }
 
@@ -63,6 +89,12 @@ export class PtyProcessListAdmission {
         : isForegroundProcessEvidence(value.foregroundProcessEvidence)
           ? Buffer.byteLength(JSON.stringify(value.foregroundProcessEvidence), 'utf8')
           : null
+    const discoveryBytes =
+      value.verifiedAgentDiscovery === undefined
+        ? 0
+        : isVerifiedAgentDiscovery(value.verifiedAgentDiscovery)
+          ? Buffer.byteLength(JSON.stringify(value.verifiedAgentDiscovery), 'utf8')
+          : null
     if (
       idBytes === null ||
       cwdBytes === null ||
@@ -71,6 +103,7 @@ export class PtyProcessListAdmission {
       terminalHandleBytes === null ||
       wslDistroBytes === null ||
       evidenceBytes === null ||
+      discoveryBytes === null ||
       (value.rootProcessId !== undefined &&
         (!Number.isSafeInteger(value.rootProcessId) || value.rootProcessId <= 0)) ||
       (value.incarnationId !== undefined && !isPtyIncarnationId(value.incarnationId)) ||
@@ -105,6 +138,7 @@ export class PtyProcessListAdmission {
       terminalHandleBytes +
       wslDistroBytes +
       evidenceBytes +
+      discoveryBytes +
       ownerBytes
     if (
       nextEntries > MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES ||
@@ -132,6 +166,9 @@ export class PtyProcessListAdmission {
               value.foregroundProcessEvidence
             )
           }
+        : {}),
+      ...(value.verifiedAgentDiscovery !== undefined
+        ? { verifiedAgentDiscovery: cloneVerifiedAgentDiscovery(value.verifiedAgentDiscovery) }
         : {}),
       ...(normalizedOwners !== undefined ? { agentSessionOwners: normalizedOwners } : {})
     }

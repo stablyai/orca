@@ -31,6 +31,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from './window-park-visibility'
 import { getEntryTabId } from './agent-hibernation-pane-eligibility'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -149,7 +150,7 @@ async function collectRuntimePtyLiveness(
   }
   const completedTabIds = new Set<string>()
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
-    const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
+    const tabId = isAgentStatusTurnComplete(entry) ? getEntryTabId(entry) : null
     if (tabId) {
       completedTabIds.add(tabId)
     }

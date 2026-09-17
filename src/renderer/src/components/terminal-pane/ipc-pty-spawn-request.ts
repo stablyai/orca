@@ -26,6 +26,7 @@ export async function spawnIpcPty(
     resumeProviderSession,
     launchToken,
     launchAgent,
+    agentSessionClaim,
     startupCommandDelivery,
     connectionId,
     worktreeId,
@@ -69,6 +70,7 @@ export async function spawnIpcPty(
         }
       : {}),
     ...(connectionId ? { connectionId } : {}),
+    ...(agentSessionClaim ? { agentSessionClaim } : {}),
     ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
     ...(connectOptions.initiallyHidden ? { initiallyHidden: true } : {}),
     worktreeId,
@@ -78,5 +80,5 @@ export async function spawnIpcPty(
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...(telemetry ? { telemetry } : {})
-  }) as Promise<IpcPtySpawnResponse>
+  })
 }

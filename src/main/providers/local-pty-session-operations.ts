@@ -118,6 +118,7 @@ export function closeLocalPtyStartupQueryAuthority(id: string): number {
 export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
   return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
     id,
+    ...(Number.isSafeInteger(proc.pid) && proc.pid > 0 ? { rootProcessId: proc.pid } : {}),
     ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
     cwd: ptyInitialCwd.get(id) ?? '',
     title: proc.process || ptyShellName.get(id) || 'shell',

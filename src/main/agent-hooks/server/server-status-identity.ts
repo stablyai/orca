@@ -55,6 +55,9 @@ export function toAgentStatusIpcPayload(
   return {
     paneKey: entry.paneKey,
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
+    ...(entry.runId ? { runId: entry.runId } : {}),
+    ...(entry.executionId ? { executionId: entry.executionId } : {}),
+    ...(entry.providerAlias ? { providerAlias: entry.providerAlias } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,
     connectionId: entry.connectionId,
@@ -70,6 +73,7 @@ export function toAgentStatusIpcPayload(
     ...(entry.observation ? { observation: entry.observation } : {}),
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
+    ...(entry.launchMembership ? { launchMembership: entry.launchMembership } : {}),
     ...entry.payload
   }
 }

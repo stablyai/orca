@@ -18,6 +18,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
+import { isAgentStatusTurnComplete } from '../../../../shared/agent-completion-time'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -184,7 +185,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       const normalizedPrompt = prompt.trim()
       if (
         currentEntry?.agentType === 'command-code' &&
-        currentEntry.state === 'done' &&
+        isAgentStatusTurnComplete(currentEntry) &&
         (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
       ) {
         return

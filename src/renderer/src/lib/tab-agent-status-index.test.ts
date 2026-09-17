@@ -17,6 +17,7 @@ import type {
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import { isAgentStatusTurnComplete } from '../../../shared/agent-completion-time'
 
 // ─── Oracle: the pre-index full-map scans, kept here (not in src) so the
 // randomized suite can assert the indexed resolvers are byte-identical. ───
@@ -29,7 +30,7 @@ function oracleAnyTabAgent(
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
-      const agent = entry.state === 'done' ? null : agentTypeToIconAgent(entry.agentType)
+      const agent = isAgentStatusTurnComplete(entry) ? null : agentTypeToIconAgent(entry.agentType)
       if (agent) {
         return agent
       }
@@ -46,7 +47,7 @@ function oracleAnyCompletedTabAgent(
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
-      const agent = entry.state === 'done' ? agentTypeToIconAgent(entry.agentType) : null
+      const agent = isAgentStatusTurnComplete(entry) ? agentTypeToIconAgent(entry.agentType) : null
       if (agent) {
         return agent
       }
@@ -86,7 +87,9 @@ const ORACLES = {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
-      return !entry || entry.state === 'done' ? null : agentTypeToIconAgent(entry.agentType)
+      return !entry || isAgentStatusTurnComplete(entry)
+        ? null
+        : agentTypeToIconAgent(entry.agentType)
     }
     return oracleAnyTabAgent(map, tabId)
   },
@@ -106,7 +109,9 @@ const ORACLES = {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
-      return !entry || entry.state !== 'done' ? null : agentTypeToIconAgent(entry.agentType)
+      return !entry || !isAgentStatusTurnComplete(entry)
+        ? null
+        : agentTypeToIconAgent(entry.agentType)
     }
     return oracleAnyCompletedTabAgent(map, tabId)
   },
@@ -331,6 +336,17 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
     }
     expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(1)), 'tab-1')).toBeNull()
     expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('claude')
+  })
+
+  it('treats a session-boundary done row as live identity, not completion', () => {
+    const paneKey = `tab-1:${leafId(0)}`
+    const boundary = {
+      ...statusEntry(paneKey, 'done', 'codex'),
+      sessionBoundary: true
+    }
+    const map = { [paneKey]: boundary }
+    expect(resolveFocusedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('codex')
+    expect(resolveFocusedCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBeNull()
   })
 
   it('ignores pane keys parsePaneKey rejects and empty maps', () => {
