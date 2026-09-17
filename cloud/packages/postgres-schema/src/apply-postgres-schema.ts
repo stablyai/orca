@@ -39,6 +39,7 @@ function wait(delayMs: number): Promise<void> {
 const CREATE_TABLE_IF_NOT_EXISTS = /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b/i
 const CREATE_INDEX_IF_NOT_EXISTS = /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\b/i
 const ALTER_TABLE_ADD_CONSTRAINT = /^ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\b/i
+const DROP_INDEX_IF_EXISTS = /^DROP\s+INDEX\s+(?:CONCURRENTLY\s+)?IF\s+EXISTS\b/i
 
 // `IF NOT EXISTS` only checks the name before the catalog inserts, so the loser of a concurrent
 // CREATE can fail on the catalog unique index (23505) or, when the winner has already committed by
@@ -68,6 +69,14 @@ function constraintAlreadyApplied(error: unknown, sql: string): boolean {
   return (
     ALTER_TABLE_ADD_CONSTRAINT.test(sql) && (error as { code?: unknown } | null)?.code === '42710'
   )
+}
+
+// `IF EXISTS` resolves the name, then locks; between those two steps another director's drop can
+// commit and the loser raises 42704 instead of the notice it would have got a moment later. Every
+// director boots at once on a deploy, so without this the losers fail their boot over a drop that
+// already happened.
+function dropAlreadyApplied(error: unknown, sql: string): boolean {
+  return DROP_INDEX_IF_EXISTS.test(sql) && (error as { code?: unknown } | null)?.code === '42704'
 }
 
 function retryableSchemaError(error: unknown, sql: string): boolean {
@@ -126,7 +135,7 @@ export async function applyPostgresSchema(
         summary.ran += 1
         break
       } catch (error) {
-        if (constraintAlreadyApplied(error, sql)) {
+        if (constraintAlreadyApplied(error, sql) || dropAlreadyApplied(error, sql)) {
           summary.skipped += 1
           break
         }

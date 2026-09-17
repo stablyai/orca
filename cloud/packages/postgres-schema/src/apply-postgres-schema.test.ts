@@ -97,6 +97,27 @@ describe('applyPostgresSchema classification', () => {
     expect(summary).toEqual({ ran: 0, skipped: 1 })
   })
 
+  it('treats an index another director already dropped as skipped rather than an error', async () => {
+    // Every director boots at once on a deploy and all of them send the same DROP INDEX IF EXISTS.
+    // Only one can win; the losers must not fail their boot over a drop that already happened.
+    const query = vi.fn(async () => {
+      throw postgresError('42704')
+    })
+    const summary = await applyPostgresSchema(['DROP INDEX IF EXISTS i'], query)
+    expect(summary).toEqual({ ran: 0, skipped: 1 })
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it('still propagates 42704 from a statement that is not a DROP IF EXISTS', async () => {
+    // Keeps the case above narrow: an undefined object anywhere else is a real boot failure.
+    const query = vi.fn(async () => {
+      throw postgresError('42704')
+    })
+    await expect(
+      applyPostgresSchema(['ALTER TABLE t ADD COLUMN IF NOT EXISTS c BIGINT'], query)
+    ).rejects.toThrow(/42704/)
+  })
+
   it('propagates an unrelated error without retrying', async () => {
     const query = vi.fn(async () => {
       throw postgresError('42501')

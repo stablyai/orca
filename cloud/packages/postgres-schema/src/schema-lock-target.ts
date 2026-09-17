@@ -3,7 +3,7 @@
 // statement wrote it, schema qualification and quoting included, because it is fed to
 // `to_regclass`; `name` is the bare identifier the catalog stores in `relname`/`attname`.
 export type SchemaLockTarget = {
-  kind: 'index' | 'column' | 'constraint'
+  kind: 'index' | 'column' | 'constraint' | 'reloption'
   table: string
   name: string
   // The catalog answer that means this statement has nothing left to do. Creating statements skip
@@ -119,6 +119,15 @@ const DROP_CONSTRAINT = new RegExp(
   'i'
 )
 
+// One option per statement, and a literal value: the catalog stores reloptions as `name=value`
+// text, so the pre-check compares the written pair against that array verbatim. A list of options
+// is refused by `hasTopLevelComma` before it reaches here, the same as a multi-action ALTER TABLE.
+const SET_RELOPTION = new RegExp(
+  `^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${QUALIFIED}\\s+` +
+    `SET\\s+\\(\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*([A-Za-z0-9_.]+)\\s*\\)\\s*$`,
+  'i'
+)
+
 // Every statement shape that takes a relation lock before Postgres evaluates its existence test.
 // `CREATE TABLE IF NOT EXISTS` is absent on purpose: it resolves a name against the schema and
 // takes no lock on an existing table.
@@ -177,7 +186,8 @@ const MUST_PARSE = [
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+COLUMN\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+CONSTRAINT\b/i,
-  /^ALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i
+  /^ALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i,
+  /^ALTER\s+TABLE\b[\s\S]*\bSET\s+\(/i
 ]
 
 // Derived from the statement itself so a renamed index cannot drift away from its pre-check.
@@ -207,6 +217,18 @@ export function schemaLockTarget(statement: string): SchemaLockTarget | undefine
       table: dropped[1],
       name: catalogName(dropped[2]),
       skipWhen: 'absent'
+    }
+  }
+  const option = SET_RELOPTION.exec(sql)
+  if (option?.[1] && option[2] && option[3]) {
+    // Option names are always folded, but the value is stored as written, so only the name goes
+    // through catalogName. `fillfactor=70` and `fillfactor=80` are different targets, which is
+    // what makes a changed value re-run rather than skip.
+    return {
+      kind: 'reloption',
+      table: option[1],
+      name: `${catalogName(option[2])}=${option[3]}`,
+      skipWhen: 'present'
     }
   }
   return undefined

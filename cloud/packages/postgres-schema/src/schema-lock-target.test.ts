@@ -417,3 +417,47 @@ describe('dollar-quoted bodies', () => {
     )
   })
 })
+
+describe('schemaLockTarget storage parameters', () => {
+  it('reads a storage parameter as a name=value target the catalog can be asked about', () => {
+    expect(schemaLockTarget('ALTER TABLE t SET (fillfactor = 70)')).toEqual({
+      kind: 'reloption',
+      table: 't',
+      name: 'fillfactor=70',
+      skipWhen: 'present'
+    })
+  })
+
+  it('folds the option name but keeps the value as written, the way pg_class stores the pair', () => {
+    expect(schemaLockTarget('ALTER TABLE t SET (FillFactor=70)')?.name).toBe('fillfactor=70')
+  })
+
+  it('makes a changed value a different target, so it re-runs instead of skipping', () => {
+    // The failure this prevents: matching on the option name alone would read `fillfactor=100` as
+    // already satisfying `fillfactor = 70` and skip the statement for the life of the database.
+    const seventy = schemaLockTarget('ALTER TABLE t SET (fillfactor = 70)')
+    const eighty = schemaLockTarget('ALTER TABLE t SET (fillfactor = 80)')
+    expect(seventy?.name).not.toBe(eighty?.name)
+  })
+
+  it('refuses a multi-option SET rather than skipping on only the first option', () => {
+    // Same reason a multi-action ALTER TABLE is refused: skipping on one option would silently
+    // drop the others for good.
+    expect(() =>
+      requireSchemaLockTarget('ALTER TABLE t SET (fillfactor = 70, autovacuum_enabled = false)')
+    ).toThrow(/unparsed_schema_lock_target/)
+  })
+
+  it('fails the boot on a SET whose shape it cannot read, rather than sending it unchecked', () => {
+    // A storage parameter takes a relation lock, so no target means the lock is taken on every
+    // boot. RESET has no value to compare and is not supported.
+    expect(() => requireSchemaLockTarget('ALTER TABLE t RESET (fillfactor)')).not.toThrow()
+    expect(() => requireSchemaLockTarget('ALTER TABLE t SET (fillfactor)')).toThrow(
+      /unparsed_schema_lock_target/
+    )
+  })
+
+  it('takes a relation lock, so the census requires it to carry a target', () => {
+    expect(takesRelationLock('ALTER TABLE t SET (fillfactor = 70)')).toBe(true)
+  })
+})

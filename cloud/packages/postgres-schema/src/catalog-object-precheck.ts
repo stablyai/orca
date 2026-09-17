@@ -26,10 +26,17 @@ WHERE attrelid = to_regclass($1) AND attname = $2 AND attnum > 0 AND NOT attisdr
 const CONSTRAINT_PRESENT = `SELECT 1 FROM pg_catalog.pg_constraint
 WHERE conrelid = to_regclass($1) AND conname = $2`
 
+// reloptions is a text[] of `name=value` pairs, absent entirely while the option is at its
+// default. Comparing the whole pair is what makes a changed value re-run: `@>` on a different
+// value answers no, and the statement runs and overwrites it.
+const RELOPTION_PRESENT = `SELECT 1 FROM pg_catalog.pg_class
+WHERE oid = to_regclass($1) AND reloptions @> ARRAY[$2]`
+
 const PRESENCE_SQL = {
   index: INDEX_PRESENT,
   column: COLUMN_PRESENT,
-  constraint: CONSTRAINT_PRESENT
+  constraint: CONSTRAINT_PRESENT,
+  reloption: RELOPTION_PRESENT
 } as const
 
 export type SchemaCatalogPresence = { present: boolean; indisvalid: unknown }

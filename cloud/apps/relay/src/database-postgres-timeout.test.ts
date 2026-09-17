@@ -134,7 +134,7 @@ describe('PostgreSQL relay deadlines', () => {
       statements.every(
         (statement) =>
           statement === POSTGRES_STATEMENT_STATS_MIGRATION.trim() ||
-          /^(?:CREATE|ALTER TABLE)\b/i.test(body(statement))
+          /^(?:CREATE|ALTER TABLE|DROP INDEX)\b/i.test(body(statement))
       )
     ).toBe(true)
     // The backfill is DML, so it stays on the deadline-bearing serving pool.

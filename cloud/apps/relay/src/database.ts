@@ -524,8 +524,9 @@ CREATE TABLE IF NOT EXISTS relay_assignment_activity_leases (
   updated_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, relay_host_id, activity_id)
 );
-CREATE INDEX IF NOT EXISTS relay_assignment_activity_expiry
-  ON relay_assignment_activity_leases(expires_at);
+-- expires_at is deliberately unindexed: every control renewal writes it (~471/s), so an index on
+-- it makes each renewal a non-HOT update that rewrites index entries. Its only reader is the 30s
+-- expiry sweep, which seq-scans 14.8k rows / 7MB in a few milliseconds.
 
 CREATE TABLE IF NOT EXISTS relay_control_connection_reservations (
   reservation_id TEXT PRIMARY KEY,
@@ -645,7 +646,18 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
      ADD COLUMN IF NOT EXISTS host_cooldown_ms BIGINT NOT NULL
      DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`,
   `ALTER TABLE relay_control_capabilities ADD COLUMN IF NOT EXISTS idle_regional_rehome BIGINT NOT NULL DEFAULT 0`,
-  `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS source_generation BIGINT NOT NULL DEFAULT 0`
+  `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS source_generation BIGINT NOT NULL DEFAULT 0`,
+  // Dropped, not created: see the comment on relay_assignment_activity_leases. Postgres resolves
+  // the index name before it locks anything, so once the index is gone this is a catalog miss and
+  // a NOTICE on every later boot, with no lock on the table - which is why it needs no pre-check.
+  `DROP INDEX IF EXISTS relay_assignment_activity_expiry`,
+  // The drop is what makes HOT legal; this is what makes it possible. A renewal can only reuse the
+  // row's own page when that page has room for a second version, and at the default fillfactor of
+  // 100 a freshly filled page has none - measured at 0.5% HOT with the index gone and the default,
+  // against 100% at 70. Takes SHARE UPDATE EXCLUSIVE, which blocks vacuum and DDL but no reader or
+  // writer, and only for the catalog write. Applies to pages as they refill, so the table converges
+  // over its own renewal cycle rather than at boot.
+  `ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`
 ]
 
 // The exact statement list a Postgres boot applies, in order, so the lock-target census can read

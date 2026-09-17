@@ -74,12 +74,6 @@ const GOLDEN_LOCK_TAKING: SchemaLockTarget[] = [
   },
   {
     kind: 'index',
-    table: 'relay_assignment_activity_leases',
-    name: 'relay_assignment_activity_expiry',
-    skipWhen: 'present'
-  },
-  {
-    kind: 'index',
     table: 'relay_control_connection_reservations',
     name: 'relay_control_connection_reservation_headroom',
     skipWhen: 'present'
@@ -116,7 +110,13 @@ const GOLDEN_LOCK_TAKING: SchemaLockTarget[] = [
   },
   { kind: 'column', table: 'relay_region_rehome_control', name: 'host_cooldown_ms', skipWhen: 'present' },
   { kind: 'column', table: 'relay_control_capabilities', name: 'idle_regional_rehome', skipWhen: 'present' },
-  { kind: 'column', table: 'relay_region_rehome_attempts', name: 'source_generation', skipWhen: 'present' }
+  { kind: 'column', table: 'relay_region_rehome_attempts', name: 'source_generation', skipWhen: 'present' },
+  {
+    kind: 'reloption',
+    table: 'relay_assignment_activity_leases',
+    name: 'fillfactor=70',
+    skipWhen: 'present'
+  }
 ]
 
 const INDEX_OR_ADD_COLUMN = /^(?:CREATE\s+(?:UNIQUE\s+)?INDEX|ALTER\s+TABLE\s+[^\s]+\s+ADD\s+COLUMN)/i
@@ -149,7 +149,10 @@ describe('relay boot-time lock targets', () => {
     for (const statement of relayPostgresSchemaStatements()) {
       const target = schemaLockTarget(statement)
       if (!target) continue
-      expect(target.name).toMatch(/^[a-z_][a-z0-9_]*$/)
+      // A reloption is the one target whose name is a pair rather than an identifier, because
+      // pg_class stores reloptions as `name=value` text and the value is half the question.
+      const shape = target.kind === 'reloption' ? /^[a-z_][a-z0-9_]*=[A-Za-z0-9_.]+$/ : /^[a-z_][a-z0-9_]*$/
+      expect(target.name).toMatch(shape)
       expect(target.table).toMatch(/^[a-z_][a-z0-9_]*$/)
     }
   })
@@ -194,7 +197,36 @@ describe('relay boot-time lock targets', () => {
 
   it('leaves every statement classifiable once its leading comments are stripped', () => {
     for (const statement of relayPostgresSchemaStatements()) {
-      expect(sqlWithoutComments(statement)).toMatch(/^(?:CREATE|ALTER|DO)\s/i)
+      expect(sqlWithoutComments(statement)).toMatch(/^(?:CREATE|ALTER|DROP|DO)\s/i)
     }
+  })
+
+  it('sends the activity-expiry drop with no pre-check, because it takes no relation lock', () => {
+    // The one statement in the schema that is neither pre-checked nor lock-taking. Postgres
+    // resolves a DROP INDEX name before it locks, so IF EXISTS on an index that is already gone
+    // costs a catalog miss and a NOTICE. Pinned so a future DROP cannot arrive unnoticed: anything
+    // that reaches here is exempt from the invariant the rest of this file enforces.
+    const drops = relayPostgresSchemaStatements().filter((statement) =>
+      /^DROP\s/i.test(sqlWithoutComments(statement))
+    )
+    expect(drops.map(sqlWithoutComments)).toEqual([
+      'DROP INDEX IF EXISTS relay_assignment_activity_expiry'
+    ])
+    for (const statement of drops) {
+      expect(takesRelationLock(statement)).toBe(false)
+      expect(schemaLockTarget(statement)).toBeUndefined()
+      expect(() => requireSchemaLockTarget(statement)).not.toThrow()
+    }
+  })
+
+  it('no longer creates an index on the column every control renewal writes', () => {
+    // The regression this drop exists to prevent: re-adding it would make ~471 renewals/s non-HOT
+    // again. A CREATE anywhere in the schema naming that index fails here.
+    const creates = relayPostgresSchemaStatements().filter((statement) =>
+      /relay_assignment_activity_expiry/i.test(sqlWithoutComments(statement))
+    )
+    expect(creates.map(sqlWithoutComments)).toEqual([
+      'DROP INDEX IF EXISTS relay_assignment_activity_expiry'
+    ])
   })
 })
