@@ -484,12 +484,27 @@ jobs:
           fi
 
           package_stable="$(current_package_stable)"
+          package_floor_candidate=""
           if [[ -n "$package_stable" ]]; then
             # Why: if a stable release is deleted after its version-bump commit
             # reached main, GitHub's release list regresses. package.json is the
             # floor for the current ref so the next cut cannot reuse an older
             # stable number just because the public release was nuked.
             if semver_gt "$package_stable" "$latest_stable"; then
+              # A stable package floor one patch above the latest published
+              # release is the release waiting to be cut. Treating it as the
+              # new baseline and bumping again silently skipped that version
+              # (for example, 1.4.197 -> 1.4.198). Preserve the floor as the
+              # patch candidate instead; refuse larger gaps so an operator
+              # must resolve the version history explicitly rather than
+              # strand clients on an unshipped number.
+              expected_patch="$(bump "$latest_stable" patch)"
+              if [[ "$package_stable" == "$expected_patch" ]]; then
+                package_floor_candidate="$package_stable"
+              elif [[ "$KIND" == "patch" ]]; then
+                echo "::error::package.json stable floor $package_stable is not the next patch after published stable $latest_stable; refusing to auto-skip stable versions." >&2
+                exit 1
+              fi
               # Skip floor-tag recovery when an explicit version is requested:
               # recover_unpublished_tag can exit 0, which would recover the
               # package-floor tag instead of cutting the requested version —
@@ -522,6 +537,10 @@ jobs:
           # human assert the exact target (e.g. leapfrog to 1.4.155); the
           # updater-safety gate and tag-collision recovery below still apply.
           new=""
+          if [[ -n "$package_floor_candidate" && ( "$KIND" == "patch" || -n "${EXPLICIT_VERSION:-}" ) ]]; then
+            new="$package_floor_candidate"
+            echo "Using package.json release floor as the next stable patch: $new"
+          fi
           if [[ -n "${EXPLICIT_VERSION:-}" ]]; then
             explicit="${EXPLICIT_VERSION#v}"
             # Why the optional trailing identifier: it lets an operator name a
@@ -555,7 +574,7 @@ jobs:
             # Same updater-safety gate the kind path enforces: stable line must
             # strictly increase over the latest published stable (prerelease
             # identifiers ignored for the comparison).
-            if ! semver_gt "$explicit" "$latest_stable"; then
+            if ! semver_gt "$explicit" "$latest_stable" && [[ "$explicit" != "$package_floor_candidate" ]]; then
               echo "::error::Refusing explicit version $explicit: not greater than latest stable $latest_stable." >&2
               exit 1
             fi
