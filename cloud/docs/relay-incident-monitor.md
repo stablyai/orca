@@ -39,12 +39,68 @@ days. No tokens, request bodies, logs, user IDs, host IDs, or relay device IDs a
 Reruns keep one stable incident ID, restore the immediately preceding private
 artifact, verify its commit/run/attempt provenance and content hashes, and pass
 `--restart`. A missing or mismatched artifact fails closed. A missing, stale,
-or collector-failed sample is durably recorded and resets the active continuous
-window. The next fresh sample starts a new 15- or 90-minute window under the
-same incident lineage.
+or collector-failed sample is durably recorded. Up to two consecutive such
+samples per source are tolerated and the window keeps running; a third resets
+the active continuous window, and the next fresh sample starts a new 15- or
+90-minute window under the same incident lineage. A pre-drain dry run must reach
+a verdict within 35 minutes of its lineage start.
 
 Exit code `2` means the gate froze or a dry run failed. Missing, stale, malformed, unauthorized, or
 unavailable telemetry fails closed.
+
+## Gate override (break-glass)
+
+`Deploy Relay Production Same-Cap` can skip this 15-minute dry-run gate. Supply both
+`gate-override-reason` and `gate-override-confirmation`, where the confirmation is exactly
+`SKIP_RELAY_MONITOR_GATE <target-image-digest>`. Supplying one without the other, a
+confirmation bound to any other digest, or a reason shorter than 12 characters fails the
+run before it touches production. `verify` mode rejects the override outright.
+
+### When it is legitimate
+
+The gate proves the fleet is healthy before a wave mutates it. That proof is the wrong
+question in exactly two situations.
+
+- **The roll is the fix for the measured condition.** When a chronic fault is the reason
+  the gate freezes, waiting for a green 15-minute window means waiting for the condition
+  the wave removes. On 2026-09-17 the gate froze 44 consecutive times on the recurring
+  Cloud SQL stall the rolling image addresses.
+- **An incident where the director is healthy.** Rolling back off a bad image should not
+  wait 15 minutes for aggregate evidence about a fleet the operator is already watching.
+
+It is not a way to move faster on an ordinary wave. Use it when you can name the signal
+the gate is freezing on and say why this wave is the answer to it.
+
+### What it does not skip
+
+Only the aggregate 15-minute dry-run and its sealed evidence are skipped. Every other
+control still runs, unchanged:
+
+- The live per-wave preflight, against the same thresholds this document lists. With no
+  sealed state to read, the expected selector comes from the dispatch inputs instead, and
+  the migration policy is pinned to `strict`. That membership is canonicalised exactly as
+  the monitor canonicalises its own, so it must still name every configured cell exactly
+  once and the order you type it in does not matter. A live threshold breach or selector
+  mismatch still fails the wave before any mutation.
+- Durable regional rehome disabled, and the exact selector generation and membership,
+  verified against the live director.
+- The reviewed Terraform plan, the exact image digest served by Artifact Registry, the
+  predecessor runtime check, and the new-incarnation check.
+- One cell at a time behind the Cloud SQL rollout lease, with the failed-wave failsafe
+  that leaves a cell isolated.
+- Single-dispatch mutation: a re-run still cannot replay a wave.
+
+### The audit trail
+
+Three places record it, and none of them depend on the operator writing anything down:
+
+- The workflow run's inputs, kept by GitHub for the life of the run.
+- The gate job's run summary: actor, mode, cells, target digest, reason, and confirmation.
+- The sealed canary artifact, under `gateOverride`, for a `canary-apply` wave.
+
+The canary authority a later batch verifies never carried a monitor run ID, so a batch can
+reuse a canary that was rolled under an override. The override is recorded in that
+artifact as audit trail, not as authority: each wave is authorized by its own confirmation.
 
 ## Local use
 
@@ -110,7 +166,7 @@ durably marked consumed before mutation and cannot authorize another run.
 | Relay pool wait | over 2,500 ms |
 | PostgreSQL retries in five minutes | over 2,000 |
 | Exhausted PostgreSQL retries in five minutes | over 300 |
-| Director instances | outside 5–6 |
+| Director instances | outside 5–6 for more than two consecutive samples |
 | Director CPU or memory | over 80% |
 | Director concurrency | over 64 |
 | Unexpected director 5xx in five minutes (excludes 503) | over 15 |
@@ -123,13 +179,22 @@ durably marked consumed before mutation and cannot authorize another run.
 Expected enabled cells must also have a powered runtime, healthy and ready endpoints, fresh
 heartbeats, and matching live admission.
 
-A cell's endpoint readings are the one exception to the freeze-on-first-breach rule
-above. Health, ready and latency are a single HTTP round trip from one runner, so they
-must fail more than two consecutive samples before they freeze the run; the streak is
-keyed by cell, so one cell's three readings share it. Absorbed breaches are recorded in
-the state artifact under `toleratedProbeEvents`. The director and auth probes have no
-such tolerance and freeze on the first bad sample. The live preflight that runs before
-each mutating wave re-samples on the same tolerance.
+Two readings are the exception to the freeze-on-first-breach rule above.
+
+A cell's endpoint readings are the first. Health, ready and latency are a single HTTP
+round trip from one runner, so they must fail more than two consecutive samples before
+they freeze the run; the streak is keyed by cell, so one cell's three readings share it.
+
+The director instance count is the second. Cloud Run replaces an instance in place
+rather than holding the count, so the reading leaves the band for about one sample
+roughly twice a day, and a deploy that briefly serves two revisions raises it the same
+way. Neither is an unhealthy fleet. The minimum and maximum share one streak, so a count
+that alternates above and below the band still freezes the run.
+
+Absorbed breaches are recorded in the state artifact under `toleratedProbeEvents`. Every
+other signal, including the director and auth health probes, freezes on the first bad
+sample. The live preflight that runs before each mutating wave re-samples on the same
+tolerance.
 
 ## Region placement alert policies
 
@@ -206,6 +271,18 @@ without its segment is a compile error in relay-contract, not a silent gap.
 
 ## Implementation log
 
+- Gave `collector_failed` the same two-consecutive-sample tolerance as an unread
+  signal and raised the pre-drain lineage cap from 25 to 35 minutes
+  (2026-09-17). Basis: dry-run 35258662628 sampled a healthy fleet clean for
+  13 minutes, then a single unreadable Cloud Monitoring sample restarted the
+  window, and the restarted window ran past the 25-minute cap at 1 500 002 ms,
+  so a healthy fleet produced no verdict. One failed collector round trip is
+  evidence about that round trip, not about the fleet, and it cannot freeze the
+  gate on its own because it carries no threshold breach. `monitor_gap` keeps
+  zero tolerance: it means the run stopped sampling, so the window has a real
+  hole. 35 minutes fits a 15-minute window plus one restart: a reset on the
+  window's last sample restarts at minute 16 and finishes at 31. The job
+  timeout is already 100 minutes.
 - Recalibrated the Cloud SQL backends freeze from 250 to 320, the unexpected
   director 5xx freeze from 3 to 15, and gave per-cell endpoint probes a
   two-consecutive-sample tolerance (2026-09-17). Basis: the pre-roll dry-run had

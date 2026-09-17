@@ -11,14 +11,18 @@ const LOCK_RETRIES = {
 }
 
 /** Serialize whole-file transactions across Orca processes sharing one execution host. */
-export async function withAgentSessionStoreTransactionLock<T>(
+export async function withFileTransactionLock<T>(
   filePath: string,
-  apply: () => Promise<T>
+  apply: () => Promise<T>,
+  options: { retries?: number } = {}
 ): Promise<T> {
   const directory = dirname(filePath)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   await chmod(directory, 0o700)
-  const release = await lock(filePath, { realpath: false, retries: LOCK_RETRIES })
+  const release = await lock(filePath, {
+    realpath: false,
+    retries: options.retries ?? LOCK_RETRIES
+  })
   try {
     return await apply()
   } finally {

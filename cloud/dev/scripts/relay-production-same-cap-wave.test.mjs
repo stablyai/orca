@@ -206,3 +206,134 @@ test('a batch trusts a canary sealed by identical code at an ancestor commit', a
     await rm(repository.root, { recursive: true, force: true })
   }
 })
+
+// Why: the break-glass override is the one input that removes a safety check, so
+// a partial or mismatched one must fail before the gate job reaches a mutation.
+test('accepts only a complete digest-bound monitor gate override', () => {
+  const reason = 'rolling the measured Cloud SQL stall fix'
+  const confirmation = `SKIP_RELAY_MONITOR_GATE ${targetDigest}`
+  const wave = {
+    mode: 'canary-apply',
+    cellIds: 'production-gce-c7',
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`
+  }
+  assert.deepEqual(
+    validateSameCapWave({
+      ...wave,
+      gateOverrideReason: reason,
+      gateOverrideConfirmation: confirmation
+    }).gateOverride,
+    { reason, confirmation }
+  )
+  // An ordinary wave carries no override at all.
+  assert.equal(validateSameCapWave(wave).gateOverride, null)
+  assert.equal(
+    validateSameCapWave({ ...wave, gateOverrideReason: '', gateOverrideConfirmation: '' })
+      .gateOverride,
+    null
+  )
+  assert.throws(
+    () => validateSameCapWave({ ...wave, gateOverrideConfirmation: confirmation }),
+    /gate override reason/
+  )
+  assert.throws(
+    () => validateSameCapWave({ ...wave, gateOverrideReason: reason }),
+    /gate override confirmation/
+  )
+  // Bound to the digest this wave installs, not to any digest.
+  assert.throws(
+    () => validateSameCapWave({
+      ...wave,
+      gateOverrideReason: reason,
+      gateOverrideConfirmation: `SKIP_RELAY_MONITOR_GATE ${rollbackDigest}`
+    }),
+    /gate override confirmation/
+  )
+  assert.throws(
+    () => validateSameCapWave({
+      ...wave,
+      gateOverrideReason: 'too short',
+      gateOverrideConfirmation: confirmation
+    }),
+    /gate override reason/
+  )
+  // The reason is rendered into the run summary, so it stays printable and single-line.
+  assert.throws(
+    () => validateSameCapWave({
+      ...wave,
+      gateOverrideReason: `${reason}\n| injected | row |`,
+      gateOverrideConfirmation: confirmation
+    }),
+    /gate override reason/
+  )
+  assert.throws(
+    () => validateSameCapWave({
+      ...wave,
+      mode: 'verify',
+      confirmation: '',
+      gateOverrideReason: reason,
+      gateOverrideConfirmation: confirmation
+    }),
+    /verify does not accept a monitor gate override/
+  )
+})
+
+test('a rollback wave may break the glass on its own target digest', () => {
+  const reason = 'getting off the bad image during an incident'
+  assert.deepEqual(
+    validateSameCapWave({
+      mode: 'rollback',
+      cellIds: 'production-gce-c7',
+      targetDigest,
+      rollbackDigest,
+      confirmation: `ROLL_BACK_RELAY_SAME_CAP ${rollbackDigest} production-gce-c7`,
+      gateOverrideReason: reason,
+      gateOverrideConfirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}`
+    }).gateOverride,
+    { reason, confirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}` }
+  )
+})
+
+// Why: the canary authority never carried a monitor run ID, so a batch can reuse
+// a canary rolled under an override. Recording it keeps the audit trail in the
+// sealed artifact without making it part of what verification demands.
+test('seals the override into the canary authority as audit trail only', () => {
+  const sealed = {
+    cellIds: 'production-gce-c7',
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`,
+    commitSha: 'f'.repeat(40),
+    runId: '42',
+    selectorGeneration: '11',
+    rehomeGeneration: '4'
+  }
+  const expected = {
+    commitSha: 'f'.repeat(40),
+    runId: '42',
+    targetDigest,
+    rollbackDigest,
+    selectorGeneration: '21',
+    rehomeGeneration: '4'
+  }
+  const overridden = canaryAuthority({
+    ...sealed,
+    gateOverrideReason: 'rolling the measured Cloud SQL stall fix',
+    gateOverrideConfirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}`,
+    actor: 'Jinwoo-H'
+  })
+  assert.deepEqual(overridden.gateOverride, {
+    reason: 'rolling the measured Cloud SQL stall fix',
+    confirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}`,
+    actor: 'Jinwoo-H'
+  })
+  assert.equal(canaryAuthority(sealed).gateOverride, null)
+  // Neither shape changes what a batch verifies.
+  assert.equal(verifyCanaryAuthority(overridden, expected).cellId, 'production-gce-c7')
+  assert.equal(
+    verifyCanaryAuthority(canaryAuthority(sealed), expected).cellId,
+    'production-gce-c7'
+  )
+})

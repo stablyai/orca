@@ -73,6 +73,15 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     showManagedTerminalWorkspace: vi.fn(async (selector: string) => ({
       id: selector.replace(/^id:/, '')
     })),
+    // The scope resolves for every workspace kind, so unlike the worktree record above it never
+    // refuses the floating sentinel — which is the whole reason the launch asks for this one.
+    showTerminalWorkspaceLaunchScope: vi.fn(async (selector: string) => ({
+      id: selector.replace(/^id:/, ''),
+      path: '/tmp/wt-7',
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })),
     ensureStructuredAgentSessionHost: vi.fn(async () => {}),
     waitForSetupTerminalCompletion
   }

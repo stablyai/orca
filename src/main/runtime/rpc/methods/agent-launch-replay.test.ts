@@ -339,7 +339,7 @@ describe('an uncertain launch stays uncertain', () => {
 
   it('records a failure that happened before anything could be created', async () => {
     const runtime = runtimeStub()
-    runtime.showManagedTerminalWorkspace.mockRejectedValueOnce(new Error('worktree_not_found'))
+    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValueOnce(new Error('worktree_not_found'))
 
     await expect(
       launch(
@@ -481,7 +481,7 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
 describe('a recorded failure replays as the failure it was', () => {
   it('answers with the code the launch actually raised, not the ledger vocabulary', async () => {
     const runtime = runtimeStub()
-    runtime.showManagedTerminalWorkspace.mockRejectedValue(new Error('worktree_not_found'))
+    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(new Error('worktree_not_found'))
     const params = createLaunch({
       operationId: OPERATION_ID,
       target: { kind: 'existing', worktree: 'gone' }
@@ -493,14 +493,14 @@ describe('a recorded failure replays as the failure it was', () => {
     // malformed" signal, which tells a client to mint a fresh id when the truthful answer is that
     // this launch definitively did not run.
     const replayed = runtimeStub()
-    replayed.showManagedTerminalWorkspace.mockRejectedValue(new Error('worktree_not_found'))
+    replayed.showTerminalWorkspaceLaunchScope.mockRejectedValue(new Error('worktree_not_found'))
     await expect(launch(params, replayed)).rejects.toThrow('worktree_not_found')
-    expect(replayed.showManagedTerminalWorkspace).not.toHaveBeenCalled()
+    expect(replayed.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
   })
 
   it('bounds the code it persists, because a code is an identifier and a message is not', async () => {
     const runtime = runtimeStub()
-    runtime.showManagedTerminalWorkspace.mockRejectedValue(
+    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(
       new Error(`ENOENT: no such file or directory, stat '${'/very/long/path'.repeat(400)}'`)
     )
 

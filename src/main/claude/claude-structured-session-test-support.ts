@@ -74,8 +74,7 @@ export function fakeClaude(
     const route = routes[subtype]
     return route ? route(params) : undefined
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake implements the complete connection contract below.
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -165,7 +164,10 @@ export function fakeClaude(
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
         routed('stop_task', { taskId })
       },
-      send: async (message) => {
+      send: async (message, beforeDispatch) => {
+        if (beforeDispatch) {
+          await beforeDispatch()
+        }
         connection.sent.push(message)
         if (message.type === 'user' && options.replayUuid !== null) {
           const configuredReplayUuid = options.replayUuids
@@ -190,7 +192,7 @@ export function fakeClaude(
     }
     connections.push(connection)
     return connection
-  }) as typeof openClaudeStreamJsonConnection
+  }
   return { connections, openConnection, routes }
 }
 

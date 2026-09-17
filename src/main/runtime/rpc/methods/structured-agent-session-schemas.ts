@@ -17,6 +17,8 @@ export {
   MutationEnvelope,
   OptionsParams,
   RespondParams,
+  RestartResumableParams,
+  RestartResumeParams,
   RewindParams,
   SendParams,
   SessionId,

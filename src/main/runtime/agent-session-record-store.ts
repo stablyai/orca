@@ -3,21 +3,25 @@ import { commitConversationCommandRecord } from './agent-session-conversation-co
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
-import {
-  claimAgentSessionOperation,
-  settleAgentSessionOperation,
-  type AgentSessionOperationClaim,
-  type AgentSessionOperationDecision,
-  type AgentSessionOperationOutcome,
-  type AgentSessionOperationRow
+import type {
+  AgentSessionOperationClaim,
+  AgentSessionOperationDecision,
+  AgentSessionOperationOutcome,
+  AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
-  admitAgentSessionGlobalOperationRow,
+  admitAgentSessionGlobalOperationInto,
   admitAgentSessionMutationOperation,
-  admitAgentSessionOperationRow,
+  admitAgentSessionOperationInto,
+  claimAgentSessionOperationInto,
+  settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from './agent-session-operation-admission'
+import {
+  isAgentSessionClaimKeyVerifiable,
+  retireAgentSessionClaimKey
+} from './agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import { classifyObservedAgentSessionSpawnToken } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
@@ -66,10 +70,6 @@ import {
   type AgentSessionStoreState
 } from './agent-session-record-store-file'
 import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
-import {
-  isAgentSessionClaimKeyVerifiable,
-  retireAgentSessionClaimKey
-} from './agent-session-claim-key-retention'
 import {
   AgentSessionStoreTransactionQueue,
   markAgentSessionStoreLeasesUnreconciled
@@ -276,21 +276,13 @@ export class AgentSessionRecordStore {
 
   /** Admits one non-reservation mutation through the durable ledger. */
   admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
-    this.transact(() => {
-      const admitted = admitAgentSessionOperationRow(this.state.operations, args)
-      this.state.operations = admitted.rows
-      return admitted.decision
-    })
+    this.transact(() => admitAgentSessionOperationInto(this.state, args))
 
   /** Send ids stay global after a caller reconnects under a different identity. */
   admitGlobalOperation = (
     args: AgentSessionOperationAdmission
   ): Promise<AgentSessionOperationDecision> =>
-    this.transact(() => {
-      const admitted = admitAgentSessionGlobalOperationRow(this.state.operations, args)
-      this.state.operations = admitted.rows
-      return admitted.decision
-    })
+    this.transact(() => admitAgentSessionGlobalOperationInto(this.state, args))
 
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact(() => admitAgentSessionMutationOperation(this.state, args))
@@ -302,20 +294,14 @@ export class AgentSessionRecordStore {
     callerKey: string
     operationId: string
   }): Promise<AgentSessionOperationClaim> =>
-    this.transact(() => {
-      const claimed = claimAgentSessionOperation(this.state.operations, args)
-      this.state.operations = claimed.rows
-      return claimed.claim
-    })
+    this.transact(() => claimAgentSessionOperationInto(this.state, args))
 
   async recordOperationOutcome(args: {
     callerKey?: string
     operationId: string
     outcome: AgentSessionOperationOutcome
   }): Promise<void> {
-    await this.transact(() => {
-      this.state.operations = settleAgentSessionOperation(this.state.operations, args)
-    })
+    await this.transact(() => settleAgentSessionOperationInto(this.state, args))
   }
 
   async markClaimConflicted(sessionId: string, now: number): Promise<AgentSessionRecord> {

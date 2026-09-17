@@ -211,11 +211,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     body: AgentJournalMessageItem
     fence: number
     requestedAt?: number
+    beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
       await this.turnCancellation.captureBaseline(session)
+      await input.beforeDispatch?.()
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false

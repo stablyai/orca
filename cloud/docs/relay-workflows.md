@@ -384,6 +384,30 @@ director; the workflow never receives or mints a director or stamped-cell runtim
 keeps only the selected cell migration-only, while the exact rollback digest remains dispatchable via
 the same workflow's `rollback` mode.
 
+### Gate override (break-glass)
+
+Every mutating same-cap wave normally consumes a fresh 15-minute aggregate monitor dry-run.
+`gate-override-reason` plus `gate-override-confirmation`, the latter exactly
+`SKIP_RELAY_MONITOR_GATE <target-image-digest>`, skips that aggregate evidence and nothing
+else. A partial or mismatched override fails the run before any mutation, and `verify` mode
+rejects it outright.
+
+It is legitimate when the roll is the fix for the condition the gate is freezing on, or
+during an incident with the director healthy. It is not a way to move faster on an ordinary
+wave.
+
+The live per-wave preflight still runs, against the same thresholds, with the expected
+selector taken from the dispatch inputs and the migration policy pinned to `strict`. That
+membership is canonicalised the same way the monitor canonicalises its own, so it must name
+every configured cell exactly once and its order does not matter.
+Durable rehome disabled, the exact selector generation and membership, the reviewed
+Terraform plan, the predecessor and new-incarnation checks, the rollout lease, the
+failed-wave failsafe, and single-dispatch mutation are all unchanged. The actor, reason,
+and confirmation are recorded in the gate job's run summary and, for a canary, sealed into
+the canary artifact under `gateOverride`; a batch may reuse a canary rolled under an
+override, because that authority never carried a monitor run ID. See
+[gate override (break-glass)](./relay-incident-monitor.md#gate-override-break-glass).
+
 The first compatible director rollout uses `bootstrap-runtime-identity=true` with
 `BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY`. That one-time path requires the exact stamped-cell
 predecessor identity, creates both the cold rollback and candidate on the distinct director identity,

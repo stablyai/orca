@@ -449,7 +449,9 @@ describe('the terminal factory', () => {
     )
 
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-    expect(runtime.showManagedTerminalWorkspace).toHaveBeenCalledWith('id:wt-7')
+    // The scope, not the worktree record: asking for the record refused any workspace without one.
+    expect(runtime.showTerminalWorkspaceLaunchScope).toHaveBeenCalledWith('id:wt-7')
+    expect(runtime.showManagedTerminalWorkspace).not.toHaveBeenCalled()
     // Resolved to an id first: everything below re-prefixes it, so a raw selector reaches the
     // runtime as `id:id:wt-7`.
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', { startupAgent: 'grok' })

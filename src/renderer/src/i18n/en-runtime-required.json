@@ -72,6 +72,21 @@
         "af6e02c44a": "page",
         "f5a6b38a14": "sheet"
       },
+      "NativeChatResumeOnRestartModal": {
+        "manyAgents": "{{value0}} agents",
+        "oneAgent": "1 agent",
+        "projects": "Folder workspaces",
+        "reconnectAgent": "Reconnect {{value0}} chat",
+        "resume": "Reconnect",
+        "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
+        "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message.",
+        "reconnectUnconfirmed_one": "Reconnection is unconfirmed for {{value0}} chat. You can still open it normally.",
+        "reconnectUnconfirmed_other": "Reconnection is unconfirmed for {{value0}} chats. You can still open them normally.",
+        "continueRefused_one": "{{value0}} chat could not be continued. Open it to continue manually.",
+        "continueRefused_other": "{{value0}} chats could not be continued. Open them to continue manually.",
+        "reconnectRefused_one": "{{value0}} chat could not be reconnected. You can still open it normally.",
+        "reconnectRefused_other": "{{value0}} chats could not be reconnected. You can still open them normally."
+      },
       "NewWorkspaceComposerCard": {
         "0e587e31fb": "yaml",
         "2132b670da": "both",

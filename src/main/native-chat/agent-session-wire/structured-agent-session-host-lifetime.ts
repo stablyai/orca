@@ -30,6 +30,8 @@ export type StructuredAgentSessionLifetimeContext = {
   now: () => number
   /** Drops the session's row from the agent-status store; see `forgetStructuredAgentSession`. */
   forgetStatus: (sessionId: string) => void
+  /** Quit-only witness validation after provider exit and event drain, before prompt cancellation. */
+  onStoppedWork?: (sessionId: string) => void
 }
 
 /** Dropping a session and dropping its status row are ONE operation: the store keeps the row until
@@ -90,6 +92,7 @@ export async function evictHeldStructuredAgentSession(
     },
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     settleWork: async () => {
+      context.onStoppedWork?.(sessionId)
       const settled = await settleStructuredAgentSessionDeadGeneration({
         journal: session.journal,
         sessionId,
@@ -130,7 +133,9 @@ export async function evictHeldStructuredAgentSession(
  *  session whose child is already stopped but whose wind-down aborted is still in scope — that is
  *  the retry. */
 export async function evictOwnedStructuredAgentSessions(
-  context: StructuredAgentSessionLifetimeContext,
+  context: StructuredAgentSessionLifetimeContext & {
+    serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
+  },
   retainOnFailure: Set<string>
 ): Promise<void> {
   const ownedSessionIds = [...context.sessions]
@@ -146,7 +151,9 @@ export async function evictOwnedStructuredAgentSessions(
   await Promise.all(
     ownedSessionIds.map(async (sessionId) => {
       try {
-        await evictHeldStructuredAgentSession(context, sessionId)
+        await context.serialize(sessionId, () =>
+          evictHeldStructuredAgentSession(context, sessionId)
+        )
         retainOnFailure.delete(sessionId)
       } catch (error) {
         failures.push(error)

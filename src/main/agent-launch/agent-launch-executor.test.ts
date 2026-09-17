@@ -15,6 +15,7 @@ import {
   type AgentLaunchExecution
 } from './agent-launch-executor'
 import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
@@ -245,5 +246,52 @@ describe('the prompt receipt', () => {
   it('omits the receipt when no prompt was requested', async () => {
     const h = harness({})
     expect((await h.run(CREATE_INTENT)).prompt).toBeUndefined()
+  })
+})
+
+/**
+ * The kind is read off the resolved workspace id, so a workspace with nowhere to keep a session is
+ * decided here rather than offered to a host probe that cannot answer for it.
+ */
+describe('a launch into an existing workspace, by workspace kind', () => {
+  it('runs the floating workspace as a terminal, never a structured session', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: FLOATING_TERMINAL_WORKTREE_ID }
+    })
+
+    // The invariant, not the call order: the floating sentinel has no session store to open into.
+    expect(h.createStructuredSession).not.toHaveBeenCalled()
+    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
+    expect(result.receipt).toMatchObject({
+      mode: 'terminal',
+      reason: 'structured_unsupported_on_host'
+    })
+  })
+
+  it('still opens a structured session in a folder workspace', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'folder:fw-1' }
+    })
+
+    // A folder workspace has no git worktree either; it must not be swept up with the sentinel.
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
+    expect(result.outcome).toEqual({
+      kind: 'structured',
+      sessionId: 'sess-1',
+      handle: 'handle_structured'
+    })
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
+  })
+
+  it('still opens a structured session in a git worktree', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: { kind: 'existing', worktree: 'wt-7' } })
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
   })
 })

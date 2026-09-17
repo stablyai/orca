@@ -10,6 +10,7 @@ import {
   INCIDENT_MONITOR_THRESHOLDS,
   type IncidentSample
 } from './incident-monitor.js'
+import { relayOpsEnvironment } from './environment-config.js'
 import type { AdmissionSelector } from './incident-selector.js'
 
 const directories: string[] = []
@@ -60,6 +61,38 @@ function stateFile(
     completedAt: new Date(now - 60_000).toISOString(),
     ...overrides
   }))
+  return path
+}
+
+// Every configured production cell, in the lexicographic order
+// normalizeSelectorMembership canonicalises to. Derived from the same durable
+// Terraform config the override path reads, so a new cell cannot strand these.
+const configuredCellIds = relayOpsEnvironment('production').cells.map(
+  (cell) => cell.cellId
+)
+const canonicalCellIds = [...configuredCellIds].sort()
+const canonicalMembership = {
+  existingOnly: canonicalCellIds,
+  migrationOnly: [],
+  general: []
+}
+
+// What the director reports: a normalised selector, never an echo of what the
+// caller expected. An order-sensitive comparison only holds if the override path
+// canonicalises its own input the same way.
+function canonicalSample(generation = 1): IncidentSample {
+  const next = sample()
+  next.selector = { generation, membership: canonicalMembership }
+  return next
+}
+
+function membershipFile(
+  membership: Record<string, string[]> = canonicalMembership
+): string {
+  const directory = mkdtempSync(join(tmpdir(), 'relay-live-preflight-selector-'))
+  directories.push(directory)
+  const path = join(directory, 'selector.json')
+  writeFileSync(path, JSON.stringify(membership))
   return path
 }
 
@@ -154,9 +187,9 @@ describe('relay incident live preflight', () => {
     )).resolves.toBeUndefined()
   })
 
-  it('rejects monitor evidence beyond the 25-minute lineage bound', async () => {
+  it('rejects monitor evidence beyond the 35-minute lineage bound', async () => {
     const path = stateFile('strict', {
-      startedAt: new Date(now - 26 * 60_000 - 1).toISOString()
+      startedAt: new Date(now - 36 * 60_000 - 1).toISOString()
     })
     await expect(runIncidentLivePreflight(
       ['--state-file', path],
@@ -571,6 +604,217 @@ describe('relay incident live preflight', () => {
     )).rejects.toThrow('cloud-monitoring/source_stale')
     expect(collect).toHaveBeenCalledTimes(5)
     expect(wait).toHaveBeenCalledTimes(4)
+  })
+
+
+  // Why: the same-cap break-glass skips the sealed 15-minute aggregate evidence,
+  // so this live recheck is the only thing left standing between the dispatch and
+  // a mutation. It must judge the fleet exactly as it does with evidence, and it
+  // must never accept a half-specified override.
+  describe('break-glass without monitor state', () => {
+    const overrideArgs = (extra: string[] = [], membership = canonicalMembership) => [
+      '--no-monitor-state',
+      '--expected-selector-generation', '1',
+      '--selector-membership-file', membershipFile(membership),
+      ...extra
+    ]
+
+    // The director's reading, plus whatever the override path decided to expect.
+    const liveCollect = (
+      mutate: (next: IncidentSample) => IncidentSample = (next) => next
+    ) => async (expected: AdmissionSelector) => {
+      const next = canonicalSample(expected.generation)
+      next.expectedSelector = expected
+      return mutate(next)
+    }
+
+    it('accepts one complete fresh green sample with no sealed evidence', async () => {
+      await expect(runIncidentLivePreflight(
+        overrideArgs(),
+        { now: () => now, collect: liveCollect() }
+      )).resolves.toBeUndefined()
+    })
+
+    // Why: the live selector is normalised and the comparison is an ordered
+    // stringify, so an operator's unsorted membership must canonicalise here or
+    // every override wave reads as selector drift on a healthy fleet.
+    it('canonicalises an unsorted operator membership', async () => {
+      const shuffled = {
+        existingOnly: [...canonicalCellIds].reverse(),
+        migrationOnly: [],
+        general: []
+      }
+      expect(shuffled.existingOnly).not.toEqual(canonicalCellIds)
+      const seen: AdmissionSelector[] = []
+      await expect(runIncidentLivePreflight(
+        overrideArgs([], shuffled),
+        {
+          now: () => now,
+          collect: async (expected) => {
+            seen.push(expected)
+            const next = canonicalSample(expected.generation)
+            next.expectedSelector = expected
+            return next
+          }
+        }
+      )).resolves.toBeUndefined()
+      expect(seen[0]!.membership.existingOnly).toEqual(canonicalCellIds)
+    })
+
+    // Why: normalising is also what enforces every configured cell exactly once,
+    // which a bare schema parse would have dropped.
+    it('rejects a membership that is not every configured cell exactly once', async () => {
+      const duplicated = {
+        existingOnly: [...canonicalCellIds, canonicalCellIds[0] as string],
+        migrationOnly: [],
+        general: []
+      }
+      await expect(runIncidentLivePreflight(
+        overrideArgs([], duplicated),
+        { now: () => now, collect: liveCollect() }
+      )).rejects.toThrow('every configured cell exactly once')
+      const missing = {
+        existingOnly: canonicalCellIds.slice(1),
+        migrationOnly: [],
+        general: []
+      }
+      await expect(runIncidentLivePreflight(
+        overrideArgs([], missing),
+        { now: () => now, collect: liveCollect() }
+      )).rejects.toThrow('every configured cell exactly once')
+      const unknown = {
+        existingOnly: [...canonicalCellIds.slice(1), 'production-gce-c999'],
+        migrationOnly: [],
+        general: []
+      }
+      await expect(runIncidentLivePreflight(
+        overrideArgs([], unknown),
+        { now: () => now, collect: liveCollect() }
+      )).rejects.toThrow('every configured cell exactly once')
+    })
+
+    it('fails closed on a live threshold breach', async () => {
+      await expect(runIncidentLivePreflight(
+        overrideArgs(),
+        {
+          now: () => now,
+          collect: liveCollect((next) => {
+            next.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.value = 0.99
+            return next
+          }),
+          wait: async () => {}
+        }
+      )).rejects.toThrow('cloud-monitoring/threshold_max cloud_sql.cpu')
+    })
+
+    it('fails closed on a live selector mismatch', async () => {
+      await expect(runIncidentLivePreflight(
+        overrideArgs(),
+        {
+          now: () => now,
+          collect: liveCollect((next) => {
+            next.selector = { ...next.selector, generation: 7 }
+            return next
+          }),
+          wait: async () => {}
+        }
+      )).rejects.toThrow('selector_mismatch')
+    })
+
+    it('expects the wave-adjusted live selector generation', async () => {
+      const seen: AdmissionSelector[] = []
+      await expect(runIncidentLivePreflight(
+        overrideArgs(['--wave-index', '2']),
+        {
+          now: () => now,
+          collect: async (expected) => {
+            seen.push(expected)
+            const next = canonicalSample(expected.generation)
+            next.expectedSelector = expected
+            return next
+          }
+        }
+      )).resolves.toBeUndefined()
+      expect(seen[0]!.generation).toBe(5)
+    })
+
+    it('pins the strictest migration policy', async () => {
+      // An inactive migration target is tolerable only under recover-forward,
+      // and an override cannot elect that policy, so this must still fail.
+      await expect(runIncidentLivePreflight(
+        overrideArgs(),
+        {
+          now: () => now,
+          collect: liveCollect((next) => {
+            next.sources['director-admin']!.signals[
+              'cell.production-gce-c1.migration_target_inactive'
+            ]!.value = 30
+            return next
+          }),
+          wait: async () => {}
+        }
+      )).rejects.toThrow('director-admin/threshold_max')
+    })
+
+    it('rejects a half-specified override', async () => {
+      const cases: string[][] = [
+        ['--no-monitor-state'],
+        ['--no-monitor-state', '--expected-selector-generation', '1'],
+        ['--no-monitor-state', '--selector-membership-file', membershipFile()],
+        // Mixing the two sources would let a caller pass sealed evidence it
+        // never wants read.
+        [
+          '--no-monitor-state',
+          '--expected-selector-generation', '1',
+          '--selector-membership-file', membershipFile(),
+          '--state-file', stateFile()
+        ],
+        // Override arguments without the flag must not be silently ignored.
+        ['--state-file', stateFile(), '--expected-selector-generation', '1'],
+        ['--no-monitor-state', '--no-monitor-state'],
+        ['--expected-selector-generation', '1']
+      ]
+      for (const args of cases) {
+        await expect(runIncidentLivePreflight(
+          args,
+          { now: () => now, collect: liveCollect() }
+        )).rejects.toThrow('usage:')
+      }
+    })
+
+    it('rejects an unknown option and a negative generation', async () => {
+      await expect(runIncidentLivePreflight(
+        overrideArgs(['--skip-everything']),
+        { now: () => now, collect: liveCollect() }
+      )).rejects.toThrow('usage:')
+      await expect(runIncidentLivePreflight(
+        [
+          '--no-monitor-state',
+          '--expected-selector-generation', '-1',
+          '--selector-membership-file', membershipFile()
+        ],
+        { now: () => now, collect: liveCollect() }
+      )).rejects.toThrow()
+    })
+
+    it('re-samples a tolerable failure and then passes', async () => {
+      let samples = 0
+      await expect(runIncidentLivePreflight(
+        overrideArgs(),
+        {
+          now: () => now,
+          collect: liveCollect((next) => {
+            samples++
+            if (samples === 1) {
+              next.sources['cloud-monitoring']!.signals['director.instances']!.value = 2
+            }
+            return next
+          }),
+          wait: async () => {}
+        }
+      )).resolves.toBeUndefined()
+      expect(samples).toBe(2)
+    })
   })
 
   it('uses the supplied admin token without minting through gcloud', async () => {

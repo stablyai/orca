@@ -69,6 +69,17 @@ on:
         description: Exact digest-and-cell-bound mutation confirmation
         required: false
         type: string
+      gate-override-reason:
+        description: >-
+          Break-glass only: why this wave may skip the aggregate 15-minute monitor
+          dry-run gate. The live per-wave preflight still runs.
+        required: false
+        type: string
+      gate-override-confirmation:
+        description: >-
+          Break-glass only: exactly "SKIP_RELAY_MONITOR_GATE <target-image-digest>"
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -111,17 +122,51 @@ jobs:
           ROLLBACK_DIGEST: ${{ inputs.rollback-image-digest }}
           CONFIRMATION: ${{ inputs.confirmation }}
           CANARY_RUN_ID: ${{ inputs.canary-run-id }}
+          GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
+          GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
         run: |
+          # Fails closed on a partial or mismatched override, before any mutation.
           CELLS="$(node dev/scripts/relay-production-same-cap-wave.mjs validate \
             --mode "${MODE}" --cell-ids "${CELL_IDS}" \
             --target-digest "${TARGET_DIGEST}" --rollback-digest "${ROLLBACK_DIGEST}" \
-            --confirmation "${CONFIRMATION}" --canary-run-id "${CANARY_RUN_ID}")"
+            --confirmation "${CONFIRMATION}" --canary-run-id "${CANARY_RUN_ID}" \
+            --gate-override-reason "${GATE_OVERRIDE_REASON}" \
+            --gate-override-confirmation "${GATE_OVERRIDE_CONFIRMATION}")"
           echo "cells=${CELLS}" >> "${GITHUB_OUTPUT}"
           if [[ "${MODE}" =~ ^(canary-apply|batch-apply)$ ]]; then
             echo 'job-mode=apply' >> "${GITHUB_OUTPUT}"
           else
             echo "job-mode=${MODE}" >> "${GITHUB_OUTPUT}"
           fi
+
+      - name: Record the monitor gate override in the run summary
+        if: ${{ inputs.gate-override-confirmation != '' }}
+        env:
+          GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
+          GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
+          ACTOR: ${{ github.actor }}
+          MODE: ${{ inputs.mode }}
+          CELL_IDS: ${{ inputs.cell-ids }}
+          TARGET_DIGEST: ${{ inputs.target-image-digest }}
+        run: |
+          {
+            echo '## Aggregate monitor gate overridden (break-glass)'
+            echo
+            echo '| field | value |'
+            echo '| --- | --- |'
+            echo "| actor | ${ACTOR} |"
+            echo "| mode | ${MODE} |"
+            echo "| cells | ${CELL_IDS} |"
+            echo "| target digest | \`${TARGET_DIGEST}\` |"
+            echo "| reason | ${GATE_OVERRIDE_REASON} |"
+            echo "| confirmation | \`${GATE_OVERRIDE_CONFIRMATION}\` |"
+            echo
+            echo 'Skipped: the 15-minute aggregate monitor dry-run and its sealed evidence.'
+            echo 'Still enforced: the live per-wave preflight against the same thresholds,'
+            echo 'durable rehome disabled, the exact selector generation and membership, the'
+            echo 'reviewed Terraform plan, one cell at a time behind the rollout lease, and'
+            echo 'single-dispatch mutation.'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Download exact prior canary authority
         if: ${{ inputs.mode == 'batch-apply' }}
@@ -146,7 +191,7 @@ jobs:
             --rehome-generation "${{ inputs.expected-rehome-generation }}"
 
       - name: Reject previously consumed aggregate safety evidence
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
@@ -163,7 +208,7 @@ jobs:
             > "${RUNNER_TEMP}/relay-same-cap-monitor-authority/${MARKER_NAME}"
 
       - name: Consume aggregate safety evidence for this exact wave
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: relay-same-cap-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
@@ -188,6 +233,8 @@ jobs:
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
       monitor-run-id: ${{ inputs.monitor-run-id }}
       monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      gate-override-reason: ${{ inputs.gate-override-reason }}
+      gate-override-confirmation: ${{ inputs.gate-override-confirmation }}
       wave-index: '0'
     secrets: inherit
 
@@ -209,6 +256,8 @@ jobs:
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
       monitor-run-id: ${{ inputs.monitor-run-id }}
       monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      gate-override-reason: ${{ inputs.gate-override-reason }}
+      gate-override-confirmation: ${{ inputs.gate-override-confirmation }}
       wave-index: '1'
     secrets: inherit
 
@@ -230,6 +279,8 @@ jobs:
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
       monitor-run-id: ${{ inputs.monitor-run-id }}
       monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      gate-override-reason: ${{ inputs.gate-override-reason }}
+      gate-override-confirmation: ${{ inputs.gate-override-confirmation }}
       wave-index: '2'
     secrets: inherit
 
@@ -251,6 +302,8 @@ jobs:
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
       monitor-run-id: ${{ inputs.monitor-run-id }}
       monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      gate-override-reason: ${{ inputs.gate-override-reason }}
+      gate-override-confirmation: ${{ inputs.gate-override-confirmation }}
       wave-index: '3'
     secrets: inherit
 
@@ -266,6 +319,10 @@ jobs:
         with: { node-version: 24 }
 
       - name: Seal exact successful canary authority
+        env:
+          GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
+          GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
+          ACTOR: ${{ github.actor }}
         run: |
           mkdir -p "${RUNNER_TEMP}/relay-same-cap-canary"
           node dev/scripts/relay-production-same-cap-wave.mjs create-canary \
@@ -276,6 +333,9 @@ jobs:
             --commit-sha "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
             --selector-generation "${{ inputs.expected-selector-generation }}" \
             --rehome-generation "${{ inputs.expected-rehome-generation }}" \
+            --gate-override-reason "${GATE_OVERRIDE_REASON}" \
+            --gate-override-confirmation "${GATE_OVERRIDE_CONFIRMATION}" \
+            --actor "${ACTOR}" \
             > "${RUNNER_TEMP}/relay-same-cap-canary/authority.json"
 
       - uses: actions/upload-artifact@v4

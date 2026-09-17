@@ -16,6 +16,8 @@ on:
       expected-rehome-generation: { required: true, type: string }
       monitor-run-id: { required: true, type: string }
       monitor-run-attempt: { required: true, type: string }
+      gate-override-reason: { required: false, type: string, default: '' }
+      gate-override-confirmation: { required: false, type: string, default: '' }
       wave-index: { required: true, type: string }
 
 permissions:
@@ -52,6 +54,8 @@ jobs:
       WAVE_INDEX: ${{ inputs.wave-index }}
       MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
       MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+      GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
+      GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
       OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-monitor-evidence
     steps:
       - name: Require exact reusable-workflow configuration
@@ -72,6 +76,14 @@ jobs:
           [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${WAVE_INDEX}" =~ ^[0-3]$ ]]
+          # The caller validated this too; re-check here so a malformed override
+          # can never reach a mutation through this reusable workflow.
+          if test -n "${GATE_OVERRIDE_REASON}${GATE_OVERRIDE_CONFIRMATION}"; then
+            test "${DEPLOY_MODE}" != verify
+            test "${GATE_OVERRIDE_CONFIRMATION}" = \
+              "SKIP_RELAY_MONITOR_GATE ${TARGET_IMAGE_DIGEST}"
+            [[ "${GATE_OVERRIDE_REASON}" =~ ^[[:print:]]{12,500}$ ]]
+          fi
           if test "${DEPLOY_MODE}" = verify; then
             EFFECTIVE_SELECTOR_GENERATION="${EXPECTED_SELECTOR_GENERATION}"
           else
@@ -110,13 +122,13 @@ jobs:
         with: { terraform_wrapper: false }
 
       - name: Require fresh aggregate monitor evidence reference
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         run: |
           [[ "${MONITOR_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
           [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
 
       - name: Download private aggregate monitor evidence
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         uses: actions/download-artifact@v4
         with:
           name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
@@ -125,7 +137,7 @@ jobs:
           run-id: ${{ inputs.monitor-run-id }}
 
       - name: Verify monitor evidence provenance
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         run: |
           node dev/scripts/relay-monitor-evidence.mjs verify-authority \
             --directory "${OUTPUT_DIRECTORY}" \
@@ -138,7 +150,7 @@ jobs:
             --wave-index "${WAVE_INDEX}"
 
       - name: Download this wave's single-use safety authority
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         uses: actions/download-artifact@v4
         with:
           name: relay-same-cap-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
@@ -147,7 +159,7 @@ jobs:
           run-id: ${{ github.run_id }}
 
       - name: Require safety evidence consumed by this workflow
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         run: |
           # Mutations are single-dispatch: a fresh dispatch cannot resume a
           # partial batch (the canary authority binds the batch-entry selector
@@ -184,9 +196,30 @@ jobs:
           # Freshness-only failures are publish lag, not health, on every wave
           # including the first; the CLI still caps the retry at the wave's
           # evidence-age budget, so this cannot mutate on aged evidence.
-          pnpm incident:relay-preflight -- \
-            --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
-            --wave-index "${WAVE_INDEX}" --retry-freshness
+          #
+          # This live recheck runs on every mutating wave, including a
+          # break-glass one. With the aggregate gate overridden there is no
+          # sealed state to read, so the expected selector comes from the
+          # dispatch inputs the rehome inspect below verifies against the live
+          # director; every threshold the sample is judged against is unchanged.
+          if test -n "${GATE_OVERRIDE_CONFIRMATION}"; then
+            jq -n \
+              --arg existingOnly "${EXPECTED_EXISTING_ONLY_CELLS/none/}" \
+              --arg migrationOnly "${EXPECTED_MIGRATION_ONLY_CELLS/none/}" \
+              --arg general "${EXPECTED_GENERAL_CELLS/none/}" \
+              '{existingOnly:$existingOnly,migrationOnly:$migrationOnly,general:$general}
+               | map_values(split(",") | map(select(length > 0)))' \
+              > "${RUNNER_TEMP}/relay-same-cap-selector.json"
+            pnpm incident:relay-preflight -- \
+              --no-monitor-state \
+              --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+              --selector-membership-file "${RUNNER_TEMP}/relay-same-cap-selector.json" \
+              --wave-index "${WAVE_INDEX}" --retry-freshness
+          else
+            pnpm incident:relay-preflight -- \
+              --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
+              --wave-index "${WAVE_INDEX}" --retry-freshness
+          fi
 
       - name: Require durable rehome disabled and exact selector
         env:

@@ -59,17 +59,22 @@ export function supportsAgentLaunch(
 /**
  * A client addresses a workspace by selector, but the result's `worktreeId` is an id and every
  * step below the executor re-prefixes it as `id:<worktreeId>`. Resolving here is what keeps a
- * caller's `id:wt-7` from reaching the runtime as `id:id:wt-7`; the terminal-workspace resolver is
- * used rather than the git-worktree one so a folder workspace is addressable too.
+ * caller's `id:wt-7` from reaching the runtime as `id:id:wt-7`.
+ *
+ * The launch *scope* is what is asked for, because the id below is the only thing read off it. The
+ * git-worktree record is the narrower answer — it does not exist for the floating workspace, so
+ * asking for one refused a launch this method can perfectly well run, on a workspace whose id it
+ * had already resolved. A folder workspace survived that only because the resolver fabricates a
+ * worktree row for it; the scope is the answer that is real for all three kinds.
  */
 async function agentLaunchTarget(
   params: AgentLaunchParams,
-  runtime: Pick<OrcaRuntimeService, 'showManagedTerminalWorkspace'>
+  runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope'>
 ): Promise<AgentLaunchTarget> {
   if (params.target.kind === 'create-worktree') {
     return { kind: 'create-worktree', create: { ...params.target.create } }
   }
-  const workspace = await runtime.showManagedTerminalWorkspace(params.target.worktree)
+  const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
   return { kind: 'existing', worktree: workspace.id }
 }
 

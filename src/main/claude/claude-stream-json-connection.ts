@@ -84,7 +84,7 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   readonly exitVerdict: ClaudeChildExitVerdict
   pauseReading?: () => void
   resumeReading?: () => void
-  send: (message: Record<string, unknown>) => Promise<void>
+  send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
   /** Resolves true after processless settlement, or root exit plus observed tree exit. */
   close: () => Promise<boolean>
 }
@@ -281,7 +281,7 @@ export async function openClaudeStreamJsonConnection(
   // cannot end before the gate is entered.
   markClaudeStructuredChildSpawned(authGateKey)
 
-  const send = (message: Record<string, unknown>): Promise<void> => {
+  const send: ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
     if (closing || exited || terminalError || child.stdin.destroyed || !child.stdin.writable) {
       return Promise.reject(
         claudeUnwrittenUserMessageError(
@@ -289,7 +289,8 @@ export async function openClaudeStreamJsonConnection(
         )
       )
     }
-    return inbox.push(message as unknown as SDKUserMessage)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
+    return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
   }
 
   const close = (): Promise<boolean> => {

@@ -477,6 +477,7 @@ export async function runIncidentMonitorCli(
         await wait(ms)
       },
       collect: segmentedCollect,
+      warn: (message) => console.warn(message),
       persist: async (nextState) => await persistState(options.stateFile, nextState),
       checkpoint: async (checkpoint) => {
         await appendCheckpoint(options.summaryFile, checkpoint)

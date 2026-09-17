@@ -173,6 +173,8 @@ export type StructuredAgentSessionAdapter = {
     /** Host clock on the submission row this send came from; the origin the turn
      *  it opens records as `requestedAt`. */
     requestedAt?: number
+    /** Revalidate after preparation, immediately before writing to the provider. */
+    beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
   rewindSupport?(sessionId: string): AgentSessionRewindSupport
   recoverRewind?(input: {
