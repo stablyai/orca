@@ -153,7 +153,7 @@ describe('a check row and a file row', () => {
     expect(reads(detailFileListSchema, [{ oldPath: 'src/a.ts' }])).toEqual([])
   })
 
-  it('carries every file status arm and drops one it has not heard of', () => {
+  it('carries every file status the host will accept back and drops one it would refuse', () => {
     for (const status of [
       'added',
       'modified',
@@ -165,18 +165,22 @@ describe('a check row and a file row', () => {
     ]) {
       expect(reads(detailFileListSchema, [{ path: 'a', status }])[0]?.status).toBe(status)
     }
+    // Absent is what the call site turns into `'modified'`; the host's own params enum would
+    // refuse the arm itself.
     expect(reads(detailFileListSchema, [{ path: 'a', status: 'ADDED' }])[0]?.status).toBeUndefined()
   })
 
-  it('carries every viewed-state arm and drops one it has not heard of', () => {
-    for (const viewerViewedState of ['DISMISSED', 'VIEWED', 'UNVIEWED']) {
+  it('forwards a viewed state the host has and one this build predates', () => {
+    for (const viewerViewedState of ['DISMISSED', 'VIEWED', 'UNVIEWED', 'PENDING']) {
       expect(
         reads(detailFileListSchema, [{ path: 'a', viewerViewedState }])[0]?.viewerViewedState
       ).toBe(viewerViewedState)
     }
-    expect(
-      reads(detailFileListSchema, [{ path: 'a', viewerViewedState: 'PENDING' }])[0]
-        ?.viewerViewedState
-    ).toBeUndefined()
+  })
+
+  it('salvages a malformed viewed state to absent and keeps the row', () => {
+    const row = reads(detailFileListSchema, [{ path: 'a', viewerViewedState: { v: 'VIEWED' } }])[0]
+    expect(row?.path).toBe('a')
+    expect(row?.viewerViewedState).toBeUndefined()
   })
 })

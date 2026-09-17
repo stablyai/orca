@@ -49,11 +49,17 @@ const hash = (parts: string[] | string): string =>
 // to-do row is checked now, so the reader's cast is gone from the list-loading hook and the row
 // type it forwarded is declared by what the reader proves. Counts are unchanged again, and
 // `semantics` does not move, because no RPC call, runtime string or JSX host signature does.
+//
+// Round 2 moves two, and only because one member widens. `GitHubDetailFile.viewerViewedState` is
+// `string` rather than the host's three arms, because the reader forwards it now: that is the
+// declaration hash and the three arm literals, `semantics` 3,281 -> 3,278. `status` keeps its arms
+// and moves nothing, because its only consumer sends it back as a param the host validates against
+// the same set. Hook, statement and render hashes do not move; nothing executable changed.
 const SCREEN_RPC_SCREEN_HOOKS = 'a550246eac444aea535ab18d50bc4db6204195ae812665a6beb40a3f5ab553d8'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
 const SCREEN_RPC_STATEMENTS = 'ffa60f57cb239bf02c4c7080847565711cb5c59e3b09d4850a6ce62e986624fa'
-const MAIN_REBASED_DECLARATIONS = '0f57ae1285c698344976adf7f888e840ddd48f1e12afb12990878525e1fe1380'
-const SCREEN_RPC_SEMANTICS = '71e1e39421e917897335d2a987a756ef85414518558853633f21fa356752b871'
+const MAIN_REBASED_DECLARATIONS = 'da0a29f09d8a2178e1a937988484f95ffa2938aea94a50a56f797fd631df6072'
+const SCREEN_RPC_SEMANTICS = '8d5ea095e1cda2bce6921ac88e73ad09b95fd10b70ab3e44d2f49d4567cc9046'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const SCREEN_RPC_RENDER_TREE = '46d5a3ce9d71a8281a1e7b17411fb1dd963a4f392a5d095bc126b6a7cff4b92d'
 
@@ -82,7 +88,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_281)
+    expect(semantics.split('\n')).toHaveLength(3_278)
     expect(hash(semantics)).toBe(SCREEN_RPC_SEMANTICS)
   })
 

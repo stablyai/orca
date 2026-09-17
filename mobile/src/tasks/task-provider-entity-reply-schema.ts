@@ -32,8 +32,6 @@ const DETAIL_FILE_STATUS = [
   'unchanged'
 ] as const
 
-const VIEWER_VIEWED_STATE = ['DISMISSED', 'VIEWED', 'UNVIEWED'] as const
-
 /**
  * One conversation comment, as every task sheet holds it.
  *
@@ -77,12 +75,12 @@ export const detailCommentListSchema = salvagingArray(detailCommentSchema)
  * A user the item can be assigned to or asked to review.
  *
  * `login` is the identity: the reviewer merge reads `reviewer.login.trim()` with no guard
- * (use-mobile-tasks-hosted-comment-review-actions.tsx:180), so a row without one drops rather than
+ * (use-mobile-tasks-hosted-comment-review-actions.tsx:172), so a row without one drops rather than
  * taking the whole picker down. `name` and `avatarUrl` keep an explicit `null` — the recorded
  * `github.listAssignableUsers` reply sends `avatarUrl: null`, and collapsing it to `''` would
  * change what the avatar row renders for a good reply.
  */
-export const assignableUserSchema = z.looseObject({
+const assignableUserSchema = z.looseObject({
   login: z.string(),
   name: prNullableText('name'),
   avatarUrl: prNullableText('avatarUrl')
@@ -117,8 +115,28 @@ export const detailCheckListSchema = salvagingArray(
   })
 )
 
-/** One changed file. `path` is what the expansion, the viewed toggle and the comment anchor are
- *  all keyed on, so a row without one can never match and drops. */
+/**
+ * One changed file. `path` is what the expansion, the viewed toggle and the comment anchor are all
+ * keyed on, so a row without one can never match and drops.
+ *
+ * No scenario reply in the corpus carries a file row, so no golden can observe either of the two
+ * vocabularies below; both rest on their unit pins and on the host's shared types.
+ *
+ * `viewerViewedState` is forwarded as text rather than closed against `GitHubPRFileViewedState`
+ * (three arms, src/shared/github/pull-request-types.ts:128). Nothing sends it back and both
+ * consumers test `=== 'VIEWED'` (mobile-tasks-item-review-sections.tsx:237,
+ * mobile-tasks-project-review-panels.tsx:209), so an arm this build predates reaches that test as
+ * itself, exactly as main's unchecked reader passed it, instead of vanishing.
+ *
+ * `status` stays closed, and the arms are not mobile's invention: the host validates this same
+ * seven-arm set on the way back in, as a zod enum on `github.prFileContents`' own params
+ * (src/shared/rpc-contract/github-pull-request-params.ts:62, matching `GitHubPRFile.status` at
+ * github/pull-request-types.ts:133). Its only consumer is that request
+ * (use-mobile-tasks-github-check-file-actions.tsx:196,
+ * use-mobile-tasks-project-file-merge-actions.tsx:78), so a forwarded eighth arm could not reach
+ * the wire without a cast, and if it did the host would refuse the call on its own params. Dropping
+ * to absent sends `?? 'modified'` instead, which fetches both sides and renders a diff.
+ */
 export const detailFileListSchema = salvagingArray(
   z.looseObject({
     path: z.string(),
@@ -127,7 +145,7 @@ export const detailFileListSchema = salvagingArray(
     additions: prCount('additions'),
     deletions: prCount('deletions'),
     isBinary: prFlag('isBinary'),
-    viewerViewedState: salvagedOptional('viewerViewedState', z.enum(VIEWER_VIEWED_STATE))
+    viewerViewedState: prText('viewerViewedState')
   })
 )
 
