@@ -35,9 +35,13 @@ const hash = (parts: string[] | string): string =>
 // use-mobile-tasks-project-detail-loading.tsx — `'DISMISSED'`, `'VIEWED'`, `'UNVIEWED'` and the
 // `['status']` index into GitHubDetailFile. No method literal and no `rpc:` call signature moves,
 // which is the property this family exists to hold.
-const SCREEN_RPC_SCREEN_HOOKS = '7150b07135c3860cd5d5adaadf25f9734c2821aeb35b903f1119270c2645fc84'
+//
+// The hook and statement hashes move once more for comment text alone: `normalized` reads a
+// statement's full span, so a comment nested inside one is hashed with it. Counts hold at 350
+// and 417.
+const SCREEN_RPC_SCREEN_HOOKS = 'b248ab058404d47d9d741bafe727fbfb9ccfa0d5fbad10a9867067ca16694692'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'cb202f3a132166121ea4fa7a191af4bcb1e475d67a94e718224fcbc3edb647ff'
+const SCREEN_RPC_STATEMENTS = 'eba4dc380e009951879821f89620db1fbc889862c82c324762bbbac797135c5b'
 const MAIN_REBASED_DECLARATIONS = 'f6f5fe2cc09dfd91f8f7048ab0ce11579cd2618e234079d2ab403bea4fb7161d'
 const SCREEN_RPC_SEMANTICS = '9bea10a73a501bbb09b825ca62119f808640e40940b3a5f1dce0493aa5452314'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'

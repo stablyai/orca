@@ -172,7 +172,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row without requiring a member, because the recorded GitLab row is `{ iid, title }`; the row builder's own reads are unchanged.
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row at `GitLabWorkItem`'s own member types, requiring the ones a consumer reads unguarded; the row builder's own reads are unchanged.
                 const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
                   items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
                   error?: { type?: string; message: string }

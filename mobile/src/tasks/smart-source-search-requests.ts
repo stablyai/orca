@@ -39,7 +39,7 @@ export async function searchGitHubItems(
   const envelope = githubWorkItemSearchRead.interpret(reply)
   // Stamp repoId so the shared row builder + create flow can attribute each item
   // to the searched repo (the runtime omits it, like the desktop fetcher).
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row's members, but requires none of them: the recorded search success carries rows of `{ number, title }` only, so a requirement here would drop a row main renders.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `workItemRow` types every member at `GitHubWorkItem`'s own type and requires the ones a consumer reads unguarded, so the assertion only fills in members the row omits; each of those is read through a guard or interpolated as text (task-source-search-reply-schema.ts:10-12).
   return envelope.items.map((item) => ({ ...item, repoId })) as GitHubWorkItem[]
 }
 
@@ -60,7 +60,7 @@ export async function searchGitLabItems(
   if (envelope.error?.type && envelope.error.type !== 'not_found') {
     throw new Error(envelope.error.message ?? '')
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same row rule as the GitHub search above; the recorded GitLab row is `{ iid, title }`.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same row rule as the GitHub search above, against `GitLabWorkItem`.
   return envelope.items.map((item) => ({ ...item, repoId })) as GitLabWorkItem[]
 }
 

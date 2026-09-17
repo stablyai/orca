@@ -146,7 +146,7 @@ export async function lookupGitHubItemByNumber(
     repo: `id:${repoId}`,
     number
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires nothing on the item, because the recorded lookup answers `{ number: 12, title: 'twelve' }`; what it adds is that a non-object payload is now a named reply rather than a spread over a string.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup decodes the same `workItemRow`, so the assertion only fills in members the row omits, each read through a guard or interpolated as text; what the schema adds is that a non-object payload is now a named incompatible reply rather than a spread over a string.
   const item = githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
@@ -183,7 +183,7 @@ export async function lookupGitLabItemByPath(
     iid: link.number,
     type: link.type
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above; the recorded GitLab lookup answers `{ iid: 7, title: 'seven' }`.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above, against `GitLabWorkItem`.
   const item = gitlabWorkItemByPathRead.interpret(reply) as GitLabWorkItem | null
   return item ? { ...item, repoId } : null
 }
