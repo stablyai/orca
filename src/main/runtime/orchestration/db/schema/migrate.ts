@@ -11,6 +11,7 @@ import { migrateV37 } from './migrate-v37'
 import { migrateV38 } from './migrate-v38'
 import { migrateV39 } from './migrate-v39'
 import { migrateV40 } from './migrate-v40'
+import { migrateV42 } from './migrate-v42'
 import { DERIVED_DELIVERY_SCHEMA_SQL, migrateV41 } from './migrate-v41'
 
 // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
@@ -38,6 +39,7 @@ export function migrate(this: OrchestrationDb): void {
     migrateV40.call(this, current)
     // Why: older steps recreate the unique index; v41 must run after them.
     migrateV41.call(this, current)
+    migrateV42.call(this, current)
     this.createMailboxDeliveryIndexesIfPossible()
     // Why: rebuild steps above RENAME the table, which SQLite refuses while a view names it.
     this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
