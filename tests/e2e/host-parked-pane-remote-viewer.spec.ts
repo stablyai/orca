@@ -34,7 +34,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
@@ -146,9 +146,11 @@ async function waitForPaneMarker(
   return false
 }
 
-test('a cold-parked host pane keeps serving its paired remote viewer', async ({
-  orcaPage
-}, testInfo) => {
+/** Verifies that a paired client keeps full terminal I/O while the host pane stays parked. */
+async function verifyColdParkedHostPane(
+  { orcaPage }: { orcaPage: Page },
+  testInfo: TestInfo
+): Promise<void> {
   test.setTimeout(600_000)
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const previousParkDelay = process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
@@ -313,6 +315,32 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     )
     console.log(`[sta2854] handle-probe=${JSON.stringify(handleProbe)}`)
 
+    // A new remote agent turn must not wake the host just to consume its live checkpoint.
+    await orcaPage.evaluate(
+      ({ hostTabId, worktreeId }) => {
+        const state = window.__store!.getState()
+        const layout = state.terminalLayoutsByTabId[hostTabId]
+        const leafId = Object.keys(layout?.ptyIdsByLeafId ?? {})[0]
+        if (!leafId) {
+          throw new Error('Parked host pane has no saved PTY')
+        }
+        const paneKey = `${hostTabId}:${leafId}`
+        state.setAgentStatus(
+          paneKey,
+          { state: 'working', prompt: 'continue the parked session', agentType: 'codex' },
+          'Codex',
+          undefined,
+          { worktreeId },
+          { providerSession: { key: 'session_id', id: 'host-park-live-checkpoint' } }
+        )
+        const checkpoint = window.__store!.getState().sleepingAgentSessionsByPaneKey[paneKey]
+        if (checkpoint?.origin !== 'live' || checkpoint.state !== 'working') {
+          throw new Error('Agent turn did not publish a live working checkpoint')
+        }
+      },
+      { hostTabId, worktreeId }
+    )
+
     // Type the moment the host parks — a user driving the pane does not wait
     // for a banner. Input accepted here must reach the host PTY.
     const token = `sta2854-${randomUUID().slice(0, 8)}`
@@ -365,9 +393,10 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       .split('\n')
       .filter((line) => line.startsWith('READY:'))
     expect(readyLines, 'host PTY was replaced across the park').toHaveLength(1)
-    // Intentionally not asserted: whether the host pane stays parked is part of
-    // what the timeline above reports (a recovery-driven remount would show as
-    // H+ samples), not a precondition of the invariant.
+    expect(
+      timeline.every((entry) => entry.startsWith('H-')),
+      'live checkpoint unparked the host pane'
+    ).toBe(true)
   } finally {
     if (previousParkDelay === undefined) {
       delete process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
@@ -381,4 +410,6 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     }
     await client.dispose()
   }
-})
+}
+
+test('a cold-parked host pane keeps serving its paired remote viewer', verifyColdParkedHostPane)
