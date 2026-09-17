@@ -21,6 +21,7 @@ export {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
   getSshPtyProvider,
+  getInProcessPtyProvider,
   getLocalPtyProvider,
   setLocalPtyProvider
 } from './pty/provider/registry'

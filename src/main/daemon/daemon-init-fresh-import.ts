@@ -35,7 +35,9 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     adapterInstances,
     defaultListSessionsSessions,
     listProcessesControl,
+    ptyRegistryState,
     getLocalPtyProviderMock,
+    getInProcessPtyProviderMock,
     localFallbackProvider,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,
@@ -55,12 +57,15 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   adapterInstances.length = 0
   defaultListSessionsSessions.length = 0
   listProcessesControl.current = null
-  getLocalPtyProviderMock.mockClear()
+  // mockReset (not mockClear) restores the registry-mirroring implementations a test may have overridden.
+  ptyRegistryState.installed = localFallbackProvider
+  getLocalPtyProviderMock.mockReset()
+  getInProcessPtyProviderMock.mockClear()
   localFallbackProvider.spawn.mockClear()
   localFallbackProvider.write.mockClear()
   localFallbackProvider.onData.mockClear()
   localFallbackProvider.onExit.mockClear()
-  setLocalPtyProviderMock.mockClear()
+  setLocalPtyProviderMock.mockReset()
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
   trackDaemonReplacedMock.mockClear()

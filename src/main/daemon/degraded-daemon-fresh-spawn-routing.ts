@@ -6,6 +6,7 @@ export class DegradedDaemonFreshSpawnRouter {
   private target: IPtyProvider
   private recovery: Promise<boolean> | null = null
   private retryAfterMs = 0
+  private generation = 0
 
   constructor(
     private readonly current: IPtyProvider,
@@ -18,6 +19,12 @@ export class DegradedDaemonFreshSpawnRouter {
 
   get routesToFallback(): true | undefined {
     return this.target === this.fallback ? true : undefined
+  }
+
+  degrade(): void {
+    this.generation++
+    this.target = this.fallback
+    this.retryAfterMs = Date.now() + DEGRADED_DAEMON_RECOVERY_RETRY_MS
   }
 
   supportsGitGuardHost(sessionId?: string): boolean {
@@ -45,9 +52,13 @@ export class DegradedDaemonFreshSpawnRouter {
     if (this.recovery) {
       return this.recovery
     }
+    const generation = this.generation
     const recovery = this.probeCurrent()
       .catch(() => false)
       .then((healthy) => {
+        if (generation !== this.generation) {
+          return false
+        }
         if (healthy) {
           this.target = this.current
           console.info('[daemon] PTY spawn health recovered; fresh terminals are daemon-backed')

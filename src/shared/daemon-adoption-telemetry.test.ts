@@ -18,6 +18,13 @@ describe('classifyDaemonSpawnerPath', () => {
         alwaysExists
       )
     ).toBe('updater-cache')
+    // Where ShipIt parks the bundle a running daemon was actually forked from (#17696).
+    expect(
+      classifyDaemonSpawnerPath(
+        '/private/var/folders/69/abc/T/com.stablyai.orca.ShipIt.EQdIcnsy/Orca.app/Contents/MacOS/Orca',
+        alwaysExists
+      )
+    ).toBe('updater-cache')
     expect(
       classifyDaemonSpawnerPath('/Users/a/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
     ).toBe('other')

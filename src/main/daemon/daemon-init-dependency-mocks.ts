@@ -11,6 +11,7 @@ import type {
   MockSpawnerHandle,
   NetConnectStubs
 } from './daemon-init-mock-types'
+import type { DaemonLauncher } from './daemon-spawner'
 
 export type { MockAdapter, MockSpawner } from './daemon-init-mock-types'
 
@@ -46,6 +47,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     defaultListSessionsSessions,
     listProcessesControl,
     getLocalPtyProviderMock,
+    getInProcessPtyProviderMock,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock,
@@ -57,7 +59,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
   // Why: both fakes are annotated with constructor types so the exported factories widen to
   // MockSpawner/MockAdapter instead of leaking their private fields into declaration emit.
   const MockDaemonSpawner: MockSpawnerConstructor = class MockDaemonSpawner {
-    readonly launcher: unknown
+    readonly launcher: DaemonLauncher
     readonly ensureRunning: Mock
     readonly resetHandle: Mock
     readonly resetRespawnWindow: Mock
@@ -65,7 +67,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly getHandle: Mock
     private socketCounter: number
     private handle: MockSpawnerHandle | null
-    constructor(opts: { runtimeDir: string; launcher: unknown }) {
+    constructor(opts: { runtimeDir: string; launcher: DaemonLauncher }) {
       this.launcher = opts.launcher
       this.socketCounter = 0
       this.handle = null
@@ -223,6 +225,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     }),
     ipcPty: () => ({
       getLocalPtyProvider: getLocalPtyProviderMock,
+      getInProcessPtyProvider: getInProcessPtyProviderMock,
       setLocalPtyProvider: setLocalPtyProviderMock,
       unbindLocalProviderListeners: unbindLocalProviderListenersMock,
       rebindLocalProviderListeners: rebindLocalProviderListenersMock

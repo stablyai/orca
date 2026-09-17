@@ -1,5 +1,6 @@
 import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { wasLocalRuntimeDelivered } from '../../../providers/local-pty-runtime-events'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import {
   localBackgroundStreamUnsub,
@@ -70,15 +71,16 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   setLocalDataUnsub(
     localProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
-      const outputSeq = isLocalProvider
-        ? session.runtime?.getPtyOutputSequence(payload.id)
-        : session.runtime?.onPtyData(
-            payload.id,
-            payload.data,
-            Date.now(),
-            rawLength,
-            payload.transformed
-          )
+      const outputSeq =
+        isLocalProvider || wasLocalRuntimeDelivered(payload)
+          ? session.runtime?.getPtyOutputSequence(payload.id)
+          : session.runtime?.onPtyData(
+              payload.id,
+              payload.data,
+              Date.now(),
+              rawLength,
+              payload.transformed
+            )
       session.acceptPtyDataForRenderer(payload, outputSeq)
     })
   )
@@ -90,7 +92,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (session.consumeSyntheticKillExit(payload.id)) {
         return
       }
-      if (!isLocalProvider) {
+      if (!isLocalProvider && !wasLocalRuntimeDelivered(payload)) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)

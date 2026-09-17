@@ -58,6 +58,12 @@ export type DaemonPtyAdapterOptions = {
   runtimeDir?: string
   packagedAppVersion?: string | null
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
+  /**
+   * Called before a fresh spawn when the daemon is macOS TCC-severed but owns live sessions,
+   * so replacing it is off the table. Resolving `true` means the caller took over fresh spawns
+   * (degraded routing); the adapter then still serves this one spawn, which was already routed.
+   */
+  onSeveredWithLiveSessions?: () => Promise<boolean>
 }
 
 export type DaemonRespawnReason =
@@ -88,6 +94,8 @@ export abstract class DaemonPtyRuntimeState {
   protected historyManager: HistoryManager | null
   protected historyReader: HistoryReader | null
   protected respawnFn: DaemonPtyAdapterOptions['respawn'] | null
+  protected onSeveredWithLiveSessions: DaemonPtyAdapterOptions['onSeveredWithLiveSessions'] | null
+  protected severedDegradeRequested = false
   protected runtimeDir: string | null
   protected packagedAppVersion: string | null
   protected pendingRespawnAdoptionRelease: (() => void) | null = null
@@ -210,6 +218,7 @@ export abstract class DaemonPtyRuntimeState {
     this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
+    this.onSeveredWithLiveSessions = opts.onSeveredWithLiveSessions ?? null
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
     this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4

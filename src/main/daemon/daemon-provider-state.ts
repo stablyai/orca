@@ -35,7 +35,10 @@ export function getDaemonSpawner(): DaemonSpawner | null {
  * from that state would be advertising recovery for terminals that cannot be recovered.
  */
 export function daemonOwnsFreshPersistentPtys(): boolean {
-  return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
+  return (
+    adapter !== null &&
+    !(adapter instanceof DegradedDaemonPtyProvider && adapter.routesFreshSpawnsToLocalProvider)
+  )
 }
 
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
@@ -124,8 +127,9 @@ export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
 // Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
 // Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
-  await adapter?.disconnectOnly()
+  const disconnecting = adapter
   adapter = null
+  await disconnecting?.disconnectOnly()
 }
 
 /** Kill the daemon and all its sessions. Use for full cleanup only. */

@@ -56,6 +56,10 @@ export async function prepareDaemonReplacement(
     | undefined
   let confirmedReplacement = false
   const health = await checkDaemonHealth(socketPath, tokenPath)
+  const preserveWithAttribution: PreserveDaemon = async (mode) => {
+    const attribution = await getMacDaemonTccAttributionHealth(runtimeDir, socketPath, tokenPath)
+    return preserveDaemon(attribution === 'severed' ? 'degraded-new-pty-fallback' : mode)
+  }
   if (health === 'healthy') {
     const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
     if (resolverHealth === 'unhealthy') {
@@ -70,7 +74,7 @@ export async function prepareDaemonReplacement(
             ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
             : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
         )
-        return preserveDaemon()
+        return preserveWithAttribution()
       }
       console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
       pendingReplacement = {
@@ -102,7 +106,7 @@ export async function prepareDaemonReplacement(
             replacementLabel
           )
         ) {
-          return preserveDaemon()
+          return preserveWithAttribution()
         }
         console.warn(
           stalePackagedBundle
@@ -138,7 +142,14 @@ export async function prepareDaemonReplacement(
             confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
               .cleaned
           } else {
-            return preserveDaemon()
+            // Why degrade rather than plain preserve: every terminal this daemon spawns from now
+            // on gets EPERM on Documents/Desktop/Downloads (#17696), and users who never reach
+            // zero live sessions would otherwise never get a working terminal again. The local
+            // provider spawns from this process, whose attribution is intact.
+            console.warn(
+              `[daemon] DEGRADED MODE: preserving daemon whose macOS TCC attribution is severed because it owns ${liveSessionCount ?? 'an unverifiable number of'} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
+            )
+            return preserveDaemon('degraded-new-pty-fallback')
           }
         } else {
           // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.

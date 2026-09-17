@@ -9,7 +9,7 @@ import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
 } from '../pty-hidden-delivery-gate'
-import { localProvider } from './provider/registry'
+import { getInProcessPtyProvider, localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
@@ -174,8 +174,8 @@ export function registerPtyHandlers(
 
   // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
   clearDidFinishLoadHandler()
-  if (localProvider instanceof LocalPtyProvider) {
-    const lp = localProvider
+  const lp = localProvider instanceof LocalPtyProvider ? localProvider : getInProcessPtyProvider()
+  if (lp instanceof LocalPtyProvider) {
     const finishLoadHandler = () => {
       // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
       const generation = lp.advanceGeneration()

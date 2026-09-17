@@ -72,7 +72,7 @@ export function useMacTccAttributionSeveredNotice(): void {
             id: SEVERED_TCC_NOTICE_ID,
             description: translate(
               'auto.hooks.useMacTccAttributionSeveredNotice.description',
-              'Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.'
+              'The terminal daemon reported a folder-access denial for a folder Orca can read. This can happen when macOS stops applying Orca’s permissions to an older daemon. Restarting the daemon may restore access; it will close running local terminal sessions. Save your work first.'
             ),
             duration: Infinity,
             action: {

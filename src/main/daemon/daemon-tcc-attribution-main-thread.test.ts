@@ -43,7 +43,8 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-const { getMacDaemonTccAttributionHealth } = await import('./daemon-tcc-attribution')
+const { getMacDaemonTccAttributionHealth, recordMacDaemonProtectedPathDenial } =
+  await import('./daemon-tcc-attribution')
 const { isDaemonStaleForCurrentBundle } = await import('./daemon-bundle-staleness')
 
 describe('macOS daemon TCC attribution main-thread cost', () => {
@@ -78,13 +79,17 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     }
   })
 
-  function writePidRecord(appVersion?: string, includeSpawner = true): void {
+  function writePidRecord(
+    appVersion?: string,
+    includeSpawner = true,
+    launchNonce = 'launch-a'
+  ): void {
     writeFileSync(
       join(dir, `daemon-v${PROTOCOL_VERSION}.pid`),
       JSON.stringify({
         pid: process.pid,
         startedAtMs: PS_STARTED_AT_MS,
-        launchNonce: 'launch-a',
+        launchNonce,
         ...(appVersion === undefined ? {} : { appVersion }),
         ...(includeSpawner ? { spawnerExecPath } : {})
       })
@@ -158,7 +163,7 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
 
     rmSync(spawnerExecPath)
     await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
-      'severed'
+      'at-risk'
     )
     expect(execFileMock).toHaveBeenCalledTimes(3)
   })
@@ -179,6 +184,33 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     expect(execFileMock).toHaveBeenCalledTimes(2)
   })
 
+  it('reports severed once the daemon proved it cannot read a cwd this process can', async () => {
+    // #17696: the symptom itself outranks a cached intact verdict and every proxy.
+    writePidRecord('1.2.3', true, 'launch-denied')
+    await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
+      'intact'
+    )
+
+    recordMacDaemonProtectedPathDenial({
+      pid: process.pid,
+      startedAtMs: PS_STARTED_AT_MS,
+      launchNonce: 'launch-denied',
+      entryPath: null,
+      appVersion: '1.2.3',
+      linuxStartTicks: null,
+      bootId: null,
+      spawnerExecPath
+    })
+    await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
+      'severed'
+    )
+    // A replacement daemon writes a new record (new launch nonce) and starts clean.
+    writePidRecord('1.2.4', true, 'launch-b')
+    await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
+      'intact'
+    )
+  })
+
   it('fails open for a legacy pid record without app-version metadata', async () => {
     writePidRecord(undefined, false)
 
@@ -188,5 +220,46 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
 
     expect(execFileMock).toHaveBeenCalledTimes(1)
     expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('never runs diagnostic subprocesses for spawn admission', async () => {
+    writePidRecord('1.2.3', true, 'spawn-fast-path')
+    const inspect = vi.fn(async () => 'valid' as const)
+    await expect(
+      getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, PROTOCOL_VERSION, inspect, true)
+    ).resolves.toBe('unknown')
+    expect(inspect).not.toHaveBeenCalled()
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('does not let an in-flight code probe overwrite a newer denial', async () => {
+    writePidRecord('1.2.3', true, 'in-flight-denial')
+    let finish!: (identity: 'valid') => void
+    const inspect = vi.fn(
+      () =>
+        new Promise<'valid'>((resolve) => {
+          finish = resolve
+        })
+    )
+    const pending = getMacDaemonTccAttributionHealth(
+      dir,
+      socketPath,
+      tokenPath,
+      PROTOCOL_VERSION,
+      inspect
+    )
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledOnce())
+    recordMacDaemonProtectedPathDenial({
+      pid: process.pid,
+      startedAtMs: PS_STARTED_AT_MS,
+      launchNonce: 'in-flight-denial',
+      entryPath: null,
+      appVersion: null,
+      linuxStartTicks: null,
+      bootId: null,
+      spawnerExecPath
+    })
+    finish('valid')
+    await expect(pending).resolves.toBe('severed')
   })
 })

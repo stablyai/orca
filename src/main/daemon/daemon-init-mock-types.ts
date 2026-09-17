@@ -1,4 +1,5 @@
 import type { Mock } from 'vitest'
+import type { DaemonLauncher } from './daemon-spawner'
 
 /** Fake DaemonSpawner instance every mocked `new DaemonSpawner()` records. */
 export type MockSpawner = {
@@ -7,7 +8,7 @@ export type MockSpawner = {
   resetRespawnWindow: Mock
   shutdown: Mock
   getHandle: Mock
-  launcher: unknown
+  launcher: DaemonLauncher
 }
 
 /** Fake DaemonPtyAdapter instance every mocked `new DaemonPtyAdapter()` records. */
@@ -21,6 +22,7 @@ export type MockAdapter = {
     respawn?: (
       reason: 'daemon_died' | 'unhealthy_resolver' | 'stale_bundle' | 'severed_tcc_attribution'
     ) => Promise<void>
+    onSeveredWithLiveSessions?: () => Promise<boolean>
     protocolVersion?: number
   }
   getActiveSessionIds: Mock
@@ -39,7 +41,7 @@ export type MockAdapter = {
 
 export type MockSpawnerConstructor = new (opts: {
   runtimeDir: string
-  launcher: unknown
+  launcher: DaemonLauncher
 }) => MockSpawner
 
 export type MockAdapterConstructor = new (opts: MockAdapter['options']) => MockAdapter
@@ -138,9 +140,11 @@ export type DaemonInitMockState = {
   adapterInstances: MockAdapter[]
   defaultListSessionsSessions: { sessionId: string }[]
   listProcessesControl: { current: null | (() => Promise<{ sessionId: string }[]>) }
-  getLocalPtyProviderMock: Mock<() => MockLocalPtyProvider>
+  ptyRegistryState: { installed: unknown }
+  getLocalPtyProviderMock: Mock<() => unknown>
+  getInProcessPtyProviderMock: Mock<() => MockLocalPtyProvider>
   localFallbackProvider: MockLocalPtyProvider
-  setLocalPtyProviderMock: Mock<(...args: unknown[]) => void>
+  setLocalPtyProviderMock: Mock<(provider: unknown) => void>
   unbindLocalProviderListenersMock: Mock<(...args: unknown[]) => void>
   rebindLocalProviderListenersMock: Mock<(...args: unknown[]) => void>
   trackDaemonReplacedMock: Mock<(...args: unknown[]) => void>

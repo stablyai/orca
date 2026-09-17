@@ -1,10 +1,9 @@
-import { getLocalPtyProvider, rebindLocalProviderListeners } from '../ipc/pty'
+import { getInProcessPtyProvider, rebindLocalProviderListeners } from '../ipc/pty'
 import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
-import { checkDaemonHealth } from './daemon-health'
 import { collectPinnedDaemonVersions, pruneOldDaemonHosts } from './daemon-host-relocation'
 import {
   cleanupFailedDaemonAdoption,
@@ -32,6 +31,10 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { isDaemonRestartInFlight } from './daemon-restart-state'
+import {
+  createSeveredDaemonRecoveryProbe,
+  degradeInstalledProviderForSeveredDaemon
+} from './daemon-severed-attribution-degrade'
 import { DaemonSpawner, getDaemonPidPath } from './daemon-spawner'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
@@ -109,7 +112,8 @@ export async function initDaemonPtyProvider(
       newSpawner.resetHandle()
       await newSpawner.ensureRunning()
       return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
-    }
+    },
+    onSeveredWithLiveSessions: () => degradeInstalledProviderForSeveredDaemon(newAdapter)
   })
   let legacyAdapters: DaemonPtyAdapter[] = []
   let routedAdapter: DaemonProvider = newAdapter
@@ -124,9 +128,12 @@ export async function initDaemonPtyProvider(
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
-            fallback: getLocalPtyProvider(),
-            probeCurrentDaemonSpawn: async () =>
-              (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
+            fallback: getInProcessPtyProvider(),
+            probeCurrentDaemonSpawn: createSeveredDaemonRecoveryProbe(
+              runtimeDir,
+              info.socketPath,
+              info.tokenPath
+            )
           })
         : legacyAdapters.length > 0
           ? new DaemonPtyRouter({
