@@ -3,7 +3,6 @@ import { isHostedTaskRepo, useCallback } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
-  type LinearIssue,
   type GitLabWorkItem,
   LINEAR_LIMIT,
   type TaskItem,
@@ -225,8 +224,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
                   workspaceId: selectedLinearWorkspaceId ?? undefined
                 })
               )
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires each row's `id` and nothing else, because the recorded smart-search success carries rows of `{ id }` alone; the team filter and sort below keep their own reads.
-          const issues = found as LinearIssue[]
+          const issues = found
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))
