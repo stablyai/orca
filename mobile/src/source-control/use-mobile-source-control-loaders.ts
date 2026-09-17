@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   GenerationScopedRequestOwner,
+  type RequestCurrency,
   type RequestScope
 } from '../transport/generation-scoped-request-owner'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
@@ -47,13 +48,23 @@ type BranchCompareOutcome =
   | { readonly kind: 'unavailable' }
   | { readonly kind: 'failed'; readonly message: string }
 
-/** Total by construction: a throw here would reach a caller that only ever voids this load. */
+/**
+ * Total by construction: a throw here would reach a caller that only ever voids this load. Null is
+ * the superseded answer, which the owner reads as no value at all.
+ */
 async function readBranchCompareOutcome(
   client: RpcClient,
-  worktreeId: string
-): Promise<BranchCompareOutcome> {
+  worktreeId: string,
+  currency: RequestCurrency
+): Promise<BranchCompareOutcome | null> {
   try {
     const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+    // Resolving the base ref is itself a round trip, so the scope may have moved while it was out.
+    // Stopping here is what keeps a superseded attempt's compare off the wire: refusing it at commit
+    // would be just as safe on screen but would have sent the request.
+    if (!currency.isCurrent()) {
+      return null
+    }
     if (!baseRef) {
       return { kind: 'failed', message: 'Unable to resolve the base branch for comparison.' }
     }
@@ -176,8 +187,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       const scope: RequestScope = [client, statusIdentityKey, worktreeId]
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
-      const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, () =>
-        readBranchCompareOutcome(client, worktreeId)
+      const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
+        readBranchCompareOutcome(client, worktreeId, currency)
       )
       // The mount latch is not the owner's to keep: a detached route has no screen to publish to,
       // which is a fact about the view, not about which reply is current.

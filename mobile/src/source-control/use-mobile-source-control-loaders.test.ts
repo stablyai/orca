@@ -21,9 +21,10 @@ vi.mock('lucide-react-native', () => ({
 
 /**
  * What the branch-compare leg now rests on and nothing else held: the owner's commit verdict is the
- * only thing that decides which of two overlapping compares reaches the screen, and the render-phase
- * `reset()` is the only thing that retires a compare when the route identity moves. Both are written
- * as explicit settlement orders rather than timers, so each case states its schedule.
+ * only thing that decides which of two overlapping compares reaches the screen, the render-phase
+ * `reset()` is the only thing that retires a compare when the route identity moves, and the owner's
+ * currency probe is the only thing that keeps a superseded attempt off the wire. All three are
+ * written as explicit settlement orders rather than timers, so each case states its schedule.
  */
 
 const WORKTREE = 'repo42::/p'
@@ -181,6 +182,39 @@ describe('useMobileSourceControlLoaders branch compare', () => {
 
     // The superseded reply settles last and has nowhere to land.
     await settleCompare(calls, 'origin/dev')
+    expect(read.loaders?.branchCompareState).toEqual({
+      kind: 'ready',
+      result: expect.objectContaining({
+        summary: expect.objectContaining({ baseRef: 'origin/main' })
+      })
+    })
+  })
+
+  it('sends no compare for an attempt superseded while it resolved its base ref', async () => {
+    const calls: PendingCall[] = []
+    const read: { loaders: Loaders | null } = { loaders: null }
+    await mount(fakeClient(calls), read)
+
+    // First attempt, stopped mid base-ref lookup: nothing of it has reached `git.branchCompare` yet.
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    expect(pendingCount(calls, 'worktree.show')).toBe(1)
+
+    // Second attempt supersedes it while that lookup is still out.
+    await act(async () => {
+      void read.loaders?.loadStatus({ force: true })
+    })
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+
+    // The superseded attempt resumes with its base ref in hand and stops on the probe. No compare
+    // has been settled in this case, so what is pending is everything that was ever sent.
+    await settleBaseRefLookup(calls, 'origin/dev')
+    expect(pendingCount(calls, 'git.branchCompare')).toBe(0)
+
+    // Exactly one compare on the wire, the live attempt's, which is the request count main sent.
+    await settleBaseRefLookup(calls, 'origin/main')
+    expect(pendingCount(calls, 'git.branchCompare')).toBe(1)
+
+    await settleCompare(calls, 'origin/main')
     expect(read.loaders?.branchCompareState).toEqual({
       kind: 'ready',
       result: expect.objectContaining({
