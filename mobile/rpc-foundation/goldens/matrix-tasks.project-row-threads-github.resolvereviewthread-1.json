@@ -3,9 +3,9 @@
   "family": "tasks.project-row-threads",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "0d8c240718b3911464a6fc486114d67cd6f60aa295cd0886ff755b77d5036014",
   "platform": "darwin",
@@ -51,6 +51,11 @@
       },
       "error": "outer refused",
       "mutating": false
+    },
+    "051bf33a6dbe": {
+      "name": "projectRowDetailError",
+      "ordinal": 11,
+      "value": "The host sent a reply this app could not read (github.resolveReviewThread)"
     },
     "09c572b1820f": {
       "name": "github.addPRReviewCommentReply#1",
@@ -103,6 +108,45 @@
       "name": "projectRowDetailError",
       "ordinal": 2,
       "value": ""
+    },
+    "1a6ab45abc2c": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+      "mutating": false
     },
     "1eb94321f034": {
       "name": "github.resolveReviewThread#1",
@@ -189,11 +233,6 @@
           }
         }
       }
-    },
-    "383a4ea22f2c": {
-      "name": "projectRowDetailError",
-      "ordinal": 11,
-      "value": "Failed to resolve thread"
     },
     "3fd46e82b799": {
       "name": "github.resolveReviewThread#1",
@@ -731,45 +770,6 @@
       "name": "itemReplyDrafts",
       "ordinal": 24,
       "value": {}
-    },
-    "b44e99aa86c4": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "Failed to resolve thread",
-      "mutating": false
     },
     "b6b9452c2348": {
       "detail": {
@@ -1423,7 +1423,7 @@
             "delete-comment-0": "eb79a9b3682a",
             "thread-1": "eb79a9b3682a"
           },
-          "state": "b44e99aa86c4",
+          "state": "1a6ab45abc2c",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1431,7 +1431,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f"
           ]
         }
@@ -1455,7 +1455,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1485,7 +1485,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1510,7 +1510,7 @@
             "delete-comment-0": "eb79a9b3682a",
             "thread-1": "eb79a9b3682a"
           },
-          "state": "b44e99aa86c4",
+          "state": "1a6ab45abc2c",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1518,7 +1518,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f"
           ]
         }
@@ -1542,7 +1542,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1572,7 +1572,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1597,7 +1597,7 @@
             "delete-comment-0": "eb79a9b3682a",
             "thread-1": "eb79a9b3682a"
           },
-          "state": "b44e99aa86c4",
+          "state": "1a6ab45abc2c",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1605,7 +1605,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f"
           ]
         }
@@ -1629,7 +1629,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1659,7 +1659,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1684,7 +1684,7 @@
             "delete-comment-0": "eb79a9b3682a",
             "thread-1": "eb79a9b3682a"
           },
-          "state": "b44e99aa86c4",
+          "state": "1a6ab45abc2c",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1692,7 +1692,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f"
           ]
         }
@@ -1716,7 +1716,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1746,7 +1746,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1771,7 +1771,7 @@
             "delete-comment-0": "eb79a9b3682a",
             "thread-1": "eb79a9b3682a"
           },
-          "state": "b44e99aa86c4",
+          "state": "1a6ab45abc2c",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1779,7 +1779,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f"
           ]
         }
@@ -1803,7 +1803,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",
@@ -1833,7 +1833,7 @@
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
-            "383a4ea22f2c",
+            "051bf33a6dbe",
             "ce1f6d47985f",
             "a8ff11b6adce",
             "5c30b4794b57",

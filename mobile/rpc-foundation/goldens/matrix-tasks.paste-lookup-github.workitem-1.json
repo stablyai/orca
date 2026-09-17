@@ -3,10 +3,10 @@
   "family": "tasks.paste-lookup",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "2a11156b7b6d3cf0773c8dc02a72e126bc187dcf62ad7d1bf5f30d7b27192b03",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -1025,17 +1025,6 @@
         }
       }
     },
-    "e8409d747ecd": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (github.workItem)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
-    },
     "e970eb27f5ca": {
       "by-number": {
         "number": 12,
@@ -1136,9 +1125,9 @@
           "sender": ["4f2d43a2cc6c"],
           "payloads": ["467d1db5ad39"],
           "settlements": {
-            "by-number": "e8409d747ecd"
+            "by-number": "ee20a1dc39e7"
           },
-          "state": "8aa944d2f7a1",
+          "state": "c392cc9aa63a",
           "effects": []
         }
       },
@@ -1148,10 +1137,10 @@
           "sender": ["4f2d43a2cc6c", "40b6e1288e8b"],
           "payloads": ["467d1db5ad39", "64b4674b65a8"],
           "settlements": {
-            "by-number": "e8409d747ecd",
+            "by-number": "ee20a1dc39e7",
             "by-slug": "731507dd2e23"
           },
-          "state": "b19c59c5ee88",
+          "state": "21981303c684",
           "effects": []
         }
       },
@@ -1161,11 +1150,11 @@
           "sender": ["4f2d43a2cc6c", "40b6e1288e8b", "54e10e591561"],
           "payloads": ["467d1db5ad39", "64b4674b65a8", "f4d2080c6e99"],
           "settlements": {
-            "by-number": "e8409d747ecd",
+            "by-number": "ee20a1dc39e7",
             "by-slug": "731507dd2e23",
             "gitlab-path": "bd533f6b0b40"
           },
-          "state": "38e35cd6299a",
+          "state": "c9a1abec42e3",
           "effects": []
         }
       },
@@ -1175,12 +1164,12 @@
           "sender": ["4f2d43a2cc6c", "40b6e1288e8b", "54e10e591561", "db48adb41100"],
           "payloads": ["467d1db5ad39", "64b4674b65a8", "f4d2080c6e99", "72a59aa8bee1"],
           "settlements": {
-            "by-number": "e8409d747ecd",
+            "by-number": "ee20a1dc39e7",
             "by-slug": "731507dd2e23",
             "gitlab-path": "bd533f6b0b40",
             "repo-slug": "0e9d6525a582"
           },
-          "state": "3bae2da7492a",
+          "state": "894b40a0b814",
           "effects": []
         }
       },

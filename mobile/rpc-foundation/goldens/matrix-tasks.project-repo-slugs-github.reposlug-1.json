@@ -3,9 +3,9 @@
   "family": "tasks.project-repo-slugs",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "667a06cf9ff8129eee64327566012448abe1fe31f58c0d9b882b13e74db5a877",
   "platform": "darwin",
@@ -45,6 +45,19 @@
         }
       }
     },
+    "06e766db7462": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
     "09f0440141bc": {
       "name": "github.repoSlug#1",
       "ordinal": 1,
@@ -77,6 +90,28 @@
           },
           "id": "frame-1",
           "ok": false
+        }
+      }
+    },
+    "0caf56550963": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "0f800c2e739d": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "undefined"
+          }
         }
       }
     },
@@ -136,6 +171,18 @@
         }
       }
     },
+    "3e9e4ea57fa1": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "refused"
+          }
+        }
+      }
+    },
     "470baf1783c9": {
       "name": "github.repoSlug#1",
       "ordinal": 1,
@@ -172,6 +219,16 @@
       "name": "github.repoSlug#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "4cfa99d7eefa": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "undefined"
+          }
+        }
+      }
     },
     "53a39b53da01": {
       "name": "githubRepoSlugCache",
@@ -233,6 +290,21 @@
         }
       }
     },
+    "5fca57506026": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
     "60d253ed9645": {
       "name": "github.repoSlug#1",
       "ordinal": 1,
@@ -265,6 +337,17 @@
             "host": "github.com",
             "owner": "owner",
             "repo": "repo"
+          }
+        }
+      }
+    },
+    "8a9b6f06911d": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
@@ -473,6 +556,19 @@
           }
         }
       }
+    },
+    "ffa0fb99ddcc": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -498,8 +594,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1b6c8cbfdc90",
-          "effects": ["53a39b53da01"]
+          "state": "4cfa99d7eefa",
+          "effects": ["0f800c2e739d"]
         }
       },
       {
@@ -522,8 +618,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1b6c8cbfdc90",
-          "effects": ["53a39b53da01"]
+          "state": "0caf56550963",
+          "effects": ["3e9e4ea57fa1"]
         }
       },
       {
@@ -534,8 +630,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1b6c8cbfdc90",
-          "effects": ["53a39b53da01"]
+          "state": "8a9b6f06911d",
+          "effects": ["06e766db7462"]
         }
       },
       {
@@ -546,8 +642,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1b6c8cbfdc90",
-          "effects": ["53a39b53da01"]
+          "state": "ffa0fb99ddcc",
+          "effects": ["5fca57506026"]
         }
       },
       {

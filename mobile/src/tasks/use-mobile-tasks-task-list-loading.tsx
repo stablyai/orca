@@ -3,7 +3,6 @@ import { isHostedTaskRepo, useCallback } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
-  type GitLabTodo,
   type LinearIssue,
   type GitLabWorkItem,
   LINEAR_LIMIT,
@@ -145,16 +144,14 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             const reply = await gitlabTodoListRead.request(requestClient, {
               repo: `id:${queriedRepos[0]!.id}`
             })
-            // Kept spelled `response.result`: a reply that is neither an array nor nullish
-            // crashes in `.map` below, and the message the screen shows is this expression's
-            // source text, which `matrix-tasks.task-list-gitlab-todos-gitlab.todos-1` pins.
-            const response = { result: gitlabTodoListRead.interpret(reply) }
+            // The reader answers rows it has checked, so `.map is not a function` and a to-do
+            // with no `actionName` are both named at `gitlab.todos` instead of crashing the list.
+            const todos = gitlabTodoListRead.interpret(reply)
             if (!isCurrent()) {
               return
             }
             setItems(
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-              ((response.result as GitLabTodo[]) ?? [])
+              (todos ?? [])
                 .map(createGitLabTodoTask)
                 .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
             )

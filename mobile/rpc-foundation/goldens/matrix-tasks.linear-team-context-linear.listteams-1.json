@@ -3,9 +3,9 @@
   "family": "tasks.linear-team-context",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
   "scenarioSha256": "c4a5928ef7035ad8bed20945f235f4fa509238b3a167c91df50baefff8e8433f",
   "platform": "darwin",
@@ -23,38 +23,10 @@
       "ordinal": 24,
       "value": true
     },
-    "0e2affb510a1": {
-      "name": "linearStatesLoading",
-      "ordinal": 31,
-      "value": false
-    },
     "1e2b9e124f23": {
       "name": "linearCommentDraft",
       "ordinal": 25,
       "value": ""
-    },
-    "1eb3610abaa4": {
-      "name": "linearTeams",
-      "ordinal": 22,
-      "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
-    },
-    "2046fde1d46c": {
-      "name": "linearCommentDraft",
-      "ordinal": 26,
-      "value": ""
-    },
-    "209865b8fe16": {
-      "name": "linearTeams",
-      "ordinal": 22,
-      "value": {
-        "error": "inner refused",
-        "ok": false
-      }
     },
     "2388b2964070": {
       "name": "linearCommentDraft",
@@ -95,46 +67,6 @@
         }
       }
     },
-    "26211ba14bbc": {
-      "name": "linear.teamStates#1",
-      "ordinal": 28,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.teamStates"
-        },
-        {
-          "name": "params",
-          "value": {
-            "teamId": "team-1",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": [
-            {
-              "color": "#000000",
-              "id": "state-1",
-              "name": "Todo",
-              "type": "unstarted"
-            }
-          ]
-        }
-      }
-    },
     "269660c94afa": {
       "name": "expandedPrFilePath",
       "ordinal": 13,
@@ -159,18 +91,6 @@
       "name": "itemCommentDraft",
       "ordinal": 6,
       "value": ""
-    },
-    "2db83018b217": {
-      "name": "linearStates",
-      "ordinal": 30,
-      "value": [
-        {
-          "color": "#000000",
-          "id": "state-1",
-          "name": "Todo",
-          "type": "unstarted"
-        }
-      ]
     },
     "337ce7504f5b": {
       "name": "createTeamId",
@@ -221,42 +141,10 @@
         "$rpc": "null"
       }
     },
-    "44bd17f18a56": {
-      "createTeamId": {
-        "$rpc": "null"
-      },
-      "states": [],
-      "statesLoading": false,
-      "teams": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
-    },
-    "4acfae52776d": {
-      "name": "linearTeams",
-      "ordinal": 22,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "4b607e97a8f6": {
-      "name": "linearSubIssueTitle",
-      "ordinal": 27,
-      "value": ""
-    },
     "4b830d961da2": {
       "name": "itemReplyDrafts",
       "ordinal": 12,
       "value": {}
-    },
-    "4d225ced0afd": {
-      "name": "linearTeams",
-      "ordinal": 22,
-      "value": {
-        "error": "refused"
-      }
     },
     "542704953557": {
       "name": "linear.listTeams#1",
@@ -301,27 +189,6 @@
           "id": "frame-1",
           "ok": false
         }
-      }
-    },
-    "5d1b8ed07c2d": {
-      "createTeamId": {
-        "$rpc": "null"
-      },
-      "states": [],
-      "statesLoading": false,
-      "teams": {
-        "error": "refused"
-      }
-    },
-    "636acb894008": {
-      "createTeamId": {
-        "$rpc": "null"
-      },
-      "states": [],
-      "statesLoading": false,
-      "teams": {
-        "error": "inner refused",
-        "ok": false
       }
     },
     "6cfd8be99e71": {
@@ -374,24 +241,6 @@
       "ordinal": 10,
       "value": ""
     },
-    "7379ae7ed6c8": {
-      "createTeamId": {
-        "$rpc": "null"
-      },
-      "states": [
-        {
-          "color": "#000000",
-          "id": "state-1",
-          "name": "Todo",
-          "type": "unstarted"
-        }
-      ],
-      "statesLoading": false,
-      "teams": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
     "74ca99e85dba": {
       "createTeamId": {
         "$rpc": "null"
@@ -411,23 +260,6 @@
           "type": "unstarted"
         }
       ]
-    },
-    "8549e5f2062c": {
-      "createTeamId": {
-        "$rpc": "null"
-      },
-      "states": [
-        {
-          "color": "#000000",
-          "id": "state-1",
-          "name": "Todo",
-          "type": "unstarted"
-        }
-      ],
-      "statesLoading": false,
-      "teams": {
-        "error": "refused"
-      }
     },
     "8ae610dd8a77": {
       "name": "linear.listTeams#1",
@@ -506,11 +338,6 @@
     "96b613832e2d": {
       "name": "expandedResolvedCommentGroups",
       "ordinal": 17,
-      "value": []
-    },
-    "9d3bed9327ca": {
-      "name": "linearTeams",
-      "ordinal": 23,
       "value": []
     },
     "9ffa64bfd433": {
@@ -715,35 +542,10 @@
       "ordinal": 11,
       "value": ""
     },
-    "d763ea704ab3": {
-      "createTeamId": {
-        "$rpc": "null"
-      },
-      "states": [
-        {
-          "color": "#000000",
-          "id": "state-1",
-          "name": "Todo",
-          "type": "unstarted"
-        }
-      ],
-      "statesLoading": false,
-      "teams": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
-    },
     "d79a27912054": {
       "name": "itemRemoveLabelsDraft",
       "ordinal": 8,
       "value": ""
-    },
-    "d8e5e6a24926": {
-      "name": "linearStatesLoading",
-      "ordinal": 25,
-      "value": true
     },
     "ddf392ecde5d": {
       "name": "linear.listTeams#1",
@@ -784,24 +586,10 @@
         }
       }
     },
-    "dfa2ba0dd600": {
-      "name": "linearTeams",
-      "ordinal": 22,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "e0fdfc89107a": {
       "name": "itemBodyDraft",
       "ordinal": 5,
       "value": ""
-    },
-    "e115116da14e": {
-      "name": "createTeamId",
-      "ordinal": 24,
-      "value": {
-        "$rpc": "null"
-      }
     },
     "e986d1eb07e5": {
       "name": "creatingTask",
@@ -844,11 +632,6 @@
       "name": "itemAddAssigneesDraft",
       "ordinal": 9,
       "value": ""
-    },
-    "f86dec954117": {
-      "name": "linear.teamStates#1",
-      "ordinal": 29,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.teamStates\",\"params\":{\"teamId\":\"team-1\",\"workspaceId\":\"linear-workspace\"}}"
     },
     "fa2514c1e19e": {
       "name": "linear.listTeams#1",
@@ -995,17 +778,16 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "4acfae52776d",
-            "9d3bed9327ca",
-            "e115116da14e"
+            "8f65be19ef93",
+            "ec29e31fa7db"
           ]
         }
       },
       {
         "id": "tk-linear-team-context.result-absent:select-metadata-item-settled",
         "observation": {
-          "sender": ["b236bdc171ef", "26211ba14bbc"],
-          "payloads": ["542704953557", "f86dec954117"],
+          "sender": ["b236bdc171ef", "b8d6de13d3a3"],
+          "payloads": ["542704953557", "b8b7d9212631"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a",
@@ -1032,14 +814,13 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "4acfae52776d",
-            "9d3bed9327ca",
-            "e115116da14e",
-            "d8e5e6a24926",
-            "2046fde1d46c",
-            "4b607e97a8f6",
-            "2db83018b217",
-            "0e2affb510a1"
+            "8f65be19ef93",
+            "ec29e31fa7db",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "77586df9fa2a",
+            "6cfd8be99e71"
           ]
         }
       },
@@ -1073,17 +854,16 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "dfa2ba0dd600",
-            "9d3bed9327ca",
-            "e115116da14e"
+            "8f65be19ef93",
+            "ec29e31fa7db"
           ]
         }
       },
       {
         "id": "tk-linear-team-context.result-null:select-metadata-item-settled",
         "observation": {
-          "sender": ["259bfbf7db98", "26211ba14bbc"],
-          "payloads": ["542704953557", "f86dec954117"],
+          "sender": ["259bfbf7db98", "b8d6de13d3a3"],
+          "payloads": ["542704953557", "b8b7d9212631"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a",
@@ -1110,14 +890,13 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "dfa2ba0dd600",
-            "9d3bed9327ca",
-            "e115116da14e",
-            "d8e5e6a24926",
-            "2046fde1d46c",
-            "4b607e97a8f6",
-            "2db83018b217",
-            "0e2affb510a1"
+            "8f65be19ef93",
+            "ec29e31fa7db",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "77586df9fa2a",
+            "6cfd8be99e71"
           ]
         }
       },
@@ -1130,7 +909,7 @@
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a"
           },
-          "state": "5d1b8ed07c2d",
+          "state": "74ca99e85dba",
           "effects": [
             "70cbb5292625",
             "2388b2964070",
@@ -1151,7 +930,7 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "4d225ced0afd",
+            "8f65be19ef93",
             "ec29e31fa7db"
           ]
         }
@@ -1166,7 +945,7 @@
             "open-composer-0": "eb79a9b3682a",
             "select-metadata-item-1": "eb79a9b3682a"
           },
-          "state": "8549e5f2062c",
+          "state": "bb26ae00041e",
           "effects": [
             "70cbb5292625",
             "2388b2964070",
@@ -1187,7 +966,7 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "4d225ced0afd",
+            "8f65be19ef93",
             "ec29e31fa7db",
             "0b7bf56895e2",
             "1e2b9e124f23",
@@ -1206,7 +985,7 @@
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a"
           },
-          "state": "636acb894008",
+          "state": "74ca99e85dba",
           "effects": [
             "70cbb5292625",
             "2388b2964070",
@@ -1227,7 +1006,7 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "209865b8fe16",
+            "8f65be19ef93",
             "ec29e31fa7db"
           ]
         }
@@ -1242,7 +1021,7 @@
             "open-composer-0": "eb79a9b3682a",
             "select-metadata-item-1": "eb79a9b3682a"
           },
-          "state": "7379ae7ed6c8",
+          "state": "bb26ae00041e",
           "effects": [
             "70cbb5292625",
             "2388b2964070",
@@ -1263,7 +1042,7 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "209865b8fe16",
+            "8f65be19ef93",
             "ec29e31fa7db",
             "0b7bf56895e2",
             "1e2b9e124f23",
@@ -1282,7 +1061,7 @@
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a"
           },
-          "state": "44bd17f18a56",
+          "state": "74ca99e85dba",
           "effects": [
             "70cbb5292625",
             "2388b2964070",
@@ -1303,7 +1082,7 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "1eb3610abaa4",
+            "8f65be19ef93",
             "ec29e31fa7db"
           ]
         }
@@ -1318,7 +1097,7 @@
             "open-composer-0": "eb79a9b3682a",
             "select-metadata-item-1": "eb79a9b3682a"
           },
-          "state": "d763ea704ab3",
+          "state": "bb26ae00041e",
           "effects": [
             "70cbb5292625",
             "2388b2964070",
@@ -1339,7 +1118,7 @@
             "96b613832e2d",
             "e986d1eb07e5",
             "c69b02881ede",
-            "1eb3610abaa4",
+            "8f65be19ef93",
             "ec29e31fa7db",
             "0b7bf56895e2",
             "1e2b9e124f23",

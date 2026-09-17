@@ -213,10 +213,12 @@ jobs:
             c7|c8|c9|c10|c13|c14|c15|c16|c19|c20|c21|c22|c23|c24|c25|c26)
               EXPECTED_HARD_CAP=1000
               EXPECTED_REGION=us-central1
+              EXPECTED_DATABASE_POOL_MAX=
               ;;
             c27|c28|c29)
               EXPECTED_HARD_CAP=3000
               EXPECTED_REGION=asia-east2
+              EXPECTED_DATABASE_POOL_MAX=16
               ;;
             *) exit 1 ;;
           esac
@@ -236,6 +238,10 @@ jobs:
           test "$(jq -r '.connection_hard_cap' <<< "${CURRENT_SHAPE}")" = "${EXPECTED_HARD_CAP}"
           test "$(jq -r '.connection_unobserved_bound' <<< "${CURRENT_SHAPE}")" = \
             "${EXPECTED_UNOBSERVED_BOUND}"
+          # The startup script emits a pool line only off the root default, so an unpinned cell
+          # must still be on that default or its plan would carry a line nothing reviews.
+          test "$(jq -r '.database_pool_max' <<< "${CURRENT_SHAPE}")" = \
+            "${EXPECTED_DATABASE_POOL_MAX:-10}"
           TARGET_ZONE="$(jq -r '.zone' <<< "${CURRENT_SHAPE}")"
           MIG_NAME="orca-cloud-relay-gce-${TARGET_HOSTNAME}"
           if test "${DEPLOY_MODE}" = rollback; then
@@ -264,6 +270,7 @@ jobs:
             echo "MIG_NAME=${MIG_NAME}"
             echo "EXPECTED_HARD_CAP=${EXPECTED_HARD_CAP}"
             echo "EXPECTED_UNOBSERVED_BOUND=${EXPECTED_UNOBSERVED_BOUND}"
+            echo "EXPECTED_DATABASE_POOL_MAX=${EXPECTED_DATABASE_POOL_MAX}"
             echo "EXPECTED_REGION=${EXPECTED_REGION}"
             echo "DESIRED_IMAGE=${DESIRED_IMAGE}"
             echo "DESIRED_IMAGE_DIGEST=${DESIRED_IMAGE_DIGEST}"
@@ -461,6 +468,11 @@ jobs:
         env:
           DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
         run: |
+          # A cell on the root pool default emits no pool line, so pin one only where it exists.
+          POOL_ARGUMENTS=()
+          if test -n "${EXPECTED_DATABASE_POOL_MAX}"; then
+            POOL_ARGUMENTS=(--database-pool-max "${EXPECTED_DATABASE_POOL_MAX}")
+          fi
           # Zero resource changes prove the prior run's apply completed and no
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
@@ -502,6 +514,7 @@ jobs:
                 --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
+                "${POOL_ARGUMENTS[@]}" \
               | jq -e '.changes == 2' >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -514,6 +527,11 @@ jobs:
           CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
           DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
         run: |
+          # A cell on the root pool default emits no pool line, so pin one only where it exists.
+          POOL_ARGUMENTS=()
+          if test -n "${EXPECTED_DATABASE_POOL_MAX}"; then
+            POOL_ARGUMENTS=(--database-pool-max "${EXPECTED_DATABASE_POOL_MAX}")
+          fi
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
@@ -528,7 +546,8 @@ jobs:
               --rollback-image "${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}" \
               --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
               --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
-              --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}"
+              --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
+              "${POOL_ARGUMENTS[@]}"
           terraform -chdir=infra/terraform apply -auto-approve \
             "${RUNNER_TEMP}/relay-same-cap.tfplan"
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \

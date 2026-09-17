@@ -75,7 +75,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   assert.match(
     job,
-    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {14}\| jq -e '\.changes == 2' >\/dev\/null/
+    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}" \\\n {14}\| jq -e '\.changes == 2' >\/dev\/null/
   )
   assert.match(job, /resume requires the isolated migration-only cell/)
   assert.match(job, /test "\$\{TARGET_INCARNATION\}" = "\$\{SOURCE_INCARNATION\}"/)

@@ -3,9 +3,9 @@
   "family": "tasks.linear-item",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
   "scenarioSha256": "a2c0c5c200b36d2194815e67df2ea50422f6ecfd9df411132202e9660c87c41b",
   "platform": "darwin",
@@ -246,16 +246,6 @@
       "ordinal": 7,
       "value": false
     },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "20511e289721": {
       "name": "linear.createIssue#1",
       "ordinal": 15,
@@ -348,100 +338,6 @@
             }
           }
         ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
-    "2649a1245792": {
-      "error": "[object Object]",
-      "item": {
-        "provider": "linear",
-        "source": {
-          "description": "",
-          "id": "issue-1",
-          "identifier": "ENG-1",
-          "labels": [],
-          "priority": 0,
-          "project": {
-            "$rpc": "null"
-          },
-          "state": {
-            "color": "#000000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering",
-            "workspaceId": "linear-workspace"
-          },
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace",
-          "workspaceName": "Workspace"
-        },
-        "title": "A Linear issue"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
-    "288dd89fb933": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "provider": "linear",
-        "source": {
-          "description": "",
-          "id": "issue-1",
-          "identifier": "ENG-1",
-          "labels": [],
-          "priority": 0,
-          "project": {
-            "$rpc": "null"
-          },
-          "state": {
-            "color": "#000000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering",
-            "workspaceId": "linear-workspace"
-          },
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace",
-          "workspaceName": "Workspace"
-        },
-        "title": "A Linear issue"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [],
         "description": "description",
         "labels": [],
         "project": {
@@ -697,6 +593,53 @@
           "id": "frame-1",
           "ok": false
         }
+      }
+    },
+    "400de10f18d7": {
+      "error": "The host sent a reply this app could not read (linear.addIssueComment)",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "mutating": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
       }
     },
     "41b1d67e2d48": {
@@ -1190,6 +1133,77 @@
         }
       }
     },
+    "889f7a0ce650": {
+      "error": "Failed to add comment",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "mutating": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      }
+    },
+    "8b293cf5b76e": {
+      "name": "detailPayload",
+      "ordinal": 19,
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [
+          {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "title": "A sub-issue",
+            "url": ""
+          }
+        ],
+        "comments": [],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      }
+    },
     "8ce8b85378ac": {
       "name": "linear.getIssue#1",
       "ordinal": 10,
@@ -1225,6 +1239,11 @@
         },
         "provider": "linear"
       }
+    },
+    "958ec42ac829": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to add comment"
     },
     "9de8a1be3f13": {
       "name": "mutatingStatus",
@@ -1309,6 +1328,11 @@
           "ok": true
         }
       }
+    },
+    "b4e9e13b6327": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (linear.addIssueComment)"
     },
     "b9efa9d17fe7": {
       "name": "linear.getIssue#1",
@@ -1429,11 +1453,6 @@
         },
         "provider": "linear"
       }
-    },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
     },
     "c54600a45fb4": {
       "name": "linear.addIssueComment#1",
@@ -1754,57 +1773,21 @@
         "provider": "linear"
       }
     },
+    "f79544ef40d8": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "linear.addIssueComment",
+        "operation": "linear.add-issue-comment",
+        "variant": "linear-comment-written"
+      }
+    },
     "f8df20507017": {
       "name": "error",
       "ordinal": 5,
       "value": ""
-    },
-    "fba66b51cfb0": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "provider": "linear",
-        "source": {
-          "description": "",
-          "id": "issue-1",
-          "identifier": "ENG-1",
-          "labels": [],
-          "priority": 0,
-          "project": {
-            "$rpc": "null"
-          },
-          "state": {
-            "color": "#000000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering",
-            "workspaceId": "linear-workspace"
-          },
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace",
-          "workspaceName": "Workspace"
-        },
-        "title": "A Linear issue"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
     },
     "fd2fad47bec2": {
       "name": "mutatingStatus",
@@ -1897,8 +1880,8 @@
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "288dd89fb933",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1850ffae4fc5", "ecf9003e4ef1"]
+          "state": "400de10f18d7",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "b4e9e13b6327", "ecf9003e4ef1"]
         }
       },
       {
@@ -1915,7 +1898,7 @@
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
-            "1850ffae4fc5",
+            "b4e9e13b6327",
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
@@ -1939,7 +1922,7 @@
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
-            "1850ffae4fc5",
+            "b4e9e13b6327",
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
@@ -1962,8 +1945,8 @@
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "fba66b51cfb0",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1e70dd84bf14", "ecf9003e4ef1"]
+          "state": "400de10f18d7",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "b4e9e13b6327", "ecf9003e4ef1"]
         }
       },
       {
@@ -1980,7 +1963,7 @@
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
-            "1e70dd84bf14",
+            "b4e9e13b6327",
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
@@ -2004,7 +1987,7 @@
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
-            "1e70dd84bf14",
+            "b4e9e13b6327",
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
@@ -2165,15 +2148,21 @@
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "2649a1245792",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "c53afd0ab8bc", "ecf9003e4ef1"]
+          "state": "889f7a0ce650",
+          "effects": [
+            "fd2fad47bec2",
+            "ed3a7d6bc894",
+            "f79544ef40d8",
+            "958ec42ac829",
+            "14949c71727e"
+          ]
         }
       },
       {
         "id": "tk-linear-item.inner-false-object-error:sub-issue-open-settled",
         "observation": {
-          "sender": ["42e7aa6692d9", "718a339556b5"],
-          "payloads": ["e24c62500e8a", "8ce8b85378ac"],
+          "sender": ["42e7aa6692d9", "b9efa9d17fe7"],
+          "payloads": ["e24c62500e8a", "d5866a3b75ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2183,20 +2172,21 @@
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
-            "c53afd0ab8bc",
-            "ecf9003e4ef1",
-            "04df4241c3b7",
-            "104bf14d3af8",
-            "54207b001c0d",
-            "9de8a1be3f13"
+            "f79544ef40d8",
+            "958ec42ac829",
+            "14949c71727e",
+            "04f53bdc9dca",
+            "e492cb3deb38",
+            "dae567a6f8ac",
+            "e0a9defd9b13"
           ]
         }
       },
       {
         "id": "tk-linear-item.inner-false-object-error:sub-issue-create-settled",
         "observation": {
-          "sender": ["42e7aa6692d9", "718a339556b5", "20511e289721"],
-          "payloads": ["e24c62500e8a", "8ce8b85378ac", "eb9318526fa4"],
+          "sender": ["42e7aa6692d9", "b9efa9d17fe7", "7fa172662b38"],
+          "payloads": ["e24c62500e8a", "d5866a3b75ed", "a3172021f067"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2207,17 +2197,18 @@
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
-            "c53afd0ab8bc",
-            "ecf9003e4ef1",
-            "04df4241c3b7",
-            "104bf14d3af8",
-            "54207b001c0d",
-            "9de8a1be3f13",
-            "f277230bcf24",
-            "ef8932b03a8c",
-            "74b8317b8a96",
-            "56ce333afb92",
-            "bbf2458754b4"
+            "f79544ef40d8",
+            "958ec42ac829",
+            "14949c71727e",
+            "04f53bdc9dca",
+            "e492cb3deb38",
+            "dae567a6f8ac",
+            "e0a9defd9b13",
+            "cc26835ea96d",
+            "29cadc65bcbb",
+            "41b1d67e2d48",
+            "8b293cf5b76e",
+            "3accbb2a4fcb"
           ]
         }
       },

@@ -3,9 +3,9 @@
   "family": "settings.task-hydration",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "4438f9fd62876333bb980157612aaf457c5a9b9115659c8c941c3b373ad071dd",
   "platform": "darwin",
@@ -72,11 +72,6 @@
       "value": {
         "$rpc": "null"
       }
-    },
-    "134351934789": {
-      "name": "error",
-      "ordinal": 52,
-      "value": "The host sent a reply this app could not read (ui.get)"
     },
     "16e4f4209bcf": {
       "name": "projectRowDetail",
@@ -540,6 +535,11 @@
       "ordinal": 55,
       "value": []
     },
+    "660b0d8b305a": {
+      "name": "error",
+      "ordinal": 52,
+      "value": "Cannot read properties of null (reading 'ui')"
+    },
     "6ffbb1794410": {
       "name": "showLinearFilterPicker",
       "ordinal": 15,
@@ -559,6 +559,11 @@
       "name": "showGitLabViewPicker",
       "ordinal": 13,
       "value": false
+    },
+    "7989e01983ca": {
+      "name": "error",
+      "ordinal": 52,
+      "value": "Cannot read properties of undefined (reading 'ui')"
     },
     "7b0ad7b958dd": {
       "name": "tasksSupportState",
@@ -1275,7 +1280,7 @@
             "3d60f87d082e",
             "294741680522",
             "e7538ac5908a",
-            "134351934789",
+            "7989e01983ca",
             "378a352b5252"
           ]
         }
@@ -1343,7 +1348,7 @@
             "3d60f87d082e",
             "294741680522",
             "e7538ac5908a",
-            "134351934789",
+            "660b0d8b305a",
             "378a352b5252"
           ]
         }

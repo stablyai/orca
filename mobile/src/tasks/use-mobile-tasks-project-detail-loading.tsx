@@ -1,11 +1,6 @@
 import type { ItemDetailLoadingModel } from './use-mobile-tasks-item-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
 import {
-  type DetailComment,
-  type GitHubAssignableUser,
-  type GitHubDetailCheck,
-  type GitHubDetailFile,
-  type GitHubPRReviewSummary,
   editableProjectFields,
   projectFieldDraftValue,
   projectRowType,
@@ -106,30 +101,24 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (!result.ok) {
           throw new Error(result.error.message)
         }
-        // Why the casts and not a narrower schema: comments, reviews, checks and files are host
-        // records this pane renders whole, and the recorded detail carries every one of them empty
-        // — so a member requirement here has nothing behind it and would drop a row main showed.
-        // `reviewDecision` is forwarded with no coalesce: explicit null and absent are different
-        // answers to "has this been reviewed", and collapsing either is a product change.
+        // The five collections are typed by the same entity schemas the item sheet reads them
+        // through, so the casts this call site carried are gone. `reviewDecision` is forwarded with
+        // no coalesce: explicit null and absent are different answers to "has this been reviewed",
+        // and collapsing either is a product change.
         setProjectRowDetail({
           provider: 'github',
           body: result.details.body ?? '',
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the thread renderer owns the comment shape.
-          comments: (result.details.comments ?? []) as DetailComment[],
+          comments: result.details.comments ?? [],
           labels: result.details.item?.labels ?? projectRowItem.content.labels.map((l) => l.name),
           assignees: result.details.assignees ?? [],
           reviewDecision: result.details.item?.reviewDecision,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the reviewer strip owns these two shapes.
-          reviewRequests: (result.details.item?.reviewRequests ?? []) as GitHubAssignableUser[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
-          latestReviews: (result.details.item?.latestReviews ?? []) as GitHubPRReviewSummary[],
+          reviewRequests: result.details.item?.reviewRequests ?? [],
+          latestReviews: result.details.item?.latestReviews ?? [],
           headSha: result.details.headSha,
           baseSha: result.details.baseSha,
           pullRequestId: result.details.pullRequestId,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the checks panel owns this shape.
-          checks: (result.details.checks ?? []) as GitHubDetailCheck[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the files list owns this shape.
-          files: (result.details.files ?? []) as GitHubDetailFile[]
+          checks: result.details.checks ?? [],
+          files: result.details.files ?? []
         })
       })
       .catch((err) => {

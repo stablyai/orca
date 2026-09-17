@@ -3,9 +3,9 @@
   "family": "tasks.task-list-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "39ef28af17e4d3774b42bba1555606770667bc9010692fb1a4492413a940c0a0",
   "platform": "darwin",
@@ -211,6 +211,12 @@
         }
       }
     },
+    "2ca7c411bba8": {
+      "error": "Unexpected Linear tasks response",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
     "34d17f188229": {
       "name": "refreshing",
       "ordinal": 14,
@@ -257,12 +263,6 @@
       "name": "error",
       "ordinal": 1,
       "value": ""
-    },
-    "3a35a9dd2f88": {
-      "error": "The host sent a reply this app could not read (linear.listIssues)",
-      "items": [],
-      "loading": false,
-      "refreshing": false
     },
     "3edde845aed1": {
       "error": "",
@@ -396,11 +396,6 @@
           "updatedAt": "2020-01-01T00:00:00.000Z"
         }
       ]
-    },
-    "8b78413be50a": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "The host sent a reply this app could not read (linear.listIssues)"
     },
     "8f4406e0198e": {
       "name": "error",
@@ -764,6 +759,11 @@
         "$rpc": "undefined"
       }
     },
+    "ecbd40ee4587": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Unexpected Linear tasks response"
+    },
     "ed9157827399": {
       "name": "linear.searchIssues#1",
       "ordinal": 10,
@@ -951,12 +951,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -972,12 +972,12 @@
             "load-0": "eb79a9b3682a",
             "set-query-1": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -999,7 +999,7 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9",
             "e492cb3deb38",
@@ -1019,12 +1019,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1040,12 +1040,12 @@
             "load-0": "eb79a9b3682a",
             "set-query-1": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1067,7 +1067,7 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9",
             "e492cb3deb38",
@@ -1087,12 +1087,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1108,12 +1108,12 @@
             "load-0": "eb79a9b3682a",
             "set-query-1": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1135,7 +1135,7 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9",
             "e492cb3deb38",
@@ -1155,12 +1155,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1176,12 +1176,12 @@
             "load-0": "eb79a9b3682a",
             "set-query-1": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1203,7 +1203,7 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9",
             "e492cb3deb38",
@@ -1223,12 +1223,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1244,12 +1244,12 @@
             "load-0": "eb79a9b3682a",
             "set-query-1": "eb79a9b3682a"
           },
-          "state": "3a35a9dd2f88",
+          "state": "2ca7c411bba8",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -1271,7 +1271,7 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "8b78413be50a",
+            "ecbd40ee4587",
             "5ac1816a09df",
             "411aee2eccd9",
             "e492cb3deb38",

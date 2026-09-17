@@ -3,9 +3,9 @@
   "family": "tasks.task-create-github",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "014040846f649f3c6ca1175b610ed1b51bae3001e7de103549d7ee1a511a2506",
   "platform": "darwin",
@@ -47,6 +47,17 @@
             "error": "refused"
           }
         }
+      }
+    },
+    "00e89647b38d": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.createIssue",
+        "operation": "github.create-issue",
+        "variant": "github-created-issue"
       }
     },
     "0561e8e18d29": {
@@ -96,15 +107,23 @@
       "ordinal": 7,
       "value": ""
     },
+    "104bf14d3af8": {
+      "name": "error",
+      "ordinal": 8,
+      "value": ""
+    },
     "13b1e9c092d4": {
       "name": "createBody",
       "ordinal": 8,
       "value": ""
     },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
+    "15ac40b429ac": {
+      "composer": true,
+      "creating": false,
+      "error": "Failed to create GitHub issue",
+      "item": {
+        "$rpc": "null"
+      }
     },
     "1c158a692d14": {
       "name": "error",
@@ -115,19 +134,6 @@
       "name": "createBody",
       "ordinal": 7,
       "value": ""
-    },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "2924a6b4c745": {
-      "composer": true,
-      "creating": false,
-      "error": "[object Object]",
-      "item": {
-        "$rpc": "null"
-      }
     },
     "2f32fea0ebc5": {
       "name": "github.createIssue#1",
@@ -162,6 +168,11 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "3416f4f57653": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (github.createIssue)"
     },
     "3aefb3006914": {
       "name": "error",
@@ -226,14 +237,6 @@
       "name": "creatingTask",
       "ordinal": 1,
       "value": true
-    },
-    "56ac6af35c46": {
-      "composer": true,
-      "creating": false,
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "$rpc": "null"
-      }
     },
     "5ab5b62983be": {
       "composer": false,
@@ -424,6 +427,11 @@
         "$rpc": "null"
       }
     },
+    "7e7f8b942081": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to create GitHub issue"
+    },
     "82b36eab5101": {
       "name": "creatingTask",
       "ordinal": 6,
@@ -509,10 +517,52 @@
         }
       }
     },
+    "97962ba4c6eb": {
+      "name": "repo.update#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}"
+    },
     "a0dc5663c500": {
       "name": "repo.update#1",
       "ordinal": 12,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}"
+    },
+    "a78fb832e24a": {
+      "name": "repo.update#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     },
     "a7bb4a381865": {
       "name": "github.createIssue#1",
@@ -603,11 +653,6 @@
       "item": {
         "$rpc": "null"
       }
-    },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
     },
     "d18a0f3313c0": {
       "name": "github.createIssue#1",
@@ -706,6 +751,11 @@
       "ordinal": 9,
       "value": ""
     },
+    "e9a162defc32": {
+      "name": "creatingTask",
+      "ordinal": 7,
+      "value": false
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -761,10 +811,10 @@
       "ordinal": 6,
       "value": ""
     },
-    "f3ba4c9e02fb": {
+    "f426f954cfa6": {
       "composer": true,
       "creating": false,
-      "error": "Cannot read properties of null (reading 'ok')",
+      "error": "The host sent a reply this app could not read (github.createIssue)",
       "item": {
         "$rpc": "null"
       }
@@ -844,8 +894,8 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "56ac6af35c46",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "1850ffae4fc5", "82b36eab5101"]
+          "state": "f426f954cfa6",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "3416f4f57653", "82b36eab5101"]
         }
       },
       {
@@ -862,7 +912,7 @@
           "effects": [
             "5294116e0f90",
             "ed3a7d6bc894",
-            "1850ffae4fc5",
+            "3416f4f57653",
             "82b36eab5101",
             "1c158a692d14"
           ]
@@ -877,8 +927,8 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "f3ba4c9e02fb",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "1e70dd84bf14", "82b36eab5101"]
+          "state": "f426f954cfa6",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "3416f4f57653", "82b36eab5101"]
         }
       },
       {
@@ -895,7 +945,7 @@
           "effects": [
             "5294116e0f90",
             "ed3a7d6bc894",
-            "1e70dd84bf14",
+            "3416f4f57653",
             "82b36eab5101",
             "1c158a692d14"
           ]
@@ -985,15 +1035,21 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "2924a6b4c745",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "c53afd0ab8bc", "82b36eab5101"]
+          "state": "15ac40b429ac",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "00e89647b38d",
+            "7e7f8b942081",
+            "e9a162defc32"
+          ]
         }
       },
       {
         "id": "tk-create-github.inner-false-object-error:issue-source-settled",
         "observation": {
-          "sender": ["a7bb4a381865", "6402264664f2"],
-          "payloads": ["4e4bdca5791a", "0bd409e9a70f"],
+          "sender": ["a7bb4a381865", "a78fb832e24a"],
+          "payloads": ["4e4bdca5791a", "97962ba4c6eb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -1003,9 +1059,10 @@
           "effects": [
             "5294116e0f90",
             "ed3a7d6bc894",
-            "c53afd0ab8bc",
-            "82b36eab5101",
-            "1c158a692d14"
+            "00e89647b38d",
+            "7e7f8b942081",
+            "e9a162defc32",
+            "104bf14d3af8"
           ]
         }
       },

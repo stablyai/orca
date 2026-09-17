@@ -3,9 +3,9 @@
   "family": "tasks.item-comment-gitlab-mr",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "ae07579881829263a2b5590249d4119f5d9f4ef3877149ac3b780ad985413f00",
   "platform": "darwin",
@@ -150,11 +150,6 @@
       "ordinal": 7,
       "value": false
     },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
     "1997c4d25500": {
       "name": "gitlab.addMRComment#1",
       "ordinal": 3,
@@ -192,11 +187,6 @@
           "ok": false
         }
       }
-    },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "3aeeda561503": {
       "name": "gitlab.addMRComment#1",
@@ -266,9 +256,9 @@
         "provider": "gitlab"
       }
     },
-    "4f6907510e35": {
+    "3c584e14e862": {
       "draft": "a comment",
-      "error": "Cannot read properties of undefined (reading 'ok')",
+      "error": "Failed to add comment",
       "item": {
         "provider": "gitlab",
         "source": {
@@ -337,39 +327,6 @@
       "ordinal": 5,
       "value": ""
     },
-    "60cf785513ee": {
-      "draft": "a comment",
-      "error": "[object Object]",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
     "63b426badd37": {
       "name": "gitlab.addMRComment#1",
       "ordinal": 4,
@@ -423,6 +380,39 @@
       "name": "error",
       "ordinal": 5,
       "value": "inner refused"
+    },
+    "7b19f4403e25": {
+      "draft": "a comment",
+      "error": "The host sent a reply this app could not read (gitlab.addMRComment)",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
     },
     "85f672c0515f": {
       "draft": "",
@@ -575,38 +565,10 @@
         }
       }
     },
-    "9fbb0c0c00a3": {
-      "draft": "a comment",
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
+    "958ec42ac829": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to add comment"
     },
     "a2af233162ab": {
       "name": "gitlab.addMRComment#1",
@@ -686,6 +648,22 @@
         "provider": "gitlab"
       }
     },
+    "b0b348496330": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "gitlab.addMRComment",
+        "operation": "gitlab.add-mr-comment",
+        "variant": "task-comment-written"
+      }
+    },
+    "b11b5f49c033": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (gitlab.addMRComment)"
+    },
     "bb90b36099bc": {
       "draft": "a comment",
       "error": "inner refused",
@@ -718,11 +696,6 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
-    },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
     },
     "de38fe098abd": {
       "name": "gitlab.addMRComment#1",
@@ -928,8 +901,8 @@
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "4f6907510e35",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1850ffae4fc5", "ecf9003e4ef1"]
+          "state": "7b19f4403e25",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "b11b5f49c033", "ecf9003e4ef1"]
         }
       },
       {
@@ -941,8 +914,8 @@
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "9fbb0c0c00a3",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1e70dd84bf14", "ecf9003e4ef1"]
+          "state": "7b19f4403e25",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "b11b5f49c033", "ecf9003e4ef1"]
         }
       },
       {
@@ -986,8 +959,14 @@
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "60cf785513ee",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "c53afd0ab8bc", "ecf9003e4ef1"]
+          "state": "3c584e14e862",
+          "effects": [
+            "fd2fad47bec2",
+            "ed3a7d6bc894",
+            "b0b348496330",
+            "958ec42ac829",
+            "14949c71727e"
+          ]
         }
       },
       {

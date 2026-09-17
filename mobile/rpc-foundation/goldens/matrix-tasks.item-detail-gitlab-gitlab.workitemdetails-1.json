@@ -3,9 +3,9 @@
   "family": "tasks.item-detail-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
   "scenarioSha256": "d163c6125fa180da7575642ee29f4bb18e3678079b7c30a42934550896d5b3c1",
   "platform": "darwin",
@@ -412,6 +412,41 @@
         "title": "A GitLab issue"
       }
     },
+    "62edf8d0f053": {
+      "error": "The host sent a reply this app could not read (gitlab.workItemDetails)",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:issue:4",
+          "labels": ["bug"],
+          "number": 4,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "issue"
+        },
+        "title": "A GitLab issue"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "number": 4,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
     "6a8913577681": {
       "name": "detailPayload",
       "ordinal": 6,
@@ -503,6 +538,11 @@
       "payload": {
         "$rpc": "null"
       }
+    },
+    "81e387573ce6": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": "The host sent a reply this app could not read (gitlab.workItemDetails)"
     },
     "8ccd4fa759a5": {
       "name": "detailLoading",
@@ -956,12 +996,12 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f24316a2872c",
+          "state": "62edf8d0f053",
           "effects": [
             "33614c90b6eb",
             "a4f1a8696a24",
             "264010756b38",
-            "923a1c0af8db",
+            "81e387573ce6",
             "7816d31432b8"
           ]
         }

@@ -73,29 +73,22 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
                   body: createBody
                 })
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = created as {
-          ok?: boolean
-          number?: number
-          url?: string
-          error?: string
-        }
-        if (result.ok === false) {
+        if (created.ok === false) {
           throw new Error(
-            result.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
+            created.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
           )
         }
-        if (typeof result.number === 'number') {
+        if (typeof created.number === 'number') {
           const createdAt = new Date().toISOString()
           if (provider === 'github') {
             setActionItem(
               createGitHubTask(repo, {
-                id: `issue:${result.number}`,
+                id: `issue:${created.number}`,
                 type: 'issue',
-                number: result.number,
+                number: created.number,
                 title,
                 state: 'open',
-                url: result.url ?? '',
+                url: created.url ?? '',
                 labels: [],
                 updatedAt: createdAt,
                 author: null
@@ -104,12 +97,12 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           } else {
             setActionItem(
               createGitLabTask(repo, {
-                id: `issue:${result.number}`,
+                id: `issue:${created.number}`,
                 type: 'issue',
-                number: result.number,
+                number: created.number,
                 title,
                 state: 'opened',
-                url: result.url ?? '',
+                url: created.url ?? '',
                 labels: [],
                 updatedAt: createdAt,
                 author: null
@@ -128,15 +121,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           description: createBody.trim() || undefined,
           workspaceId: team.workspaceId
         })
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = linearIssueCreate.interpret(reply) as {
-          ok?: boolean
-          id?: string
-          identifier?: string
-          title?: string
-          url?: string
-          error?: string
-        }
+        const result = linearIssueCreate.interpret(reply)
         if (result.ok === false || !result.id || !result.identifier) {
           throw new Error(result.error ?? 'Failed to create Linear issue')
         }

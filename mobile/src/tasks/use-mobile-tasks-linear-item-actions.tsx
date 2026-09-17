@@ -2,7 +2,6 @@ import type { GithubReplyMergeActionsModel } from './use-mobile-tasks-github-rep
 import { useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
-  type LinearIssue,
   type LinearIssueChild,
   type TaskItem,
   createLinearTask
@@ -45,12 +44,7 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = linearIssueCommentWrite.interpret(reply) as {
-          ok?: boolean
-          id?: string
-          error?: string
-        }
+        const result = linearIssueCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add comment')
         }
@@ -88,8 +82,7 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           { id: child.id, workspaceId },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const issue = linearIssueRead.interpret(reply) as LinearIssue | null
+        const issue = linearIssueRead.interpret(reply)
         if (!issue) {
           throw new Error('Sub-issue not found')
         }
@@ -126,15 +119,7 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = linearIssueCreate.interpret(reply) as {
-          ok?: boolean
-          id?: string
-          identifier?: string
-          title?: string
-          url?: string
-          error?: string
-        }
+        const result = linearIssueCreate.interpret(reply)
         if (result.ok === false || !result.id || !result.identifier) {
           throw new Error(result.error ?? 'Failed to create sub-issue')
         }

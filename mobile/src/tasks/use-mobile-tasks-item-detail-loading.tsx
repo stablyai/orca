@@ -4,16 +4,7 @@ import {
   buildGitLabCheckSummary,
   useEffect
 } from './mobile-tasks-dependencies'
-import {
-  type DetailComment,
-  type GitHubAssignableUser,
-  type GitHubDetailCheck,
-  type GitHubDetailFile,
-  type GitHubPRReviewSummary,
-  type LinearIssue,
-  type TaskItem,
-  createLinearTask
-} from './mobile-tasks-legacy-foundation'
+import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import {
   githubItemDetailRead,
   gitlabItemDetailRead,
@@ -57,31 +48,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const details = githubItemDetailRead.interpret(reply) as {
-          body?: string
-          comments?: DetailComment[]
-          item?: {
-            labels?: string[]
-            reviewDecision?: string | null
-            reviewRequests?: GitHubAssignableUser[]
-            latestReviews?: GitHubPRReviewSummary[]
-          }
-          assignees?: string[]
-          headSha?: string
-          baseSha?: string
-          pullRequestId?: string
-          checks?: GitHubDetailCheck[]
-          files?: Array<{
-            path: string
-            oldPath?: string
-            status?: GitHubDetailFile['status']
-            additions?: number
-            deletions?: number
-            isBinary?: boolean
-            viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
-          }>
-        } | null
+        const details = githubItemDetailRead.interpret(reply)
         if (!details) {
           throw new Error('Details not found')
         }
@@ -116,23 +83,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const details = gitlabItemDetailRead.interpret(reply) as {
-          body?: string
-          comments?: DetailComment[]
-          item?: { labels?: string[]; mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' }
-          assignees?: string[]
-          pipelineJobs?: Array<{
-            id?: number
-            name: string
-            stage: string
-            status: string
-            webUrl?: string | null
-            duration?: number | null
-          }>
-          reviewers?: unknown[]
-          approvalState?: { approvalsRequired: number | null; approvalsLeft: number | null }
-        } | null
+        const details = gitlabItemDetailRead.interpret(reply)
         if (!details) {
           throw new Error('Details not found')
         }
@@ -208,11 +159,9 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           { timeoutMs: 30_000 }
         )
       ])
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const issue = linearIssueRead.interpret(issueReply) as LinearIssue | null
+      const issue = linearIssueRead.interpret(issueReply)
       const accepted = linearIssueCommentsRead.interpret(commentsReply)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const comments = accepted.accepted ? ((accepted.value as DetailComment[]) ?? []) : []
+      const comments = accepted.accepted ? (accepted.value ?? []) : []
       if (!issue) {
         throw new Error('Details not found')
       }

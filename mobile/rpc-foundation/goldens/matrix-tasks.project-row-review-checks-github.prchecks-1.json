@@ -3,9 +3,9 @@
   "family": "tasks.project-row-review-checks",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
   "scenarioSha256": "20e9631df87e40e64d35cee0c0e06b922fe53bd93e3d9e4078633b85a5278b7e",
   "platform": "darwin",
@@ -619,11 +619,6 @@
         }
       }
     },
-    "39eee3daef29": {
-      "name": "projectRowDetailError",
-      "ordinal": 12,
-      "value": "Invalid checks response"
-    },
     "3a4324d7f4c0": {
       "name": "github.requestPRReviewers#1",
       "ordinal": 3,
@@ -870,67 +865,6 @@
       "name": "projectRowDetailError",
       "ordinal": 12,
       "value": "outer refused"
-    },
-    "735789ad613e": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": [
-          {
-            "avatarUrl": {
-              "$rpc": "null"
-            },
-            "login": "octocat",
-            "name": {
-              "$rpc": "null"
-            }
-          }
-        ]
-      },
-      "draft": "",
-      "error": "Invalid checks response",
-      "mutating": false,
-      "refreshSeq": 0
     },
     "7440f0f1bab9": {
       "name": "projectMutating",
@@ -1355,6 +1289,72 @@
       "error": "",
       "mutating": false,
       "refreshSeq": 1
+    },
+    "bb4b1a8930bc": {
+      "name": "projectRowDetailError",
+      "ordinal": 12,
+      "value": "The host sent a reply this app could not read (github.prChecks)"
+    },
+    "c21bc380413b": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "The host sent a reply this app could not read (github.prChecks)",
+      "mutating": false,
+      "refreshSeq": 0
     },
     "d09c526ea284": {
       "name": "projectRowDetailError",
@@ -1857,7 +1857,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "735789ad613e",
+          "state": "c21bc380413b",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1866,7 +1866,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a"
           ]
         }
@@ -1891,7 +1891,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -1921,7 +1921,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -1944,7 +1944,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "735789ad613e",
+          "state": "c21bc380413b",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -1953,7 +1953,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a"
           ]
         }
@@ -1978,7 +1978,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2008,7 +2008,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2031,7 +2031,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "735789ad613e",
+          "state": "c21bc380413b",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -2040,7 +2040,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a"
           ]
         }
@@ -2065,7 +2065,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2095,7 +2095,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2118,7 +2118,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "735789ad613e",
+          "state": "c21bc380413b",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -2127,7 +2127,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a"
           ]
         }
@@ -2152,7 +2152,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2182,7 +2182,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2205,7 +2205,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "735789ad613e",
+          "state": "c21bc380413b",
           "effects": [
             "5d32aa29303c",
             "19346a719903",
@@ -2214,7 +2214,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a"
           ]
         }
@@ -2239,7 +2239,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2269,7 +2269,7 @@
             "a735fd6aee5f",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "39eee3daef29",
+            "bb4b1a8930bc",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",

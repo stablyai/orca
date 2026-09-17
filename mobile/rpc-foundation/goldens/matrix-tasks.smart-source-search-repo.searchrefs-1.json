@@ -3,10 +3,10 @@
   "family": "tasks.smart-source-search",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "aa06630cd902fd5dde5181bddd38f5478ae5b48044a3105b090728158aa9a621",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -51,17 +51,6 @@
       "name": "repo.searchRefs#1",
       "ordinal": 8,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"bug\",\"limit\":20}}"
-    },
-    "05e258da6c04": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (repo.searchRefs)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
     },
     "071e0e8e68dc": {
       "branches": [],
@@ -706,6 +695,16 @@
         "isRpcDeliveryUnknown": false
       }
     },
+    "c30c54d734bc": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of undefined (reading 'refDetails')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "c43e80126d82": {
       "branches": [
         {
@@ -861,6 +860,16 @@
         "isRpcDeliveryUnknown": false
       }
     },
+    "f582af356003": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of null (reading 'refDetails')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "f9ed1961ff08": {
       "name": "linear.listIssues#1",
       "ordinal": 9,
@@ -996,7 +1005,7 @@
             "github": "36290ab254a4",
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
-            "branches": "05e258da6c04"
+            "branches": "c30c54d734bc"
           },
           "state": "41d2452d4ebe",
           "effects": []
@@ -1023,7 +1032,7 @@
             "github": "36290ab254a4",
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
-            "branches": "05e258da6c04",
+            "branches": "c30c54d734bc",
             "linear-assigned": "26dc3b7c8299"
           },
           "state": "d1572a7d1ddb",
@@ -1039,7 +1048,7 @@
             "github": "36290ab254a4",
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
-            "branches": "05e258da6c04"
+            "branches": "f582af356003"
           },
           "state": "41d2452d4ebe",
           "effects": []
@@ -1066,7 +1075,7 @@
             "github": "36290ab254a4",
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
-            "branches": "05e258da6c04",
+            "branches": "f582af356003",
             "linear-assigned": "26dc3b7c8299"
           },
           "state": "d1572a7d1ddb",

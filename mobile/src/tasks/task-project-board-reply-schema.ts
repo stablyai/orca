@@ -1,5 +1,12 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import {
+  assignableUserListSchema,
+  detailCheckListSchema,
+  detailCommentListSchema,
+  detailFileListSchema,
+  reviewSummaryListSchema
+} from './task-provider-entity-reply-schema'
 
 // The sixteen `github.project.*` replies the Projects board reads. Every one of them is an
 // accepted result carrying its own `{ ok, error }` envelope, published by
@@ -207,22 +214,22 @@ export const taskProjectRowDetailSchema = z.union([
     ok: z.literal(true),
     details: z.looseObject({
       body: projectMessage('body'),
-      comments: salvagedOptional('comments', salvagingArray(z.unknown())),
+      comments: salvagedOptional('comments', detailCommentListSchema),
       item: salvagedOptional(
         'item',
         z.looseObject({
           labels: salvagedOptional('labels', salvagingArray(z.string())),
           reviewDecision: salvagedOptional('reviewDecision', z.string().nullable()),
-          reviewRequests: salvagedOptional('reviewRequests', salvagingArray(z.unknown())),
-          latestReviews: salvagedOptional('latestReviews', salvagingArray(z.unknown()))
+          reviewRequests: salvagedOptional('reviewRequests', assignableUserListSchema),
+          latestReviews: salvagedOptional('latestReviews', reviewSummaryListSchema)
         })
       ),
       assignees: salvagedOptional('assignees', salvagingArray(z.string())),
       headSha: projectMessage('headSha'),
       baseSha: projectMessage('baseSha'),
       pullRequestId: projectMessage('pullRequestId'),
-      checks: salvagedOptional('checks', salvagingArray(z.unknown())),
-      files: salvagedOptional('files', salvagingArray(z.unknown()))
+      checks: salvagedOptional('checks', detailCheckListSchema),
+      files: salvagedOptional('files', detailFileListSchema)
     })
   }),
   z.looseObject({ ok: z.literal(false), error: requiredProjectError })
@@ -243,11 +250,12 @@ export const taskProjectLabelListSchema = z.looseObject({
   error: optionalProjectError
 })
 
-/** The assignable-user list, guarded the same way at :107-:110. Rows pass through because the
- *  picker renders a host record this module does not re-declare; `login` is what it keys on. */
+/** The assignable-user list, guarded the same way at :107-:110. The row is
+ *  `assignableUserListSchema`, the same entity the item sheet's reviewer picker decodes: `login` is
+ *  what both key on, and `name`/`avatarUrl` keep their explicit `null`. */
 export const taskProjectAssignableUserListSchema = z.looseObject({
   ok: optionalOk,
-  users: salvagedOptional('users', salvagingArray(z.looseObject({ login: z.string() }))),
+  users: salvagedOptional('users', assignableUserListSchema),
   error: optionalProjectError
 })
 

@@ -3,9 +3,9 @@
   "family": "tasks.project-row-review-checks",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
   "scenarioSha256": "2d947b63fb35dad9bbe201061cb51d0b3c5a5e6f3e8018eeda2ec1f962952809",
   "platform": "darwin",
@@ -13,7 +13,7 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "024c8bcbe9d9": {
+    "0827e8a64c0d": {
       "detail": {
         "assignees": ["octocat"],
         "baseSha": "base-sha",
@@ -60,7 +60,7 @@
         "reviewRequests": []
       },
       "draft": "octocat",
-      "error": "Cannot read properties of undefined (reading 'ok')",
+      "error": "Failed to request reviewers",
       "mutating": false,
       "refreshSeq": 0
     },
@@ -431,57 +431,6 @@
       "mutating": false,
       "refreshSeq": 0
     },
-    "23acafa856fa": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "draft": "octocat",
-      "error": "Cannot read properties of null (reading 'ok')",
-      "mutating": false,
-      "refreshSeq": 0
-    },
     "253a401313b2": {
       "detail": {
         "assignees": ["octocat"],
@@ -544,6 +493,62 @@
       "name": "github.prChecks#1",
       "ordinal": 11,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"noCache\":true}}"
+    },
+    "29b6b89fda61": {
+      "name": "projectRowDetail",
+      "ordinal": 12,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
     },
     "2b956bbf980c": {
       "name": "projectRowDetailRefreshSeq",
@@ -610,6 +615,17 @@
       "error": "",
       "mutating": false,
       "refreshSeq": 0
+    },
+    "3371341e2026": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.requestPRReviewers",
+        "operation": "github.request-pr-reviewers",
+        "variant": "task-item-mutation"
+      }
     },
     "3a4324d7f4c0": {
       "name": "github.requestPRReviewers#1",
@@ -720,10 +736,10 @@
       "ordinal": 9,
       "value": ""
     },
-    "48a0d697f700": {
+    "46aa3b6c9dea": {
       "name": "projectRowDetailError",
       "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
+      "value": "The host sent a reply this app could not read (github.requestPRReviewers)"
     },
     "4ad8bb2f6308": {
       "name": "projectReviewersDraft",
@@ -891,10 +907,10 @@
       "mutating": false,
       "refreshSeq": 1
     },
-    "68b5ffb78d28": {
+    "671d737b8d3a": {
       "name": "projectRowDetailError",
-      "ordinal": 5,
-      "value": "[object Object]"
+      "ordinal": 6,
+      "value": "Failed to request reviewers"
     },
     "6db288f85826": {
       "name": "github.requestPRReviewers#1",
@@ -1079,6 +1095,57 @@
           }
         }
       }
+    },
+    "8be4f9964003": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "draft": "octocat",
+      "error": "The host sent a reply this app could not read (github.requestPRReviewers)",
+      "mutating": false,
+      "refreshSeq": 0
     },
     "8edd2cc5d098": {
       "name": "github.setPRFileViewed#1",
@@ -1788,17 +1855,21 @@
       "mutating": false,
       "refreshSeq": 0
     },
-    "d77f6fa8d216": {
-      "name": "projectRowDetailError",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "dfafb40d73d4": {
-      "detail": {
+    "d4d68d8186b6": {
+      "name": "projectRowDetail",
+      "ordinal": 24,
+      "value": {
         "assignees": ["octocat"],
         "baseSha": "base-sha",
         "body": "body",
-        "checks": [],
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
         "comments": [
           {
             "author": "octocat",
@@ -1826,7 +1897,7 @@
             },
             "path": "src/index.ts",
             "status": "modified",
-            "viewerViewedState": "UNVIEWED"
+            "viewerViewedState": "VIEWED"
           }
         ],
         "headSha": "head-sha",
@@ -1838,11 +1909,7 @@
           "$rpc": "null"
         },
         "reviewRequests": []
-      },
-      "draft": "octocat",
-      "error": "[object Object]",
-      "mutating": false,
-      "refreshSeq": 0
+      }
     },
     "e3180bc6526a": {
       "name": "projectMutating",
@@ -2199,8 +2266,8 @@
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a"
           },
-          "state": "024c8bcbe9d9",
-          "effects": ["5d32aa29303c", "19346a719903", "48a0d697f700", "72332e237f1f"]
+          "state": "8be4f9964003",
+          "effects": ["5d32aa29303c", "19346a719903", "46aa3b6c9dea", "72332e237f1f"]
         }
       },
       {
@@ -2217,7 +2284,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "48a0d697f700",
+            "46aa3b6c9dea",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -2241,7 +2308,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "48a0d697f700",
+            "46aa3b6c9dea",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -2270,7 +2337,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "48a0d697f700",
+            "46aa3b6c9dea",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -2296,8 +2363,8 @@
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a"
           },
-          "state": "23acafa856fa",
-          "effects": ["5d32aa29303c", "19346a719903", "d77f6fa8d216", "72332e237f1f"]
+          "state": "8be4f9964003",
+          "effects": ["5d32aa29303c", "19346a719903", "46aa3b6c9dea", "72332e237f1f"]
         }
       },
       {
@@ -2314,7 +2381,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "d77f6fa8d216",
+            "46aa3b6c9dea",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -2338,7 +2405,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "d77f6fa8d216",
+            "46aa3b6c9dea",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -2367,7 +2434,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "d77f6fa8d216",
+            "46aa3b6c9dea",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -2596,15 +2663,21 @@
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a"
           },
-          "state": "dfafb40d73d4",
-          "effects": ["5d32aa29303c", "19346a719903", "68b5ffb78d28", "72332e237f1f"]
+          "state": "0827e8a64c0d",
+          "effects": [
+            "5d32aa29303c",
+            "19346a719903",
+            "3371341e2026",
+            "671d737b8d3a",
+            "a735fd6aee5f"
+          ]
         }
       },
       {
         "id": "tk-project-row-review-checks.inner-false-object-error:checks-settled",
         "observation": {
-          "sender": ["157e777228bd", "1d7be6a36f40"],
-          "payloads": ["7ff05eadbd07", "1c5e14fa3ceb"],
+          "sender": ["157e777228bd", "a1762a31897f"],
+          "payloads": ["7ff05eadbd07", "29943274d7ef"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -2614,20 +2687,21 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "68b5ffb78d28",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "510db4658728",
-            "0c4bbb309bc3",
-            "ce1f6d47985f"
+            "3371341e2026",
+            "671d737b8d3a",
+            "a735fd6aee5f",
+            "b0f2d0edec6a",
+            "44c2e6541ebd",
+            "29b6b89fda61",
+            "e3180bc6526a"
           ]
         }
       },
       {
         "id": "tk-project-row-review-checks.inner-false-object-error:rerun-settled",
         "observation": {
-          "sender": ["157e777228bd", "1d7be6a36f40", "ff26a657cfde"],
-          "payloads": ["7ff05eadbd07", "1c5e14fa3ceb", "5fb01c7a0215"],
+          "sender": ["157e777228bd", "a1762a31897f", "83680a8503ad"],
+          "payloads": ["7ff05eadbd07", "29943274d7ef", "16338db99b3b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -2638,24 +2712,25 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "68b5ffb78d28",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "510db4658728",
-            "0c4bbb309bc3",
-            "ce1f6d47985f",
-            "a8ff11b6adce",
-            "5c30b4794b57",
-            "79e27b30fec7",
-            "1cc38c8dde55"
+            "3371341e2026",
+            "671d737b8d3a",
+            "a735fd6aee5f",
+            "b0f2d0edec6a",
+            "44c2e6541ebd",
+            "29b6b89fda61",
+            "e3180bc6526a",
+            "4123bc693ce4",
+            "d09c526ea284",
+            "2b956bbf980c",
+            "7440f0f1bab9"
           ]
         }
       },
       {
         "id": "tk-project-row-review-checks.inner-false-object-error:viewed-settled",
         "observation": {
-          "sender": ["157e777228bd", "1d7be6a36f40", "ff26a657cfde", "c12dad531759"],
-          "payloads": ["7ff05eadbd07", "1c5e14fa3ceb", "5fb01c7a0215", "c5b398957021"],
+          "sender": ["157e777228bd", "a1762a31897f", "83680a8503ad", "8edd2cc5d098"],
+          "payloads": ["7ff05eadbd07", "29943274d7ef", "16338db99b3b", "0af1de3f1c7b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -2667,20 +2742,21 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "68b5ffb78d28",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "510db4658728",
-            "0c4bbb309bc3",
-            "ce1f6d47985f",
-            "a8ff11b6adce",
-            "5c30b4794b57",
-            "79e27b30fec7",
-            "1cc38c8dde55",
-            "d09377137801",
-            "97ba222c899d",
-            "f9af825a9403",
-            "08a40bd35faa"
+            "3371341e2026",
+            "671d737b8d3a",
+            "a735fd6aee5f",
+            "b0f2d0edec6a",
+            "44c2e6541ebd",
+            "29b6b89fda61",
+            "e3180bc6526a",
+            "4123bc693ce4",
+            "d09c526ea284",
+            "2b956bbf980c",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "d4d68d8186b6",
+            "eb4a625e2236"
           ]
         }
       },

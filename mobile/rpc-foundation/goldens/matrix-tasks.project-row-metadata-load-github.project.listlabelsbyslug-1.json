@@ -3,9 +3,9 @@
   "family": "tasks.project-row-metadata-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "7c948e76afb331e4038298215181adc97cd533c4f79e205e183c08e8a2db20fc",
   "platform": "darwin",
@@ -13,17 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "073745984248": {
-      "name": "reply-salvage",
-      "ordinal": 16,
-      "value": {
-        "droppedCount": 1,
-        "droppedPaths": ["error"],
-        "method": "github.project.listLabelsBySlug",
-        "operation": "github.project.repo-labels",
-        "variant": "github-project-labels"
-      }
-    },
     "0bcc456bf76f": {
       "name": "github.project.listLabelsBySlug#1",
       "ordinal": 4,
@@ -178,6 +167,11 @@
       "ordinal": 5,
       "value": []
     },
+    "381af2adf79d": {
+      "name": "projectLabelsError",
+      "ordinal": 16,
+      "value": "Failed to load labels"
+    },
     "3902ea43121b": {
       "name": "projectAssignableUsersLoading",
       "ordinal": 7,
@@ -224,6 +218,11 @@
           }
         }
       }
+    },
+    "470f737f0c02": {
+      "name": "projectLabelsError",
+      "ordinal": 16,
+      "value": "Cannot read properties of null (reading 'ok')"
     },
     "4888b8ed69c4": {
       "name": "github.project.listLabelsBySlug#1",
@@ -352,11 +351,6 @@
         }
       ],
       "usersError": ""
-    },
-    "5a71bc1a4967": {
-      "name": "projectLabelsLoading",
-      "ordinal": 18,
-      "value": false
     },
     "5a98f463c804": {
       "name": "github.project.listLabelsBySlug#1",
@@ -516,6 +510,11 @@
         }
       }
     },
+    "8cd5756b84e6": {
+      "name": "projectLabelsError",
+      "ordinal": 16,
+      "value": "Cannot read properties of undefined (reading 'ok')"
+    },
     "903819696961": {
       "labels": [],
       "labelsError": "Failed to load labels",
@@ -586,26 +585,6 @@
         }
       }
     },
-    "a71d7fbf7517": {
-      "name": "projectIssueTypes",
-      "ordinal": 21,
-      "value": [
-        {
-          "id": "type-1",
-          "name": "Bug"
-        }
-      ]
-    },
-    "a9db726dabcc": {
-      "name": "projectLabelsError",
-      "ordinal": 17,
-      "value": "Failed to load labels"
-    },
-    "aa05f01a4255": {
-      "name": "projectIssueTypesLoading",
-      "ordinal": 22,
-      "value": false
-    },
     "b2a3d019b4c1": {
       "name": "github.project.listLabelsBySlug#1",
       "ordinal": 4,
@@ -639,21 +618,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "b5d449c93e42": {
-      "name": "projectAssignableUsers",
-      "ordinal": 19,
-      "value": [
-        {
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ]
-    },
-    "b6a7c936cff9": {
-      "name": "projectLabelsError",
-      "ordinal": 16,
-      "value": "The host sent a reply this app could not read (github.project.listLabelsBySlug)"
     },
     "bee3fb4d48da": {
       "name": "projectIssueTypes",
@@ -725,19 +689,9 @@
       ],
       "usersError": ""
     },
-    "d6657538c321": {
-      "name": "projectAssignableUsersLoading",
-      "ordinal": 20,
-      "value": false
-    },
-    "e004f7afb559": {
-      "name": "projectLabelsLoading",
-      "ordinal": 17,
-      "value": false
-    },
-    "e297dafb80c9": {
+    "dba8d8f1c7df": {
       "labels": [],
-      "labelsError": "The host sent a reply this app could not read (github.project.listLabelsBySlug)",
+      "labelsError": "Cannot read properties of undefined (reading 'ok')",
       "types": [
         {
           "id": "type-1",
@@ -752,6 +706,11 @@
         }
       ],
       "usersError": ""
+    },
+    "e004f7afb559": {
+      "name": "projectLabelsLoading",
+      "ordinal": 17,
+      "value": false
     },
     "e2ec2112181a": {
       "name": "github.project.listLabelsBySlug#1",
@@ -827,6 +786,24 @@
       "name": "projectLabelsError",
       "ordinal": 16,
       "value": "Unknown method"
+    },
+    "f9bf509bfe31": {
+      "labels": [],
+      "labelsError": "Cannot read properties of null (reading 'ok')",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": ""
     }
   },
   "recording": {
@@ -868,7 +845,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "e297dafb80c9",
+          "state": "dba8d8f1c7df",
           "effects": [
             "5dd15ec04d86",
             "d36a9b596499",
@@ -879,7 +856,7 @@
             "bee3fb4d48da",
             "e918604a4f49",
             "9912fbdd457c",
-            "b6a7c936cff9",
+            "8cd5756b84e6",
             "e004f7afb559",
             "21ea4fab050f",
             "25899527b47b",
@@ -896,7 +873,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "e297dafb80c9",
+          "state": "f9bf509bfe31",
           "effects": [
             "5dd15ec04d86",
             "d36a9b596499",
@@ -907,7 +884,7 @@
             "bee3fb4d48da",
             "e918604a4f49",
             "9912fbdd457c",
-            "b6a7c936cff9",
+            "470f737f0c02",
             "e004f7afb559",
             "21ea4fab050f",
             "25899527b47b",
@@ -935,13 +912,12 @@
             "bee3fb4d48da",
             "e918604a4f49",
             "9912fbdd457c",
-            "073745984248",
-            "a9db726dabcc",
-            "5a71bc1a4967",
-            "b5d449c93e42",
-            "d6657538c321",
-            "a71d7fbf7517",
-            "aa05f01a4255"
+            "381af2adf79d",
+            "e004f7afb559",
+            "21ea4fab050f",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
           ]
         }
       },
@@ -964,13 +940,12 @@
             "bee3fb4d48da",
             "e918604a4f49",
             "9912fbdd457c",
-            "073745984248",
-            "a9db726dabcc",
-            "5a71bc1a4967",
-            "b5d449c93e42",
-            "d6657538c321",
-            "a71d7fbf7517",
-            "aa05f01a4255"
+            "381af2adf79d",
+            "e004f7afb559",
+            "21ea4fab050f",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
           ]
         }
       },

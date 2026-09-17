@@ -3,10 +3,10 @@
   "family": "tasks.smart-source-search",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "767044526344237daee0a3f981a10615fbb9ebc3f45c2f6f41f9b8b16d362082",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -17,17 +17,6 @@
       "name": "repo.searchRefs#1",
       "ordinal": 8,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"bug\",\"limit\":20}}"
-    },
-    "216978499a3f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (linear.listIssues)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
     },
     "2238dace1c39": {
       "name": "linear.listIssues#1",
@@ -484,6 +473,16 @@
             ]
           }
         }
+      }
+    },
+    "957cc0c5ead6": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unexpected Linear tasks response",
+        "isRpcDeliveryUnknown": false
       }
     },
     "97320b400cf5": {
@@ -958,7 +957,7 @@
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
             "branches": "b015aaf3a53a",
-            "linear-assigned": "216978499a3f"
+            "linear-assigned": "957cc0c5ead6"
           },
           "state": "c43e80126d82",
           "effects": []
@@ -986,7 +985,7 @@
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
             "branches": "b015aaf3a53a",
-            "linear-assigned": "216978499a3f"
+            "linear-assigned": "957cc0c5ead6"
           },
           "state": "c43e80126d82",
           "effects": []
@@ -1014,7 +1013,7 @@
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
             "branches": "b015aaf3a53a",
-            "linear-assigned": "216978499a3f"
+            "linear-assigned": "957cc0c5ead6"
           },
           "state": "c43e80126d82",
           "effects": []
@@ -1042,7 +1041,7 @@
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
             "branches": "b015aaf3a53a",
-            "linear-assigned": "216978499a3f"
+            "linear-assigned": "957cc0c5ead6"
           },
           "state": "c43e80126d82",
           "effects": []
@@ -1070,7 +1069,7 @@
             "gitlab": "6e2d75e3bbd7",
             "linear": "a4ee5d16b4f6",
             "branches": "b015aaf3a53a",
-            "linear-assigned": "216978499a3f"
+            "linear-assigned": "957cc0c5ead6"
           },
           "state": "c43e80126d82",
           "effects": []

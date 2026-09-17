@@ -3,9 +3,9 @@
   "family": "tasks.task-create-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "217a3da50a54c4cbe19a68835ecfa038eae5b350430f0b8fd0a616bb5bdfe32d",
   "platform": "darwin",
@@ -13,6 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0a0e271f6e55": {
+      "composer": true,
+      "creating": false,
+      "error": "Failed to create GitLab issue",
+      "item": {
+        "$rpc": "null"
+      }
+    },
     "0fef9dc7845d": {
       "name": "createTitle",
       "ordinal": 7,
@@ -62,11 +70,6 @@
       "ordinal": 8,
       "value": ""
     },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
     "1d2d5aa2a25a": {
       "name": "createBody",
       "ordinal": 7,
@@ -108,11 +111,6 @@
         }
       }
     },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "2452c7c34695": {
       "name": "gitlab.createIssue#1",
       "ordinal": 3,
@@ -150,14 +148,6 @@
         }
       }
     },
-    "2924a6b4c745": {
-      "composer": true,
-      "creating": false,
-      "error": "[object Object]",
-      "item": {
-        "$rpc": "null"
-      }
-    },
     "2b5235cc87a9": {
       "name": "actionItem",
       "ordinal": 5,
@@ -193,6 +183,17 @@
         "$rpc": "null"
       }
     },
+    "51e333f53f1c": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "gitlab.createIssue",
+        "operation": "gitlab.create-issue",
+        "variant": "gitlab-created-issue"
+      }
+    },
     "5294116e0f90": {
       "name": "creatingTask",
       "ordinal": 1,
@@ -202,14 +203,6 @@
       "name": "gitlab.createIssue#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
-    },
-    "56ac6af35c46": {
-      "composer": true,
-      "creating": false,
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "$rpc": "null"
-      }
     },
     "580f3724d37b": {
       "composer": false,
@@ -284,6 +277,14 @@
           "id": "frame-1",
           "ok": false
         }
+      }
+    },
+    "713a981190a1": {
+      "composer": true,
+      "creating": false,
+      "error": "The host sent a reply this app could not read (gitlab.createIssue)",
+      "item": {
+        "$rpc": "null"
       }
     },
     "776607d47471": {
@@ -377,6 +378,11 @@
           "ok": false
         }
       }
+    },
+    "8b5e52fefec5": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (gitlab.createIssue)"
     },
     "91259ae589b2": {
       "name": "error",
@@ -473,11 +479,6 @@
         "$rpc": "null"
       }
     },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
-    },
     "cc3c569abdd3": {
       "name": "gitlab.createIssue#1",
       "ordinal": 3,
@@ -568,6 +569,16 @@
         "$rpc": "null"
       }
     },
+    "e9a162defc32": {
+      "name": "creatingTask",
+      "ordinal": 7,
+      "value": false
+    },
+    "ea5b0cd18ee3": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to create GitLab issue"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -585,14 +596,6 @@
       "name": "createTitle",
       "ordinal": 6,
       "value": ""
-    },
-    "f3ba4c9e02fb": {
-      "composer": true,
-      "creating": false,
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "$rpc": "null"
-      }
     },
     "f8df20507017": {
       "name": "error",
@@ -680,8 +683,8 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "56ac6af35c46",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "1850ffae4fc5", "82b36eab5101"]
+          "state": "713a981190a1",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "8b5e52fefec5", "82b36eab5101"]
         }
       },
       {
@@ -693,8 +696,8 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "f3ba4c9e02fb",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "1e70dd84bf14", "82b36eab5101"]
+          "state": "713a981190a1",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "8b5e52fefec5", "82b36eab5101"]
         }
       },
       {
@@ -739,8 +742,14 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "2924a6b4c745",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "c53afd0ab8bc", "82b36eab5101"]
+          "state": "0a0e271f6e55",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "51e333f53f1c",
+            "ea5b0cd18ee3",
+            "e9a162defc32"
+          ]
         }
       },
       {

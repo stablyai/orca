@@ -51,8 +51,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     setLinearConnectError('')
     try {
       const reply = await linearAccountConnect.request(client, { apiKey })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const result = linearAccountConnect.interpret(reply) as { ok?: boolean; error?: string }
+      const result = linearAccountConnect.interpret(reply)
       if (result.ok === false) {
         throw new Error(result.error ?? 'Failed to connect Linear')
       }

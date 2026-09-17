@@ -3,10 +3,10 @@
   "family": "worktree.hosted-base",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "a84f8a5acfd428eb77b5c02a3de0fa8b780c666db31bbe574ecf76cdf84adeb2",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -100,6 +100,16 @@
       "error": {
         "category": "Error",
         "message": "refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "2c7f810cc819": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "[object Object]",
         "isRpcDeliveryUnknown": false
       }
     },
@@ -204,6 +214,16 @@
         "compareBaseRef": "origin/main"
       }
     },
+    "7214459608bf": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot use 'in' operator to search for 'error' in null",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "8b00f7de0885": {
       "name": "worktree.resolveMrBase#1",
       "ordinal": 3,
@@ -238,17 +258,6 @@
         }
       }
     },
-    "924a3decea89": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (worktree.resolveMrBase)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
-    },
     "92df85b51d0c": {
       "name": "worktree.resolveMrBase#1",
       "ordinal": 4,
@@ -268,6 +277,16 @@
       "name": "worktree.resolvePrBase#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
+    },
+    "ae5862eb7a20": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot use 'in' operator to search for 'error' in undefined",
+        "isRpcDeliveryUnknown": false
+      }
     },
     "b948e8307e81": {
       "status": "rejected",
@@ -606,7 +625,7 @@
           "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
             "pr": "5428de0f5130",
-            "mr": "924a3decea89"
+            "mr": "ae5862eb7a20"
           },
           "state": "236529aa012d",
           "effects": []
@@ -619,7 +638,7 @@
           "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
             "pr": "5428de0f5130",
-            "mr": "924a3decea89"
+            "mr": "7214459608bf"
           },
           "state": "236529aa012d",
           "effects": []
@@ -658,7 +677,7 @@
           "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
             "pr": "5428de0f5130",
-            "mr": "924a3decea89"
+            "mr": "2c7f810cc819"
           },
           "state": "236529aa012d",
           "effects": []

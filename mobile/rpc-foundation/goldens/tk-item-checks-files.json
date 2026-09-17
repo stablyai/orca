@@ -3,11 +3,11 @@
   "family": "tasks.item-checks-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
-  "scenarioSha256": "15de2c1dd80a591a5e27d50664ff21d4e71442c711fc3bbdf7d1f95f499cf04c",
+  "scenarioSha256": "644a27c1e3fa6bfa73c7822c2949e9534508e5e3a996b0e8e56be6326658d123",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -54,17 +54,6 @@
       "name": "error",
       "ordinal": 21,
       "value": ""
-    },
-    "04c163c9d858": {
-      "name": "prFileContents",
-      "ordinal": 24,
-      "value": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      }
     },
     "04df4241c3b7": {
       "name": "mutatingStatus",
@@ -175,12 +164,13 @@
         }
       }
     },
-    "38d90ed8a1ee": {
+    "47ac5bdaffbe": {
       "contents": {
         "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
         }
       },
       "drafts": {},
@@ -475,6 +465,51 @@
       },
       "refreshSeq": 1
     },
+    "747ae3d77900": {
+      "name": "github.prFileContents#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 12,
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "modified": "b",
+            "modifiedIsBinary": false,
+            "original": "a",
+            "originalIsBinary": false
+          }
+        }
+      }
+    },
     "78f13a8847a8": {
       "name": "github.prFileContents#1",
       "ordinal": 23,
@@ -588,61 +623,13 @@
       "ordinal": 18,
       "value": false
     },
-    "b6fc0b12fd0b": {
-      "name": "github.rerunPRChecks#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"failedOnly\":true}}"
-    },
-    "b7302ece9856": {
-      "name": "github.prFileContents#1",
-      "ordinal": 22,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prFileContents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseSha": "base-sha",
-            "headSha": "head-sha",
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "prNumber": 12,
-            "repo": "id:repo-1",
-            "status": "modified"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "newContent": "b",
-            "oldContent": "a",
-            "truncated": false
-          }
-        }
-      }
-    },
-    "c3ea578fcb3f": {
+    "b68ec3f01a39": {
       "contents": {
         "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
         }
       },
       "drafts": {
@@ -696,6 +683,11 @@
         "reviewRequests": []
       },
       "refreshSeq": 1
+    },
+    "b6fc0b12fd0b": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"failedOnly\":true}}"
     },
     "c5221050cf37": {
       "name": "github.addPRReviewComment#1",
@@ -755,6 +747,18 @@
       "name": "mutatingStatus",
       "ordinal": 32,
       "value": false
+    },
+    "e2dba3496560": {
+      "name": "prFileContents",
+      "ordinal": 24,
+      "value": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -860,7 +864,7 @@
       {
         "id": "expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "372c9f84cf26", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "372c9f84cf26", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -869,7 +873,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "c3ea578fcb3f",
+          "state": "b68ec3f01a39",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -886,7 +890,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -898,7 +902,7 @@
             "01a8f1e0db1b",
             "372c9f84cf26",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -916,7 +920,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "38d90ed8a1ee",
+          "state": "47ac5bdaffbe",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -933,7 +937,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",

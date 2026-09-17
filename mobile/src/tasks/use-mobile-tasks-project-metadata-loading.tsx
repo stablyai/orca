@@ -1,10 +1,6 @@
 import type { ProjectDetailLoadingModel } from './use-mobile-tasks-project-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
-import {
-  type GitHubAssignableUser,
-  type GitHubIssueType,
-  splitRepositorySlug
-} from './mobile-tasks-legacy-foundation'
+import { type GitHubIssueType, splitRepositorySlug } from './mobile-tasks-legacy-foundation'
 import {
   githubProjectAssignableUserListRead,
   githubProjectIssueTypeListRead,
@@ -106,8 +102,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load assignees')
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the `login` the picker keys on and passes the rest of each row through, because the assignee sheet renders a host record this reader does not re-declare.
-        setProjectAssignableUsers((result.users ?? []) as GitHubAssignableUser[])
+        setProjectAssignableUsers(result.users ?? [])
       })
       .catch((err) => {
         if (!stale) {

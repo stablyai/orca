@@ -3,11 +3,11 @@
   "family": "tasks.task-list-gitlab-todos",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
-  "scenarioSha256": "8b0b64a6a0ef6e1cc6baa28e632fd3394a6c8b825f0835daa9634fa41c8685aa",
+  "scenarioSha256": "e36b90621e11880ec1e6c16e8e3c89cc14f5d68a4a9e06b8a3098fc0bd0104a2",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -98,6 +98,33 @@
       "name": "items",
       "ordinal": 5,
       "value": []
+    },
+    "2ee5e836afb7": {
+      "name": "items",
+      "ordinal": 5,
+      "value": [
+        {
+          "key": "gitlab-todo:1",
+          "provider": "gitlabTodo",
+          "source": {
+            "actionName": "review_requested",
+            "authorAvatarUrl": "",
+            "authorUsername": "octocat",
+            "id": 1,
+            "projectPath": "group/project",
+            "state": "pending",
+            "targetIid": 4,
+            "targetTitle": "A GitLab todo",
+            "targetType": "Issue",
+            "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          },
+          "status": "review requested",
+          "subtitle": "group/project #4",
+          "title": "A GitLab todo",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
     },
     "35fee2e074f0": {
       "name": "gitlab.todos#1",
@@ -199,51 +226,6 @@
       "ordinal": 2,
       "value": true
     },
-    "65696d9af446": {
-      "name": "gitlab.todos#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.todos"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": [
-            {
-              "id": 1,
-              "target": {
-                "id": "gid://1",
-                "iid": 4,
-                "state": "opened",
-                "title": "A GitLab todo",
-                "updatedAt": "2020-01-01T00:00:00.000Z",
-                "webUrl": ""
-              },
-              "targetType": "Issue"
-            }
-          ]
-        }
-      }
-    },
     "682c92d9610e": {
       "name": "gitlab.todos#1",
       "ordinal": 3,
@@ -277,6 +259,12 @@
           }
         }
       }
+    },
+    "6d1d0fdc038f": {
+      "error": "The host sent a reply this app could not read (gitlab.todos)",
+      "items": [],
+      "loading": false,
+      "refreshing": false
     },
     "6d7869e6f6ea": {
       "name": "loading",
@@ -315,16 +303,57 @@
         }
       }
     },
-    "77882f3fe361": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "Cannot read properties of undefined (reading 'replace')"
-    },
     "820944a2683d": {
       "error": "outer refused",
       "items": [],
       "loading": false,
       "refreshing": false
+    },
+    "8511d41d7490": {
+      "name": "gitlab.todos#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.todos"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": [
+            {
+              "actionName": "review_requested",
+              "authorAvatarUrl": "",
+              "authorUsername": "octocat",
+              "id": 1,
+              "projectPath": "group/project",
+              "state": "pending",
+              "targetIid": 4,
+              "targetTitle": "A GitLab todo",
+              "targetType": "Issue",
+              "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+              "updatedAt": "2020-01-01T00:00:00.000Z"
+            }
+          ]
+        }
+      }
     },
     "87720d7ea28a": {
       "name": "gitlab.todos#1",
@@ -404,6 +433,39 @@
         }
       }
     },
+    "bdb019c11efb": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "The host sent a reply this app could not read (gitlab.todos)"
+    },
+    "d57ec76a49a3": {
+      "error": "",
+      "items": [
+        {
+          "key": "gitlab-todo:1",
+          "provider": "gitlabTodo",
+          "source": {
+            "actionName": "review_requested",
+            "authorAvatarUrl": "",
+            "authorUsername": "octocat",
+            "id": 1,
+            "projectPath": "group/project",
+            "state": "pending",
+            "targetIid": 4,
+            "targetTitle": "A GitLab todo",
+            "targetType": "Issue",
+            "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          },
+          "status": "review requested",
+          "subtitle": "group/project #4",
+          "title": "A GitLab todo",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -447,12 +509,6 @@
         }
       }
     },
-    "f0df2712eb78": {
-      "error": "(response.result ?? []).map is not a function",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
     "f11183466799": {
       "error": "Unknown method",
       "items": [],
@@ -468,17 +524,6 @@
       "name": "error",
       "ordinal": 6,
       "value": "outer refused"
-    },
-    "f56c22495539": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "(response.result ?? []).map is not a function"
-    },
-    "f7da7040be7b": {
-      "error": "Cannot read properties of undefined (reading 'replace')",
-      "items": [],
-      "loading": false,
-      "refreshing": false
     },
     "fe6919657d3a": {
       "name": "gitlab.todos#1",
@@ -519,20 +564,19 @@
       {
         "id": "tk-list-gitlab-todos.normal:load-settled",
         "observation": {
-          "sender": ["65696d9af446"],
+          "sender": ["8511d41d7490"],
           "payloads": ["038bb64a38ce"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f7da7040be7b",
+          "state": "d57ec76a49a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
-            "1f4eeb3dcff1",
-            "77882f3fe361",
-            "5ac1816a09df",
-            "411aee2eccd9"
+            "2ee5e836afb7",
+            "6d7869e6f6ea",
+            "88d78bf42794"
           ]
         }
       },
@@ -583,12 +627,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f0df2712eb78",
+          "state": "6d1d0fdc038f",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "f56c22495539",
+            "bdb019c11efb",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -603,12 +647,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f0df2712eb78",
+          "state": "6d1d0fdc038f",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "f56c22495539",
+            "bdb019c11efb",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -623,12 +667,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f0df2712eb78",
+          "state": "6d1d0fdc038f",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "f56c22495539",
+            "bdb019c11efb",
             "5ac1816a09df",
             "411aee2eccd9"
           ]

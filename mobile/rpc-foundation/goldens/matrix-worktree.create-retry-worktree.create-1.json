@@ -3,10 +3,10 @@
   "family": "worktree.create-retry",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "e93a36ef900de27e1a566cdb2389ba4f900a330eadbb476b9bfb1ef05707b352",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -183,17 +183,6 @@
         }
       }
     },
-    "67a20c90d720": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (worktree.create)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
-    },
     "7665e4eb5ce2": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -317,6 +306,14 @@
           "id": "frame-1",
           "ok": true
         }
+      }
+    },
+    "9df0ac2b0247": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to create workspace"
       }
     },
     "a47d068fc282": {
@@ -504,6 +501,11 @@
           }
         }
       }
+    },
+    "ed1eb862d036": {
+      "outcome": {
+        "error": "Failed to create workspace"
+      }
     }
   },
   "recording": {
@@ -527,9 +529,9 @@
           "sender": ["9cc25d051b87"],
           "payloads": ["06b14e4985de"],
           "settlements": {
-            "create": "67a20c90d720"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -539,9 +541,9 @@
           "sender": ["e6492b79ae1b"],
           "payloads": ["06b14e4985de"],
           "settlements": {
-            "create": "67a20c90d720"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -551,9 +553,9 @@
           "sender": ["636b0892097b"],
           "payloads": ["06b14e4985de"],
           "settlements": {
-            "create": "67a20c90d720"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -563,9 +565,9 @@
           "sender": ["810f613e774d"],
           "payloads": ["06b14e4985de"],
           "settlements": {
-            "create": "67a20c90d720"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -575,9 +577,9 @@
           "sender": ["af1cf5b96577"],
           "payloads": ["06b14e4985de"],
           "settlements": {
-            "create": "67a20c90d720"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },

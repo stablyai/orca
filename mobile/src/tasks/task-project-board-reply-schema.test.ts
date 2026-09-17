@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GitHubProjectOwnerType } from '../../../src/shared/github/project-types'
 import {
   taskProjectAccessibleListSchema,
+  taskProjectAssignableUserListSchema,
   taskProjectCommentMutationSchema,
   taskProjectCommentWriteSchema,
   taskProjectIssueTypeListSchema,
@@ -215,5 +216,69 @@ describe('the comment replies', () => {
       error: { message: 'nope' }
     })
     expect(parsed.success && parsed.data).toMatchObject({ error: { message: 'nope' } })
+  })
+})
+
+// The five collections and the assignee list are typed by the item half's entity schemas now, so a
+// row the pane would have crashed on drops instead of reaching a consumer as the declared type.
+// No scenario reply carries any of them non-empty, so these pins are the only thing that observes
+// the change — the goldens cannot.
+describe('the detail collections are the shared entity rows', () => {
+  const details = (value: Record<string, unknown>) =>
+    taskProjectRowDetailSchema.safeParse({ ok: true, details: value })
+
+  it('drops a comment with no body, which the thread renders unguarded', () => {
+    const parsed = details({ comments: [{ id: 1, body: 'kept' }, { id: 2 }] })
+    expect(parsed.success && parsed.data).toMatchObject({
+      details: { comments: [{ id: 1, body: 'kept' }] }
+    })
+  })
+
+  it('drops a reviewer with no login, which the merge reads as `login.trim()`', () => {
+    const parsed = details({ item: { reviewRequests: [{ login: 'octocat' }, { name: 'nobody' }] } })
+    expect(parsed.success && parsed.data).toMatchObject({
+      details: { item: { reviewRequests: [{ login: 'octocat' }] } }
+    })
+  })
+
+  it('keeps a reviewer row null name and avatar rather than collapsing them', () => {
+    const parsed = details({
+      item: { reviewRequests: [{ login: 'octocat', name: null, avatarUrl: null }] }
+    })
+    expect(JSON.stringify(parsed)).toContain('"name":null')
+    expect(JSON.stringify(parsed)).toContain('"avatarUrl":null')
+  })
+
+  it('drops a review with no login and a check with no name', () => {
+    const reviews = details({ item: { latestReviews: [{ state: 'APPROVED' }] } })
+    expect(reviews.success && reviews.data).toMatchObject({
+      details: { item: { latestReviews: [] } }
+    })
+    const checks = details({
+      checks: [{ name: 'build', status: 'COMPLETED' }, { status: 'QUEUED' }]
+    })
+    expect(checks.success && checks.data).toMatchObject({
+      details: { checks: [{ name: 'build', status: 'COMPLETED' }] }
+    })
+  })
+
+  it('drops a file with no path, which no expansion or comment anchor could match', () => {
+    const parsed = details({ files: [{ path: 'a.ts' }, { additions: 3 }] })
+    expect(parsed.success && parsed.data).toMatchObject({ details: { files: [{ path: 'a.ts' }] } })
+  })
+
+  it('keeps an empty collection, which is what every recorded detail reply carries', () => {
+    const parsed = details({ comments: [], checks: [], files: [], item: { reviewRequests: [] } })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('drops an assignable user with no login and keeps the rest of the row', () => {
+    const parsed = taskProjectAssignableUserListSchema.safeParse({
+      ok: true,
+      users: [{ login: 'octocat', name: null, avatarUrl: null }, { name: 'nobody' }]
+    })
+    expect(parsed.success && parsed.data).toMatchObject({
+      users: [{ login: 'octocat', name: null, avatarUrl: null }]
+    })
   })
 })

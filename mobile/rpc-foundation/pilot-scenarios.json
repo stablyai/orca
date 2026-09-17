@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "scenarios": [
     {
       "id": "b1",
@@ -11324,6 +11324,69 @@
       ]
     },
     {
+      "id": "tk-item-detail-github-reactions",
+      "operation": "tasks.item-detail-github",
+      "version": 1,
+      "family": "tasks.item-detail-github",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "body": "body",
+              "comments": [
+                {
+                  "id": 901,
+                  "author": "octocat",
+                  "authorAvatarUrl": "",
+                  "body": "a review comment",
+                  "createdAt": "2020-01-01T00:00:00.000Z",
+                  "url": "https://github.com/owner/repo/pull/12#issuecomment-901",
+                  "reactions": [
+                    {
+                      "content": "+1",
+                      "count": 3
+                    },
+                    {
+                      "content": "heart",
+                      "count": 1
+                    }
+                  ]
+                }
+              ],
+              "item": {
+                "labels": ["bug"],
+                "reviewDecision": "APPROVED",
+                "reviewRequests": [],
+                "latestReviews": []
+              },
+              "assignees": ["octocat"],
+              "headSha": "head-sha",
+              "baseSha": "base-sha",
+              "pullRequestId": "PR_kwDO",
+              "checks": [],
+              "files": []
+            }
+          }
+        },
+        {
+          "checkpoint": "mounted"
+        }
+      ]
+    },
+    {
       "id": "tk-item-detail-gitlab",
       "operation": "tasks.item-detail-gitlab",
       "version": 1,
@@ -11348,6 +11411,65 @@
             "result": {
               "body": "body",
               "comments": [],
+              "item": {
+                "labels": ["bug"],
+                "mergeable": "MERGEABLE"
+              },
+              "assignees": [],
+              "pipelineJobs": [],
+              "reviewers": [],
+              "approvalState": {
+                "approvalsRequired": 1,
+                "approvalsLeft": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "mounted"
+        }
+      ]
+    },
+    {
+      "id": "tk-item-detail-gitlab-reactions",
+      "operation": "tasks.item-detail-gitlab",
+      "version": 1,
+      "family": "tasks.item-detail-gitlab",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "gitlab.workItemDetails#1",
+          "params": {
+            "iid": 4,
+            "projectRef": "group/project",
+            "repo": "id:repo-1",
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "body": "body",
+              "comments": [
+                {
+                  "id": 901,
+                  "author": "octocat",
+                  "authorAvatarUrl": "",
+                  "body": "a discussion note",
+                  "createdAt": "2020-01-01T00:00:00.000Z",
+                  "url": "https://gitlab.example.com/group/project/-/issues/4#note_901",
+                  "reactions": [
+                    {
+                      "name": "thumbsup",
+                      "count": 2
+                    }
+                  ]
+                }
+              ],
               "item": {
                 "labels": ["bug"],
                 "mergeable": "MERGEABLE"
@@ -11701,15 +11823,16 @@
             "result": [
               {
                 "id": 1,
+                "actionName": "review_requested",
                 "targetType": "Issue",
-                "target": {
-                  "id": "gid://1",
-                  "iid": 4,
-                  "title": "A GitLab todo",
-                  "webUrl": "",
-                  "state": "opened",
-                  "updatedAt": "2020-01-01T00:00:00.000Z"
-                }
+                "targetIid": 4,
+                "targetTitle": "A GitLab todo",
+                "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+                "projectPath": "group/project",
+                "authorUsername": "octocat",
+                "authorAvatarUrl": "",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "state": "pending"
               }
             ]
           }
@@ -12328,9 +12451,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "oldContent": "a",
-              "newContent": "b",
-              "truncated": false
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
             }
           }
         },
@@ -13669,9 +13793,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "oldContent": "a",
-              "newContent": "b",
-              "truncated": false
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
             }
           }
         },

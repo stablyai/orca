@@ -130,10 +130,12 @@ describe('unchecked RPC reader boundary', () => {
   })
 
   it('scans a plausible number of files', () => {
-    // A broken root or extension filter would make every check below vacuously pass. The floor on
-    // the offender count comes down with the list, so a successful migration step does not fail it.
+    // A broken root or extension filter would make every check below vacuously pass. The file floor
+    // is safe to hold at a constant; the offender floor is not, because the list counts down to
+    // zero — it was 20 and this step reached it. Against the list instead, the check survives every
+    // step of the countdown: a filter that scanned nothing reports 0 against a list naming 20.
     expect(scanned.length).toBeGreaterThan(400)
-    expect(observed.size).toBeGreaterThan(20)
+    expect(observed.size).toBe(inventory.length)
   })
 
   it('lists each file once', () => {

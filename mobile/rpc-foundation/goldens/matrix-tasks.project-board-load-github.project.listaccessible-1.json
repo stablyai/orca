@@ -3,9 +3,9 @@
   "family": "tasks.project-board-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "7c16d49ffeace5c689309316da6e4638fa1b70d3ef52a78d27db934ae56cf64d",
   "platform": "darwin",
@@ -570,6 +570,16 @@
         }
       }
     },
+    "7868f9428edf": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of null (reading 'ok')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "7a9df0d1a484": {
       "name": "githubProjectLoading",
       "ordinal": 25,
@@ -798,17 +808,6 @@
         "category": "Error",
         "message": "transport failure",
         "isRpcDeliveryUnknown": true
-      }
-    },
-    "aaf09e2731f5": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (github.project.listAccessible)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
       }
     },
     "b0c25dac9d8e": {
@@ -1083,6 +1082,16 @@
       "name": "githubProjectError",
       "ordinal": 24,
       "value": ""
+    },
+    "db45b655b685": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of undefined (reading 'ok')",
+        "isRpcDeliveryUnknown": false
+      }
     },
     "dfe16215433b": {
       "name": "github.project.listAccessible#1",
@@ -1474,7 +1483,7 @@
           "payloads": ["b42c8edc0d53"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5"
+            "projects-0": "db45b655b685"
           },
           "state": "147d0c98fb46",
           "effects": ["2085118de92f", "a5a3530ec11c"]
@@ -1487,7 +1496,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "db45b655b685",
             "views-1": "be0da5b53ffb"
           },
           "state": "0e76d492b4f4",
@@ -1501,7 +1510,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6", "2423ca7008fd"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "db45b655b685",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
@@ -1538,7 +1547,7 @@
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "db45b655b685",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
@@ -1577,7 +1586,7 @@
           "payloads": ["b42c8edc0d53"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5"
+            "projects-0": "7868f9428edf"
           },
           "state": "147d0c98fb46",
           "effects": ["2085118de92f", "a5a3530ec11c"]
@@ -1590,7 +1599,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "7868f9428edf",
             "views-1": "be0da5b53ffb"
           },
           "state": "0e76d492b4f4",
@@ -1604,7 +1613,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6", "2423ca7008fd"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "7868f9428edf",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
@@ -1641,7 +1650,7 @@
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "7868f9428edf",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
@@ -1680,7 +1689,7 @@
           "payloads": ["b42c8edc0d53"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5"
+            "projects-0": "f3b516f62081"
           },
           "state": "147d0c98fb46",
           "effects": ["2085118de92f", "a5a3530ec11c"]
@@ -1693,7 +1702,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "f3b516f62081",
             "views-1": "be0da5b53ffb"
           },
           "state": "0e76d492b4f4",
@@ -1707,7 +1716,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6", "2423ca7008fd"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "f3b516f62081",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
@@ -1744,7 +1753,7 @@
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "f3b516f62081",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
@@ -1783,7 +1792,7 @@
           "payloads": ["b42c8edc0d53"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5"
+            "projects-0": "f3b516f62081"
           },
           "state": "147d0c98fb46",
           "effects": ["2085118de92f", "a5a3530ec11c"]
@@ -1796,7 +1805,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "f3b516f62081",
             "views-1": "be0da5b53ffb"
           },
           "state": "0e76d492b4f4",
@@ -1810,7 +1819,7 @@
           "payloads": ["b42c8edc0d53", "a2a600cf1ed6", "2423ca7008fd"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "f3b516f62081",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
@@ -1847,7 +1856,7 @@
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "projects-0": "aaf09e2731f5",
+            "projects-0": "f3b516f62081",
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"

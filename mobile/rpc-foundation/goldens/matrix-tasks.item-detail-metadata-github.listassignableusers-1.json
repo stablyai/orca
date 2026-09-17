@@ -3,9 +3,9 @@
   "family": "tasks.item-detail-metadata",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
   "scenarioSha256": "3ef6ef046f60d2d11ef81adf69bd5216036405eb05e5fd30cf1c402120488ee5",
   "platform": "darwin",
@@ -77,16 +77,6 @@
       "ordinal": 14,
       "value": ""
     },
-    "20b03638e734": {
-      "name": "itemAssignableUsers",
-      "ordinal": 14,
-      "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
-    },
     "215de61d1fbb": {
       "name": "itemAssignableUsersLoading",
       "ordinal": 15,
@@ -127,13 +117,6 @@
         }
       }
     },
-    "30be1587e288": {
-      "name": "itemAssignableUsers",
-      "ordinal": 14,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "3356ec8253b4": {
       "name": "itemBodyDraft",
       "ordinal": 1,
@@ -163,16 +146,6 @@
       "name": "itemAssignableUsersError",
       "ordinal": 14,
       "value": "transport failure"
-    },
-    "4811b212ee14": {
-      "labels": ["bug", "chore"],
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": {
-        "$rpc": "undefined"
-      },
-      "usersError": "",
-      "usersLoading": false
     },
     "4e8a9b0b302b": {
       "name": "github.listAssignableUsers#1",
@@ -330,37 +303,6 @@
       "usersError": "outer refused",
       "usersLoading": false
     },
-    "6107288aca15": {
-      "labels": ["bug", "chore"],
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": {
-        "$rpc": "null"
-      },
-      "usersError": "",
-      "usersLoading": false
-    },
-    "62d3b046be51": {
-      "name": "itemAssignableUsers",
-      "ordinal": 14,
-      "value": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
-    "7565dbfa3de0": {
-      "labels": ["bug", "chore"],
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      },
-      "usersError": "",
-      "usersLoading": false
-    },
     "8656a07ff9a8": {
       "name": "itemAssignableUsersError",
       "ordinal": 14,
@@ -424,27 +366,10 @@
       "ordinal": 10,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "9ebb2d5e915a": {
-      "name": "itemAssignableUsers",
-      "ordinal": 14,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "a49372405361": {
       "name": "itemAssignableUsersLoading",
       "ordinal": 8,
       "value": true
-    },
-    "abf563fcde19": {
-      "labels": ["bug", "chore"],
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": {
-        "error": "refused"
-      },
-      "usersError": "",
-      "usersLoading": false
     },
     "ac0fe77ec843": {
       "name": "github.listAssignableUsers#1",
@@ -485,6 +410,14 @@
       "name": "itemLabelsLoading",
       "ordinal": 4,
       "value": true
+    },
+    "b547643a8c4b": {
+      "labels": ["bug", "chore"],
+      "labelsError": "",
+      "labelsLoading": false,
+      "users": [],
+      "usersError": "The host sent a reply this app could not read (github.listAssignableUsers)",
+      "usersLoading": false
     },
     "bb786eaeecad": {
       "name": "github.listAssignableUsers#1",
@@ -594,24 +527,6 @@
         }
       }
     },
-    "d6ef32125dc7": {
-      "labels": ["bug", "chore"],
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": {
-        "error": "inner refused",
-        "ok": false
-      },
-      "usersError": "",
-      "usersLoading": false
-    },
-    "df7fa998b7b8": {
-      "name": "itemAssignableUsers",
-      "ordinal": 14,
-      "value": {
-        "error": "refused"
-      }
-    },
     "e11f2dac1b42": {
       "name": "itemLabelsError",
       "ordinal": 3,
@@ -662,6 +577,11 @@
         }
       }
     },
+    "f446885f520e": {
+      "name": "itemAssignableUsersError",
+      "ordinal": 14,
+      "value": "The host sent a reply this app could not read (github.listAssignableUsers)"
+    },
     "fbaca9693f87": {
       "name": "itemAvailableLabels",
       "ordinal": 12,
@@ -703,7 +623,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "4811b212ee14",
+          "state": "b547643a8c4b",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -714,7 +634,7 @@
             "a49372405361",
             "fbaca9693f87",
             "3c0f8d43db2e",
-            "9ebb2d5e915a",
+            "f446885f520e",
             "215de61d1fbb"
           ]
         }
@@ -727,7 +647,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "6107288aca15",
+          "state": "b547643a8c4b",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -738,7 +658,7 @@
             "a49372405361",
             "fbaca9693f87",
             "3c0f8d43db2e",
-            "30be1587e288",
+            "f446885f520e",
             "215de61d1fbb"
           ]
         }
@@ -751,7 +671,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "abf563fcde19",
+          "state": "b547643a8c4b",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -762,7 +682,7 @@
             "a49372405361",
             "fbaca9693f87",
             "3c0f8d43db2e",
-            "df7fa998b7b8",
+            "f446885f520e",
             "215de61d1fbb"
           ]
         }
@@ -775,7 +695,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d6ef32125dc7",
+          "state": "b547643a8c4b",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -786,7 +706,7 @@
             "a49372405361",
             "fbaca9693f87",
             "3c0f8d43db2e",
-            "62d3b046be51",
+            "f446885f520e",
             "215de61d1fbb"
           ]
         }
@@ -799,7 +719,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "7565dbfa3de0",
+          "state": "b547643a8c4b",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -810,7 +730,7 @@
             "a49372405361",
             "fbaca9693f87",
             "3c0f8d43db2e",
-            "20b03638e734",
+            "f446885f520e",
             "215de61d1fbb"
           ]
         }

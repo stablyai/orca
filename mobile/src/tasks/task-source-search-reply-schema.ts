@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { linearIssueRowSchema } from './task-item-detail-reply-schema'
 
 // The Smart workspace-source picker's provider reads: per-repo search, and the single-item lookups
 // a pasted link or number resolves to. Checked against
@@ -80,37 +81,23 @@ export const taskGitLabWorkItemListSchema = z.looseObject({
  * response')` reached the screen as its own copy; the same payloads are now named as an
  * incompatible `linear.searchIssues` / `linear.listIssues` reply.
  *
- * Required: `id`, `state.name`, `team.name` and `priority`. `createLinearTask` reads
- * `issue.state.name` and `issue.team.name` with no guard (mobile-tasks-item-mapping.ts:296-297),
- * so a row without either is a TypeError the moment the row is mapped, and
- * `getLinearPriorityRank(issue.priority)` feeds `a.priority - b.priority`
- * (mobile-tasks-reviewer-linear.ts:99-101), where an absent priority makes the whole comparator
- * NaN and orders the reviewer list arbitrarily. All four are non-optional on the host's own type
- * (src/shared/linear/issue-types.ts:3-33), which is what `linear.searchIssues` and
- * `linear.listIssues` return (linear.ts:50-56, linear-issue-list-method.ts:5-16).
+ * The row is `linearIssueRowSchema`, imported rather than declared again: this and the item sheet
+ * decode the same `LinearIssue` (src/shared/linear/issue-types.ts:3-35), which `linear.searchIssues`
+ * and `linear.listIssues` return (linear.ts:50-56, linear-issue-list-method.ts:5-16). Its nine
+ * requirements are all non-optional on that type, and two of them are reads that throw here:
+ * `createLinearTask` reads `issue.state.name` and `issue.team.name` with no guard
+ * (mobile-tasks-item-mapping.ts:296-297), and `getLinearPriorityRank(issue.priority)` feeds
+ * `a.priority - b.priority` (mobile-tasks-reviewer-linear.ts:99-101), where an absent priority makes
+ * the whole comparator NaN and orders the reviewer list arbitrarily.
  *
- * The rest are typed and optional because none of them can throw: `identifier`, `title` and
- * `updatedAt` are interpolated or handed to `Intl.Collator`, which coerce rather than crash.
- *
- * The earlier version of this schema required `id` alone, on the grounds that the recorded
- * smart-search rows were `{ id: 'issue-1' }`. Those rows were a fixture defect, not evidence: no
- * Linear issue the host can build lacks `state` or `team`. The fixtures now carry real rows and
- * main's rendering of them is recorded before this requirement lands.
+ * An earlier version of this file declared its own row requiring `id` alone, on the grounds that
+ * the recorded smart-search rows were `{ id: 'issue-1' }`. Those rows were a fixture defect, not
+ * evidence: no Linear issue the host can build lacks `state` or `team`. The fixtures now carry real
+ * rows and main's rendering of them is recorded before this requirement lands.
  */
-const linearIssueRow = z.looseObject({
-  id: z.string(),
-  identifier: itemText('identifier'),
-  title: itemText('title'),
-  url: itemText('url'),
-  updatedAt: itemText('updatedAt'),
-  priority: z.number(),
-  state: z.looseObject({ name: z.string(), color: itemText('color'), type: itemText('type') }),
-  team: z.looseObject({ id: itemText('id'), name: z.string(), key: itemText('key') })
-})
-
 export const taskLinearIssueListSchema = z.union([
-  salvagingArray(linearIssueRow),
-  z.looseObject({ items: salvagingArray(linearIssueRow) }).transform((reply) => reply.items)
+  salvagingArray(linearIssueRowSchema),
+  z.looseObject({ items: salvagingArray(linearIssueRowSchema) }).transform((reply) => reply.items)
 ])
 
 /**

@@ -3,10 +3,10 @@
   "family": "tasks.paste-lookup",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "ab5511fa34181dc9de590df2fe57a0d061a261e7b204a6ef830c03bc53923d65",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -697,17 +697,6 @@
         }
       }
     },
-    "b57c80c16379": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (gitlab.workItemByPath)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
-    },
     "b948e8307e81": {
       "status": "rejected",
       "startedAt": 0,
@@ -1062,9 +1051,9 @@
           "settlements": {
             "by-number": "731507dd2e23",
             "by-slug": "731507dd2e23",
-            "gitlab-path": "b57c80c16379"
+            "gitlab-path": "ee20a1dc39e7"
           },
-          "state": "e970eb27f5ca",
+          "state": "06c1311be9ff",
           "effects": []
         }
       },
@@ -1076,10 +1065,10 @@
           "settlements": {
             "by-number": "731507dd2e23",
             "by-slug": "731507dd2e23",
-            "gitlab-path": "b57c80c16379",
+            "gitlab-path": "ee20a1dc39e7",
             "repo-slug": "0e9d6525a582"
           },
-          "state": "7a02e1f7b185",
+          "state": "a1e6f2b40722",
           "effects": []
         }
       },

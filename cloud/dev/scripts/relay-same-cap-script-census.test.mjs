@@ -31,10 +31,21 @@ function rehomeSourceCells() {
   )
 }
 
-function startupScript({ cap, image, trusted }) {
+// The job cross-checks its pinned pool against the committed map; model the same read.
+function tfvarsDatabasePoolMax(cellId) {
+  const start = production.indexOf(`"${cellId}" = {`)
+  assert.notEqual(start, -1, `${cellId} is missing from production.tfvars`)
+  const block = production.slice(start, production.indexOf('\n  }', start))
+  return /database_pool_max\s*=\s*(\d+)/.exec(block)?.[1] ?? '10'
+}
+
+function startupScript({ cap, image, trusted, pool }) {
   return [
     `  printf 'ORCA_RELAY_CELL_CONNECTION_HARD_CAP=%s\\n' '${cap}'`,
     `  printf 'ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND=%s\\n' '60'`,
+    ...(pool === undefined
+      ? []
+      : [`  printf 'ORCA_RELAY_DATABASE_POOL_MAX=%s\\n' '${pool}'`]),
     ...(trusted ? [
       `  printf 'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT=%s\\n' '${DIRECTOR_IDENTITY}'`,
       `  printf 'ORCA_RELAY_REHOME_AUDIENCE=%s\\n' '${AUDIENCE}'`
@@ -48,7 +59,7 @@ function startupScript({ cap, image, trusted }) {
 }
 
 // The exact shape the apply step's plan has: template replaced, MIG rebound to it.
-function rollPlan({ cellId, cap, protocol }) {
+function rollPlan({ cellId, cap, protocol, pool }) {
   return {
     configuration: {
       root_module: {
@@ -77,14 +88,17 @@ function rollPlan({ cellId, cap, protocol }) {
             metadata_startup_script: startupScript({
               cap,
               image: ROLLBACK_IMAGE,
-              trusted: protocol >= 1
+              trusted: protocol >= 1,
+              // The live template predates the reviewed pool raise, as every asia cell's does.
+              pool: pool === undefined ? undefined : '10'
             })
           },
           after: {
             metadata_startup_script: startupScript({
               cap,
               image: TARGET_IMAGE,
-              trusted: protocol >= 1
+              trusted: protocol >= 1,
+              pool
             }),
             self_link: null
           },
@@ -108,7 +122,8 @@ function hostname(cellId) {
   return cellId.slice('production-gce-'.length)
 }
 
-// The job resolves cap and region from the cell id before any admin call; run that block alone.
+// The job resolves cap, region, and pool from the cell id before any admin call; run that block
+// alone. An empty pool is the root default, which the startup template emits no line for.
 function resolveCellShape(cellId) {
   const start = workflow.indexOf('          TARGET_HOSTNAME="${TARGET_CELL_ID#production-gce-}"')
   assert.notEqual(start, -1, 'the same-cap cell shape block is missing')
@@ -119,8 +134,15 @@ function resolveCellShape(cellId) {
     '-euo',
     'pipefail',
     '-c',
-    `${script}\necho "\${EXPECTED_REGION} \${EXPECTED_HARD_CAP}"`
+    `${script}\necho "\${EXPECTED_REGION} \${EXPECTED_HARD_CAP} pool=\${EXPECTED_DATABASE_POOL_MAX}"`
   ], { env: { ...process.env, TARGET_CELL_ID: cellId }, encoding: 'utf8' })
+}
+
+function cellShape(cellId) {
+  const resolved = resolveCellShape(cellId)
+  assert.equal(resolved.status, 0, `${cellId}: ${resolved.stderr}`)
+  const [, cap, pool] = resolved.stdout.trim().split(' ')
+  return { cap: Number(cap), pool: pool.slice('pool='.length) || undefined }
 }
 
 describe('same-cap roll scripts accept every same-cap cell', () => {
@@ -143,11 +165,16 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     }
   })
 
-  it('resolves a cap and region for every wave cell and refuses anything else', () => {
+  it('resolves a cap, region, and pool for every wave cell and refuses anything else', () => {
     for (const cellId of SAME_CAP_CELLS) {
       const resolved = resolveCellShape(cellId)
       assert.equal(resolved.status, 0, `${cellId}: ${resolved.stderr}`)
-      assert.match(resolved.stdout.trim(), /^(us-central1 1000|asia-east2 3000)$/)
+      assert.match(
+        resolved.stdout.trim(),
+        /^(us-central1 1000 pool=|asia-east2 3000 pool=16)$/,
+        cellId
+      )
+      assert.equal(tfvarsDatabasePoolMax(cellId), cellShape(cellId).pool ?? '10', cellId)
     }
     assert.equal(resolveCellShape('production-gce-c17').status, 1)
     assert.equal(resolveCellShape('production-gce-c30').status, 1)
@@ -165,7 +192,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     }
   })
 
-  it('passes this cell\'s rehome protocol on every plan validation the job runs', () => {
+  it('passes this cell\'s rehome protocol and pool on every plan validation the job runs', () => {
     const invocations = workflow.split('validate-relay-capacity-plan.mjs').slice(1)
     assert.equal(invocations.length, 2)
     for (const invocation of invocations) {
@@ -174,25 +201,34 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       const call = lines.slice(0, end + 1).join(' ')
       assert.match(call, /--mode same-cap-cell/)
       assert.match(call, /--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}"/)
+      assert.match(call, /"\$\{POOL_ARGUMENTS\[@\]\}"/)
     }
+    // Each of those steps must build the flag from the resolved pool, and only when there is one.
+    const builders = workflow.split(
+      'if test -n "${EXPECTED_DATABASE_POOL_MAX}"; then\n' +
+        '            POOL_ARGUMENTS=(--database-pool-max "${EXPECTED_DATABASE_POOL_MAX}")'
+    )
+    assert.equal(builders.length, 3)
+    assert.equal(workflow.split('POOL_ARGUMENTS=()').length, 3)
   })
 
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
     for (const [cellId, protocol] of SAME_CAP_CELLS.flatMap((cell) => [[cell, 1], [cell, 3]])) {
-      const [, cap] = resolveCellShape(cellId).stdout.trim().split(' ')
+      const { cap, pool } = cellShape(cellId)
       assert.equal(REHOME_SOURCE_CELLS.has(cellId), true, cellId)
       const config = {
         mode: 'same-cap-cell',
         cellId,
-        hardCap: Number(cap),
+        hardCap: cap,
         unobservedBound: 60,
         image: TARGET_IMAGE,
         rollbackImage: ROLLBACK_IMAGE,
         rehomeDirectorServiceAccount: DIRECTOR_IDENTITY,
         rehomeAudience: AUDIENCE,
-        regionalRehomeProtocol: String(protocol)
+        regionalRehomeProtocol: String(protocol),
+        databasePoolMax: pool
       }
-      const plan = rollPlan({ cellId, cap, protocol })
+      const plan = rollPlan({ cellId, cap, protocol, pool })
       assert.deepEqual(
         validateCapacityPlan(plan, config),
         { mode: 'same-cap-cell', changes: 2 },
@@ -203,6 +239,15 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
         () => validateCapacityPlan(plan, {
           ...config,
           regionalRehomeProtocol: '0'
+        }),
+        /reviewed image and capacity/,
+        cellId
+      )
+      // Dropping the pin must reject a pinned cell, and adding one must reject a default cell.
+      assert.throws(
+        () => validateCapacityPlan(plan, {
+          ...config,
+          databasePoolMax: pool === undefined ? '16' : undefined
         }),
         /reviewed image and capacity/,
         cellId

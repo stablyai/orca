@@ -1,5 +1,13 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { linearTeamsSchema } from './task-item-detail-reply-schema'
+import {
+  githubWorkItemCountSchema,
+  gitlabTodoListSchema,
+  linearAccountConnectedSchema,
+  linearAccountStatusSchema,
+  taskRepoPreferenceWrittenSchema
+} from './task-list-reply-schema'
 
 // What the Tasks list reads to fill itself for a provider, plus the one write that connects a
 // Linear account. The per-repo item searches themselves are the Smart picker's operations in
@@ -18,7 +26,7 @@ export const linearAccountStatusRead = bindDeferredRpcOperation(
     method: 'linear.status',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-status')
+    read: rpcResultVariant('linear-account-status', linearAccountStatusSchema)
   })
 )
 
@@ -33,7 +41,7 @@ export const linearWorkspaceTeamListRead = bindDeferredRpcOperation(
     method: 'linear.listTeams',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-teams')
+    read: rpcResultVariant('linear-teams', linearTeamsSchema)
   })
 )
 
@@ -44,7 +52,7 @@ export const githubWorkItemCountRead = bindDeferredRpcOperation(
     method: 'github.countWorkItems',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-work-item-count')
+    read: rpcResultVariant('github-work-item-count', githubWorkItemCountSchema)
   })
 )
 
@@ -55,7 +63,7 @@ export const gitlabTodoListRead = bindDeferredRpcOperation(
     method: 'gitlab.todos',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-todos')
+    read: rpcResultVariant('gitlab-todos', gitlabTodoListSchema)
   })
 )
 
@@ -69,7 +77,7 @@ export const linearAccountConnect = bindDeferredRpcOperation(
     method: 'linear.connect',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-connection')
+    read: rpcResultVariant('linear-account-connected', linearAccountConnectedSchema)
   })
 )
 
@@ -83,6 +91,6 @@ export const taskRepoPreferenceWrite = bindDeferredRpcOperation(
     method: 'repo.update',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('repo-updated')
+    read: rpcResultVariant('repo-updated', taskRepoPreferenceWrittenSchema)
   })
 )

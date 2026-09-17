@@ -3,9 +3,9 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
   "scenarioSha256": "1d7713cf4c23d053105c2abb02340d81d5eb689f4311a0984932d8ebd031b4ce",
   "platform": "darwin",
@@ -156,6 +156,11 @@
         "$rpc": "null"
       }
     },
+    "168de462b844": {
+      "name": "error",
+      "ordinal": 11,
+      "value": "Cannot read properties of null (reading 'worktree')"
+    },
     "1bb065c2a768": {
       "creating": {
         "$rpc": "null"
@@ -302,6 +307,11 @@
         "startedAt": 0
       }
     },
+    "5536b8846bae": {
+      "name": "error",
+      "ordinal": 11,
+      "value": "Cannot read properties of undefined (reading 'worktree')"
+    },
     "582028823c76": {
       "name": "worktree.create#1",
       "ordinal": 6,
@@ -345,6 +355,16 @@
         }
       }
     },
+    "67b44e804cc9": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Cannot read properties of null (reading 'worktree')",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
     "67e4de286c96": {
       "name": "worktree.create#1",
       "ordinal": 6,
@@ -386,11 +406,6 @@
           }
         }
       }
-    },
-    "71f882fa01cd": {
-      "name": "error",
-      "ordinal": 8,
-      "value": "The host sent a reply this app could not read (worktree.create)"
     },
     "7abdfe20af50": {
       "creating": "linear:1",
@@ -462,10 +477,30 @@
       "status": "pending",
       "startedAt": 0
     },
+    "97348f3fe285": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Cannot read properties of undefined (reading 'worktree')",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
     "975f2ff9a730": {
       "name": "settings.get#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "97dc8fc98386": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Cannot read properties of undefined (reading 'displayName')",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
     },
     "9b03383cf8c2": {
       "name": "worktree.create#1",
@@ -552,6 +587,11 @@
           }
         }
       }
+    },
+    "a87cc5b1a6b1": {
+      "name": "error",
+      "ordinal": 11,
+      "value": "Cannot read properties of undefined (reading 'displayName')"
     },
     "ba6b37393b35": {
       "name": "worktree.create#1",
@@ -688,16 +728,6 @@
       "ordinal": 8,
       "value": "Unknown method"
     },
-    "df8accf1ced4": {
-      "creating": {
-        "$rpc": "null"
-      },
-      "error": "The host sent a reply this app could not read (worktree.create)",
-      "settings": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      }
-    },
     "e0423a9e6995": {
       "name": "worktree.create#1",
       "ordinal": 7,
@@ -823,13 +853,16 @@
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "df8accf1ced4",
+          "state": "97348f3fe285",
           "effects": [
             "e0a8ee1f3c00",
             "ed3a7d6bc894",
             "e445683fd6a5",
-            "71f882fa01cd",
-            "f2ebfa81caaf"
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "5536b8846bae",
+            "15a350feeedb"
           ]
         }
       },
@@ -842,13 +875,16 @@
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "df8accf1ced4",
+          "state": "67b44e804cc9",
           "effects": [
             "e0a8ee1f3c00",
             "ed3a7d6bc894",
             "e445683fd6a5",
-            "71f882fa01cd",
-            "f2ebfa81caaf"
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "168de462b844",
+            "15a350feeedb"
           ]
         }
       },
@@ -861,13 +897,16 @@
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "df8accf1ced4",
+          "state": "97dc8fc98386",
           "effects": [
             "e0a8ee1f3c00",
             "ed3a7d6bc894",
             "e445683fd6a5",
-            "71f882fa01cd",
-            "f2ebfa81caaf"
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "a87cc5b1a6b1",
+            "15a350feeedb"
           ]
         }
       },
@@ -880,13 +919,16 @@
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "df8accf1ced4",
+          "state": "97dc8fc98386",
           "effects": [
             "e0a8ee1f3c00",
             "ed3a7d6bc894",
             "e445683fd6a5",
-            "71f882fa01cd",
-            "f2ebfa81caaf"
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "a87cc5b1a6b1",
+            "15a350feeedb"
           ]
         }
       },
@@ -899,13 +941,16 @@
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "df8accf1ced4",
+          "state": "97dc8fc98386",
           "effects": [
             "e0a8ee1f3c00",
             "ed3a7d6bc894",
             "e445683fd6a5",
-            "71f882fa01cd",
-            "f2ebfa81caaf"
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "a87cc5b1a6b1",
+            "15a350feeedb"
           ]
         }
       },

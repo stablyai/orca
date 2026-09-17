@@ -43,7 +43,8 @@ const mutants: Record<string, Mutation> = {
   'linear-select-workspace': 'linear-workspace-context-reload',
   'terminal-input-send-refused': 'terminal-send-refusal-restores-draft',
   'terminal-worktree-connection-resolved': 'worktree-connection-first-repo',
-  'pr-sidebar-checks-refused': 'pr-sidebar-checks-failure-state'
+  'pr-sidebar-checks-refused': 'pr-sidebar-checks-failure-state',
+  'tk-item-detail-metadata': 'assignable-user-avatar-null-collapse'
 }
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2

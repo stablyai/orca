@@ -161,6 +161,16 @@ describe('the Linear issue list takes both shapes the picker has always accepted
     expect(taskLinearIssueListSchema.safeParse([noPriority])).toMatchObject({ data: [] })
   })
 
+  // Adopting the item half's `linearIssueRowSchema` adds five requirements to this path. Each one
+  // is non-optional on the host's own `LinearIssue`, and each is rendered by the picker row.
+  it.each(['identifier', 'title', 'url', 'updatedAt', 'labels'])(
+    'drops an issue with no %s, which the host type declares non-optional',
+    (member) => {
+      const { [member]: _dropped, ...without } = linearRow
+      expect(taskLinearIssueListSchema.safeParse([without])).toMatchObject({ data: [] })
+    }
+  )
+
   it('keeps the rest of the page when one row drops', () => {
     const { state: _state, ...noState } = linearRow
     const parsed = taskLinearIssueListSchema.safeParse([linearRow, noState])

@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e371a83ef260056074cfa80eb8b2f78a4d32bbdc",
+  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "5cc1773d06d49d2616da72f2790753322edda6d67e12b5e41116971d34787391",
   "platform": "darwin",
@@ -371,16 +371,6 @@
         }
       }
     },
-    "6b6100c1c1e4": {
-      "name": "workspaceSshState",
-      "ordinal": 11,
-      "value": {
-        "error": "The host sent a reply this app could not read (ssh.connect)",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "6d2db0d7fee0": {
       "agent": "claude",
       "connecting": false,
@@ -428,13 +418,11 @@
         }
       }
     },
-    "7dd30a2d39c7": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": ["codex"],
-      "setup": "unresolved",
-      "ssh": {
-        "error": "The host sent a reply this app could not read (ssh.connect)",
+    "6e8ee29ff682": {
+      "name": "workspaceSshState",
+      "ordinal": 11,
+      "value": {
+        "error": "Cannot read properties of null (reading 'state')",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -577,6 +565,16 @@
         }
       }
     },
+    "b8589ebe20a6": {
+      "name": "workspaceSshState",
+      "ordinal": 11,
+      "value": {
+        "error": "Cannot read properties of undefined (reading 'state')",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
     "b8c64c3eae3b": {
       "name": "ssh.connect#1",
       "ordinal": 9,
@@ -624,7 +622,19 @@
       "ordinal": 14,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "cf105a6ee444": {
+    "cabfead2f0ff": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "error": "Cannot read properties of null (reading 'state')",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "ce5554d7557b": {
       "agent": "claude",
       "connecting": false,
       "detected": ["codex"],
@@ -638,7 +648,7 @@
         "source": "repo"
       },
       "ssh": {
-        "error": "The host sent a reply this app could not read (ssh.connect)",
+        "error": "Cannot read properties of undefined (reading 'state')",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -744,6 +754,26 @@
         "targetId": "ssh-1"
       }
     },
+    "e17430747d93": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      },
+      "ssh": {
+        "error": "Cannot read properties of null (reading 'state')",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
     "e44d3b580ab0": {
       "name": "workspaceSshConnecting",
       "ordinal": 12,
@@ -840,6 +870,18 @@
             }
           }
         }
+      }
+    },
+    "f066aa754e25": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "error": "Cannot read properties of undefined (reading 'state')",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
       }
     },
     "f3578583dfdc": {
@@ -966,7 +1008,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "7dd30a2d39c7",
+          "state": "f066aa754e25",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -974,7 +1016,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "6b6100c1c1e4",
+            "b8589ebe20a6",
             "e44d3b580ab0"
           ]
         }
@@ -989,7 +1031,7 @@
             "connect": "eb79a9b3682a",
             "setup": "0ba2cee4b538"
           },
-          "state": "cf105a6ee444",
+          "state": "ce5554d7557b",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -997,7 +1039,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "6b6100c1c1e4",
+            "b8589ebe20a6",
             "e44d3b580ab0"
           ]
         }
@@ -1011,7 +1053,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "7dd30a2d39c7",
+          "state": "cabfead2f0ff",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -1019,7 +1061,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "6b6100c1c1e4",
+            "6e8ee29ff682",
             "e44d3b580ab0"
           ]
         }
@@ -1034,7 +1076,7 @@
             "connect": "eb79a9b3682a",
             "setup": "0ba2cee4b538"
           },
-          "state": "cf105a6ee444",
+          "state": "e17430747d93",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -1042,7 +1084,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "6b6100c1c1e4",
+            "6e8ee29ff682",
             "e44d3b580ab0"
           ]
         }
