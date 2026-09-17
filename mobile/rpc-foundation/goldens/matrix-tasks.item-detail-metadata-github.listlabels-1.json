@@ -3,7 +3,7 @@
   "family": "tasks.item-detail-metadata",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
@@ -13,24 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "09c5c8d10325": {
-      "labels": {
-        "$rpc": "undefined"
-      },
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": "",
-      "usersLoading": false
-    },
     "0bfb51d103da": {
       "name": "itemLabelsError",
       "ordinal": 12,
@@ -67,16 +49,6 @@
       ],
       "usersError": "",
       "usersLoading": false
-    },
-    "1ba3247ae096": {
-      "name": "itemAvailableLabels",
-      "ordinal": 12,
-      "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
     },
     "215de61d1fbb": {
       "name": "itemAssignableUsersLoading",
@@ -264,89 +236,15 @@
         }
       }
     },
-    "57c277b6556c": {
-      "labels": {
-        "$rpc": "null"
-      },
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": "",
-      "usersLoading": false
-    },
-    "599afdd0e242": {
-      "name": "itemAvailableLabels",
+    "586d4bb85833": {
+      "name": "itemLabelsError",
       "ordinal": 12,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "5e07dabde15e": {
-      "name": "itemAvailableLabels",
-      "ordinal": 12,
-      "value": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
-    "687824c5a987": {
-      "labels": {
-        "error": "refused"
-      },
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": "",
-      "usersLoading": false
-    },
-    "7357dc0a4b99": {
-      "labels": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      },
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": "",
-      "usersLoading": false
+      "value": "The host sent a reply this app could not read (github.listLabels)"
     },
     "8133d5271224": {
       "name": "itemLabelsError",
       "ordinal": 12,
       "value": ""
-    },
-    "8ef263cb5925": {
-      "name": "itemAvailableLabels",
-      "ordinal": 12,
-      "value": {
-        "error": "refused"
-      }
     },
     "90483b517d86": {
       "name": "itemAssignableUsers",
@@ -360,13 +258,6 @@
           "name": "Octo"
         }
       ]
-    },
-    "972e579b072a": {
-      "name": "itemAvailableLabels",
-      "ordinal": 12,
-      "value": {
-        "$rpc": "null"
-      }
     },
     "99b2357770d0": {
       "name": "itemAssignableUsersError",
@@ -453,25 +344,6 @@
           }
         }
       }
-    },
-    "c5ab6c4bd0c5": {
-      "labels": {
-        "error": "inner refused",
-        "ok": false
-      },
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": "",
-      "usersLoading": false
     },
     "c8bbeea01e3a": {
       "name": "github.listLabels#1",
@@ -654,6 +526,22 @@
       "ordinal": 2,
       "value": []
     },
+    "e988589d9748": {
+      "labels": [],
+      "labelsError": "The host sent a reply this app could not read (github.listLabels)",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
     "eb10dbb56e82": {
       "name": "github.listLabels#1",
       "ordinal": 5,
@@ -775,7 +663,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "09c5c8d10325",
+          "state": "e988589d9748",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -784,7 +672,7 @@
             "3edb9333eaaf",
             "99b2357770d0",
             "a49372405361",
-            "599afdd0e242",
+            "586d4bb85833",
             "3c0f8d43db2e",
             "90483b517d86",
             "215de61d1fbb"
@@ -799,7 +687,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "57c277b6556c",
+          "state": "e988589d9748",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -808,7 +696,7 @@
             "3edb9333eaaf",
             "99b2357770d0",
             "a49372405361",
-            "972e579b072a",
+            "586d4bb85833",
             "3c0f8d43db2e",
             "90483b517d86",
             "215de61d1fbb"
@@ -823,7 +711,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "687824c5a987",
+          "state": "e988589d9748",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -832,7 +720,7 @@
             "3edb9333eaaf",
             "99b2357770d0",
             "a49372405361",
-            "8ef263cb5925",
+            "586d4bb85833",
             "3c0f8d43db2e",
             "90483b517d86",
             "215de61d1fbb"
@@ -847,7 +735,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "c5ab6c4bd0c5",
+          "state": "e988589d9748",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -856,7 +744,7 @@
             "3edb9333eaaf",
             "99b2357770d0",
             "a49372405361",
-            "5e07dabde15e",
+            "586d4bb85833",
             "3c0f8d43db2e",
             "90483b517d86",
             "215de61d1fbb"
@@ -871,7 +759,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "7357dc0a4b99",
+          "state": "e988589d9748",
           "effects": [
             "3356ec8253b4",
             "e8ff540f77f3",
@@ -880,7 +768,7 @@
             "3edb9333eaaf",
             "99b2357770d0",
             "a49372405361",
-            "1ba3247ae096",
+            "586d4bb85833",
             "3c0f8d43db2e",
             "90483b517d86",
             "215de61d1fbb"

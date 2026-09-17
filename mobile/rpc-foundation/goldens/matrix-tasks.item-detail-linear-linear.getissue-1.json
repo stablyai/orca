@@ -3,7 +3,7 @@
   "family": "tasks.item-detail-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
@@ -475,8 +475,44 @@
         }
       }
     },
-    "8a85a95f03c5": {
-      "error": "",
+    "8b14e4b9849c": {
+      "name": "detailError",
+      "ordinal": 8,
+      "value": "transport failure"
+    },
+    "8ccd4fa759a5": {
+      "name": "detailLoading",
+      "ordinal": 9,
+      "value": false
+    },
+    "8dfd0fa77324": {
+      "name": "detailPayload",
+      "ordinal": 8,
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-1",
+            "user": {
+              "displayName": "Octo"
+            }
+          }
+        ],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "939d91c4130d": {
+      "error": "Details not found",
       "item": {
         "provider": "linear",
         "source": {
@@ -541,92 +577,11 @@
       ],
       "loading": false,
       "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-1",
-            "user": {
-              "displayName": "Octo"
-            }
-          }
-        ],
-        "description": "",
-        "labels": [],
-        "project": {
-          "$rpc": "undefined"
-        },
-        "provider": "linear"
+        "$rpc": "null"
       }
     },
-    "8b14e4b9849c": {
-      "name": "detailError",
-      "ordinal": 8,
-      "value": "transport failure"
-    },
-    "8ccd4fa759a5": {
-      "name": "detailLoading",
-      "ordinal": 9,
-      "value": false
-    },
-    "8dfd0fa77324": {
-      "name": "detailPayload",
-      "ordinal": 8,
-      "value": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-1",
-            "user": {
-              "displayName": "Octo"
-            }
-          }
-        ],
-        "description": "a description",
-        "labels": [],
-        "project": {
-          "$rpc": "undefined"
-        },
-        "provider": "linear"
-      }
-    },
-    "8f87693a8b7c": {
-      "name": "detailPayload",
-      "ordinal": 8,
-      "value": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-1",
-            "user": {
-              "displayName": "Octo"
-            }
-          }
-        ],
-        "description": "",
-        "labels": [],
-        "project": {
-          "$rpc": "undefined"
-        },
-        "provider": "linear"
-      }
-    },
-    "939d91c4130d": {
-      "error": "Details not found",
+    "979f82812d71": {
+      "error": "The host sent a reply this app could not read (linear.getIssue)",
       "item": {
         "provider": "linear",
         "source": {
@@ -986,6 +941,11 @@
         }
       }
     },
+    "bf56513aa6ac": {
+      "name": "detailError",
+      "ordinal": 8,
+      "value": "The host sent a reply this app could not read (linear.getIssue)"
+    },
     "d3c9684f3610": {
       "name": "linear.getIssue#1",
       "ordinal": 4,
@@ -1167,12 +1127,12 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "939d91c4130d",
+          "state": "979f82812d71",
           "effects": [
             "33614c90b6eb",
             "a4f1a8696a24",
             "264010756b38",
-            "f0aafd9fd2e7",
+            "bf56513aa6ac",
             "8ccd4fa759a5"
           ]
         }
@@ -1203,14 +1163,13 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "8a85a95f03c5",
+          "state": "979f82812d71",
           "effects": [
             "33614c90b6eb",
             "a4f1a8696a24",
             "264010756b38",
-            "8f87693a8b7c",
-            "ffc9ef3e7044",
-            "a7fb6d964b37"
+            "bf56513aa6ac",
+            "8ccd4fa759a5"
           ]
         }
       },
@@ -1222,14 +1181,13 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "8a85a95f03c5",
+          "state": "979f82812d71",
           "effects": [
             "33614c90b6eb",
             "a4f1a8696a24",
             "264010756b38",
-            "8f87693a8b7c",
-            "ffc9ef3e7044",
-            "a7fb6d964b37"
+            "bf56513aa6ac",
+            "8ccd4fa759a5"
           ]
         }
       },
@@ -1241,14 +1199,13 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "8a85a95f03c5",
+          "state": "979f82812d71",
           "effects": [
             "33614c90b6eb",
             "a4f1a8696a24",
             "264010756b38",
-            "8f87693a8b7c",
-            "ffc9ef3e7044",
-            "a7fb6d964b37"
+            "bf56513aa6ac",
+            "8ccd4fa759a5"
           ]
         }
       },

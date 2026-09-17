@@ -3,7 +3,7 @@
   "family": "tasks.item-metadata-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
@@ -109,6 +109,11 @@
         "provider": "gitlab"
       }
     },
+    "14949c71727e": {
+      "name": "mutatingStatus",
+      "ordinal": 7,
+      "value": false
+    },
     "176521f93bc7": {
       "name": "gitlab.updateIssue#1",
       "ordinal": 3,
@@ -146,16 +151,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "27cf854619a1": {
       "name": "gitlab.updateIssue#1",
@@ -198,10 +193,73 @@
         }
       }
     },
+    "29c448841f73": {
+      "error": "The host sent a reply this app could not read (gitlab.updateIssue)",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:issue:4",
+          "labels": ["bug"],
+          "number": 4,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "issue"
+        },
+        "title": "A GitLab issue"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "number": 4,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "2a33d3e3468b": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to update GitLab item"
+    },
     "2edac82b3b9a": {
       "name": "itemRemoveAssigneesDraft",
       "ordinal": 11,
       "value": ""
+    },
+    "3b10c3bd94b0": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "gitlab.updateIssue",
+        "operation": "gitlab.update-issue",
+        "variant": "task-item-mutation"
+      }
     },
     "456886cb46f5": {
       "name": "gitlab.updateIssue#1",
@@ -285,6 +343,11 @@
       "ordinal": 5,
       "value": "transport failure"
     },
+    "6c731a45bff2": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (gitlab.updateIssue)"
+    },
     "776607d47471": {
       "name": "error",
       "ordinal": 5,
@@ -344,53 +407,6 @@
       "name": "mutatingStatus",
       "ordinal": 12,
       "value": false
-    },
-    "9fc7a62f68d0": {
-      "error": "[object Object]",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:issue:4",
-          "labels": ["bug"],
-          "number": 4,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "issue"
-        },
-        "title": "A GitLab issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
     },
     "a3139ecf7ce9": {
       "error": "Unknown method",
@@ -577,53 +593,6 @@
       "ordinal": 8,
       "value": ""
     },
-    "b605bb35b53b": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:issue:4",
-          "labels": ["bug"],
-          "number": 4,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "issue"
-        },
-        "title": "A GitLab issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
     "b7c486cbae9c": {
       "name": "gitlab.updateIssue#1",
       "ordinal": 3,
@@ -752,10 +721,52 @@
         "provider": "gitlab"
       }
     },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
+    "c555f8c27d97": {
+      "error": "Failed to update GitLab item",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:issue:4",
+          "labels": ["bug"],
+          "number": 4,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "issue"
+        },
+        "title": "A GitLab issue"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "number": 4,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
     },
     "c7ff417f5a6d": {
       "error": "outer refused",
@@ -936,53 +947,6 @@
         "$rpc": "undefined"
       }
     },
-    "eb9e28be91e8": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:issue:4",
-          "labels": ["bug"],
-          "number": 4,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "issue"
-        },
-        "title": "A GitLab issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
     "ecf9003e4ef1": {
       "name": "mutatingStatus",
       "ordinal": 6,
@@ -1065,8 +1029,8 @@
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "eb9e28be91e8",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1850ffae4fc5", "ecf9003e4ef1"]
+          "state": "29c448841f73",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "6c731a45bff2", "ecf9003e4ef1"]
         }
       },
       {
@@ -1078,8 +1042,8 @@
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "b605bb35b53b",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1e70dd84bf14", "ecf9003e4ef1"]
+          "state": "29c448841f73",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "6c731a45bff2", "ecf9003e4ef1"]
         }
       },
       {
@@ -1128,8 +1092,14 @@
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "9fc7a62f68d0",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "c53afd0ab8bc", "ecf9003e4ef1"]
+          "state": "c555f8c27d97",
+          "effects": [
+            "fd2fad47bec2",
+            "ed3a7d6bc894",
+            "3b10c3bd94b0",
+            "2a33d3e3468b",
+            "14949c71727e"
+          ]
         }
       },
       {

@@ -3,7 +3,7 @@
   "family": "tasks.item-checks-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
@@ -119,64 +119,6 @@
         },
         "reviewRequests": []
       }
-    },
-    "09ab59e7bed7": {
-      "contents": {
-        "src/index.ts": {
-          "$rpc": "null"
-        }
-      },
-      "drafts": {
-        "src/index.ts:12": "a review comment"
-      },
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "VIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
     },
     "0b6d842dd4b6": {
       "name": "github.addPRReviewComment#1",
@@ -348,15 +290,6 @@
       "name": "error",
       "ordinal": 24,
       "value": "Connection closed"
-    },
-    "314f8014ac46": {
-      "name": "prFileContents",
-      "ordinal": 24,
-      "value": {
-        "src/index.ts": {
-          "$rpc": "null"
-        }
-      }
     },
     "372c9f84cf26": {
       "name": "github.setPRFileViewed#1",
@@ -530,70 +463,6 @@
             "body": "a thought",
             "createdAt": "2020-01-01T00:00:00.000Z",
             "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "VIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
-    },
-    "437650c032c7": {
-      "contents": {
-        "src/index.ts": {
-          "$rpc": "undefined"
-        }
-      },
-      "drafts": {},
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a review comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 901,
-            "line": 12,
-            "path": "src/index.ts"
           }
         ],
         "files": [
@@ -849,64 +718,6 @@
       "ordinal": 10,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-1\",\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/index.ts\",\"viewed\":true}}"
     },
-    "6255f2d00cb6": {
-      "contents": {
-        "src/index.ts": {
-          "$rpc": "undefined"
-        }
-      },
-      "drafts": {
-        "src/index.ts:12": "a review comment"
-      },
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "VIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
-    },
     "6d512f848a18": {
       "name": "error",
       "ordinal": 27,
@@ -1064,15 +875,6 @@
           },
           "id": "frame-4",
           "ok": false
-        }
-      }
-    },
-    "7874ba0d3206": {
-      "name": "prFileContents",
-      "ordinal": 24,
-      "value": {
-        "src/index.ts": {
-          "$rpc": "undefined"
         }
       }
     },
@@ -1294,70 +1096,6 @@
           }
         }
       }
-    },
-    "bbc7b8125888": {
-      "contents": {
-        "src/index.ts": {
-          "$rpc": "null"
-        }
-      },
-      "drafts": {},
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a review comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 901,
-            "line": 12,
-            "path": "src/index.ts"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "VIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
     },
     "bc0342f92c4b": {
       "name": "github.prFileContents#1",
@@ -1624,6 +1362,60 @@
         "src/index.ts:12": "a review comment"
       },
       "error": "transport failure",
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": true,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "refreshSeq": 1
+    },
+    "cabcdc07b9d0": {
+      "contents": {},
+      "drafts": {
+        "src/index.ts:12": "a review comment"
+      },
+      "error": "The host sent a reply this app could not read (github.prFileContents)",
       "mutating": false,
       "payload": {
         "assignees": ["octocat"],
@@ -2014,6 +1806,11 @@
       },
       "refreshSeq": 1
     },
+    "ea3d146fdfc8": {
+      "name": "error",
+      "ordinal": 24,
+      "value": "The host sent a reply this app could not read (github.prFileContents)"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -2363,7 +2160,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "6255f2d00cb6",
+          "state": "cabcdc07b9d0",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2380,7 +2177,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "7874ba0d3206",
+            "ea3d146fdfc8",
             "cdbe0a4858fa"
           ]
         }
@@ -2410,7 +2207,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "437650c032c7",
+          "state": "2612177ac631",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2427,7 +2224,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "7874ba0d3206",
+            "ea3d146fdfc8",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2449,7 +2246,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "09ab59e7bed7",
+          "state": "cabcdc07b9d0",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2466,7 +2263,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "314f8014ac46",
+            "ea3d146fdfc8",
             "cdbe0a4858fa"
           ]
         }
@@ -2496,7 +2293,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "bbc7b8125888",
+          "state": "2612177ac631",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2513,7 +2310,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "314f8014ac46",
+            "ea3d146fdfc8",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",

@@ -3,7 +3,7 @@
   "family": "tasks.item-checks-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
@@ -129,6 +129,60 @@
       "name": "error",
       "ordinal": 8,
       "value": ""
+    },
+    "1517dd12baea": {
+      "contents": {},
+      "drafts": {
+        "src/index.ts:12": "a review comment"
+      },
+      "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "refreshSeq": 1
     },
     "1b13b8814170": {
       "name": "github.resolveReviewThread#1",
@@ -648,6 +702,11 @@
         }
       }
     },
+    "6ca3d32409f6": {
+      "name": "error",
+      "ordinal": 17,
+      "value": "The host sent a reply this app could not read (github.resolveReviewThread)"
+    },
     "6d512f848a18": {
       "name": "error",
       "ordinal": 27,
@@ -974,60 +1033,6 @@
         }
       }
     },
-    "9bc46994c57d": {
-      "contents": {},
-      "drafts": {
-        "src/index.ts:12": "a review comment"
-      },
-      "error": "Failed to resolve thread",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "VIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
-    },
     "9c20f396f0fe": {
       "name": "detailPayload",
       "ordinal": 17,
@@ -1133,11 +1138,6 @@
       "name": "error",
       "ordinal": 17,
       "value": "outer refused"
-    },
-    "b5954ea95682": {
-      "name": "error",
-      "ordinal": 17,
-      "value": "Failed to resolve thread"
     },
     "b5cbf28fce63": {
       "name": "github.resolveReviewThread#1",
@@ -1859,7 +1859,7 @@
             "viewed-1": "eb79a9b3682a",
             "thread-2": "eb79a9b3682a"
           },
-          "state": "9bc46994c57d",
+          "state": "1517dd12baea",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1871,7 +1871,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb"
           ]
         }
@@ -1900,7 +1900,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -1947,7 +1947,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -1973,7 +1973,7 @@
             "viewed-1": "eb79a9b3682a",
             "thread-2": "eb79a9b3682a"
           },
-          "state": "9bc46994c57d",
+          "state": "1517dd12baea",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1985,7 +1985,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb"
           ]
         }
@@ -2014,7 +2014,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2061,7 +2061,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2087,7 +2087,7 @@
             "viewed-1": "eb79a9b3682a",
             "thread-2": "eb79a9b3682a"
           },
-          "state": "9bc46994c57d",
+          "state": "1517dd12baea",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2099,7 +2099,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb"
           ]
         }
@@ -2128,7 +2128,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2175,7 +2175,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2201,7 +2201,7 @@
             "viewed-1": "eb79a9b3682a",
             "thread-2": "eb79a9b3682a"
           },
-          "state": "9bc46994c57d",
+          "state": "1517dd12baea",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2213,7 +2213,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb"
           ]
         }
@@ -2242,7 +2242,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2289,7 +2289,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2315,7 +2315,7 @@
             "viewed-1": "eb79a9b3682a",
             "thread-2": "eb79a9b3682a"
           },
-          "state": "9bc46994c57d",
+          "state": "1517dd12baea",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2327,7 +2327,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb"
           ]
         }
@@ -2356,7 +2356,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",
@@ -2403,7 +2403,7 @@
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
-            "b5954ea95682",
+            "6ca3d32409f6",
             "a17cf032d1cb",
             "7a9925855d5f",
             "856c3f5b4b50",

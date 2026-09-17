@@ -3,7 +3,7 @@
   "family": "tasks.item-review-github",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
@@ -314,6 +314,11 @@
         "title": "A pull request"
       }
     },
+    "4a17d3acb485": {
+      "name": "error",
+      "ordinal": 14,
+      "value": "The host sent a reply this app could not read (github.prChecks)"
+    },
     "5652285eaff7": {
       "draft": "a comment",
       "error": "",
@@ -405,11 +410,6 @@
       "name": "mutatingStatus",
       "ordinal": 15,
       "value": false
-    },
-    "5a10033af095": {
-      "name": "error",
-      "ordinal": 14,
-      "value": "Invalid checks response"
     },
     "62e92e71cb1f": {
       "name": "mutatingStatus",
@@ -872,6 +872,93 @@
           "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
+      }
+    },
+    "a9f6c357affa": {
+      "draft": "a comment",
+      "error": "The host sent a reply this app could not read (github.prChecks)",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [
+            {
+              "avatarUrl": {
+                "$rpc": "null"
+              },
+              "login": "octocat",
+              "name": {
+                "$rpc": "null"
+              }
+            }
+          ],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
       }
     },
     "ace53d85ec71": {
@@ -1380,93 +1467,6 @@
       "ordinal": 14,
       "value": ""
     },
-    "f30de670023b": {
-      "draft": "a comment",
-      "error": "Invalid checks response",
-      "item": {
-        "provider": "github",
-        "source": {
-          "id": "github:pr:12",
-          "labels": ["bug"],
-          "latestReviews": [],
-          "number": 12,
-          "repoId": "repo-1",
-          "reviewDecision": {
-            "$rpc": "null"
-          },
-          "reviewRequests": [
-            {
-              "avatarUrl": {
-                "$rpc": "null"
-              },
-              "login": "octocat",
-              "name": {
-                "$rpc": "null"
-              }
-            }
-          ],
-          "state": "open",
-          "type": "pr"
-        },
-        "title": "A pull request"
-      },
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": [
-          {
-            "avatarUrl": {
-              "$rpc": "null"
-            },
-            "login": "octocat",
-            "name": {
-              "$rpc": "null"
-            }
-          }
-        ]
-      }
-    },
     "f65e0af02b52": {
       "name": "error",
       "ordinal": 14,
@@ -1566,7 +1566,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "f30de670023b",
+          "state": "a9f6c357affa",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1577,7 +1577,7 @@
             "0617d29f99ab",
             "11b6302399f9",
             "17366c313ad9",
-            "5a10033af095",
+            "4a17d3acb485",
             "5737a7806a0c"
           ]
         }
@@ -1592,7 +1592,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "f30de670023b",
+          "state": "a9f6c357affa",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1603,7 +1603,7 @@
             "0617d29f99ab",
             "11b6302399f9",
             "17366c313ad9",
-            "5a10033af095",
+            "4a17d3acb485",
             "5737a7806a0c"
           ]
         }
@@ -1618,7 +1618,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "f30de670023b",
+          "state": "a9f6c357affa",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1629,7 +1629,7 @@
             "0617d29f99ab",
             "11b6302399f9",
             "17366c313ad9",
-            "5a10033af095",
+            "4a17d3acb485",
             "5737a7806a0c"
           ]
         }
@@ -1644,7 +1644,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "f30de670023b",
+          "state": "a9f6c357affa",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1655,7 +1655,7 @@
             "0617d29f99ab",
             "11b6302399f9",
             "17366c313ad9",
-            "5a10033af095",
+            "4a17d3acb485",
             "5737a7806a0c"
           ]
         }
@@ -1670,7 +1670,7 @@
             "reviewers-0": "eb79a9b3682a",
             "checks-1": "eb79a9b3682a"
           },
-          "state": "f30de670023b",
+          "state": "a9f6c357affa",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1681,7 +1681,7 @@
             "0617d29f99ab",
             "11b6302399f9",
             "17366c313ad9",
-            "5a10033af095",
+            "4a17d3acb485",
             "5737a7806a0c"
           ]
         }

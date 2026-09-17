@@ -3,7 +3,7 @@
   "family": "tasks.item-merge-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
@@ -134,10 +134,10 @@
         }
       }
     },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
+    "14949c71727e": {
+      "name": "mutatingStatus",
+      "ordinal": 7,
+      "value": false
     },
     "1be492d81713": {
       "name": "gitlab.mergeMR#1",
@@ -175,58 +175,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "364618fdc146": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
       }
     },
     "370597a7fb42": {
@@ -274,6 +222,16 @@
         "$rpc": "null"
       }
     },
+    "4c652d007a6b": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to merge"
+    },
+    "55cefee0a14c": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (gitlab.mergeMR)"
+    },
     "594cabccd04a": {
       "name": "gitlab.mergeMR#1",
       "ordinal": 3,
@@ -307,53 +265,6 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "5bced36399b0": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
       }
     },
     "6358a93881bf": {
@@ -495,6 +406,17 @@
         "provider": "gitlab"
       }
     },
+    "75cccb1de940": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "gitlab.mergeMR",
+        "operation": "gitlab.merge-merge-request",
+        "variant": "task-item-mutation"
+      }
+    },
     "776607d47471": {
       "name": "error",
       "ordinal": 5,
@@ -545,53 +467,6 @@
     },
     "98354008c52b": {
       "error": "inner refused",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "a4f53aae0c36": {
-      "error": "[object Object]",
       "item": {
         "provider": "gitlab",
         "source": {
@@ -750,10 +625,52 @@
         "provider": "gitlab"
       }
     },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
+    "bc0818479b28": {
+      "error": "The host sent a reply this app could not read (gitlab.mergeMR)",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
     },
     "c6efd8599d7e": {
       "name": "gitlab.mergeMR#1",
@@ -797,6 +714,53 @@
     },
     "d6f17e3de7da": {
       "error": "transport failure",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "e1b5dd2a1c1e": {
+      "error": "Failed to merge",
       "item": {
         "provider": "gitlab",
         "source": {
@@ -934,8 +898,8 @@
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"
           },
-          "state": "364618fdc146",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1850ffae4fc5", "ecf9003e4ef1"]
+          "state": "bc0818479b28",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "55cefee0a14c", "ecf9003e4ef1"]
         }
       },
       {
@@ -947,8 +911,8 @@
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"
           },
-          "state": "5bced36399b0",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "1e70dd84bf14", "ecf9003e4ef1"]
+          "state": "bc0818479b28",
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "55cefee0a14c", "ecf9003e4ef1"]
         }
       },
       {
@@ -986,8 +950,14 @@
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"
           },
-          "state": "a4f53aae0c36",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "c53afd0ab8bc", "ecf9003e4ef1"]
+          "state": "e1b5dd2a1c1e",
+          "effects": [
+            "fd2fad47bec2",
+            "ed3a7d6bc894",
+            "75cccb1de940",
+            "4c652d007a6b",
+            "14949c71727e"
+          ]
         }
       },
       {

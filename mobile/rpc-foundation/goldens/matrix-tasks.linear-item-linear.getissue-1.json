@@ -3,7 +3,7 @@
   "family": "tasks.linear-item",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
@@ -22,6 +22,62 @@
       "name": "error",
       "ordinal": 12,
       "value": ""
+    },
+    "0d843613a5cc": {
+      "error": "The host sent a reply this app could not read (linear.getIssue)",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "mutating": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a linear comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "comment-9",
+            "user": {
+              "displayName": "You"
+            }
+          }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      }
     },
     "11da347c285d": {
       "name": "detailPayload",
@@ -781,62 +837,6 @@
       "ordinal": 12,
       "value": "outer refused"
     },
-    "7df18cabc6c9": {
-      "error": "Cannot read properties of undefined (reading 'name')",
-      "item": {
-        "provider": "linear",
-        "source": {
-          "description": "",
-          "id": "issue-1",
-          "identifier": "ENG-1",
-          "labels": [],
-          "priority": 0,
-          "project": {
-            "$rpc": "null"
-          },
-          "state": {
-            "color": "#000000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering",
-            "workspaceId": "linear-workspace"
-          },
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace",
-          "workspaceName": "Workspace"
-        },
-        "title": "A Linear issue"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
     "7fa172662b38": {
       "name": "linear.createIssue#1",
       "ordinal": 16,
@@ -949,11 +949,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "9849c2bb31a1": {
-      "name": "error",
-      "ordinal": 12,
-      "value": "Cannot read properties of undefined (reading 'name')"
     },
     "a3172021f067": {
       "name": "linear.createIssue#1",
@@ -1174,6 +1169,11 @@
         },
         "provider": "linear"
       }
+    },
+    "de55c95bea1e": {
+      "name": "error",
+      "ordinal": 12,
+      "value": "The host sent a reply this app could not read (linear.getIssue)"
     },
     "e0a9defd9b13": {
       "name": "mutatingStatus",
@@ -1422,7 +1422,7 @@
             "comment-0": "eb79a9b3682a",
             "sub-issue-open-1": "eb79a9b3682a"
           },
-          "state": "1cdac3892b88",
+          "state": "0d843613a5cc",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1431,7 +1431,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "43457340844d",
+            "de55c95bea1e",
             "e0a9defd9b13"
           ]
         }
@@ -1456,7 +1456,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "43457340844d",
+            "de55c95bea1e",
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",
@@ -1530,7 +1530,7 @@
             "comment-0": "eb79a9b3682a",
             "sub-issue-open-1": "eb79a9b3682a"
           },
-          "state": "7df18cabc6c9",
+          "state": "0d843613a5cc",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1539,7 +1539,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "9849c2bb31a1",
+            "de55c95bea1e",
             "e0a9defd9b13"
           ]
         }
@@ -1564,7 +1564,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "9849c2bb31a1",
+            "de55c95bea1e",
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",
@@ -1584,7 +1584,7 @@
             "comment-0": "eb79a9b3682a",
             "sub-issue-open-1": "eb79a9b3682a"
           },
-          "state": "7df18cabc6c9",
+          "state": "0d843613a5cc",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1593,7 +1593,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "9849c2bb31a1",
+            "de55c95bea1e",
             "e0a9defd9b13"
           ]
         }
@@ -1618,7 +1618,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "9849c2bb31a1",
+            "de55c95bea1e",
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",
@@ -1638,7 +1638,7 @@
             "comment-0": "eb79a9b3682a",
             "sub-issue-open-1": "eb79a9b3682a"
           },
-          "state": "7df18cabc6c9",
+          "state": "0d843613a5cc",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1647,7 +1647,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "9849c2bb31a1",
+            "de55c95bea1e",
             "e0a9defd9b13"
           ]
         }
@@ -1672,7 +1672,7 @@
             "14949c71727e",
             "04f53bdc9dca",
             "e492cb3deb38",
-            "9849c2bb31a1",
+            "de55c95bea1e",
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",

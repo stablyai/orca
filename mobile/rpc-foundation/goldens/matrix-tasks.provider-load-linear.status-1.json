@@ -3,7 +3,7 @@
   "family": "tasks.provider-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
@@ -374,16 +374,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "545c802fdcb4": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'connected')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "5e1882223b41": {
@@ -851,6 +841,17 @@
         }
       }
     },
+    "db17b820bb60": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (linear.status)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
     "de7bfe07e04b": {
       "name": "github.countWorkItems#1",
       "ordinal": 14,
@@ -1029,16 +1030,6 @@
         }
       }
     },
-    "f797d088ff86": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'connected')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "fa74ad96f499": {
       "name": "linear.status#1",
       "ordinal": 1,
@@ -1178,7 +1169,7 @@
           "payloads": ["084da53ea1e3"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "545c802fdcb4"
+            "linear-context-0": "db17b820bb60"
           },
           "state": "0577812165ed",
           "effects": []
@@ -1191,7 +1182,7 @@
           "payloads": ["084da53ea1e3", "a2c4c90609f8"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "545c802fdcb4",
+            "linear-context-0": "db17b820bb60",
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "0577812165ed",
@@ -1205,7 +1196,7 @@
           "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "545c802fdcb4",
+            "linear-context-0": "db17b820bb60",
             "persist-teams-1": "eb79a9b3682a",
             "github-page-2": "49c5fd241816"
           },
@@ -1220,7 +1211,7 @@
           "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "545c802fdcb4",
+            "linear-context-0": "db17b820bb60",
             "persist-teams-1": "eb79a9b3682a",
             "github-page-2": "49c5fd241816",
             "github-count-3": "413e4f429e18"
@@ -1236,7 +1227,7 @@
           "payloads": ["084da53ea1e3"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "f797d088ff86"
+            "linear-context-0": "db17b820bb60"
           },
           "state": "0577812165ed",
           "effects": []
@@ -1249,7 +1240,7 @@
           "payloads": ["084da53ea1e3", "a2c4c90609f8"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "f797d088ff86",
+            "linear-context-0": "db17b820bb60",
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "0577812165ed",
@@ -1263,7 +1254,7 @@
           "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "f797d088ff86",
+            "linear-context-0": "db17b820bb60",
             "persist-teams-1": "eb79a9b3682a",
             "github-page-2": "49c5fd241816"
           },
@@ -1278,7 +1269,7 @@
           "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "linear-context-0": "f797d088ff86",
+            "linear-context-0": "db17b820bb60",
             "persist-teams-1": "eb79a9b3682a",
             "github-page-2": "49c5fd241816",
             "github-count-3": "413e4f429e18"

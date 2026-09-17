@@ -3,7 +3,7 @@
   "family": "tasks.linear-item",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
@@ -58,10 +58,61 @@
         }
       }
     },
-    "09683c838b30": {
-      "name": "error",
-      "ordinal": 18,
-      "value": "Cannot read properties of null (reading 'ok')"
+    "10b1d5c98c92": {
+      "error": "Failed to create sub-issue",
+      "item": {
+        "key": "linear:linear-workspace:issue-2",
+        "provider": "linear",
+        "source": {
+          "description": "a description",
+          "id": "issue-2",
+          "identifier": "ENG-2",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        },
+        "status": "Todo",
+        "subtitle": "ENG-2 · Engineering",
+        "title": "A sub-issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z"
+      },
+      "mutating": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a linear comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "comment-9",
+            "user": {
+              "displayName": "You"
+            }
+          }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      }
     },
     "11a5b5d052b7": {
       "name": "linear.createIssue#1",
@@ -399,6 +450,11 @@
       "ordinal": 18,
       "value": ""
     },
+    "4782a0dbc7ea": {
+      "name": "error",
+      "ordinal": 19,
+      "value": "Failed to create sub-issue"
+    },
     "48107958be60": {
       "error": "",
       "item": {
@@ -499,62 +555,6 @@
         }
       }
     },
-    "54b843bb4bf8": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "key": "linear:linear-workspace:issue-2",
-        "provider": "linear",
-        "source": {
-          "description": "a description",
-          "id": "issue-2",
-          "identifier": "ENG-2",
-          "labels": [],
-          "priority": 0,
-          "state": {
-            "color": "#000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering"
-          },
-          "title": "A sub-issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace"
-        },
-        "status": "Todo",
-        "subtitle": "ENG-2 · Engineering",
-        "title": "A sub-issue",
-        "updatedAt": "2020-01-01T00:00:00.000Z"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
     "55ef5154f27b": {
       "name": "detailPayload",
       "ordinal": 6,
@@ -580,11 +580,6 @@
         },
         "provider": "linear"
       }
-    },
-    "5da364e40393": {
-      "name": "error",
-      "ordinal": 18,
-      "value": "[object Object]"
     },
     "761abd6f1fcd": {
       "name": "error",
@@ -902,62 +897,6 @@
         "provider": "linear"
       }
     },
-    "95e8e6626c1f": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "key": "linear:linear-workspace:issue-2",
-        "provider": "linear",
-        "source": {
-          "description": "a description",
-          "id": "issue-2",
-          "identifier": "ENG-2",
-          "labels": [],
-          "priority": 0,
-          "state": {
-            "color": "#000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering"
-          },
-          "title": "A sub-issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace"
-        },
-        "status": "Todo",
-        "subtitle": "ENG-2 · Engineering",
-        "title": "A sub-issue",
-        "updatedAt": "2020-01-01T00:00:00.000Z"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
     "9cb7ff59be26": {
       "name": "error",
       "ordinal": 18,
@@ -967,62 +906,6 @@
       "name": "linear.createIssue#1",
       "ordinal": 17,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A sub-issue\",\"workspaceId\":\"linear-workspace\",\"parentIssueId\":\"issue-1\",\"projectId\":null}}"
-    },
-    "a7f0744be826": {
-      "error": "[object Object]",
-      "item": {
-        "key": "linear:linear-workspace:issue-2",
-        "provider": "linear",
-        "source": {
-          "description": "a description",
-          "id": "issue-2",
-          "identifier": "ENG-2",
-          "labels": [],
-          "priority": 0,
-          "state": {
-            "color": "#000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering"
-          },
-          "title": "A sub-issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace"
-        },
-        "status": "Todo",
-        "subtitle": "ENG-2 · Engineering",
-        "title": "A sub-issue",
-        "updatedAt": "2020-01-01T00:00:00.000Z"
-      },
-      "mutating": false,
-      "payload": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
     },
     "ab6b34f742fd": {
       "name": "error",
@@ -1168,10 +1051,61 @@
       "ordinal": 5,
       "value": ""
     },
-    "c7339432ef8b": {
-      "name": "error",
-      "ordinal": 18,
-      "value": "Cannot read properties of undefined (reading 'ok')"
+    "bf57d9a0cf81": {
+      "error": "The host sent a reply this app could not read (linear.createIssue)",
+      "item": {
+        "key": "linear:linear-workspace:issue-2",
+        "provider": "linear",
+        "source": {
+          "description": "a description",
+          "id": "issue-2",
+          "identifier": "ENG-2",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        },
+        "status": "Todo",
+        "subtitle": "ENG-2 · Engineering",
+        "title": "A sub-issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z"
+      },
+      "mutating": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a linear comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "comment-9",
+            "user": {
+              "displayName": "You"
+            }
+          }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      }
     },
     "caf8f91bd626": {
       "name": "error",
@@ -1323,10 +1257,26 @@
         "provider": "linear"
       }
     },
+    "de1a8f6051e9": {
+      "name": "error",
+      "ordinal": 18,
+      "value": "The host sent a reply this app could not read (linear.createIssue)"
+    },
     "e0a9defd9b13": {
       "name": "mutatingStatus",
       "ordinal": 13,
       "value": false
+    },
+    "e0ff409226e7": {
+      "name": "reply-salvage",
+      "ordinal": 18,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "linear.createIssue",
+        "operation": "linear.create-issue",
+        "variant": "linear-created-issue"
+      }
     },
     "e24c62500e8a": {
       "name": "linear.addIssueComment#1",
@@ -1608,7 +1558,7 @@
             "sub-issue-open-1": "eb79a9b3682a",
             "sub-issue-create-2": "eb79a9b3682a"
           },
-          "state": "54b843bb4bf8",
+          "state": "bf57d9a0cf81",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1621,7 +1571,7 @@
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",
-            "c7339432ef8b",
+            "de1a8f6051e9",
             "bbf2458754b4"
           ]
         }
@@ -1637,7 +1587,7 @@
             "sub-issue-open-1": "eb79a9b3682a",
             "sub-issue-create-2": "eb79a9b3682a"
           },
-          "state": "95e8e6626c1f",
+          "state": "bf57d9a0cf81",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1650,7 +1600,7 @@
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",
-            "09683c838b30",
+            "de1a8f6051e9",
             "bbf2458754b4"
           ]
         }
@@ -1724,7 +1674,7 @@
             "sub-issue-open-1": "eb79a9b3682a",
             "sub-issue-create-2": "eb79a9b3682a"
           },
-          "state": "a7f0744be826",
+          "state": "10b1d5c98c92",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1737,8 +1687,9 @@
             "e0a9defd9b13",
             "cc26835ea96d",
             "29cadc65bcbb",
-            "5da364e40393",
-            "bbf2458754b4"
+            "e0ff409226e7",
+            "4782a0dbc7ea",
+            "3accbb2a4fcb"
           ]
         }
       },

@@ -3,7 +3,7 @@
   "family": "tasks.task-create-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
@@ -60,16 +60,6 @@
         }
       }
     },
-    "1850ffae4fc5": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "1e70dd84bf14": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "233381f915af": {
       "composer": true,
       "creating": false,
@@ -78,12 +68,15 @@
         "$rpc": "null"
       }
     },
-    "2924a6b4c745": {
-      "composer": true,
-      "creating": false,
-      "error": "[object Object]",
-      "item": {
-        "$rpc": "null"
+    "30d39651f586": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "linear.createIssue",
+        "operation": "linear.create-issue",
+        "variant": "linear-created-issue"
       }
     },
     "34beeae20de2": {
@@ -177,6 +170,14 @@
       "ordinal": 1,
       "value": true
     },
+    "54f14c01a5e1": {
+      "composer": true,
+      "creating": false,
+      "error": "Failed to create Linear issue",
+      "item": {
+        "$rpc": "null"
+      }
+    },
     "569f09937c17": {
       "name": "linear.createIssue#1",
       "ordinal": 3,
@@ -213,14 +214,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "56ac6af35c46": {
-      "composer": true,
-      "creating": false,
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "item": {
-        "$rpc": "null"
       }
     },
     "58d5e47807d7": {
@@ -260,6 +253,11 @@
           "ok": false
         }
       }
+    },
+    "5c6dab9499b0": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (linear.createIssue)"
     },
     "5ca21ce0a8bd": {
       "name": "error",
@@ -480,6 +478,11 @@
       "ordinal": 5,
       "value": "Unknown method"
     },
+    "ad2d22e4895f": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to create Linear issue"
+    },
     "b1504689c2b3": {
       "name": "creatingTask",
       "ordinal": 9,
@@ -567,11 +570,6 @@
         "$rpc": "null"
       }
     },
-    "c53afd0ab8bc": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "[object Object]"
-    },
     "ce67fb8d9d58": {
       "name": "linear.createIssue#1",
       "ordinal": 4,
@@ -585,6 +583,19 @@
         "$rpc": "null"
       }
     },
+    "e92e2340bb29": {
+      "composer": true,
+      "creating": false,
+      "error": "The host sent a reply this app could not read (linear.createIssue)",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "e9a162defc32": {
+      "name": "creatingTask",
+      "ordinal": 7,
+      "value": false
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -597,14 +608,6 @@
       "name": "error",
       "ordinal": 2,
       "value": ""
-    },
-    "f3ba4c9e02fb": {
-      "composer": true,
-      "creating": false,
-      "error": "Cannot read properties of null (reading 'ok')",
-      "item": {
-        "$rpc": "null"
-      }
     },
     "f8df20507017": {
       "name": "error",
@@ -692,8 +695,8 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "56ac6af35c46",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "1850ffae4fc5", "82b36eab5101"]
+          "state": "e92e2340bb29",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "5c6dab9499b0", "82b36eab5101"]
         }
       },
       {
@@ -705,8 +708,8 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "f3ba4c9e02fb",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "1e70dd84bf14", "82b36eab5101"]
+          "state": "e92e2340bb29",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "5c6dab9499b0", "82b36eab5101"]
         }
       },
       {
@@ -744,8 +747,14 @@
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
-          "state": "2924a6b4c745",
-          "effects": ["5294116e0f90", "ed3a7d6bc894", "c53afd0ab8bc", "82b36eab5101"]
+          "state": "54f14c01a5e1",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "30d39651f586",
+            "ad2d22e4895f",
+            "e9a162defc32"
+          ]
         }
       },
       {

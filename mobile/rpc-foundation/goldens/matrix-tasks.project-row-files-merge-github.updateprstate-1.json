@@ -3,7 +3,7 @@
   "family": "tasks.project-row-files-merge",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "9133c02c5bfc9cdb2265e4def52155bb331e7553",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b228732762828412ad3d9eec3ece00a897d866046e37044322c3911758d6e0a9",
@@ -55,6 +55,11 @@
       "name": "projectRowDetailError",
       "ordinal": 16,
       "value": ""
+    },
+    "1148303653f8": {
+      "name": "error",
+      "ordinal": 32,
+      "value": "The host sent a reply this app could not read (github.updatePRState)"
     },
     "12580e56c628": {
       "name": "github.updatePRState#1",
@@ -174,11 +179,6 @@
         }
       }
     },
-    "26583e7c81c4": {
-      "name": "error",
-      "ordinal": 32,
-      "value": "[object Object]"
-    },
     "31dce0186d15": {
       "name": "mutatingStatus",
       "ordinal": 22,
@@ -243,6 +243,11 @@
       "ordinal": 32,
       "value": "Unknown method"
     },
+    "42a52ca9465a": {
+      "name": "error",
+      "ordinal": 33,
+      "value": "Failed to update GitHub status"
+    },
     "44c2e6541ebd": {
       "name": "projectRowDetailError",
       "ordinal": 9,
@@ -295,6 +300,17 @@
       "ordinal": 5,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prFileContents\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"path\":\"src/index.ts\",\"status\":\"modified\",\"headSha\":\"head-sha\",\"baseSha\":\"base-sha\"}}"
     },
+    "62bb73b50116": {
+      "name": "reply-salvage",
+      "ordinal": 32,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.updatePRState",
+        "operation": "github.update-pull-request-state",
+        "variant": "task-item-mutation"
+      }
+    },
     "65c6b60b2a1c": {
       "name": "github.mergePR#1",
       "ordinal": 17,
@@ -342,11 +358,6 @@
       "value": {
         "$rpc": "null"
       }
-    },
-    "69395cb6e852": {
-      "name": "error",
-      "ordinal": 32,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     },
     "6a8158b48fb7": {
       "name": "github.updatePRState#1",
@@ -834,6 +845,11 @@
       "ordinal": 32,
       "value": "Connection closed"
     },
+    "d773683f6bb9": {
+      "name": "mutatingStatus",
+      "ordinal": 34,
+      "value": false
+    },
     "e5e99109503e": {
       "name": "github.updatePRState#1",
       "ordinal": 30,
@@ -956,11 +972,6 @@
       "name": "github.updatePRState#1",
       "ordinal": 31,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
-    },
-    "fd942b19331c": {
-      "name": "error",
-      "ordinal": 32,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "fdf15056fb68": {
       "contents": {
@@ -1297,7 +1308,7 @@
             "fa2f2de4dfe7",
             "9bb57f30c113",
             "801bda6a9198",
-            "69395cb6e852",
+            "1148303653f8",
             "82be5a1db7df"
           ]
         }
@@ -1350,7 +1361,7 @@
             "fa2f2de4dfe7",
             "9bb57f30c113",
             "801bda6a9198",
-            "fd942b19331c",
+            "1148303653f8",
             "82be5a1db7df"
           ]
         }
@@ -1509,8 +1520,9 @@
             "fa2f2de4dfe7",
             "9bb57f30c113",
             "801bda6a9198",
-            "26583e7c81c4",
-            "82be5a1db7df"
+            "62bb73b50116",
+            "42a52ca9465a",
+            "d773683f6bb9"
           ]
         }
       },
