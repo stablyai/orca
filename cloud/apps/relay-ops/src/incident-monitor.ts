@@ -143,7 +143,11 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
 } as const
 
 export const INCIDENT_CHECKPOINT_MINUTES = [0, 5, 15, 30, 45, 60, 75, 90] as const
-export const INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS = 25 * 60_000
+// Why: 35 minutes, raised 2026-09-17 from 25. A 15-minute window plus one
+// restart must fit: a continuity reset on the window's last sample restarts at
+// minute 16 and finishes at 31. Under 25 a reset past minute 9 cost the whole
+// verdict, which is what run 35258662628 hit on a healthy fleet.
+export const INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS = 35 * 60_000
 
 export type IncidentSourceName =
   | 'active-probe'
@@ -678,6 +682,7 @@ export type IncidentMonitorDependencies = {
   collect(): Promise<IncidentSample>
   persist(state: IncidentMonitorState): Promise<void>
   checkpoint(summary: IncidentCheckpoint): Promise<void>
+  warn?(message: string): void
 }
 
 function checkpointMinutes(durationMinutes: number): number[] {
@@ -699,10 +704,19 @@ const CONTINUITY_FAILURE_CODES = new Set([
   ...FRESHNESS_FAILURE_CODES
 ])
 
+// A whole sample we could not read gets the same consecutive-sample budget as an
+// unread signal, for the same reason: one failed collector round trip is evidence
+// about that round trip, not about the fleet. `monitor_gap` is excluded because it
+// means the run itself stopped sampling, so the window genuinely has a hole.
+const TOLERABLE_CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  ...FRESHNESS_FAILURE_CODES
+])
+
 // Why: Cloud Monitoring overshoots its own publish bar, and one unread sample is
-// not evidence of an unhealthy fleet. Under the 25-minute lineage cap a restart
-// past minute 10 costs the entire verdict, so a healthy fleet produced none on
-// 2026-09-05. A signal may miss this many consecutive samples before the window
+// not evidence of an unhealthy fleet. Under the 25-minute lineage cap in force
+// then, a restart past minute 10 cost the entire verdict, so a healthy fleet
+// produced none on 2026-09-05. A signal may miss this many consecutive samples before the window
 // restarts; the sample is still evaluated against every threshold it can read,
 // and a threshold breach still freezes the run outright.
 export const INCIDENT_FRESHNESS_TOLERANCE_SAMPLES = 2
@@ -838,7 +852,12 @@ export async function runIncidentMonitor(
         state.recoverySourceCellId,
         state.capacityCellId
       )
-    } catch {
+    } catch (error) {
+      dependencies.warn?.(
+        `incident monitor collector failed: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      )
       evaluation = {
         status: 'freeze',
         evaluatedAt: new Date(dependencies.now()).toISOString(),
@@ -859,7 +878,8 @@ export async function runIncidentMonitor(
     const toleratedKeys = new Set(
       state.windowStartedAt !== null &&
         continuityFailures.length > 0 &&
-        continuityFailures.every((failure) => FRESHNESS_FAILURE_CODES.has(failure.code))
+        continuityFailures.every((failure) =>
+          TOLERABLE_CONTINUITY_FAILURE_CODES.has(failure.code))
         ? continuityFailures.map(freshnessKey)
         : []
     )

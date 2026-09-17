@@ -39,9 +39,11 @@ days. No tokens, request bodies, logs, user IDs, host IDs, or relay device IDs a
 Reruns keep one stable incident ID, restore the immediately preceding private
 artifact, verify its commit/run/attempt provenance and content hashes, and pass
 `--restart`. A missing or mismatched artifact fails closed. A missing, stale,
-or collector-failed sample is durably recorded and resets the active continuous
-window. The next fresh sample starts a new 15- or 90-minute window under the
-same incident lineage.
+or collector-failed sample is durably recorded. Up to two consecutive such
+samples per source are tolerated and the window keeps running; a third resets
+the active continuous window, and the next fresh sample starts a new 15- or
+90-minute window under the same incident lineage. A pre-drain dry run must reach
+a verdict within 35 minutes of its lineage start.
 
 Exit code `2` means the gate froze or a dry run failed. Missing, stale, malformed, unauthorized, or
 unavailable telemetry fails closed.
@@ -206,6 +208,18 @@ without its segment is a compile error in relay-contract, not a silent gap.
 
 ## Implementation log
 
+- Gave `collector_failed` the same two-consecutive-sample tolerance as an unread
+  signal and raised the pre-drain lineage cap from 25 to 35 minutes
+  (2026-09-17). Basis: dry-run 35258662628 sampled a healthy fleet clean for
+  13 minutes, then a single unreadable Cloud Monitoring sample restarted the
+  window, and the restarted window ran past the 25-minute cap at 1 500 002 ms,
+  so a healthy fleet produced no verdict. One failed collector round trip is
+  evidence about that round trip, not about the fleet, and it cannot freeze the
+  gate on its own because it carries no threshold breach. `monitor_gap` keeps
+  zero tolerance: it means the run stopped sampling, so the window has a real
+  hole. 35 minutes fits a 15-minute window plus one restart: a reset on the
+  window's last sample restarts at minute 16 and finishes at 31. The job
+  timeout is already 100 minutes.
 - Recalibrated the Cloud SQL backends freeze from 250 to 320, the unexpected
   director 5xx freeze from 3 to 15, and gave per-cell endpoint probes a
   two-consecutive-sample tolerance (2026-09-17). Basis: the pre-roll dry-run had

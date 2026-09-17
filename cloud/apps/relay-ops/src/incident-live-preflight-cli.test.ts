@@ -154,9 +154,9 @@ describe('relay incident live preflight', () => {
     )).resolves.toBeUndefined()
   })
 
-  it('rejects monitor evidence beyond the 25-minute lineage bound', async () => {
+  it('rejects monitor evidence beyond the 35-minute lineage bound', async () => {
     const path = stateFile('strict', {
-      startedAt: new Date(now - 26 * 60_000 - 1).toISOString()
+      startedAt: new Date(now - 36 * 60_000 - 1).toISOString()
     })
     await expect(runIncidentLivePreflight(
       ['--state-file', path],

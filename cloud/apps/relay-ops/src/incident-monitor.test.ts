@@ -813,6 +813,150 @@ describe('incident monitor lifecycle', () => {
     expect(preDrainDryRunPassed(result)).toBe(true)
   })
 
+  // Why: dry-run 35258662628 read a healthy fleet clean for 13 minutes, then one
+  // unreadable Cloud Monitoring sample restarted the window and the restart blew
+  // the lineage cap, so a green fleet produced no verdict.
+  it('carries a 15-minute window through a single collector failure', async () => {
+    let now = startedAt
+    const warnings: string[] = []
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        if (now === startedAt + 10 * 60_000) {
+          throw new Error('cloud monitoring read failed')
+        }
+        return healthySample(now)
+      },
+      persist: async () => {},
+      checkpoint: async () => {},
+      warn: (message) => {
+        warnings.push(message)
+      }
+    })
+    expect(result.windowSequence).toBe(0)
+    expect(result.windowStartedAt).toBe(new Date(startedAt).toISOString())
+    expect(result.completedAt).toBe(new Date(startedAt + 15 * 60_000).toISOString())
+    expect(result.sampleCount).toBe(16)
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(result.continuityEvents).toEqual([{
+      recordedAt: new Date(startedAt + 10 * 60_000).toISOString(),
+      windowSequence: 0,
+      tolerated: true,
+      failures: [{ code: 'collector_failed', source: 'cloud-monitoring' }]
+    }])
+    expect(warnings).toEqual([
+      'incident monitor collector failed: cloud monitoring read failed'
+    ])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  it('restarts the window after three consecutive collector failures', async () => {
+    let now = startedAt
+    let failures = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        if (failures > 0 && now >= startedAt + 10 * 60_000) {
+          failures--
+          throw new Error('cloud monitoring read failed')
+        }
+        return healthySample(now)
+      },
+      persist: async () => {},
+      checkpoint: async () => {},
+      warn: () => {}
+    })
+    const restartMinute = 10 + INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    expect(result.windowSequence).toBe(1)
+    expect(result.windowStartedAt).toBe(
+      new Date(startedAt + restartMinute * 60_000).toISOString()
+    )
+    expect(result.completedAt).toBe(
+      new Date(startedAt + (restartMinute + 15) * 60_000).toISOString()
+    )
+    expect(result.sampleCount).toBe(16)
+    expect(result.continuityEvents.map((event) => event.tolerated)).toEqual([
+      ...Array<boolean>(INCIDENT_FRESHNESS_TOLERANCE_SAMPLES).fill(true),
+      false
+    ])
+    expect(result.continuityEvents.at(-1)!.failures).toEqual([
+      { code: 'collector_failed', source: 'cloud-monitoring' }
+    ])
+    expect(result.frozenAt).toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  it('still reaches a dry-run verdict after a restart on the last sample', async () => {
+    let now = startedAt
+    let failures = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        if (failures > 0 && now >= startedAt + 13 * 60_000) {
+          failures--
+          throw new Error('cloud monitoring read failed')
+        }
+        return healthySample(now)
+      },
+      persist: async () => {},
+      checkpoint: async () => {},
+      warn: () => {}
+    })
+    expect(result.windowSequence).toBe(1)
+    expect(result.windowStartedAt).toBe(new Date(startedAt + 16 * 60_000).toISOString())
+    expect(result.completedAt).toBe(new Date(startedAt + 31 * 60_000).toISOString())
+    expect(result.sampleCount).toBe(16)
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
   it('gives a signal a fresh budget only after it reads fresh again', async () => {
     let now = startedAt
     const staleMinutes = new Set([3, 5, 6, 9, 10])
@@ -977,7 +1121,7 @@ describe('incident monitor lifecycle', () => {
     expect(result.sampleCount).toBe(16)
   })
 
-  it('fails a dry run after 25 total minutes of continuity resets', async () => {
+  it('fails a dry run after 35 total minutes of continuity resets', async () => {
     let now = startedAt
     const state = initialIncidentMonitorState({
       incidentId: 'incident-1',
@@ -991,15 +1135,16 @@ describe('incident monitor lifecycle', () => {
       durationMinutes: 15,
       intervalMs: 60_000
     })
-    let staleSamples = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    // Two restarts: the first on the window's last sample, the second far enough
+    // into the replacement window that no third window can finish in the lineage.
+    const staleMinutes = new Set([13, 14, 15, 24, 25, 26])
     const result = await runIncidentMonitor(state, {
       now: () => now,
       wait: async (ms) => {
         now += ms
       },
       collect: async () => {
-        if (staleSamples > 0 && now >= startedAt + 10 * 60_000) {
-          staleSamples--
+        if (staleMinutes.has((now - startedAt) / 60_000)) {
           return healthySample(
             now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1
           )
@@ -1014,8 +1159,8 @@ describe('incident monitor lifecycle', () => {
       new Date(startedAt + INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS).toISOString()
     )
     expect(result.frozenAt).not.toBeNull()
-    expect(result.windowSequence).toBe(1)
-    expect(result.sampleCount).toBe(13)
+    expect(result.windowSequence).toBe(2)
+    expect(result.sampleCount).toBe(9)
     expect(result.failures).toContainEqual({
       code: 'continuity_deadline_exceeded',
       source: 'active-probe',
