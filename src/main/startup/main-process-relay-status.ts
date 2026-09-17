@@ -14,5 +14,10 @@ export function publishDesktopRelayStatus(
 ): void {
   state.desktopRelayStatus = status
   state.desktopRelayCellUrl = cellUrl
-  state.mainWindow?.webContents.send('mobile:relayStatusChanged', getDesktopRelayStatus())
+  // Why isDestroyed and not just the optional chain: `state.mainWindow` is nulled on 'closed',
+  // so between destroy and that event `webContents.send` throws "Object has been destroyed".
+  // This runs from inside a bare `setTimeout` recovery step, where a throw killed the retry chain.
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('mobile:relayStatusChanged', getDesktopRelayStatus())
+  }
 }

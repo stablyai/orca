@@ -28,8 +28,18 @@ export class RelayRetrySchedule {
     this.timer = setTimeout(() => {
       this.timer = null
       this.armed = null
-      retry()
-      armed.resolve()
+      // Why contained: `retry` is the caller's whole recovery step, run bare inside a timer. A
+      // synchronous throw there escaped as an uncaughtException AND skipped the resolve, so every
+      // waiter on `settled` parked on a promise nothing would ever settle, while the schedule was
+      // left with no armed timer — the chain dead with no re-entry. Waking the waiters is right
+      // either way: the retry is over, however it ended.
+      try {
+        retry()
+      } catch (error) {
+        console.error('[relay] scheduled retry threw:', error)
+      } finally {
+        armed.resolve()
+      }
     }, delayMs)
   }
 
