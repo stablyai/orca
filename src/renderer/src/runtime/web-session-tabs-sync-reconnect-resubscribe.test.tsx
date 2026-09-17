@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
@@ -20,7 +21,6 @@ vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
 import {
@@ -70,7 +70,7 @@ function hostSnapshot(
     pairingRevision: REVISION_A,
     sequence,
     checkedAt: sequence,
-    status: { runtimeId: 'runtime-a' } as RuntimeHostStatusSnapshot['status'],
+    status: makeStatus('runtime-a'),
     verification: 'verified',
     transport: 'ready',
     ...patch
@@ -81,9 +81,21 @@ function mirroredSubscriptions(method: string): Recorded[] {
   return subscriptions.filter((entry) => entry.request.method === method)
 }
 
+function makeStatus(runtimeId: string): RuntimeStatus {
+  return {
+    runtimeId,
+    rendererGraphEpoch: 0,
+    graphStatus: 'ready',
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0
+  }
+}
+
 /** The dependencies the mirror-subscription effects actually read, rebuilt from current state. */
 function mirrorKeys(): ReturnType<typeof buildRuntimeSessionMirrorEnvironmentKeys> {
   const state = useAppStore.getState()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder takes the whole app state; only the fields below reach the mirror-target scan.
   return buildRuntimeSessionMirrorEnvironmentKeys({
     activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId ?? null,
     repos: state.repos,
@@ -139,6 +151,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     resetWebSessionTabsSnapshotFreshnessForTests()
     clearHostLiveTerminalProbesForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror scan and revision ledger read only id, createdAt and pairingRevision.
     const runtimeEnvironments = [
       { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A }
     ] as PublicKnownRuntimeEnvironment[]
@@ -150,7 +163,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
         activeWorktreeId: WORKTREE,
         workspaceSessionReady: true,
         runtimeEnvironments,
-        runtimeStatusByEnvironmentId: new Map() as AppState['runtimeStatusByEnvironmentId']
+        runtimeStatusByEnvironmentId: new Map()
       },
       true
     )
@@ -221,7 +234,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
         .applyRuntimeHostStatusSnapshot(hostSnapshot(2, { verification: 'unavailable' }))
       useAppStore.getState().applyRuntimeHostStatusSnapshot(
         hostSnapshot(3, {
-          status: { runtimeId: 'runtime-b' } as RuntimeHostStatusSnapshot['status']
+          status: makeStatus('runtime-b')
         })
       )
       await settle()

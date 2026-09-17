@@ -22,8 +22,20 @@ const PAIRING_REVISION = 101
 
 function createSliceStore() {
   return create<RuntimeStatusSlice>()((...a) => ({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice creator is declared against the whole AppState; this store holds only its own slice, which is all the code under test reads.
     ...createRuntimeStatusSlice(...(a as unknown as Parameters<typeof createRuntimeStatusSlice>))
   }))
+}
+
+function makeStatus(runtimeId: string): RuntimeStatus {
+  return {
+    runtimeId,
+    rendererGraphEpoch: 0,
+    graphStatus: 'ready',
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0
+  }
 }
 
 function makeSnapshot(
@@ -35,7 +47,7 @@ function makeSnapshot(
     pairingRevision: PAIRING_REVISION,
     sequence,
     checkedAt: sequence,
-    status: { runtimeId: 'rt-1' } as RuntimeStatus,
+    status: makeStatus('rt-1'),
     transport: 'ready',
     ...patch
   }
@@ -106,7 +118,7 @@ it('discards the mirror hydration when the runtime itself was replaced', () => {
   store
     .getState()
     .applyRuntimeHostStatusSnapshot(
-      makeSnapshot(3, { verification: 'verified', status: { runtimeId: 'rt-2' } as RuntimeStatus })
+      makeSnapshot(3, { verification: 'verified', status: makeStatus('rt-2') })
     )
   expect(hasHostSessionMirrorHydrated(ENVIRONMENT_ID, WORKTREE_ID)).toBe(false)
 })
