@@ -28,6 +28,29 @@ vi.mock('node:os', async () => {
   }
 })
 
+// Why: the login path resolves a PowerShell host, and on a Windows host it runs
+// behind a console wrapper whose payload relays its PID. Both are real process
+// launches; pin them so this stays a test about the quota refresh.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
+}))
+
+vi.mock('../../shared/windows-interactive-login-spawn', () => ({
+  buildWindowsHostInteractiveLoginSpawn: (command: string, args: string[]) => ({
+    command,
+    args,
+    stdio: 'ignore' as const,
+    windowsHide: true,
+    cleanup: () => {},
+    getTerminationPid: () => null,
+    waitForTerminationPid: () => Promise.resolve(null),
+    hasRelayedPid: () => true
+  })
+}))
+
 describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
 

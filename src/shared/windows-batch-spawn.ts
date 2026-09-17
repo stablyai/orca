@@ -35,7 +35,12 @@ const UNSAFE_WINDOWS_BATCH_SYNTAX = new RegExp(
   `[${WINDOWS_BATCH_UNSAFE_CHARACTERS.map((character) => character.replace(/[\\^\]-]/, '\\$&')).join('')}\\r\\n]`
 )
 
-function hasUnsafeWindowsBatchSyntax(value: string): boolean {
+/**
+ * True when cmd.exe re-parsing this value could start a command or expand a
+ * variable. Exported so callers that *choose* a program path can reject one the
+ * wrapper would refuse, instead of discovering it as a launch failure.
+ */
+export function hasUnsafeWindowsBatchSyntax(value: string): boolean {
   return UNSAFE_WINDOWS_BATCH_SYNTAX.test(value)
 }
 
