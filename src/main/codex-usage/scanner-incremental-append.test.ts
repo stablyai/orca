@@ -6,12 +6,15 @@ import { join } from 'node:path'
 
 const { getPathMock, homedirMock, streamReads, onStreamOpen } = vi.hoisted(() => {
   const streamReads: { path: string; bytes: number; start: number; bounded: boolean }[] = []
+  // Seam for mutating the tree mid-scan, between two files' parse reads.
+  const onStreamOpen: { current: ((path: string, bounded: boolean) => void) | null } = {
+    current: null
+  }
   return {
     getPathMock: vi.fn<(name: string) => string>(),
     homedirMock: vi.fn<() => string>(),
     streamReads,
-    // Seam for mutating the tree mid-scan, between two files' parse reads.
-    onStreamOpen: { current: null as ((path: string, bounded: boolean) => void) | null }
+    onStreamOpen
   }
 })
 
