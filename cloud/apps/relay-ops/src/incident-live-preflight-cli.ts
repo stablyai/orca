@@ -182,9 +182,30 @@ export async function runIncidentLivePreflight(
   const attempts = Math.max(freshnessAttempts, cellProbeAttempts)
   let freshnessRetries = freshnessAttempts - 1
   let cellProbeRetries = cellProbeAttempts - 1
+  // Waiting must never carry the mutation past the same evidence-age bound the
+  // entry check enforces, so the wave budget also caps the retry window.
+  const budgetExhausted = (): boolean =>
+    now() + FRESHNESS_RETRY_INTERVAL_MS - completedAt > maxEvidenceAgeMs
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    // A director admin read can fail on its own (its handler maps a Cloud SQL
+    // pool timeout onto 404), which says nothing about relay health; spend an
+    // attempt on it rather than failing the wave on one unlucky sample.
+    let sample: IncidentSample
+    try {
+      sample = await collect()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'sample collection failed'
+      if (attempt === attempts || budgetExhausted()) {
+        throw new Error(`relay live preflight failed: collector: ${message}`)
+      }
+      console.warn(
+        `relay live preflight re-sampling after collector failure (${attempt}/${attempts - 1})`
+      )
+      await wait(FRESHNESS_RETRY_INTERVAL_MS)
+      continue
+    }
     const evaluation = evaluateIncidentSample(
-      await collect(),
+      sample,
       now(),
       state.migrationPolicy,
       state.recoverySourceCellId,
@@ -203,11 +224,7 @@ export async function runIncidentLivePreflight(
       freshnessFailures.length + cellProbeFailures.length === evaluation.failures.length &&
       (freshnessFailures.length === 0 || freshnessRetries > 0) &&
       (cellProbeFailures.length === 0 || cellProbeRetries > 0)
-    // Waiting must never carry the mutation past the same evidence-age bound
-    // the entry check enforces, so the wave budget also caps the retry window.
-    const budgetExhausted =
-      now() + FRESHNESS_RETRY_INTERVAL_MS - completedAt > maxEvidenceAgeMs
-    if (!retryable || attempt === attempts || budgetExhausted) {
+    if (!retryable || attempt === attempts || budgetExhausted()) {
       throw new Error(
         `relay live preflight failed: ${evaluation.failures
           .map(describeFailure)

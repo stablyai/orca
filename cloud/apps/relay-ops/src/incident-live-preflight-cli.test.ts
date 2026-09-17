@@ -365,6 +365,72 @@ describe('relay incident live preflight', () => {
     })
   })
 
+  // Why: on 2026-09-17 a canary wave died because one director admin read
+  // returned 404 for a 2 s Cloud SQL pool timeout. Collecting the sample is not
+  // a health verdict, so a thrown collector spends an attempt instead.
+  describe('collector failures', () => {
+    it('re-samples after a thrown collector and then passes', async () => {
+      const waits: number[] = []
+      let attempts = 0
+      await expect(runIncidentLivePreflight(
+        ['--state-file', stateFile()],
+        {
+          now: () => now,
+          collect: async () => {
+            attempts++
+            if (attempts === 1) throw new Error('Relay admin telemetry returned 404')
+            return sample()
+          },
+          wait: async (ms) => {
+            waits.push(ms)
+          }
+        }
+      )).resolves.toBeUndefined()
+      expect(attempts).toBe(2)
+      expect(waits).toEqual([15_000])
+    })
+
+    it('fails the wave when every attempt throws, naming the collector', async () => {
+      let attempts = 0
+      await expect(runIncidentLivePreflight(
+        ['--state-file', stateFile()],
+        {
+          now: () => now,
+          collect: async () => {
+            attempts++
+            throw new Error('Relay admin telemetry returned 404')
+          },
+          wait: async () => {}
+        }
+      )).rejects.toThrow(
+        'relay live preflight failed: collector: Relay admin telemetry returned 404'
+      )
+      expect(attempts).toBe(1 + INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples)
+    })
+
+    it('does not re-sample a collector failure past the evidence-age budget', async () => {
+      const agedPath = stateFile('strict', {
+        startedAt: new Date(now - 26 * 60_000).toISOString(),
+        windowStartedAt: new Date(now - 25 * 60_000).toISOString(),
+        lastSampleAt: new Date(now - 10 * 60_000 + 7).toISOString(),
+        completedAt: new Date(now - 10 * 60_000 + 14).toISOString()
+      })
+      let attempts = 0
+      await expect(runIncidentLivePreflight(
+        ['--state-file', agedPath],
+        {
+          now: () => now,
+          collect: async () => {
+            attempts++
+            throw new Error('Relay admin telemetry returned 404')
+          },
+          wait: async () => {}
+        }
+      )).rejects.toThrow('relay live preflight failed: collector:')
+      expect(attempts).toBe(1)
+    })
+  })
+
   it('enforces the signed migration policy', async () => {
     const inactiveTarget = sample()
     inactiveTarget.sources['director-admin']!.signals[
