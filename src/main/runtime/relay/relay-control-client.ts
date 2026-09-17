@@ -86,6 +86,9 @@ export class RelayControlClient {
     })
     socket.once('close', (code) => this.handleClose(code))
     // Recovery cannot advance while an upgrade/proof promise remains pending forever.
+    // Armed in the same tick as the socket and expiring from 'opening' as well as
+    // 'proving', so it also bounds a black-holed connect that never opens; a
+    // transport-level handshakeTimeout here would be a second bound on that phase.
     this.connectTimer = setTimeout(
       () => this.expireConnect(),
       this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS

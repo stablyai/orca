@@ -25,6 +25,7 @@ import {
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
 import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
+import { nativeChatToolRunOutcome } from '../../../../shared/native-chat-tool-run-outcome'
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
@@ -123,9 +124,9 @@ export function NativeChatToolRun({
     : null
   const isSettled = headerActiveCall == null
   const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
-  const hasRunningCall = headerBlocks.some(
-    (block) => isToolCallBlock(block) && block.state === 'running'
-  )
+  const { succeeded: runSucceeded, failedCallCount } = nativeChatToolRunOutcome(headerBlocks, {
+    activeTurnIsWorking
+  })
   // The turn caret opens the activity group while each child tool stays collapsed.
   const expandToolLines = expandOverride === undefined ? open : false
   // Diffing every edit is the run's most expensive work, so a collapsed run —
@@ -273,8 +274,29 @@ export function NativeChatToolRun({
               {fallbackLabel}
             </span>
           )}
-          {/* A running item cannot inherit completion from its turn. */}
-          {structuredActivityUi && !hasRunningCall ? (
+          {failedCallCount > 0 ? (
+            /* Outside the truncating member list, so the one thing the reader
+               cannot afford to miss survives a pane too narrow to print it.
+               Quiet text in the header's own type, not a destructive tint or a
+               swapped glyph: a tool error is routine work, and the failing
+               line's own detail is one click away. */
+            <span
+              aria-label={translate(
+                'components.native-chat.tool.failedCallsLabel',
+                NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCallsLabel,
+                { value0: failedCallCount }
+              )}
+              className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80"
+            >
+              {translate(
+                'components.native-chat.tool.failedCount',
+                NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount,
+                { value0: failedCallCount }
+              )}
+            </span>
+          ) : null}
+          {/* Only a stated success is marked done — see nativeChatToolRunOutcome. */}
+          {structuredActivityUi && runSucceeded ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {/* Chevron is revealed on hover when collapsed and points down when open. */}

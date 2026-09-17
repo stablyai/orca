@@ -19,7 +19,17 @@ function collectScriptModules(scriptPath, seen = new Set()) {
     return seen
   }
   seen.add(scriptPath)
-  for (const [, specifier] of readFileSync(scriptPath, 'utf8').matchAll(/from '(\.\/[^']+)'/g)) {
+  // `from`, bare and dynamic `import`, and plain `require` -- the Windows gates
+  // are .cjs, and a module reached only by require or by a side-effect import is
+  // the one nobody notices is missing until a subprocess fails with a
+  // resolution error instead. Deliberately not `projectRequire`/`requireLocal`
+  // wrappers: those specifiers are resolved against the project root at runtime,
+  // not against this file, so following them would stage the wrong path.
+  const source = readFileSync(scriptPath, 'utf8')
+  const specifiers = source.matchAll(
+    /(?:\bfrom|\brequire\s*\(|\bimport\s*\(|\bimport)\s*'(\.\/[^']+)'/g
+  )
+  for (const [, specifier] of specifiers) {
     collectScriptModules(join(dirname(scriptPath), specifier), seen)
   }
   return seen

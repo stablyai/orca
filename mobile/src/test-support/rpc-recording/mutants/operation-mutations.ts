@@ -221,8 +221,8 @@ export const OPERATION_MUTATIONS = {
   // there. Invisible to any scenario whose session already has an active tab.
   'create-after-tab-id-null': {
     file: 'use-mobile-session-terminal-create-actions.ts',
-    before: '        afterTabId: activeSessionTabId ?? undefined,',
-    after: '        afterTabId: activeSessionTabId,'
+    before: '      const afterTabId = activeSessionTabId ?? undefined',
+    after: '      const afterTabId = activeSessionTabId'
   },
   // Swaps the two quick-command members, so a saved shell command arrives as an agent prompt and an
   // agent prompt arrives as a startup command. Invisible to any scenario that fills neither.

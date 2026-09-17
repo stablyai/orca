@@ -35,8 +35,11 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { platform as osPlatform } from 'node:os'
 import { join, resolve } from 'node:path'
+
+const requireLocal = createRequire(import.meta.url)
 
 const projectDir = process.cwd()
 let cliOptions
@@ -79,11 +82,10 @@ const NATIVE_MODULES = [
   ...(rebuildPlatform === 'win32' ? ['@orca/windows-registry', '@vscode/windows-process-tree'] : [])
 ]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
+/** Whether this rebuild targets something other than the machine running it. */
+const isCrossHostRebuild = rebuildPlatform !== osPlatform() || rebuildArch !== process.arch
 const forceRebuild =
-  process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
-  cliOptions.force ||
-  rebuildPlatform !== osPlatform() ||
-  rebuildArch !== process.arch
+  process.env.ORCA_FORCE_NATIVE_REBUILD === '1' || cliOptions.force || isCrossHostRebuild
 let modulesToRebuild = onlyModules
 
 ensureElectronPackageInstalled()
@@ -175,6 +177,7 @@ try {
   })
   restoreNodePtyWindowsConptyRuntime()
   assertWindowsProcessTreeAddonIsPatched()
+  assertNodePtyConptyDeniesMsysBreakaway()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
   if (isWindowsNativeLockError(err)) {
@@ -226,6 +229,32 @@ function assertWindowsProcessTreeAddonIsPatched() {
           'command-line reader. The packaged app would carry the primitive MDE scores as ' +
           'credential dumping.'
   )
+}
+
+/**
+ * The other half of the same problem, for the addon this rebuild just produced.
+ *
+ * The Electron probe below carries the marker check too, but it is skipped
+ * whenever the Electron package binary is unusable -- and "covered by another
+ * path" is not "this path checks". Reading the binary needs neither a loadable
+ * Electron nor an executable target arch, so it runs here regardless.
+ *
+ * Absent is fatal on the host that will run this install: loadNativeModule
+ * falls through to prebuilds/win32-<arch>, and the published prebuild predates
+ * the denial, so the app would load it with nothing said. A cross-host rebuild
+ * does not necessarily leave a win32 addon on this disk, and that must not fail
+ * an install that was working.
+ */
+function assertNodePtyConptyDeniesMsysBreakaway() {
+  if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
+    return
+  }
+  const { assertRebuiltConptyDeniesMsysBreakaway } = requireLocal('./node-pty-job-ownership.cjs')
+  assertRebuiltConptyDeniesMsysBreakaway({
+    nodePtyDir: resolve(projectDir, 'node_modules', 'node-pty'),
+    rebuildArch,
+    crossHost: isCrossHostRebuild
+  })
 }
 
 function restoreNodePtyWindowsConptyRuntime() {
@@ -548,14 +577,22 @@ function loadNativeModule(moduleName) {
   }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
-    const { assertNodePtyJobOwnership } = projectRequire(
+    const { assertNodePtyJobOwnership, nodePtyAddonPath } = projectRequire(
       './config/scripts/node-pty-job-ownership.cjs'
     )
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
     const nativeName = getNodePtyNativeModuleName()
     const native = loadNativeModule(nativeName)
     assertNodePtyWindowsConptyRuntime(native.dir)
-    assertNodePtyJobOwnership({ nativeName, native })
+    assertNodePtyJobOwnership({
+      nativeName,
+      native,
+      addonPath: nodePtyAddonPath(
+        projectRequire.resolve('node-pty/lib/utils'),
+        native,
+        nativeName
+      )
+    })
     if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +

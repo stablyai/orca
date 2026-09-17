@@ -871,6 +871,11 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
+          config/scripts/rebuild-native-deps-node-pty.test.mjs
+          config/scripts/ensure-native-runtime-job-ownership.test.mjs
+          config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
+          config/scripts/windows-pe-machine.test.mjs
+          config/scripts/script-module-dependencies.test.mjs
           src/main/windows-registry-addon.test.ts
           config/scripts/windows-process-tree-gyp-path.test.mjs
           config/scripts/windows-process-tree-gyp-rebuild.test.mjs

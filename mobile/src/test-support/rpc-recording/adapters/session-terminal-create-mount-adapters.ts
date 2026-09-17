@@ -8,6 +8,7 @@ import type {
   Terminal
 } from '../../../session/mobile-session-route-types'
 import type { TuiAgent } from '../../../../../src/shared/tui-agent'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 
 const PREVIOUS_HANDLE = 'terminal-0'
 
@@ -71,6 +72,7 @@ export function sessionTerminalCreateMountAdapters(
       let activeHandle: string | null = PREVIOUS_HANDLE
       let worktreeId = ''
       let activeSessionTabId: string | null = null
+      let hostCapabilities: string[] = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
       let creating = false
       let createError = ''
       const terminalsRef = { current: terminals }
@@ -91,6 +93,7 @@ export function sessionTerminalCreateMountAdapters(
           mountFixture<Parameters<typeof useCreateActions>[0]>({
             worktreeId,
             client,
+            hostCapabilities,
             connState: 'connected',
             setTerminals: (update) => {
               terminals = typeof update === 'function' ? update(terminals) : update
@@ -148,6 +151,10 @@ export function sessionTerminalCreateMountAdapters(
             activeSessionTabId =
               typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
             activeSessionTabIdRef.current = activeSessionTabId
+            hostCapabilities =
+              args.supportsSplitGroupPlacement === false
+                ? []
+                : [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
             deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
             return hook.mount()
           }

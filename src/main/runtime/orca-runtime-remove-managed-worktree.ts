@@ -13,9 +13,11 @@ import {
 } from './runtime-worktree-selection'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
-import { resolveWorktreeRemovalRoute } from '../worktree-removal-execution-host-route'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { listWorktreesStrict } from '../git/worktree'
+import {
+  resolveWorktreeRemovalHome,
+  resolveWorktreeRemovalRoute
+} from '../worktree-removal-execution-host-route'
+import { listWorktreesOnRemovalRoute } from './worktree-removal-route-listing'
 import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
@@ -95,15 +97,11 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
         // the delete use is how an `executionHostId: 'ssh:*'`-only row got listed remotely and
         // deleted here; the route refuses rather than falling back to this machine.
         const route = resolveWorktreeRemovalRoute(removalHostId)
-        const localWorktreeGitOptions =
-          route.kind === 'ssh' ? {} : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-        const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
-        const registeredWorktrees =
-          route.kind === 'ssh'
-            ? await route.provider.listWorktrees(repo.path)
-            : hasLocalWorktreeGitOptions
-              ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
-              : await listWorktreesStrict(repo.path)
+        const { localWorktreeGitOptions, registeredWorktrees } = await listWorktreesOnRemovalRoute(
+          route,
+          repo,
+          this.requireStore()
+        )
         const removedMeta = resolveWorktreeRemovalMetadata(
           store,
           removalTarget.repoId,
@@ -111,10 +109,12 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           removalHostId
         )
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
+        const removalHome = resolveWorktreeRemovalHome(route)
         const registeredWorktree = findRegisteredDeletableWorktree(
           repo.path,
           removalTarget.path,
-          registeredWorktrees
+          registeredWorktrees,
+          removalHome
         )
         if (!registeredWorktree) {
           return removeRuntimeUnregisteredWorktree({
@@ -251,7 +251,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           removedPushTarget,
           store,
           localOptions: localWorktreeGitOptions,
-          hasLocalOptions: hasLocalWorktreeGitOptions,
+          hasLocalOptions: Object.keys(localWorktreeGitOptions).length > 0,
           force,
           runHooks,
           allowFailedArchiveHook,
