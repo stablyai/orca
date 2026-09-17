@@ -61,4 +61,6 @@ export type CreateMainWindowOptions = {
     /** `ERR_*` code only, for the same reason — Electron's load-error message embeds the URL. */
     errorCode?: string
   }) => void
+  /** ID of the worktree to activate on renderer mount. */
+  initialWorktreeId?: string
 }
