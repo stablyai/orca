@@ -38,8 +38,7 @@ function notification(trigger: unknown = { type: 'push', remoteMessage: { notifi
         }
       }
     }
-    // `data` stays required here: Expo declares it optional, and the dismissal cases below assign
-    // through it.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal above carries every member the code under test reads; `data` is narrowed back to required because Expo declares it optional and the dismissal cases assign through it.
   } as unknown as Notification & { request: { content: { data: Record<string, unknown> } } }
 }
 
