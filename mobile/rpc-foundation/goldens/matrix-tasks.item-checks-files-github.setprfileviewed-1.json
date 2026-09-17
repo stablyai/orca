@@ -3,7 +3,7 @@
   "family": "tasks.item-checks-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "542c1c38edc536fb0e8fd2b7a5092c5a25b7c239",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
@@ -1034,60 +1034,6 @@
       "ordinal": 19,
       "value": "src/index.ts"
     },
-    "7c616ddf083d": {
-      "contents": {},
-      "drafts": {
-        "src/index.ts:12": "a review comment"
-      },
-      "error": "Failed to sync viewed state with GitHub.",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
-    },
     "7fda96277de7": {
       "name": "github.resolveReviewThread#1",
       "ordinal": 15,
@@ -1275,6 +1221,60 @@
       "name": "mutatingStatus",
       "ordinal": 18,
       "value": false
+    },
+    "a3c0a5cdd953": {
+      "contents": {},
+      "drafts": {
+        "src/index.ts:12": "a review comment"
+      },
+      "error": "The host sent a reply this app could not read (github.setPRFileViewed)",
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "refreshSeq": 1
     },
     "b1ea2cd73d6a": {
       "contents": {
@@ -1776,15 +1776,15 @@
       "ordinal": 13,
       "value": true
     },
-    "f8cc6012f21b": {
-      "name": "error",
-      "ordinal": 11,
-      "value": "Failed to sync viewed state with GitHub."
-    },
     "fd2fad47bec2": {
       "name": "mutatingStatus",
       "ordinal": 1,
       "value": true
+    },
+    "febe6d923070": {
+      "name": "error",
+      "ordinal": 11,
+      "value": "The host sent a reply this app could not read (github.setPRFileViewed)"
     }
   },
   "recording": {
@@ -1973,7 +1973,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "7c616ddf083d",
+          "state": "a3c0a5cdd953",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1981,7 +1981,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13"
           ]
         }
@@ -2005,7 +2005,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2034,7 +2034,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2081,7 +2081,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2110,7 +2110,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "7c616ddf083d",
+          "state": "a3c0a5cdd953",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2118,7 +2118,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13"
           ]
         }
@@ -2142,7 +2142,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2171,7 +2171,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2218,7 +2218,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2247,7 +2247,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "7c616ddf083d",
+          "state": "a3c0a5cdd953",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2255,7 +2255,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13"
           ]
         }
@@ -2279,7 +2279,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2308,7 +2308,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2355,7 +2355,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2384,7 +2384,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "7c616ddf083d",
+          "state": "a3c0a5cdd953",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2392,7 +2392,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13"
           ]
         }
@@ -2416,7 +2416,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2445,7 +2445,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2492,7 +2492,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2521,7 +2521,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "7c616ddf083d",
+          "state": "a3c0a5cdd953",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2529,7 +2529,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13"
           ]
         }
@@ -2553,7 +2553,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2582,7 +2582,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2629,7 +2629,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "f8cc6012f21b",
+            "febe6d923070",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",

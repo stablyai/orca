@@ -3,7 +3,7 @@
   "family": "tasks.project-row-files-merge",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "542c1c38edc536fb0e8fd2b7a5092c5a25b7c239",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b228732762828412ad3d9eec3ece00a897d866046e37044322c3911758d6e0a9",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0b13649a6e2a": {
-      "name": "projectRowDetailError",
-      "ordinal": 12,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "0dc3824edb1e": {
       "name": "projectRowDetailError",
       "ordinal": 16,
@@ -107,6 +102,34 @@
       "name": "projectMutating",
       "ordinal": 20,
       "value": false
+    },
+    "224f5830b379": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "error": "Failed to add review comment",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
     },
     "290319f991cf": {
       "contents": {
@@ -241,11 +264,6 @@
         }
       }
     },
-    "3bd99eec8b12": {
-      "name": "projectRowDetailError",
-      "ordinal": 12,
-      "value": "[object Object]"
-    },
     "4123bc693ce4": {
       "name": "projectMutating",
       "ordinal": 14,
@@ -289,34 +307,6 @@
         "itemType": "PULL_REQUEST"
       }
     },
-    "5672ce577af1": {
-      "contents": {
-        "src/index.ts": {
-          "modified": "b",
-          "modifiedIsBinary": false,
-          "original": "a",
-          "originalIsBinary": false
-        }
-      },
-      "error": "[object Object]",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "issueType": {
-            "$rpc": "null"
-          },
-          "labels": [],
-          "number": 2,
-          "repository": "owner/repo",
-          "state": "OPEN",
-          "url": "https://github.com/owner/repo/pull/2"
-        },
-        "fieldValuesByFieldId": {},
-        "id": "item-2",
-        "itemType": "PULL_REQUEST"
-      }
-    },
     "56a2a300d457": {
       "name": "error",
       "ordinal": 23,
@@ -336,11 +326,6 @@
       "name": "projectMutating",
       "ordinal": 15,
       "value": true
-    },
-    "62745f2b3947": {
-      "name": "projectRowDetailError",
-      "ordinal": 12,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     },
     "62a79bf8d7aa": {
       "name": "github.prFileContents#1",
@@ -488,6 +473,22 @@
       "name": "github.updateIssue#1",
       "ordinal": 24,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"state\":\"closed\"}}}"
+    },
+    "70c8197a7d39": {
+      "name": "reply-salvage",
+      "ordinal": 12,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.addPRReviewComment",
+        "operation": "github.add-pr-review-comment",
+        "variant": "task-comment-written"
+      }
+    },
+    "72622b41fe65": {
+      "name": "projectRowDetailError",
+      "ordinal": 13,
+      "value": "Failed to add review comment"
     },
     "73511c204332": {
       "name": "projectRowDetailError",
@@ -1027,6 +1028,34 @@
       "ordinal": 8,
       "value": true
     },
+    "b2431ed2f799": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "error": "The host sent a reply this app could not read (github.addPRReviewComment)",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
     "b4f3b072f887": {
       "name": "mutatingStatus",
       "ordinal": 27,
@@ -1090,34 +1119,6 @@
           "name": "Table",
           "number": 1
         }
-      }
-    },
-    "bde6fc07c747": {
-      "contents": {
-        "src/index.ts": {
-          "modified": "b",
-          "modifiedIsBinary": false,
-          "original": "a",
-          "originalIsBinary": false
-        }
-      },
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "issueType": {
-            "$rpc": "null"
-          },
-          "labels": [],
-          "number": 2,
-          "repository": "owner/repo",
-          "state": "OPEN",
-          "url": "https://github.com/owner/repo/pull/2"
-        },
-        "fieldValuesByFieldId": {},
-        "id": "item-2",
-        "itemType": "PULL_REQUEST"
       }
     },
     "bf640f72c375": {
@@ -1195,34 +1196,6 @@
           "number": 2,
           "repository": "owner/repo",
           "state": "MERGED",
-          "url": "https://github.com/owner/repo/pull/2"
-        },
-        "fieldValuesByFieldId": {},
-        "id": "item-2",
-        "itemType": "PULL_REQUEST"
-      }
-    },
-    "c2c0d7487336": {
-      "contents": {
-        "src/index.ts": {
-          "modified": "b",
-          "modifiedIsBinary": false,
-          "original": "a",
-          "originalIsBinary": false
-        }
-      },
-      "error": "Cannot read properties of null (reading 'ok')",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "issueType": {
-            "$rpc": "null"
-          },
-          "labels": [],
-          "number": 2,
-          "repository": "owner/repo",
-          "state": "OPEN",
           "url": "https://github.com/owner/repo/pull/2"
         },
         "fieldValuesByFieldId": {},
@@ -1557,6 +1530,11 @@
         "$rpc": "null"
       }
     },
+    "f6757791d765": {
+      "name": "projectRowDetailError",
+      "ordinal": 12,
+      "value": "The host sent a reply this app could not read (github.addPRReviewComment)"
+    },
     "f90d80584a52": {
       "name": "github.addPRReviewComment#1",
       "ordinal": 10,
@@ -1857,7 +1835,7 @@
             "expand-0": "eb79a9b3682a",
             "file-comment-1": "eb79a9b3682a"
           },
-          "state": "bde6fc07c747",
+          "state": "b2431ed2f799",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
@@ -1866,7 +1844,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "62745f2b3947",
+            "f6757791d765",
             "e3180bc6526a"
           ]
         }
@@ -1891,7 +1869,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "62745f2b3947",
+            "f6757791d765",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -1922,7 +1900,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "62745f2b3947",
+            "f6757791d765",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -1970,7 +1948,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "62745f2b3947",
+            "f6757791d765",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -1998,7 +1976,7 @@
             "expand-0": "eb79a9b3682a",
             "file-comment-1": "eb79a9b3682a"
           },
-          "state": "c2c0d7487336",
+          "state": "b2431ed2f799",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
@@ -2007,7 +1985,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "0b13649a6e2a",
+            "f6757791d765",
             "e3180bc6526a"
           ]
         }
@@ -2032,7 +2010,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "0b13649a6e2a",
+            "f6757791d765",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2063,7 +2041,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "0b13649a6e2a",
+            "f6757791d765",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2111,7 +2089,7 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "0b13649a6e2a",
+            "f6757791d765",
             "e3180bc6526a",
             "4123bc693ce4",
             "d09c526ea284",
@@ -2425,7 +2403,7 @@
             "expand-0": "eb79a9b3682a",
             "file-comment-1": "eb79a9b3682a"
           },
-          "state": "5672ce577af1",
+          "state": "224f5830b379",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
@@ -2434,16 +2412,17 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "3bd99eec8b12",
-            "e3180bc6526a"
+            "70c8197a7d39",
+            "72622b41fe65",
+            "383fbfbc5ed2"
           ]
         }
       },
       {
         "id": "tk-project-row-files-merge.inner-false-object-error:merge-settled",
         "observation": {
-          "sender": ["7851b73bc42c", "f90d80584a52", "e521d7490271"],
-          "payloads": ["62a79bf8d7aa", "c0706151fdcc", "da0a6d765548"],
+          "sender": ["7851b73bc42c", "f90d80584a52", "65c6b60b2a1c"],
+          "payloads": ["62a79bf8d7aa", "c0706151fdcc", "a943cc6b7a3c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a",
@@ -2459,21 +2438,22 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "3bd99eec8b12",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "d09c526ea284",
-            "d3070ca55c8b",
-            "86757a4e13db",
-            "1bf0937a02b9"
+            "70c8197a7d39",
+            "72622b41fe65",
+            "383fbfbc5ed2",
+            "6257568c133a",
+            "0dc3824edb1e",
+            "c29af82331bb",
+            "b6bf910e70a4",
+            "aba945c58a7f"
           ]
         }
       },
       {
         "id": "tk-project-row-files-merge.inner-false-object-error:issue-state-settled",
         "observation": {
-          "sender": ["7851b73bc42c", "f90d80584a52", "e521d7490271", "9ddead459370"],
-          "payloads": ["62a79bf8d7aa", "c0706151fdcc", "da0a6d765548", "6f8dc6f394e0"],
+          "sender": ["7851b73bc42c", "f90d80584a52", "65c6b60b2a1c", "a2462ffcc807"],
+          "payloads": ["62a79bf8d7aa", "c0706151fdcc", "a943cc6b7a3c", "a05f949ea04b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a",
@@ -2490,17 +2470,18 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "3bd99eec8b12",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "d09c526ea284",
-            "d3070ca55c8b",
-            "86757a4e13db",
-            "1bf0937a02b9",
-            "2d8d5e501a0d",
-            "29ed7524dd3c",
-            "f3dafd073b87",
-            "acff45feb249"
+            "70c8197a7d39",
+            "72622b41fe65",
+            "383fbfbc5ed2",
+            "6257568c133a",
+            "0dc3824edb1e",
+            "c29af82331bb",
+            "b6bf910e70a4",
+            "aba945c58a7f",
+            "31dce0186d15",
+            "56a2a300d457",
+            "e66062a7229b",
+            "fa2f2de4dfe7"
           ]
         }
       },
@@ -2510,16 +2491,16 @@
           "sender": [
             "7851b73bc42c",
             "f90d80584a52",
-            "e521d7490271",
-            "9ddead459370",
-            "c31250861ab1"
+            "65c6b60b2a1c",
+            "a2462ffcc807",
+            "8476f11073be"
           ],
           "payloads": [
             "62a79bf8d7aa",
             "c0706151fdcc",
-            "da0a6d765548",
-            "6f8dc6f394e0",
-            "5e590e1a351e"
+            "a943cc6b7a3c",
+            "a05f949ea04b",
+            "fd670a2a8a82"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2538,21 +2519,22 @@
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
-            "3bd99eec8b12",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "d09c526ea284",
-            "d3070ca55c8b",
-            "86757a4e13db",
-            "1bf0937a02b9",
-            "2d8d5e501a0d",
-            "29ed7524dd3c",
-            "f3dafd073b87",
-            "acff45feb249",
-            "b4f3b072f887",
-            "484e5b3de56e",
-            "c2cdeb454467",
-            "db1d1bcab9f6"
+            "70c8197a7d39",
+            "72622b41fe65",
+            "383fbfbc5ed2",
+            "6257568c133a",
+            "0dc3824edb1e",
+            "c29af82331bb",
+            "b6bf910e70a4",
+            "aba945c58a7f",
+            "31dce0186d15",
+            "56a2a300d457",
+            "e66062a7229b",
+            "fa2f2de4dfe7",
+            "9bb57f30c113",
+            "801bda6a9198",
+            "eafeb0235606",
+            "82be5a1db7df"
           ]
         }
       },

@@ -3,7 +3,7 @@
   "family": "tasks.project-row-files-merge",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "542c1c38edc536fb0e8fd2b7a5092c5a25b7c239",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b228732762828412ad3d9eec3ece00a897d866046e37044322c3911758d6e0a9",
@@ -89,6 +89,16 @@
       "name": "error",
       "ordinal": 26,
       "value": "outer refused"
+    },
+    "1b5f4d56301c": {
+      "name": "mutatingStatus",
+      "ordinal": 29,
+      "value": true
+    },
+    "22b1e4293201": {
+      "name": "mutatingStatus",
+      "ordinal": 28,
+      "value": false
     },
     "2beb5d31113c": {
       "name": "github.updateIssue#1",
@@ -249,10 +259,53 @@
         }
       }
     },
+    "4328ba7f3daf": {
+      "name": "error",
+      "ordinal": 27,
+      "value": "Failed to update GitHub status"
+    },
     "44c2e6541ebd": {
       "name": "projectRowDetailError",
       "ordinal": 9,
       "value": ""
+    },
+    "4752c3affc91": {
+      "name": "github.updatePRState#1",
+      "ordinal": 31,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-1",
+            "updates": {
+              "state": "closed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     },
     "56a2a300d457": {
       "name": "error",
@@ -340,11 +393,6 @@
       "name": "error",
       "ordinal": 26,
       "value": "Unknown method"
-    },
-    "5f7b9406719d": {
-      "name": "error",
-      "ordinal": 26,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     },
     "6257568c133a": {
       "name": "projectMutating",
@@ -517,15 +565,10 @@
         }
       }
     },
-    "8ab434972af5": {
+    "8862f0950552": {
       "name": "error",
-      "ordinal": 26,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "8e12baf5cd21": {
-      "name": "error",
-      "ordinal": 26,
-      "value": "[object Object]"
+      "ordinal": 30,
+      "value": ""
     },
     "948edbfc0f6a": {
       "name": "projectRowDetail",
@@ -642,6 +685,17 @@
         }
       }
     },
+    "a4fed05a842b": {
+      "name": "reply-salvage",
+      "ordinal": 26,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.updateIssue",
+        "operation": "github.update-issue",
+        "variant": "task-item-mutation"
+      }
+    },
     "a943cc6b7a3c": {
       "name": "github.mergePR#1",
       "ordinal": 18,
@@ -651,6 +705,11 @@
       "name": "projectMutating",
       "ordinal": 21,
       "value": false
+    },
+    "adcb432703e9": {
+      "name": "github.updatePRState#1",
+      "ordinal": 32,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
     },
     "b0f2d0edec6a": {
       "name": "projectMutating",
@@ -877,10 +936,22 @@
         "itemType": "PULL_REQUEST"
       }
     },
+    "c5adb9266c5a": {
+      "name": "actionItem",
+      "ordinal": 33,
+      "value": {
+        "$rpc": "null"
+      }
+    },
     "d03a99b98103": {
       "name": "projectRowDetailError",
       "ordinal": 3,
       "value": ""
+    },
+    "d773683f6bb9": {
+      "name": "mutatingStatus",
+      "ordinal": 34,
+      "value": false
     },
     "e66062a7229b": {
       "name": "actionItem",
@@ -947,6 +1018,11 @@
           "ok": false
         }
       }
+    },
+    "f7e7becd9fcb": {
+      "name": "error",
+      "ordinal": 26,
+      "value": "The host sent a reply this app could not read (github.updateIssue)"
     },
     "fa2f2de4dfe7": {
       "name": "mutatingStatus",
@@ -1267,7 +1343,7 @@
             "aba945c58a7f",
             "31dce0186d15",
             "56a2a300d457",
-            "5f7b9406719d",
+            "f7e7becd9fcb",
             "fa2f2de4dfe7"
           ]
         }
@@ -1316,7 +1392,7 @@
             "aba945c58a7f",
             "31dce0186d15",
             "56a2a300d457",
-            "5f7b9406719d",
+            "f7e7becd9fcb",
             "fa2f2de4dfe7",
             "9bb57f30c113",
             "801bda6a9198",
@@ -1356,7 +1432,7 @@
             "aba945c58a7f",
             "31dce0186d15",
             "56a2a300d457",
-            "8ab434972af5",
+            "f7e7becd9fcb",
             "fa2f2de4dfe7"
           ]
         }
@@ -1405,7 +1481,7 @@
             "aba945c58a7f",
             "31dce0186d15",
             "56a2a300d457",
-            "8ab434972af5",
+            "f7e7becd9fcb",
             "fa2f2de4dfe7",
             "9bb57f30c113",
             "801bda6a9198",
@@ -1623,8 +1699,9 @@
             "aba945c58a7f",
             "31dce0186d15",
             "56a2a300d457",
-            "8e12baf5cd21",
-            "fa2f2de4dfe7"
+            "a4fed05a842b",
+            "4328ba7f3daf",
+            "22b1e4293201"
           ]
         }
       },
@@ -1636,14 +1713,14 @@
             "c24da637c6f9",
             "65c6b60b2a1c",
             "596d550a7775",
-            "8476f11073be"
+            "4752c3affc91"
           ],
           "payloads": [
             "62a79bf8d7aa",
             "c0706151fdcc",
             "a943cc6b7a3c",
             "a05f949ea04b",
-            "fd670a2a8a82"
+            "adcb432703e9"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1672,12 +1749,13 @@
             "aba945c58a7f",
             "31dce0186d15",
             "56a2a300d457",
-            "8e12baf5cd21",
-            "fa2f2de4dfe7",
-            "9bb57f30c113",
-            "801bda6a9198",
-            "eafeb0235606",
-            "82be5a1db7df"
+            "a4fed05a842b",
+            "4328ba7f3daf",
+            "22b1e4293201",
+            "1b5f4d56301c",
+            "8862f0950552",
+            "c5adb9266c5a",
+            "d773683f6bb9"
           ]
         }
       },
