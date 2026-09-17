@@ -624,4 +624,26 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchCommand).not.toContain('--model')
     expect(restored?.launchCommand).toContain("'--resume' 'claude-session-1'")
   })
+
+  // Why: buildAgentResumeStartupPlan short-circuits on agentCommand and drops
+  // sessionOptions (tui-agent-resume-startup.ts:35-41). Call sites that pass
+  // persisted launchConfig.agentCommand must gate it on !sessionOptions so
+  // the picker's --model/--effort survives. This test pins the short-circuit
+  // so the gate at the call site cannot be silently removed.
+  it('does not apply sessionOptions when agentCommand is set (short-circuit)', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      agentCommand: 'claude --dangerously-skip-permissions',
+      sessionOptions: { model: 'opus', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      platform: 'darwin',
+      shell: 'posix'
+    })
+    expect(restored?.launchCommand).not.toContain('--model')
+    expect(restored?.launchCommand).not.toContain('--effort')
+    expect(restored?.launchCommand).toContain("'--resume' 'claude-session-1'")
+  })
 })

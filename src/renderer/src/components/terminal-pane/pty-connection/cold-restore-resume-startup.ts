@@ -74,7 +74,9 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         launchConfig !== undefined
           ? launchConfig.agentEnv
           : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+      ...(launchConfig?.agentCommand && !sessionOptions
+        ? { agentCommand: launchConfig.agentCommand }
+        : {}),
       ...(launchConfig?.ompResumeFilePath
         ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
         : {}),

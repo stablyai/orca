@@ -127,13 +127,20 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
+  const sessionOptions = resolveNativeChatLaunchSessionOptions(
+    args.state.settings?.nativeChatSessionOptions,
+    args.session.agent
+  )
+  const isLocalSession =
+    !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
     args.session.agent !== 'omp' &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
-    !args.commandOverride?.trim()
+    !args.commandOverride?.trim() &&
+    !sessionOptions
   ) {
     return {
       command: args.session.resumeCommand,
@@ -148,8 +155,6 @@ function buildAiVaultResumeForWorktree(
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
-  const isLocalSession =
-    !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
@@ -162,10 +167,6 @@ function buildAiVaultResumeForWorktree(
   const cwd = embedCwd ? args.session.cwd : null
   const startupCwd = !embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}
   if (providerSession && isResumableTuiAgent(args.session.agent)) {
-    const sessionOptions = resolveNativeChatLaunchSessionOptions(
-      args.state.settings?.nativeChatSessionOptions,
-      args.session.agent
-    )
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
       providerSession,
@@ -174,6 +175,7 @@ function buildAiVaultResumeForWorktree(
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
       },
       platform,
+      isRemote: !isLocalSession,
       shell: liveShell,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
