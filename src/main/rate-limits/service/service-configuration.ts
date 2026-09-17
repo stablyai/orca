@@ -10,7 +10,7 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
-  type GeminiCliOAuthEnabledResolver,
+  type AntigravityCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
   type InactiveClaudeAccountInfo,
   type RateLimitState,
@@ -48,8 +48,12 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.miniMaxConfigResolver = resolver
   }
 
-  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
-    this.geminiCliOAuthEnabledResolver = resolver
+  setAntigravityCliOAuthEnabledResolver(resolver: AntigravityCliOAuthEnabledResolver): void {
+    this.antigravityCliOAuthEnabledResolver = resolver
+  }
+
+  setGeminiCliOAuthEnabledResolver(resolver: AntigravityCliOAuthEnabledResolver): void {
+    this.setAntigravityCliOAuthEnabledResolver(resolver)
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {

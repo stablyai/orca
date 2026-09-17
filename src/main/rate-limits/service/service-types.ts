@@ -59,8 +59,15 @@ export type MiniMaxResolvedConfig = {
   error: string | null
 }
 
-export type GeminiCliOAuthEnabledResolver = () => boolean
-export type ActiveRateLimitProvider = ProviderRateLimits['provider']
+export type AntigravityCliOAuthEnabledResolver = () => boolean
+export type ActiveRateLimitProvider =
+  | 'claude'
+  | 'codex'
+  | 'opencode-go'
+  | 'kimi'
+  | 'minimax'
+  | 'grok'
+  | 'antigravity'
 export type ActiveProviderState = {
   provider: ActiveRateLimitProvider
   limits: ProviderRateLimits | null
