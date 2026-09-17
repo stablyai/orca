@@ -135,6 +135,11 @@ export function projectStructuredPermission(
   return {
     title: prompt.body.title,
     prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
+    ...(prompt.body.displayName ? { displayName: prompt.body.displayName } : {}),
+    ...(prompt.body.description ? { description: prompt.body.description } : {}),
+    ...(prompt.body.decisionReason ? { decisionReason: prompt.body.decisionReason } : {}),
+    ...(prompt.body.blockedPath ? { blockedPath: prompt.body.blockedPath } : {}),
+    ...(prompt.body.matchedAskRule ? { matchedAskRule: prompt.body.matchedAskRule } : {}),
     ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
     options: prompt.body.options.map((option) => ({
       label: option.label,

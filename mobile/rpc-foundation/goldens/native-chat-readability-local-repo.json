@@ -3,9 +3,9 @@
   "family": "session.native-chat-readability",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "46d80cfd496b06ce42ff1ed985e513bbf49b5188bc1128c6d01a74675741935a",
   "platform": "darwin",
@@ -13,8 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0f1ed2b7a695": {
+    "19b2979d7fc2": {
       "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "70e0675ab2a9": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -53,11 +59,6 @@
         }
       }
     },
-    "5730368193ee": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
-    },
     "dcf89ce6b4ca": {
       "readable": true,
       "worktreeId": "repo-1::/w"
@@ -77,8 +78,8 @@
       {
         "id": "readable",
         "observation": {
-          "sender": ["0f1ed2b7a695"],
-          "payloads": ["5730368193ee"],
+          "sender": ["70e0675ab2a9"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

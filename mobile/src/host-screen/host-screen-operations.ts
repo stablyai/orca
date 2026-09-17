@@ -94,7 +94,14 @@ export const worktreeRemove = bindDeferredRpcOperation(
   })
 )
 
-/** Telling the host which workspace the phone opened. Best-effort; navigation does not wait. */
+/**
+ * Telling the host which workspace the phone opened. Best-effort; navigation does not wait.
+ *
+ * Two readers. The host list sends it and never looks, and the session route's startup effect reads
+ * the skip verdict for one thing only: an accepted reply saying the host is headless is what raises
+ * the "open Orca on the host" toast. A refusal and a dropped reply both mean "no advice", which is
+ * what the skip already says.
+ */
 export const worktreeActivate = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.activate-or-skip',

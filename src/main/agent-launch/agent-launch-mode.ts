@@ -17,6 +17,11 @@
  * records; every other surface says "chat session" / "terminal agent".
  */
 
+import type {
+  AgentLaunchMode,
+  AgentLaunchModeReason,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch-intent'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import {
@@ -29,29 +34,9 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
-export type AgentLaunchMode = 'structured' | 'terminal'
-
-export type AgentLaunchModeReason =
-  | 'user_default'
-  | 'remote_execution_host'
-  | 'reused_terminal'
-  | 'agent_without_structured_session'
-  | 'tui_launch_command'
-  | 'structured_sessions_unavailable'
-  | 'structured_support_unknown'
-  | 'wsl_execution_runtime'
-  | 'codex_on_windows'
-  | 'structured_unsupported_on_host'
-
-export type AgentLaunchModeReceipt = {
-  /** The mode the launch actually ran in. */
-  mode: AgentLaunchMode
-  /** The user's settings default for a new agent tab. */
-  preferred: AgentLaunchMode
-  reason: AgentLaunchModeReason
-  /** One sentence, always present, so a fallback is never silent. */
-  detail: string
-}
+// The receipt is part of the launch contract, so it is declared with the rest of it; re-exported
+// here because this module is where the decision that fills it lives.
+export type { AgentLaunchMode, AgentLaunchModeReason, AgentLaunchModeReceipt }
 
 /** What this caller calls the thing it is starting, so one decision serves every surface without
  *  a receipt reading "worker" on a phone. */

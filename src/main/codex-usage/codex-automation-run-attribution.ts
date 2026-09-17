@@ -1,6 +1,7 @@
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
+import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
 
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -15,17 +16,7 @@ type CodexAutomationAttributionDeps = {
   /** Callback, not a snapshot: refresh mutates persisted state in place. */
   getState: () => CodexUsagePersistedState
   refresh: (force: boolean) => Promise<{ lastScanError: string | null }>
-}
-
-function shouldForceAutomationUsageScan(
-  scanState: CodexUsagePersistedState['scanState'],
-  completedAt: number
-): boolean {
-  const { lastScanStartedAt, lastScanCompletedAt } = scanState
-  // Why: attribution needs one scan attempt after the run finishes. Keying on
-  // the attempt instead of its outcome bounds this to a single forced scan per
-  // run — a persistently failing scan used to re-force on every lookup, forever.
-  return Math.max(lastScanStartedAt ?? 0, lastScanCompletedAt ?? 0) < completedAt
+  isScanning: () => boolean
 }
 
 export async function resolveCodexAutomationRunUsage(
@@ -63,7 +54,7 @@ export async function resolveCodexAutomationRunUsage(
   }
 
   const scanState = await deps.refresh(
-    shouldForceAutomationUsageScan(deps.getState().scanState, input.completedAt)
+    shouldForceAutomationUsageScan(deps.getState().scanState, input.completedAt, deps.isScanning())
   )
   if (scanState.lastScanError) {
     return unavailable('scan_failed', scanState.lastScanError)

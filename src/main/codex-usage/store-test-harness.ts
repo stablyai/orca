@@ -15,6 +15,55 @@ export function createEmptyScanResult() {
   }
 }
 
+/** One completed session in `worktreeId`, shaped for automation-run attribution. */
+export function createWorktreeUsageSession(worktreeId: string) {
+  const tokens = {
+    eventCount: 1,
+    inputTokens: 1000,
+    cachedInputTokens: 400,
+    outputTokens: 250,
+    reasoningOutputTokens: 100,
+    totalTokens: 1250,
+    hasInferredPricing: false
+  }
+  return {
+    sessionId: 'session-1',
+    firstTimestamp: '2026-04-10T15:00:00.000Z',
+    lastTimestamp: '2026-04-10T15:05:00.000Z',
+    primaryModel: 'gpt-5',
+    hasMixedModels: false,
+    primaryProjectLabel: 'Repo',
+    hasMixedLocations: false,
+    primaryWorktreeId: worktreeId,
+    primaryRepoId: 'repo-1',
+    totalInputTokens: 1000,
+    totalCachedInputTokens: 400,
+    totalOutputTokens: 250,
+    totalReasoningOutputTokens: 100,
+    ...tokens,
+    locationBreakdown: [
+      {
+        locationKey: `worktree:${worktreeId}`,
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId,
+        ...tokens
+      }
+    ],
+    modelBreakdown: [{ modelKey: 'gpt-5', modelLabel: 'gpt-5', ...tokens }],
+    locationModelBreakdown: [
+      {
+        locationKey: `worktree:${worktreeId}`,
+        modelKey: 'gpt-5',
+        modelLabel: 'gpt-5',
+        repoId: 'repo-1',
+        worktreeId,
+        ...tokens
+      }
+    ]
+  }
+}
+
 export function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],

@@ -3,9 +3,9 @@
   "family": "files.mutation-ownership",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "b9cfb187224a4b42efe8ccfcd96145833730d135c4fffa345716f95991a4700f",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0b7588536afb": {
+    "049e3dd3b1db": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -34,79 +35,24 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "0d163aa89099": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "29bfbe94cca9": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "expectedExecutionHostId": "ssh:target-1",
-        "expectedSshConnectionGeneration": 3,
-        "expectedSshTargetId": "target-1"
-      }
-    },
-    "2f24cdd633b5": {
+    "088efd8ff3f7": {
       "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"target-1\"}}",
-      "sent": 3
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"target-1\"}}"
     },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "48e2bdc38094": {
+    "0fbf6809f292": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -138,8 +84,78 @@
         }
       }
     },
-    "4b0fb2833d76": {
+    "29bfbe94cca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "3cf4416a7928": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "hostId": "ssh:target-1"
+            }
+          }
+        }
+      }
+    },
+    "518ec57c381a": {
+      "ownership": "uncaptured"
+    },
+    "68ce4d376250": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of null (reading 'capabilities')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "7f0419402be8": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -159,21 +175,119 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
         }
       }
     },
-    "518ec57c381a": {
-      "ownership": "uncaptured"
+    "83e4ac78046a": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "6116946241ca": {
+    "848eaee9cd6a": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of undefined (reading 'capabilities')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9ce0c7923c41": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Remote file changes require a newer Orca server. Update the HUB and try again.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b5476ba1aabe": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "b6e8ae2b152e": {
       "name": "ssh.getState#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -213,84 +327,9 @@
         }
       }
     },
-    "68ce4d376250": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'capabilities')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "6ef43f81f7e3": {
-      "name": "worktree.show#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "hostId": "ssh:target-1"
-            }
-          }
-        }
-      }
-    },
-    "74a9cdb3c227": {
+    "b70aead0ffe8": {
       "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "753f8f2aac3b": {
-      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -315,108 +354,34 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": "outer refused"
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "848eaee9cd6a": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'capabilities')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
-    "90817e8c47cb": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9ce0c7923c41": {
+    "b948e8307e81": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
         "category": "Error",
-        "message": "Remote file changes require a newer Orca server. Update the HUB and try again.",
+        "message": "Unknown method",
         "isRpcDeliveryUnknown": false
       }
     },
-    "a56852d6836b": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": ["files.mutation-ownership.v1"]
-          }
-        }
+    "bd84dadd27c7": {
+      "ownership": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
       }
     },
-    "a8d9f204690e": {
+    "bfe4c76a5071": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -449,28 +414,24 @@
         }
       }
     },
-    "a947768bc0ed": {
+    "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
         "category": "Error",
-        "message": "transport failure",
+        "message": "",
         "isRpcDeliveryUnknown": true
       }
     },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
+    "c924e7a5a7da": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
     },
-    "bc119660f0c1": {
+    "c98cb7e69921": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -490,34 +451,24 @@
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
-    "bd84dadd27c7": {
-      "ownership": {
-        "expectedExecutionHostId": "ssh:target-1",
-        "expectedSshConnectionGeneration": 3,
-        "expectedSshTargetId": "target-1"
-      }
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "e7e6fb5e264b": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
-      "sent": 2
-    },
-    "f2a2b92aa73c": {
+    "d08f74d65ee6": {
       "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "e81d3a627ac2": {
+      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -544,9 +495,43 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "capabilities": ["files.mutation-ownership.v1"]
           }
+        }
+      }
+    },
+    "e852b360bd93": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
         }
       }
     },
@@ -560,8 +545,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "f68f9c806fb2": {
+    "fa37fc8bfba3": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -588,11 +574,39 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
+            "$rpc": "null"
           }
+        }
+      }
+    },
+    "fa49f7da1267": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
         }
       }
     }
@@ -603,8 +617,8 @@
       {
         "id": "files-ownership-ssh.prelude:status-pending",
         "observation": {
-          "sender": ["bc119660f0c1"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["83e4ac78046a"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "9270aeb7d9c6"
           },
@@ -615,8 +629,8 @@
       {
         "id": "files-ownership-ssh.normal:settled",
         "observation": {
-          "sender": ["a56852d6836b", "6ef43f81f7e3", "6116946241ca"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "2f24cdd633b5"],
+          "sender": ["e81d3a627ac2", "3cf4416a7928", "b6e8ae2b152e"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da", "088efd8ff3f7"],
           "settlements": {
             "capture": "29bfbe94cca9"
           },
@@ -627,8 +641,8 @@
       {
         "id": "files-ownership-ssh.result-absent:settled",
         "observation": {
-          "sender": ["90817e8c47cb"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["fa49f7da1267"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "848eaee9cd6a"
           },
@@ -639,8 +653,8 @@
       {
         "id": "files-ownership-ssh.result-null:settled",
         "observation": {
-          "sender": ["0d163aa89099"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["fa37fc8bfba3"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "68ce4d376250"
           },
@@ -651,8 +665,8 @@
       {
         "id": "files-ownership-ssh.inner-ok-missing:settled",
         "observation": {
-          "sender": ["48e2bdc38094"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["0fbf6809f292"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "9ce0c7923c41"
           },
@@ -663,8 +677,8 @@
       {
         "id": "files-ownership-ssh.inner-false-string-error:settled",
         "observation": {
-          "sender": ["f2a2b92aa73c"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["b5476ba1aabe"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "9ce0c7923c41"
           },
@@ -675,8 +689,8 @@
       {
         "id": "files-ownership-ssh.inner-false-object-error:settled",
         "observation": {
-          "sender": ["f68f9c806fb2"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["7f0419402be8"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "9ce0c7923c41"
           },
@@ -687,8 +701,8 @@
       {
         "id": "files-ownership-ssh.outer-refused:settled",
         "observation": {
-          "sender": ["0b7588536afb"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["b70aead0ffe8"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "32a7c0ae7918"
           },
@@ -699,8 +713,8 @@
       {
         "id": "files-ownership-ssh.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["a8d9f204690e"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["bfe4c76a5071"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "f3b516f62081"
           },
@@ -711,8 +725,8 @@
       {
         "id": "files-ownership-ssh.method-not-found:settled",
         "observation": {
-          "sender": ["753f8f2aac3b"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["e852b360bd93"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "b948e8307e81"
           },
@@ -723,8 +737,8 @@
       {
         "id": "files-ownership-ssh.transport-rejection:settled",
         "observation": {
-          "sender": ["4b0fb2833d76"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["c98cb7e69921"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "a947768bc0ed"
           },
@@ -735,8 +749,8 @@
       {
         "id": "files-ownership-ssh.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["74a9cdb3c227"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["049e3dd3b1db"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "capture": "c7584e82c72f"
           },

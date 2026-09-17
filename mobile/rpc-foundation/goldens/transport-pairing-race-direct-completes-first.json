@@ -3,9 +3,9 @@
   "family": "transport.pairing-race",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "488173fa313295f97aa88fb4bf1944fdb655e37cfd2444e9d15515bd6ad82d95",
   "platform": "darwin",
@@ -13,41 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "26f802fad080": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": []
-          }
-        }
-      }
-    },
-    "36caf183b988": {
+    "61a4715b43bf": {
       "name": "status.get#2",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -79,29 +47,63 @@
         }
       }
     },
-    "63ab1563ba51": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
-    },
     "93edac3a1c3e": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": "direct"
     },
-    "b33a14df0df6": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
+    "a1e33b5bf8ef": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
     },
-    "d433a326314e": {
+    "ca99f593a4a0": {
       "name": "candidate-closed",
-      "value": "relay",
-      "sent": 2
+      "ordinal": 5,
+      "value": "relay"
     },
     "d9b301beff12": {
       "outcome": "direct"
+    },
+    "e7b5d7d57a61": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -110,13 +112,13 @@
       {
         "id": "direct-wins-when-it-completes-first",
         "observation": {
-          "sender": ["26f802fad080", "36caf183b988"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6"],
+          "sender": ["a1e33b5bf8ef", "61a4715b43bf"],
+          "payloads": ["e7b5d7d57a61", "f1834177e593"],
           "settlements": {
             "race": "93edac3a1c3e"
           },
           "state": "d9b301beff12",
-          "effects": ["d433a326314e"]
+          "effects": ["ca99f593a4a0"]
         }
       }
     ]

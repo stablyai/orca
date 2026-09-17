@@ -13,9 +13,14 @@ export type CodexUsageParseResumeState = {
    *  size: a rollout can be observed mid-write with a partial trailing line. */
   parsedBytes: number
   /** Digest of the bytes just before `parsedBytes`. A rewrite or rotation that
-   *  leaves the file at the same length still changes this. */
+   *  leaves the file at the same length still changes this, unless it left the
+   *  tail of the prefix byte-identical — which is what `headDigest` covers. */
   boundaryDigest: string
-  /** `dev:ino`, or null where the platform does not report an inode. */
+  /** Digest of the bytes at the start of the parsed prefix. Catches a rewrite
+   *  that replaced the leading records and kept the length and the tail. */
+  headDigest: string
+  /** `dev:ino`, or null where the platform does not report an inode. Not a
+   *  rotation check: ext4 and overlayfs reuse the inode of a recreated path. */
   physicalFileId: string | null
   sessionId: string
   sessionCwd: string | null

@@ -1,6 +1,7 @@
 import type { CanUseTool, OnUserDialog, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { claudePermissionPresentation } from './claude-permission-presentation'
 
 export const CLAUDE_CAN_USE_TOOL_SUBTYPE = 'can_use_tool'
 export const CLAUDE_REQUEST_USER_DIALOG_SUBTYPE = 'request_user_dialog'
@@ -53,6 +54,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
   const canUseTool: CanUseTool = (toolName, input, options) =>
     new Promise<PermissionResult | null>((resolve) => {
       const prompt = deps.prompts.register({
+        ...claudePermissionPresentation(options),
         requestId: options.requestId,
         toolName,
         toolUseId: options.toolUseID,

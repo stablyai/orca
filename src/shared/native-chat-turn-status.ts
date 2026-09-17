@@ -163,10 +163,14 @@ export function reduceNativeChatTurnTiming(
 
   const timing = retained[activeTurnKey]
   if (isWorking) {
-    // An in-flight turn keeps the start it already had; only a fresh turn (or an
-    // authoritative host timestamp) restamps it.
+    // A lifecycle row can arrive before its exact request-origin revision. Keep
+    // the earlier anchor so publication order can never run the live clock backward.
     const startedAt =
-      workingStartedAt ?? (timing && timing.workedSeconds == null ? timing.startedAt : now)
+      timing && timing.workedSeconds == null
+        ? workingStartedAt === null || workingStartedAt === undefined
+          ? timing.startedAt
+          : Math.min(timing.startedAt, workingStartedAt)
+        : (workingStartedAt ?? now)
     if (timing?.startedAt === startedAt && timing.workedSeconds == null) {
       return retained
     }
@@ -240,7 +244,7 @@ export function selectNativeChatTurnStatuses(
   return {
     active: isWorking
       ? {
-          startedAt: workingStartedAt ?? timingByTurn[activeTurnKey]?.startedAt ?? null,
+          startedAt: timingByTurn[activeTurnKey]?.startedAt ?? workingStartedAt ?? null,
           thinking,
           workedSeconds: null
         }

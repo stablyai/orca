@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod'
+import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import { WorktreeCreate } from './worktree-create-params'
@@ -28,6 +29,21 @@ const LaunchAgent = z
 
 export const AgentLaunch = z.object({
   agent: LaunchAgent,
+  /**
+   * Names this launch so a retry replays instead of starting a second agent.
+   *
+   * Optional, and optional forever: shipped mobile sends none, and a host that required one would
+   * refuse every live client. Its absence is not a silent downgrade to a weaker guarantee — it is
+   * the caller declining the guarantee, and the host must never mint an id on a caller's behalf
+   * after an ambiguous launch, because an id minted on the retry is a brand new operation.
+   */
+  operationId: z
+    .string()
+    .refine(
+      (value) => parseAgentSessionOperationTimestamp(value) !== null,
+      'Malformed launch operation id'
+    )
+    .optional(),
   target: z.discriminatedUnion('kind', [
     z.object({
       kind: z.literal('existing'),

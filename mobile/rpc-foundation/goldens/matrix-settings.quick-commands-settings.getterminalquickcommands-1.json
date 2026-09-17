@@ -3,9 +3,9 @@
   "family": "settings.quick-commands",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "c6d5040d0fd1e6b852625561aa67d11f555f5adb12303b6f8d0176183026a6b1",
   "platform": "darwin",
@@ -13,8 +13,285 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "04f6dbaf09c1": {
+    "293828e985f4": {
       "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": []
+          }
+        }
+      }
+    },
+    "3436bd0afc4e": {
+      "commands": [],
+      "error": "outer refused",
+      "loading": false,
+      "persisted": [false],
+      "ready": false
+    },
+    "39ce53b18223": {
+      "commands": [],
+      "error": "Failed to load quick commands",
+      "loading": false,
+      "persisted": [false],
+      "ready": false
+    },
+    "3a752c2955e2": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
+    },
+    "57653dce9e88": {
+      "commands": [],
+      "error": "",
+      "loading": false,
+      "persisted": [false],
+      "ready": false
+    },
+    "607a55e2a75c": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "60cffab341b1": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "6802e9327771": {
+      "commands": [],
+      "error": "Unknown method",
+      "loading": false,
+      "persisted": [false],
+      "ready": false
+    },
+    "6ab1d0c3a5d5": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+    },
+    "76c980d41c21": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "79b6ec004f59": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "7d2d60c3289d": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "966c7e8ed097": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a86d1745ad9b": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -49,119 +326,9 @@
         }
       }
     },
-    "1ce4c013ba3d": {
+    "a897be4839be": {
       "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "21ccc919b368": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "21ee979928e9": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "3436bd0afc4e": {
-      "commands": [],
-      "error": "outer refused",
-      "loading": false,
-      "persisted": [false],
-      "ready": false
-    },
-    "39ce53b18223": {
-      "commands": [],
-      "error": "Failed to load quick commands",
-      "loading": false,
-      "persisted": [false],
-      "ready": false
-    },
-    "51361d7747a6": {
-      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -194,59 +361,16 @@
         }
       }
     },
-    "55a0abce3ee8": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "57653dce9e88": {
+    "d4b326e9a5d1": {
       "commands": [],
-      "error": "",
+      "error": "transport failure",
       "loading": false,
       "persisted": [false],
       "ready": false
     },
-    "6802e9327771": {
-      "commands": [],
-      "error": "Unknown method",
-      "loading": false,
-      "persisted": [false],
-      "ready": false
-    },
-    "7ed3d39f0607": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": false
-    },
-    "8215dc36bdfb": {
+    "de7991e02663": {
       "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -270,21 +394,33 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
           "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
+          "ok": false
         }
       }
     },
-    "a832f000ad89": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}",
-      "sent": 1
+    "e9c308be6dea": {
+      "commands": [],
+      "error": "Failed to save quick command",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
     },
-    "ae75d9a09c8f": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f7798a9d2071": {
       "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -317,8 +453,9 @@
         }
       }
     },
-    "b0069ba7e0a2": {
+    "ff66005bb7e9": {
       "name": "settings.updateTerminalQuickCommands#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -364,131 +501,6 @@
           }
         }
       }
-    },
-    "d4b326e9a5d1": {
-      "commands": [],
-      "error": "transport failure",
-      "loading": false,
-      "persisted": [false],
-      "ready": false
-    },
-    "d766ce9ee125": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "terminalQuickCommands": []
-          }
-        }
-      }
-    },
-    "e6aede33fdf3": {
-      "name": "settings.updateTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}",
-      "sent": 2
-    },
-    "e7d45eb699d8": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "e9c308be6dea": {
-      "commands": [],
-      "error": "Failed to save quick command",
-      "loading": false,
-      "persisted": [false],
-      "ready": true
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f555436e2b82": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -497,8 +509,8 @@
       {
         "id": "quick-commands-loaded-and-saved.normal:saved",
         "observation": {
-          "sender": ["d766ce9ee125", "b0069ba7e0a2"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "sender": ["293828e985f4", "ff66005bb7e9"],
+          "payloads": ["3a752c2955e2", "6ab1d0c3a5d5"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -510,8 +522,8 @@
       {
         "id": "quick-commands-loaded-and-saved.result-absent:saved",
         "observation": {
-          "sender": ["21ccc919b368"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["60cffab341b1"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -523,8 +535,8 @@
       {
         "id": "quick-commands-loaded-and-saved.result-null:saved",
         "observation": {
-          "sender": ["21ee979928e9"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["607a55e2a75c"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -536,8 +548,8 @@
       {
         "id": "quick-commands-loaded-and-saved.inner-ok-missing:saved",
         "observation": {
-          "sender": ["8215dc36bdfb"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["76c980d41c21"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -549,8 +561,8 @@
       {
         "id": "quick-commands-loaded-and-saved.inner-false-string-error:saved",
         "observation": {
-          "sender": ["f555436e2b82"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["79b6ec004f59"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -562,8 +574,8 @@
       {
         "id": "quick-commands-loaded-and-saved.inner-false-object-error:saved",
         "observation": {
-          "sender": ["04f6dbaf09c1"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["a86d1745ad9b"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -575,8 +587,8 @@
       {
         "id": "quick-commands-loaded-and-saved.outer-refused:saved",
         "observation": {
-          "sender": ["1ce4c013ba3d"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["de7991e02663"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -588,8 +600,8 @@
       {
         "id": "quick-commands-loaded-and-saved.outer-refused-no-message:saved",
         "observation": {
-          "sender": ["51361d7747a6"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["a897be4839be"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -601,8 +613,8 @@
       {
         "id": "quick-commands-loaded-and-saved.method-not-found:saved",
         "observation": {
-          "sender": ["ae75d9a09c8f"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["f7798a9d2071"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -614,8 +626,8 @@
       {
         "id": "quick-commands-loaded-and-saved.transport-rejection:saved",
         "observation": {
-          "sender": ["e7d45eb699d8"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["7d2d60c3289d"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -627,8 +639,8 @@
       {
         "id": "quick-commands-loaded-and-saved.transport-rejection-no-message:saved",
         "observation": {
-          "sender": ["55a0abce3ee8"],
-          "payloads": ["a832f000ad89"],
+          "sender": ["966c7e8ed097"],
+          "payloads": ["3a752c2955e2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"

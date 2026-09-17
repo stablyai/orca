@@ -3,9 +3,9 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
   "scenarioSha256": "8ae9e1dbb32d404eac9e01f71dacf1c37497030220a8e988c0093bb7ed2d159b",
   "platform": "darwin",
@@ -13,30 +13,33 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0289e08fa363": {
-      "name": "workspaceCreateDraft",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 3
-    },
-    "090c88478661": {
-      "name": "settings.get#1",
+    "037515630624": {
+      "name": "worktree.create#1",
+      "ordinal": 8,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "worktree.create"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "activate": true,
+            "baseBranch": "main",
+            "createdWithAgent": "claude",
+            "displayName": "Recorded pull request",
+            "displayNameKind": "generated",
+            "linkedPR": 7,
+            "name": "pr-7",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://github.com/o/r/pull/7"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 600000
           }
         }
       ],
@@ -45,109 +48,9 @@
         "startedAt": 0
       }
     },
-    "1fbad6cd3477": {
+    "138f771c1c0e": {
       "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"pr-7\",\"displayName\":\"Recorded pull request\",\"displayNameKind\":\"generated\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://github.com/o/r/pull/7\",\"createdWithAgent\":\"claude\",\"baseBranch\":\"main\",\"linkedPR\":7}}",
-      "sent": 3
-    },
-    "2473f12c7cdd": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "settings": {
-              "defaultTuiAgent": "codex",
-              "disabledTuiAgents": []
-            }
-          }
-        }
-      }
-    },
-    "33e3b949d4c5": {
-      "creating": {
-        "$rpc": "null"
-      },
-      "error": "",
-      "settings": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      }
-    },
-    "3dc266b1bda1": {
-      "creating": "github:7",
-      "error": "",
-      "settings": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      }
-    },
-    "52051fd3214e": {
-      "creating": "github:7",
-      "error": "",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
-    "5c52bc3f9e55": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
-    },
-    "759bb7d4b5cf": {
-      "name": "setupPrompt",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 3
-    },
-    "8f08c9b94011": {
-      "name": "actionItem",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 3
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "96be595b4b0e": {
-      "name": "creatingKey",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 3
-    },
-    "9e263f5e91be": {
-      "name": "error",
-      "value": "",
-      "sent": 0
-    },
-    "9e9f36142bbd": {
-      "name": "worktree.create#1",
+      "ordinal": 8,
       "args": [
         {
           "name": "method",
@@ -191,32 +94,52 @@
         }
       }
     },
-    "a49b109c46d4": {
-      "name": "worktree.create#1",
+    "20a51a1f4413": {
+      "name": "navigation",
+      "ordinal": 13,
+      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone"
+    },
+    "33e3b949d4c5": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "3a020ef7bb19": {
+      "name": "worktree.resolvePrBase#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":7}}"
+    },
+    "3dc266b1bda1": {
+      "creating": "github:7",
+      "error": "",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "41a2214deb19": {
+      "name": "settings.get#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "worktree.create"
+          "value": "settings.get"
         },
         {
           "name": "params",
           "value": {
-            "activate": true,
-            "baseBranch": "main",
-            "createdWithAgent": "claude",
-            "displayName": "Recorded pull request",
-            "displayNameKind": "generated",
-            "linkedPR": 7,
-            "name": "pr-7",
-            "repo": "id:repo-1",
-            "setupDecision": "inherit",
-            "startupDraft": "https://github.com/o/r/pull/7"
+            "$rpc": "absent"
           }
         },
         {
           "name": "options",
           "value": {
-            "timeoutMs": 600000
+            "$rpc": "absent"
           }
         }
       ],
@@ -225,39 +148,93 @@
         "startedAt": 0
       }
     },
-    "a4bcccf87769": {
-      "name": "worktree.resolvePrBase#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":7}}",
-      "sent": 2
-    },
-    "d78d24fff8fb": {
-      "name": "runtimeTaskSettings",
-      "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      },
-      "sent": 1
-    },
-    "e00e0d995284": {
+    "4d3dd1938fc5": {
       "name": "creatingKey",
-      "value": "github:7",
-      "sent": 0
+      "ordinal": 1,
+      "value": "github:7"
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "52051fd3214e": {
+      "creating": "github:7",
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
       }
     },
-    "f2ca7e4f0a73": {
-      "name": "navigation",
-      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone",
-      "sent": 3
+    "76e970794904": {
+      "name": "creatingKey",
+      "ordinal": 14,
+      "value": {
+        "$rpc": "null"
+      }
     },
-    "f9e183f427ee": {
+    "8ac371cf7234": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": []
+            }
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "975f2ff9a730": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "aad9a752c611": {
+      "name": "workspaceCreateDraft",
+      "ordinal": 11,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "ae917606f5e3": {
+      "name": "worktree.create#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"pr-7\",\"displayName\":\"Recorded pull request\",\"displayNameKind\":\"generated\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://github.com/o/r/pull/7\",\"createdWithAgent\":\"claude\",\"baseBranch\":\"main\",\"linkedPR\":7}}"
+    },
+    "cc60f9d62cad": {
+      "name": "actionItem",
+      "ordinal": 10,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "e32768eed86f": {
       "name": "worktree.resolvePrBase#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -289,6 +266,34 @@
           }
         }
       }
+    },
+    "e445683fd6a5": {
+      "name": "runtimeTaskSettings",
+      "ordinal": 5,
+      "value": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec46783c7fad": {
+      "name": "setupPrompt",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
     }
   },
   "recording": {
@@ -297,48 +302,48 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["5c52bc3f9e55"],
+          "sender": ["41a2214deb19"],
+          "payloads": ["975f2ff9a730"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "52051fd3214e",
-          "effects": ["e00e0d995284", "9e263f5e91be"]
+          "effects": ["4d3dd1938fc5", "ed3a7d6bc894"]
         }
       },
       {
         "id": "pr-base-resolved",
         "observation": {
-          "sender": ["2473f12c7cdd", "f9e183f427ee", "a49b109c46d4"],
-          "payloads": ["5c52bc3f9e55", "a4bcccf87769", "1fbad6cd3477"],
+          "sender": ["8ac371cf7234", "e32768eed86f", "037515630624"],
+          "payloads": ["975f2ff9a730", "3a020ef7bb19", "ae917606f5e3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "3dc266b1bda1",
-          "effects": ["e00e0d995284", "9e263f5e91be", "d78d24fff8fb"]
+          "effects": ["4d3dd1938fc5", "ed3a7d6bc894", "e445683fd6a5"]
         }
       },
       {
         "id": "created-from-pr-base",
         "observation": {
-          "sender": ["2473f12c7cdd", "f9e183f427ee", "9e9f36142bbd"],
-          "payloads": ["5c52bc3f9e55", "a4bcccf87769", "1fbad6cd3477"],
+          "sender": ["8ac371cf7234", "e32768eed86f", "138f771c1c0e"],
+          "payloads": ["975f2ff9a730", "3a020ef7bb19", "ae917606f5e3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "33e3b949d4c5",
           "effects": [
-            "e00e0d995284",
-            "9e263f5e91be",
-            "d78d24fff8fb",
-            "8f08c9b94011",
-            "0289e08fa363",
-            "759bb7d4b5cf",
-            "f2ca7e4f0a73",
-            "96be595b4b0e"
+            "4d3dd1938fc5",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "cc60f9d62cad",
+            "aad9a752c611",
+            "ec46783c7fad",
+            "20a51a1f4413",
+            "76e970794904"
           ]
         }
       }

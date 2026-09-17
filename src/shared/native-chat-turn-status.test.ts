@@ -149,6 +149,30 @@ describe('reduceNativeChatTurnTiming', () => {
     expect(next.u1?.startedAt).toBe(500)
   })
 
+  it('does not move a live turn later before its request origin arrives', () => {
+    const optimistic = reduceNativeChatTurnTiming(
+      {},
+      { activeTurnKey: 'u1', validTurnKeys, isWorking: true, now: 1_000 }
+    )
+    const turnStarted = reduceNativeChatTurnTiming(optimistic, {
+      activeTurnKey: 'u1',
+      validTurnKeys,
+      isWorking: true,
+      workingStartedAt: 8_000,
+      now: 8_000
+    })
+    const exactOrigin = reduceNativeChatTurnTiming(turnStarted, {
+      activeTurnKey: 'u1',
+      validTurnKeys,
+      isWorking: true,
+      workingStartedAt: 900,
+      now: 8_100
+    })
+
+    expect(turnStarted).toBe(optimistic)
+    expect(exactOrigin.u1).toEqual({ startedAt: 900, workedSeconds: null })
+  })
+
   it('settles the turn to whole elapsed seconds when work stops', () => {
     const working = reduceNativeChatTurnTiming(
       {},
@@ -288,6 +312,42 @@ describe('reduceNativeChatTurnTiming', () => {
 })
 
 describe('selectNativeChatTurnStatuses', () => {
+  it('keeps the selected live start monotonic until the exact request origin arrives', () => {
+    const optimistic = reduceNativeChatTurnTiming(
+      {},
+      { activeTurnKey: 'u1', validTurnKeys: new Set(['u1']), isWorking: true, now: 1_000 }
+    )
+    const turnStarted = reduceNativeChatTurnTiming(optimistic, {
+      activeTurnKey: 'u1',
+      validTurnKeys: new Set(['u1']),
+      isWorking: true,
+      workingStartedAt: 8_000,
+      now: 8_000
+    })
+    const beforeEcho = selectNativeChatTurnStatuses(turnStarted, {
+      activeTurnKey: 'u1',
+      isWorking: true,
+      workingStartedAt: 8_000,
+      thinking: false
+    })
+    const exactOrigin = reduceNativeChatTurnTiming(turnStarted, {
+      activeTurnKey: 'u1',
+      validTurnKeys: new Set(['u1']),
+      isWorking: true,
+      workingStartedAt: 900,
+      now: 8_100
+    })
+    const afterEcho = selectNativeChatTurnStatuses(exactOrigin, {
+      activeTurnKey: 'u1',
+      isWorking: true,
+      workingStartedAt: 900,
+      thinking: false
+    })
+
+    expect(beforeEcho.active?.startedAt).toBe(1_000)
+    expect(afterEcho.active?.startedAt).toBe(900)
+  })
+
   it('carries the reasoning verdict it is given onto the working turn', () => {
     const { active } = selectNativeChatTurnStatuses(
       { u1: { startedAt: 1_000, workedSeconds: null } },

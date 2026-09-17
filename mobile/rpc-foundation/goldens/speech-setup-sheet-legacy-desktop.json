@@ -3,9 +3,9 @@
   "family": "speech.setup-sheet",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "0ba2d8283fe98206c7500b62732e30acdc5b8e55f50b7ea8cae96403b803d519",
   "platform": "darwin",
@@ -23,9 +23,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "44136fa355b3": {},
-    "673374bd1eb2": {
+    "103ab24b6298": {
       "name": "speech.models.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -58,10 +58,11 @@
         }
       }
     },
-    "f98fd51d5ce2": {
+    "44136fa355b3": {},
+    "4f793e38be31": {
       "name": "speech.models.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}"
     }
   },
   "recording": {
@@ -70,8 +71,8 @@
       {
         "id": "legacy-desktop",
         "observation": {
-          "sender": ["673374bd1eb2"],
-          "payloads": ["f98fd51d5ce2"],
+          "sender": ["103ab24b6298"],
+          "payloads": ["4f793e38be31"],
           "settlements": {
             "list": "100447f8b483"
           },

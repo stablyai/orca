@@ -3,9 +3,9 @@
   "family": "tasks.item-metadata-github",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
   "scenarioSha256": "010c65eaa056c5df0b867dd5b5851e206e8479e9fcce02515f1e326df4b8889c",
   "platform": "darwin",
@@ -13,42 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "32a3635e06a4": {
-      "name": "mutatingStatus",
-      "value": false,
-      "sent": 1
-    },
-    "387542f122bb": {
+    "4227d4e27287": {
       "name": "github.updatePR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"title\":\"Renamed\",\"body\":\"new body\"}}}",
-      "sent": 1
-    },
-    "48545870a5c1": {
-      "name": "items",
-      "value": [
-        {
-          "provider": "github",
-          "source": {
-            "id": "github:pr:12",
-            "labels": ["bug"],
-            "latestReviews": [],
-            "number": 12,
-            "repoId": "repo-1",
-            "reviewDecision": {
-              "$rpc": "null"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Renamed",
-            "type": "pr"
-          },
-          "title": "Renamed"
-        }
-      ],
-      "sent": 1
-    },
-    "7cb20f219688": {
-      "name": "github.updatePR#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -85,13 +52,19 @@
         }
       }
     },
-    "9e263f5e91be": {
-      "name": "error",
-      "value": "",
-      "sent": 0
+    "82bce4c83103": {
+      "name": "github.updatePR#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"title\":\"Renamed\",\"body\":\"new body\"}}}"
     },
-    "a42cad5a2c3e": {
+    "9b243259db75": {
+      "name": "mutatingStatus",
+      "ordinal": 8,
+      "value": false
+    },
+    "bcd901c23e88": {
       "name": "actionItem",
+      "ordinal": 5,
       "value": {
         "provider": "github",
         "source": {
@@ -109,16 +82,11 @@
           "type": "pr"
         },
         "title": "Renamed"
-      },
-      "sent": 1
+      }
     },
-    "cc96725d8f47": {
-      "name": "mutatingStatus",
-      "value": true,
-      "sent": 0
-    },
-    "dbb0d797e4ab": {
+    "c5829ecafc57": {
       "name": "detailPayload",
+      "ordinal": 7,
       "value": {
         "assignees": ["octocat"],
         "baseSha": "base-sha",
@@ -163,8 +131,31 @@
           "$rpc": "null"
         },
         "reviewRequests": []
-      },
-      "sent": 1
+      }
+    },
+    "ca02c3ae6243": {
+      "name": "items",
+      "ordinal": 6,
+      "value": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Renamed",
+            "type": "pr"
+          },
+          "title": "Renamed"
+        }
+      ]
     },
     "e3fcde8cdbfe": {
       "error": "",
@@ -260,6 +251,16 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "fd2fad47bec2": {
+      "name": "mutatingStatus",
+      "ordinal": 1,
+      "value": true
     }
   },
   "recording": {
@@ -268,20 +269,20 @@
       {
         "id": "update-pr-settled",
         "observation": {
-          "sender": ["7cb20f219688"],
-          "payloads": ["387542f122bb"],
+          "sender": ["4227d4e27287"],
+          "payloads": ["82bce4c83103"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
           },
           "state": "e3fcde8cdbfe",
           "effects": [
-            "cc96725d8f47",
-            "9e263f5e91be",
-            "a42cad5a2c3e",
-            "48545870a5c1",
-            "dbb0d797e4ab",
-            "32a3635e06a4"
+            "fd2fad47bec2",
+            "ed3a7d6bc894",
+            "bcd901c23e88",
+            "ca02c3ae6243",
+            "c5829ecafc57",
+            "9b243259db75"
           ]
         }
       }

@@ -5,10 +5,7 @@ import type {
   AgentJournalQuestion,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { formatToolInput, truncateToolDetail } from '../../shared/native-chat-tool-summary'
 import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
@@ -45,17 +42,22 @@ export function claudePromptIdentity(input: {
 }
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
-  const serialized = JSON.stringify(prompt.input)
-  return {
+  const detail = truncateToolDetail(formatToolInput(prompt.input))
+  return boundJournalPromptBody({
     kind: 'approval',
-    title: `Allow ${prompt.toolName}?`,
-    detail: serialized ? boundInlineText(serialized, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text : null,
+    title: prompt.title ?? `Allow ${prompt.toolName}?`,
+    ...(prompt.displayName ? { displayName: prompt.displayName } : {}),
+    ...(prompt.description ? { description: prompt.description } : {}),
+    ...(prompt.decisionReason ? { decisionReason: prompt.decisionReason } : {}),
+    ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
+    ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
+    detail: detail || null,
     options: CLAUDE_APPROVAL_DECISIONS.map((decision) => ({
       id: decision,
       label: APPROVAL_LABELS[decision]
     })),
     resolution: { ...PENDING }
-  }
+  })
 }
 
 export type ClaudeQuestionItem = {

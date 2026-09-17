@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import ts from 'typescript'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
+import { observeSalvagedReads } from './salvage-observation'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -150,6 +151,7 @@ export function operationModuleLoader(
     const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
     const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
     evaluate((name: string) => imported(file, name), exports)
+    observeSalvagedReads(file, exports)
     return exports
   }
   return {

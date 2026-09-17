@@ -661,7 +661,10 @@ describe('a structured Claude session over agentSession.*', () => {
     )
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
-    expect(approval?.body).toMatchObject({ title: 'Allow Bash?', detail: '{"command":"ls"}' })
+    expect(approval?.body).toMatchObject({
+      title: 'Allow Bash?',
+      detail: '{\n  "command": "ls"\n}'
+    })
     await ok('agentSession.respondToApproval', {
       envelope: envelope(
         'agentSession.respondTo:approval',

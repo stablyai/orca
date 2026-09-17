@@ -1,7 +1,8 @@
-import { createElement, type Context } from 'react'
+import { createElement } from 'react'
 import { hookMount, performHookAction } from '../hook-mount'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
+import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
@@ -19,7 +20,7 @@ const WORKTREE = 'repo42::/p'
 
 /** The commit list reads its reconnect handle through the context `client-context.tsx` keeps. */
 export const sourceControlScreenReadMountExposures: readonly OperationExposure[] = [
-  ['client-context.tsx', '\nexports.recorderHostClientContext = Ctx;']
+  hostClientContextExposure
 ]
 
 /**
@@ -80,9 +81,7 @@ export function sourceControlScreenReadMountAdapters(
       const List = modules.load<typeof import('../../../source-control/MobileGitHistoryList')>(
         'mobile/src/source-control/MobileGitHistoryList.tsx'
       ).MobileGitHistoryList
-      const { recorderHostClientContext } = modules.load<{
-        recorderHostClientContext: Context<RpcClientContextValue | null>
-      }>('mobile/src/transport/client-context.tsx')
+      const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({
         acquire: () => client,
         release: () => {},
@@ -96,7 +95,7 @@ export function sourceControlScreenReadMountAdapters(
       const screen = screenMount(
         () =>
           createElement(
-            recorderHostClientContext.Provider,
+            hostClientContext.Provider,
             { value: context },
             createElement(List, {
               client,

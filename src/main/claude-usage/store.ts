@@ -139,7 +139,8 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   async getAutomationRunUsage(input: AutomationUsageLookupInput): Promise<AutomationRunUsage> {
     return resolveAutomationRunUsage(input, {
       getState: () => this.state,
-      refresh: (force) => this.refresh(force)
+      refresh: (force) => this.refresh(force),
+      isScanning: () => this.getScanState().isScanning
     })
   }
 }

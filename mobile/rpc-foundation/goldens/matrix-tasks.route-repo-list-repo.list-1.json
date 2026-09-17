@@ -3,18 +3,91 @@
   "family": "tasks.route-repo-list",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "d1810575d5f0e7a45f9f9a327c271f0ed483b16b21b65cfb5fcfa9dc90baf6c8",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "feb6cee1ab7ecff1ba98bfba22d4924c748d3bb6b749db460cb617ee50b92f2c",
   "scenarioSha256": "6373b83783b1a9b061bede3bba7aa3b573c3a50b897102a094df93f926856fdc",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "06b63e0d9986": {
+    "12e70439f294": {
       "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "1321b4c8c0b8": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "19b2979d7fc2": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "1b23dab83fcf": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -46,52 +119,27 @@
         }
       }
     },
-    "06fc8e7b85d5": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
+    "2c8a833ba907": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "repoListError": "Unknown method",
+      "repoListStatus": "error",
+      "repos": []
     },
-    "2381a3fe154e": {
+    "32a7c0ae7918": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'repos')",
+        "category": "Error",
+        "message": "outer refused",
         "isRpcDeliveryUnknown": false
       }
     },
-    "26accd69bc48": {
+    "35f85fe3b71c": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -115,56 +163,25 @@
         "startedAt": 0
       }
     },
-    "2c8a833ba907": {
+    "3af5453be521": {
       "crash": {
         "$rpc": "null"
       },
-      "repoListError": "Unknown method",
+      "repoListError": "The host sent a reply this app could not read (repo.list)",
       "repoListStatus": "error",
       "repos": []
     },
-    "2ebe4d776f9b": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
+    "43e0e76c3901": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "repoListError": "outer refused",
+      "repoListStatus": "error",
+      "repos": []
     },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "38e790fd9e9c": {
+    "48c68906a98a": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -196,24 +213,83 @@
         }
       }
     },
-    "3afd0fbd92b6": {
+    "5035ab0dea56": {
       "crash": {
         "$rpc": "null"
       },
-      "repoListError": "Cannot read properties of null (reading 'repos')",
+      "repoListError": "",
       "repoListStatus": "error",
       "repos": []
     },
-    "43e0e76c3901": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "repoListError": "outer refused",
-      "repoListStatus": "error",
-      "repos": []
-    },
-    "49bee46155dd": {
+    "624ec4e5082c": {
       "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "747c556da67a": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "7d0fa424be7c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -254,84 +330,9 @@
         }
       }
     },
-    "5035ab0dea56": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "repoListError": "",
-      "repoListStatus": "error",
-      "repos": []
-    },
-    "5730368193ee": {
+    "8a72d3d14d44": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
-    },
-    "63dfbb6942f2": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'repos')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "6e5c6593dad8": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "75825f56bde8": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "repoListError": "",
-      "repoListStatus": "loaded",
-      "repos": {
-        "$rpc": "undefined"
-      }
-    },
-    "9206a72df4c7": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "repoListError": "Cannot read properties of undefined (reading 'repos')",
-      "repoListStatus": "error",
-      "repos": []
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9d3fa0db2665": {
-      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -358,13 +359,15 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
+            "error": "inner refused",
             "ok": false
           }
         }
       }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
     },
     "9d8c57ae3003": {
       "crash": {
@@ -410,40 +413,6 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "b9f0f1e94cd9": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -454,99 +423,9 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "cc1facdf008c": {
+    "d68475063b62": {
       "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "e341bd05e614": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f3b516f62081": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "f5484d90b3f7": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "repoListError": "",
-      "repoListStatus": "loaded",
-      "repos": ["repo-1", "repo-2"]
-    },
-    "f96e83d33565": {
-      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -573,11 +452,117 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "inner refused",
+            "error": {
+              "message": "inner refused"
+            },
             "ok": false
           }
         }
       }
+    },
+    "d8654a93cec4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (repo.list)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "dae756300589": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1d579dd459c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "f5484d90b3f7": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "repoListError": "",
+      "repoListStatus": "loaded",
+      "repos": ["repo-1", "repo-2"]
     },
     "fcd8faa86ca8": {
       "status": "fulfilled",
@@ -613,8 +598,8 @@
       {
         "id": "tasks-route-repo-list.prelude:repos-pending",
         "observation": {
-          "sender": ["26accd69bc48"],
-          "payloads": ["5730368193ee"],
+          "sender": ["35f85fe3b71c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "9270aeb7d9c6"
@@ -626,8 +611,8 @@
       {
         "id": "tasks-route-repo-list.normal:repos-loaded",
         "observation": {
-          "sender": ["49bee46155dd"],
-          "payloads": ["5730368193ee"],
+          "sender": ["7d0fa424be7c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "fcd8faa86ca8"
@@ -639,73 +624,73 @@
       {
         "id": "tasks-route-repo-list.result-absent:repos-loaded",
         "observation": {
-          "sender": ["2ebe4d776f9b"],
-          "payloads": ["5730368193ee"],
+          "sender": ["747c556da67a"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "ensure": "2381a3fe154e"
+            "ensure": "d8654a93cec4"
           },
-          "state": "9206a72df4c7",
+          "state": "3af5453be521",
           "effects": []
         }
       },
       {
         "id": "tasks-route-repo-list.result-null:repos-loaded",
         "observation": {
-          "sender": ["38e790fd9e9c"],
-          "payloads": ["5730368193ee"],
+          "sender": ["48c68906a98a"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "ensure": "63dfbb6942f2"
+            "ensure": "d8654a93cec4"
           },
-          "state": "3afd0fbd92b6",
+          "state": "3af5453be521",
           "effects": []
         }
       },
       {
         "id": "tasks-route-repo-list.inner-ok-missing:repos-loaded",
         "observation": {
-          "sender": ["06b63e0d9986"],
-          "payloads": ["5730368193ee"],
+          "sender": ["1b23dab83fcf"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "ensure": "eb79a9b3682a"
+            "ensure": "d8654a93cec4"
           },
-          "state": "75825f56bde8",
+          "state": "3af5453be521",
           "effects": []
         }
       },
       {
         "id": "tasks-route-repo-list.inner-false-string-error:repos-loaded",
         "observation": {
-          "sender": ["f96e83d33565"],
-          "payloads": ["5730368193ee"],
+          "sender": ["8a72d3d14d44"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "ensure": "eb79a9b3682a"
+            "ensure": "d8654a93cec4"
           },
-          "state": "75825f56bde8",
+          "state": "3af5453be521",
           "effects": []
         }
       },
       {
         "id": "tasks-route-repo-list.inner-false-object-error:repos-loaded",
         "observation": {
-          "sender": ["9d3fa0db2665"],
-          "payloads": ["5730368193ee"],
+          "sender": ["d68475063b62"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "ensure": "eb79a9b3682a"
+            "ensure": "d8654a93cec4"
           },
-          "state": "75825f56bde8",
+          "state": "3af5453be521",
           "effects": []
         }
       },
       {
         "id": "tasks-route-repo-list.outer-refused:repos-loaded",
         "observation": {
-          "sender": ["b9f0f1e94cd9"],
-          "payloads": ["5730368193ee"],
+          "sender": ["624ec4e5082c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "32a7c0ae7918"
@@ -717,8 +702,8 @@
       {
         "id": "tasks-route-repo-list.outer-refused-no-message:repos-loaded",
         "observation": {
-          "sender": ["06fc8e7b85d5"],
-          "payloads": ["5730368193ee"],
+          "sender": ["f1d579dd459c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "f3b516f62081"
@@ -730,8 +715,8 @@
       {
         "id": "tasks-route-repo-list.method-not-found:repos-loaded",
         "observation": {
-          "sender": ["e341bd05e614"],
-          "payloads": ["5730368193ee"],
+          "sender": ["12e70439f294"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "b948e8307e81"
@@ -743,8 +728,8 @@
       {
         "id": "tasks-route-repo-list.transport-rejection:repos-loaded",
         "observation": {
-          "sender": ["6e5c6593dad8"],
-          "payloads": ["5730368193ee"],
+          "sender": ["dae756300589"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "a947768bc0ed"
@@ -756,8 +741,8 @@
       {
         "id": "tasks-route-repo-list.transport-rejection-no-message:repos-loaded",
         "observation": {
-          "sender": ["cc1facdf008c"],
-          "payloads": ["5730368193ee"],
+          "sender": ["1321b4c8c0b8"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "c7584e82c72f"

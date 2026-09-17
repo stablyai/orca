@@ -59,14 +59,9 @@ export function readAgentLaunchCreateOutcome(result: unknown): AgentLaunchCreate
   if (typeof worktreeId !== 'string' || !worktreeId.trim()) {
     return null
   }
-  // A current host reports an incomplete create at the top level, the same place `worktree.create`
-  // puts it, so nothing here branches on which surface the host built to find it. A host that
-  // predates that move nests the same warning on the terminal outcome instead, and still advertises
-  // the one `agent.launch.v1` capability, so this route cannot tell the two apart up front — read
-  // both shapes for as long as such a host can be paired. Top level wins: it is the only place a
-  // current host writes, so the fallback cannot shadow a fresher value.
-  const warning =
-    readTrimmedWarning(result) || readTrimmedWarning('outcome' in result ? result.outcome : null)
+  // v2 guarantees that an incomplete create is reported at the top level, the same place
+  // `worktree.create` puts it, so nothing here branches on which surface the host built.
+  const warning = readTrimmedWarning(result)
   return { worktreeId, ...(warning ? { warning } : {}) }
 }
 
@@ -81,7 +76,7 @@ function readTrimmedWarning(source: unknown): string {
  * Whether the host rejected the method itself rather than the create.
  *
  * The `status.get` probe can be stale in one direction that matters: the host advertises
- * `agent.launch.v1` but has not yet recorded this client's own capability list, and then refuses
+ * `agent.launch.v2` but has not yet recorded this client's own capability list, and then refuses
  * the call. Downgrading to `worktree.create` keeps that race from failing a create outright.
  */
 export function isAgentLaunchUnsupportedRefusal(error: {

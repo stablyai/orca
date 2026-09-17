@@ -3,18 +3,40 @@
   "family": "git.history-commit-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "57147be5ea5d7c74e8fd0d2473c7001dd91008cf53128d5e60fd6d3d607183e6",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
   "scenarioSha256": "27e71d989da152adcbe40a02186df8b8a2e19a6a0e8bfe727e2133c4360f7639",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "17bc1e177fe1": {
+    "0a26f0498c96": {
+      "name": "git.commitCompare#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"commitId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}"
+    },
+    "0e92a08f8380": {
       "name": "git.history#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
+    },
+    "322a1b963588": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "5d7a655deafc": {
+      "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -39,22 +61,6 @@
         "startedAt": 0
       }
     },
-    "322a1b963588": {
-      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h"],
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "FlatList": 1
-      },
-      "labels": [],
-      "text": []
-    },
-    "7e2ddc2aee54": {
-      "name": "git.history#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}",
-      "sent": 1
-    },
     "8271d8fc83a6": {
       "commitRow": "unrendered",
       "crash": {
@@ -67,41 +73,9 @@
       "labels": [],
       "text": []
     },
-    "83c65c3101c2": {
-      "name": "git.commitCompare#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"commitId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
-      "sent": 2
-    },
-    "9d4d0ea6c245": {
-      "commitRow": [
-        "first",
-        "aaaaaaa",
-        " · ",
-        "dev",
-        " · ",
-        "1h",
-        "src/app.ts",
-        "+",
-        "4",
-        " ",
-        "-",
-        "1",
-        "src/other.ts",
-        "+",
-        "9",
-        " "
-      ],
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "FlatList": 1
-      },
-      "labels": [],
-      "text": []
-    },
-    "b2ab284c5373": {
+    "94c8fcc83e52": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -143,8 +117,37 @@
         }
       }
     },
-    "d20f49d98e53": {
+    "9d4d0ea6c245": {
+      "commitRow": [
+        "first",
+        "aaaaaaa",
+        " · ",
+        "dev",
+        " · ",
+        "1h",
+        "src/app.ts",
+        "+",
+        "4",
+        " ",
+        "-",
+        "1",
+        "src/other.ts",
+        "+",
+        "9",
+        " "
+      ],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "ce63cea4bc23": {
       "name": "git.commitCompare#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -169,8 +172,9 @@
         "startedAt": 0
       }
     },
-    "d573c17c2122": {
+    "da380f404a23": {
       "name": "git.commitCompare#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -230,8 +234,8 @@
       {
         "id": "history-pending",
         "observation": {
-          "sender": ["17bc1e177fe1"],
-          "payloads": ["7e2ddc2aee54"],
+          "sender": ["5d7a655deafc"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -242,8 +246,8 @@
       {
         "id": "files-pending",
         "observation": {
-          "sender": ["b2ab284c5373", "d20f49d98e53"],
-          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
+          "sender": ["94c8fcc83e52", "ce63cea4bc23"],
+          "payloads": ["0e92a08f8380", "0a26f0498c96"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -255,8 +259,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["b2ab284c5373", "d573c17c2122"],
-          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
+          "sender": ["94c8fcc83e52", "da380f404a23"],
+          "payloads": ["0e92a08f8380", "0a26f0498c96"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"

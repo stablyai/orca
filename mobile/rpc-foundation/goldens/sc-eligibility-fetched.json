@@ -3,9 +3,9 @@
   "family": "hostedReview.eligibility",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "f6a1595073abe11b33973e8865900a1d849f44221961da5c12ea13aa696f6490",
   "platform": "darwin",
@@ -49,17 +49,59 @@
       },
       "prefill": "unresolved"
     },
-    "349d5045a996": {
+    "482bc172202f": {
       "name": "hostedReview.getCreationEligibility#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}",
-      "sent": 1
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "485a0942bda3": {
       "eligibility": "unfetched",
       "prefill": "unresolved"
     },
-    "899a024357b9": {
+    "8bbf03da5e8d": {
       "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "ef2ac85133d3": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -112,46 +154,6 @@
           }
         }
       }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "e41e491351c2": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     }
   },
   "recording": {
@@ -160,8 +162,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["e41e491351c2"],
-          "payloads": ["349d5045a996"],
+          "sender": ["482bc172202f"],
+          "payloads": ["8bbf03da5e8d"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -172,8 +174,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["899a024357b9"],
-          "payloads": ["349d5045a996"],
+          "sender": ["ef2ac85133d3"],
+          "payloads": ["8bbf03da5e8d"],
           "settlements": {
             "fetch": "24bd84c9fb40"
           },

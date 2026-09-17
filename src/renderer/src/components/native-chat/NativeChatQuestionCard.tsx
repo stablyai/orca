@@ -192,10 +192,11 @@ export function NativeChatQuestionCard({
                   <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                     <Pencil className="size-3.5" />
                   </span>
-                  {/* Intentionally plain — no `/` or `@` grammar. This row answers the
-                      question; a slash command addresses the session, so running one here
-                      could only answer with command text or abandon the pending prompt.
-                      That grammar belongs to the composer, which this card replaces. */}
+                  {/* No `/` or `@` picker here — that autocomplete belongs to the composer,
+                      which this card replaces. What you type is delivered verbatim as the
+                      AskUserQuestion tool result: it reaches the model but never the command
+                      parser, so `/compact` and friends are inert, while a skill name can
+                      still be acted on. */}
                   <input
                     ref={answerInputRef}
                     disabled={isSubmitting}

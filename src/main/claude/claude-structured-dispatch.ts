@@ -30,11 +30,13 @@ const MAX_ACTIVE_DISPATCH_WAITERS = 64
 /** Settles a provider-proven late outcome; replay rows independently reconcile acceptance. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
 
-export function resolveClaudeReplayWaiter(
+export type ClaudeReplayTurnOrigin = { requestedAt: number | null }
+
+export function resolveClaudeReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
   onSettledLate?: ClaudeLateDispatchSettlement
-): boolean {
+): ClaudeReplayTurnOrigin | null {
   const envelope = readClaudeMessageEnvelope(message)
   const isUserReplay =
     envelope?.role === 'user' &&
@@ -45,11 +47,11 @@ export function resolveClaudeReplayWaiter(
     (!isUserReplay && !isCompletedCommand) ||
     readClaudeFrameString(message, 'session_id') !== session.providerSessionId
   ) {
-    return false
+    return null
   }
   const uuid = readClaudeFrameString(message, 'uuid')
   if (!uuid) {
-    return false
+    return null
   }
 
   // Newer SDK frames carry the client uuid that caused a turn. A correlation
@@ -62,27 +64,29 @@ export function resolveClaudeReplayWaiter(
     )
     if (exact) {
       settleWaiter(session, exact, uuid, onSettledLate)
-      return isUserReplay && exact.dispatchSequence === session.dispatchSequence
+      return isUserReplay ? { requestedAt: exact.requestedAt } : null
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
     )
     if (retired) {
       forgetRetiredWaiter(session, retired)
-      return recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
+      recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
+      return null
     }
-    return false
+    return null
   }
 
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
     settleWaiter(session, exact, uuid, onSettledLate)
-    return isUserReplay && exact.dispatchSequence === session.dispatchSequence
+    return isUserReplay ? { requestedAt: exact.requestedAt } : null
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
     forgetRetiredWaiter(session, retired)
-    return recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
+    recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
+    return null
   }
 
   if (isUserReplay) {
@@ -96,8 +100,9 @@ export function resolveClaudeReplayWaiter(
         (candidate) => candidate.replayContentKey === replayContentKey
       )
       if (compatible.length === 1) {
-        settleWaiter(session, compatible[0]!, uuid, onSettledLate)
-        return compatible[0]!.dispatchSequence === session.dispatchSequence
+        const [candidate] = compatible
+        settleWaiter(session, candidate!, uuid, onSettledLate)
+        return { requestedAt: candidate!.requestedAt }
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(
@@ -106,30 +111,31 @@ export function resolveClaudeReplayWaiter(
       if (lateCompatible.length === 1) {
         const [candidate] = lateCompatible
         forgetRetiredWaiter(session, candidate!)
-        return recoverLateIdentity(session, candidate!, uuid, true, onSettledLate)
+        recoverLateIdentity(session, candidate!, uuid, true, onSettledLate)
+        return null
       }
     }
-    return false
+    return null
   }
   const current = session.dispatchWaiters[0]
   if (isCompletedCommand && !current?.acceptsResult) {
-    return false
+    return null
   }
   // A legacy result has no dispatch correlation. Any retired waiter makes queue order ambiguous,
   // even when the retired dispatch was an ordinary turn rather than a slash command.
   if (isCompletedCommand && session.retiredDispatchWaiters.length > 0) {
-    return false
+    return null
   }
   // Once an eviction occurred, a fresh result uuid cannot be joined to a waiter by queue order.
   if (isCompletedCommand && session.replayContentFallbackBlocked) {
-    return false
+    return null
   }
   const waiter = uuid ? session.dispatchWaiters.shift() : undefined
   if (waiter && uuid) {
     settleWaiter(session, waiter, uuid, onSettledLate)
-    return isUserReplay
+    return isUserReplay ? { requestedAt: waiter.requestedAt } : null
   }
-  return false
+  return null
 }
 
 function settleWaiter(
@@ -166,20 +172,18 @@ function recoverLateIdentity(
   uuid: string,
   isUserReplay: boolean,
   onSettledLate?: ClaudeLateDispatchSettlement
-): boolean {
+): void {
   if (!isUserReplay && !waiter.acceptsResult) {
-    return false
+    return
   }
   // The provider acted on this dispatch, so the send it came from is delivered.
-  // Unfenced on purpose: the dispatch-sequence check below only decides whether
-  // this replay still opens a turn, while delivery is settled for good either way.
+  // A retired replay settles delivery only; it cannot reopen a turn.
   if (waiter.clientMessageId) {
     onSettledLate?.({
       clientMessageId: waiter.clientMessageId,
       providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
     })
   }
-  return isUserReplay && waiter.dispatchSequence === session.dispatchSequence
 }
 
 /**
@@ -194,7 +198,8 @@ function waitForReplay(
   acceptsResult: boolean,
   sentUuid: string,
   replayContentKey: string,
-  clientMessageId: string | null
+  clientMessageId: string | null,
+  requestedAt: number | null
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -203,6 +208,7 @@ function waitForReplay(
       clientMessageId,
       sentUuid,
       dispatchSequence: session.dispatchSequence,
+      requestedAt,
       replayContentKey,
       resolve
     }
@@ -273,7 +279,7 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId?: string; body: AgentJournalMessageItem }
+  input: { clientMessageId?: string; body: AgentJournalMessageItem; requestedAt?: number }
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -294,7 +300,8 @@ export async function dispatchClaudeTurn(
     acceptsResult,
     sentUuid,
     claudeDispatchContentKey(content),
-    input.clientMessageId ?? null
+    input.clientMessageId ?? null,
+    input.requestedAt ?? null
   )
   const replayed = replay.promise
   try {

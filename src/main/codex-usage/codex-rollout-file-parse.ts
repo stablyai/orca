@@ -1,13 +1,14 @@
 import { basename } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
-import {
-  attributeCodexUsageEvent,
-  type CodexUsageWorktreeRef
-} from './codex-usage-event-attribution'
+import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
+import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
 import { codexUsageAggregation } from './codex-usage-aggregation'
-import { buildCodexRolloutResumeState } from './codex-rollout-resume-state'
+import {
+  buildCodexRolloutResumeState,
+  resolveCodexRolloutResume
+} from './codex-rollout-resume-state'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
@@ -82,9 +83,22 @@ function createParseContext(
 
 export async function parseCodexUsageFile(
   filePath: string,
-  worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
+  resolveWorktree: UsageWorktreeResolver,
   options: CodexRolloutParseOptions = {}
 ): Promise<CodexUsagePersistedFile> {
+  // Why: the caller verified this resume point while walking the directory, and
+  // every file discovered or parsed since then has run in between. Re-verify
+  // here, against the file about to be read, or a rollout replaced in that gap
+  // gets the cached session id, cwd, model and running totals stitched onto an
+  // unrelated file's records — and `processedFile` below re-stats to the new
+  // size, so the reuse path then freezes the corrupted projection.
+  if (
+    options.resume &&
+    (await resolveCodexRolloutResume(filePath, options.resume.previous)) === null
+  ) {
+    return parseCodexUsageFile(filePath, resolveWorktree, { ...options, resume: undefined })
+  }
+
   const processedFile = await getProcessedFileInfo(filePath)
   const legacySourceSkipBytes = options.legacySourceSkipBytes ?? 0
   const startOffset = options.resume?.state.parsedBytes ?? legacySourceSkipBytes
@@ -124,18 +138,37 @@ export async function parseCodexUsageFile(
       continue
     }
     ownedEventKeys.add(parsed.eventKey)
-    const attributed = await attributeCodexUsageEvent(parsed, worktrees)
+    const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
     if (attributed) {
       events.push(attributed)
     }
   }
 
   // A counted-but-unterminated tail would be counted again on resume, and a
-  // legacy suffix offset is recomputed per scan, so neither may be resumed.
-  const parseResumeState =
-    partialTailProducedEvent || legacySourceSkipBytes > 0
-      ? null
-      : await buildCodexRolloutResumeState(filePath, parsedBytes, resumeContext)
+  // legacy suffix offset is recomputed per scan, so neither may be resumed. A
+  // prefix under the resumable floor is turned away by the builder itself.
+  const resumeStateSuppressed = partialTailProducedEvent || legacySourceSkipBytes > 0
+  const parseResumeState = resumeStateSuppressed
+    ? null
+    : await buildCodexRolloutResumeState(
+        filePath,
+        parsedBytes,
+        resumeContext,
+        // Already verified against the file at the top of this scan.
+        options.resume?.state.headDigest ?? null
+      )
+
+  // Why: a resume point only exists past the resumable floor and `parsedBytes`
+  // only grows, so the builder's other null — a prefix too short to be worth
+  // resuming — is unreachable here and this null means a short read: the file
+  // shrank past the prefix this parse merged history for, after the
+  // re-verification above and during the read. `processedFile` already re-stat'd
+  // to the smaller size, so persisting that pair would let the next scan reuse a
+  // pre-truncation total forever. An unterminated tail proves the file still
+  // runs past the resume offset, so it cannot be this case.
+  if (options.resume && !resumeStateSuppressed && parseResumeState === null) {
+    return parseCodexUsageFile(filePath, resolveWorktree, { ...options, resume: undefined })
+  }
 
   const appended = codexUsageAggregation.aggregate(events)
   const previous = options.resume?.previous

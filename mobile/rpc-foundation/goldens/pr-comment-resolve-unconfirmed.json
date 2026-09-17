@@ -3,9 +3,9 @@
   "family": "github.pr-comment-mutation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "f425131d29fee8826c00a550fb537d0bd1a37bbaf3b33992984d5e04a990a512",
   "platform": "darwin",
@@ -13,6 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0e0226959068": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+        "ok": false
+      }
+    },
     "1165af07b50f": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -22,19 +31,14 @@
         "ok": false
       }
     },
-    "35ba72e2b9cd": {
-      "name": "github.resolveReviewThread#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 2
+    "2b8d60101912": {
+      "name": "github.resolveReviewThread#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
     },
-    "5603f79b1c06": {
-      "resolve-thread": {
-        "error": "Failed to update review thread.",
-        "ok": false
-      }
-    },
-    "70d79a65b986": {
+    "38f037a31b80": {
       "name": "github.resolveReviewThread#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -65,13 +69,26 @@
         }
       }
     },
-    "9ab4446a2d2c": {
-      "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 1
+    "483de03b566e": {
+      "name": "github.resolveReviewThread#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
     },
-    "9b791087c56d": {
+    "5603f79b1c06": {
+      "resolve-thread": {
+        "error": "Failed to update review thread.",
+        "ok": false
+      }
+    },
+    "699651595413": {
+      "resolve-thread": {
+        "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+        "ok": false
+      }
+    },
+    "8b60835c8142": {
       "name": "github.resolveReviewThread#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -110,8 +127,8 @@
       {
         "id": "explicit-false",
         "observation": {
-          "sender": ["9b791087c56d"],
-          "payloads": ["9ab4446a2d2c"],
+          "sender": ["8b60835c8142"],
+          "payloads": ["2b8d60101912"],
           "settlements": {
             "explicit-false": "1165af07b50f"
           },
@@ -122,13 +139,13 @@
       {
         "id": "absent-result",
         "observation": {
-          "sender": ["9b791087c56d", "70d79a65b986"],
-          "payloads": ["9ab4446a2d2c", "35ba72e2b9cd"],
+          "sender": ["8b60835c8142", "38f037a31b80"],
+          "payloads": ["2b8d60101912", "483de03b566e"],
           "settlements": {
             "explicit-false": "1165af07b50f",
-            "absent-result": "1165af07b50f"
+            "absent-result": "0e0226959068"
           },
-          "state": "5603f79b1c06",
+          "state": "699651595413",
           "effects": []
         }
       }

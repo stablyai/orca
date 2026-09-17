@@ -1,3 +1,5 @@
+import type { AgentJournalApprovalMatchedAskRule } from '../../../src/shared/agent-session-journal-types'
+
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
 // structured permission event on mobile. We detect them heuristically so the
@@ -10,6 +12,11 @@
  *  (e.g. "y", "1") when the user taps it. */
 export type MobileChatPermission = {
   title: string
+  displayName?: string
+  description?: string
+  decisionReason?: string
+  blockedPath?: string
+  matchedAskRule?: AgentJournalApprovalMatchedAskRule
   detail?: string
   /** Structured prompt identity, present only when the host can cancel it exactly. */
   prompt?: { itemId: string; expectedRevision: number }

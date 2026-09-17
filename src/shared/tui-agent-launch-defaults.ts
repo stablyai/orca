@@ -1,6 +1,13 @@
+import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
+import {
+  resolveStartupShell,
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
+import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   opencode: ['--dangerously-skip-permissions'],
@@ -27,15 +34,25 @@ export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boo
  * Whether the configured arguments carry this agent's permission-bypass flag.
  *
  * The Agent Permissions toggle has no storage of its own — it writes and reads this flag inside
- * the arguments string — so presence at a token boundary, not whole-string equality, is what
- * "Yolo" means. A terminal launch applies the flag wherever else the user has written in the field.
+ * the arguments string. Read the same argv the startup path builds so quoted prompt text and
+ * operands after `--` cannot authorize a structured session.
  */
 export function tuiAgentArgsBypassPermissions(
   agent: TuiAgent,
-  value: string | null | undefined
+  value: string | null | undefined,
+  shell: AgentStartupShell
 ): boolean {
   const bypassArg = YOLO_TUI_AGENT_ARGS[agent]
-  return typeof value === 'string' && bypassArg !== undefined && argPattern(bypassArg).test(value)
+  if (typeof value !== 'string' || bypassArg === undefined) {
+    return false
+  }
+  const tokenized = tokenizeStartupCommand(value, shell)
+  if (!tokenized.ok) {
+    return false
+  }
+  const terminator = tokenized.tokens.indexOf('--')
+  const options = terminator === -1 ? tokenized.tokens : tokenized.tokens.slice(0, terminator)
+  return options.includes(bypassArg)
 }
 
 function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
@@ -117,9 +134,25 @@ export function resolveTuiAgentLaunchArgs(
  */
 export function resolvedTuiAgentArgsBypassPermissions(
   agent: TuiAgent,
-  configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
+  settings:
+    | Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>
+    | null
+    | undefined,
+  platform: NodeJS.Platform
 ): boolean {
-  return tuiAgentArgsBypassPermissions(agent, resolveTuiAgentLaunchArgs(agent, configuredArgs))
+  const shell = resolveStartupShell(
+    platform,
+    resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote: false,
+      terminalWindowsShell: settings?.terminalWindowsShell
+    })
+  )
+  return tuiAgentArgsBypassPermissions(
+    agent,
+    resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
+    shell
+  )
 }
 
 export function resolveTuiAgentLaunchEnv(
