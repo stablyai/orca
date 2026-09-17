@@ -192,6 +192,7 @@ export class StructuredAgentSessionHost {
    *  on disk, so the same session can be attached again. */
   close(sessionId: string): Promise<void> {
     return this.serialize(sessionId, async () => {
+      await this.conversationCommands.abandon(sessionId)
       await this.handoffs.closeRetainedTuiOwner(sessionId)
       await evictHeldStructuredAgentSession(this.lifetimeContext(), sessionId)
       this.clientDelivery.closeSession(sessionId)
@@ -252,6 +253,7 @@ export class StructuredAgentSessionHost {
         runtimeState: this.runtimeState,
         handoffs: this.handoffs,
         tasks: this.tasks,
+        abandonConversationCommands: this.conversationCommands.abandonAll,
         evictOwnedSessions: () =>
           evictOwnedStructuredAgentSessions(this.lifetimeContext(), retainSessionIds)
       }),
@@ -270,6 +272,8 @@ export class StructuredAgentSessionHost {
       flushStreamedEvents: this.flushStreamedEvents,
       requireSession: (sessionId) => this.requireSession(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
+      abandonConversationCommand: (sessionId, turnId) =>
+        this.conversationCommands.abandon(sessionId, turnId),
       now: () => this.now()
     }
   }

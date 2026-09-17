@@ -134,4 +134,41 @@ describe('desktop structured prompt cancellation', () => {
     expect(call?.[2]).toMatchObject({ turnId: 'turn-1' })
     expect(call?.[2]).not.toHaveProperty('prompt')
   })
+
+  it('keeps a conversation claim when cancellation is not accepted', async () => {
+    items = []
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.conversationCommand') {
+        return new Promise(() => {})
+      }
+      if (method === 'agentSession.cancel') {
+        return Promise.reject(new Error('connection lost'))
+      }
+      return Promise.resolve({ ok: true, value: { models: [], current: { model: 'test' } } })
+    })
+    const view = renderHook(() =>
+      useStructuredAgentSession({ sessionId: 'session-1', target, agent: 'codex', isVisible: true })
+    )
+
+    let pending!: ReturnType<typeof view.result.current.runConversationCommand>
+    act(() => {
+      pending = view.result.current.runConversationCommand('compact')
+    })
+    await act(async () => {
+      await expect(view.result.current.cancel('compact:operation-1')).resolves.toBeNull()
+    })
+
+    await act(async () => {
+      await expect(view.result.current.runConversationCommand('compact')).resolves.toMatchObject({
+        accepted: false,
+        error: expect.stringContaining('Wait for the conversation operation to finish')
+      })
+    })
+    expect(
+      mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.conversationCommand')
+    ).toHaveLength(1)
+
+    act(() => view.unmount())
+    await pending
+  })
 })

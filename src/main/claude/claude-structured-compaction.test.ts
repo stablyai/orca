@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
-import { compactClaudeSession, isClaudeCompactionContent } from './claude-structured-compaction'
+import {
+  compactClaudeSession,
+  isClaudeCompactionContent,
+  observeClaudeCompaction
+} from './claude-structured-compaction'
 import { sessionFor } from './claude-structured-dispatch-test-support'
 
 afterEach(() => {
@@ -62,5 +66,125 @@ describe('Claude compaction transcript content', () => {
     await vi.advanceTimersByTimeAsync(10)
 
     await rejection
+  })
+
+  it('retains an interrupted command until its matching Claude lifecycle terminal', async () => {
+    const session = sessionFor()
+    session.capabilities = ['msg_lifecycle_v1']
+    const tracker = new StructuredSessionCompaction()
+    const pending = compactClaudeSession(session, tracker, {
+      sessionId: 'orca-session',
+      fence: 1,
+      turnId: 'compact:operation-1'
+    })
+    const rejected = expect(pending).rejects.toThrow('interrupted')
+
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    const commandUuid = session.dispatchWaiters[0]!.sentUuid
+    tracker.claude('orca-session', {
+      type: 'command_lifecycle',
+      state: 'started',
+      command_uuid: commandUuid,
+      session_id: 'provider-session'
+    })
+    tracker.interrupted('orca-session')
+    await rejected
+
+    tracker.claude('orca-session', {
+      type: 'result',
+      subtype: 'success',
+      session_id: 'provider-session'
+    })
+    tracker.claude('orca-session', {
+      type: 'command_lifecycle',
+      state: 'completed',
+      command_uuid: 'later-command',
+      session_id: 'provider-session'
+    })
+    expect(tracker.hasPending('orca-session')).toBe(true)
+
+    tracker.claude('orca-session', {
+      type: 'command_lifecycle',
+      state: 'cancelled',
+      command_uuid: commandUuid,
+      session_id: 'provider-session'
+    })
+    expect(tracker.hasPending('orca-session')).toBe(false)
+  })
+
+  it('releases interrupted transcript suppression when a later dispatched turn starts', async () => {
+    const tracker = new StructuredSessionCompaction()
+    const onLateResult = vi.fn(async () => {})
+    const pending = tracker.run(
+      'orca-session',
+      'provider-session',
+      async () => ({}),
+      onLateResult,
+      'compact:operation-1'
+    )
+    tracker.bindClaudeCommand('orca-session', 'compact:operation-1', 'compact-command', true)
+    tracker.interrupted('orca-session')
+    const handle = vi.fn()
+
+    observeClaudeCompaction(
+      tracker,
+      {
+        type: 'message',
+        sessionId: 'orca-session',
+        startsTurn: true,
+        message: {
+          type: 'user',
+          session_id: 'provider-session',
+          uuid: 'later-turn',
+          message: { role: 'user', content: 'continue' }
+        }
+      },
+      { handle }
+    )
+
+    await expect(pending).rejects.toThrow('interrupted')
+    expect(tracker.hasPending('orca-session')).toBe(false)
+    expect(handle).toHaveBeenCalledOnce()
+    expect(onLateResult).toHaveBeenCalledWith({ error: 'Compaction was interrupted.' })
+  })
+
+  it('keeps a late replay of the interrupted compact command suppressed', async () => {
+    const tracker = new StructuredSessionCompaction()
+    const pending = tracker.run(
+      'orca-session',
+      'provider-session',
+      async () => ({}),
+      undefined,
+      'compact:operation-1'
+    )
+    tracker.bindClaudeCommand('orca-session', 'compact:operation-1', 'compact-command', true)
+    tracker.interrupted('orca-session')
+    await expect(pending).rejects.toThrow('interrupted')
+    const handle = vi.fn()
+
+    observeClaudeCompaction(
+      tracker,
+      {
+        type: 'message',
+        sessionId: 'orca-session',
+        startsTurn: true,
+        message: {
+          type: 'user',
+          session_id: 'provider-session',
+          uuid: 'compatibility-replay-id',
+          message: { role: 'user', content: '/compact' }
+        }
+      },
+      { handle }
+    )
+
+    expect(tracker.hasPending('orca-session')).toBe(true)
+    expect(handle).not.toHaveBeenCalled()
+    tracker.claude('orca-session', {
+      type: 'command_lifecycle',
+      state: 'cancelled',
+      command_uuid: 'compact-command',
+      session_id: 'provider-session'
+    })
   })
 })

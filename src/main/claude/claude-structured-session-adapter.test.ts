@@ -528,6 +528,47 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
   })
 })
 
+describe('ClaudeStructuredSessionAdapter.compact', () => {
+  it('releases compaction ownership when close or replacement ends the provider', async () => {
+    const claude = fakeClaude()
+    const adapter = await acquired(claude)
+    const first = adapter.compact({
+      sessionId: 'session-1',
+      turnId: 'compact:first',
+      fence: 7
+    })
+    await vi.waitFor(() => expect(claude.connections[0].sent).toHaveLength(1))
+
+    await adapter.closeSession('session-1')
+    await expect(first).resolves.toEqual({ error: 'The provider exited during compaction.' })
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    const second = adapter.compact({
+      sessionId: 'session-1',
+      turnId: 'compact:second',
+      fence: 8
+    })
+    await vi.waitFor(() => expect(claude.connections[1].sent).toHaveLength(1))
+    await adapter.acquire({ identity: identityFor(), fence: 9, spawnToken: 'spawn-11' })
+    await expect(second).resolves.toEqual({ error: 'The provider exited during compaction.' })
+
+    const third = adapter.compact({
+      sessionId: 'session-1',
+      turnId: 'compact:third',
+      fence: 9
+    })
+    await vi.waitFor(() => expect(claude.connections[2].sent).toHaveLength(1))
+    claude.connections[2].handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      session_id: PROVIDER_SESSION_ID,
+      compact_result: 'success'
+    })
+
+    await expect(third).resolves.toEqual({})
+  })
+})
+
 describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
   /** A start that fails after the child self-exited, with its close verdict scripted. */
   function failedStart(

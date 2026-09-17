@@ -315,6 +315,67 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   })
 })
 
+describe('CodexStructuredSessionAdapter.compact', () => {
+  it('releases compaction ownership when close or replacement ends the provider', async () => {
+    const codex = fakeCodex()
+    const adapter = await acquired(codex)
+    const first = adapter.compact({
+      sessionId: 'session-1',
+      turnId: 'compact:first',
+      fence: 7
+    })
+    await vi.waitFor(() =>
+      expect(codex.connections[0].calls).toContainEqual({
+        method: 'thread/compact/start',
+        params: { threadId: THREAD_ID }
+      })
+    )
+
+    await adapter.closeSession('session-1')
+    await expect(first).resolves.toEqual({ error: 'The provider exited during compaction.' })
+    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
+
+    const second = adapter.compact({
+      sessionId: 'session-1',
+      turnId: 'compact:second',
+      fence: 8
+    })
+    await vi.waitFor(() =>
+      expect(codex.connections[1].calls).toContainEqual({
+        method: 'thread/compact/start',
+        params: { threadId: THREAD_ID }
+      })
+    )
+    await adapter.acquire({ identity: identityFor('session-1'), fence: 9, spawnToken: 'spawn-11' })
+    await expect(second).resolves.toEqual({ error: 'The provider exited during compaction.' })
+
+    const third = adapter.compact({
+      sessionId: 'session-1',
+      turnId: 'compact:third',
+      fence: 9
+    })
+    await vi.waitFor(() =>
+      expect(codex.connections[2].calls).toContainEqual({
+        method: 'thread/compact/start',
+        params: { threadId: THREAD_ID }
+      })
+    )
+    codex.connections[2].handlers.onNotification?.('turn/started', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-third' }
+    })
+    codex.connections[2].handlers.onNotification?.('thread/compacted', {
+      threadId: THREAD_ID
+    })
+    codex.connections[2].handlers.onNotification?.('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-third', status: 'completed' }
+    })
+
+    await expect(third).resolves.toEqual({})
+  })
+})
+
 describe('CodexStructuredSessionAdapter.dispatch', () => {
   it('admits a send as soon as Codex owns it', async () => {
     const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })

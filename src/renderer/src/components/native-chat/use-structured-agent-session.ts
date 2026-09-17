@@ -1,11 +1,9 @@
-import { useRef } from 'react'
-import * as structuredConversationCommands from './structured-conversation-command-send'
-import type { AgentSessionPromptResult } from '../../../../shared/agent-session-wire'
-import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import type {
-  AgentSessionConversationCommand,
-  AgentSessionConversationCommandResult
-} from '../../../../shared/agent-session-conversation-command'
+  AgentSessionCancelResult,
+  AgentSessionPromptResult
+} from '../../../../shared/agent-session-wire'
+import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { supportsStructuredAgentSessionPromptCancel } from '@/runtime/structured-agent-session-client'
@@ -17,6 +15,7 @@ import { useStructuredAgentSessionMessages } from './use-structured-agent-sessio
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { useStructuredConversationCommand } from './use-structured-conversation-command'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -30,14 +29,21 @@ export function useStructuredAgentSession(args: {
   transportEnabled?: boolean
 }) {
   const { agent, isVisible, sessionId, target, transportEnabled = true } = args
-  const { state, loadingOlder, loadOlder, mutate, writeError, providerVisible } =
-    useStructuredAgentSessionTransport({
-      sessionId,
-      target,
-      isVisible,
-      enabled: transportEnabled
-    })
-  const commandPending = useRef(false)
+  const {
+    state,
+    loadingOlder,
+    loadOlder,
+    mutate,
+    mutateWithDisposition,
+    writeError,
+    clearWriteError,
+    providerVisible
+  } = useStructuredAgentSessionTransport({
+    sessionId,
+    target,
+    isVisible,
+    enabled: transportEnabled
+  })
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
   const { conversationCommands, optionSnapshot, optionSurface, setStructuredOption } =
     useStructuredAgentSessionOptions({
@@ -64,25 +70,24 @@ export function useStructuredAgentSession(args: {
     outbox,
     transportState.submissions
   )
+  const conversationCommand = useStructuredConversationCommand({
+    sessionId,
+    target,
+    fence: transportState.fence,
+    items: transportState.journalItems,
+    blocked: Boolean(
+      transportState.turnId ||
+      prompts.length ||
+      transportState.backgroundTasks.isMonitoring ||
+      outbox.length
+    ),
+    mutate: mutateWithDisposition,
+    onReconciled: clearWriteError
+  })
   return {
     conversationCommands,
     runConversationCommand: (command: AgentSessionConversationCommand) =>
-      structuredConversationCommands.sendStructuredConversationCommand({
-        command,
-        pending: commandPending,
-        blocked: Boolean(
-          transportState.turnId ||
-          prompts.length ||
-          transportState.backgroundTasks.isMonitoring ||
-          outbox.length
-        ),
-        send: (command) =>
-          mutate<AgentSessionConversationCommandResult>(
-            'agentSession.conversationCommand',
-            'agentSession.conversationCommand',
-            { command }
-          )
-      }),
+      conversationCommand.run(command),
     journalItems: transportState.journalItems,
     messages,
     status: transportEnabled ? state.status : 'ready',
@@ -96,7 +101,7 @@ export function useStructuredAgentSession(args: {
     outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
-      !commandPending.current && outboxController.send(...input),
+      !conversationCommand.isRunning() && outboxController.send(...input),
     retry: outboxController.retry,
     isWorking: transportState.isWorking,
     workingStartedAt: transportState.turnTiming.workingStartedAt,
@@ -109,10 +114,15 @@ export function useStructuredAgentSession(args: {
       // fingerprint and operation id: older hosts reject the strict prompt field.
       const promptSupported =
         prompt !== undefined && (await supportsStructuredAgentSessionPromptCancel(target))
-      return mutate('agentSession.cancel', 'agentSession.cancel', {
-        turnId,
-        ...(promptSupported ? { prompt } : {})
-      })
+      const result = await mutate<AgentSessionCancelResult>(
+        'agentSession.cancel',
+        'agentSession.cancel',
+        { turnId, ...(promptSupported ? { prompt } : {}) }
+      )
+      if (result?.cancelled) {
+        conversationCommand.retire()
+      }
+      return result
     },
     stopBackgroundTask: (taskId?: string) =>
       mutate('agentSession.cancel', 'agentSession.cancel', {

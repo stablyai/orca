@@ -2646,6 +2646,11 @@
       "composer": {
         "effort": "Effort"
       },
+      "conversationCommand": {
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "running": "Wait for the conversation operation to finish.",
+        "unconfirmed": "Conversation operation was not confirmed."
+      },
       "question": {
         "other": "Other…"
       },

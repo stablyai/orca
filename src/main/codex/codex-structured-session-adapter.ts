@@ -73,7 +73,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     this.teardown = new CodexStructuredSessionTeardown({
       sessions: this.sessions,
       acquisitions: this.acquisitions,
-      ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
+      onEvent: (event) => this.forwardProviderEvent(event),
       ...(deps.onBackgroundTasksChanged
         ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
         : {}),
@@ -106,7 +106,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
       input,
-      deps: this.deps,
+      deps: { ...this.deps, onEvent: (event) => this.forwardProviderEvent(event) },
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       turnCancellation: this.turnCancellation,
@@ -119,6 +119,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
         this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
     })
+
+  private forwardProviderEvent(event: CodexStructuredSessionEvent): void {
+    if (event.type === 'ended') {
+      this.compactions.ended(event.sessionId)
+    }
+    this.deps.onEvent?.(event)
+  }
 
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(

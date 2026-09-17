@@ -18,11 +18,6 @@ export async function recoverInterruptedCompaction(
     return
   }
   const error = 'Previous compaction completion could not be confirmed after session recovery.'
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: `compact:${command.operationId}` },
-    { kind: 'status', text: error },
-    { fence }
-  )
   const recovered = { ...command, phase: 'committed' as const, state: 'unknown' as const, error }
   await store.setConversationCommand(sessionId, fence, recovered)
   await store.recordOperationOutcome({
@@ -30,4 +25,16 @@ export async function recoverInterruptedCompaction(
     operationId: command.operationId,
     outcome: { status: 'succeeded', sessionId, conversationCommand: recovered }
   })
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: `compact:${command.operationId}` },
+    {
+      kind: 'status',
+      text: error,
+      turnLifecycle: {
+        turnId: `compact:${command.operationId}`,
+        state: 'unverifiable'
+      }
+    },
+    { fence }
+  )
 }

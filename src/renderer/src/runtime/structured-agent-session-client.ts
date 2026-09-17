@@ -53,9 +53,9 @@ export async function callStructuredAgentSession<TResult>(
   ) {
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
-  return method === 'agentSession.conversationCommand'
-    ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
-    : callRuntimeRpc<TResult>(target, method, params)
+  // No deadline here: a conversation command outlives its reply, so the client bounds it against the
+  // command's terminal frame (`structured-conversation-command-claim.ts`), not against this promise.
+  return callRuntimeRpc<TResult>(target, method, params)
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(

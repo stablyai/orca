@@ -36,12 +36,22 @@ export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
   return { ok: false, refusal }
 }
 
-export type AgentSessionMutationRequest<TValue> = {
+type AgentSessionMutationAdmissionPlan<TValue> = Pick<
+  MutationPlan<TValue>,
+  | 'method'
+  | 'fields'
+  | 'operationIdScope'
+  | 'replay'
+  | 'rerunWhenReplayMissing'
+  | 'recoverUnknownFromDurableState'
+>
+
+export type AgentSessionMutationAdmissionRequest<TValue> = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   callerKey: string
   envelope: AgentSessionMutationEnvelope
-  plan: MutationPlan<TValue>
+  plan: AgentSessionMutationAdmissionPlan<TValue>
   /** Journal of the attached session; absent when this host holds none. */
   journal: AgentSessionJournal | undefined
   publish: (journal: AgentSessionJournal) => void
@@ -49,12 +59,27 @@ export type AgentSessionMutationRequest<TValue> = {
   now: () => number
 }
 
-export async function admitAndRunAgentSessionMutation<TValue>(
-  request: AgentSessionMutationRequest<TValue>
-): Promise<AgentSessionMutationResult<TValue>> {
+export type AgentSessionMutationRequest<TValue> = Omit<
+  AgentSessionMutationAdmissionRequest<TValue>,
+  'plan'
+> & { plan: MutationPlan<TValue> }
+
+export type AgentSessionMutationAdmission<TValue> =
+  | { decision: 'return'; result: AgentSessionMutationResult<TValue> }
+  | {
+      decision: 'run'
+      context: AgentSessionTurnContext
+      operationCallerKey: string
+    }
+
+/** Admit a mutation without running it. Long-running host work uses this split so the session queue
+ *  protects durable admission without remaining held across a provider round trip. */
+export async function admitAgentSessionMutationRequest<TValue>(
+  request: AgentSessionMutationAdmissionRequest<TValue>
+): Promise<AgentSessionMutationAdmission<TValue>> {
   const { envelope, plan, journal } = request
   if (!journal) {
-    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+    return { decision: 'return', result: refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED) }
   }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: plan.method,
@@ -63,7 +88,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   })
   const conflict = agentSessionFingerprintConflict(envelope, hostFingerprint)
   if (conflict) {
-    return refuseAgentSessionMutation(conflict)
+    return { decision: 'return', result: refuseAgentSessionMutation(conflict) }
   }
   const admitted = await request.store.admitMutationOperation({
     callerKey: request.callerKey,
@@ -73,11 +98,11 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
   if (!admitted) {
-    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+    return { decision: 'return', result: refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED) }
   }
   const { admission, record } = admitted
   if (admission.decision === 'refused') {
-    return refuseAgentSessionMutation(admission.refusal)
+    return { decision: 'return', result: refuseAgentSessionMutation(admission.refusal) }
   }
 
   const fence = record.lease.runtimeFence
@@ -91,15 +116,14 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
     })
     if (replay.decision === 'refuse') {
-      return refuseAgentSessionMutation(replay.refusal)
+      return { decision: 'return', result: refuseAgentSessionMutation(replay.refusal) }
     }
     if (replay.decision === 'replay') {
-      return { ok: true, replayed: true, fence, cursor: journal.cursor(), value: replay.value }
+      return {
+        decision: 'return',
+        result: { ok: true, replayed: true, fence, cursor: journal.cursor(), value: replay.value }
+      }
     }
-    // Nothing durable landed, so this id is about to run for the first time. A
-    // refused call leaves its ledger row behind, and replaying past the lease and
-    // the fence would let a resend act under an owner that has since changed — so
-    // a first run pays the full admission price either way.
     const rerun = admitAgentSessionMutation({
       envelope,
       hostFingerprint,
@@ -107,26 +131,42 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       lease: record.lease
     })
     if (rerun.decision === 'refused') {
-      return refuseAgentSessionMutation(rerun.refusal)
+      return { decision: 'return', result: refuseAgentSessionMutation(rerun.refusal) }
     }
+  }
+  return { decision: 'run', context, operationCallerKey: admission.row.callerKey }
+}
+
+export async function admitAndRunAgentSessionMutation<TValue>(
+  request: AgentSessionMutationRequest<TValue>
+): Promise<AgentSessionMutationResult<TValue>> {
+  const admitted = await admitAgentSessionMutationRequest(request)
+  if (admitted.decision === 'return') {
+    return admitted.result
   }
 
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
     // A global send replay can cross caller identities. Settlement still owns
     // the durable row admitted by the original caller.
-    operationCallerKey: admission.row.callerKey,
-    envelope,
-    plan,
-    context
+    operationCallerKey: admitted.operationCallerKey,
+    envelope: request.envelope,
+    plan: request.plan,
+    context: admitted.context
   })
   return outcome.ok
-    ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
+    ? {
+        ok: true,
+        replayed: false,
+        fence: admitted.context.fence,
+        cursor: admitted.context.journal.cursor(),
+        value: outcome.value
+      }
     : refuseAgentSessionMutation(outcome.refusal)
 }
 
 function turnContext<TValue>(
-  request: AgentSessionMutationRequest<TValue>,
+  request: AgentSessionMutationAdmissionRequest<TValue>,
   journal: AgentSessionJournal,
   fence: number
 ): AgentSessionTurnContext {

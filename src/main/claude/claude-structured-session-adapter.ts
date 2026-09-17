@@ -63,7 +63,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireClaudeSession({
       input,
-      deps: this.deps,
+      deps: { ...this.deps, onEvent: (event) => this.emit(null, event) },
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       exits: this.exits,
@@ -299,7 +299,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...(this.deps.onBackgroundTasksChanged
         ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
         : {}),
-      ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
+      onEvent: (event) => this.emit(null, event)
     })
 
   closeSession = (sessionId: string): Promise<boolean> => {
@@ -315,7 +315,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...(this.deps.onBackgroundTasksChanged
         ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
         : {}),
-      ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
+      onEvent: (event) => this.emit(null, event)
     })
   }
 

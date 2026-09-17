@@ -1,5 +1,6 @@
 import type {
   AgentJournalItemIdentity,
+  AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -71,6 +72,13 @@ export type ClaudeLateDispatchOutcome =
       providerIdentity: AgentJournalItemIdentity
     }
   | { clientMessageId: string; state: 'rejected'; reason: string }
+
+export type ClaudeDispatchTurnInput = {
+  clientMessageId?: string
+  providerMessageUuid?: string
+  body: AgentJournalMessageItem
+  requestedAt?: number
+}
 
 export type ClaudeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {

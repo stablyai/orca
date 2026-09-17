@@ -155,6 +155,7 @@ describe('structured agent-session host teardown', () => {
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
       handoffs: { stopTuiHistoryCatchup: () => undefined, drain: noop },
       tasks: { drainAttaches: noop },
+      abandonConversationCommands: noop,
       evictOwnedSessions: noop
     })
     expect(phases.map((phase) => phase.name)).toEqual([
@@ -162,6 +163,7 @@ describe('structured agent-session host teardown', () => {
       'stop-lease-renewal',
       'stop-tui-catchup',
       'drain-handoffs',
+      'abandon-conversation-commands',
       'drain-attaches',
       'evict-owned-sessions',
       'flush-event-sinks'

@@ -40,6 +40,7 @@ export type StructuredAgentSessionMutationContext = {
   flushStreamedEvents: (sessionId: string) => Promise<void>
   requireSession: (sessionId: string) => StructuredAgentSessionHostSession
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  abandonConversationCommand: (sessionId: string, turnId?: string) => Promise<void>
   now: () => number
 }
 
@@ -55,7 +56,24 @@ function mutate<TValue>(
       adapter: context.deps.adapter,
       callerKey: caller.callerKey,
       envelope,
-      plan,
+      plan:
+        plan.method === 'agentSession.cancel'
+          ? plan
+          : {
+              ...plan,
+              run: (ctx) => {
+                const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
+                return command?.phase === 'prepared' && command.state === 'unknown'
+                  ? Promise.resolve({
+                      ok: false as const,
+                      refusal: {
+                        code: 'agent_session_operation_invalid' as const,
+                        message: 'Wait for the conversation operation to finish.'
+                      }
+                    })
+                  : plan.run(ctx)
+              }
+            },
       journal: context.sessions.get(envelope.sessionId)?.journal,
       publish: (journal) => context.publish(envelope.sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,
@@ -114,17 +132,17 @@ export function cancelStructuredAgentSessionTurn(
     prompt?: { itemId: string; expectedRevision: number }
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
-  const command = context.deps.store.getRecord(params.envelope.sessionId)?.conversationCommand
-  // Interrupts must reach a provider while the command awaits its terminal frame.
-  const cancellationContext =
-    command?.command === 'compact' && command.phase === 'prepared'
-      ? {
-          ...context,
-          serialize: <T>(sessionId: string, task: () => Promise<T>) =>
-            context.serialize(`compact-cancel:${sessionId}`, task)
-        }
-      : context
-  return mutate(cancellationContext, caller, params.envelope, cancelPlan(params))
+  const plan = cancelPlan(params)
+  return mutate(context, caller, params.envelope, {
+    ...plan,
+    run: async (ctx) => {
+      const outcome = await plan.run(ctx)
+      if (outcome.ok && outcome.value.cancelled) {
+        await context.abandonConversationCommand(params.envelope.sessionId, params.turnId)
+      }
+      return outcome
+    }
+  })
 }
 
 export function respondToStructuredAgentSessionPrompt(

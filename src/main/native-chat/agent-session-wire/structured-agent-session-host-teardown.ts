@@ -54,6 +54,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   }
   handoffs: { stopTuiHistoryCatchup: () => void; drain: () => Promise<void> }
   tasks: { drainAttaches: () => Promise<void> }
+  abandonConversationCommands: () => Promise<void>
   evictOwnedSessions: () => Promise<void>
 }): StructuredAgentSessionTeardownPhase[] {
   return [
@@ -63,6 +64,10 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
     {
       name: 'drain-handoffs',
       run: () => withTimeout(collaborators.handoffs.drain(), HANDOFF_DRAIN_TIMEOUT_MS, undefined)
+    },
+    {
+      name: 'abandon-conversation-commands',
+      run: () => collaborators.abandonConversationCommands()
     },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
     {

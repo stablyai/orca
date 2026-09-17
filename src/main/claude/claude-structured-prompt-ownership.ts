@@ -170,6 +170,9 @@ export async function cancelClaudeStructuredTurn(input: {
       isCurrent,
       input.onDispatchSettledLate
     )
+    if (result.cancelled && compactionOwnsTurn()) {
+      compactions.interrupted(request.sessionId)
+    }
     if (result.cancelled && claim && cancellationObserved) {
       interruptConfirmed = true
       await waitForClaudePromptCancellation(cancellationObserved, timeoutMs)

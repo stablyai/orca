@@ -24,7 +24,11 @@ export async function cancelCodexStructuredTurn(input: {
   }
   const prompt = request.prompt
   if (!prompt) {
-    return cancellation.cancel(session, session.threadId, turnId)
+    const result = await cancellation.cancel(session, session.threadId, turnId)
+    if (result.cancelled && compactions.ownsTurn(request.sessionId, request.turnId)) {
+      compactions.interrupted(request.sessionId)
+    }
+    return result
   }
   if (session.fence !== request.fence) {
     return { cancelled: false }
