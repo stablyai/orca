@@ -1,4 +1,4 @@
-import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './terminal-wait-detection'
+import { mayContainTerminalWaitBlockedSentinel } from './terminal-wait-blocked-sentinel'
 
 /**
  * Which retained tail lines match the wait-blocked sentinel, memoized per
@@ -19,7 +19,7 @@ function collectSentinelMatches(
   into: number[]
 ): void {
   for (let index = startIndex; index < lines.length; index += 1) {
-    if (TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(lines[index]!)) {
+    if (mayContainTerminalWaitBlockedSentinel(lines[index]!)) {
       into.push(index)
     }
   }

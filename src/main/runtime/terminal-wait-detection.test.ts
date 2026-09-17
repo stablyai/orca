@@ -476,9 +476,13 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     it(`refuses ${dialog.name} whose wording names no blocked reason, account row and all`, () => {
       const waitText = waitTextFor(dialog.lines)
 
-      // No blocked-signal rule matches, so the ordering defense cannot reach these: readiness has to
-      // refuse them on its own or the orchestrator types into a live dialog.
-      expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+      // Only the sign-in dialog names a reason: its `2. Paste an API key` option is a credential
+      // prompt in everything but punctuation. The other four are silent to every blocked-signal
+      // rule, so the ordering defense cannot reach them — readiness has to refuse them on its own
+      // or the orchestrator types into a live dialog.
+      expect(detectTerminalWaitBlockedReason(waitText)).toBe(
+        dialog.name === 'a sign-in dialog' ? 'agent-credential-prompt' : null
+      )
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
 
