@@ -45,9 +45,13 @@ describe('installMonacoDelayerCancellationGuard', () => {
     const promise = delayer.trigger(() => undefined)
     delayer.cancel()
 
-    await expect(promise).rejects.toMatchObject({
-      name: 'Canceled',
-      message: 'Canceled'
-    })
+    try {
+      await expect(promise).rejects.toMatchObject({
+        name: 'Canceled',
+        message: 'Canceled'
+      })
+    } finally {
+      delayer.dispose()
+    }
   })
 })
