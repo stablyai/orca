@@ -40,9 +40,9 @@ export const nativeChatTerminalWrite = bindDeferredRpcOperation(
  *
  * The reader is checked, unlike the member read #21083 landed with: `tab` and its `id` are what the
  * strip keys the new tab on, and main reached the screen with `undefined` there and failed on the
- * next property. `require-result-or-throw-message` keeps the message where it was, because that
- * policy rethrows the reader's exception rather than turning it into an incompatible verdict, so
- * the create's own `catch` reports the unreadable reply as the same failure copy.
+ * next property. `require-result-or-throw-message` carries a refused reply to the create's own
+ * `catch` as one `RpcIncompatibleReplyError` naming the method, which `reportCreateFailure` shows
+ * in place of main's raw property-read exception.
  *
  * Throws the host's message rather than a skip because the host names the real cause — pty
  * exhaustion, a disabled agent, an unresolved worktree — and the screen shows it verbatim.
