@@ -163,7 +163,9 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setBaseBranch(undefined)
+      if (baseBranchNamesWorkspace) {
+        setBaseBranch(undefined)
+      }
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setBranchNameOverride(undefined)
@@ -189,6 +191,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     },
     [
       name,
+      baseBranchNamesWorkspace,
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
@@ -215,7 +218,9 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setLinkedGitLabMR(null)
     setLinkedWorkItem(null)
     setLinkedTaskSourceContext(null)
-    setBaseBranch(undefined)
+    if (baseBranchNamesWorkspace) {
+      setBaseBranch(undefined)
+    }
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
@@ -235,6 +240,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     }
   }, [
     name,
+    baseBranchNamesWorkspace,
     branchAutoNameRef,
     lastAutoNameRef,
     lastAutoNoteRef,

@@ -132,6 +132,8 @@ export function useComposerSourceState(
     workspaceHostScope: target.composerTargetStore.workspaceHostScope
   })
   const branchStartPointActions = useBranchStartPointActions({
+    baseBranch: target.workspaceIdentityState.baseBranch,
+    baseBranchNamesWorkspace: target.workspaceIdentityState.baseBranchNamesWorkspace,
     applyLinkedGitLabWorkItem: sourceIdentityActions.applyLinkedGitLabWorkItem,
     applyLinkedWorkItem: external.githubSourceApplication.applyLinkedWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
@@ -160,6 +162,7 @@ export function useComposerSourceState(
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
   const githubProviderSelection = useGitHubProviderSelection({
+    baseBranchNamesWorkspace: target.workspaceIdentityState.baseBranchNamesWorkspace,
     applyLinkedWorkItem: external.githubSourceApplication.applyLinkedWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     eligibleRepos: target.composerTargetStore.eligibleRepos,
