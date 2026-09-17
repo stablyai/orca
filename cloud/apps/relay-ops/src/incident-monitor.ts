@@ -135,9 +135,10 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   // 30 s. That answer is an HTTP 503, not a transport failure, so provenance
   // cannot separate it from a cell that genuinely serves health=0 -- persistence
   // can. At the 60 s sample interval a 30 s outage shows up in one sample and at
-  // worst two, so a cell probe must fail more than this many consecutive samples
-  // before it freezes the run. This tolerance applies only to per-cell probe
-  // signals; the director and auth probes stay at zero tolerance.
+  // worst two, so a cell's probe must fail more than this many consecutive samples
+  // before it freezes the run. The streak is per cell, not per signal, so a cell
+  // that alternates between slow and unanswered still accumulates one. This applies
+  // only to per-cell probes; the director and auth probes stay at zero tolerance.
   cellProbeToleranceSamples: 2
 } as const
 
@@ -242,7 +243,8 @@ export type IncidentMonitorState = {
   }[]
   frozenAt: string | null
   failures: IncidentFailure[]
-  // Consecutive samples each cell-probe signal has currently been failing for.
+  // Consecutive samples each cell's probe has currently been failing for, keyed by
+  // cell so its health, ready and latency readings share one streak.
   probeStreaks: Record<string, number>
   // Cell-probe breaches absorbed by the tolerance, kept so a green artifact still
   // shows what the gate chose not to freeze on.
@@ -709,11 +711,22 @@ function freshnessKey(failure: IncidentFailure): string {
   return `${failure.source}/${failure.signal ?? '*'}`
 }
 
-// A per-cell reading from the active probe, which is a single HTTP round trip and so
-// is subject to cellProbeToleranceSamples. Director and auth probes are excluded on
-// purpose: they are the single points of failure this gate exists to catch.
-function isCellProbeFailure(failure: IncidentFailure): boolean {
-  return failure.source === 'active-probe' && (failure.signal?.startsWith('cell.') ?? false)
+// The streak key for a per-cell active-probe reading, or null if the failure is not
+// one. A cell probe is a single HTTP round trip and so is subject to
+// cellProbeToleranceSamples; director and auth probes return null on purpose,
+// because they are the single points of failure this gate exists to catch.
+//
+// Why the key is the cell and not the signal: health, ready and latency_ms all
+// describe the same round trip. Keyed per signal, a cell that alternates between
+// answering slowly and not answering at all holds every individual streak at one and
+// never reaches the tolerance, so a continuously unhealthy cell passes the gate.
+export function cellProbeStreakKey(failure: IncidentFailure): string | null {
+  const signal = failure.signal
+  if (failure.source !== 'active-probe' || signal === undefined) return null
+  if (!signal.startsWith('cell.')) return null
+  const lastDot = signal.lastIndexOf('.')
+  if (lastDot < 'cell.'.length) return null
+  return `${failure.source}/${signal.slice(0, lastDot)}`
 }
 
 // Rebuild the per-signal tolerated streak from the trailing continuity events so a
@@ -877,8 +890,9 @@ export async function runIncidentMonitor(
       state.sampleCount++
     }
     const probeFailures = new Map<string, IncidentFailure[]>()
-    for (const failure of thresholdFailures.filter(isCellProbeFailure)) {
-      const key = freshnessKey(failure)
+    for (const failure of thresholdFailures) {
+      const key = cellProbeStreakKey(failure)
+      if (key === null) continue
       probeFailures.set(key, [...(probeFailures.get(key) ?? []), failure])
     }
     for (const key of Object.keys(state.probeStreaks)) {
@@ -903,7 +917,7 @@ export async function runIncidentMonitor(
       })
     }
     const freezingFailures = [
-      ...thresholdFailures.filter((failure) => !isCellProbeFailure(failure)),
+      ...thresholdFailures.filter((failure) => cellProbeStreakKey(failure) === null),
       ...sustainedProbeFailures
     ]
     if (freezingFailures.length > 0) {

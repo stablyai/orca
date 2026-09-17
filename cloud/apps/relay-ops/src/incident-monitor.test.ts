@@ -1218,6 +1218,77 @@ describe('incident monitor cell probe tolerance', () => {
     expect(preDrainDryRunPassed(result)).toBe(true)
   })
 
+  // Why: health, ready and latency_ms all describe the same round trip, so the streak
+  // is keyed by cell. Keyed per signal, this cell holds every individual streak at one
+  // and never reaches the tolerance, yet it is unhealthy without a break from sample 2.
+  it('freezes on a cell that alternates between slow and unanswered', async () => {
+    let now = startedAt
+    let index = -1
+    const result = await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (index < 2) return sample
+        // Two samples slow, then two samples down, repeating: never the same signal
+        // twice in a row beyond the tolerance, but never healthy either.
+        if (Math.floor((index - 2) / 2) % 2 === 0) {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+            signal(9_000, now)
+        } else {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+            signal(0, now)
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.ready'] =
+            signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+  })
+
+  // Why: the streak lives in the state file, so a resumed run must not hand a cell
+  // that was already failing a fresh budget.
+  it('freezes immediately when a resumed state carries a full streak', async () => {
+    let now = startedAt
+    const resumed = {
+      ...dryRunState(),
+      lastSampleAt: new Date(startedAt).toISOString(),
+      probeStreaks: {
+        'active-probe/cell.production-gce-c1':
+          INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+      }
+    }
+    const result = await runIncidentMonitor(resumed, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+          signal(0, now)
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).toBe(new Date(startedAt).toISOString())
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health'
+      })
+    )
+  })
+
   it('gives the director and auth probes no tolerance', async () => {
     let now = startedAt
     let index = -1
