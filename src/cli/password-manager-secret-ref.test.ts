@@ -74,6 +74,16 @@ describe('resolveSecretRef', () => {
     expect(String(error)).not.toContain('hunter2')
   })
 
+  it('names the timeout instead of reporting an unknown exit', async () => {
+    const run = vi.fn(async () => processResult({ code: null, timedOut: true }))
+    await expect(resolveSecretRef('bw://acme', { env: {}, run })).rejects.toThrow(/timed out/)
+  })
+
+  it('rejects a timed-out lookup even when the runner reports a zero exit', async () => {
+    const run = vi.fn(async () => processResult({ code: 0, stdout: 'partial', timedOut: true }))
+    await expect(resolveSecretRef('bw://acme', { env: {}, run })).rejects.toThrow(/timed out/)
+  })
+
   it('fails when the vendor CLI returns nothing', async () => {
     const run = vi.fn(async () => processResult({ stdout: '\n' }))
     await expect(resolveSecretRef('bw://acme', { env: {}, run })).rejects.toThrow(

@@ -86,11 +86,14 @@ function lookupFailure(ref: string, program: string, result: ProcessResult): Run
     .split('\n')
     .find((line) => line.trim().length > 0)
     ?.trim()
+  // A timeout resolves with a null code, so naming it keeps an unlocked-vault
+  // prompt that nobody answered distinguishable from a crashed CLI.
+  const cause = result.timedOut
+    ? `${program} timed out after ${SECRET_LOOKUP_TIMEOUT_MS / 1000}s — the vault may be locked and waiting for input`
+    : `${program} exited ${result.code ?? 'without a code'}`
   return new RuntimeClientError(
     'secret_ref_lookup_failed',
-    `Secret lookup for ${ref} failed (${program} exited ${result.code ?? 'without a code'})${
-      detail === undefined ? '' : `: ${detail}`
-    }`
+    `Secret lookup for ${ref} failed (${cause})${detail === undefined ? '' : `: ${detail}`}`
   )
 }
 
@@ -120,7 +123,7 @@ export async function resolveSecretRef(
       }`
     )
   }
-  if (result.code !== 0) {
+  if (result.timedOut || result.code !== 0) {
     throw lookupFailure(ref, command.program, result)
   }
   const secret = result.stdout.replace(/\r?\n$/, '')

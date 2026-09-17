@@ -58,6 +58,8 @@ Browser rules:
 - To fill a password without the value entering your context or any process argv, pass
   `--secret-ref op://<vault>/<item>/<field>` (1Password CLI) or `--secret-ref bw://<item>[/password|username|totp]`
   (Bitwarden CLI). Orca runs the vendor CLI itself and sends the value straight to the page; it is never printed.
+  On a host driving external Chromium through `ORCA_BROWSER_EXECUTABLE`, the value still reaches the
+  `agent-browser` driver's argv, so treat that host's process table as able to see it.
 - If `fill` or `type` fails on a custom input, try `ORCA focus --element @e1 --json` then `ORCA inserttext --text "text" --json`.
 - A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.
 
