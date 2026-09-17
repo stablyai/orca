@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -57,6 +58,10 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       terminalWindowsShell: state.settings?.terminalWindowsShell,
       tabShellOverride: session.shellOverride
     })
+    const sessionOptions = resolveNativeChatLaunchSessionOptions(
+      state.settings?.nativeChatSessionOptions,
+      agent
+    )
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -73,6 +78,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       ...(launchConfig?.ompResumeFilePath
         ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
         : {}),
+      ...(sessionOptions ? { sessionOptions, sessionOptionsOverrideAgentArgs: true } : {}),
       platform: resumeTarget.platform,
       shell: resumeTarget.shell
     })

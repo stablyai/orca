@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import {
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
@@ -69,6 +70,10 @@ export function launchSleepingAgentSession(
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
+  const sessionOptions = resolveNativeChatLaunchSessionOptions(
+    state.settings?.nativeChatSessionOptions,
+    record.agent
+  )
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -85,6 +90,7 @@ export function launchSleepingAgentSession(
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
+    ...(sessionOptions ? { sessionOptions, sessionOptionsOverrideAgentArgs: true } : {}),
     platform: resumeTarget.platform,
     shell: resumeTarget.shell
   })

@@ -577,4 +577,51 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     })
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
+
+  it('injects picker --model/--effort on the resume path when sessionOptions are set', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      sessionOptions: { model: 'opus', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      platform: 'darwin',
+      shell: 'posix'
+    })
+    expect(restored?.launchCommand).toContain("'--model' 'opus'")
+    expect(restored?.launchCommand).toContain("'--effort' 'xhigh'")
+    expect(restored?.launchCommand).toContain("'--resume' 'claude-session-1'")
+  })
+
+  it('overrides persisted --model/--effort with picker values when sessionOptionsOverrideAgentArgs is true', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions --model fable-5-1 --effort low',
+      sessionOptions: { model: 'opus', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      platform: 'darwin',
+      shell: 'posix'
+    })
+    expect(restored?.launchCommand).toContain("'--model' 'opus'")
+    expect(restored?.launchCommand).toContain("'--effort' 'xhigh'")
+    expect(restored?.launchCommand).not.toContain("'fable-5-1'")
+    expect(restored?.launchCommand).not.toContain("'low'")
+    expect(restored?.launchCommand).toContain("'--resume' 'claude-session-1'")
+  })
+
+  it('does not inject --model when no picker sessionOptions are set', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      platform: 'darwin',
+      shell: 'posix'
+    })
+    expect(restored?.launchCommand).not.toContain('--model')
+    expect(restored?.launchCommand).toContain("'--resume' 'claude-session-1'")
+  })
 })
