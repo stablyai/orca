@@ -182,16 +182,15 @@ export type DetailComment = {
   body: string
   createdAt?: string
   url?: string
+  /**
+   * `content` is whatever the provider called the reaction — GitHub's `GitHubReactionContent`
+   * (`'+1'`, `'-1'`, `laugh`, ...) and absent on GitLab, whose rows are `{ name, count }`. It was
+   * declared as an eight-arm mobile vocabulary no producer sends; `COMMENT_REACTION_EMOJI` is
+   * keyed by that same vocabulary and so resolves no glyph for a real reaction, which is a
+   * separate defect this type must not hide.
+   */
   reactions?: Array<{
-    content:
-      | 'thumbs_up'
-      | 'thumbs_down'
-      | 'laugh'
-      | 'confused'
-      | 'heart'
-      | 'hooray'
-      | 'rocket'
-      | 'eyes'
+    content?: string
     count: number
   }>
   path?: string

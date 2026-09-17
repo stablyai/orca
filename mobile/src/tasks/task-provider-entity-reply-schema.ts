@@ -22,17 +22,6 @@ import { prCount, prFlag, prNullableText, prText } from '../session/github-pr-en
 // plain salvaged-member combinators over zod-salvage, and one definition is what keeps "absent
 // stays absent, malformed reads as absent" identical on both surfaces.
 
-const DETAIL_REACTION_CONTENT = [
-  'thumbs_up',
-  'thumbs_down',
-  'laugh',
-  'confused',
-  'heart',
-  'hooray',
-  'rocket',
-  'eyes'
-] as const
-
 const DETAIL_FILE_STATUS = [
   'added',
   'modified',
@@ -51,9 +40,16 @@ const VIEWER_VIEWED_STATE = ['DISMISSED', 'VIEWED', 'UNVIEWED'] as const
  * `id` and `body` are the only required members, and they are the two `DetailComment` declares
  * non-optional: the timeline keys rows by id and renders body unguarded. Every other member is
  * reached through `?.` or `??` — commentAuthor (mobile-tasks-item-comments.tsx:47) is the shape of
- * all of them — so it stays optional and is passed through exactly as the host sent it. The
- * reaction arm set is closed because the mobile vocabulary (`thumbs_up`) is not GitHub's (`+1`):
- * a row this build cannot name has no glyph to render, so it drops rather than reaching the list.
+ * all of them — so it stays optional and is passed through exactly as the host sent it.
+ *
+ * A reaction's `content` is forwarded, not matched against an arm set. Three producers feed this
+ * one list and they disagree: GitHub sends `GitHubReactionContent` (`'+1'`, `'-1'`, `laugh`, ...,
+ * src/shared/github/comment-types.ts:3-17, normalised from GraphQL in
+ * src/main/github/comment-reactions.ts:19-27), and GitLab sends `GitLabReaction { name, count }`
+ * with no `content` at all (src/shared/gitlab-types.ts:60-72). An arm set drawn from either one
+ * drops the other producer's rows outright, so the reader keeps `count` — the only member read
+ * unguarded, by the `count > 0` filter at mobile-tasks-item-comments.tsx:145 — and hands `content`
+ * to the glyph lookup exactly as it arrived.
  */
 export const detailCommentSchema = z.looseObject({
   id: z.union([z.string(), z.number().finite()]),
@@ -66,9 +62,7 @@ export const detailCommentSchema = z.looseObject({
   url: prText('url'),
   reactions: salvagedOptional(
     'reactions',
-    salvagingArray(
-      z.looseObject({ content: z.enum(DETAIL_REACTION_CONTENT), count: z.number().finite() })
-    )
+    salvagingArray(z.looseObject({ content: prText('content'), count: z.number().finite() }))
   ),
   path: prText('path'),
   line: prCount('line'),

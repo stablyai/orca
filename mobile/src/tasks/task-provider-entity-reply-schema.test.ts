@@ -75,23 +75,28 @@ describe('a comment row', () => {
     expect(refuses(detailCommentListSchema, 'none')).toBe(true)
   })
 
-  it('carries the reaction vocabulary this app renders and drops the one it does not', () => {
-    const reactions = [
-      { content: 'thumbs_up', count: 1 },
-      { content: 'thumbs_down', count: 1 },
-      { content: 'laugh', count: 1 },
-      { content: 'confused', count: 1 },
-      { content: 'heart', count: 1 },
-      { content: 'hooray', count: 1 },
-      { content: 'rocket', count: 1 },
-      { content: 'eyes', count: 1 }
+  it('forwards every provider reaction, including the two vocabularies mobile never declared', () => {
+    const github = [
+      { content: '+1', count: 3 },
+      { content: '-1', count: 1 },
+      { content: 'heart', count: 1 }
     ]
-    expect(reads(detailCommentListSchema, [{ ...COMMENT, reactions }])[0]?.reactions).toHaveLength(
-      8
-    )
     expect(
-      reads(detailCommentListSchema, [{ ...COMMENT, reactions: [{ content: '+1', count: 1 }] }])[0]
-        ?.reactions
+      reads(detailCommentListSchema, [{ ...COMMENT, reactions: github }])[0]?.reactions
+    ).toEqual(github)
+    const gitlab = [{ name: 'thumbsup', count: 2 }]
+    expect(
+      reads(detailCommentListSchema, [{ ...COMMENT, reactions: gitlab }])[0]?.reactions
+    ).toMatchObject([{ count: 2 }])
+  })
+
+  it('keeps the count the chip filters on and lets a malformed content read as absent', () => {
+    const row = reads(detailCommentListSchema, [
+      { ...COMMENT, reactions: [{ content: 7, count: 2 }] }
+    ])[0]
+    expect(row?.reactions).toEqual([{ count: 2 }])
+    expect(
+      reads(detailCommentListSchema, [{ ...COMMENT, reactions: [{ content: '+1' }] }])[0]?.reactions
     ).toEqual([])
   })
 
