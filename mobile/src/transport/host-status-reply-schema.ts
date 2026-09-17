@@ -19,7 +19,7 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * `transport-capability-probe-non-string-capabilities-drop` golden records as `published: [[]]`.
  *
  * The object itself is required, and the three callers each keep the guard that decides what an
- * unreadable status means to them: see `hostStatusGatesRead`, `readProbedHostCapabilities` and
+ * unreadable status means to them: see `readHostStatusGates`, `readProbedHostCapabilities` and
  * `hostAnsweredStatusProbe` in host-status-probe-operations.ts.
  */
 export const hostStatusSchema = z.looseObject({
