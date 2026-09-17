@@ -176,6 +176,21 @@ export function createRelayApp(
     context.header('Retry-After', String(stickyRetryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
+  // An admin route that collapses every failure into one status cannot tell a
+  // real conflict from a database that was briefly out of reach, and the rollout
+  // tooling retries on 503 only. Transient failures get the answer the public
+  // routes already give; everything else keeps the route's own mapping.
+  const rejectAdminOperation = (
+    context: Context,
+    error: unknown,
+    status: 404 | 409
+  ): Response => {
+    if (!isRelayDatabaseTransientError(error)) {
+      return context.json({ error: operationError(error) }, status)
+    }
+    context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
+    return context.json({ error: 'database_temporarily_unavailable' }, 503)
+  }
   // Aggregate counters cannot separate a handful of pathological hosts from a broad
   // population, so every admission rejection names its host and reason. Keyed on
   // route:lane:reason rather than host, the log stays bounded under load.
@@ -505,7 +520,7 @@ export function createRelayApp(
     try {
       return context.json({ v: 1, ...(await operations.idleRehome(body.data)) })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/host-drain', async (context) => {
@@ -556,7 +571,7 @@ export function createRelayApp(
         ...(sharedRuntimeIdentityRejected ? { sharedRuntimeIdentityRejected } : {})
       })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/runtime-status', async (context) => {
@@ -610,7 +625,7 @@ export function createRelayApp(
       await operations.assignments.recordCellHeartbeat(body.data)
       return context.json({ ok: true })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-rehome-status', async (context) => {
@@ -630,7 +645,7 @@ export function createRelayApp(
       await operations.assignments.recordCellRegionalRehomeStatus(body.data)
       return context.json({ ok: true })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.get('/v1/admin/regional-rehome-preview', async (context) => {
@@ -669,7 +684,7 @@ export function createRelayApp(
       const control = await operations.assignments.applyRegionalRehomeControl(body.data)
       return context.json({ v: 1, control })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/regional-rehome-trust-probe', async (context) => {
@@ -713,7 +728,7 @@ export function createRelayApp(
       })
       return context.json(result)
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/evacuate', async (context) => {
@@ -734,7 +749,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, migration })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/migration-complete', async (context) => {
@@ -755,7 +770,7 @@ export function createRelayApp(
       )
       return context.json({ ok: true })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/migration-supersede-cell', async (context) => {
@@ -780,7 +795,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, superseded })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/rebalance-dormant', async (context) => {
@@ -801,7 +816,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, assignment })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/admission-selector/apply', async (context) => {
@@ -821,7 +836,7 @@ export function createRelayApp(
       const result = await operations.assignments.applyCellAdmissionSelector(body.data)
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/admission-selector/apply-staging-asia-proof', async (context) => {
@@ -846,7 +861,7 @@ export function createRelayApp(
       })
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/admission-selector/status', async (context) => {
@@ -868,7 +883,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/admission-selector/add-migration-cells', async (context) => {
@@ -899,7 +914,7 @@ export function createRelayApp(
       })
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-state', async (context) => {
@@ -924,7 +939,7 @@ export function createRelayApp(
       )
       return context.json({ ok: true })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-adopt-legacy', async (context) => {
@@ -947,7 +962,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, cellId: body.data.cellId, expiresAt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-commit-legacy-adoption', async (context) => {
@@ -970,7 +985,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, cellId: body.data.cellId, committed: true })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attest', async (context) => {
@@ -999,7 +1014,7 @@ export function createRelayApp(
         attempt: result.attempt
       })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attempt-prepare', async (context) => {
@@ -1020,7 +1035,7 @@ export function createRelayApp(
       const attempt = await operations.assignments.prepareCellFenceAttempt(evidence)
       return context.json({ v: 1, attempt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attempt-start', async (context) => {
@@ -1045,7 +1060,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attempt-plan', async (context) => {
@@ -1069,7 +1084,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, attempt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attempt-operation', async (context) => {
@@ -1095,7 +1110,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attempt-status', async (context) => {
@@ -1115,7 +1130,7 @@ export function createRelayApp(
       const attempt = await operations.assignments.cellFenceAttempt(body.data.cellId)
       return context.json({ v: 1, attempt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-fence-attempt-abort', async (context) => {
@@ -1136,7 +1151,7 @@ export function createRelayApp(
       const attempt = await operations.assignments.abortCellFenceAttempt(evidence)
       return context.json({ v: 1, attempt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/drain-attempt-prepare', async (context) => {
@@ -1162,7 +1177,7 @@ export function createRelayApp(
       })
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/drain-attempt-send', async (context) => {
@@ -1182,7 +1197,7 @@ export function createRelayApp(
       const attempt = await operations.assignments.beginCellDrainSend(body.data)
       return context.json({ v: 1, attempt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/drain-attempt-receipt', async (context) => {
@@ -1204,7 +1219,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, attempt })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/drain-attempt-recover-forward', async (context) => {
@@ -1224,7 +1239,7 @@ export function createRelayApp(
       const result = await operations.assignments.prepareCellDrainRecovery(body.data)
       return context.json({ v: 1, ...result })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/cell-config', async (context) => {
@@ -1251,7 +1266,7 @@ export function createRelayApp(
       )
       return context.json({ ok: true })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/evacuate-cell', async (context) => {
@@ -1273,7 +1288,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, started })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/evacuation-capacity', async (context) => {
@@ -1296,7 +1311,7 @@ export function createRelayApp(
       )
       return context.json({ v: 1, ...capacity })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 409)
+      return rejectAdminOperation(context, error, 409)
     }
   })
   app.post('/v1/admin/evacuation-status', async (context) => {
@@ -1342,7 +1357,7 @@ export function createRelayApp(
       const status = await operations.assignments.cellDeploymentStatus(body.data.cellId)
       return context.json({ v: 1, status })
     } catch (error) {
-      return context.json({ error: operationError(error) }, 404)
+      return rejectAdminOperation(context, error, 404)
     }
   })
   return app
