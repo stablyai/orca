@@ -40,6 +40,8 @@ const hash = (parts: string[] | string): string =>
 // gone and the `?? ''` fallback's one added, the whole of `semantics`' 3,290 -> 3,281. The eight
 // alias-only bindings the deleted casts left behind (`const result = created` and its seven
 // siblings) are inlined, which moves the hook and statement hashes without moving their counts.
+// Only those eight: the Linear arm of task creation keeps its own `result`, which is a declaration
+// with a name rather than an alias for one.
 // No `rpc:` signature and no `jsx:` signature moves, the render-token hash does not move, and
 // counts stay at 350 hooks, 417 statements and 194 declarations.
 //
@@ -47,9 +49,9 @@ const hash = (parts: string[] | string): string =>
 // to-do row is checked now, so the reader's cast is gone from the list-loading hook and the row
 // type it forwarded is declared by what the reader proves. Counts are unchanged again, and
 // `semantics` does not move, because no RPC call, runtime string or JSX host signature does.
-const SCREEN_RPC_SCREEN_HOOKS = 'ea596e60d596b595b007af6ab7f11fc232098b4a6c0331e092021b429836c17c'
+const SCREEN_RPC_SCREEN_HOOKS = 'a550246eac444aea535ab18d50bc4db6204195ae812665a6beb40a3f5ab553d8'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'b35d41712ae65958d6ae7cc7a967f4d2ccc99d65873f340f804e3ad92cbd0260'
+const SCREEN_RPC_STATEMENTS = 'ffa60f57cb239bf02c4c7080847565711cb5c59e3b09d4850a6ce62e986624fa'
 const MAIN_REBASED_DECLARATIONS = '0f57ae1285c698344976adf7f888e840ddd48f1e12afb12990878525e1fe1380'
 const SCREEN_RPC_SEMANTICS = '71e1e39421e917897335d2a987a756ef85414518558853633f21fa356752b871'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'

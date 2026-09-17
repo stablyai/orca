@@ -121,19 +121,19 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           description: createBody.trim() || undefined,
           workspaceId: team.workspaceId
         })
-        const created = linearIssueCreate.interpret(reply)
-        if (created.ok === false || !created.id || !created.identifier) {
-          throw new Error(created.error ?? 'Failed to create Linear issue')
+        const result = linearIssueCreate.interpret(reply)
+        if (result.ok === false || !result.id || !result.identifier) {
+          throw new Error(result.error ?? 'Failed to create Linear issue')
         }
         setActionItem(
           createLinearTask({
-            id: created.id,
+            id: result.id,
             workspaceId: team.workspaceId,
             workspaceName: team.workspaceName,
-            identifier: created.identifier,
-            title: created.title ?? title,
+            identifier: result.identifier,
+            title: result.title ?? title,
             description: createBody.trim(),
-            url: created.url ?? '',
+            url: result.url ?? '',
             state: { name: 'Open', type: 'unstarted', color: colors.accentBlue },
             team,
             labels: [],
