@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
 import {
   MAX_CONSECUTIVE_DEATHS,
-  USAGE_SCAN_TIMEOUT_MS,
+  USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS,
   UsageScanWorkerClient,
   scanCodexUsageOnWorker
 } from './usage-scan-worker-client'
@@ -101,13 +101,65 @@ describe('UsageScanWorkerClient', () => {
     await expect(client.scan(CODEX_BODY)).rejects.toThrow(/spawn failed/)
   })
 
-  it('rejects a scan whose worker never answers', async () => {
+  it('rejects a scan whose worker goes silent', async () => {
     vi.useFakeTimers()
     try {
       const client = createClient(() => new FakeWorker())
       const pending = client.scan(CODEX_BODY)
-      const assertion = expect(pending).rejects.toThrow(/timed out/)
-      await vi.advanceTimersByTimeAsync(USAGE_SCAN_TIMEOUT_MS + 1)
+      const assertion = expect(pending).rejects.toThrow(/no progress/)
+      await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS + 1)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps waiting on a scan that is slow but still reporting progress', async () => {
+    vi.useFakeTimers()
+    try {
+      const worker = new FakeWorker()
+      const client = createClient(() => worker)
+      const pending = client.scan(CODEX_BODY)
+      // Posted synchronously by dispatch; vi.waitFor would advance the fake clock.
+      expect(worker.postedRequests).toHaveLength(1)
+
+      // Four windows of wall clock, each broken by a progress message just
+      // before the deadline: the old wall-clock budget died in the first one.
+      for (let window = 1; window <= 4; window++) {
+        await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
+        worker.emit('message', { id: worker.lastId(), filesScanned: window * 100 })
+      }
+      await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
+      worker.emit('message', {
+        id: worker.lastId(),
+        ok: true,
+        value: {
+          providerId: 'codex',
+          source: [{ path: 'a.jsonl' }],
+          sessions: [],
+          dailyAggregates: []
+        }
+      })
+
+      await expect(pending).resolves.toMatchObject({ source: [{ path: 'a.jsonl' }] })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still kills a worker that stops reporting progress mid-scan', async () => {
+    vi.useFakeTimers()
+    try {
+      const worker = new FakeWorker()
+      const client = createClient(() => worker)
+      const pending = client.scan(CODEX_BODY)
+      expect(worker.postedRequests).toHaveLength(1)
+      const assertion = expect(pending).rejects.toThrow(/no progress/)
+
+      await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
+      worker.emit('message', { id: worker.lastId(), filesScanned: 100 })
+      await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS + 1)
+
       await assertion
     } finally {
       vi.useRealTimers()

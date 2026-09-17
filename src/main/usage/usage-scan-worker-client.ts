@@ -23,18 +23,23 @@ import type {
   UsageScanWorkerResponse,
   UsageScanWorkerValue
 } from './usage-scan-worker-protocol'
+import { isUsageScanWorkerProgress } from './usage-scan-worker-protocol'
 
 // Why (#20940): this module owns the request half of the shared usage scan
-// worker — FIFO one-at-a-time dispatch, a per-scan deadline, respawn-on-fault —
-// while WorkerThreadRequestQueue owns the queue mechanics and
+// worker — FIFO one-at-a-time dispatch, a no-progress deadline, respawn-on-fault
+// — while WorkerThreadRequestQueue owns the queue mechanics and
 // LazyWorkerThreadHost owns the thread's lifetime. The default spawn and the
 // process-wide singleton live in usage-scan-worker-spawn.ts.
 
-// Why this long: a first scan of a multi-gigabyte history is legitimately
-// minutes, and before the worker existed these scans had no deadline at all. A
-// shorter one would fail scans that used to succeed; this only backstops a
-// wedged thread.
-export const USAGE_SCAN_TIMEOUT_MS = 10 * 60_000
+// Why no-progress rather than wall clock: a cold scan of a real history is
+// legitimately minutes — 637 s measured on a 30 GB corpus with 300 worktrees
+// before #21130, ~51 s after — and a slower disk or a larger corpus goes past
+// any fixed budget. A wall-clock deadline killed those scans, recorded a scan
+// error, and left the cache unadvanced, so the next refresh started cold and
+// died at the same point, forever. The worker posts a file counter as it goes
+// (`UsageScanWorkerProgress`), so this window only has to cover the gap between
+// two files; it stays generous because a single huge rollout is still one gap.
+export const USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS = 10 * 60_000
 // One user action refreshes several providers in a burst, and the store's own
 // staleness window is 5 minutes. Long enough to serve a burst, short enough that
 // an idle app is not holding a thread.
@@ -66,7 +71,8 @@ export class UsageScanWorkerClient {
       idleTeardownMs: IDLE_TEARDOWN_MS,
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new UsageScanWorkerUnavailableError(message),
-      describeTimeout: (timeoutMs) => `Usage scan worker timed out after ${timeoutMs}ms`,
+      isProgress: isUsageScanWorkerProgress,
+      describeTimeout: (timeoutMs) => `Usage scan worker reported no progress for ${timeoutMs}ms`,
       describeExit: (code) => `Usage scan worker exited with code ${code}`,
       describeCrashLoop: (lastError) => `Usage scan worker crashed repeatedly (${lastError})`,
       // Why: never fall back to scanning on the main thread here. A missing
@@ -83,7 +89,10 @@ export class UsageScanWorkerClient {
    * @returns The worker's value for that provider.
    */
   async scan(body: UsageScanWorkerRequestBody): Promise<UsageScanWorkerValue> {
-    const response = await this.queue.dispatch((id) => ({ ...body, id }), USAGE_SCAN_TIMEOUT_MS)
+    const response = await this.queue.dispatch(
+      (id) => ({ ...body, id }),
+      USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS
+    )
     if (!response.ok) {
       throw new Error(response.error)
     }

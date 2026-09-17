@@ -20,6 +20,14 @@ export type WorkerThreadRequestQueueOptions<TRequest> = {
    * that was dropped, which is the only detail a log has to identify it.
    */
   queueCap?: { maxQueuedCalls: number; describeFull: (request: TRequest) => string }
+  /**
+   * Marks a message as liveness for the active call rather than its result.
+   * Omit it and `describeTimeout`'s deadline is a wall clock on the whole call;
+   * supply it and the deadline becomes a no-progress window, re-armed by every
+   * progress message the active call sends. Work that is slow but still moving
+   * must not be killed for being slow.
+   */
+  isProgress?: (message: { id: number }) => boolean
   /** The client's own error subclass, so callers can tell "no worker" from a fault. */
   createUnavailableError: (message: string) => Error
   describeTimeout: (timeoutMs: number) => string
@@ -106,16 +114,30 @@ export class WorkerThreadRequestQueue<
     }
     this.active = call
     this.host.clearIdleTimer()
-    // Clock starts at dispatch: a queue-inclusive deadline would fire falsely
-    // on the calls waiting behind a long one.
+    this.armDeadline(call)
+    worker.postMessage(call.request)
+  }
+
+  /**
+   * Clock starts at dispatch, not enqueue: a queue-inclusive deadline would fire
+   * falsely on the calls waiting behind a long one. Re-armed on every progress.
+   */
+  private armDeadline(call: PendingCall<TRequest, TResponse>): void {
+    if (call.timer) {
+      clearTimeout(call.timer)
+    }
     call.timer = setTimeout(() => this.onTimeout(call), call.timeoutMs)
     call.timer.unref?.()
-    worker.postMessage(call.request)
   }
 
   private onMessage(response: TResponse): void {
     const call = this.active
     if (!call || call.request.id !== response.id) {
+      return
+    }
+    // Liveness, not a result: keep waiting, but restart the no-progress window.
+    if (this.options.isProgress?.(response)) {
+      this.armDeadline(call)
       return
     }
     this.consecutiveDeaths = 0

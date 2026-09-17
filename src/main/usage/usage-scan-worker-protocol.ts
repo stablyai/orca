@@ -30,7 +30,11 @@ export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode'
 
 /** Request body per provider; `previous` is that provider's own per-source cache. */
 export type UsageScanWorkerRequestBody =
-  | { providerId: 'claude'; worktrees: UsageScanWorktreeRef[]; previous: ClaudeUsagePersistedFile[] }
+  | {
+      providerId: 'claude'
+      worktrees: UsageScanWorktreeRef[]
+      previous: ClaudeUsagePersistedFile[]
+    }
   | { providerId: 'codex'; worktrees: UsageScanWorktreeRef[]; previous: CodexUsagePersistedFile[] }
   | {
       providerId: 'opencode'
@@ -68,3 +72,20 @@ export type UsageScanWorkerValue =
 export type UsageScanWorkerResponse =
   | { id: number; ok: true; value: UsageScanWorkerValue }
   | { id: number; ok: false; error: string }
+
+/**
+ * Liveness for one in-flight scan: files (or databases) finished so far.
+ *
+ * Why: a corpus large enough to need minutes must not be killed for being slow,
+ * but a wedged thread still has to be. The client's deadline is therefore a
+ * no-progress window keyed on these, not a wall clock on the whole scan.
+ */
+export type UsageScanWorkerProgress = { id: number; filesScanned: number }
+
+export type UsageScanWorkerMessage = UsageScanWorkerResponse | UsageScanWorkerProgress
+
+export function isUsageScanWorkerProgress(message: {
+  id: number
+}): message is UsageScanWorkerProgress {
+  return 'filesScanned' in message
+}

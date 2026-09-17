@@ -41,7 +41,8 @@ async function getProcessedFileStat(
 
 export async function scanClaudeUsageFiles(
   worktrees: ClaudeUsageWorktreeRef[],
-  previousProcessedFiles: ClaudeUsagePersistedFile[] = []
+  previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
+  onFileScanned?: () => void
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -93,6 +94,9 @@ export async function scanClaudeUsageFiles(
       } else {
         pathsToParse.push(batch[batchIndex])
       }
+    }
+    for (let done = 0; done < batch.length; done++) {
+      onFileScanned?.()
     }
     if (index + batch.length < files.length) {
       await yieldToEventLoop()
@@ -146,6 +150,9 @@ export async function scanClaudeUsageFiles(
         ownedDedupeKeys,
         hasDeferredClaims
       })
+    }
+    for (let done = 0; done < batch.length; done++) {
+      onFileScanned?.()
     }
     if (index + batch.length < pathsToParse.length) {
       await yieldToEventLoop()

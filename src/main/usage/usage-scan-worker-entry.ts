@@ -3,6 +3,7 @@ import { scanClaudeUsageFiles } from '../claude-usage/scanner'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import type {
+  UsageScanWorkerProgress,
   UsageScanWorkerRequest,
   UsageScanWorkerResponse,
   UsageScanWorkerValue
@@ -32,12 +33,36 @@ if (!parentPort) {
 }
 const port = parentPort
 
-async function runScan(request: UsageScanWorkerRequest): Promise<UsageScanWorkerValue> {
+// Why: the client's deadline is a no-progress window, so a scan that is slow
+// because the corpus is large has to say so. Rate-limited because a 21k-file
+// corpus would otherwise wake the main thread 21k times for a counter it only
+// reads as "still moving".
+const PROGRESS_POST_INTERVAL_MS = 1_000
+
+function createProgressReporter(id: number): () => void {
+  let filesScanned = 0
+  let lastPostedAt = 0
+  return () => {
+    filesScanned++
+    const now = Date.now()
+    if (now - lastPostedAt < PROGRESS_POST_INTERVAL_MS) {
+      return
+    }
+    lastPostedAt = now
+    const progress: UsageScanWorkerProgress = { id, filesScanned }
+    port.postMessage(progress)
+  }
+}
+
+async function runScan(
+  request: UsageScanWorkerRequest,
+  onFileScanned: () => void
+): Promise<UsageScanWorkerValue> {
   // Switched, not table-driven: each branch narrows `previous` to that
   // provider's own record type, so nothing here needs a type assertion.
   switch (request.providerId) {
     case 'claude': {
-      const result = await scanClaudeUsageFiles(request.worktrees, request.previous)
+      const result = await scanClaudeUsageFiles(request.worktrees, request.previous, onFileScanned)
       return {
         providerId: 'claude',
         source: result.processedFiles,
@@ -46,7 +71,7 @@ async function runScan(request: UsageScanWorkerRequest): Promise<UsageScanWorker
       }
     }
     case 'codex': {
-      const result = await scanCodexUsageFiles(request.worktrees, request.previous)
+      const result = await scanCodexUsageFiles(request.worktrees, request.previous, onFileScanned)
       return {
         providerId: 'codex',
         source: result.processedFiles,
@@ -55,7 +80,11 @@ async function runScan(request: UsageScanWorkerRequest): Promise<UsageScanWorker
       }
     }
     case 'opencode': {
-      const result = await scanOpenCodeUsageDatabases(request.worktrees, request.previous)
+      const result = await scanOpenCodeUsageDatabases(
+        request.worktrees,
+        request.previous,
+        onFileScanned
+      )
       return {
         providerId: 'opencode',
         source: result.processedDatabases,
@@ -68,7 +97,11 @@ async function runScan(request: UsageScanWorkerRequest): Promise<UsageScanWorker
 
 async function handleRequest(request: UsageScanWorkerRequest): Promise<UsageScanWorkerResponse> {
   try {
-    return { id: request.id, ok: true, value: await runScan(request) }
+    return {
+      id: request.id,
+      ok: true,
+      value: await runScan(request, createProgressReporter(request.id))
+    }
   } catch (err) {
     return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }
   }
