@@ -155,8 +155,22 @@ const sparsePreset = z.looseObject({
   updatedAt: salvagedOptional('updatedAt', z.number())
 })
 
-/** The preset list, answered under `presets`. Required, because use-mobile-tasks-workspace-source-effects.tsx:62 reads `presets.some(...)` off
- *  whatever the member read answered. */
+/**
+ * The preset list, answered under `presets`. Required, because
+ * use-mobile-tasks-workspace-source-effects.tsx:62 reads `presets.some(...)` off whatever the
+ * member read answered.
+ *
+ * What a refusal does here is worth stating plainly, because "reports the named error" overstates
+ * it: the error goes to `setWorkspaceSparsePresetsError`, whose value is destructured as
+ * `_workspaceSparsePresetsError` (use-mobile-tasks-workspace-and-project-state.tsx:57) and read by
+ * nobody, on this branch and on main alike. The only visible effect is `presetsLoaded` staying
+ * false, which disables "New preset" (mobile-tasks-workspace-option-pickers.tsx:190/:194) and both
+ * draft entry points (use-mobile-tasks-workspace-sparse-actions.tsx:34/:51). Main set
+ * `presetsLoaded: true` over an empty list and let the user create one. No shipped host reaches
+ * that state: `repo.sparsePresets` has no refusal arm and answers
+ * `{ presets: await runtime.listSparsePresets(...) }` unconditionally
+ * (src/main/runtime/rpc/methods/repo.ts:87-91).
+ */
 export const repoSparsePresetListSchema = z
   .looseObject({ presets: salvagingArray(sparsePreset) })
   .transform((reply) => reply.presets)
