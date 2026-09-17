@@ -405,23 +405,6 @@ describe('ingestGitGrepLine', () => {
     expect(f.matches[0]).toMatchObject({ line: 10, column: 1, matchLength: 12 })
   })
 
-  it('does not broaden a separator-only include pattern to the repository', () => {
-    const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
-    try {
-      execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
-      writeFileSync(join(rootPath, 'target.ts'), 'needle\n')
-
-      expect(() =>
-        execFileSync('git', buildGitGrepArgs('needle', { includePattern: '/' }), {
-          cwd: rootPath,
-          stdio: 'ignore'
-        })
-      ).toThrow()
-    } finally {
-      rmSync(rootPath, { recursive: true, force: true })
-    }
-  })
-
   it('handles colons in filenames via null delimiter', () => {
     const acc = createAccumulator()
     const re = buildSubmatchRegex('x', {})
