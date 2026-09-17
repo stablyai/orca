@@ -150,7 +150,11 @@ describe('Claude model confirmation', () => {
 
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
-      current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
+      current: {
+        model: 'sonnet',
+        effort: 'high',
+        confirmed: ['model', 'effort', 'permissionMode']
+      }
     })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -158,7 +162,7 @@ describe('Claude model confirmation', () => {
     // The readback was taken under sonnet; nothing has reported haiku holding it.
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.effort).toBe('high')
-    expect(options.current.confirmed).toBeUndefined()
+    expect(options.current.confirmed).toEqual(['permissionMode'])
   })
 })
 
@@ -168,10 +172,13 @@ describe('Claude effort the settings readback cannot report', () => {
     calls: string[] = []
   ): { session: ClaudeSession; calls: string[] } {
     return {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This focused fixture supplies every session member exercised by effort mutation.
       session: {
         options: new Map<string, string>([['model', 'sonnet']]),
         reportedOptions: {},
         optionMutationSequence: 0,
+        permissionModeMutationSequence: 0,
+        reportedPermissionModeMutation: 0,
         confirmedOptions: new Set<string>(),
         connection: {
           supportedModels: async () => {

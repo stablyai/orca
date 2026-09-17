@@ -29,6 +29,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
+import type { StructuredAgentSessionPermissionMode } from '../../../shared/structured-agent-session-permission-mode'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
@@ -139,6 +140,8 @@ export type StructuredAgentSessionAcquireInput = {
   fence: number
   spawnToken: string
   options?: Readonly<Record<string, string>>
+  /** Immutable non-Plan mode captured by the first owner for Plan exit restoration. */
+  permissionModeRestoreValue?: StructuredAgentSessionPermissionMode
   /** Provider events may begin before acquisition returns. */
   events?: StructuredAgentSessionEventSink
   recordPhase?: AgentSessionCreatePhaseRecorder
@@ -232,7 +235,9 @@ export type StructuredAgentSessionAdapter = {
     kind: 'approval' | 'question'
     optionId: string
     fence: number
-    commit: () => Promise<void>
+    commit: (settlement?: { options: Readonly<Record<string, string>> }) => Promise<void>
+    /** Fenced host persistence for provider-owned changes during prompt settlement. */
+    settleOptions?: (options: Readonly<Record<string, string>>) => Promise<void>
   }): Promise<void>
   setOption(
     input: StructuredAgentSessionSetOptionInput

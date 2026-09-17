@@ -20,6 +20,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
+import { isAgentSessionOptions } from './agent-session-options-record'
 
 const BoundedPayload = z.object({
   head: z.string(),
@@ -129,7 +130,14 @@ const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
   resolvedBy: z.string().nullable(),
-  resolvedAt: z.number().nullable()
+  resolvedAt: z.number().nullable(),
+  sessionOptions: z
+    .object({
+      expectedRevision: z.number().int().nonnegative(),
+      expectedValues: z.unknown().refine(isAgentSessionOptions),
+      values: z.unknown().refine(isAgentSessionOptions)
+    })
+    .optional()
 })
 
 const ApprovalMatchedAskRule = z.object({

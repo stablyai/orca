@@ -111,6 +111,7 @@ describe('claude structured launch resolution', () => {
     expect(second.providerSessionId).toBe(first.providerSessionId)
     expect(first).toMatchObject({
       pathToClaudeCodeExecutable: '/usr/local/bin/claude',
+      launchPermissionMode: 'default',
       cwd: '/repos/workspace-1',
       claudeConfigDir: '/home/work/.claude',
       resumeLeafUuid: null,
@@ -202,6 +203,7 @@ describe('claude structured launch resolution', () => {
   ])('starts a Yolo session in bypassPermissions for args %s', async (claude) => {
     const launch = await resolverFor(record(), undefined, false, { claude })({ identity: IDENTITY })
 
+    expect(launch.launchPermissionMode).toBe('bypassPermissions')
     expect(launch.options.extraArgs).toEqual({
       'replay-user-messages': null,
       'dangerously-skip-permissions': null
@@ -216,10 +218,13 @@ describe('claude structured launch resolution', () => {
   it('starts a session that never opened Agent settings in bypassPermissions', async () => {
     const launch = await resolverFor(record(), undefined, false, {})({ identity: IDENTITY })
 
+    expect(launch.launchPermissionMode).toBe('bypassPermissions')
     expect(launch.options.extraArgs).toEqual({
       'replay-user-messages': null,
       'dangerously-skip-permissions': null
     })
+    expect(launch.options.permissionMode).toBeUndefined()
+    expect(launch.options.allowDangerouslySkipPermissions).toBeUndefined()
   })
 
   // Manual is stored as an empty string, which owns the key and so beats the shipped default.
@@ -230,6 +235,7 @@ describe('claude structured launch resolution', () => {
         identity: IDENTITY
       })
 
+      expect(launch.launchPermissionMode).toBe('default')
       expect(launch.options.permissionMode).toBeUndefined()
       expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
       expect(launch.options.allowDangerouslySkipPermissions).toBeUndefined()
@@ -247,6 +253,7 @@ describe('claude structured launch resolution', () => {
 
     expect(launch.options.model).toBeUndefined()
     expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
+    expect(launch.launchPermissionMode).toBe('default')
     expect(launch.options.permissionMode).toBeUndefined()
   })
 

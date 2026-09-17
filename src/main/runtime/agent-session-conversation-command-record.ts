@@ -1,17 +1,23 @@
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
 import type { AgentSessionConversationCommandRecord } from '../../shared/agent-session-conversation-command'
+import { withAgentSessionRecordOptions } from './agent-session-record-options'
 
 export function commitConversationCommandRecord(
   state: AgentSessionStoreState,
   sessionId: string,
   fence: number,
-  command: AgentSessionConversationCommandRecord
+  command: AgentSessionConversationCommandRecord,
+  optionSettlement?: { values: Readonly<Record<string, string>>; now: number }
 ): void {
   const record = state.records.get(sessionId)
   if (!record || record.lease.runtimeFence !== fence) {
     throw new Error('agent_session_checkpoint_stale')
   }
-  state.records.set(sessionId, { ...record, conversationCommand: command })
+  const settled =
+    optionSettlement === undefined
+      ? record
+      : withAgentSessionRecordOptions(record, optionSettlement.values, optionSettlement.now)
+  state.records.set(sessionId, { ...settled, conversationCommand: command })
   if (
     command.command === 'clear' &&
     command.phase === 'committed' &&

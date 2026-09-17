@@ -9,7 +9,12 @@ import {
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { CLAUDE_SPAWN_TOKEN_ENV } from './claude-structured-owner-identity'
-import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../shared/structured-agent-session-options'
 import {
   CLAUDE_STRUCTURED_INIT_TIMEOUT_MS,
   type ClaudeStructuredSessionAdapter,
@@ -20,7 +25,6 @@ import {
   adapterFor,
   fakeClaude,
   identityFor,
-  invokeCanUseTool,
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
@@ -69,6 +73,96 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       observedAt: 1_700_000_000_500
     })
     expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'init' } })
+  })
+
+  it('offers Plan from the launch baseline when system/init omits permission mode', async () => {
+    const claude = fakeClaude({ initPermissionMode: null })
+    const adapter = adapterFor(claude, {
+      launchPermissionMode: 'bypassPermissions'
+    })
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+
+    const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+    expect(options).toMatchObject({
+      permissionModeRestoreValue: 'bypassPermissions',
+      current: { permissionMode: 'bypassPermissions' }
+    })
+    const projected = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      options
+    )
+    expect(
+      structuredAgentSessionOptionSnapshot(projected).find(({ id }) => id === 'permissionMode')
+    ).toMatchObject({ kind: { currentValue: 'bypassPermissions' } })
+  })
+
+  it('uses provider settings ahead of the launch fallback when system/init omits permission mode', async () => {
+    const claude = fakeClaude({
+      initPermissionMode: null,
+      settings: { applied: { permissionMode: 'acceptEdits' } }
+    })
+    const adapter = adapterFor(claude, { launchPermissionMode: 'bypassPermissions' })
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      permissionModeRestoreValue: 'acceptEdits',
+      current: {
+        permissionMode: 'acceptEdits',
+        confirmed: expect.arrayContaining(['permissionMode'])
+      }
+    })
+  })
+
+  it('uses provider settings ahead of a conflicting system/init permission mode', async () => {
+    const claude = fakeClaude({
+      initPermissionMode: 'bypassPermissions',
+      settings: { applied: { permissionMode: 'acceptEdits' } }
+    })
+    const adapter = adapterFor(claude, { launchPermissionMode: 'default' })
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      permissionModeRestoreValue: 'acceptEdits',
+      current: {
+        permissionMode: 'acceptEdits',
+        confirmed: expect.arrayContaining(['permissionMode'])
+      }
+    })
+  })
+
+  it('uses system/init ahead of the launch fallback when settings omit permission mode', async () => {
+    const claude = fakeClaude({ initPermissionMode: 'acceptEdits' })
+    const adapter = adapterFor(claude, { launchPermissionMode: 'bypassPermissions' })
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      permissionModeRestoreValue: 'acceptEdits',
+      current: {
+        permissionMode: 'acceptEdits',
+        confirmed: expect.arrayContaining(['permissionMode'])
+      }
+    })
   })
 
   it('restores persisted model and effort before publishing a reacquired session', async () => {
@@ -187,8 +281,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
 
   it.each([
     ['model', 'set_model', { model: 'retired-model' }],
-    ['effort', 'apply_flag_settings', { effort: 'retired-effort' }],
-    ['permissionMode', 'set_permission_mode', { permissionMode: 'retired-mode' }]
+    ['effort', 'apply_flag_settings', { effort: 'retired-effort' }]
   ] as const)(
     'self-heals a persisted %s rejected during restore',
     async (key, subtype, options) => {
@@ -212,6 +305,116 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       expect(adapter.readOptionRestoreFailures('session-1')).toEqual([key])
     }
   )
+
+  it('self-heals an invalid persisted permission mode without dispatching it', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+
+    await expect(
+      adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'spawn-9',
+        options: { permissionMode: 'retired-mode' }
+      })
+    ).resolves.toBeDefined()
+
+    expect(adapter.readOptionRestoreFailures('session-1')).toEqual(['permissionMode'])
+    expect(claude.connections[0].calls.map(({ subtype }) => subtype)).toContain('get_settings')
+    expect(claude.connections[0].calls.map(({ subtype }) => subtype)).not.toContain(
+      'set_permission_mode'
+    )
+  })
+
+  it('retries a durable approved exit when the resumed provider still reports plan', async () => {
+    let permissionMode = 'plan'
+    const claude = fakeClaude({
+      initPermissionMode: 'plan',
+      routes: {
+        get_settings: () => ({ applied: { permissionMode } }),
+        set_permission_mode: (params) => {
+          permissionMode = String(params?.mode)
+        }
+      }
+    })
+    const adapter = adapterFor(claude, { resumed: true })
+
+    await expect(
+      adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'spawn-9',
+        options: { permissionMode: 'acceptEdits' }
+      })
+    ).resolves.toBeDefined()
+
+    expect(claude.connections[0].calls).toContainEqual({
+      subtype: 'set_permission_mode',
+      params: { mode: 'acceptEdits' }
+    })
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      permissionModeRestoreValue: 'acceptEdits',
+      current: {
+        permissionMode: 'acceptEdits',
+        confirmed: expect.arrayContaining(['permissionMode'])
+      }
+    })
+  })
+
+  it('publishes provider-current Plan when a recovered approved exit retry is rejected', async () => {
+    const claude = fakeClaude({
+      initPermissionMode: 'plan',
+      routes: {
+        get_settings: () => ({ applied: { permissionMode: 'plan' } }),
+        set_permission_mode: () => {
+          throw new ClaudeControlRequestError('set_permission_mode', 'temporarily unavailable')
+        }
+      }
+    })
+    const adapter = adapterFor(claude, { resumed: true })
+
+    await expect(
+      adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'spawn-9',
+        options: { permissionMode: 'acceptEdits' }
+      })
+    ).resolves.toBeDefined()
+
+    expect(adapter.readOptionRestoreFailures('session-1')).toEqual([])
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      permissionModeRestoreValue: 'acceptEdits',
+      current: {
+        permissionMode: 'plan',
+        confirmed: expect.arrayContaining(['permissionMode'])
+      }
+    })
+  })
+
+  it('retains the immutable exit mode when reacquiring a session still in plan', async () => {
+    const claude = fakeClaude({
+      initPermissionMode: 'plan',
+      routes: { get_settings: () => ({ applied: { permissionMode: 'plan' } }) }
+    })
+    const adapter = adapterFor(claude, { resumed: true })
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { permissionMode: 'plan' },
+      permissionModeRestoreValue: 'acceptEdits'
+    })
+
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      permissionModeRestoreValue: 'acceptEdits',
+      current: {
+        permissionMode: 'plan',
+        confirmed: expect.arrayContaining(['permissionMode'])
+      }
+    })
+  })
 
   it('does not treat a transport timeout while restoring an option as recoverable', async () => {
     const claude = fakeClaude({
@@ -692,125 +895,5 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     )
     expect(events.filter((event) => event.type === 'ended')).toEqual([])
     expect(connection.close).toHaveBeenCalledTimes(4)
-  })
-})
-
-describe('ClaudeStructuredSessionAdapter prompts', () => {
-  it('turns can_use_tool into an addressable durable approval that settles the SDK callback', async () => {
-    const claude = fakeClaude()
-    const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = await acquired(claude, {}, events)
-    const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' },
-      suggestions: [{ type: 'addRules' }]
-    })
-    expect(events.at(-1)).toMatchObject({
-      type: 'prompt',
-      prompt: { kind: 'approval', toolName: 'Bash', promptKey: 'permission-1' }
-    })
-
-    adapter.bindPromptItemId('session-1', 'journal-approval', 'permission-1')
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-approval',
-      kind: 'approval',
-      optionId: 'allowForSession',
-      fence: 7,
-      commit: async () => undefined
-    })
-    // The answer resolves the SDK's own callback promise; the SDK writes the wire response.
-    await expect(answered.promise).resolves.toEqual({
-      behavior: 'allow',
-      updatedInput: { command: 'git status' },
-      updatedPermissions: [{ type: 'addRules' }],
-      toolUseID: 'tool-1'
-    })
-  })
-
-  it('collects every AskUserQuestion card before settling the one callback', async () => {
-    const claude = fakeClaude()
-    const adapter = await acquired(claude)
-    const answered = invokeCanUseTool(
-      claude.connections[0],
-      'AskUserQuestion',
-      'question-1',
-      'tool-question',
-      {
-        input: {
-          questions: [
-            { question: 'Library?', options: [{ label: 'Luxon' }] },
-            { question: 'Ship now?', options: [{ label: 'Yes' }] }
-          ]
-        }
-      }
-    )
-    adapter.bindPromptItemId('session-1', 'journal-q1', 'question-1', 'Library?')
-    adapter.bindPromptItemId('session-1', 'journal-q2', 'question-1', 'Ship now?')
-
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-q1',
-      kind: 'question',
-      optionId: encodeClaudeQuestionOptionId('Library?', 'Luxon'),
-      fence: 7,
-      commit: async () => undefined
-    })
-    await tick()
-    expect(answered.settled()).toBe(false)
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-q2',
-      kind: 'question',
-      optionId: encodeClaudeQuestionOptionId('Ship now?', 'Yes'),
-      fence: 7,
-      commit: async () => undefined
-    })
-    await expect(answered.promise).resolves.toMatchObject({
-      behavior: 'allow',
-      updatedInput: { answers: { 'Library?': 'Luxon', 'Ship now?': 'Yes' } },
-      toolUseID: 'tool-question'
-    })
-  })
-
-  it('leaves a prompt cancelled and unanswerable once the SDK abort signal fires', async () => {
-    const claude = fakeClaude()
-    const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = await acquired(claude, {}, events)
-    const controller = new AbortController()
-    const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-9', 'tool-9', {
-      input: { command: 'rm -rf /' },
-      signal: controller.signal
-    })
-    adapter.bindPromptItemId('session-1', 'journal-9', 'permission-9')
-
-    controller.abort()
-    // A cancelled request is forgotten and settled with null — never an authorization.
-    await expect(answered.promise).resolves.toBeNull()
-    expect(events.at(-1)).toMatchObject({ type: 'prompt-cancelled', promptKey: 'permission-9' })
-    // A late answer after the abort must not authorize the wrong tool.
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'journal-9',
-        kind: 'approval',
-        optionId: 'allow',
-        fence: 7,
-        commit: async () => undefined
-      })
-    ).rejects.toThrow(/no longer waiting/)
-  })
-
-  it('settles an in-flight permission callback when the session closes, leaving no dangling promise', async () => {
-    const claude = fakeClaude()
-    const adapter = await acquired(claude)
-    const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-close', 'tool-c', {
-      input: { command: 'ls' }
-    })
-    await tick()
-    expect(answered.settled()).toBe(false)
-
-    await adapter.closeSession('session-1')
-
-    await expect(answered.promise).resolves.toBeNull()
   })
 })

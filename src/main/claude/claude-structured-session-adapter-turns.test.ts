@@ -232,7 +232,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         },
         { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
       ],
-      current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
+      permissionModeRestoreValue: 'default',
+      current: {
+        model: 'sonnet',
+        effort: 'high',
+        permissionMode: 'default',
+        confirmed: ['model', 'effort', 'permissionMode']
+      }
     })
   })
 
@@ -258,7 +264,9 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     expect(result.current).toEqual({
       model: 'custom-model',
       effort: 'high',
-      confirmed: ['model', 'effort']
+      permissionMode: 'default',
+      confirmed: ['model', 'effort', 'permissionMode']
     })
+    expect(result.permissionModeRestoreValue).toBe('default')
   })
 })

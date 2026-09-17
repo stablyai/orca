@@ -62,6 +62,12 @@ export function mobileOptionsPillLabel(descriptors: readonly SessionOptionDescri
       continue
     }
     if (descriptor.kind.type === 'select') {
+      if (
+        descriptor.id === 'permissionMode' &&
+        (descriptor.valueSource !== 'reported' || descriptor.kind.currentValue !== 'plan')
+      ) {
+        continue
+      }
       const label = selectedChoiceLabel(descriptor)
       if (label) {
         labels.push(label)

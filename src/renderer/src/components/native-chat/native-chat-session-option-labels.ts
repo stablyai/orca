@@ -13,6 +13,8 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
       return translate('components.native-chat.composer.effort', descriptor.label)
     case 'fastMode':
       return translate('components.native-chat.composer.fastMode', 'Fast mode')
+    case 'permissionMode':
+      return translate('components.native-chat.composer.planMode', 'Plan mode')
     case 'thinking':
       return translate('components.native-chat.composer.thinking', 'Thinking')
     default:
@@ -20,7 +22,31 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
   }
 }
 
-export function nativeChatSessionChoiceLabel(choice: SessionOptionSelectChoice): string {
+export function nativeChatSessionChoiceLabel(
+  choice: SessionOptionSelectChoice,
+  optionId?: string
+): string {
+  if (optionId === 'permissionMode') {
+    switch (choice.value) {
+      case 'default':
+        return translate('components.native-chat.composer.optionValue.normal', 'Normal')
+      case 'acceptEdits':
+        return translate('components.native-chat.composer.optionValue.acceptEdits', 'Accept edits')
+      case 'bypassPermissions':
+        return translate(
+          'components.native-chat.composer.optionValue.bypassPermissions',
+          'Bypass permissions'
+        )
+      case 'plan':
+        return translate('components.native-chat.composer.optionValue.plan', 'Plan')
+      case 'dontAsk':
+        return translate('components.native-chat.composer.optionValue.dontAsk', "Don't ask")
+      case 'auto':
+        return translate('components.native-chat.composer.optionValue.auto', 'Auto')
+      default:
+        return choice.label
+    }
+  }
   switch (choice.value) {
     case 'minimal':
       return translate('components.native-chat.composer.optionValue.minimal', 'Minimal')
@@ -102,6 +128,12 @@ export function nativeChatOptionsPillLabel(
       continue
     }
     if (descriptor.kind.type === 'select' && descriptor.kind.currentValue) {
+      if (
+        descriptor.id === 'permissionMode' &&
+        (descriptor.valueSource !== 'reported' || descriptor.kind.currentValue !== 'plan')
+      ) {
+        continue
+      }
       const choice = descriptor.kind.choices.find(
         (candidate) => candidate.value === descriptor.kind.currentValue
       )
@@ -110,7 +142,8 @@ export function nativeChatOptionsPillLabel(
           choice ?? {
             value: descriptor.kind.currentValue,
             label: descriptor.kind.currentValue
-          }
+          },
+          descriptor.id
         )
       )
     } else if (descriptor.kind.type === 'boolean' && descriptor.kind.currentValue === true) {

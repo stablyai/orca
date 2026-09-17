@@ -185,6 +185,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
           extraArgs: { ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs, settings: settingsPath },
           sessionId: providerSessionId
         },
+        launchPermissionMode: 'default',
         cwd: process.cwd(),
         claudeConfigDir,
         providerSessionId,

@@ -6,6 +6,7 @@ import type { ClaudeJournalTranslator } from './claude-structured-journal-transl
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import { readStructuredAgentSessionPermissionMode } from '../../shared/structured-agent-session-permission-mode'
 
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
@@ -23,6 +24,9 @@ export function createClaudeSessionPublication(input: {
   linkId?: string
   observedAt: number
   options?: ReadonlyMap<string, string>
+  permissionModeRestoreValue?: ClaudeSession['basePermissionMode']
+  launchPermissionMode?: ClaudeSession['basePermissionMode']
+  settingsPermissionMode?: ClaudeSession['basePermissionMode']
   capabilities: readonly string[]
   /** Read from `get_settings`; `system/init` never reports an effort. */
   effort: string | null
@@ -34,6 +38,21 @@ export function createClaudeSessionPublication(input: {
   const model = input.init.model
   const effort = input.effort
   const fastMode = input.fastMode
+  const persistedPermissionMode = readStructuredAgentSessionPermissionMode(
+    input.options?.get('permissionMode')
+  )
+  const reportedPermissionMode =
+    input.settingsPermissionMode ?? input.init.permissionMode ?? undefined
+  // The durable baseline wins; otherwise capture the provider's state or its accepted launch mode.
+  const basePermissionMode =
+    input.permissionModeRestoreValue ??
+    (persistedPermissionMode && persistedPermissionMode !== 'plan'
+      ? persistedPermissionMode
+      : reportedPermissionMode && reportedPermissionMode !== 'plan'
+        ? reportedPermissionMode
+        : input.launchPermissionMode && input.launchPermissionMode !== 'plan'
+          ? input.launchPermissionMode
+          : undefined)
   return {
     acquisition: {
       process: input.process,
@@ -62,13 +81,17 @@ export function createClaudeSessionPublication(input: {
       commands: new ClaudeSlashCommandCatalog(input.init.message, input.initialization),
       dispatchSequence: 0,
       optionMutationSequence: 0,
+      permissionModeMutationSequence: 0,
+      reportedPermissionModeMutation: 0,
       options: new Map(input.options),
       capabilities: input.capabilities,
       reportedOptions: {
         ...(model ? { model } : {}),
         ...(effort ? { effort } : {}),
-        ...(fastMode !== null ? { fastMode } : {})
+        ...(fastMode !== null ? { fastMode } : {}),
+        ...(reportedPermissionMode ? { permissionMode: reportedPermissionMode } : {})
       },
+      ...(basePermissionMode ? { basePermissionMode } : {}),
       ...(input.fastModeState ? { fastModeState: input.fastModeState } : {}),
       ...(input.fastModeDisabledReason
         ? { fastModeDisabledReason: input.fastModeDisabledReason }
@@ -79,7 +102,10 @@ export function createClaudeSessionPublication(input: {
       reportedModelMutation: 0,
       confirmedOptions: new Set([
         ...(effort ? ['effort'] : []),
-        ...(fastMode !== null ? ['fastMode'] : [])
+        ...(fastMode !== null ? ['fastMode'] : []),
+        ...(basePermissionMode && reportedPermissionMode === basePermissionMode
+          ? ['permissionMode']
+          : [])
       ]),
       restoreSkippedOptions: new Set(),
       translator: input.translator,

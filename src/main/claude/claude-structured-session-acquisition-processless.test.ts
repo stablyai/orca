@@ -49,6 +49,7 @@ describe('Claude structured processless acquisition', () => {
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: 'claude',
         options: {},
+        launchPermissionMode: 'default',
         cwd: '/work/repo',
         claudeConfigDir: '/accounts/claude',
         providerSessionId: PROVIDER_SESSION_ID,

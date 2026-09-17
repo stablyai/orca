@@ -91,6 +91,46 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
   }
 }
 
+const CLAUDE_PERMISSION_MODE: CatalogOption = {
+  id: 'permissionMode',
+  label: 'Plan mode',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'default', label: 'Normal' },
+      { value: 'plan', label: 'Plan' }
+    ],
+    defaultValue: 'default'
+  },
+  apply: {
+    launchArgs: (value) =>
+      value === 'default'
+        ? []
+        : value === 'bypassPermissions'
+          ? ['--dangerously-skip-permissions']
+          : ['--permission-mode', String(value)],
+    agentArgsOverride: (tokens) =>
+      hasFlag(tokens, ['--permission-mode', '--dangerously-skip-permissions']),
+    removeAgentArgs: (tokens) =>
+      removeClaudeBypassFlag(removeAgentArgOption(tokens, ['--permission-mode']))
+  }
+}
+
+function removeClaudeBypassFlag(tokens: readonly string[]): string[] {
+  const terminator = tokens.indexOf('--')
+  const optionTokens = terminator === -1 ? tokens : tokens.slice(0, terminator)
+  const trailing = terminator === -1 ? [] : tokens.slice(terminator)
+  return [
+    ...optionTokens.filter(
+      (token) =>
+        token !== '--dangerously-skip-permissions' &&
+        !token.startsWith('--dangerously-skip-permissions=')
+    ),
+    ...trailing
+  ]
+}
+
 export function createClaudeCatalogOptions(args: {
   effortLevelIds: readonly string[]
   supportsFastMode?: boolean
@@ -174,6 +214,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   },
   unknownModelOptions: [claudeEffort(true)],
+  structuredSessionOptions: [CLAUDE_PERMISSION_MODE],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels

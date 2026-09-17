@@ -20,7 +20,6 @@ import {
 } from './agent-session-operation-admission'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import { classifyObservedAgentSessionSpawnToken } from '../../shared/agent-session-lease-adjudication'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
@@ -31,7 +30,6 @@ import {
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,
-  proveAgentSessionOwner,
   setAgentSessionJournalCheckpoint,
   type AgentSessionProcessIdentityCommit
 } from './agent-session-lease-transitions'
@@ -50,6 +48,10 @@ import {
   collectAgentSessionRestartProbes,
   type AgentSessionRestartProbeArgs
 } from './agent-session-restart-reconciliation'
+import {
+  commitAgentSessionOwnerProof,
+  type AgentSessionOwnerProofCommit
+} from './agent-session-owner-proof'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
   setAgentSessionReservationProcesslessProof,
@@ -142,10 +144,11 @@ export class AgentSessionRecordStore {
   setConversationCommand(
     sessionId: string,
     fence: number,
-    command: NonNullable<AgentSessionRecord['conversationCommand']>
+    command: NonNullable<AgentSessionRecord['conversationCommand']>,
+    optionSettlement?: { values: Readonly<Record<string, string>>; now: number }
   ): Promise<void> {
     return this.transact(() =>
-      commitConversationCommandRecord(this.state, sessionId, fence, command)
+      commitConversationCommandRecord(this.state, sessionId, fence, command, optionSettlement)
     )
   }
 
@@ -195,26 +198,10 @@ export class AgentSessionRecordStore {
       setAgentSessionReservationProcesslessProof({ ...args, record })
     )
 
-  async proveOwner(args: {
-    sessionId: string
-    fence: number
-    link: AgentSessionProviderHandleLink
-    now: number
-    leaseTtlMs?: number
-    options?: Readonly<Record<string, string>>
-  }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => {
-      const proved = proveAgentSessionOwner({
-        record,
-        fence: args.fence,
-        link: args.link,
-        now: args.now,
-        leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
-      })
-      return args.options
-        ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
-        : proved
-    })
+  async proveOwner(args: AgentSessionOwnerProofCommit): Promise<AgentSessionRecord> {
+    return this.mutate(args.sessionId, (record) =>
+      commitAgentSessionOwnerProof(record, args, args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS)
+    )
   }
 
   /** Settle the failed attach and its reservation in one durable transaction. */

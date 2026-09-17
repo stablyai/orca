@@ -208,7 +208,7 @@ describe('answerClaudePrompt', () => {
     if (!claim) {
       throw new Error('expected prompt claim')
     }
-    await answerClaudePrompt(session, claim, 'allow')
+    await answerClaudePrompt(session, claim, 'allow', async () => {})
 
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: 'allow', toolUseID: 'tool-1' })

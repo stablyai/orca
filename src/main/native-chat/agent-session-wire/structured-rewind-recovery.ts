@@ -1,27 +1,34 @@
+import { isDeepStrictEqual } from 'node:util'
 import { restoreRewindJournalBody } from './structured-rewind-journal-body'
 import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
-import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { withAgentSessionRecordOptions } from '../../runtime/agent-session-record-options'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
+import { materializeResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
 
 export function persistRewindRecord(
   store: AgentSessionRecordStore,
   sessionId: string,
   fence: number,
-  rewind: AgentSessionRewindRecord
+  rewind: AgentSessionRewindRecord,
+  optionSettlement?: { values: Readonly<Record<string, string>>; now: number }
 ): Promise<unknown> {
   return store.transitionHandoff(sessionId, (record) => {
     if (record.lease.runtimeFence !== fence) {
       throw new Error('agent_session_checkpoint_stale')
     }
-    return { ...record, rewind }
+    const settled =
+      optionSettlement === undefined
+        ? record
+        : withAgentSessionRecordOptions(record, optionSettlement.values, optionSettlement.now)
+    return { ...settled, rewind }
   })
 }
 
@@ -113,6 +120,18 @@ export async function recoverStructuredRewind(
   })
   // A crash after the journal transaction must settle its existing epoch, not replace it twice.
   const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
+  if (!alreadyReplaced) {
+    const record = store.getRecord(sessionId)
+    if (!record) {
+      throw new Error('agent_session_identity_required')
+    }
+    await materializeResolvedPromptSessionOptions({
+      record,
+      items: journal.snapshot().items,
+      persist: (options) =>
+        store.replaceSessionOptions({ sessionId, fence, options, now: now() }).then(() => undefined)
+    })
+  }
   if (
     alreadyReplaced &&
     !isDeepStrictEqual(

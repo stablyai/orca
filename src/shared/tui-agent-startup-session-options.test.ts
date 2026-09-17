@@ -83,7 +83,7 @@ describe('tui agent startup session options', () => {
     ).toEqual({
       ok: false,
       error:
-        'Agent command override conflicts with the requested launch preferences. Remove model or effort flags from the command override.'
+        'Agent command override conflicts with the requested launch preferences. Remove conflicting option flags from the command override.'
     })
   })
 
@@ -157,5 +157,65 @@ describe('tui agent startup session options', () => {
       "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium'"
     )
     expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.5', effort: 'high' })
+  })
+
+  it('restores a structured Claude permission mode when resuming in a TUI', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--permission-mode plan --model opus',
+      sessionOptions: { permissionMode: 'acceptEdits' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(plan?.launchCommand).toBe(
+      "claude '--model' 'opus' '--permission-mode' 'acceptEdits' '--resume' 'session-1'"
+    )
+    expect(plan?.sessionOptions).toEqual({ permissionMode: 'acceptEdits' })
+    expect(plan?.launchConfig.agentCommand).toBe("claude '--model' 'opus'")
+
+    const resumed = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentCommand: plan?.launchConfig.agentCommand
+    })
+    expect(resumed?.launchCommand).toBe("claude '--model' 'opus' '--resume' 'session-1'")
+  })
+
+  it.each([
+    ['acceptEdits', "'--permission-mode' 'acceptEdits'"],
+    ['bypassPermissions', "'--dangerously-skip-permissions'"]
+  ])('replaces legacy Claude bypass args with recovered %s', (permissionMode, expectedArg) => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--dangerously-skip-permissions --model opus',
+      sessionOptions: { permissionMode },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(plan?.launchCommand).toContain(expectedArg)
+    expect(plan?.launchConfig.agentCommand).toBe("claude '--model' 'opus'")
+    expect(plan?.launchCommand.match(/dangerously-skip-permissions/g) ?? []).toHaveLength(
+      permissionMode === 'bypassPermissions' ? 1 : 0
+    )
+  })
+
+  it('restores Claude default mode by removing explicit permission flags', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--dangerously-skip-permissions=true --permission-mode plan --model opus',
+      sessionOptions: { permissionMode: 'default' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(plan?.launchCommand).toBe("claude '--model' 'opus' '--resume' 'session-1'")
+    expect(plan?.launchConfig.agentCommand).toBe("claude '--model' 'opus'")
   })
 })

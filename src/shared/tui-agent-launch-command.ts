@@ -1,5 +1,6 @@
 import {
   removeOverriddenAgentSessionArgs,
+  removeTransientStructuredSessionOptions,
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
 import type { SessionOptionValue } from './native-chat-session-options'
@@ -72,12 +73,21 @@ export function resolveAgentLaunchCommand(args: {
       return {
         ok: false,
         error:
-          'Agent command override conflicts with the requested launch preferences. Remove model or effort flags from the command override.'
+          'Agent command override conflicts with the requested launch preferences. Remove conflicting option flags from the command override.'
       }
     }
   }
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
-  const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
+  const persistentTokens = removeTransientStructuredSessionOptions(
+    args.agent,
+    args.sessionOptions,
+    trailingTokens.tokens,
+    Boolean(args.sessionOptionsOverrideAgentArgs)
+  )
+  const persistentSuffix = persistentTokens
+    .map((token) => quoteStartupArg(token, args.shell))
+    .join(' ')
+  const commandWithoutSessionOptions = persistentSuffix ? `${command} ${persistentSuffix}` : command
   const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
   const overrideTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(

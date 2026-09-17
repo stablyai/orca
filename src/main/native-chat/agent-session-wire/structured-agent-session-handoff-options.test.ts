@@ -43,7 +43,45 @@ let transcriptPath: string
 let optionFailure: Error | null
 const dispatchedModels: string[] = []
 const launchedOptions: (Readonly<Record<string, string>> | undefined)[] = []
+const persistedOptionsAtLaunch: (Readonly<Record<string, string>> | undefined)[] = []
 const closedTuiOwners: StructuredTuiOwner[] = []
+
+async function seedResolvedOptionEffect(values: Readonly<Record<string, string>>): Promise<number> {
+  const expectedValues = { permissionMode: 'plan' }
+  const record = store.getRecord(SESSION)!
+  const updated = await store.replaceSessionOptions({
+    sessionId: SESSION,
+    fence: record.lease.runtimeFence,
+    options: expectedValues,
+    now: NOW
+  })
+  const events = acquire.mock.calls.at(-1)?.[0].events
+  if (!events) {
+    throw new Error('option-effect recovery requires an acquired session')
+  }
+  events.appendItem(
+    { provider: 'orca', clientMessageId: 'approved-plan-exit' },
+    {
+      kind: 'approval',
+      title: 'Exit plan mode?',
+      detail: null,
+      options: [{ id: 'allow', label: 'Allow' }],
+      resolution: {
+        state: 'resolved',
+        selectedOptionId: 'allow',
+        resolvedBy: 'client-1',
+        resolvedAt: NOW,
+        sessionOptions: {
+          expectedRevision: updated.optionsRevision ?? 0,
+          expectedValues,
+          values
+        }
+      }
+    }
+  )
+  await host.flushStreamedEvents(SESSION)
+  return updated.optionsRevision ?? 0
+}
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
   return {
@@ -88,6 +126,7 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
     hostLabel: 'Test host',
     launchTui: async ({ record, fence, spawnToken }) => {
       launchedOptions.push(record.options)
+      persistedOptionsAtLaunch.push(store.getRecord(SESSION)?.options)
       return tuiOwner(fence, spawnToken)
     },
     reproveTuiOwner: async ({ owner }) => owner,
@@ -182,6 +221,7 @@ beforeEach(async () => {
   optionFailure = null
   dispatchedModels.length = 0
   launchedOptions.length = 0
+  persistedOptionsAtLaunch.length = 0
   closedTuiOwners.length = 0
   const accountHome = join(root, 'codex-home')
   const sessionsDir = join(accountHome, 'sessions', '2026', '08', '12')
@@ -313,5 +353,70 @@ describe('structured session handoff options', () => {
       })
     ).toMatchObject({ ok: true })
     expect(dispatchedModels).toEqual([PICKED_MODEL])
+  })
+
+  it.each([
+    ['the restored base', { permissionMode: 'acceptEdits' }, {}, 2],
+    ['an empty settled option set', {}, {}, 1]
+  ] as const)(
+    'folds a prompt-owned option effect into TUI owner reservation for %s',
+    async (_label, values, settledValues, revisionDelta) => {
+      const revision = await seedResolvedOptionEffect(values)
+
+      expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
+      await vi.waitFor(
+        async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+        { timeout: 5000 }
+      )
+
+      expect(launchedOptions).toEqual([values])
+      expect(persistedOptionsAtLaunch).toEqual([values])
+      expect(store.getRecord(SESSION)).toMatchObject({
+        options: settledValues,
+        optionsRevision: revision + revisionDelta
+      })
+    }
+  )
+
+  it('does not replay a delivered permission mode when returning from TUI to native', async () => {
+    await seedResolvedOptionEffect({ permissionMode: 'acceptEdits' })
+
+    expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+      { timeout: 5000 }
+    )
+    expect(store.getRecord(SESSION)?.options).toEqual({})
+
+    expect(await host.requestHandoff(CALLER, handoff('to-native'))).toMatchObject({ ok: true })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
+      { timeout: 5000 }
+    )
+    expect(acquire.mock.calls[1]?.[0].options).toEqual({})
+  })
+
+  it('keeps a user-selected Plan mode across a TUI round trip', async () => {
+    const record = store.getRecord(SESSION)!
+    await store.replaceSessionOptions({
+      sessionId: SESSION,
+      fence: record.lease.runtimeFence,
+      options: { permissionMode: 'plan' },
+      now: NOW
+    })
+
+    expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+      { timeout: 5000 }
+    )
+    expect(store.getRecord(SESSION)?.options).toEqual({ permissionMode: 'plan' })
+
+    expect(await host.requestHandoff(CALLER, handoff('to-native'))).toMatchObject({ ok: true })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
+      { timeout: 5000 }
+    )
+    expect(acquire.mock.calls[1]?.[0].options).toEqual({ permissionMode: 'plan' })
   })
 })

@@ -345,52 +345,64 @@ describe('structured session ownership recovery on restore', () => {
     })
   })
 
-  it('finishes a live new-owner-proving stage after restart', async () => {
-    const operation = operationId()
-    let record = await setStoredAgentSessionHandoffStage(store, {
-      sessionId: SESSION,
-      fence: 1,
-      stage: 'preparing',
-      handoffOperationId: operation,
-      now: NOW
-    })
-    record = await stopStoredAgentSessionOwnerForHandoff(store, {
-      sessionId: SESSION,
-      expectedFence: record.lease.runtimeFence,
-      operationId: operation,
-      now: NOW
-    })
-    const spawnToken = 'restarted-tui'
-    record = await reserveStoredAgentSessionHandoffOwner(store, {
-      sessionId: SESSION,
-      expectedFence: record.lease.runtimeFence,
-      runtimeKind: 'tui',
-      spawnToken,
-      operationId: operation,
-      claimKeyId: 'key-1',
-      now: NOW
-    })
-    await store.commitProcessIdentity({
-      sessionId: SESSION,
-      fence: record.lease.runtimeFence,
-      process: process(spawnToken, 4400),
-      now: NOW
-    })
-    coordinator = createCoordinator()
+  it.each([
+    ['a delivered restore', { model: 'opus', permissionMode: 'acceptEdits' }, { model: 'opus' }],
+    [
+      'an active Plan selection',
+      { model: 'opus', permissionMode: 'plan' },
+      { model: 'opus', permissionMode: 'plan' }
+    ]
+  ] as const)(
+    'finishes a live new-owner-proving stage after restart for %s',
+    async (_label, options, expectedOptions) => {
+      const operation = operationId()
+      let record = await setStoredAgentSessionHandoffStage(store, {
+        sessionId: SESSION,
+        fence: 1,
+        stage: 'preparing',
+        handoffOperationId: operation,
+        now: NOW
+      })
+      record = await stopStoredAgentSessionOwnerForHandoff(store, {
+        sessionId: SESSION,
+        expectedFence: record.lease.runtimeFence,
+        operationId: operation,
+        now: NOW
+      })
+      const spawnToken = 'restarted-tui'
+      record = await reserveStoredAgentSessionHandoffOwner(store, {
+        sessionId: SESSION,
+        expectedFence: record.lease.runtimeFence,
+        runtimeKind: 'tui',
+        spawnToken,
+        operationId: operation,
+        claimKeyId: 'key-1',
+        now: NOW,
+        options
+      })
+      await store.commitProcessIdentity({
+        sessionId: SESSION,
+        fence: record.lease.runtimeFence,
+        process: process(spawnToken, 4400),
+        now: NOW
+      })
+      coordinator = createCoordinator()
 
-    await coordinator.restore(SESSION)
+      await coordinator.restore(SESSION)
 
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      runtimeKind: 'tui',
-      claimStatus: 'live',
-      handoffStage: null
-    })
-    expect(coordinator.status(SESSION)).toMatchObject({ owner: 'tui', phase: 'idle' })
-    expect(recoverTuiHistoryCatchup).toHaveBeenCalledWith(
-      SESSION,
-      store.getRecord(SESSION)?.lease.runtimeFence
-    )
-  })
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({
+        runtimeKind: 'tui',
+        claimStatus: 'live',
+        handoffStage: null
+      })
+      expect(store.getRecord(SESSION)?.options).toEqual(expectedOptions)
+      expect(coordinator.status(SESSION)).toMatchObject({ owner: 'tui', phase: 'idle' })
+      expect(recoverTuiHistoryCatchup).toHaveBeenCalledWith(
+        SESSION,
+        store.getRecord(SESSION)?.lease.runtimeFence
+      )
+    }
+  )
 
   it('continues only the persisted TUI handoff after a store restart', async () => {
     const plainOperation = operationId()

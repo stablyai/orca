@@ -278,7 +278,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
-    answerClaudeStructuredPrompt({ request, sessions: this.sessions })
+    answerClaudeStructuredPrompt(request, this.sessions, this.deps.requestTimeoutMs)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     setClaudeStructuredOption(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
   readOptions = (input: { sessionId: string; fence: number }) =>

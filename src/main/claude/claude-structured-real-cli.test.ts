@@ -55,6 +55,7 @@ function realAdapter(
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: command,
       options: { ...CLAUDE_STRUCTURED_BASE_OPTIONS, sessionId: providerSessionId },
+      launchPermissionMode: 'default',
       cwd,
       claudeConfigDir,
       providerSessionId,

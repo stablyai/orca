@@ -68,6 +68,7 @@ function context(
     persistOptions: async () => undefined,
     resolvedBy: 'client-1',
     publish: vi.fn(),
+    publishOptions: vi.fn(),
     flushStreamedEvents,
     now: () => 1
   }

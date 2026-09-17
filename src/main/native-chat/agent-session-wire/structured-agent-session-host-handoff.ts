@@ -14,12 +14,14 @@ import type { StructuredAgentSessionHostDeps } from './structured-agent-session-
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 import { recoverDeadTuiHandoffStatus } from './structured-agent-session-dead-tui-recovery'
-import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
+import { readNativeSessionOptionRestoration } from './structured-agent-session-option-restoration'
+import { recoverResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
 import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
 import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
+import { resolveClaudeNativeHandoffOptions } from './claude-tui-permission-mode'
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
@@ -243,20 +245,32 @@ export async function acquireNativeHandoffOwner(
   if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
     throw new Error('structured_agent_session_unsupported')
   }
+  const resolvedOptions = recoverResolvedPromptSessionOptions(
+    record,
+    session.journal.snapshot().items
+  )
+  const nativeHandoffOptions = resolveClaudeNativeHandoffOptions(record, resolvedOptions)
+  const acquisitionOptions = nativeHandoffOptions.options
   const acquired = await deps.adapter.acquire({
     identity: journalIdentityFor(record, session.params),
     fence: input.fence,
     spawnToken: input.spawnToken,
-    ...(record.options ? { options: record.options } : {}),
+    ...(acquisitionOptions ? { options: acquisitionOptions } : {}),
+    ...(record.permissionModeRestoreValue
+      ? { permissionModeRestoreValue: record.permissionModeRestoreValue }
+      : {}),
     events: eventSink.sink
   })
   let proved: AgentSessionRecord
   try {
-    const options = await readNativeSessionOptions({
+    const restoration = await readNativeSessionOptionRestoration({
       adapter: deps.adapter,
       sessionId: input.sessionId,
       fence: input.fence,
-      ...(record.options ? { priorOptions: record.options } : {})
+      ...(acquisitionOptions ? { priorOptions: acquisitionOptions } : {}),
+      ...(nativeHandoffOptions.permissionModeAdoption
+        ? { permissionModeAdoption: nativeHandoffOptions.permissionModeAdoption }
+        : {})
     })
     await deps.store.commitProcessIdentity({
       sessionId: input.sessionId,
@@ -269,7 +283,14 @@ export async function acquireNativeHandoffOwner(
       fence: input.fence,
       link: acquired.link,
       now: host.now(),
-      ...(options ? { options } : {})
+      ...(restoration
+        ? {
+            options: restoration.options,
+            ...(restoration.permissionModeRestoreValue
+              ? { permissionModeRestoreValue: restoration.permissionModeRestoreValue }
+              : {})
+          }
+        : {})
     })
   } catch (error) {
     return rethrowAfterAgentSessionAcquisitionCleanup(deps.adapter, input.sessionId, error)
@@ -281,7 +302,8 @@ export async function acquireNativeHandoffOwner(
   eventSink.bind({
     journal: session.journal,
     fence: proved.lease.runtimeFence,
-    publish: (activity) => host.subscribers.publish(input.sessionId, session.journal, activity)
+    publish: (activity) => host.subscribers.publish(input.sessionId, session.journal, activity),
+    publishOptions: () => host.subscribers.optionsChanged(input.sessionId)
   })
   const acquiredBarrier = await eventSink.drained()
   if (!acquiredBarrier.ok) {

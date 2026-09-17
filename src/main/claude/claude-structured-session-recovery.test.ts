@@ -61,6 +61,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: 'claude',
         options: {},
+        launchPermissionMode: 'default',
         cwd: '/work/repo',
         claudeConfigDir: '/accounts/claude',
         providerSessionId: PROVIDER_SESSION_ID,
@@ -475,6 +476,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
         return {
           pathToClaudeCodeExecutable: 'claude',
           options: { sessionId: PROVIDER_SESSION_ID },
+          launchPermissionMode: 'default' as const,
           cwd: '/work/repo',
           claudeConfigDir: '/accounts/claude',
           providerSessionId: PROVIDER_SESSION_ID,
@@ -485,6 +487,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       return {
         pathToClaudeCodeExecutable: 'claude',
         options: { resume: PROVIDER_SESSION_ID, resumeSessionAt: durableLeafUuid },
+        launchPermissionMode: 'default' as const,
         cwd: '/work/repo',
         claudeConfigDir: '/accounts/claude',
         providerSessionId: PROVIDER_SESSION_ID,

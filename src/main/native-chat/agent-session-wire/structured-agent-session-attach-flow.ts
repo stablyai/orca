@@ -16,7 +16,7 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   admitAttachOrRefuse,
@@ -43,6 +43,8 @@ import {
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import type { JournalLoad } from '../agent-session-journal/journal-open'
+import { readProviderHistoryBeforeAcquisition } from './structured-agent-session-provider-history-window'
 
 export type AttachFlowInput = {
   rewind?: StructuredAgentSessionAcquireInput['rewind']
@@ -68,6 +70,11 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
+  /** Re-derives prompt-owned option effects before a replacement provider starts. */
+  optionsForAcquisition?: (
+    record: AgentSessionRecord,
+    readDurableItems: () => readonly AgentJournalRenderItem[] | undefined
+  ) => Readonly<Record<string, string>> | undefined
   /** Closes and removes partial publication after journal attachment fails. */
   onAttachFailed?: () => Promise<void>
 }
@@ -96,6 +103,7 @@ export async function performAttach(
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
   let acquiredOwner = false
+  let journalLoad: JournalLoad | null | undefined
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
@@ -153,7 +161,7 @@ export async function performAttach(
     // Sample provider history before a new child is acquired. Once acquireOwner
     // starts the child, the adapter's liveness signal intentionally becomes
     // conservative and an absent prompt can no longer prove non-delivery.
-    providerHistoryWindow = await readProviderHistoryWindow({
+    providerHistoryWindow = await readProviderHistoryBeforeAcquisition({
       adapter: input.adapter,
       identity: journalIdentityFor(record, params),
       accountHome: record.accountHome,
@@ -165,6 +173,7 @@ export async function performAttach(
       )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
+      journalLoad = acquired.journalLoad
       acquiredOwner = true
     }
   } catch (error) {
@@ -238,7 +247,8 @@ export async function performAttach(
       params,
       journalRoot: input.journalRoot,
       adapter: input.adapter,
-      providerHistoryWindow
+      providerHistoryWindow,
+      ...(journalLoad !== undefined ? { journalLoad } : {})
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
     await input.onAttached(attached, acquisitionGeneration, acquiredOwner)
@@ -264,27 +274,6 @@ export async function performAttach(
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds
     }
   }
-}
-
-async function readProviderHistoryWindow(input: {
-  adapter: StructuredAgentSessionAdapter
-  identity: AgentSessionJournalIdentity
-  accountHome: AgentSessionRecord['accountHome']
-  ownerAlreadyAdmitted: boolean
-}): Promise<ProviderHistoryWindow | null> {
-  const read = input.adapter.providerHistoryWindow
-  if (!read) {
-    return null
-  }
-  let history: ProviderHistoryWindow | null
-  try {
-    history = await read({ identity: input.identity, accountHome: input.accountHome })
-  } catch {
-    return null
-  }
-  // A lease that was already live may belong to a provider child this process
-  // has not indexed yet. Preserve the safe unknown outcome in that case.
-  return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
 }
 
 async function settleUnsupportedReservation(

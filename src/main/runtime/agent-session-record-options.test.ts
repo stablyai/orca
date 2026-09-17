@@ -2,7 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { readNativeSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
+import {
+  readNativeSessionOptionRestoration,
+  readNativeSessionOptions
+} from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 
 const NOW = 1_800_000_000_000
@@ -43,6 +46,68 @@ it('drops provider-rejected persisted options before the next owner proof', asyn
       priorOptions: { permissionMode: 'retired-mode', other: 'keep' }
     })
   ).resolves.toEqual({ model: 'provider-model', other: 'keep' })
+})
+
+it('clears a confirmed approved-exit retry after the provider adopts it', async () => {
+  await expect(
+    readNativeSessionOptions({
+      adapter: {
+        readOptions: async () => ({
+          models: [],
+          permissionModeRestoreValue: 'acceptEdits',
+          current: {
+            model: 'provider-model',
+            permissionMode: 'acceptEdits',
+            confirmed: ['permissionMode']
+          }
+        })
+      },
+      sessionId: SESSION,
+      fence: 2,
+      priorOptions: { permissionMode: 'acceptEdits', other: 'keep' }
+    })
+  ).resolves.toEqual({ model: 'provider-model', other: 'keep' })
+})
+
+it('retains an unconfirmed approved-exit retry for the next acquisition', async () => {
+  await expect(
+    readNativeSessionOptions({
+      adapter: {
+        readOptions: async () => ({
+          models: [],
+          permissionModeRestoreValue: 'acceptEdits',
+          current: { model: 'provider-model', permissionMode: 'plan' }
+        })
+      },
+      sessionId: SESSION,
+      fence: 2,
+      priorOptions: { permissionMode: 'acceptEdits', other: 'keep' }
+    })
+  ).resolves.toEqual({
+    model: 'provider-model',
+    permissionMode: 'acceptEdits',
+    other: 'keep'
+  })
+})
+
+it('carries the immutable permission restore value beside hydrated options', async () => {
+  await expect(
+    readNativeSessionOptionRestoration({
+      adapter: {
+        readOptions: async () => ({
+          models: [],
+          permissionModeRestoreValue: 'acceptEdits',
+          current: { model: 'provider-model', permissionMode: 'plan' }
+        })
+      },
+      sessionId: SESSION,
+      fence: 2,
+      priorOptions: { permissionMode: 'plan' }
+    })
+  ).resolves.toEqual({
+    options: { model: 'provider-model', permissionMode: 'plan' },
+    permissionModeRestoreValue: 'acceptEdits'
+  })
 })
 
 it('persists resumed provider options atomically with owner proof', async () => {
@@ -103,9 +168,12 @@ it('persists resumed provider options atomically with owner proof', async () => 
       observedAt: NOW
     },
     now: NOW,
+    permissionModeRestoreValue: 'acceptEdits',
     ...(options ? { options } : {})
   })
 
   const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
   expect(reopened.getRecord(SESSION)?.options).toEqual({ model: 'gpt-tui', effort: 'low' })
+  expect(reopened.getRecord(SESSION)?.optionsRevision).toBe(1)
+  expect(reopened.getRecord(SESSION)?.permissionModeRestoreValue).toBe('acceptEdits')
 })

@@ -61,11 +61,23 @@ function target(
     journal,
     fence,
     publish: (activity) =>
-      log.push({ call: 'publish', fence, ...(activity !== undefined ? { activity } : {}) })
+      log.push({ call: 'publish', fence, ...(activity !== undefined ? { activity } : {}) }),
+    publishOptions: () => log.push({ call: 'publishOptions', fence })
   }
 }
 
 describe('deferred structured agent-session event sink', () => {
+  it('delivers provider option changes through the bound host target', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+    deferred.bind(target(7, log))
+
+    deferred.sink.optionsChanged?.()
+    await deferred.drained()
+
+    expect(log).toEqual([{ call: 'publishOptions', fence: 7 }])
+  })
+
   it('buffers writes made before the journal exists and drains them in arrival order', async () => {
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink()

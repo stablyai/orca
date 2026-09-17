@@ -16,6 +16,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { performAttach } from './structured-agent-session-attach-flow'
+import { recoverResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
 import {
   pinnedAgentSessionLaunchArgs,
   pinnedAgentSessionLaunchEnv
@@ -94,6 +95,11 @@ export function attachStructuredAgentSession(
           }
           eventSink.unbind()
         },
+        optionsForAcquisition: (record, readDurableItems) =>
+          recoverResolvedPromptSessionOptions(
+            record,
+            context.sessions.get(sessionId)?.journal.snapshot().items ?? readDurableItems()
+          ),
         authority: {
           spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),
           claimKeyId: context.deps.claimKeyId,
@@ -129,8 +135,12 @@ export function attachStructuredAgentSession(
                 acquisitionGeneration
               })
             }
-            await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
-              context.subscribers.publish(sessionId, attached.journal, activity)
+            await bindAndDrain(
+              eventSink,
+              attached.journal,
+              fence,
+              (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
+              () => context.subscribers.optionsChanged(sessionId)
             )
           } catch (error) {
             await agentSessionJournalCloseRetries.closeOrRetain(attached.journal)
@@ -207,9 +217,10 @@ async function bindAndDrain(
   eventSink: DeferredStructuredAgentSessionEventSink,
   journal: AgentSessionJournal,
   fence: number,
-  publish: (activity?: AgentSessionTurnActivity | null) => void
+  publish: (activity?: AgentSessionTurnActivity | null) => void,
+  publishOptions: () => void
 ): Promise<void> {
-  eventSink.bind({ journal, fence, publish })
+  eventSink.bind({ journal, fence, publish, publishOptions })
   const barrier = await eventSink.drained()
   if (!barrier.ok) {
     throw barrier.error

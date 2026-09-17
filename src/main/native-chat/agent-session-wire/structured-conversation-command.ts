@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
 import type {
@@ -19,6 +20,7 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import { recoverResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
 
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
@@ -54,6 +56,7 @@ export function runStructuredConversationCommand(
       envelope,
       journal: context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
+      publishOptions: () => context.publishOptions(sessionId),
       flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {
@@ -112,12 +115,15 @@ export function runStructuredConversationCommand(
             state: 'unknown' as const,
             ...(replacementSessionId ? { replacementSessionId } : {})
           }
-          let effectiveOptions = record.options
+          let effectiveOptions = recoverResolvedPromptSessionOptions(
+            record,
+            ctx.journal.snapshot().items
+          )
           if (command === 'clear' && !prior) {
             try {
               const options = await ctx.adapter.readOptions?.({ sessionId, fence: ctx.fence })
               effectiveOptions = {
-                ...record.options,
+                ...effectiveOptions,
                 ...(options
                   ? {
                       model: options.current.model,
@@ -136,10 +142,13 @@ export function runStructuredConversationCommand(
               }
             }
           }
-          if (effectiveOptions && command === 'clear') {
-            await ctx.persistOptions(effectiveOptions)
-          }
-          await store.setConversationCommand(sessionId, ctx.fence, prepared)
+          const optionSettlement =
+            effectiveOptions &&
+            command === 'clear' &&
+            !isDeepStrictEqual(effectiveOptions, record.options)
+              ? { values: effectiveOptions, now: ctx.now() }
+              : undefined
+          await store.setConversationCommand(sessionId, ctx.fence, prepared, optionSettlement)
           let error: string | undefined
           if (command === 'clear' && replacementSessionId) {
             const attach: AgentSessionAttachParams = {

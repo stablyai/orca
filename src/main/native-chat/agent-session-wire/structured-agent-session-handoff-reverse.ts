@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionHandoffRequest } from '../../../shared/agent-session-wire'
 import {
   abandonStoredAgentSessionHandoffAttempt,
@@ -7,8 +8,12 @@ import {
   stopStoredAgentSessionOwnerForHandoff
 } from '../../runtime/agent-session-handoff-record-transitions'
 import { AgentSessionAcquisitionExitUnprovenError } from './structured-agent-session-adapter'
+import { readClaudeTuiPermissionMode } from './claude-tui-permission-mode'
 import { markStructuredHandoffManualRecovery } from './structured-agent-session-handoff-flow-context'
-import type { StructuredAgentSessionHandoffFlowContext } from './structured-agent-session-handoff-types'
+import type {
+  StructuredAgentSessionHandoffFlowContext,
+  StructuredTuiOwner
+} from './structured-agent-session-handoff-types'
 
 export async function handoffStructuredSessionToNative(
   context: StructuredAgentSessionHandoffFlowContext,
@@ -74,11 +79,17 @@ export async function handoffStructuredSessionToNative(
       }
       throw error
     }
+    record = context.requireRecord(sessionId)
+    const tuiPermissionMode =
+      record.provider === 'claude'
+        ? await readExitedClaudeTuiPermissionMode(record, owner, transcriptPath)
+        : undefined
     record = await stopStoredAgentSessionOwnerForHandoff(deps.store, {
       sessionId,
       expectedFence: record.lease.runtimeFence,
       operationId,
-      now: deps.now()
+      now: deps.now(),
+      ...(tuiPermissionMode !== undefined ? { tuiPermissionMode } : {})
     })
     context.publishStage(record, 'to-native')
   } else if (
@@ -151,5 +162,26 @@ export async function handoffStructuredSessionToNative(
     sessionId,
     agent: record.provider,
     ...(owner?.adoptedTerminal ? { adoptedTerminal: true } : {})
+  })
+}
+
+async function readExitedClaudeTuiPermissionMode(
+  record: AgentSessionRecord,
+  owner: StructuredTuiOwner | undefined,
+  transcriptPath: string | undefined
+) {
+  const head = record.providerHandleChain.at(-1)?.handle
+  if (
+    !owner ||
+    !transcriptPath ||
+    head?.provider !== 'claude' ||
+    owner.link.handle.provider !== 'claude' ||
+    owner.link.handle.sessionId !== head.sessionId
+  ) {
+    return null
+  }
+  return readClaudeTuiPermissionMode({
+    filePath: transcriptPath,
+    providerSessionId: head.sessionId
   })
 }

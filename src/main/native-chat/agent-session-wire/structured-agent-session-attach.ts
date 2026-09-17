@@ -41,6 +41,7 @@ import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import type { JournalLoad } from '../agent-session-journal/journal-open'
 import {
   openAgentSessionJournalWithRecovery,
   type AgentSessionJournalRecovery
@@ -189,6 +190,8 @@ export async function attachJournal(input: {
   /** Provider history sampled before a new child is acquired. `null` means the
    *  adapter had no usable history; omit to read lazily for direct callers. */
   providerHistoryWindow?: ProviderHistoryWindow | null
+  /** Replay read before acquisition so the later open does not repeat the journal scan. */
+  journalLoad?: JournalLoad | null
 }): Promise<AttachedJournal> {
   const identity = journalIdentityFor(input.record, input.params)
   const fence = input.record.lease.runtimeFence
@@ -202,7 +205,8 @@ export async function attachJournal(input: {
       sessionId: identity.sessionId
     }),
     fence,
-    historyFilePath
+    historyFilePath,
+    ...(input.journalLoad !== undefined ? { loaded: input.journalLoad } : {})
   })
   try {
     // That await is a WRITE. A failure in it leaves the journal with no caller

@@ -4,6 +4,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+import type { StructuredAgentSessionPermissionMode } from './structured-agent-session-permission-mode'
 
 export * from './agent-session-wire-refusals'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
@@ -177,6 +178,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
+      /** Provider-owned option state changed; connected clients should reread it. */
+      optionsChanged?: true
     } & AgentSessionHostClockField)
   | ({
       type: 'reset'
@@ -344,6 +347,8 @@ export type AgentSessionOptionsResult = {
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
+  /** Present only when this provider can switch a live session into and out of plan mode. */
+  permissionModeRestoreValue?: StructuredAgentSessionPermissionMode
   current: {
     model: string
     effort?: string
@@ -351,6 +356,8 @@ export type AgentSessionOptionsResult = {
     fastMode?: boolean
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
+    /** Provider-reported mode for sessions whose plan control was initiated by the user. */
+    permissionMode?: StructuredAgentSessionPermissionMode
     /**
      * Option ids whose value the provider reported back, not merely accepted.
      * Optional: a host that predates it sends nothing and the client keeps

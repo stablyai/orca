@@ -17,6 +17,7 @@ describe('agent session option catalog', () => {
       catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
     ).toEqual(['effort', 'fastMode'])
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
+    expect(catalog?.structuredSessionOptions?.map(({ id }) => id)).toEqual(['permissionMode'])
   })
 
   it('merges discovered labels while preserving cataloged option shapes', () => {

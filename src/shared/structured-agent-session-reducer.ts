@@ -36,6 +36,8 @@ export type StructuredAgentSessionState = {
   backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
+  /** Advances when the host reports provider-owned option settlement. */
+  optionsRevision: number
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
 }
@@ -62,7 +64,8 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   retainedItemLimit: MAX_RETAINED_ITEMS,
   hasOlder: false,
   status: 'idle',
-  handoff: null
+  handoff: null,
+  optionsRevision: 0
 }
 
 /** A frame without `hostNow` (older host) leaves the previous sample in place. */
@@ -92,6 +95,7 @@ function replacePage(
     hasOlder: page.hasOlder,
     status: 'ready',
     handoff: handoff ?? null,
+    optionsRevision: 0,
     activity: activity ?? null,
     ...(backgroundTasks !== undefined
       ? { backgroundTasks }
@@ -175,6 +179,7 @@ export function reduceStructuredAgentSession(
         state.activity
       ),
       commands: state.commands,
+      optionsRevision: state.optionsRevision,
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -208,6 +213,7 @@ export function reduceStructuredAgentSession(
     return {
       ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
       commands: event.commands,
+      optionsRevision: state.optionsRevision,
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -230,6 +236,7 @@ export function reduceStructuredAgentSession(
     (event.fence === undefined || event.fence === state.fence) &&
     (event.handoff === undefined || event.handoff === state.handoff) &&
     (event.commands === undefined || event.commands === state.commands) &&
+    event.optionsChanged !== true &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
@@ -257,6 +264,7 @@ export function reduceStructuredAgentSession(
     error: undefined,
     handoff: event.handoff ?? state.handoff,
     commands: event.commands !== undefined ? event.commands : state.commands,
+    optionsRevision: state.optionsRevision + (event.optionsChanged === true ? 1 : 0),
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(activity !== undefined ? { activity } : {}),
     ...hostClockField(event.hostNow, receivedAt, state.hostClock)

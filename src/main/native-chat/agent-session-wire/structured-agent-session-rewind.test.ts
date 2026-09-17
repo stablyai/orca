@@ -222,6 +222,46 @@ describe('host rewind', () => {
     expect(acquires[1]?.rewind).toMatchObject({ targetUuid: 'drop' })
     expect(host.journalSnapshot(HOST_TEST_SESSION).items).toHaveLength(2)
   })
+  it('materializes a prompt-owned option effect before replacing the journal epoch', async () => {
+    const target = await seed()
+    const current = store.getRecord(HOST_TEST_SESSION)!
+    const expectedValues = { permissionMode: 'plan' }
+    const updated = await store.replaceSessionOptions({
+      sessionId: HOST_TEST_SESSION,
+      fence: current.lease.runtimeFence,
+      options: expectedValues,
+      now: HOST_TEST_NOW
+    })
+    sink.appendItem(
+      { provider: 'orca', clientMessageId: 'approved-plan-exit' },
+      {
+        kind: 'approval',
+        title: 'Exit plan mode?',
+        detail: null,
+        options: [{ id: 'allow', label: 'Allow' }],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'allow',
+          resolvedBy: 'desktop',
+          resolvedAt: HOST_TEST_NOW,
+          sessionOptions: {
+            expectedRevision: updated.optionsRevision ?? 0,
+            expectedValues,
+            values: { permissionMode: 'acceptEdits' }
+          }
+        }
+      }
+    )
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+
+    expect(await host.rewind(caller, params(target))).toMatchObject({ ok: true })
+    expect(store.getRecord(HOST_TEST_SESSION)?.options).toEqual({
+      permissionMode: 'acceptEdits'
+    })
+    expect(
+      host.journalSnapshot(HOST_TEST_SESSION).items.some((item) => item.body.kind === 'approval')
+    ).toBe(false)
+  })
   it('finishes a durable provider success on reattach without repeating the provider mutation', async () => {
     const target = await seed()
     const request = params(target)

@@ -66,7 +66,17 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
     question: 'Deploy?',
     options: [{ id: 'a', label: 'Yes' }],
     freeTextQuestionId: 'q-free',
-    resolution: { state: 'resolved', selectedOptionId: 'a', resolvedBy: 'client', resolvedAt: 5 }
+    resolution: {
+      state: 'resolved',
+      selectedOptionId: 'a',
+      resolvedBy: 'client',
+      resolvedAt: 5,
+      sessionOptions: {
+        expectedRevision: 2,
+        expectedValues: { permissionMode: 'plan' },
+        values: { permissionMode: 'acceptEdits' }
+      }
+    }
   },
   { kind: 'status', text: 'working' },
   {

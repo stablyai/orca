@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
+import {
+  CLAUDE_SESSION_OPTION_CATALOG,
+  CODEX_SESSION_OPTION_CATALOG
+} from './agent-session-option-catalog-claude-codex'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import {
@@ -184,5 +187,89 @@ describe('structured agent session options', () => {
         valueSource: 'unknown'
       })
     )
+  })
+
+  it('retains provider-scoped options while rebuilding effort and Fast from discovery', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          {
+            id: 'account-model',
+            label: 'Account Model',
+            isDefault: true,
+            efforts: [
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' }
+            ],
+            supportsFastMode: true
+          }
+        ],
+        fastModeSupport: { supported: true },
+        permissionModeRestoreValue: 'acceptEdits',
+        current: {
+          model: 'account-model',
+          effort: 'medium',
+          fastMode: false,
+          permissionMode: 'plan',
+          confirmed: ['effort', 'fastMode', 'permissionMode']
+        }
+      }
+    )
+
+    const snapshot = structuredAgentSessionOptionSnapshot(state)
+    expect(snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode', 'permissionMode'])
+    expect(snapshot.find(({ id }) => id === 'permissionMode')).toMatchObject({
+      valueSource: 'reported',
+      kind: {
+        currentValue: 'plan',
+        choices: [
+          { value: 'acceptEdits', label: 'Accept edits' },
+          { value: 'plan', label: 'Plan' }
+        ]
+      }
+    })
+  })
+
+  it('names a non-plan restore mode instead of collapsing it to Normal', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      {
+        models: [{ id: 'account-model', label: 'Account Model', isDefault: true, efforts: [] }],
+        permissionModeRestoreValue: 'bypassPermissions',
+        current: {
+          model: 'account-model',
+          permissionMode: 'plan',
+          confirmed: ['permissionMode']
+        }
+      }
+    )
+
+    expect(
+      structuredAgentSessionOptionSnapshot(state).find(({ id }) => id === 'permissionMode')
+    ).toMatchObject({
+      kind: {
+        choices: [
+          { value: 'bypassPermissions', label: 'Bypass permissions' },
+          { value: 'plan', label: 'Plan' }
+        ]
+      }
+    })
+  })
+
+  it('does not expose a provider option absent from the Codex seed catalog', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [{ id: 'account-model', label: 'Account Model', isDefault: true, efforts: [] }],
+        permissionModeRestoreValue: 'default',
+        current: { model: 'account-model', permissionMode: 'plan' }
+      }
+    )
+
+    expect(structuredAgentSessionOptionSnapshot(state).map(({ id }) => id)).toEqual(['model'])
   })
 })

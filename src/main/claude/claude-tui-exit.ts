@@ -40,41 +40,67 @@ function readLeafCandidate(line: string): TranscriptLeafCandidate | null {
   }
 }
 
-export async function readClaudeTranscriptLeafUuid(transcriptPath: string): Promise<string | null> {
+export async function* readClaudeTranscriptTailLines(
+  transcriptPath: string
+): AsyncGenerator<string> {
   const file = await open(transcriptPath, 'r')
   try {
     const { size } = await file.stat()
     let position = size
-    let suffix = ''
-    let fallback: string | null = null
+    let suffix: Buffer[] = []
     let scanned = 0
     while (position > 0 && scanned < TRANSCRIPT_TAIL_READ_LIMIT_BYTES) {
       const length = Math.min(TRANSCRIPT_TAIL_CHUNK_BYTES, position)
       position -= length
       scanned += length
-      const buffer = Buffer.alloc(length)
-      await file.read(buffer, 0, length, position)
-      const lines = `${buffer.toString('utf8')}${suffix}`.split(/\r?\n/)
-      suffix = position > 0 ? (lines.shift() ?? '') : ''
-      for (let index = lines.length - 1; index >= 0; index -= 1) {
-        const line = lines[index]?.trim()
-        if (!line) {
-          continue
+      const allocation = Buffer.allocUnsafe(length)
+      const { bytesRead } = await file.read(allocation, 0, length, position)
+      if (bytesRead !== length) {
+        return
+      }
+      const buffer = allocation.subarray(0, bytesRead)
+      let end = buffer.length
+      for (let newline = buffer.lastIndexOf(0x0a, end - 1); newline !== -1;) {
+        const part = buffer.subarray(newline + 1, end)
+        const line =
+          suffix.length === 0
+            ? part.toString('utf8')
+            : Buffer.concat([part, ...suffix]).toString('utf8')
+        suffix = []
+        if (line.trim()) {
+          yield line.trim()
         }
-        const candidate = readLeafCandidate(line)
-        if (!candidate) {
-          continue
-        }
-        if (candidate.authoritative) {
-          return candidate.leafUuid
-        }
-        fallback ??= candidate.leafUuid
+        end = newline
+        newline = end > 0 ? buffer.lastIndexOf(0x0a, end - 1) : -1
+      }
+      if (end > 0) {
+        suffix.unshift(buffer.subarray(0, end))
       }
     }
-    return fallback
+    if (position === 0 && suffix.length > 0) {
+      const line = Buffer.concat(suffix).toString('utf8').trim()
+      if (line) {
+        yield line
+      }
+    }
   } finally {
     await file.close()
   }
+}
+
+export async function readClaudeTranscriptLeafUuid(transcriptPath: string): Promise<string | null> {
+  let fallback: string | null = null
+  for await (const line of readClaudeTranscriptTailLines(transcriptPath)) {
+    const candidate = readLeafCandidate(line)
+    if (!candidate) {
+      continue
+    }
+    if (candidate.authoritative) {
+      return candidate.leafUuid
+    }
+    fallback ??= candidate.leafUuid
+  }
+  return fallback
 }
 
 export type ClaudeTuiChildExit = {

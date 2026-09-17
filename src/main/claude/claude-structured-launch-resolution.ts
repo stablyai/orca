@@ -89,6 +89,8 @@ export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
   options: ClaudeStructuredSdkOptions
+  /** Resolved Agent Permissions posture, independent of its CLI/SDK encoding. */
+  launchPermissionMode: PermissionMode
   cwd: string
   env?: Record<string, string>
   claudeConfigDir: string
@@ -193,9 +195,8 @@ export function createClaudeStructuredLaunchResolver(
         : claudeSessionIdForOrcaSession(identity.sessionId)
     // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
     // concern, and the permission mode they used to smuggle in is an owned provider option now.
-    const permission = claudeStructuredPermissionOptions(
-      (await deps.resolvePermissionMode?.()) ?? 'default'
-    )
+    const launchPermissionMode = (await deps.resolvePermissionMode?.()) ?? 'default'
+    const permission = claudeStructuredPermissionOptions(launchPermissionMode)
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
     const auth = await deps.resolveAuthPolicy()
     const overlay = await deps.resolveEnv?.()
@@ -231,6 +232,7 @@ export function createClaudeStructuredLaunchResolver(
     )
     return {
       pathToClaudeCodeExecutable: command,
+      launchPermissionMode,
       options: {
         ...CLAUDE_STRUCTURED_BASE_OPTIONS,
         ...permission,

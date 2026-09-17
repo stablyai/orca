@@ -7,6 +7,29 @@ export type ResolvedSessionOptionLaunch = {
   appliedValues: Record<string, SessionOptionValue>
 }
 
+export function removeTransientStructuredSessionOptions(
+  agent: AgentType,
+  values: Record<string, SessionOptionValue> | null | undefined,
+  tokens: readonly string[],
+  overrideAgentArgs: boolean
+): string[] {
+  const catalog = getAgentSessionOptionCatalog(agent)
+  if (!catalog || !values) {
+    return [...tokens]
+  }
+  let result = [...tokens]
+  for (const option of catalog.structuredSessionOptions ?? []) {
+    const value = values[option.id]
+    if (value === undefined) {
+      continue
+    }
+    if (overrideAgentArgs || !option.apply.agentArgsOverride?.(result)) {
+      result = option.apply.removeAgentArgs?.(result) ?? result
+    }
+  }
+  return result
+}
+
 export function removeOverriddenAgentSessionArgs(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
@@ -14,10 +37,19 @@ export function removeOverriddenAgentSessionArgs(
 ): string[] {
   const catalog = getAgentSessionOptionCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
-  if (!catalog || !values || !modelId) {
+  if (!catalog || !values) {
     return [...tokens]
   }
-  let result = catalog.modelApply.removeAgentArgs?.(tokens) ?? [...tokens]
+  let result = [...tokens]
+  for (const option of catalog.structuredSessionOptions ?? []) {
+    if (values[option.id] !== undefined && option.apply.removeAgentArgs) {
+      result = option.apply.removeAgentArgs(result)
+    }
+  }
+  if (!modelId) {
+    return result
+  }
+  result = catalog.modelApply.removeAgentArgs?.(result) ?? result
   const model = findCatalogModel(catalog, modelId)
   const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
   for (const option of modelOptions) {
@@ -36,14 +68,14 @@ export function resolveAgentSessionOptionLaunch(
 ): ResolvedSessionOptionLaunch {
   const catalog = getAgentSessionOptionCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
-  if (!catalog || !values || !modelId) {
+  if (!catalog || !values) {
     return { args: [], appliedValues: {} }
   }
 
-  const model = findCatalogModel(catalog, modelId)
+  const model = modelId ? findCatalogModel(catalog, modelId) : undefined
   const appliedValues: Record<string, SessionOptionValue> = {}
   const args: string[] = []
-  const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
+  const modelOptions = modelId ? (model?.options ?? catalog.unknownModelOptions ?? []) : []
   const modelValues = Object.fromEntries(
     modelOptions.flatMap((option) => {
       const explicitValue = values[option.id]
@@ -60,12 +92,11 @@ export function resolveAgentSessionOptionLaunch(
       return model && includeCatalogDefaults ? [[option.id, option.kind.defaultValue]] : []
     })
   )
-  const composedModelId = catalog.composeModelValue
-    ? catalog.composeModelValue(modelId, modelValues)
-    : modelId
+  const composedModelId =
+    modelId && catalog.composeModelValue ? catalog.composeModelValue(modelId, modelValues) : modelId
   const modelOverridden = catalog.modelApply.agentArgsOverride?.(trailingAgentArgs) === true
 
-  if (catalog.modelApply.launchArgs) {
+  if (modelId && composedModelId && catalog.modelApply.launchArgs) {
     args.push(...catalog.modelApply.launchArgs(composedModelId))
     if (!modelOverridden) {
       appliedValues.model = modelId
@@ -87,6 +118,16 @@ export function resolveAgentSessionOptionLaunch(
     }
     args.push(...option.apply.launchArgs(value))
     if (!modelOverridden && !option.apply.agentArgsOverride?.(trailingAgentArgs)) {
+      appliedValues[option.id] = value
+    }
+  }
+  for (const option of catalog.structuredSessionOptions ?? []) {
+    const value = values[option.id]
+    if (value === undefined || !option.apply.launchArgs) {
+      continue
+    }
+    args.push(...option.apply.launchArgs(value))
+    if (!option.apply.agentArgsOverride?.(trailingAgentArgs)) {
       appliedValues[option.id] = value
     }
   }

@@ -54,6 +54,35 @@ function hydrationPage(
 }
 
 describe('structured agent session reducer', () => {
+  it('advances the option revision without replacing transcript items', () => {
+    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)])
+      }
+    })
+    const updated = reduceStructuredAgentSession(initial, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: initial.cursor!,
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        optionsChanged: true
+      }
+    })
+
+    expect(updated.optionsRevision).toBe(1)
+    expect(updated.items).toBe(initial.items)
+  })
+
   it('applies an additive targeted-stop capability update without journal churn', () => {
     const backgroundTasks = {
       state: 'monitoring' as const,

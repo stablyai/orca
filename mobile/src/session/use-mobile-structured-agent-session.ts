@@ -152,6 +152,7 @@ export function useMobileStructuredAgentSession(args: {
     sessionId,
     enabled,
     fence: state.fence,
+    optionsRevision: state.optionsRevision,
     mutate
   })
   const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =

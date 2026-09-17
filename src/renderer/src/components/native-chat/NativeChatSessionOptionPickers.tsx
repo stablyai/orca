@@ -66,6 +66,7 @@ function PickerTrigger(props: {
   disabled: boolean
   disabledReason?: string | null
   dispatched: boolean
+  active: boolean
 }): React.JSX.Element {
   // Why: value-only visible text must still include the category in the
   // accessible name (WCAG 2.5.3 Label in Name / voice control).
@@ -82,7 +83,7 @@ function PickerTrigger(props: {
         <DropdownMenuTrigger asChild disabled={props.disabled}>
           <Button
             type="button"
-            variant="ghost"
+            variant={props.active ? 'secondary' : 'ghost'}
             size="xs"
             aria-label={accessibleName}
             className="max-w-48 text-muted-foreground"
@@ -195,7 +196,7 @@ function DescriptorMenuRows(props: {
           disabled={!descriptor.settable || pending}
         >
           <ChoiceBody
-            label={nativeChatSessionChoiceLabel(choice)}
+            label={nativeChatSessionChoiceLabel(choice, descriptor.id)}
             description={choice.description}
           />
         </DropdownMenuRadioItem>
@@ -251,6 +252,13 @@ function NativeChatSessionOptionPickersInner({
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
       : null
+  const planModeActive = options.some(
+    (descriptor) =>
+      descriptor.id === 'permissionMode' &&
+      descriptor.valueSource === 'reported' &&
+      descriptor.kind.type === 'select' &&
+      descriptor.kind.currentValue === 'plan'
+  )
 
   return (
     <div className="flex min-w-0 items-center gap-0.5">
@@ -264,6 +272,7 @@ function NativeChatSessionOptionPickersInner({
           disabled={isWorking || pendingId !== null}
           disabledReason={modelReason}
           dispatched={sessionOptionDispatchUnconfirmed(model)}
+          active={false}
         />
         <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
           {modelReason && !model.settable ? (
@@ -288,6 +297,7 @@ function NativeChatSessionOptionPickersInner({
             disabled={isWorking || pendingId !== null}
             disabledReason={optionsReason}
             dispatched={options.some(sessionOptionDispatchUnconfirmed)}
+            active={planModeActive}
           />
           <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-60">
             {options.map((descriptor, index) => {

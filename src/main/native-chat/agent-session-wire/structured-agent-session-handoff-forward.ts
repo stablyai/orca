@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type { AgentSessionHandoffRequest } from '../../../shared/agent-session-wire'
 import {
   abandonStoredAgentSessionHandoffAttempt,
@@ -13,6 +14,8 @@ import type {
   StructuredTuiOwner
 } from './structured-agent-session-handoff-types'
 import { StructuredTuiLaunchCleanupError } from './structured-agent-session-handoff-types'
+import { recoverResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
+import { optionsAfterStructuredTuiPermissionDelivery } from './structured-tui-permission-delivery'
 
 export async function handoffStructuredSessionToTui(
   context: StructuredAgentSessionHandoffFlowContext,
@@ -61,6 +64,12 @@ export async function handoffStructuredSessionToTui(
     await markStructuredHandoffManualRecovery(context, sessionId, operationId)
     throw nativeSuspend.error
   }
+  const recoveredOptions = recoverResolvedPromptSessionOptions(
+    record,
+    deps.session(sessionId).journal.snapshot().items
+  )
+  const optionsChanged =
+    recoveredOptions !== undefined && !isDeepStrictEqual(recoveredOptions, record.options)
   const spawnToken = randomUUID()
   record = await reserveStoredAgentSessionHandoffOwner(deps.store, {
     sessionId,
@@ -69,7 +78,8 @@ export async function handoffStructuredSessionToTui(
     spawnToken,
     operationId,
     claimKeyId: deps.claimKeyId,
-    now: deps.now()
+    now: deps.now(),
+    ...(optionsChanged ? { options: recoveredOptions } : {})
   })
   context.publishStage(record, 'to-tui')
   let owner: StructuredTuiOwner | null = null
@@ -99,11 +109,13 @@ export async function handoffStructuredSessionToTui(
         now: deps.now()
       })
     }
+    const deliveredOptions = optionsAfterStructuredTuiPermissionDelivery(record)
     record = await deps.store.proveOwner({
       sessionId,
       fence: record.lease.runtimeFence,
       link: owner.link,
-      now: deps.now()
+      now: deps.now(),
+      ...(deliveredOptions !== null ? { options: deliveredOptions } : {})
     })
   } catch (error) {
     deps.stopTuiHistoryCatchup?.(sessionId)

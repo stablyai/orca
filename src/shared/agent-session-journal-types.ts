@@ -122,6 +122,13 @@ export type AgentJournalResolution = {
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
+  /** Provider-owned option effect committed with the answer. The prior revision and values
+   *  let a later explicit option write supersede crash recovery deterministically. */
+  sessionOptions?: {
+    expectedRevision: number
+    expectedValues: Readonly<Record<string, string>>
+    values: Readonly<Record<string, string>>
+  }
 }
 
 export type AgentJournalPromptOption = {

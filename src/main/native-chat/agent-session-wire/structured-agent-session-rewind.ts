@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   agentJournalItemKey,
@@ -21,6 +22,7 @@ import { rewindRefusal } from './structured-rewind-refusal'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
 import { replaceClaudeRewindOwner } from './structured-rewind-claude-owner'
 import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
+import { recoverResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
 
 export async function rewindStructuredAgentSession(
   context: StructuredAgentSessionMutationContext,
@@ -38,6 +40,7 @@ export async function rewindStructuredAgentSession(
       envelope: params.envelope,
       journal: context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
+      publishOptions: () => context.publishOptions(sessionId),
       flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {
@@ -157,6 +160,9 @@ export async function rewindStructuredAgentSession(
           ) {
             return rewindRefusal('history-limit')
           }
+          const recoveredOptions = recoverResolvedPromptSessionOptions(record, snapshot.items)
+          const optionsChanged =
+            recoveredOptions !== undefined && !isDeepStrictEqual(recoveredOptions, record.options)
           let prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
             callerKey: caller.callerKey,
@@ -166,7 +172,15 @@ export async function rewindStructuredAgentSession(
             phase: 'prepared',
             retained
           }
-          await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+          await persistRewindRecord(
+            store,
+            sessionId,
+            ctx.fence,
+            prepared,
+            optionsChanged && recoveredOptions
+              ? { values: recoveredOptions, now: ctx.now() }
+              : undefined
+          )
           ctx.publish()
           const provider = claude
             ? await replaceClaudeRewindOwner(attachContext, caller.callerKey, params, claude)

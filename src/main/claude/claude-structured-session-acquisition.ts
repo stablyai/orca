@@ -27,7 +27,8 @@ import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { createClaudeSessionJournalTranslator } from './claude-structured-journal-translation'
 import {
   observeClaudeFastModeFacts,
-  readClaudeSettingsEffort
+  readClaudeSettingsEffort,
+  readClaudeSettingsPermissionMode
 } from './claude-structured-session-options'
 import {
   claudeStructuredSessionPublicationOptions,
@@ -104,9 +105,6 @@ export async function acquireClaudeSession({
     }
     if (init) {
       initDeadline.resolve(init)
-      // Every turn opens with an init frame naming the model the CLI is actually
-      // running; set_model answers success for a model it never resolves, so this
-      // report is the session's only adoption evidence.
       if (liveSession && init.model) {
         liveSession.reportedOptions.model = init.model
         liveSession.reportedModelMutation = liveSession.optionMutationSequence
@@ -254,6 +252,7 @@ export async function acquireClaudeSession({
         leafUuid: observedLeafUuid,
         fence: input.fence,
         effort: readClaudeSettingsEffort(settings),
+        settingsPermissionMode: readClaudeSettingsPermissionMode(settings) ?? undefined,
         ...claudeStructuredSessionPublicationOptions(acquisitionOptions),
         resumed: launch.resumed,
         prompts,
@@ -262,6 +261,10 @@ export async function acquireClaudeSession({
         process,
         acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
         options: acquisitionOptions.options,
+        launchPermissionMode: launch.launchPermissionMode,
+        ...(input.permissionModeRestoreValue
+          ? { permissionModeRestoreValue: input.permissionModeRestoreValue }
+          : {}),
         capabilities: readClaudeCapabilities(init, initialization),
         ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
         observedAt: deps.now?.() ?? Date.now()

@@ -162,10 +162,13 @@ describe('confirmation never outlives the write it belongs to', () => {
   it('drops an earlier effort confirmation when the value changes', async () => {
     const calls: string[] = []
     let reported = 'low'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This focused fixture supplies every session member exercised by effort confirmation.
     const session = {
       options: new Map<string, string>([['model', 'sonnet']]),
       reportedOptions: {},
       optionMutationSequence: 0,
+      permissionModeMutationSequence: 0,
+      reportedPermissionModeMutation: 0,
       confirmedOptions: new Set<string>(),
       connection: {
         supportedModels: async () => CATALOG,

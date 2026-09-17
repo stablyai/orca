@@ -48,6 +48,7 @@ export function useStructuredAgentSession(args: {
       providerVisible,
       fence: state.fence,
       turnId: transportState.turnId,
+      optionsRevision: state.optionsRevision,
       mutate
     })
   const outboxController = useStructuredAgentSessionOutbox({

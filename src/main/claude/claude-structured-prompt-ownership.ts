@@ -10,6 +10,7 @@ import {
   supportsClaudeQueuedInterruptCancellation
 } from './claude-structured-control-actions'
 import type { ClaudeLateDispatchSettlement } from './claude-structured-dispatch'
+import { claudeCurrentDispatchHasRetiredWaiter } from './claude-structured-dispatch-ownership'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 /** Conservative user-facing window: below the 10s init and 30s control deadlines, trading
@@ -136,16 +137,12 @@ export async function cancelClaudeStructuredTurn(input: {
     dispatchAdmissionIsCurrent() ||
     (Boolean(prompt) && supportsClaudeQueuedInterruptCancellation(session))
   const compactionOwnsTurn = (): boolean => compactions.ownsTurn(request.sessionId, request.turnId)
-  const currentDispatchHasRetiredWaiter = (): boolean =>
-    session.retiredDispatchWaiters.some(
-      (waiter) => waiter.dispatchSequence === session.dispatchSequence
-    )
   let dispatchAdmissionExpired = false
   if (
     !prompt &&
     !compactionOwnsTurn() &&
     !dispatchAdmissionAllowsCancellation() &&
-    (request.dispatchStatus !== undefined || currentDispatchHasRetiredWaiter())
+    (request.dispatchStatus !== undefined || claudeCurrentDispatchHasRetiredWaiter(session))
   ) {
     dispatchAdmissionExpired = !(await waitForClaudeDispatchAdmission(
       dispatchAdmissionAllowsCancellation
@@ -188,11 +185,11 @@ export async function cancelClaudeStructuredTurn(input: {
   }
 }
 
-export async function answerClaudeStructuredPrompt(input: {
-  request: AnswerInput
-  sessions: Map<string, ClaudeSession>
-}): Promise<void> {
-  const { request, sessions } = input
+export async function answerClaudeStructuredPrompt(
+  request: AnswerInput,
+  sessions: Map<string, ClaudeSession>,
+  timeoutMs?: number
+): Promise<void> {
   const session = sessions.get(request.sessionId)
   if (!session || session.fence !== request.fence) {
     throw new AgentSessionPromptUnavailableError(request.itemId)
@@ -203,16 +200,24 @@ export async function answerClaudeStructuredPrompt(input: {
     throw new AgentSessionPromptUnavailableError(request.itemId)
   }
   try {
-    await request.commit()
-    if (
-      sessions.get(request.sessionId) !== session ||
-      session.fence !== request.fence ||
-      session.acquisitionGeneration !== acquisitionGeneration ||
-      !session.prompts.ownsClaim(claim)
-    ) {
-      throw new AgentSessionPromptUnavailableError(request.itemId)
-    }
-    await answerClaudePrompt(session, claim, request.optionId)
+    await answerClaudePrompt(
+      session,
+      claim,
+      request.optionId,
+      async (settlement) => {
+        await request.commit(settlement)
+        if (
+          sessions.get(request.sessionId) !== session ||
+          session.fence !== request.fence ||
+          session.acquisitionGeneration !== acquisitionGeneration ||
+          !session.prompts.ownsClaim(claim)
+        ) {
+          throw new AgentSessionPromptUnavailableError(request.itemId)
+        }
+      },
+      request.settleOptions,
+      timeoutMs
+    )
   } catch (error) {
     session.prompts.releaseClaim(claim)
     throw error

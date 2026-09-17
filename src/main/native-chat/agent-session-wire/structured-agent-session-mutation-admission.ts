@@ -45,6 +45,7 @@ export type AgentSessionMutationRequest<TValue> = {
   /** Journal of the attached session; absent when this host holds none. */
   journal: AgentSessionJournal | undefined
   publish: (journal: AgentSessionJournal) => void
+  publishOptions: () => void
   flushStreamedEvents: (sessionId: string) => Promise<void>
   now: () => number
 }
@@ -130,13 +131,15 @@ function turnContext<TValue>(
   journal: AgentSessionJournal,
   fence: number
 ): AgentSessionTurnContext {
-  const persistedOptions = request.store.getRecord(request.envelope.sessionId)?.options
+  const record = request.store.getRecord(request.envelope.sessionId)
+  const persistedOptions = record?.options
   return {
     sessionId: request.envelope.sessionId,
     journal,
     fence,
     adapter: request.adapter,
     ...(persistedOptions ? { persistedOptions } : {}),
+    persistedOptionsRevision: record?.optionsRevision ?? 0,
     persistOptions: (options) =>
       request.store
         .replaceSessionOptions({
@@ -148,6 +151,7 @@ function turnContext<TValue>(
         .then(() => undefined),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
+    publishOptions: request.publishOptions,
     flushStreamedEvents: () => request.flushStreamedEvents(request.envelope.sessionId),
     now: () => request.now()
   }

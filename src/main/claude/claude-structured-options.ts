@@ -1,4 +1,4 @@
-import type { EffortLevel, PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import {
   AgentSessionOptionRejectedError,
@@ -15,6 +15,9 @@ import {
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { readStructuredAgentSessionPermissionMode } from '../../shared/structured-agent-session-permission-mode'
+import { setClaudeStructuredPermissionMode } from './claude-structured-permission-mode'
+import { claudeCurrentDispatchHasRetiredWaiter } from './claude-structured-dispatch-ownership'
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode', 'permissionMode'] as const
 
@@ -46,20 +49,43 @@ export async function setClaudeStructuredOption(
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
       : null
+  const permissionMode =
+    input.key === 'permissionMode' ? readStructuredAgentSessionPermissionMode(input.value) : null
+  if (input.key === 'permissionMode' && !permissionMode) {
+    throw new AgentSessionOptionRejectedError(`claude permission mode ${input.value} is invalid`)
+  }
+  if (permissionMode) {
+    if (
+      session.translator?.currentTurnId ||
+      session.dispatchWaiters.length > 0 ||
+      claudeCurrentDispatchHasRetiredWaiter(session)
+    ) {
+      throw new AgentSessionOptionRejectedError(
+        'claude permission mode cannot change while a turn or send is unsettled'
+      )
+    }
+    if (
+      !session.basePermissionMode ||
+      (permissionMode !== 'plan' && permissionMode !== session.basePermissionMode)
+    ) {
+      throw new AgentSessionOptionRejectedError(
+        `claude permission mode ${permissionMode} is not offered by this session`
+      )
+    }
+    return setClaudeStructuredPermissionMode(session, permissionMode, timeoutMs)
+  }
   const apply =
     input.key === 'model'
       ? () => session.connection.setModel(input.value, { timeoutMs })
-      : input.key === 'permissionMode'
-        ? () => session.connection.setPermissionMode(input.value as PermissionMode, { timeoutMs })
-        : input.key === 'effort'
-          ? () =>
-              session.connection.applyFlagSettings(
-                { effortLevel: input.value as EffortLevel },
-                { timeoutMs }
-              )
-          : input.key === 'fastMode' && typeof fastMode === 'boolean'
-            ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
-            : null
+      : input.key === 'effort'
+        ? () =>
+            session.connection.applyFlagSettings(
+              { effortLevel: input.value as EffortLevel },
+              { timeoutMs }
+            )
+        : input.key === 'fastMode' && typeof fastMode === 'boolean'
+          ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
+          : null
   if (!apply) {
     throw new AgentSessionOptionRejectedError(
       `claude stream-json has no session option named ${input.key}`
@@ -124,8 +150,8 @@ export async function setClaudeStructuredOption(
       : null
   const modelWasConfirmed = readClaudeCurrentModel(session).confirmed
   const mutationSequence = ++session.optionMutationSequence
-  // Only a model write can stale the model report — an effort or permission-mode
-  // write does not change what the child is running. Leaving the stamp behind
+  // Only a model write can stale the model report — an effort or Fast-mode write
+  // does not change what the child is running. Leaving the stamp behind
   // would drop the session back to the written model and refuse, on the next
   // effort write, a level the model actually running advertises.
   if (modelWasConfirmed && input.key !== 'model') {
@@ -180,10 +206,8 @@ export async function setClaudeStructuredOption(
   // child's own answer so the disagreement survives as the level a later read falls
   // back to.
   const decodedInput = input.key === 'fastMode' ? fastMode : input.value
-  if (adopted !== null && adopted !== decodedInput) {
-    if (typeof adopted === 'string') {
-      session.reportedOptions.effort = adopted
-    }
+  if (input.key === 'effort' && typeof adopted === 'string' && adopted !== decodedInput) {
+    session.reportedOptions.effort = adopted
   }
   session.options.set(
     input.key,
@@ -213,6 +237,8 @@ export async function restoreClaudeStructuredSessionOptions(
   // Any write that was already in flight belongs to the previous acquisition
   // state and must not repopulate this map after restore starts.
   session.optionMutationSequence += 1
+  session.permissionModeMutationSequence += 1
+  session.reportedPermissionModeMutation = session.permissionModeMutationSequence
   // The fence bump is not a write, so the report the session already holds is still
   // current as of this instant; leaving the stamp behind would make every restored
   // session read as unconfirmed until its next turn.
@@ -220,11 +246,22 @@ export async function restoreClaudeStructuredSessionOptions(
   const options = [...session.options.entries()]
   session.options.clear()
   for (const [key, value] of options) {
+    const permissionMode =
+      key === 'permissionMode' ? readStructuredAgentSessionPermissionMode(value) : null
+    const retriesApprovedExit =
+      permissionMode !== null &&
+      permissionMode !== 'plan' &&
+      permissionMode === session.basePermissionMode
     try {
-      await setClaudeStructuredOption(session, { key, value }, timeoutMs)
+      await (retriesApprovedExit
+        ? setClaudeStructuredPermissionMode(session, permissionMode, timeoutMs, 'keep-requested')
+        : setClaudeStructuredOption(session, { key, value }, timeoutMs))
     } catch (error) {
       if (!isAgentSessionOptionRejectedError(error)) {
         throw error
+      }
+      if (retriesApprovedExit) {
+        continue
       }
       // A stale or unavailable preference must not poison every future acquire;
       // the provider's current value remains authoritative and is re-persisted.

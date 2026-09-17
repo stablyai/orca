@@ -16,7 +16,7 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
-import { loadJournal } from '../agent-session-journal/journal-open'
+import { loadJournal, type JournalLoad } from '../agent-session-journal/journal-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 
@@ -56,8 +56,13 @@ export async function openAgentSessionJournalWithRecovery(input: {
   fence: number
   /** Resolve directly to a transcript instead of discovering it by session id. */
   historyFilePath?: string | null
+  /** A replay already read while deriving state before provider acquisition. */
+  loaded?: JournalLoad | null
 }): Promise<AgentSessionJournalOpened> {
-  const probe = loadJournal(input.journalDir, input.identity.sessionId)
+  const probe =
+    input.loaded !== undefined
+      ? input.loaded
+      : loadJournal(input.journalDir, input.identity.sessionId)
   if (probe?.readOnly) {
     const journal = await openAgentSessionJournal({
       identity: input.identity,
@@ -67,7 +72,8 @@ export async function openAgentSessionJournalWithRecovery(input: {
   }
   const journal = await openAgentSessionJournal({
     identity: input.identity,
-    journalDir: input.journalDir
+    journalDir: input.journalDir,
+    loaded: probe
   })
   if (!probe?.corrupt) {
     return { journal, recovery: null }

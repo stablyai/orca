@@ -18,6 +18,7 @@ import {
   recoverUnavailableTuiAsNative,
   type StructuredAgentSessionRestartAccess
 } from './structured-agent-session-handoff-restart-tui'
+import { optionsAfterStructuredTuiPermissionDelivery } from './structured-tui-permission-delivery'
 
 type RestartAccess = StructuredAgentSessionRestartAccess
 
@@ -171,11 +172,13 @@ async function restoreRecoverableLiveTui(
       handoffOperationId: null,
       now: input.deps.now()
     })
+    const deliveredOptions = optionsAfterStructuredTuiPermissionDelivery(settled)
     settled = await input.deps.store.proveOwner({
       sessionId: settled.sessionId,
       fence: settled.lease.runtimeFence,
       link: owner.link,
-      now: input.deps.now()
+      now: input.deps.now(),
+      ...(deliveredOptions !== null ? { options: deliveredOptions } : {})
     })
   } else {
     settled = await setStoredAgentSessionHandoffStage(input.deps.store, {
@@ -248,11 +251,13 @@ async function restoreProving(input: RestartAccess, record: AgentSessionRecord):
     if (!reproved) {
       return
     }
+    const deliveredOptions = optionsAfterStructuredTuiPermissionDelivery(record)
     await input.deps.store.proveOwner({
       sessionId: record.sessionId,
       fence: record.lease.runtimeFence,
       link: reproved.link,
-      now: input.deps.now()
+      now: input.deps.now(),
+      ...(deliveredOptions !== null ? { options: deliveredOptions } : {})
     })
     input.retainOwner(record.sessionId, reproved)
     await startRecoveredTuiCatchup(input, record)

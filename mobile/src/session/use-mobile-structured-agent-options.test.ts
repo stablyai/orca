@@ -129,6 +129,7 @@ type ProbeProps = {
   client: RpcClient | null
   sessionId: string | null
   fence: number | null
+  optionsRevision?: number
   mutate: StructuredAgentSessionMutate
   onRender: (controller: Controller) => void
 }
@@ -141,6 +142,7 @@ function Probe(props: ProbeProps): null {
       sessionId: props.sessionId,
       enabled: true,
       fence: props.fence,
+      optionsRevision: props.optionsRevision ?? 0,
       mutate: props.mutate
     })
   )
@@ -317,6 +319,72 @@ describe('useMobileStructuredAgentOptions post-write refresh', () => {
 
     expect(client.optionReads()).toBe(1)
     expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
+    await harness.unmount()
+  })
+})
+
+describe('useMobileStructuredAgentOptions provider refresh', () => {
+  it('applies a provider-owned plan-mode exit when its options revision advances', async () => {
+    const plan: AgentSessionOptionsResult = {
+      ...OPTIONS,
+      permissionModeRestoreValue: 'acceptEdits',
+      current: { ...OPTIONS.current, permissionMode: 'plan', confirmed: ['permissionMode'] }
+    }
+    const restored: AgentSessionOptionsResult = {
+      ...plan,
+      current: { ...OPTIONS.current, permissionMode: 'acceptEdits', confirmed: ['permissionMode'] }
+    }
+    const client = optionsClient(queuedReads(plan, restored))
+    const { mutate } = recordingMutate(async () => ({ status: 'rejected' }))
+    const harness = await mountOptions({
+      ...BASE,
+      agent: 'claude',
+      client: client.client,
+      mutate
+    })
+
+    expect(currentValueOf(harness.current().optionSnapshot, 'permissionMode')).toBe('plan')
+
+    await harness.rerender({ optionsRevision: 1 })
+
+    expect(client.optionReads()).toBe(2)
+    expect(currentValueOf(harness.current().optionSnapshot, 'permissionMode')).toBe('acceptEdits')
+    await harness.unmount()
+  })
+
+  it('does not let an older post-write read overwrite the provider refresh', async () => {
+    const postWrite = deferred<AgentSessionOptionsResult>()
+    const providerRefresh = deferred<AgentSessionOptionsResult>()
+    let read = 0
+    const client = optionsClient(() => {
+      read += 1
+      if (read === 1) {
+        return Promise.resolve(FAST_OPTIONS)
+      }
+      return read === 2 ? postWrite.promise : providerRefresh.promise
+    })
+    const { mutate } = recordingMutate(async () =>
+      accepted({ key: 'fastMode', value: 'true', options: {} }, true)
+    )
+    const harness = await mountOptions({
+      ...BASE,
+      client: client.client,
+      mutate
+    })
+
+    await act(async () => {
+      await harness.current().setStructuredOption('fastMode', true)
+    })
+    await harness.rerender({ optionsRevision: 1 })
+    expect(client.optionReads()).toBe(3)
+
+    await act(async () => providerRefresh.resolve(FAST_OPTIONS_ON))
+    await settle()
+    expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(true)
+
+    await act(async () => postWrite.resolve(FAST_OPTIONS))
+    await settle()
+    expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(true)
     await harness.unmount()
   })
 })

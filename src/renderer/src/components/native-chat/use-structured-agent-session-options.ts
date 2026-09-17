@@ -30,10 +30,20 @@ export function useStructuredAgentSessionOptions(args: {
   providerVisible: boolean
   fence: number | null
   turnId: string | null
+  optionsRevision: number
   mutate: StructuredAgentSessionMutate
 }) {
-  const { agent, fence, mutate, providerVisible, sessionId, target, transportEnabled, turnId } =
-    args
+  const {
+    agent,
+    fence,
+    mutate,
+    optionsRevision,
+    providerVisible,
+    sessionId,
+    target,
+    transportEnabled,
+    turnId
+  } = args
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -45,6 +55,7 @@ export function useStructuredAgentSessionOptions(args: {
   const activeOptionRecordRef = useRef(optionState.record)
   const pendingOptionRef = useRef<string | null>(null)
   const optionMutationGeneration = useRef(0)
+  const optionReadSequence = useRef(0)
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -71,11 +82,16 @@ export function useStructuredAgentSessionOptions(args: {
     }
     let stale = false
     const readGeneration = optionMutationGeneration.current
+    const readSequence = ++optionReadSequence.current
     void callStructuredAgentSession<AgentSessionOptionsResult>(target, 'agentSession.options', {
       sessionId
     })
       .then((result) => {
-        if (!stale && optionMutationGeneration.current === readGeneration) {
+        if (
+          !stale &&
+          optionMutationGeneration.current === readGeneration &&
+          optionReadSequence.current === readSequence
+        ) {
           setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
           updateOptionState((current) =>
             current.record === activeOptionRecordRef.current
@@ -88,7 +104,16 @@ export function useStructuredAgentSessionOptions(args: {
     return () => {
       stale = true
     }
-  }, [fence, optionCatalog, providerVisible, sessionId, target, turnId, updateOptionState])
+  }, [
+    fence,
+    optionCatalog,
+    optionsRevision,
+    providerVisible,
+    sessionId,
+    target,
+    turnId,
+    updateOptionState
+  ])
 
   const optionSnapshot = useMemo(
     () => structuredAgentSessionOptionSnapshot(optionState),
@@ -139,6 +164,7 @@ export function useStructuredAgentSessionOptions(args: {
           if (!transportEnabled) {
             return false
           }
+          const readSequence = ++optionReadSequence.current
           void callStructuredAgentSession<AgentSessionOptionsResult>(
             target,
             'agentSession.options',
@@ -147,7 +173,8 @@ export function useStructuredAgentSessionOptions(args: {
             .then((refreshed) => {
               if (
                 activeOptionRecordRef.current === targetRecord &&
-                optionMutationGeneration.current === mutationGeneration
+                optionMutationGeneration.current === mutationGeneration &&
+                optionReadSequence.current === readSequence
               ) {
                 updateOptionState((latest) =>
                   latest.record === targetRecord

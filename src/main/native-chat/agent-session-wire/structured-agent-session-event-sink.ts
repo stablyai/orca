@@ -55,6 +55,8 @@ export type StructuredAgentSessionEventSink = {
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   publish(options?: StructuredAgentSessionAppendOptions): void
+  /** Tells connected clients to reread provider-owned session options. */
+  optionsChanged?(): void
   setActivity?(activity: AgentSessionTurnActivity | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
@@ -88,6 +90,7 @@ export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
+  publishOptions?: () => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -259,6 +262,13 @@ export function createDeferredStructuredAgentSessionEventSink(
         ),
       publish: (options = {}) => {
         publish(options)
+      },
+      optionsChanged: () => {
+        queue.submit({
+          bytes: 1,
+          coalescingKey: 'options-changed',
+          run: (bound) => bound.publishOptions?.()
+        })
       },
       setActivity: (activity) => {
         queue.submit({

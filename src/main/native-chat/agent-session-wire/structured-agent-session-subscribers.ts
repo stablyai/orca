@@ -40,6 +40,11 @@ type Subscriber = {
   commands?: AgentSessionSlashCommand[] | null
 }
 
+type AgentSessionBatchFields = Pick<
+  Extract<AgentSessionSubscribeEvent, { type: 'batch' }>,
+  'backgroundTasks' | 'handoff' | 'optionsChanged'
+>
+
 export type AgentSessionSubscribersHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   /** Fires after any publication that can change journal content, whether or not anyone
@@ -182,18 +187,7 @@ export class AgentSessionSubscribers {
   }
 
   handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        handoff,
-        hostNow
-      })
-      subscriber.fence = fence
-    }
+    this.publishEphemeral(sessionId, { handoff }, fence)
   }
 
   backgroundTasks(
@@ -201,17 +195,29 @@ export class AgentSessionSubscribers {
     state: AgentSessionBackgroundTaskState | null,
     fence: number
   ): void {
+    this.publishEphemeral(sessionId, { backgroundTasks: state }, fence)
+  }
+
+  optionsChanged(sessionId: string): void {
+    this.publishEphemeral(sessionId, { optionsChanged: true })
+  }
+
+  private publishEphemeral(
+    sessionId: string,
+    fields: AgentSessionBatchFields,
+    fence?: number
+  ): void {
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
       this.emit(subscriber, {
         type: 'batch',
         sessionId,
         batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        backgroundTasks: state,
-        hostNow
+        fence: fence ?? subscriber.fence,
+        hostNow,
+        ...fields
       })
-      subscriber.fence = fence
+      subscriber.fence = fence ?? subscriber.fence
     }
   }
 

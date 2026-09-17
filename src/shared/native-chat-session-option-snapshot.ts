@@ -20,11 +20,12 @@ export type { NativeChatLiveOptionTransport }
 
 function choiceWithCurrent(
   choices: readonly SessionOptionSelectChoice[],
-  tracked: TrackedNativeChatSessionOption | undefined
+  tracked: TrackedNativeChatSessionOption | undefined,
+  retainUnlistedCurrent: boolean
 ): SessionOptionSelectChoice[] {
   const result = [...choices]
   const current = typeof tracked?.value === 'string' ? tracked.value : null
-  if (current && !result.some((choice) => choice.value === current)) {
+  if (retainUnlistedCurrent && current && !result.some((choice) => choice.value === current)) {
     result.push({ value: current, label: current })
   }
   return result
@@ -87,7 +88,7 @@ function optionDescriptor(args: {
   const showDefault = mode === 'draft' && !tracked && !modelIsCliDefault
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
+    const choices = choiceWithCurrent(option.kind.choices, tracked, option.id !== 'permissionMode')
     if (choices.length <= 1) {
       return null
     }

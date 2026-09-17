@@ -163,6 +163,60 @@ describe('host conversation commands', () => {
     })
   })
 
+  it('materializes a prompt-owned option effect before clearing the conversation', async () => {
+    const current = store.getRecord(HOST_TEST_SESSION)!
+    const expectedValues = { permissionMode: 'plan' }
+    const updated = await store.replaceSessionOptions({
+      sessionId: HOST_TEST_SESSION,
+      fence: current.lease.runtimeFence,
+      options: expectedValues,
+      now: HOST_TEST_NOW
+    })
+    const events = vi.mocked(adapter.acquire).mock.calls.at(-1)?.[0].events
+    if (!events) {
+      throw new Error('option-effect recovery requires an acquired session')
+    }
+    events.appendItem(
+      { provider: 'orca', clientMessageId: 'approved-plan-exit' },
+      {
+        kind: 'approval',
+        title: 'Exit plan mode?',
+        detail: null,
+        options: [{ id: 'allow', label: 'Allow' }],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'allow',
+          resolvedBy: 'desktop',
+          resolvedAt: HOST_TEST_NOW,
+          sessionOptions: {
+            expectedRevision: updated.optionsRevision ?? 0,
+            expectedValues,
+            values: { permissionMode: 'acceptEdits' }
+          }
+        }
+      }
+    )
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+
+    const result = await host.conversationCommand(caller, commandParams('clear'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(store.getRecord(result.value.replacementSessionId!)).toMatchObject({
+      options: {
+        permissionMode: 'acceptEdits',
+        model: 'test-model',
+        effort: 'high'
+      }
+    })
+    expect(store.getRecord(HOST_TEST_SESSION)?.options).toEqual({
+      permissionMode: 'acceptEdits',
+      model: 'test-model',
+      effort: 'high'
+    })
+  })
+
   it('clears with a fresh record and effective options, retaining old history and idempotent mapping', async () => {
     const before = store.getRecord(HOST_TEST_SESSION)!
     const params = commandParams('clear')

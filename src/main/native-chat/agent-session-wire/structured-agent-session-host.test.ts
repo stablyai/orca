@@ -358,6 +358,131 @@ describe('respondToPrompt', () => {
     expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
 
+  it('persists provider-owned option settlement before a replacement acquisition', async () => {
+    const record = await attach()
+    setOption.mockResolvedValueOnce({ permissionMode: 'plan' })
+    const optionFields = { key: 'permissionMode', value: 'plan' }
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', optionFields),
+      ...optionFields
+    })
+    const prompt = await seedApproval()
+    const events: AgentSessionSubscribeEvent[] = []
+    const unsubscribe = host.subscribe({
+      id: 'options-observer',
+      sessionId: SESSION,
+      emit: (event) => events.push(event)
+    })
+    answerPrompt.mockImplementationOnce(async ({ commit, settleOptions }) => {
+      await commit({ options: { permissionMode: 'acceptEdits' } })
+      await settleOptions?.({})
+    })
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
+
+    await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:approval', fields),
+      kind: 'approval',
+      ...fields
+    })
+    expect(store.getRecord(SESSION)?.options).toEqual({})
+    expect(
+      host.journalSnapshot(SESSION).items.find((item) => item.itemId === prompt.itemId)?.body
+    ).toMatchObject({
+      resolution: {
+        sessionOptions: {
+          expectedRevision: 1,
+          values: { permissionMode: 'acceptEdits' }
+        }
+      }
+    })
+    expect(events).toContainEqual(expect.objectContaining({ type: 'batch', optionsChanged: true }))
+
+    const released = await store.evictProvenDeadOwner({
+      sessionId: SESSION,
+      expectedFence: record?.lease.runtimeFence ?? 1,
+      probe: { outcome: 'pid-absent' },
+      now: NOW
+    })
+    await expect(
+      host.attach(CALLER, ensureParams(released.lease.runtimeFence))
+    ).resolves.toMatchObject({ ok: true })
+    expect(acquire.mock.calls[1]?.[0].options).toEqual({})
+    unsubscribe()
+  })
+
+  it('recovers a committed prompt option effect before replacement acquisition', async () => {
+    const record = await attach()
+    setOption.mockResolvedValueOnce({ permissionMode: 'plan' })
+    const optionFields = { key: 'permissionMode', value: 'plan' }
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', optionFields),
+      ...optionFields
+    })
+    const prompt = await seedApproval()
+    answerPrompt.mockImplementationOnce(async ({ commit }) => {
+      await commit({ options: { permissionMode: 'acceptEdits' } })
+    })
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
+
+    await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:approval', fields),
+      kind: 'approval',
+      ...fields
+    })
+    expect(store.getRecord(SESSION)).toMatchObject({
+      options: { permissionMode: 'plan' },
+      optionsRevision: 1
+    })
+
+    const released = await store.evictProvenDeadOwner({
+      sessionId: SESSION,
+      expectedFence: record?.lease.runtimeFence ?? 1,
+      probe: { outcome: 'pid-absent' },
+      now: NOW
+    })
+    await expect(
+      host.attach(CALLER, ensureParams(released.lease.runtimeFence))
+    ).resolves.toMatchObject({ ok: true })
+    expect(acquire.mock.calls[1]?.[0].options).toEqual({ permissionMode: 'acceptEdits' })
+  })
+
+  it('does not let a later Plan write overtake approved prompt settlement', async () => {
+    await attach()
+    setOption.mockResolvedValueOnce({ permissionMode: 'plan' })
+    const planFields = { key: 'permissionMode', value: 'plan' }
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', planFields),
+      ...planFields
+    })
+    const prompt = await seedApproval()
+    const releaseSettlement = Promise.withResolvers<void>()
+    answerPrompt.mockImplementationOnce(async ({ commit, settleOptions }) => {
+      await commit()
+      await releaseSettlement.promise
+      await settleOptions?.({})
+    })
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
+    const responding = host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:approval', fields),
+      kind: 'approval',
+      ...fields
+    })
+    await vi.waitFor(() => expect(answerPrompt).toHaveBeenCalledOnce())
+
+    setOption.mockResolvedValueOnce({ permissionMode: 'plan' })
+    const returningToPlan = host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', planFields),
+      ...planFields
+    })
+    await Promise.resolve()
+    expect(setOption).toHaveBeenCalledTimes(1)
+
+    releaseSettlement.resolve()
+    await responding
+    await returningToPlan
+    expect(store.getRecord(SESSION)?.options).toEqual({ permissionMode: 'plan' })
+  })
+
   it('refuses a second answer to one prompt and says which answer won', async () => {
     await attach()
     const prompt = await seedApproval()
@@ -454,6 +579,26 @@ describe('respondToPrompt', () => {
 })
 
 describe('setOption', () => {
+  it('notifies every subscriber after an explicit option change', async () => {
+    await attach()
+    const events: AgentSessionSubscribeEvent[] = []
+    const unsubscribe = host.subscribe({
+      id: 'options-observer',
+      sessionId: SESSION,
+      emit: (event) => events.push(event)
+    })
+    setOption.mockResolvedValueOnce({ permissionMode: 'plan' })
+    const optionFields = { key: 'permissionMode', value: 'plan' }
+
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', optionFields),
+      ...optionFields
+    })
+
+    expect(events).toContainEqual(expect.objectContaining({ type: 'batch', optionsChanged: true }))
+    unsubscribe()
+  })
+
   it('goes to the provider and writes nothing to the journal', async () => {
     await attach()
     setOption.mockResolvedValueOnce({ model: 'gpt-5', effort: 'high' })

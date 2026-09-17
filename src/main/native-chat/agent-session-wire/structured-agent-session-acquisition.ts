@@ -8,15 +8,22 @@ import {
 } from './structured-agent-session-adapter'
 import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
-import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
+import { readNativeSessionOptionRestoration } from './structured-agent-session-option-restoration'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
+import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import { loadJournal, type JournalLoad } from '../agent-session-journal/journal-open'
+import { renderJournalState } from '../agent-session-journal/journal-reducer'
 
 /** A reservation with no process behind it is only a promise to spawn; the
  * adapter makes it real and the store then grants the writer. */
 export async function acquireOwner(
   input: AttachFlowInput,
   record: AgentSessionRecord
-): Promise<{ record: AgentSessionRecord; acquisitionGeneration: string | null }> {
+): Promise<{
+  record: AgentSessionRecord
+  acquisitionGeneration: string | null
+  journalLoad?: JournalLoad | null
+}> {
   const { store, rewind, now } = input
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
@@ -37,23 +44,48 @@ export async function acquireOwner(
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
+    let journalLoad: JournalLoad | null | undefined
+    let acquisitionOptions: Readonly<Record<string, string>> | undefined
+    try {
+      acquisitionOptions =
+        input.optionsForAcquisition?.(record, () => {
+          const identity = journalIdentityFor(record, input.params)
+          if (journalLoad === undefined) {
+            journalLoad = loadJournal(
+              journalDirectoryFor(input.journalRoot, identity),
+              record.sessionId
+            )
+          }
+          return journalLoad && !journalLoad.readOnly && !journalLoad.corrupt
+            ? renderJournalState(journalLoad.state).items
+            : undefined
+        }) ?? record.options
+    } catch (error) {
+      throw new AgentSessionPreSpawnError(error)
+    }
     const acquired = await input.adapter.acquire({
       identity: journalIdentityFor(record, input.params),
       ...claudeRewindAcquisitionProofs({ store, record, rewind, now }),
       fence,
       // Retries must recover the original reservation, not mint a second child.
       spawnToken,
-      ...(record.options ? { options: record.options } : {}),
+      ...(acquisitionOptions ? { options: acquisitionOptions } : {}),
+      ...(record.permissionModeRestoreValue
+        ? { permissionModeRestoreValue: record.permissionModeRestoreValue }
+        : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
       ...(input.recordPhase ? { recordPhase: input.recordPhase } : {})
     })
-    const options = await withAgentSessionCreatePhase('restore_options', input.recordPhase, () =>
-      readNativeSessionOptions({
-        adapter: input.adapter,
-        sessionId: record.sessionId,
-        fence,
-        ...(record.options ? { priorOptions: record.options } : {})
-      })
+    const restoration = await withAgentSessionCreatePhase(
+      'restore_options',
+      input.recordPhase,
+      () =>
+        readNativeSessionOptionRestoration({
+          adapter: input.adapter,
+          sessionId: record.sessionId,
+          fence,
+          ...(acquisitionOptions ? { priorOptions: acquisitionOptions } : {})
+        })
     )
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
@@ -70,11 +102,19 @@ export async function acquireOwner(
       fence,
       link: acquired.link,
       now: input.now(),
-      ...(options ? { options } : {})
+      ...(restoration
+        ? {
+            options: restoration.options,
+            ...(restoration.permissionModeRestoreValue
+              ? { permissionModeRestoreValue: restoration.permissionModeRestoreValue }
+              : {})
+          }
+        : {})
     })
     return {
       record: proved,
-      acquisitionGeneration: acquired.acquisitionGeneration ?? null
+      acquisitionGeneration: acquired.acquisitionGeneration ?? null,
+      ...(journalLoad !== undefined ? { journalLoad } : {})
     }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {

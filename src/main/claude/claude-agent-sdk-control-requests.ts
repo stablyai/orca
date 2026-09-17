@@ -61,16 +61,22 @@ export function runClaudeControl<T>(
     timer = setTimeout(() => reject(new Error(`claude ${subtype} request timed out`)), timeoutMs)
     timer.unref?.()
   })
+  let request: Promise<T>
+  try {
+    // Start the control write before returning. ExitPlanMode approval depends on its
+    // permission-mode restore being issued before the provider callback is released.
+    request = run()
+  } catch (error) {
+    request = Promise.reject(error)
+  }
   return Promise.race([
-    Promise.resolve()
-      .then(run)
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
-          throw error
-        }
-        throw new ClaudeControlRequestError(subtype, message)
-      }),
+    request.catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error)
+      if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
+        throw error
+      }
+      throw new ClaudeControlRequestError(subtype, message)
+    }),
     deadline
   ]).finally(() => {
     if (timer) {

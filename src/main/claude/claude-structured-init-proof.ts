@@ -1,12 +1,17 @@
 import { CLAUDE_DEFAULT_SETTING_SOURCES } from './claude-structured-launch-resolution'
 import type { ClaudeAuthDiagnostic } from './claude-structured-session-state'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  readStructuredAgentSessionPermissionMode,
+  type StructuredAgentSessionPermissionMode
+} from '../../shared/structured-agent-session-permission-mode'
 
 export type ClaudeInitObservation = {
   providerSessionId: string
   uuid: string | null
   /** The resolved model id the CLI reports it is running; only `system/init` carries it. */
   model: string | null
+  permissionMode?: StructuredAgentSessionPermissionMode | null
   message: Record<string, unknown>
 }
 
@@ -35,6 +40,9 @@ export function readClaudeInit(message: Record<string, unknown>): ClaudeInitObse
         providerSessionId,
         uuid: isInit ? readClaudeFrameString(message, 'uuid') : null,
         model: isInit ? readClaudeFrameString(message, 'model') : null,
+        permissionMode: isInit
+          ? readStructuredAgentSessionPermissionMode(message.permissionMode)
+          : null,
         message
       }
     : null

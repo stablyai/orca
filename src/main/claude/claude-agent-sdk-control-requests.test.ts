@@ -24,3 +24,20 @@ describe('createClaudeControlSurface stopTask', () => {
     expect(stopTask).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('createClaudeControlSurface permission mode', () => {
+  it('starts the provider write before returning its settlement promise', async () => {
+    const order: string[] = []
+    const setPermissionMode = vi.fn(async () => {
+      order.push('started')
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test supplies the only Query method the permission-mode control invokes.
+    const controls = createClaudeControlSurface({ setPermissionMode } as unknown as Query)
+
+    const settled = controls.setPermissionMode('acceptEdits')
+    order.push('returned')
+    await settled
+
+    expect(order).toEqual(['started', 'returned'])
+  })
+})

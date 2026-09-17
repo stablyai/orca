@@ -51,6 +51,14 @@ export function fakeClaude(
     initSessionId?: string
     initUuid?: string
     initModel?: string
+    initPermissionMode?:
+      | 'default'
+      | 'acceptEdits'
+      | 'bypassPermissions'
+      | 'plan'
+      | 'dontAsk'
+      | 'auto'
+      | null
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
     initCommands?: unknown
@@ -74,10 +82,11 @@ export function fakeClaude(
     const route = routes[subtype]
     return route ? route(params) : undefined
   }
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers) => {
+    const resolvedHandlers = handlers ?? {}
     const connection: FakeConnection = {
       launch,
-      handlers,
+      handlers: resolvedHandlers,
       calls: [],
       sent: [],
       closeCount: 0,
@@ -86,11 +95,11 @@ export function fakeClaude(
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (options.exitBeforeInit) {
-          handlers.onExit?.(new Error(options.exitBeforeInit))
+          resolvedHandlers.onExit?.(new Error(options.exitBeforeInit))
           return { models: [] }
         }
         if (options.initProof === 'session-start') {
-          handlers.onMessage?.({
+          resolvedHandlers.onMessage?.({
             type: 'system',
             subtype: 'hook_started',
             hook_name: 'SessionStart:startup',
@@ -101,12 +110,15 @@ export function fakeClaude(
           // Keys mirror the real system/init frame, which carries `model` but no
           // effort of any kind: the current effort only comes back from
           // get_settings. Never add a field the CLI does not send.
-          handlers.onMessage?.({
+          resolvedHandlers.onMessage?.({
             type: 'system',
             subtype: 'init',
             session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
             uuid: options.initUuid ?? 'init-uuid',
             model: options.initModel ?? 'claude-sonnet-5',
+            ...(options.initPermissionMode === null
+              ? {}
+              : { permissionMode: options.initPermissionMode ?? 'default' }),
             apiKeySource: 'none',
             ...(options.capabilities ? { capabilities: options.capabilities } : {})
           })
@@ -122,6 +134,7 @@ export function fakeClaude(
         // Shape measured from Claude Code 2.1.258: {applied, effective, sources},
         // and the only place the session's current effort is reported.
         return (
+          routed('get_settings') ??
           options.settings ?? {
             applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false },
             effective: { model: 'claude-sonnet-5', effortLevel: 'high', env: {} },
@@ -171,7 +184,7 @@ export function fakeClaude(
           const replayUuid =
             configuredReplayUuid === undefined ? `user-uuid-${replayIndex}` : configuredReplayUuid
           if (replayUuid !== null) {
-            handlers.onMessage?.({
+            resolvedHandlers.onMessage?.({
               ...message,
               uuid: replayUuid
             })
@@ -187,7 +200,8 @@ export function fakeClaude(
     }
     connections.push(connection)
     return connection
-  }) as typeof openClaudeStreamJsonConnection
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture returns the complete connection contract above and only adds fake-specific fields.
+  }
   return { connections, openConnection, routes }
 }
 
@@ -206,6 +220,7 @@ export function adapterFor(
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},
+      launchPermissionMode: 'default',
       cwd: '/work/repo',
       claudeConfigDir: '/accounts/claude',
       providerSessionId: PROVIDER_SESSION_ID,

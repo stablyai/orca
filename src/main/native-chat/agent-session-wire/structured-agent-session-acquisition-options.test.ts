@@ -17,6 +17,7 @@ import {
 } from './structured-agent-session-attach'
 import { performAttach } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import { recoverResolvedPromptSessionOptions } from './structured-agent-session-prompt-option-recovery'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'legacy-session'
@@ -112,6 +113,154 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
 }
 
 describe('structured session acquisition options', () => {
+  it('settles option derivation failures without claiming a provider process', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-acquisition-option-derivation-'))
+    const store = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    const sessionAdapter = adapter({ origin: 'created' })
+    const acquire = vi.spyOn(sessionAdapter, 'acquire')
+    const releaseAcquisition = vi.fn(async () => false)
+    sessionAdapter.releaseAcquisition = releaseAcquisition
+
+    await expect(
+      performAttach({
+        store,
+        adapter: sessionAdapter,
+        journalRoot: root,
+        authority: {
+          spawnToken: 'spawn-a',
+          claimKeyId: 'key-1',
+          handoffOperationId: CREATE_OPERATION,
+          probe: { outcome: 'reservation-unused' }
+        },
+        callerKey: 'client-1',
+        params: attachParams(CREATE_OPERATION, null),
+        now: () => NOW,
+        optionsForAcquisition: () => {
+          throw new Error('journal unavailable')
+        },
+        onAttached: () => {}
+      })
+    ).rejects.toThrow('journal unavailable')
+    expect(acquire).not.toHaveBeenCalled()
+    expect(releaseAcquisition).not.toHaveBeenCalled()
+    const failedRecord = store.getRecord(SESSION)
+    expect(failedRecord?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      ownerProcess: null,
+      reservedSpawnToken: null
+    })
+
+    const retried = await performAttach({
+      store,
+      adapter: sessionAdapter,
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-b',
+        claimKeyId: 'key-1',
+        handoffOperationId: RESUME_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(RESUME_OPERATION, failedRecord?.lease.runtimeFence ?? 0),
+      now: () => NOW + 1,
+      onAttached: () => {}
+    })
+    expect(retried).toMatchObject({ ok: true })
+  })
+
+  it('recovers a prompt option effect from disk before replacement acquisition', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-prompt-option-recovery-'))
+    const initialStore = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    let firstJournal: AgentSessionJournal | undefined
+    const created = await performAttach({
+      store: initialStore,
+      adapter: adapter({ origin: 'created' }),
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(CREATE_OPERATION, null, { permissionMode: 'plan' }),
+      now: () => NOW,
+      onAttached: (attached) => {
+        firstJournal = attached.journal
+      }
+    })
+    expect(created).toMatchObject({ ok: true })
+    await firstJournal!.appendItem(
+      { provider: 'orca', clientMessageId: 'approved-exit' },
+      {
+        kind: 'approval',
+        title: 'Exit plan mode?',
+        detail: null,
+        options: [{ id: 'allow', label: 'Allow' }],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'allow',
+          resolvedBy: 'client-1',
+          resolvedAt: NOW,
+          sessionOptions: {
+            expectedRevision: 0,
+            expectedValues: { permissionMode: 'plan' },
+            values: { permissionMode: 'acceptEdits' }
+          }
+        }
+      },
+      { fence: 1 }
+    )
+    await firstJournal!.close()
+
+    const restartedStore = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    await restartedStore.reconcileOnRestart({
+      probe: async () => ({ outcome: 'pid-absent' }),
+      now: NOW + 1
+    })
+    const replacement = adapter({ origin: 'resumed' })
+    const replacementAcquire = vi.spyOn(replacement, 'acquire')
+    let replacementJournal: AgentSessionJournal | undefined
+    const resumed = await performAttach({
+      store: restartedStore,
+      adapter: replacement,
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-b',
+        claimKeyId: 'key-1',
+        handoffOperationId: RESUME_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(
+        RESUME_OPERATION,
+        restartedStore.getRecord(SESSION)?.lease.runtimeFence ?? 0
+      ),
+      now: () => NOW + 1,
+      optionsForAcquisition: (record, readDurableItems) =>
+        recoverResolvedPromptSessionOptions(record, readDurableItems()),
+      onAttached: (attached) => {
+        replacementJournal = attached.journal
+      }
+    })
+
+    expect(resumed).toMatchObject({ ok: true })
+    expect(replacementAcquire).toHaveBeenCalledWith(
+      expect.objectContaining({ options: { permissionMode: 'acceptEdits' } })
+    )
+    await replacementJournal!.close()
+  })
+
   it('samples provider history before acquiring a replacement child', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-history-before-acquire-'))
     const initialStore = await AgentSessionRecordStore.open({
@@ -126,7 +275,7 @@ describe('structured session acquisition options', () => {
     })
     const withHistory = (origin: 'created' | 'resumed'): StructuredAgentSessionAdapter => {
       const sessionAdapter = adapter({ origin })
-      const acquire = vi.mocked(sessionAdapter.acquire)
+      const acquire = vi.spyOn(sessionAdapter, 'acquire')
       acquire.mockImplementation(async (input) => {
         childAcquired = true
         return {
@@ -221,6 +370,7 @@ describe('structured session acquisition options', () => {
       hostId: 'local'
     })
     const sessionAdapter = adapter({ origin: 'created' })
+    const acquire = vi.spyOn(sessionAdapter, 'acquire')
     const options = { model: 'gpt-5.6-sol', effort: 'medium', fastMode: 'false' }
     const recordPhase = vi.fn<AgentSessionCreatePhaseRecorder>()
 
@@ -242,9 +392,7 @@ describe('structured session acquisition options', () => {
     })
 
     expect(created).toMatchObject({ ok: true })
-    expect(sessionAdapter.acquire).toHaveBeenCalledWith(
-      expect.objectContaining({ options, recordPhase })
-    )
+    expect(acquire).toHaveBeenCalledWith(expect.objectContaining({ options, recordPhase }))
     expect(store.getRecord(SESSION)?.options).toEqual(options)
   })
 
@@ -445,8 +593,8 @@ describe('structured session acquisition options', () => {
         options: { current: { model: 'gpt-5.6-terra' }, models: [] }
       })
       const injected = new Error(`${failurePoint} failed`)
-      const acquire = vi.mocked(base.acquire)
-      const readOptions = vi.mocked(base.readOptions!)
+      const acquire = vi.spyOn(base, 'acquire')
+      const readOptions = vi.spyOn(base, 'readOptions')
       if (failurePoint === 'acquire') {
         acquire.mockRejectedValueOnce(injected)
       } else if (failurePoint === 'options') {

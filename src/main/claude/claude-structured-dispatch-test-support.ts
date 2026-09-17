@@ -21,6 +21,8 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
+    permissionModeMutationSequence: 0,
+    reportedPermissionModeMutation: 0,
     options: new Map(),
     reportedOptions: {},
     reportedModelMutation: 0,

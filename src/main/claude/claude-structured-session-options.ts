@@ -14,6 +14,11 @@ import {
 } from './claude-structured-model-catalog'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import {
+  readStructuredAgentSessionPermissionMode,
+  type StructuredAgentSessionPermissionMode
+} from '../../shared/structured-agent-session-permission-mode'
+import { claudePublishedPermissionMode } from './claude-structured-permission-mode-projection'
 
 /**
  * The session's current effort, which only `get_settings` reports: the
@@ -33,6 +38,51 @@ export function readClaudeSettingsFastMode(settings: unknown): boolean | null {
 export function readClaudeSettingsFastModePerSessionOptIn(settings: unknown): boolean | null {
   const value = record(record(settings)?.effective)?.fastModePerSessionOptIn
   return typeof value === 'boolean' ? value : null
+}
+
+export function readClaudeSettingsPermissionMode(
+  settings: unknown
+): StructuredAgentSessionPermissionMode | null {
+  const settingsRecord = record(settings)
+  return (
+    readStructuredAgentSessionPermissionMode(record(settingsRecord?.applied)?.permissionMode) ??
+    readStructuredAgentSessionPermissionMode(record(settingsRecord?.effective)?.permissionMode)
+  )
+}
+
+export function observeClaudeUserPermissionMode(session: ClaudeSession, value: unknown): void {
+  if (
+    !session.options.has('permissionMode') &&
+    session.reportedPermissionModeMutation === session.permissionModeMutationSequence
+  ) {
+    return
+  }
+  if (
+    session.confirmedOptions.has('permissionMode') &&
+    session.reportedPermissionModeMutation === session.permissionModeMutationSequence
+  ) {
+    return
+  }
+  const permissionMode = readStructuredAgentSessionPermissionMode(record(value)?.permissionMode)
+  if (!permissionMode) {
+    return
+  }
+  const previousPermissionMode = session.reportedOptions.permissionMode
+  const wasConfirmed = session.confirmedOptions.has('permissionMode')
+  session.reportedOptions.permissionMode = permissionMode
+  session.reportedPermissionModeMutation = session.permissionModeMutationSequence
+  const desiredPermissionMode = session.options.get('permissionMode') ?? session.basePermissionMode
+  if (desiredPermissionMode === permissionMode) {
+    session.confirmedOptions.add('permissionMode')
+  } else {
+    session.confirmedOptions.delete('permissionMode')
+  }
+  if (
+    previousPermissionMode !== permissionMode ||
+    wasConfirmed !== session.confirmedOptions.has('permissionMode')
+  ) {
+    session.events?.optionsChanged?.()
+  }
 }
 
 const FAST_MODE_STATES: readonly AgentSessionFastModeState[] = ['off', 'cooldown', 'on']
@@ -55,6 +105,7 @@ export function readClaudeFastModeFacts(value: unknown): {
 }
 
 export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknown): void {
+  observeClaudeUserPermissionMode(session, value)
   const facts = readClaudeFastModeFacts(value)
   if (facts.state) {
     session.fastModeState = facts.state
@@ -202,6 +253,7 @@ export async function readClaudeStructuredSessionOptions(
   timeoutMs: number | undefined
 ): Promise<AgentSessionOptionsResult> {
   const readMutationSequence = session.optionMutationSequence
+  const readPermissionModeMutation = session.permissionModeMutationSequence
   const [catalog, settings] = await Promise.all([
     session.connection.supportedModels({ timeoutMs }).catch(() => null),
     session.connection.getSettings({ timeoutMs }).catch(() => null)
@@ -222,6 +274,26 @@ export async function readClaudeStructuredSessionOptions(
     }
     if (perSessionOptIn !== null) {
       session.fastModePerSessionOptIn = perSessionOptIn
+    }
+  }
+  if (
+    settings !== null &&
+    readPermissionModeMutation === session.permissionModeMutationSequence &&
+    session.basePermissionMode &&
+    (session.options.has('permissionMode') ||
+      session.reportedPermissionModeMutation !== readPermissionModeMutation)
+  ) {
+    const permissionMode = readClaudeSettingsPermissionMode(settings)
+    if (permissionMode) {
+      session.reportedOptions.permissionMode = permissionMode
+      session.reportedPermissionModeMutation = readPermissionModeMutation
+      const desiredPermissionMode =
+        session.options.get('permissionMode') ?? session.basePermissionMode
+      if (desiredPermissionMode === permissionMode) {
+        session.confirmedOptions.add('permissionMode')
+      } else {
+        session.confirmedOptions.delete('permissionMode')
+      }
     }
   }
   const discovered = listedModels(catalog ? { models: catalog } : null)
@@ -253,12 +325,17 @@ export async function readClaudeStructuredSessionOptions(
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
   const support = claudeFastModeSupport(discovered, session.fastModeDisabledReason)
+  const { value: permissionMode, reported: permissionModeReported } =
+    claudePublishedPermissionMode(session)
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
     ...(fastMode !== undefined &&
     (session.confirmedOptions.has('fastMode') || !session.options.has('fastMode'))
       ? ['fastMode']
+      : []),
+    ...(permissionMode && (session.confirmedOptions.has('permissionMode') || permissionModeReported)
+      ? ['permissionMode']
       : [])
   ]
   return {
@@ -271,11 +348,15 @@ export async function readClaudeStructuredSessionOptions(
       ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
     })),
     ...(support ? { fastModeSupport: support } : {}),
+    ...(session.basePermissionMode
+      ? { permissionModeRestoreValue: session.basePermissionMode }
+      : {}),
     current: {
       model,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
+      ...(permissionMode ? { permissionMode } : {}),
       ...(confirmed.length > 0 ? { confirmed } : {})
     }
   }

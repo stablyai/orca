@@ -33,6 +33,7 @@ export type StructuredAgentSessionAttachContext = {
       journal: AgentSessionJournal,
       activity?: AgentSessionTurnActivity | null
     ) => void
+    optionsChanged: (sessionId: string) => void
   }
   tasks: StructuredAgentSessionTaskQueue
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>

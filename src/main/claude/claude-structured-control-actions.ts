@@ -5,6 +5,10 @@ import {
   type ClaudeLateDispatchSettlement
 } from './claude-structured-dispatch'
 import type { ClaudeSession } from './claude-structured-session-state'
+import {
+  claudePermissionModeRestoreIntent,
+  restoreClaudePermissionModeAfterApprovedPrompt
+} from './claude-structured-permission-mode'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
 
@@ -83,17 +87,34 @@ export async function stopClaudeBackgroundTasks(
 export async function answerClaudePrompt(
   session: ClaudeSession,
   claim: ClaudePromptClaim,
-  optionId: string
+  optionId: string,
+  commit: (settlement?: { options: Readonly<Record<string, string>> }) => Promise<void>,
+  settleOptions?: (options: Readonly<Record<string, string>>) => Promise<void>,
+  timeoutMs?: number
 ): Promise<void> {
   if (!session.prompts.ownsClaim(claim)) {
     throw new Error(`claude is no longer waiting on ${claim.itemId}`)
   }
   const response = applyClaudePromptAnswer(claim.found, optionId)
+  const restoreIntent =
+    claim.found.prompt.toolName === 'ExitPlanMode' && response?.behavior === 'allow'
+      ? claudePermissionModeRestoreIntent(session)
+      : null
+  await commit(restoreIntent ? { options: restoreIntent.options } : undefined)
   if (response === null) {
     session.prompts.releaseClaim(claim)
     return
   }
   session.prompts.forget(claim.found.prompt)
+  const optionSettlement = restoreIntent
+    ? restoreClaudePermissionModeAfterApprovedPrompt(
+        session,
+        restoreIntent,
+        settleOptions,
+        timeoutMs
+      )
+    : null
   claim.found.prompt.settle(response)
   session.translator?.journalPrompts.resolve(claim.found.prompt.promptKey)
+  await optionSettlement
 }

@@ -49,6 +49,9 @@ function mergeBatch(
       : {}),
     ...(right.activity !== undefined || left.activity !== undefined
       ? { activity: right.activity !== undefined ? right.activity : (left.activity ?? null) }
+      : {}),
+    ...(right.optionsChanged === true || left.optionsChanged === true
+      ? { optionsChanged: true as const }
       : {})
   }
 }

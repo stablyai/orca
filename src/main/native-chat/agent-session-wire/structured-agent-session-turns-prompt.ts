@@ -65,15 +65,37 @@ export async function performPrompt(
       kind: input.kind,
       optionId: input.optionId,
       fence: ctx.fence,
-      commit: async () => {
+      commit: async (settlement) => {
         committed.item = await ctx.journal.appendItem(
           identity,
-          { ...prompt, resolution },
+          {
+            ...prompt,
+            resolution: {
+              ...resolution,
+              ...(settlement
+                ? {
+                    sessionOptions: {
+                      expectedRevision: ctx.persistedOptionsRevision ?? 0,
+                      expectedValues: ctx.persistedOptions ?? {},
+                      values: settlement.options
+                    }
+                  }
+                : {})
+            }
+          },
           {
             fence: ctx.fence
           }
         )
         ctx.publish()
+      },
+      settleOptions: async (options) => {
+        try {
+          await ctx.persistOptions(options)
+          ctx.publish()
+        } finally {
+          ctx.publishOptions()
+        }
       }
     })
   } catch (error) {

@@ -24,7 +24,6 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
           worktree: `id:${record.location.workspaceId}`,
           agent: provider,
           providerSession: { key: 'session_id', id: providerSessionId },
-          ...(record.options ? { launchPreferences: record.options } : {}),
           presentation: 'background'
         },
         {},
@@ -32,6 +31,7 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
           spawnToken,
           providerRoot: record.accountHome.path,
           sessionId: record.sessionId,
+          ...(record.options !== undefined ? { sessionOptions: record.options } : {}),
           ...(record.launchArgs !== undefined ? { launchArgs: record.launchArgs } : {})
         }
       )

@@ -216,6 +216,23 @@ const fast: SessionOptionDescriptor = {
   settable: true
 }
 
+const planMode: SessionOptionDescriptor = {
+  id: 'permissionMode',
+  label: 'Plan mode',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    currentValue: 'plan',
+    choices: [
+      { value: 'acceptEdits', label: 'Normal' },
+      { value: 'plan', label: 'Plan' }
+    ]
+  },
+  valueSource: 'reported',
+  transport: 'agent-session',
+  settable: true
+}
+
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
@@ -307,6 +324,32 @@ describe('NativeChatSessionOptionPickers', () => {
       <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
     )
     expect(screen.queryByRole('button', { name: /Effort/ })).toBeNull()
+  })
+
+  it('shows the active Plan indicator only after provider readback', () => {
+    const { rerender } = render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), planMode]}
+        isWorking={false}
+      />
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Session options Plan' }).getAttribute('variant')
+    ).toBe('secondary')
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), { ...planMode, valueSource: 'dispatched' }]}
+        isWorking={false}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Session options Options' }).getAttribute('variant')
+    ).toBe('ghost')
+    expect(screen.queryByRole('button', { name: /Plan/ })).toBeNull()
   })
 
   it('names a lone unknown effort control explicitly', () => {

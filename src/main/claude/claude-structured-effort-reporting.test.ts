@@ -22,10 +22,13 @@ function sessionWith(
   listed?: { model: string; catalog: readonly Record<string, unknown>[] }
 ) {
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This focused fixture supplies every session member exercised by effort reporting.
     session: {
       options: new Map<string, string>(listed ? [['model', listed.model]] : []),
-      reportedOptions: {} as { model?: string; effort?: string },
+      reportedOptions: {},
       optionMutationSequence: 0,
+      permissionModeMutationSequence: 0,
+      reportedPermissionModeMutation: 0,
       reportedModelMutation: 0,
       confirmedOptions: new Set<string>(),
       restoreSkippedOptions: new Set<string>(),
