@@ -32,8 +32,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       res.end()
       return
     }
-    // Why no alias resolution: a legacy alias key never parses as a stable pane key, and the
-    // hook holds the stable key it was launched with, so the registry lookup is direct.
+    // Why no alias resolution: the PTY registry is keyed by the physical key the pane was
+    // spawned with, which is the key the hook holds in ORCA_PANE_KEY, so the lookup is direct.
     try {
       const resolution = isValidPaneKey(paneKey)
         ? this.onResolveTerminalInputSource?.(paneKey)
@@ -52,9 +52,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       const body = JSON.stringify(resolution.source)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(body)
-    } catch {
+    } catch (error) {
       // Why: this handler runs outside the POST path's try, and an unhandled throw here would
-      // reject the void-ed request promise and take the process down.
+      // reject the void-ed request promise and take the process down. Log it, since a hook
+      // that ignores status codes would otherwise see only "no device info".
+      console.error('[agent-hooks] last-input resolver error', error)
       res.writeHead(500)
       res.end()
     }
