@@ -6187,8 +6187,15 @@
             "result": {
               "items": [
                 {
+                  "id": "issue:1",
+                  "type": "issue",
                   "number": 1,
-                  "title": "one"
+                  "title": "one",
+                  "state": "open",
+                  "url": "",
+                  "labels": [],
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "author": null
                 }
               ]
             }
@@ -6215,8 +6222,15 @@
             "result": {
               "items": [
                 {
-                  "iid": 2,
-                  "title": "two"
+                  "id": "issue:2",
+                  "type": "issue",
+                  "number": 2,
+                  "title": "two",
+                  "state": "opened",
+                  "url": "",
+                  "labels": [],
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "author": null
                 }
               ],
               "error": {
@@ -6245,7 +6259,24 @@
             "result": {
               "items": [
                 {
-                  "id": "issue-1"
+                  "id": "issue-1",
+                  "identifier": "ENG-1",
+                  "title": "A searched issue",
+                  "url": "",
+                  "state": {
+                    "name": "Todo",
+                    "type": "unstarted",
+                    "color": "#000"
+                  },
+                  "team": {
+                    "id": "team-1",
+                    "key": "ENG",
+                    "name": "Engineering"
+                  },
+                  "labels": [],
+                  "priority": 0,
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "workspaceId": "linear-workspace"
                 }
               ]
             }
@@ -6296,7 +6327,24 @@
             "ok": true,
             "result": [
               {
-                "id": "issue-3"
+                "id": "issue-3",
+                "identifier": "ENG-3",
+                "title": "An assigned issue",
+                "url": "",
+                "state": {
+                  "name": "In Progress",
+                  "type": "started",
+                  "color": "#111"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 2,
+                "updatedAt": "2020-01-02T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
               }
             ]
           }
@@ -6335,7 +6383,24 @@
             "ok": true,
             "result": [
               {
-                "id": "issue-2"
+                "id": "issue-2",
+                "identifier": "ENG-2",
+                "title": "An assigned issue",
+                "url": "",
+                "state": {
+                  "name": "Todo",
+                  "type": "unstarted",
+                  "color": "#000"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 0,
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
               }
             ]
           }
@@ -6432,8 +6497,15 @@
           "reply": {
             "ok": true,
             "result": {
+              "id": "issue:12",
+              "type": "issue",
               "number": 12,
-              "title": "twelve"
+              "title": "twelve",
+              "state": "open",
+              "url": "",
+              "labels": [],
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "author": null
             }
           }
         },
@@ -6456,8 +6528,15 @@
           "reply": {
             "ok": true,
             "result": {
+              "id": "issue:12",
+              "type": "issue",
               "number": 12,
-              "title": "twelve"
+              "title": "twelve",
+              "state": "open",
+              "url": "",
+              "labels": [],
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "author": null
             }
           }
         },
@@ -6480,8 +6559,15 @@
           "reply": {
             "ok": true,
             "result": {
-              "iid": 7,
-              "title": "seven"
+              "id": "issue:7",
+              "type": "issue",
+              "number": 7,
+              "title": "seven",
+              "state": "opened",
+              "url": "",
+              "labels": [],
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "author": null
             }
           }
         },
