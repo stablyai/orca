@@ -255,6 +255,17 @@ export const OPERATION_MUTATIONS = {
     before: '      await ensureSessionTabs().catch(() => null)',
     after: '      await ensureSessionTabs()'
   },
+  // Collapses the assignable-user row's explicit `avatarUrl: null` into absence, so a host that
+  // reported "this user has no avatar" becomes indistinguishable from one that does not report
+  // avatars at all, and the picker draws its initials placeholder for both. The null-collapse class
+  // the session domain shipped twice before a review caught it; this anchor keeps it caught.
+  'assignable-user-avatar-null-collapse': {
+    file: 'task-provider-entity-reply-schema.ts',
+    before: `  name: prNullableText('name'),
+  avatarUrl: prNullableText('avatarUrl')`,
+    after: `  name: prNullableText('name'),
+  avatarUrl: prText('avatarUrl')`
+  },
   // Publishes the settings envelope as the refreshed task runtime settings.
   'task-workspace-envelope': {
     file: 'use-mobile-tasks-workspace-create-actions.tsx',
