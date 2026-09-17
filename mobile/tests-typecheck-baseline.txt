@@ -8,6 +8,7 @@ src/browser/mobile-browser-frameless-stream.test.tsx
 src/components/CodexResetCreditAction.test.ts
 src/components/HostProtocolGate.test.ts
 src/components/MobileHomeQuickActions.test.ts
+src/components/MobileHostCard-truthful-status.test.tsx
 src/components/MobileHostCard.test.ts
 src/components/MobileMarkdown.file-links.test.ts
 src/components/MobileRichMarkdownEditor.test.tsx

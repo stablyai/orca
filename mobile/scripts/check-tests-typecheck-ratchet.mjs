@@ -17,6 +17,28 @@ const BASELINE_PATH = 'tests-typecheck-baseline.txt'
 const PROJECT = 'tsconfig.test.json'
 const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
+// The only test files allowed to sit outside the program, and why. Everything else on disk must be
+// in it: the error diff below sees a file only once it errors, so an excluded or shadowed test
+// disappears from this gate silently.
+export const TESTS_OUTSIDE_PROGRAM = new Map([
+  [
+    'scripts/rpc-recording-pin-guard.test.ts',
+    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
+  ],
+  [
+    'src/tasks/agent-launch-mobile-replay.test.ts',
+    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
+  ],
+  [
+    'src/tasks/mobile-agent-launch-architecture.test.ts',
+    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
+  ],
+  [
+    'src/transport/mobile-relay-browser-cancel-budget.test.ts',
+    'Node-side: imports src/shared/child-process, checked against @types/node rather than RN libs'
+  ]
+])
+
 export function parseFailingFiles(tscOutput) {
   const files = new Set()
   for (const line of tscOutput.split('\n')) {
@@ -26,6 +48,57 @@ export function parseFailingFiles(tscOutput) {
     }
   }
   return [...files].sort()
+}
+
+export function collectTestFilesOnDisk(root = process.cwd()) {
+  const found = []
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
+        continue
+      }
+      const rel = dir ? `${dir}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        walk(rel)
+      } else if (/\.test\.tsx?$/.test(entry.name)) {
+        found.push(rel)
+      }
+    }
+  }
+  walk('')
+  return found.sort()
+}
+
+// tsc prints absolute real paths, so the root is realpath'd before stripping it.
+export function collectProgramTestFiles(root = process.cwd()) {
+  const tsc = path.join(root, 'node_modules', '.bin', 'tsc')
+  const result = spawnSync(tsc, ['--listFilesOnly', '-p', PROJECT], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024
+  })
+  if (result.error) {
+    throw result.error
+  }
+  const prefix = `${fs.realpathSync(root)}${path.sep}`
+  return `${result.stdout ?? ''}`
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /\.test\.tsx?$/.test(line) && line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length).split(path.sep).join('/'))
+    .sort()
+}
+
+export function diffCensus(onDisk, inProgram, allowed = TESTS_OUTSIDE_PROGRAM) {
+  const program = new Set(inProgram)
+  const allow = allowed instanceof Map ? allowed : new Map(allowed.map((e) => [e, '']))
+  const disk = new Set(onDisk)
+  return {
+    missing: [...disk].filter((entry) => !program.has(entry) && !allow.has(entry)).sort(),
+    staleAllowance: [...allow.keys()]
+      .filter((entry) => !disk.has(entry) || program.has(entry))
+      .sort()
+  }
 }
 
 export function parseBaseline(text) {
@@ -110,6 +183,42 @@ function printStaleFailure(stale) {
   console.error('')
 }
 
+function printCensusFailure(missing, staleAllowance) {
+  for (const entry of missing) {
+    console.error(`::error::Test file is not in the typecheck program: ${entry}`)
+  }
+  for (const entry of staleAllowance) {
+    console.error(`::error::Stale TESTS_OUTSIDE_PROGRAM entry: ${entry}`)
+  }
+  console.error('')
+  console.error('╭────────────────────────────────────────────────────────────────────────────╮')
+  console.error('│  ❌  mobile tests typecheck census failed — a test file is unchecked.         │')
+  console.error('╰────────────────────────────────────────────────────────────────────────────╯')
+  console.error('')
+  if (missing.length > 0) {
+    console.error(`  ${missing.length} test file(s) on disk are outside \`tsc -p ${PROJECT}\`:`)
+    console.error('')
+    for (const entry of missing) {
+      console.error(`    • ${entry}`)
+    }
+    console.error('')
+    console.error('  Usual causes: an added `exclude` entry, or a `Foo.test.tsx` shadowed by a')
+    console.error('  `Foo.test.ts` beside it — a wildcard `include` keeps only the higher-priority')
+    console.error('  extension, so the .tsx silently leaves the program. Rename one, or exclude it')
+    console.error('  on purpose by adding it to TESTS_OUTSIDE_PROGRAM with its reason.')
+    console.error('')
+  }
+  if (staleAllowance.length > 0) {
+    console.error(`  ${staleAllowance.length} TESTS_OUTSIDE_PROGRAM entr(y/ies) no longer apply`)
+    console.error('  (the file is gone, or it is in the program now). Remove them:')
+    console.error('')
+    for (const entry of staleAllowance) {
+      console.error(`    • ${entry}`)
+    }
+    console.error('')
+  }
+}
+
 export function main(root = process.cwd()) {
   const baselineFile = path.join(root, BASELINE_PATH)
   if (!fs.existsSync(baselineFile)) {
@@ -118,6 +227,12 @@ export function main(root = process.cwd()) {
     )
     return 1
   }
+  const census = diffCensus(collectTestFilesOnDisk(root), collectProgramTestFiles(root))
+  if (census.missing.length > 0 || census.staleAllowance.length > 0) {
+    printCensusFailure(census.missing, census.staleAllowance)
+    return 1
+  }
+
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
   const current = collectCurrentFailingFiles(root)
   const { added, stale } = diffBaseline(current, baseline)
@@ -134,7 +249,7 @@ export function main(root = process.cwd()) {
     return 1
   }
   console.log(
-    `mobile tests typecheck ratchet OK — ${current.length} grandfathered file(s), every other test file checks.`
+    `mobile tests typecheck ratchet OK — every test file on disk is in the program (${TESTS_OUTSIDE_PROGRAM.size} excluded on purpose), ${current.length} grandfathered file(s), every other test file checks.`
   )
   return 0
 }
