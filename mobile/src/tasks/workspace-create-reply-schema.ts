@@ -10,18 +10,18 @@ const createText = (name: string) => salvagedOptional(name, z.string())
 /**
  * A created workspace.
  *
- * `worktree.id` is the requirement: use-mobile-tasks-workspace-create-actions.tsx:276 routes to
- * `/session/${result.worktree.id}` and :271 reads `result.worktree.displayName`, neither guarded,
+ * `worktree.id` is the requirement: use-mobile-tasks-workspace-create-actions.tsx:272 routes to
+ * `/session/${result.worktree.id}` and :266 reads `result.worktree.displayName`, neither guarded,
  * so a reply without the record navigated the phone to `/session/undefined`. Every recorded create
  * carries it — `tw-create-retry-created`, `tw-create-retry-warning-kept`,
  * `settings-task-workspace-create-linear` and its pr-start-point sibling.
  *
- * `z.string()` and not `.min(1)`: worktree-create-retry.ts:159 rejects an empty id itself and
+ * `z.string()` and not `.min(1)`: worktree-create-retry.ts:158 rejects an empty id itself and
  * answers "Failed to create workspace", and that arm stays reachable rather than becoming a decode
  * failure.
  *
- * `warning` is optional and untrimmed. Both readers trim it themselves (:273 and
- * worktree-create-retry.ts:165), and `tw-create-retry-warning-kept` records the host sending
+ * `warning` is optional and untrimmed. Both readers trim it themselves (:268 and
+ * worktree-create-retry.ts:169), and `tw-create-retry-warning-kept` records the host sending
  * `"  startup terminal failed  "` — normalising it here would move that golden.
  */
 export const worktreeCreateReceiptSchema = z.looseObject({
@@ -57,7 +57,7 @@ export const agentLaunchCreateReceiptSchema = z.looseObject({
  * A linked pull request's or merge request's start point.
  *
  * A union, because the consumer's own test is `'error' in result`
- * (composer-source-base-resolve.ts:39/:68, use-mobile-tasks-workspace-create-actions.tsx:187/:230)
+ * (composer-source-base-resolve.ts:36/:65, use-mobile-tasks-workspace-create-actions.tsx:185/:226)
  * and `in` on a non-object was a TypeError. The soft-error arm comes first for the same reason
  * main's branch does, and it keeps an empty message verbatim — `tw-hosted-base-soft-error` records
  * the host answering `{ error: '' }`, which the create surfaces as its own copy.

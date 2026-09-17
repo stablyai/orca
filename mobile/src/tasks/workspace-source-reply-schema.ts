@@ -33,12 +33,12 @@ const sourceText = (name: string) => salvagedOptional(name, z.string())
  * `status` is an OPEN enum. It is a wire surface (remote-wire-compatibility.md rule 4), so an arm
  * this build has not heard of must not refuse the record or drop it. It degrades to
  * `'disconnected'`, which is main's own answer for a state it did not receive
- * (use-new-workspace-execution-target.ts:64, use-mobile-tasks-workspace-sparse-actions.tsx:145):
+ * (use-new-workspace-execution-target.ts:63, use-mobile-tasks-workspace-sparse-actions.tsx:144):
  * the readiness gate is an equality test against `'connected'`, so the degrade never grants a
  * create it should not, and it leaves the Connect affordance the user needs.
  *
  * The whole member stays nullable and optional because that is what the two call sites read:
- * `state ?? fallback…` at use-mobile-tasks-workspace-ssh-state.tsx:63 and :97.
+ * `state ?? fallback…` at use-mobile-tasks-workspace-ssh-state.tsx:62 and :96.
  *
  * `providerEpoch`, `supportsFolderDownload` and `remotePlatform` are NOT declared. Nothing in this
  * domain reads them, and a loose object forwards them to the file-mutation owner check and the
@@ -66,7 +66,7 @@ export const sshConnectionStateSchema = z
  * The agent ids a host reports, local or remote.
  *
  * A bare array of strings, which is what both handlers return. The drawer builds a `Set` from it
- * (use-mobile-tasks-workspace-ssh-state.tsx:134, use-new-workspace-execution-target.ts:96), so a
+ * (use-mobile-tasks-workspace-ssh-state.tsx:131, use-new-workspace-execution-target.ts:96), so a
  * non-iterable payload was a TypeError inside a `.then` and a number reply was a silent
  * `Set { 7 }` that matched no agent. A non-string element drops rather than failing the probe:
  * every reader compares the id to a known agent, so a dropped element and a kept non-string agree
@@ -77,14 +77,14 @@ export const detectedAgentIdsSchema = salvagingArray(z.string())
 /**
  * The repo's orca.yaml hooks.
  *
- * Nothing is required. use-mobile-tasks-workspace-ssh-state.tsx:204 spells
- * `result.hooks?.scripts?.setup?.trim()`, :206 defaults `setupRunPolicy`, and
+ * Nothing is required. use-mobile-tasks-workspace-ssh-state.tsx:196 spells
+ * `result.hooks?.scripts?.setup?.trim()`, :204 defaults `setupRunPolicy`, and
  * `normalizeSetupHookTrust` rejects a `setupTrust` without both members — and the recorded
  * `tw-workspace-ssh-not-ready` reply is `{ hooks: { scripts: {} } }` with no `source` and no
  * policy at all, so a requirement on either would refuse a reply main handled. `setupTrust` is
  * nullable because `components-setup-ask` records an explicit `null` there.
  *
- * `setupRunPolicy` stays a plain string. :207 tests it against `'ask'` and :211 against
+ * `setupRunPolicy` stays a plain string. :205 tests it against `'ask'` and :209 against
  * `'run-by-default'`, so an unknown policy already lands on the `skip` arm; closing the set would
  * drop it to the schema's fallback instead and change which arm a newer host reaches.
  */
@@ -114,7 +114,7 @@ export const repoSetupHooksSchema = z.looseObject({
  * One saved sparse-checkout preset.
  *
  * `id` alone is required: it is what the picker selects by and what the save path dedupes on
- * (use-mobile-tasks-workspace-sparse-actions.tsx:96/:101). `repoId`, `createdAt` and `updatedAt`
+ * (use-mobile-tasks-workspace-sparse-actions.tsx:93/:98). `repoId`, `createdAt` and `updatedAt`
  * are declared non-optional by SparsePreset but absent from the recorded preset
  * (`tw-workspace-source-presets`, `{ id: 'p1', name: 'docs', directories: ['docs'] }`), so they
  * are typed and optional — defaulting them would put numbers in the drawer's recorded state that
@@ -129,8 +129,8 @@ const sparsePreset = z.looseObject({
   updatedAt: salvagedOptional('updatedAt', z.number())
 })
 
-/** The preset list, answered under `presets`. Required, because :59 defaults it with `?? []` only
- *  after the member read — main read `.presets` off whatever arrived. */
+/** The preset list, answered under `presets`. Required, because use-mobile-tasks-workspace-source-effects.tsx:62 reads `presets.some(...)` off
+ *  whatever the member read answered. */
 export const repoSparsePresetListSchema = z
   .looseObject({ presets: salvagingArray(sparsePreset) })
   .transform((reply) => reply.presets)
@@ -149,8 +149,8 @@ export const repoSparsePresetSaveSchema = z
  * Base-branch search.
  *
  * Neither member is required: both call sites spell the same
- * `refDetails ?? refs.map(…)` fallback (use-mobile-tasks-workspace-source-effects.tsx:130,
- * smart-source-search-requests.ts:115), and the two recorded replies carry one member each —
+ * `refDetails ?? refs.map(…)` fallback (use-mobile-tasks-workspace-source-effects.tsx:128,
+ * smart-source-search-requests.ts:108), and the two recorded replies carry one member each —
  * `{ refs: [...] }` in `tw-workspace-source-presets` and `{ refDetails: [...] }` in
  * `tw-smart-search-gitlab-provider-error`. The fallback stays at the call sites, where it was;
  * what the schema adds is that a `refs` full of numbers no longer reaches the picker as rows

@@ -66,9 +66,9 @@ const projectSummary = z.looseObject({
 /**
  * The accessible-project list.
  *
- * `projects` is required on the success arm: use-mobile-tasks-project-loading-actions.tsx:69 hands
- * it straight to `setGithubProjects`, and `partialFailures` is not, because :70 spells `?? []`.
- * `error.message` is required on the refusal arm because :67 throws it unguarded.
+ * `projects` is required on the success arm: use-mobile-tasks-project-loading-actions.tsx:62 hands
+ * it straight to `setGithubProjects`, and `partialFailures` is not, because :64 spells `?? []`.
+ * `error.message` is required on the refusal arm because :59 throws it unguarded.
  */
 export const taskProjectAccessibleListSchema = z.union([
   z.looseObject({
@@ -87,12 +87,12 @@ export const taskProjectAccessibleListSchema = z.union([
 /**
  * A project's views.
  *
- * `views` is required: :91 publishes it and :92 returns it, and :199/:204/:218/:228 run `find` and
+ * `views` is required: :84 publishes it and :85 returns it, and :192/:197/:211/:221 run `find` and
  * `filter` over the same array with no guard. A view needs the `id` the selection is committed
- * under (:233 → githubProjectSettings.lastViewByProject), so a row without one drops.
+ * under (:226 → githubProjectSettings.lastViewByProject), so a row without one drops.
  *
  * `layout` is a plain string, not an enum. Every reader is an equality test against
- * `'TABLE_LAYOUT'` (:204/:212/:218/:228), so a layout arm this build has not heard of already
+ * `'TABLE_LAYOUT'` (:197/:205/:211/:221), so a layout arm this build has not heard of already
  * reads as "not supported" — closing the set would instead drop the row and change the count the
  * "no supported views" copy is decided by. That is remote-wire-compatibility.md rule 4.
  */
@@ -114,10 +114,10 @@ export const taskProjectViewListSchema = z.union([
 /**
  * The board table.
  *
- * `data` and `data.selectedView` are required because :132 reads `data.selectedView.filter` and
- * :134-:143 read four more members off it, all unguarded — a reply without the container was a
+ * `data` and `data.selectedView` are required because :126 reads `data.selectedView.filter` and
+ * :128-:137 read four more members off it, all unguarded — a reply without the container was a
  * property read on undefined. `project.id` is required for the same reason at
- * use-mobile-tasks-project-metadata-actions.tsx:170, which sends it as `projectId` on every field
+ * use-mobile-tasks-project-metadata-actions.tsx:160/:172, which sends it as `projectId` on every field
  * mutation.
  *
  * Nothing inside `selectedView` or `rows` is required. The recorded table
@@ -149,15 +149,15 @@ export const taskProjectViewTableSchema = z.union([
 /**
  * A pasted project URL or `owner/number`, resolved.
  *
- * `owner`, `ownerType` and `number` are required: :286-:291 forward all three into
+ * `owner`, `ownerType` and `number` are required: :267-:272 forward all three into
  * `selectGitHubProject`, which puts them in the key and in the next `github.project.listViews`
  * params. `ownerType` is therefore a CLOSED enum with no fallback — it is echoed into a param, and
  * remote-wire-compatibility.md rule 4 forbids a reply-schema fallback from shaping one. The arm
  * set is genuinely closed host-side: project-view-listing.ts:23 answers `validation_error` for any
  * other value, so degrading an unknown arm would only put a value the host refuses on the wire.
  *
- * `title` is optional because no mobile consumer reads it, and `viewNumber`/`host` because :290
- * and :292 both default them.
+ * `title` is optional because no mobile consumer reads it, and `viewNumber`/`host` because :271
+ * and :273 both default them.
  */
 export const taskProjectRefSchema = z.union([
   z.looseObject({
@@ -175,11 +175,11 @@ export const taskProjectRefSchema = z.union([
 /**
  * A board row's detail pane.
  *
- * `details` is required: use-mobile-tasks-project-detail-loading.tsx:140-:151 reads eleven members
+ * `details` is required: use-mobile-tasks-project-detail-loading.tsx:116-:128 reads eleven members
  * off it, each defaulted but the container itself never guarded. `error.message` is required
- * because :137 throws it.
+ * because :107 throws it.
  *
- * `item.reviewDecision` is nullable AND optional and stays that way. :144 forwards it verbatim
+ * `item.reviewDecision` is nullable AND optional and stays that way. :121 forwards it verbatim
  * into `projectRowDetail`, where `null` ("reviewed, no decision") and absent ("this host does not
  * report one") are different states — collapsing either into the other with a `??` here would be
  * the null-collapse the session domain shipped and had caught two review rounds later.
@@ -213,8 +213,8 @@ export const taskProjectRowDetailSchema = z.union([
 /**
  * The repo label list.
  *
- * Flat, not a union: use-mobile-tasks-project-metadata-loading.tsx:58 spells
- * `result.error?.message ?? 'Failed to load labels'` and :61 spells `result.labels ?? []`, so
+ * Flat, not a union: use-mobile-tasks-project-metadata-loading.tsx:57 spells
+ * `result.error?.message ?? 'Failed to load labels'` and :59 spells `result.labels ?? []`, so
  * every member is already defaulted and an envelope with no `ok` still reads as refused. What the
  * schema adds is the container and the element type — a `labels` that is not an array of strings
  * reached the label picker as rendered garbage.
@@ -225,7 +225,7 @@ export const taskProjectLabelListSchema = z.looseObject({
   error: optionalProjectError
 })
 
-/** The assignable-user list, guarded the same way at :109-:112. Rows pass through because the
+/** The assignable-user list, guarded the same way at :107-:110. Rows pass through because the
  *  picker renders a host record this module does not re-declare; `login` is what it keys on. */
 export const taskProjectAssignableUserListSchema = z.looseObject({
   ok: optionalOk,
@@ -233,8 +233,8 @@ export const taskProjectAssignableUserListSchema = z.looseObject({
   error: optionalProjectError
 })
 
-/** The repo issue types, guarded the same way at :165-:168. `id` is the mutation's own param
- *  (use-mobile-tasks-project-metadata-actions.tsx:245), so a row without one cannot be applied. */
+/** The repo issue types, guarded the same way at :161-:164. `id` is the mutation's own param
+ *  (use-mobile-tasks-project-metadata-actions.tsx:240), so a row without one cannot be applied. */
 export const taskProjectIssueTypeListSchema = z.looseObject({
   ok: optionalOk,
   types: salvagedOptional(
@@ -249,8 +249,8 @@ export const taskProjectIssueTypeListSchema = z.looseObject({
  * writes, the issue-type write, and the field set/clear pair.
  *
  * Every consumer tests `result.ok === false` and then `result.error?.message ?? '…'`
- * (use-mobile-tasks-project-metadata-actions.tsx:64/:174/:251 and
- * use-mobile-tasks-project-workspace-comment-actions.tsx:141), so nothing but the container is
+ * (use-mobile-tasks-project-metadata-actions.tsx:63/:182/:245 and
+ * use-mobile-tasks-project-workspace-comment-actions.tsx:142), so nothing but the container is
  * required. The container is the change: `project.update-metadata`'s `b2` seed answers
  * `result: null`, which main read as `null.ok` and #20563 left recorded as a TypeError. It is now
  * named as an incompatible `github.project.updateIssueBySlug` reply instead.
@@ -263,7 +263,7 @@ export const taskProjectMutationStatusSchema = z.looseObject({
 /**
  * The added comment.
  *
- * `comment` is optional because :229 gates on it before appending. It carries `id` and `body`
+ * `comment` is optional because :225 gates on it before appending. It carries `id` and `body`
  * because the thread renderer keys and prints them, and because the recorded reply
  * (`tk-project-row-comments-issue`) carries both — `id` as a NUMBER there, which is why the
  * schema takes either rather than the string the mobile type leads with.
@@ -286,8 +286,8 @@ export const taskProjectCommentWriteSchema = z.looseObject({
  * The comment edit and delete verdicts.
  *
  * `error` is a string OR an envelope, because both consumers read it that way
- * (use-mobile-tasks-project-workspace-comment-actions.tsx:276 and
- * use-mobile-tasks-project-thread-reply-actions.tsx:64 both branch on `typeof result.error ===
+ * (use-mobile-tasks-project-workspace-comment-actions.tsx:271 and
+ * use-mobile-tasks-project-thread-reply-actions.tsx:62 both branch on `typeof result.error ===
  * 'string'`). Declaring only the envelope would salvage the string away and replace a host message
  * the user has always seen with this app's fallback copy.
  */

@@ -39,8 +39,7 @@ const workItemRow = z.looseObject({
  * `items` is required. use-mobile-tasks-provider-load-actions.tsx:138 maps it with no guard, and
  * the host's own envelope declares the invariant ("`items` always contains whatever succeeded",
  * src/shared/github/work-item-types.ts:96) — so an absent `items` is a reply this app cannot read,
- * not an empty page. The smart picker's own `?? []` at smart-source-search-requests.ts:43 stays
- * where it is; it now only covers the empty array.
+ * not an empty page. smart-source-search-requests.ts:43 maps the same array.
  *
  * `sources`, `errors` and `issueSourceFellBack` pass through untyped beyond their container: the
  * banner extractors read them member by member with their own guards, and `sources.issues` is a
@@ -57,7 +56,7 @@ export const taskGitHubWorkItemListSchema = z.looseObject({
 /**
  * The GitLab work-item list.
  *
- * `items` is required for the same reason: use-mobile-tasks-task-list-loading.tsx:182 maps it
+ * `items` is required for the same reason: use-mobile-tasks-task-list-loading.tsx:183 maps it
  * unguarded. `error` is the provider's in-band failure and stays optional — both consumers test
  * `envelope.error?.type` before reading `.message`, and `tw-smart-search-all-providers` records a
  * reply carrying items AND a `not_found` error at once, which the list renders rather than raises.
@@ -112,7 +111,7 @@ export const taskLinearIssueListSchema = z.union([
  *
  * Null is preserved rather than refused: both `github.workItem` and `gitlab.workItemByPath` answer
  * it for a number that does not resolve, and every consumer already spells `item ? … : null`
- * (smart-source-paste-intent.ts:152/:172/:189). Nothing inside is required, because the recorded
+ * (smart-source-paste-intent.ts:151/:171/:188). Nothing inside is required, because the recorded
  * `tw-paste-lookup-resolved` items are `{ number: 12, title: 'twelve' }` and `{ iid: 7, title:
  * 'seven' }` — the GitLab one does not even carry `number`.
  */
