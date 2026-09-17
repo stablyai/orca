@@ -135,10 +135,18 @@ Run these checks before committing mobile terminal changes:
 ```bash
 cd mobile
 pnpm exec tsc --noEmit
+pnpm run check:tests-typecheck
 pnpm lint
 cd ..
 pnpm typecheck:node
 ```
+
+`tsc --noEmit` reads `tsconfig.json`, which excludes test files so Metro never bundles them.
+`tsconfig.test.json` puts them back, and `pnpm run typecheck:tests` shows their errors in full.
+`check:tests-typecheck` is the gate over it: a ratchet against `tests-typecheck-baseline.txt`, the
+126 test files that do not typecheck yet. It fails when a file that checks today stops checking,
+and when a baseline entry starts checking (prune it with
+`node scripts/check-tests-typecheck-ratchet.mjs --prune`). The list may only shrink.
 
 ## Protocol Version Compatibility
 
