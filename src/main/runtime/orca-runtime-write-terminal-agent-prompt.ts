@@ -66,19 +66,22 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       throw error
     }
 
-    if (!submitJoinsPasteFrame) {
-      if (renderGate) {
-        try {
-          await waitForAgentPromptPromise(renderGate.wait(), options.signal)
-        } finally {
-          renderGate.dispose()
-        }
-      } else {
-        await waitForAgentPromptDelay(
-          getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
-          options.signal
-        )
+    if (submitJoinsPasteFrame) {
+      // Why: the submit already left with the paste frame, so there is nothing to wait for. The
+      // gate is still unsubscribed here: an agent that later needs both paths would otherwise
+      // leave its terminal-data listener registered for the life of the runtime.
+      renderGate?.dispose()
+    } else if (renderGate) {
+      try {
+        await waitForAgentPromptPromise(renderGate.wait(), options.signal)
+      } finally {
+        renderGate.dispose()
       }
+    } else {
+      await waitForAgentPromptDelay(
+        getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
+        options.signal
+      )
     }
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
