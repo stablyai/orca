@@ -20,12 +20,16 @@ import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.
 /** The recorder is exempt from the fence, so a reproduction lays the candidate copy over the pin. */
 const RECORDER_OVERLAY = 'mobile/src/test-support/rpc-recording'
 /**
- * Everything a reproduction takes from the candidate tree rather than from the pin: the corpus it
- * compares against, the manifest that names the pin and derives the scenarios, and the recorder it
- * lays over the pinned sources. A revision that moves none of these cannot move the verdict, which
- * is what lets a pull request skip the run.
+ * Everything whose change can move the reproduction's verdict: the corpus it compares against, the
+ * manifest that names the pin and derives the scenarios, the recorder it lays over the pinned
+ * sources, and this guard, which drives the run. A revision that moves none of these cannot move
+ * the verdict, which is what lets a pull request skip the run.
  */
-const CORPUS_PROVENANCE_PATHS = ['mobile/rpc-foundation', RECORDER_OVERLAY] as const
+const CORPUS_PROVENANCE_PATHS = [
+  'mobile/rpc-foundation',
+  RECORDER_OVERLAY,
+  'mobile/scripts/rpc-recording-pin-guard.mts'
+] as const
 /**
  * The corpus readers that are not drivers. Boundary: a suite belongs here when its verdict is a
  * function of the corpus bytes themselves. The `mutants/` suites read the same directory but assert
@@ -145,6 +149,22 @@ export async function corpusProvenanceChanged(root: string, since: string): Prom
   // `HEAD` is the merge preview whose first parent is the base, so it resolves to `since` itself.
   const branchPoint = await git(root, ['merge-base', since, 'HEAD'])
   const from = branchPoint.code === 0 ? branchPoint.stdout.trim() : since
+  // `git diff` sees tracked paths only, but the overlay copy and the census both read these
+  // directories as they sit on disk, so an untracked golden or manifest is input to the verdict.
+  // Run rather than skip: an unjudged local addition is the case the reproduction exists for.
+  const untracked = await git(root, [
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '--',
+    ...CORPUS_PROVENANCE_PATHS
+  ])
+  if (untracked.code !== 0) {
+    throw new Error(`Could not enumerate untracked corpus files: ${untracked.stderr.trim()}`)
+  }
+  if (untracked.stdout.trim() !== '') {
+    return true
+  }
   const diff = await git(root, ['diff', '--quiet', from, '--', ...CORPUS_PROVENANCE_PATHS])
   if (diff.code !== 0 && diff.code !== 1) {
     throw new Error(`Could not diff the corpus against ${from}: ${diff.stderr.trim()}`)

@@ -42,9 +42,11 @@ async function commitAt(repository: string, path: string, body: string): Promise
   return await git(repository, 'rev-parse', 'HEAD')
 }
 const RECORDER_FILE = 'mobile/src/test-support/rpc-recording/run-recording.ts'
-/** Both provenance paths: the gate refuses to answer when either one names nothing. */
+const GUARD_FILE = 'mobile/scripts/rpc-recording-pin-guard.mts'
+/** Every provenance path: the gate refuses to answer when any one of them names nothing. */
 async function seedProvenance(repository: string): Promise<string> {
   await commitAt(repository, 'mobile/rpc-foundation/pilot-scenarios.json', 'pin')
+  await commitAt(repository, GUARD_FILE, 'guard')
   return await commitAt(repository, RECORDER_FILE, 'recorder')
 }
 const MISSING_SHA = '0123456789abcdef0123456789abcdef01234567'
@@ -188,6 +190,23 @@ describe('what a reproduction reads from the candidate tree', () => {
     const repository = await throwawayRepository()
     const base = await seedProvenance(repository)
     await commitAt(repository, RECORDER_FILE, 'two')
+    expect(await corpusProvenanceChanged(repository, base)).toBe(true)
+  })
+
+  it('runs when the guard itself moved, because it decides the skip and drives the run', async () => {
+    const repository = await throwawayRepository()
+    const base = await seedProvenance(repository)
+    await commitAt(repository, GUARD_FILE, 'changed')
+    expect(await corpusProvenanceChanged(repository, base)).toBe(true)
+  })
+
+  it('runs on an untracked golden, which no diff of tracked paths can see', async () => {
+    const repository = await throwawayRepository()
+    const base = await seedProvenance(repository)
+    const golden = join(repository, 'mobile/rpc-foundation/goldens/local.json')
+    await mkdir(dirname(golden), { recursive: true })
+    await writeFile(golden, '{}\n')
+    // The overlay copy and the census both read the directory as it sits on disk.
     expect(await corpusProvenanceChanged(repository, base)).toBe(true)
   })
 
