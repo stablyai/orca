@@ -11,6 +11,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RpcContext } from '../core'
+import {
+  CAPABLE_CLIENT,
+  methodNamed,
+  rpcContext,
+  runtimeStub,
+  type AgentLaunchRuntimeStub as RuntimeStub
+} from './agent-launch.test-fixture'
 
 /** The real `createStructuredAgentSessionForWorktree` answers ok-or-refusal. The stub used to
  *  declare only the ok arm, which made the refusal-downgrade path unmodellable. */
@@ -33,100 +40,10 @@ vi.mock('./structured-agent-session-create', () => ({
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const { WORKTREE_METHODS } = await import('./worktree')
 
-const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
-}
-
-function runtimeStub(
-  options: {
-    settings?: Record<string, unknown>
-    createSupport?: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
-    setupReceipt?: {
-      startupPolicy: 'start-immediately' | 'wait-for-setup'
-      state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
-      terminalHandle?: string
-    }
-    /** What `createManagedWorktree` reports when the workspace exists but is incomplete. */
-    createWarning?: string
-    /** What `createTerminal` reports when the surface itself came up degraded. */
-    terminalWarning?: string
-  } = {}
-) {
-  const worktreeCreateResults = new Map<string, Promise<unknown>>()
-  const waitForSetupTerminalCompletion = vi.fn(
-    async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({
-      exitCode: 0
-    })
-  )
-  return {
-    getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
-    getStructuredAgentSessionCreateSupport: vi.fn(
-      async () => options.createSupport ?? { supported: true }
-    ),
-    dedupeWorktreeCreate: vi.fn(
-      (repo: string, key: string | undefined, run: () => Promise<unknown>) => {
-        if (!key) {
-          return run()
-        }
-        const compositeKey = `${repo}\0${key}`
-        const existing = worktreeCreateResults.get(compositeKey)
-        if (existing) {
-          return existing
-        }
-        const result = run()
-        worktreeCreateResults.set(compositeKey, result)
-        void result.catch(() => worktreeCreateResults.delete(compositeKey))
-        return result
-      }
-    ),
-    showRepo: vi.fn(async () => ({ id: 'repo-1' })),
-    createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => ({
-      worktree: { id: 'wt-new' },
-      startupTerminal: args.startupAgent ? { handle: 'term_agent_first' } : undefined,
-      ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {}),
-      ...(options.createWarning ? { warning: options.createWarning } : {})
-    })),
-    createTerminal: vi.fn(async () => ({
-      handle: 'term_1',
-      ...(options.terminalWarning ? { warning: options.terminalWarning } : {})
-    })),
-    showTerminal: vi.fn(async (handle: string) => ({ handle, worktreeId: 'wt-7' })),
-    isTerminalRunningAgent: vi.fn(async () => true),
-    showManagedTerminalWorkspace: vi.fn(async (selector: string) => ({
-      id: selector.replace(/^id:/, '')
-    })),
-    ensureStructuredAgentSessionHost: vi.fn(async () => {}),
-    waitForSetupTerminalCompletion
-  }
-}
-
-type RuntimeStub = ReturnType<typeof runtimeStub>
-
-function methodNamed<TMethod extends { name: string }, TName extends string>(
-  methods: readonly TMethod[],
-  name: TName
-): Extract<TMethod, { name: TName }> {
-  const found = methods.find(
-    (entry): entry is Extract<TMethod, { name: TName }> => entry.name === name
-  )
-  if (!found) {
-    throw new Error(`missing method ${name}`)
-  }
-  return found
-}
-
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 
 function parseLaunch(params: unknown) {
   return AGENT_LAUNCH.params.safeParse(params)
-}
-
-// The one call the stub cannot satisfy structurally; every method it does implement is asserted.
-function rpcContext(runtime: RuntimeStub, context: Partial<RpcContext>): RpcContext {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements only the runtime surface these methods reach, so a method it omits throws on call rather than reading a wrong value.
-  return { runtime, ...context } as unknown as RpcContext
 }
 
 function createArgs(runtime: RuntimeStub): Record<string, unknown> {
@@ -135,12 +52,6 @@ function createArgs(runtime: RuntimeStub): Record<string, unknown> {
     throw new Error('createManagedWorktree was not called')
   }
   return args
-}
-
-const CAPABLE_CLIENT: Partial<RpcContext> = {
-  clientKind: 'mobile',
-  pairedDeviceId: 'device-1',
-  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
 }
 
 async function launch(
@@ -189,6 +100,19 @@ describe('who may call agent.launch', () => {
     const runtime = runtimeStub()
     await launch(CREATE_LAUNCH, runtime)
     expect(runtime.createManagedWorktree).toHaveBeenCalled()
+  })
+
+  it('refuses the prior wire contract after the result shape changed', async () => {
+    const runtime = runtimeStub()
+    await expect(
+      launch(CREATE_LAUNCH, runtime, {
+        clientKind: 'mobile',
+        pairedDeviceId: 'device-1',
+        clientCapabilities: ['agent.launch.v1']
+      })
+    ).rejects.toThrow('agent_launch_unsupported')
+    expect(AGENT_LAUNCH_RUNTIME_CAPABILITY).toBe('agent.launch.v2')
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
 
   it('admits an in-process caller, which negotiates nothing', async () => {

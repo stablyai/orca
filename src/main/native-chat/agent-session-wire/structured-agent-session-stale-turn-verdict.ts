@@ -92,6 +92,9 @@ function settledLifecycle(
   if (lifecycle.startedAt !== undefined) {
     settled.startedAt = lifecycle.startedAt
   }
+  if (lifecycle.requestedAt !== undefined) {
+    settled.requestedAt = lifecycle.requestedAt
+  }
   if (verdict.state === 'interrupted') {
     settled.completedAt = verdict.completedAt
   }

@@ -50,7 +50,12 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
   { kind: 'diff', path: 'a.ts', patch: PAYLOAD },
   {
     kind: 'approval',
-    title: 'Run?',
+    title: 'Claude wants to present a plan',
+    displayName: 'Present plan',
+    description: 'Review the proposed implementation steps.',
+    decisionReason: 'Plan mode requires approval.',
+    blockedPath: '/repo/PLAN.md',
+    matchedAskRule: { source: 'project', toolName: 'ExitPlanMode', ruleContent: 'ask' },
     detail: null,
     options: [{ id: 'a', label: 'Yes' }],
     resolution: RESOLUTION

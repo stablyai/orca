@@ -3,9 +3,9 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "ebf1bbc01ad7704fe79eff0969fcc2d4af8ebfa7c2410d2ed9d3ae8c6976b434",
   "platform": "darwin",
@@ -13,22 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "62643ed38326": {
-      "failure": "Workspace is busy",
-      "launched": "unlaunched"
-    },
-    "6e913cd7b306": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Workspace is busy",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "a7dec90e01a8": {
+    "3e6273f4fe55": {
       "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -64,10 +51,24 @@
         }
       }
     },
-    "af416f104f9a": {
+    "62643ed38326": {
+      "failure": "Workspace is busy",
+      "launched": "unlaunched"
+    },
+    "6e913cd7b306": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Workspace is busy",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "88cd0d2b1302": {
       "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     }
   },
   "recording": {
@@ -76,8 +77,8 @@
       {
         "id": "create-refused",
         "observation": {
-          "sender": ["a7dec90e01a8"],
-          "payloads": ["af416f104f9a"],
+          "sender": ["3e6273f4fe55"],
+          "payloads": ["88cd0d2b1302"],
           "settlements": {
             "bare": "6e913cd7b306"
           },

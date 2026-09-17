@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "865a659012dd882fd6073813585e2911a1d6252404fbf5a5e273f062b89fc91d",
   "platform": "darwin",
@@ -13,54 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0a30edace604": {
-      "name": "workspaceSparsePresetsError",
-      "value": "Failed to save sparse preset.",
-      "sent": 2
-    },
-    "14b354ce0ded": {
-      "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
-      "sent": 1
-    },
-    "15dd622cbe08": {
+    "02daf4600c50": {
       "name": "repo.saveSparsePreset#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}",
-      "sent": 2
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
     },
-    "193c0bc3cf2a": {
-      "presets": [],
-      "presetsError": "Failed to save sparse preset.",
-      "saving": false,
-      "ssh": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "1db4236fbf9f": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      },
-      "sent": 1
-    },
-    "3f2baafe9f80": {
-      "name": "workspaceSparseSaving",
-      "value": false,
-      "sent": 2
-    },
-    "594fac1293d4": {
+    "0df082978757": {
       "name": "workspaceSparsePresetsError",
-      "value": "",
-      "sent": 1
+      "ordinal": 8,
+      "value": "Failed to save sparse preset."
     },
-    "a6bf06ff84e0": {
+    "137e0fd71a21": {
       "name": "repo.saveSparsePreset#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -92,21 +57,25 @@
         }
       }
     },
-    "c74f5fe12440": {
-      "name": "workspaceSparseSaving",
-      "value": true,
-      "sent": 1
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "193c0bc3cf2a": {
+      "presets": [],
+      "presetsError": "Failed to save sparse preset.",
+      "saving": false,
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
       }
     },
-    "f22d3216eb8d": {
+    "37c5cc533ab4": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 9,
+      "value": false
+    },
+    "4e16f40bd113": {
       "name": "ssh.getState#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -138,6 +107,39 @@
           "ok": false
         }
       }
+    },
+    "973f31a4e64b": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 5,
+      "value": ""
+    },
+    "a11809a84754": {
+      "name": "ssh.getState#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "a71abdbfefa8": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "ea6e5bf810d9": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 4,
+      "value": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -146,19 +148,19 @@
       {
         "id": "saved-without-preset",
         "observation": {
-          "sender": ["f22d3216eb8d", "a6bf06ff84e0"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "sender": ["4e16f40bd113", "137e0fd71a21"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
           "state": "193c0bc3cf2a",
           "effects": [
-            "1db4236fbf9f",
-            "c74f5fe12440",
-            "594fac1293d4",
-            "0a30edace604",
-            "3f2baafe9f80"
+            "a71abdbfefa8",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "0df082978757",
+            "37c5cc533ab4"
           ]
         }
       }

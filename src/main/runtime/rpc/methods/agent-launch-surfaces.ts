@@ -22,7 +22,12 @@ import type { RpcContext } from '../core'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
-export function agentLaunchSurfaceFactory(context: RpcContext): AgentLaunchSurfaceFactory {
+/** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
+export function agentLaunchSurfaceFactory(
+  context: RpcContext,
+  attachOperationId?: string,
+  operationCallerKey?: string
+): AgentLaunchSurfaceFactory {
   return {
     createStructuredSession: async ({ worktreeId, agent, options }) => {
       const sessionId = randomUUID()
@@ -33,10 +38,13 @@ export function agentLaunchSurfaceFactory(context: RpcContext): AgentLaunchSurfa
           await context.runtime.ensureStructuredAgentSessionHost()
           return requireInstalledHost()
         },
-        caller: structuredCallerFor(context),
+        caller: operationCallerKey
+          ? { callerKey: operationCallerKey }
+          : structuredCallerFor(context),
         envelope: {
           sessionId,
-          clientOperationId: createStructuredAgentSessionOperationId(randomUUID),
+          clientOperationId:
+            attachOperationId ?? createStructuredAgentSessionOperationId(randomUUID),
           expectedRuntimeFence: null,
           // Overwritten by `prepare` with the host's own attach fingerprint. The create-intent
           // conflict check it would otherwise feed guards a replayed client operation id, and this

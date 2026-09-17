@@ -139,20 +139,17 @@ async function uploadMobileClipboardImageTransaction(
       startResponse.error.code === 'method_not_found' &&
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       return clipboardImageSaveAsTempFile.interpret(
         await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
-      ) as string
+      )
     }
     throw new Error(startResponse.error.message)
   }
 
-  // Why the raw result rather than the interpretation: a success carrying no result throws a
-  // TypeError here, and V8 puts the destructured expression's source text in its message — which
-  // the composer then shows. Reading the slot off the accepted payload would rewrite that sentence
-  // for every user who hits a malformed reply, which is the one change this migration must not make.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same cast main made, kept so the thrown message is the same one.
-  const { uploadId } = startResponse.result as { uploadId: string }
+  // The slot comes off the checked reader now, not off a cast of the raw result. A success
+  // carrying no `uploadId` used to throw a V8 destructuring TypeError whose message the composer
+  // showed verbatim; it is an incompatible reply named by its method instead.
+  const { uploadId } = clipboardImageUploadStart.interpret(startResponse)
   try {
     for (
       let offset = 0;
@@ -170,10 +167,9 @@ async function uploadMobileClipboardImageTransaction(
         })
       )
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
     return clipboardImageUploadCommit.interpret(
       await clipboardImageUploadCommit.request(client, { uploadId })
-    ) as string
+    )
   } catch (error) {
     // Why: failed mobile image sends create server-side upload state; abort so
     // the bounded upload slot is released immediately instead of waiting for TTL.

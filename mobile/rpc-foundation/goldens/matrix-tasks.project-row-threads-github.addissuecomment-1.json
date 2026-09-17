@@ -3,9 +3,9 @@
   "family": "tasks.project-row-threads",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "0f220b97bbb64ef8d347973690e6fab4b305eaaa54c9b7883340415c54e61206",
   "platform": "darwin",
@@ -13,92 +13,25 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02839f22d2db": {
-      "name": "projectMutating",
-      "value": false,
-      "sent": 1
+    "04a1bdf42024": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": "Unknown method"
     },
-    "02df4d991595": {
-      "name": "projectRowDetail",
-      "value": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "sent": 1
+    "09c572b1820f": {
+      "name": "github.addPRReviewCommentReply#1",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commentId\":501,\"body\":\"a reply\",\"threadId\":\"thread-1\",\"path\":\"src/index.ts\",\"line\":12}}"
     },
-    "0f3697bbd111": {
-      "name": "projectMutating",
-      "value": true,
-      "sent": 2
+    "112862a75da0": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": "outer refused"
     },
-    "1689d9f91f40": {
-      "name": "github.resolveReviewThread#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.resolveReviewThread"
-        },
-        {
-          "name": "params",
-          "value": {
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "resolve": true,
-            "threadId": "thread-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": true
-        }
-      }
+    "15f1ae8e9e18": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": "transport failure"
     },
     "192db8712646": {
       "detail": {
@@ -163,18 +96,58 @@
       "error": "",
       "mutating": false
     },
-    "33c9edfc8631": {
+    "19346a719903": {
       "name": "projectRowDetailError",
-      "value": "inner refused",
-      "sent": 4
+      "ordinal": 2,
+      "value": ""
     },
-    "347fa6adc9f3": {
+    "1a913f7b5c17": {
       "name": "projectRowDetailError",
-      "value": "",
-      "sent": 3
+      "ordinal": 24,
+      "value": "Cannot read properties of undefined (reading 'ok')"
     },
-    "3616b3bb9bd2": {
+    "1eb94321f034": {
+      "name": "github.resolveReviewThread#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.resolveReviewThread"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "resolve": true,
+            "threadId": "thread-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": true
+        }
+      }
+    },
+    "3b135726b0dd": {
       "name": "github.addIssueComment#1",
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -206,24 +179,21 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
           "id": "frame-4",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
     },
-    "3d423b72401d": {
-      "name": "projectRowDetailError",
-      "value": "Unknown method",
-      "sent": 4
-    },
-    "3eed5086ca8e": {
-      "name": "projectRowDetailError",
-      "value": "Cannot read properties of undefined (reading 'ok')",
-      "sent": 4
+    "403b13184ce0": {
+      "name": "itemReplyDrafts",
+      "ordinal": 17,
+      "value": {
+        "comment-2": "a reply"
+      }
     },
     "43de89e6550f": {
       "detail": {
@@ -273,49 +243,96 @@
       "error": "[object Object]",
       "mutating": false
     },
-    "4a9746552893": {
-      "name": "projectRowDetailError",
-      "value": "transport failure",
-      "sent": 4
-    },
-    "4c677c52a54e": {
-      "name": "projectRowDetail",
-      "value": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
+    "49a4bcc6a5a5": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
         },
-        "reviewRequests": []
-      },
-      "sent": 2
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "49c74204b8d3": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": "Connection closed"
+    },
+    "4ea4497066fb": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true
+        }
+      }
+    },
+    "510db4658728": {
+      "name": "projectRowDetailError",
+      "ordinal": 8,
+      "value": ""
     },
     "550f58aa00a7": {
       "detail": {
@@ -365,18 +382,63 @@
       "error": "",
       "mutating": true
     },
-    "558fe933adba": {
-      "name": "projectRowDetailError",
-      "value": "Connection closed",
-      "sent": 4
+    "5ba91867e6b3": {
+      "name": "projectRowDetail",
+      "ordinal": 11,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
     },
-    "55b83fbfcc09": {
+    "5c30b4794b57": {
       "name": "projectRowDetailError",
-      "value": "[object Object]",
-      "sent": 4
+      "ordinal": 14,
+      "value": ""
     },
-    "5e4d75ca8adc": {
+    "5d32aa29303c": {
+      "name": "projectMutating",
+      "ordinal": 1,
+      "value": true
+    },
+    "647143f4a02b": {
+      "name": "github.project.deleteIssueCommentBySlug#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501}}"
+    },
+    "6474e552d22f": {
       "name": "github.addIssueComment#1",
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -408,19 +470,13 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-4",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
         }
       }
-    },
-    "6332aa2e35ef": {
-      "name": "projectRowDetailError",
-      "value": "Cannot read properties of null (reading 'ok')",
-      "sent": 4
     },
     "680d3e2ff566": {
       "detail": {
@@ -470,47 +526,6 @@
       "error": "Unknown method",
       "mutating": false
     },
-    "6d3be646bec9": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
     "6eb252a289a0": {
       "detail": {
         "assignees": ["octocat"],
@@ -559,363 +574,19 @@
       "error": "Cannot read properties of undefined (reading 'ok')",
       "mutating": false
     },
-    "6f4f9198e5ff": {
+    "72332e237f1f": {
       "name": "projectMutating",
-      "value": false,
-      "sent": 2
+      "ordinal": 6,
+      "value": false
     },
-    "73c3051352c2": {
+    "7440f0f1bab9": {
       "name": "projectMutating",
-      "value": false,
-      "sent": 3
+      "ordinal": 19,
+      "value": false
     },
-    "761c230291b6": {
-      "name": "projectMutating",
-      "value": true,
-      "sent": 3
-    },
-    "78c52015aa43": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a reply",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 903,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "inner refused",
-      "mutating": false
-    },
-    "7b2465eedefe": {
-      "name": "projectMutating",
-      "value": true,
-      "sent": 0
-    },
-    "80d38ca65a5d": {
-      "name": "projectRowDetailError",
-      "value": "",
-      "sent": 0
-    },
-    "85f150b2df81": {
-      "name": "projectRowDetailError",
-      "value": "",
-      "sent": 1
-    },
-    "874009380ba6": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a reply",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 903,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "You",
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 902
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "",
-      "mutating": false
-    },
-    "8a1d11133692": {
-      "name": "projectRowDetailError",
-      "value": "",
-      "sent": 2
-    },
-    "8bbb5efeadaf": {
-      "name": "itemReplyDrafts",
-      "value": {},
-      "sent": 4
-    },
-    "8dc2f0b815b9": {
-      "name": "github.addPRReviewCommentReply#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commentId\":501,\"body\":\"a reply\",\"threadId\":\"thread-1\",\"path\":\"src/index.ts\",\"line\":12}}",
-      "sent": 3
-    },
-    "976f63e51ba2": {
-      "name": "projectRowDetailError",
-      "value": "",
-      "sent": 4
-    },
-    "979e7cec91d8": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true
-        }
-      }
-    },
-    "a7e90307fc74": {
+    "7864f42823b1": {
       "name": "projectRowDetail",
-      "value": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a reply",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 903,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "sent": 3
-    },
-    "b6b9452c2348": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "",
-      "mutating": false
-    },
-    "b94df8ff01a9": {
-      "name": "github.project.deleteIssueCommentBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.deleteIssueCommentBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "commentId": 501,
-            "host": "github.enterprise.test",
-            "owner": "owner",
-            "repo": "repo"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "bdfb0177e2c1": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-4",
-          "ok": false
-        }
-      }
-    },
-    "c283c93a5619": {
-      "name": "projectRowDetail",
+      "ordinal": 25,
       "value": {
         "assignees": ["octocat"],
         "baseSha": "base-sha",
@@ -974,127 +645,9 @@
           "$rpc": "null"
         },
         "reviewRequests": []
-      },
-      "sent": 4
-    },
-    "c3f765625de5": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
       }
     },
-    "cc8e9797ff26": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "cd0e088a1f9b": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "cdb73ed7cd45": {
+    "78c52015aa43": {
       "detail": {
         "assignees": ["octocat"],
         "baseSha": "base-sha",
@@ -1139,74 +692,12 @@
         },
         "reviewRequests": []
       },
-      "error": "transport failure",
+      "error": "inner refused",
       "mutating": false
     },
-    "cf1e9d4fc0c3": {
-      "name": "itemReplyDrafts",
-      "value": {
-        "comment-2": "a reply"
-      },
-      "sent": 3
-    },
-    "d018a759f2a7": {
-      "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 2
-    },
-    "d1bb762720d5": {
-      "name": "projectMutating",
-      "value": true,
-      "sent": 1
-    },
-    "d1d6434fd325": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "d49ee0febc71": {
-      "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"body\":\"@octocat a reply\",\"type\":\"pr\"}}",
-      "sent": 4
-    },
-    "d515951be1e3": {
+    "7f87c5800a4e": {
       "name": "projectRowDetail",
+      "ordinal": 18,
       "value": {
         "assignees": ["octocat"],
         "baseSha": "base-sha",
@@ -1227,12 +718,6 @@
             "line": 12,
             "path": "src/index.ts",
             "threadId": "thread-1"
-          },
-          {
-            "author": "You",
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 902
           }
         ],
         "files": [
@@ -1256,167 +741,16 @@
           "$rpc": "null"
         },
         "reviewRequests": []
-      },
-      "sent": 4
-    },
-    "d846e6d21f1e": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a reply",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 903,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "outer refused",
-      "mutating": false
-    },
-    "df5e09a21420": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "comment": {
-              "author": "You",
-              "body": "a comment",
-              "createdAt": "2020-01-01T00:00:00.000Z",
-              "id": 902
-            },
-            "ok": true
-          }
-        }
       }
     },
-    "e0a1028e48ba": {
+    "804093660fbd": {
       "name": "projectRowDetailError",
-      "value": "outer refused",
-      "sent": 4
+      "ordinal": 24,
+      "value": "[object Object]"
     },
-    "e76d5520ec18": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a reply",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 903,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "",
-      "mutating": false
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f27ce2e53696": {
+    "85a7bb52eb28": {
       "name": "github.addIssueComment#1",
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -1451,14 +785,17 @@
           "id": "frame-4",
           "ok": true,
           "result": {
-            "error": "inner refused",
+            "error": {
+              "message": "inner refused"
+            },
             "ok": false
           }
         }
       }
     },
-    "f674d050fe62": {
+    "86f1d86b2ef1": {
       "name": "github.addPRReviewCommentReply#1",
+      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -1510,15 +847,737 @@
         }
       }
     },
-    "f87580087aa8": {
-      "name": "github.project.deleteIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501}}",
-      "sent": 1
+    "874009380ba6": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a reply",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 903,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 902
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "mutating": false
     },
-    "fa2e7b92e1d5": {
+    "89e9aec7c9f2": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "8b906dcc9bb6": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "8baca63d6578": {
+      "name": "github.resolveReviewThread#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"threadId\":\"thread-1\",\"resolve\":true}}"
+    },
+    "99542210ddd6": {
+      "name": "projectRowDetail",
+      "ordinal": 5,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
+    },
+    "a360294cb193": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": "inner refused"
+    },
+    "a8ff11b6adce": {
       "name": "projectMutating",
-      "value": false,
-      "sent": 4
+      "ordinal": 13,
+      "value": true
+    },
+    "abdc42e00721": {
+      "name": "projectMutating",
+      "ordinal": 26,
+      "value": false
+    },
+    "b145ac6005a6": {
+      "name": "itemReplyDrafts",
+      "ordinal": 24,
+      "value": {}
+    },
+    "b3ac1e3114bf": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": ""
+    },
+    "b6b9452c2348": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "mutating": false
+    },
+    "bb6b127da045": {
+      "name": "github.project.deleteIssueCommentBySlug#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.deleteIssueCommentBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commentId": 501,
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "c1bd400fb401": {
+      "name": "projectRowDetail",
+      "ordinal": 25,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a reply",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 903,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 902
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
+    },
+    "c2f0cb5f4fe2": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "comment": {
+              "author": "You",
+              "body": "a comment",
+              "createdAt": "2020-01-01T00:00:00.000Z",
+              "id": 902
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "cc34591bceaa": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cca2fbdc89cd": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 23,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"body\":\"@octocat a reply\",\"type\":\"pr\"}}"
+    },
+    "cdb73ed7cd45": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a reply",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 903,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "transport failure",
+      "mutating": false
+    },
+    "ce1f6d47985f": {
+      "name": "projectMutating",
+      "ordinal": 12,
+      "value": false
+    },
+    "d8315c6f526f": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "d846e6d21f1e": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a reply",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 903,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "outer refused",
+      "mutating": false
+    },
+    "dabbf6f436c3": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "dbfde5054235": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": "Cannot read properties of null (reading 'ok')"
+    },
+    "e76d5520ec18": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a reply",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 903,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "mutating": false
+    },
+    "eb4a625e2236": {
+      "name": "projectMutating",
+      "ordinal": 25,
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ecb02d3e0977": {
+      "name": "projectMutating",
+      "ordinal": 20,
+      "value": true
+    },
+    "f39ed9ab521e": {
+      "name": "projectMutating",
+      "ordinal": 7,
+      "value": true
+    },
+    "f4c1462519fa": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "@octocat a reply",
+            "number": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
     },
     "fa87419c6c2e": {
       "detail": {
@@ -1568,49 +1627,10 @@
       "error": "Cannot read properties of null (reading 'ok')",
       "mutating": false
     },
-    "fbe223460865": {
-      "name": "github.addIssueComment#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.addIssueComment"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "@octocat a reply",
-            "number": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
+    "fb41e38e331b": {
+      "name": "projectRowDetailError",
+      "ordinal": 21,
+      "value": ""
     }
   },
   "recording": {
@@ -1619,21 +1639,21 @@
       {
         "id": "tk-project-row-threads.prelude:delete-comment-settled",
         "observation": {
-          "sender": ["b94df8ff01a9"],
-          "payloads": ["f87580087aa8"],
+          "sender": ["bb6b127da045"],
+          "payloads": ["647143f4a02b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a"
           },
           "state": "b6b9452c2348",
-          "effects": ["7b2465eedefe", "80d38ca65a5d", "02df4d991595", "02839f22d2db"]
+          "effects": ["5d32aa29303c", "19346a719903", "99542210ddd6", "72332e237f1f"]
         }
       },
       {
         "id": "tk-project-row-threads.prelude:thread-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40"],
-          "payloads": ["f87580087aa8", "d018a759f2a7"],
+          "sender": ["bb6b127da045", "1eb94321f034"],
+          "payloads": ["647143f4a02b", "8baca63d6578"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1641,22 +1661,22 @@
           },
           "state": "b6b9452c2348",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.prelude:review-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1665,27 +1685,27 @@
           },
           "state": "e76d5520ec18",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.prelude:cleanup",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "cd0e088a1f9b"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "cc34591bceaa"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1695,31 +1715,31 @@
           },
           "state": "550f58aa00a7",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "558fe933adba",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "49c74204b8d3",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.normal:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "c2f0cb5f4fe2"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1729,32 +1749,32 @@
           },
           "state": "874009380ba6",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "8bbb5efeadaf",
-            "d515951be1e3",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "b145ac6005a6",
+            "c1bd400fb401",
+            "abdc42e00721"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.result-absent:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "979e7cec91d8"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "4ea4497066fb"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1764,31 +1784,31 @@
           },
           "state": "6eb252a289a0",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "3eed5086ca8e",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "1a913f7b5c17",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.result-null:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "6d3be646bec9"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "49a4bcc6a5a5"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1798,31 +1818,31 @@
           },
           "state": "fa87419c6c2e",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "6332aa2e35ef",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "dbfde5054235",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.inner-ok-missing:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "d1d6434fd325"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "6474e552d22f"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1832,32 +1852,32 @@
           },
           "state": "192db8712646",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "8bbb5efeadaf",
-            "c283c93a5619",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "b145ac6005a6",
+            "7864f42823b1",
+            "abdc42e00721"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.inner-false-string-error:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "f27ce2e53696"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "3b135726b0dd"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1867,31 +1887,31 @@
           },
           "state": "78c52015aa43",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "33c9edfc8631",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "a360294cb193",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.inner-false-object-error:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "fbe223460865"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "85a7bb52eb28"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1901,31 +1921,31 @@
           },
           "state": "43de89e6550f",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "55b83fbfcc09",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "804093660fbd",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.outer-refused:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "bdfb0177e2c1"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "f4c1462519fa"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1935,31 +1955,31 @@
           },
           "state": "d846e6d21f1e",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "e0a1028e48ba",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "112862a75da0",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.outer-refused-no-message:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "3616b3bb9bd2"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "d8315c6f526f"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1969,31 +1989,31 @@
           },
           "state": "e76d5520ec18",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "976f63e51ba2",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "b3ac1e3114bf",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.method-not-found:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "5e4d75ca8adc"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "89e9aec7c9f2"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2003,31 +2023,31 @@
           },
           "state": "680d3e2ff566",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "3d423b72401d",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "04a1bdf42024",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.transport-rejection:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "cc8e9797ff26"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "8b906dcc9bb6"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2037,31 +2057,31 @@
           },
           "state": "cdb73ed7cd45",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "4a9746552893",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "15f1ae8e9e18",
+            "eb4a625e2236"
           ]
         }
       },
       {
         "id": "tk-project-row-threads.transport-rejection-no-message:issue-reply-settled",
         "observation": {
-          "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "c3f765625de5"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "sender": ["bb6b127da045", "1eb94321f034", "86f1d86b2ef1", "dabbf6f436c3"],
+          "payloads": ["647143f4a02b", "8baca63d6578", "09c572b1820f", "cca2fbdc89cd"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2071,23 +2091,23 @@
           },
           "state": "e76d5520ec18",
           "effects": [
-            "7b2465eedefe",
-            "80d38ca65a5d",
-            "02df4d991595",
-            "02839f22d2db",
-            "d1bb762720d5",
-            "85f150b2df81",
-            "4c677c52a54e",
-            "6f4f9198e5ff",
-            "0f3697bbd111",
-            "8a1d11133692",
-            "cf1e9d4fc0c3",
-            "a7e90307fc74",
-            "73c3051352c2",
-            "761c230291b6",
-            "347fa6adc9f3",
-            "976f63e51ba2",
-            "fa2e7b92e1d5"
+            "5d32aa29303c",
+            "19346a719903",
+            "99542210ddd6",
+            "72332e237f1f",
+            "f39ed9ab521e",
+            "510db4658728",
+            "5ba91867e6b3",
+            "ce1f6d47985f",
+            "a8ff11b6adce",
+            "5c30b4794b57",
+            "403b13184ce0",
+            "7f87c5800a4e",
+            "7440f0f1bab9",
+            "ecb02d3e0977",
+            "fb41e38e331b",
+            "b3ac1e3114bf",
+            "eb4a625e2236"
           ]
         }
       }

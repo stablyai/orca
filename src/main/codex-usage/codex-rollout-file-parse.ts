@@ -1,10 +1,8 @@
 import { basename } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
-import {
-  attributeCodexUsageEvent,
-  type CodexUsageWorktreeRef
-} from './codex-usage-event-attribution'
+import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
+import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
 import { codexUsageAggregation } from './codex-usage-aggregation'
 import {
@@ -85,7 +83,7 @@ function createParseContext(
 
 export async function parseCodexUsageFile(
   filePath: string,
-  worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
+  resolveWorktree: UsageWorktreeResolver,
   options: CodexRolloutParseOptions = {}
 ): Promise<CodexUsagePersistedFile> {
   // Why: the caller verified this resume point while walking the directory, and
@@ -98,7 +96,7 @@ export async function parseCodexUsageFile(
     options.resume &&
     (await resolveCodexRolloutResume(filePath, options.resume.previous)) === null
   ) {
-    return parseCodexUsageFile(filePath, worktrees, { ...options, resume: undefined })
+    return parseCodexUsageFile(filePath, resolveWorktree, { ...options, resume: undefined })
   }
 
   const processedFile = await getProcessedFileInfo(filePath)
@@ -140,7 +138,7 @@ export async function parseCodexUsageFile(
       continue
     }
     ownedEventKeys.add(parsed.eventKey)
-    const attributed = await attributeCodexUsageEvent(parsed, worktrees)
+    const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
     if (attributed) {
       events.push(attributed)
     }
@@ -169,7 +167,7 @@ export async function parseCodexUsageFile(
   // pre-truncation total forever. An unterminated tail proves the file still
   // runs past the resume offset, so it cannot be this case.
   if (options.resume && !resumeStateSuppressed && parseResumeState === null) {
-    return parseCodexUsageFile(filePath, worktrees, { ...options, resume: undefined })
+    return parseCodexUsageFile(filePath, resolveWorktree, { ...options, resume: undefined })
   }
 
   const appended = codexUsageAggregation.aggregate(events)

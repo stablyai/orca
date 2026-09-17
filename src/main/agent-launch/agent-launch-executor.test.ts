@@ -232,13 +232,14 @@ describe('an agent with no structured session', () => {
 })
 
 describe('the prompt receipt', () => {
-  it('reports a requested prompt as undelivered rather than omitting it', async () => {
+  it('reports a requested prompt as not delivered rather than omitting it', async () => {
     const h = harness({})
     const result = await h.run({
       ...CREATE_INTENT,
       prompt: { text: 'do the thing', delivery: 'draft' }
     })
-    expect(result.prompt).toEqual({ delivery: 'draft', delivered: false })
+    // The executor delivers nothing, so the only honest outcome is the one that under-claims.
+    expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
   })
 
   it('omits the receipt when no prompt was requested', async () => {

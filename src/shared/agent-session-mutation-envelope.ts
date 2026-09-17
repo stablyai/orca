@@ -29,12 +29,17 @@ export function computeAgentSessionPayloadFingerprint(input: {
   sessionId: string
   fields: Record<string, unknown>
 }): string {
-  const canonical = canonicalize({
+  return canonicalAgentSessionDigest({
     method: input.method,
     sessionId: input.sessionId,
     fields: input.fields
   })
-  return createHash('sha256').update(canonical).digest('hex')
+}
+
+/** The same digest for an operation that has no session to name — a launch decides which surface it
+ *  gets, so it has no session id until after it runs. */
+export function canonicalAgentSessionDigest(value: Record<string, unknown>): string {
+  return createHash('sha256').update(canonicalize(value)).digest('hex')
 }
 
 function canonicalize(value: unknown): string {

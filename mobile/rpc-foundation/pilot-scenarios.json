@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "scenarios": [
     {
       "id": "b1",
@@ -8382,6 +8382,201 @@
         },
         {
           "checkpoint": "no-pr"
+        }
+      ]
+    },
+    {
+      "id": "pr-sidebar-load",
+      "operation": "session.pr-sidebar",
+      "version": 1,
+      "family": "session.pr-sidebar",
+      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://x/12",
+              "updatedAt": "2026-01-01",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": 12
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://x/12",
+                "headSha": "head-sha-1",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        }
+      ]
+    },
+    {
+      "id": "pr-sidebar-checks-refused",
+      "operation": "session.pr-sidebar",
+      "version": 1,
+      "family": "session.pr-sidebar",
+      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://x/12",
+              "updatedAt": "2026-01-01",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": 12
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://x/12",
+                "headSha": "head-sha-1",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "checks": []
+            }
+          }
+        },
+        {
+          "checkpoint": "checks-refused"
         }
       ]
     },
@@ -20752,6 +20947,986 @@
       ]
     },
     {
+      "id": "session-startup-both-activation-sites",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "created": "1"
+          }
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "advance": 1800
+        },
+        {
+          "checkpoint": "reactivating"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sleepingAgentWake": "unsupported-headless"
+            }
+          }
+        },
+        {
+          "checkpoint": "reactivated"
+        },
+        {
+          "advance": 750
+        },
+        {
+          "checkpoint": "refreshed"
+        },
+        {
+          "action": "consume-created-route",
+          "id": "consume-route"
+        },
+        {
+          "checkpoint": "activating"
+        },
+        {
+          "complete": "worktree.activate#2",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sleepingAgentWake": "unsupported-headless"
+            }
+          }
+        },
+        {
+          "checkpoint": "activated"
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "reloaded"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-floating-route-skips-activation",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "created": "1",
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "advance": 2600
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-keeps-terminals-visible-on-reconnect",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "initialized": ["terminal-0"]
+          }
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "refreshed"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        },
+        {
+          "checkpoint": "unmounted"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-refused-tab-load-still-loads-terminals",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "tabLoadRejects": true
+          }
+        },
+        {
+          "checkpoint": "tab-load-refused"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-with-prompt",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "initialPrompt": "review these notes",
+            "successToast": "Notes sent",
+            "errorToast": "Couldn't run Notes"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "review these notes",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "prompt-sent"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-replaces-active",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-refused",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "errorToast": "Couldn't run Notes"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "pty_exhausted",
+              "message": "No pty slots left on the host"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-without-handle",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": null,
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-without-active-tab",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": {
+              "$undefined": true
+            },
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-runs-a-quick-command",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "startupCommand": "pnpm test",
+            "startupCommandDelivery": "shell-ready",
+            "errorToast": "Couldn't run Tests"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "command": "pnpm test",
+            "startupCommandDelivery": "shell-ready",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-launches-an-agent-quick-command",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "claude",
+            "agentPrompt": "summarize the diff",
+            "errorToast": "Couldn't run Review"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "agentPrompt": "summarize the diff",
+            "agent": "claude",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-ignores-a-second-create-in-flight",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "action": "create",
+          "id": "create-again"
+        },
+        {
+          "bind": "first-create",
+          "request": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          }
+        },
+        {
+          "checkpoint": "second-create-ignored"
+        },
+        {
+          "complete": "first-create",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-take-floor",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-to-desktop",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "desktop",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "desktop"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-drops-second-toggle",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "phone"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "first",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "second",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "one-in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "desktop",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "desktop"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "action": "toggle",
+          "id": "third",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "retoggled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-without-viewport",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-without-device-token",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
       "id": "notifications-desktop-stream-closed",
       "operation": "notifications.desktop-stream",
       "version": 1,
@@ -20864,6 +22039,477 @@
         },
         {
           "checkpoint": "not-replayed"
+        }
+      ]
+    },
+    {
+      "id": "review-file-diff-shapes",
+      "operation": "session.diff-review-load",
+      "version": 1,
+      "family": "session.review-file-diff",
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "diff",
+          "id": "binary",
+          "args": {
+            "scope": "unstaged"
+          }
+        },
+        {
+          "complete": "git.diff#1",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "filePath": "src/app.ts",
+            "staged": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "binary"
+            }
+          }
+        },
+        {
+          "checkpoint": "binary"
+        },
+        {
+          "action": "diff",
+          "id": "too-large",
+          "args": {
+            "scope": "staged"
+          }
+        },
+        {
+          "complete": "git.diff#2",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "filePath": "src/app.ts",
+            "staged": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "too-large",
+              "byteLength": 2048
+            }
+          }
+        },
+        {
+          "checkpoint": "too-large"
+        },
+        {
+          "action": "diff",
+          "id": "invalid",
+          "args": {
+            "scope": "unstaged"
+          }
+        },
+        {
+          "complete": "git.diff#3",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "filePath": "src/app.ts",
+            "staged": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "unknown"
+            }
+          }
+        },
+        {
+          "checkpoint": "invalid"
+        }
+      ]
+    },
+    {
+      "id": "review-branch-diff-shapes",
+      "operation": "session.diff-review-load",
+      "version": 1,
+      "family": "session.review-branch-diff",
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "diff",
+          "id": "branch",
+          "args": {
+            "scope": "branch"
+          }
+        },
+        {
+          "complete": "git.branchDiff#1",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "filePath": "src/app.ts",
+            "compare": {
+              "baseRef": "origin/main",
+              "baseOid": "base-oid",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "binary"
+            }
+          }
+        },
+        {
+          "checkpoint": "branch"
+        },
+        {
+          "action": "diff",
+          "id": "no-compare",
+          "args": {
+            "scope": "branch",
+            "compare": false
+          }
+        },
+        {
+          "checkpoint": "no-compare"
+        }
+      ]
+    },
+    {
+      "id": "review-git-mutations-run",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.review-git-mutations",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "stage",
+          "id": "stage"
+        },
+        {
+          "complete": "git.stage#1",
+          "params": {
+            "filePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "staged": true
+            }
+          }
+        },
+        {
+          "checkpoint": "staged"
+        },
+        {
+          "action": "discard",
+          "id": "discard"
+        },
+        {
+          "complete": "git.discard#1",
+          "params": {
+            "filePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "discarded": true
+            }
+          }
+        },
+        {
+          "checkpoint": "discarded"
+        },
+        {
+          "action": "stage-reviewed",
+          "id": "stage-reviewed"
+        },
+        {
+          "complete": "git.stage#2",
+          "params": {
+            "filePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "staged": true
+            }
+          }
+        },
+        {
+          "checkpoint": "swept"
+        }
+      ]
+    },
+    {
+      "id": "review-send-sheet-lists-terminals",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.review-send-sheet",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "open-send-sheet",
+          "id": "open"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tabs": [
+                {
+                  "id": "tab-1",
+                  "type": "terminal",
+                  "title": "codex",
+                  "terminal": "terminal-1"
+                },
+                {
+                  "id": "tab-2",
+                  "type": "markdown",
+                  "title": "notes.md"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "listed"
+        }
+      ]
+    },
+    {
+      "id": "session-browser-tab-created",
+      "operation": "session.content-create",
+      "version": 1,
+      "family": "session.browser-tab-create",
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "browser",
+          "id": "browser"
+        },
+        {
+          "complete": "browser.tabCreate#1",
+          "params": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "browserPageId": "page-1"
+            }
+          }
+        },
+        {
+          "advance": 1200
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "structured-agent-session-created",
+      "operation": "agentSession.structured-launch",
+      "version": 1,
+      "family": "agentSession.structured-create",
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "agentSession.createSupport#1",
+          "params": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "supported": true
+            }
+          }
+        },
+        {
+          "complete": "agentSession.create#1",
+          "params": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": null,
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "value": {
+                "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-renamed",
+      "operation": "session.tab-close",
+      "version": 1,
+      "family": "session.tab-rename",
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "rename",
+          "id": "rename",
+          "args": {
+            "title": "build"
+          }
+        },
+        {
+          "complete": "terminal.rename#1",
+          "params": {
+            "terminal": "terminal-1",
+            "title": "build"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "renamed": true
+            }
+          }
+        },
+        {
+          "advance": 300
+        },
+        {
+          "checkpoint": "renamed"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-closed",
+      "operation": "session.tab-close",
+      "version": 1,
+      "family": "session.tab-close-session",
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "close-tab",
+          "id": "close-tab"
+        },
+        {
+          "complete": "session.tabs.close#1",
+          "params": {
+            "reason": "user",
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "closed": true
+            }
+          }
+        },
+        {
+          "checkpoint": "closed"
+        }
+      ]
+    },
+    {
+      "id": "new-tab-local-agents",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings.new-tab-local-agents",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": null
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": []
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.detectAgents#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        },
+        {
+          "checkpoint": "settled"
         }
       ]
     }

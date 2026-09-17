@@ -3,18 +3,35 @@
   "family": "files.explorer-screen",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "160421b989563424531fc893a115b95b399d1524ebaf1c91caa8b2862b52eb07",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "7a42a348f4407b94cf75ac77a4b6b783b7d28103b1ae1d111d2708dab0dd4a0c",
   "scenarioSha256": "0b87a230cf1c4219e415c840a088502c8bda7cd2fb525bde1a83a5903d6fd96b",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "195987bc4ef2": {
+    "1fac8f3b8f44": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "FlatList": 1,
+        "Pressable": 1,
+        "SafeAreaView": 1,
+        "Text": 2,
+        "View": 3
+      },
+      "labels": ["Back to session"],
+      "rows": ["dir:src", "file:README.md"],
+      "text": ["Files", "orca-files"]
+    },
+    "59851eb4cbf7": {
       "name": "files.readDir#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -39,24 +56,38 @@
         "startedAt": 0
       }
     },
-    "1fac8f3b8f44": {
+    "858aa6e98236": {
+      "name": "files.readDir#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
+    },
+    "e91880eefe86": {
       "crash": {
         "$rpc": "null"
       },
       "elements": {
+        "ActivityIndicator": 1,
         "ChevronLeft": 1,
-        "FlatList": 1,
         "Pressable": 1,
         "SafeAreaView": 1,
         "Text": 2,
-        "View": 3
+        "View": 4
       },
       "labels": ["Back to session"],
-      "rows": ["dir:src", "file:README.md"],
+      "rows": [],
       "text": ["Files", "orca-files"]
     },
-    "23a7ef6123a7": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fbc738d75fe6": {
       "name": "files.readDir#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -95,35 +126,6 @@
           ]
         }
       }
-    },
-    "87ae27687a19": {
-      "name": "files.readDir#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}",
-      "sent": 1
-    },
-    "e91880eefe86": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "ChevronLeft": 1,
-        "Pressable": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 4
-      },
-      "labels": ["Back to session"],
-      "rows": [],
-      "text": ["Files", "orca-files"]
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -132,8 +134,8 @@
       {
         "id": "loading",
         "observation": {
-          "sender": ["195987bc4ef2"],
-          "payloads": ["87ae27687a19"],
+          "sender": ["59851eb4cbf7"],
+          "payloads": ["858aa6e98236"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -144,8 +146,8 @@
       {
         "id": "listed",
         "observation": {
-          "sender": ["23a7ef6123a7"],
-          "payloads": ["87ae27687a19"],
+          "sender": ["fbc738d75fe6"],
+          "payloads": ["858aa6e98236"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

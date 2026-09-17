@@ -4,7 +4,9 @@ import { setAgentSessionRecordConversationName } from './agent-session-record-co
 /** Durable single-writer session records and their operation ledger. */
 
 import {
+  claimAgentSessionOperation,
   settleAgentSessionOperation,
+  type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
   type AgentSessionOperationOutcome,
   type AgentSessionOperationRow
@@ -65,14 +67,16 @@ import {
 } from './agent-session-record-store-file'
 import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
 import {
+  isAgentSessionClaimKeyVerifiable,
+  retireAgentSessionClaimKey
+} from './agent-session-claim-key-retention'
+import {
   AgentSessionStoreTransactionQueue,
   markAgentSessionStoreLeasesUnreconciled
 } from './agent-session-store-transaction-queue'
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
-/** Retired claim keys stay verifiable this long so a rotation cannot strand a running agent. */
-export const AGENT_SESSION_CLAIM_KEY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export class AgentSessionRecordStore {
   private constructor(private readonly transactions: AgentSessionStoreTransactionQueue) {}
@@ -159,10 +163,8 @@ export class AgentSessionRecordStore {
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
 
-  isClaimKeyVerifiable(keyId: string, now: number): boolean {
-    const retired = this.state.retiredClaimKeys.find((entry) => entry.keyId === keyId)
-    return !retired || now - retired.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
-  }
+  isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
+    isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
   /** Spawn tokens observed on the host with no matching lease. Stop them; never adopt them. */
   listOrphanSpawnTokens(observedTokens: readonly string[]): string[] {
@@ -273,29 +275,38 @@ export class AgentSessionRecordStore {
   }
 
   /** Admits one non-reservation mutation through the durable ledger. */
-  async admitOperation(
-    args: AgentSessionOperationAdmission
-  ): Promise<AgentSessionOperationDecision> {
-    return this.transact(() => {
+  admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
+    this.transact(() => {
       const admitted = admitAgentSessionOperationRow(this.state.operations, args)
       this.state.operations = admitted.rows
       return admitted.decision
     })
-  }
 
   /** Send ids stay global after a caller reconnects under a different identity. */
-  async admitGlobalOperation(
+  admitGlobalOperation = (
     args: AgentSessionOperationAdmission
-  ): Promise<AgentSessionOperationDecision> {
-    return this.transact(() => {
+  ): Promise<AgentSessionOperationDecision> =>
+    this.transact(() => {
       const admitted = admitAgentSessionGlobalOperationRow(this.state.operations, args)
       this.state.operations = admitted.rows
       return admitted.decision
     })
-  }
 
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact(() => admitAgentSessionMutationOperation(this.state, args))
+
+  /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
+   *  read `pending`, and only a conditional swap tells the one that may run from the one that must
+   *  replay. */
+  claimOperation = (args: {
+    callerKey: string
+    operationId: string
+  }): Promise<AgentSessionOperationClaim> =>
+    this.transact(() => {
+      const claimed = claimAgentSessionOperation(this.state.operations, args)
+      this.state.operations = claimed.rows
+      return claimed.claim
+    })
 
   async recordOperationOutcome(args: {
     callerKey?: string
@@ -321,14 +332,7 @@ export class AgentSessionRecordStore {
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
   async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact(() => {
-      if (!this.state.retiredClaimKeys.some((entry) => entry.keyId === keyId)) {
-        this.state.retiredClaimKeys.push({ keyId, retiredAt: now })
-      }
-      this.state.retiredClaimKeys = this.state.retiredClaimKeys.filter(
-        (entry) => now - entry.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
-      )
-    })
+    await this.transact(() => retireAgentSessionClaimKey(this.state, keyId, now))
   }
 
   private async mutate(

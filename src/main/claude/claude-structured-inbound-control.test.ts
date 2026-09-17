@@ -14,14 +14,17 @@ function permissionOptions(
   requestId: string,
   toolUseID: string,
   signal: AbortSignal,
-  suggestions?: unknown[]
+  suggestions?: CanUseToolOptions['suggestions'],
+  presentation: Partial<CanUseToolOptions> = {}
 ): CanUseToolOptions {
+  // Spread first so the required fields below stay definite rather than optional.
   return {
+    ...presentation,
     requestId,
     toolUseID,
     signal,
     ...(suggestions ? { suggestions } : {})
-  } as unknown as CanUseToolOptions
+  }
 }
 
 function callbacksFor() {
@@ -41,7 +44,9 @@ describe('Claude permission callbacks', () => {
     const answered = control.canUseTool(
       'Bash',
       { command: 'git status' },
-      permissionOptions('perm-1', 'tool-1', new AbortController().signal, [{ type: 'addRules' }])
+      permissionOptions('perm-1', 'tool-1', new AbortController().signal, [
+        { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
+      ])
     )
 
     expect(control.emit).toHaveBeenCalledWith(
@@ -52,10 +57,47 @@ describe('Claude permission callbacks', () => {
       })
     )
     const found = control.prompts.find('perm-1')
-    expect(found?.prompt.suggestions).toEqual([{ type: 'addRules' }])
+    expect(found?.prompt.suggestions).toEqual([
+      { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
+    ])
     // The prompt's settle is the SDK callback's own resolve — answering resolves this promise.
     found?.prompt.settle({ behavior: 'allow', toolUseID: 'tool-1' })
     await expect(answered).resolves.toEqual({ behavior: 'allow', toolUseID: 'tool-1' })
+  })
+
+  it('keeps the SDK permission presentation and strips terminal escapes', async () => {
+    const control = callbacksFor()
+    const answered = control.canUseTool(
+      'Read',
+      { file_path: '/repo/secrets.txt' },
+      permissionOptions(
+        'perm-presentation',
+        'tool-presentation',
+        new AbortController().signal,
+        [],
+        {
+          title: '\u001b[31mClaude wants to read secrets.txt\u001b[0m',
+          displayName: 'Read file',
+          description: 'Read access outside the workspace',
+          decisionReason: '\u001b[33mThe path is outside the allowed root.\u001b[0m',
+          blockedPath: '/repo/secrets.txt',
+          matchedAskRule: { source: 'project', toolName: 'Read', ruleContent: '/repo/**' }
+        }
+      )
+    )
+
+    const prompt = control.prompts.find('perm-presentation')?.prompt
+    expect(prompt).toMatchObject({
+      title: 'Claude wants to read secrets.txt',
+      displayName: 'Read file',
+      description: 'Read access outside the workspace',
+      decisionReason: 'The path is outside the allowed root.',
+      blockedPath: '/repo/secrets.txt',
+      matchedAskRule: { source: 'project', toolName: 'Read', ruleContent: '/repo/**' }
+    })
+    expect(JSON.stringify(prompt)).not.toContain('\\u001b')
+    prompt?.settle({ behavior: 'deny', message: 'done', toolUseID: 'tool-presentation' })
+    await expect(answered).resolves.toMatchObject({ behavior: 'deny' })
   })
 
   it('denies a malformed permission request without registering a prompt', async () => {

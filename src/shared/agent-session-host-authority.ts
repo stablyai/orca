@@ -23,6 +23,7 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_operation_conflict',
   'agent_session_operation_expired',
   'agent_session_operation_capacity',
+  'agent_session_operation_unknown',
   'agent_session_legacy_required',
   'execution_owner_reconciling',
   'execution_owner_unavailable'

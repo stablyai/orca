@@ -463,6 +463,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'sandboxEscape', value: 'yes', fence: 7 })
     ).rejects.toThrow('no thread option named sandboxEscape')
+    await expect(
+      adapter.setOption({ sessionId: 'session-1', key: 'approvalPolicy', value: 'never', fence: 7 })
+    ).rejects.toThrow('no thread option named approvalPolicy')
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'client-1',

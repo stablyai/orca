@@ -3,9 +3,9 @@
   "family": "tasks.paste-lookup",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "1fb1cdc8a2544e25547175760143a61355900a3ed4b87e08a1fa0dd2409e317d",
   "platform": "darwin",
@@ -66,10 +66,49 @@
         }
       }
     },
-    "293712bf6b06": {
+    "40b6e1288e8b": {
       "name": "github.workItemByOwnerRepo#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemByOwnerRepo\",\"params\":{\"repo\":\"id:repo-1\",\"owner\":\"owner\",\"ownerRepo\":\"repo\",\"number\":12,\"type\":\"issue\"}}",
-      "sent": 2
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemByOwnerRepo"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "owner": "owner",
+            "ownerRepo": "repo",
+            "repo": "id:repo-1",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "number": 12,
+            "title": "twelve"
+          }
+        }
+      }
+    },
+    "467d1db5ad39": {
+      "name": "github.workItem#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItem\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12}}"
     },
     "4a3429622287": {
       "by-number": {
@@ -89,107 +128,9 @@
         "title": "seven"
       }
     },
-    "62d4d4b68fd1": {
-      "name": "github.repoSlug#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 4
-    },
-    "65342779da15": {
-      "name": "github.workItem#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.workItem"
-        },
-        {
-          "name": "params",
-          "value": {
-            "number": 12,
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "number": 12,
-            "title": "twelve"
-          }
-        }
-      }
-    },
-    "731507dd2e23": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      }
-    },
-    "7445a582a9c8": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "owner": "owner",
-            "repo": "repo"
-          }
-        }
-      }
-    },
-    "bd533f6b0b40": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "iid": 7,
-        "repoId": "repo-1",
-        "title": "seven"
-      }
-    },
-    "d296887f365c": {
+    "54e10e591561": {
       "name": "gitlab.workItemByPath#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemByPath\",\"params\":{\"repo\":\"id:repo-1\",\"host\":\"gitlab.com\",\"path\":\"group/project\",\"iid\":7,\"type\":\"issue\"}}",
-      "sent": 3
-    },
-    "e29333b1693f": {
-      "name": "gitlab.workItemByPath#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -226,39 +167,49 @@
         }
       }
     },
-    "e970eb27f5ca": {
-      "by-number": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      },
-      "by-slug": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      },
-      "cache": []
-    },
-    "ee9b55f8dafb": {
-      "name": "github.workItem#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItem\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12}}",
-      "sent": 1
-    },
-    "f9ea1f747023": {
+    "64b4674b65a8": {
       "name": "github.workItemByOwnerRepo#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemByOwnerRepo\",\"params\":{\"repo\":\"id:repo-1\",\"owner\":\"owner\",\"ownerRepo\":\"repo\",\"number\":12,\"type\":\"issue\"}}"
+    },
+    "72a59aa8bee1": {
+      "name": "github.repoSlug#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "731507dd2e23": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "number": 12,
+        "repoId": "repo-1",
+        "title": "twelve"
+      }
+    },
+    "bd533f6b0b40": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "iid": 7,
+        "repoId": "repo-1",
+        "title": "seven"
+      }
+    },
+    "bf2cabd50e5a": {
+      "name": "github.workItem#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "github.workItemByOwnerRepo"
+          "value": "github.workItem"
         },
         {
           "name": "params",
           "value": {
             "number": 12,
-            "owner": "owner",
-            "ownerRepo": "repo",
-            "repo": "id:repo-1",
-            "type": "issue"
+            "repo": "id:repo-1"
           }
         },
         {
@@ -273,7 +224,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-1",
           "ok": true,
           "result": {
             "number": 12,
@@ -281,6 +232,59 @@
           }
         }
       }
+    },
+    "db48adb41100": {
+      "name": "github.repoSlug#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "e970eb27f5ca": {
+      "by-number": {
+        "number": 12,
+        "repoId": "repo-1",
+        "title": "twelve"
+      },
+      "by-slug": {
+        "number": 12,
+        "repoId": "repo-1",
+        "title": "twelve"
+      },
+      "cache": []
+    },
+    "f4d2080c6e99": {
+      "name": "gitlab.workItemByPath#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemByPath\",\"params\":{\"repo\":\"id:repo-1\",\"host\":\"gitlab.com\",\"path\":\"group/project\",\"iid\":7,\"type\":\"issue\"}}"
     }
   },
   "recording": {
@@ -289,8 +293,8 @@
       {
         "id": "by-number",
         "observation": {
-          "sender": ["65342779da15"],
-          "payloads": ["ee9b55f8dafb"],
+          "sender": ["bf2cabd50e5a"],
+          "payloads": ["467d1db5ad39"],
           "settlements": {
             "by-number": "731507dd2e23"
           },
@@ -301,8 +305,8 @@
       {
         "id": "by-slug",
         "observation": {
-          "sender": ["65342779da15", "f9ea1f747023"],
-          "payloads": ["ee9b55f8dafb", "293712bf6b06"],
+          "sender": ["bf2cabd50e5a", "40b6e1288e8b"],
+          "payloads": ["467d1db5ad39", "64b4674b65a8"],
           "settlements": {
             "by-number": "731507dd2e23",
             "by-slug": "731507dd2e23"
@@ -314,8 +318,8 @@
       {
         "id": "gitlab-path",
         "observation": {
-          "sender": ["65342779da15", "f9ea1f747023", "e29333b1693f"],
-          "payloads": ["ee9b55f8dafb", "293712bf6b06", "d296887f365c"],
+          "sender": ["bf2cabd50e5a", "40b6e1288e8b", "54e10e591561"],
+          "payloads": ["467d1db5ad39", "64b4674b65a8", "f4d2080c6e99"],
           "settlements": {
             "by-number": "731507dd2e23",
             "by-slug": "731507dd2e23",
@@ -328,8 +332,8 @@
       {
         "id": "repo-slug-matched",
         "observation": {
-          "sender": ["65342779da15", "f9ea1f747023", "e29333b1693f", "7445a582a9c8"],
-          "payloads": ["ee9b55f8dafb", "293712bf6b06", "d296887f365c", "62d4d4b68fd1"],
+          "sender": ["bf2cabd50e5a", "40b6e1288e8b", "54e10e591561", "db48adb41100"],
+          "payloads": ["467d1db5ad39", "64b4674b65a8", "f4d2080c6e99", "72a59aa8bee1"],
           "settlements": {
             "by-number": "731507dd2e23",
             "by-slug": "731507dd2e23",

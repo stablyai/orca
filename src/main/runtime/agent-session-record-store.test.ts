@@ -10,10 +10,8 @@ import type {
 } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { setStoredAgentSessionHandoffStage } from './agent-session-handoff-record-transitions'
-import {
-  AGENT_SESSION_CLAIM_KEY_RETENTION_MS,
-  AgentSessionRecordStore
-} from './agent-session-record-store'
+import { AgentSessionRecordStore } from './agent-session-record-store'
+import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
 import {
   agentSessionStorePath,
   AGENT_SESSION_STORE_FILE_NAME

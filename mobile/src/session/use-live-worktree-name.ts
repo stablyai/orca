@@ -5,7 +5,7 @@ import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
-import { getLiveWorktreeDisplayName, type WorktreeDisplayNameSource } from './worktree-display-name'
+import { getLiveWorktreeDisplayName } from './worktree-display-name'
 import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import {
   classifyWorktreeShowResponse,
@@ -119,8 +119,7 @@ export function useLiveWorktreeName({
           if (!accepted.accepted) {
             return
           }
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this member unread; the reader hands back the same `worktree` value.
-          const worktree = accepted.value as WorktreeDisplayNameSource | undefined
+          const worktree = accepted.value
           const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
             setWorktreeName((current) =>

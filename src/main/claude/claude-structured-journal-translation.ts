@@ -132,7 +132,8 @@ export function createClaudeJournalTranslator(
   const handleMessage = (
     message: Record<string, unknown>,
     startsTurn: boolean,
-    observedAt: number
+    observedAt: number,
+    requestedAt?: number
   ): boolean => {
     const envelope = readClaudeMessageEnvelope(message)
     if (!envelope) {
@@ -208,6 +209,7 @@ export function createClaudeJournalTranslator(
       frame: message,
       startsTurn,
       observedAt,
+      ...(requestedAt === undefined ? {} : { requestedAt }),
       userItemId: agentJournalItemKey(identity)
     })
     if (sendEchoTurn) {
@@ -274,7 +276,12 @@ export function createClaudeJournalTranslator(
         subagents.observeSystemFrame(event.message)
         const kind = claudeProviderFrameKind(event.message)
         if (
-          !handleMessage(event.message, event.startsTurn === true, event.observedAt ?? Date.now())
+          !handleMessage(
+            event.message,
+            event.startsTurn === true,
+            event.observedAt ?? Date.now(),
+            event.requestedAt
+          )
         ) {
           providerFallback.append(kind, event.message)
         }

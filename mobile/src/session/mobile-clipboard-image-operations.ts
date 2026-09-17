@@ -1,5 +1,10 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  clipboardImagePathSchema,
+  clipboardImageUnreadReplySchema,
+  clipboardImageUploadSlotSchema
+} from './clipboard-image-reply-schema'
 
 // The chunked clipboard image upload: open a slot, append the base64 in chunks, commit, and abort
 // what a failure left behind. Every leg raises the host's own message, because the composer shows
@@ -16,7 +21,7 @@ export const clipboardImageUploadStart = bindDeferredRpcOperation(
     method: 'clipboard.startImageUpload',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('clipboard-image-upload-slot')
+    read: rpcResultVariant('clipboard-image-upload-slot', clipboardImageUploadSlotSchema)
   })
 )
 
@@ -26,7 +31,7 @@ export const clipboardImageUploadAppend = bindDeferredRpcOperation(
     method: 'clipboard.appendImageUploadChunk',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('clipboard-image-chunk-appended')
+    read: rpcResultVariant('clipboard-image-chunk-appended', clipboardImageUnreadReplySchema)
   })
 )
 
@@ -37,7 +42,7 @@ export const clipboardImageUploadCommit = bindDeferredRpcOperation(
     method: 'clipboard.commitImageUpload',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('clipboard-image-path')
+    read: rpcResultVariant('clipboard-image-path', clipboardImagePathSchema)
   })
 )
 
@@ -47,7 +52,7 @@ export const clipboardImageSaveAsTempFile = bindDeferredRpcOperation(
     method: 'clipboard.saveImageAsTempFile',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('clipboard-image-path')
+    read: rpcResultVariant('clipboard-image-path', clipboardImagePathSchema)
   })
 )
 
@@ -62,7 +67,7 @@ export const clipboardImageUploadAbort = bindDeferredRpcOperation(
     method: 'clipboard.abortImageUpload',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('clipboard-image-upload-aborted')
+    read: rpcResultVariant('clipboard-image-upload-aborted', clipboardImageUnreadReplySchema)
   })
 )
 

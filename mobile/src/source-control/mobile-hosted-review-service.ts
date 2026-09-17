@@ -160,8 +160,7 @@ export function buildMobileHostedReviewCreateParams(
   return {
     repo: mobileRepoSelectorFromWorktreeId(worktreeId),
     worktree: `id:${worktreeId}`,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the params type lists this build's provider arms, but the arm set is the host's, and the host is the one that named this token in its own eligibility reply. Narrowing here is the defect this assertion exists to avoid: it would put 'unsupported' on the wire and make a newer host refuse its own provider. The allow-list that decides whether mobile may create is supportsHostedReviewCreation(), which already answers no for a token this build does not know.
-    provider: input.provider as RpcSendParams<'hostedReview.create'>['provider'],
+    provider: input.provider,
     base: input.base.trim(),
     ...(input.head && input.head.trim().length > 0 ? { head: input.head.trim() } : {}),
     title: input.title.trim(),

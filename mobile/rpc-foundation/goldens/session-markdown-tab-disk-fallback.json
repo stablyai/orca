@@ -3,9 +3,9 @@
   "family": "session.tab-documents",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "f46cef9d1c6a5ed6d8b6f1d180cdf5c666f52e043b70feb07e5fccee885ceeda",
   "platform": "darwin",
@@ -13,8 +13,34 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "10a4d64eaaba": {
+    "44abbe2af7aa": {
+      "name": "markdown.readTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+    },
+    "c6cea5310098": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Editing needs Orca desktop running.",
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
+    "d4be01606497": {
       "name": "files.read#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
+    },
+    "d59404d25d6c": {
+      "name": "files.read#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -49,13 +75,9 @@
         }
       }
     },
-    "781e10561184": {
-      "name": "files.read#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}",
-      "sent": 2
-    },
-    "82537e84c006": {
+    "e258dafc91f1": {
       "name": "markdown.readTab#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -89,26 +111,6 @@
         }
       }
     },
-    "af5666510c34": {
-      "name": "markdown.readTab#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}",
-      "sent": 1
-    },
-    "c6cea5310098": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "",
-          "content": "# disk",
-          "editable": false,
-          "isDirty": false,
-          "localContent": "# disk",
-          "readOnlyReason": "Editing needs Orca desktop running.",
-          "stale": false,
-          "status": "ready"
-        }
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -124,8 +126,8 @@
       {
         "id": "fell-back",
         "observation": {
-          "sender": ["82537e84c006", "10a4d64eaaba"],
-          "payloads": ["af5666510c34", "781e10561184"],
+          "sender": ["e258dafc91f1", "d59404d25d6c"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },

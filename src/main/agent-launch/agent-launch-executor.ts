@@ -281,10 +281,10 @@ function existingWorktreeId(target: AgentLaunchTarget): string {
 
 /** Prompt delivery is the caller's, not the executor's: a PTY paste is observed by whoever owns
  *  the pane, and a structured first turn is sent through the session. The executor reports the
- *  requested delivery back undelivered so a caller cannot mistake silence for delivery. */
+ *  requested delivery back as not delivered so a caller cannot mistake silence for delivery. */
 function promptReceipt(intent: AgentLaunchIntent): Pick<AgentLaunchResult, 'prompt'> {
   if (!intent.prompt) {
     return {}
   }
-  return { prompt: { delivery: intent.prompt.delivery, delivered: false } }
+  return { prompt: { delivery: intent.prompt.delivery, outcome: 'not-delivered' } }
 }

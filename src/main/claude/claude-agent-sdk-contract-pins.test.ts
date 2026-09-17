@@ -354,17 +354,11 @@ describe('Claude Agent SDK contract pins', () => {
 
     expect(spawns).toHaveLength(1)
     const argv = normalizeArgv(spawns[0]!.args)
-    // Agent Permissions reaches the child as the SDK's own typed pair, spelled exactly once each.
-    // `--allow-dangerously-skip-permissions` is what the SDK emits for the allow flag; the CLI
-    // refuses `bypassPermissions` without it, so a rename upstream must fail here rather than
-    // silently return a Yolo user to permission prompts.
-    for (const flag of ['--permission-mode', '--allow-dangerously-skip-permissions']) {
-      expect(
-        argv.filter((arg) => arg === flag),
-        `${flag} occurrences`
-      ).toHaveLength(1)
-    }
-    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('bypassPermissions')
+    // The SDK's typed bypass option emits a newer allow flag that older user-installed Claude
+    // binaries reject. Keep the older owned flag until Orca establishes a minimum CLI version.
+    expect(argv.filter((arg) => arg === '--dangerously-skip-permissions')).toHaveLength(1)
+    expect(argv).not.toContain('--allow-dangerously-skip-permissions')
+    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
     // Configured CLI arguments are a terminal concern; a record written before they stopped
     // being read must not smuggle one back into the child's argv.
     expect(argv).not.toContain('--model')

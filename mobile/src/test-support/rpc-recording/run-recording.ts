@@ -15,22 +15,26 @@ import type {
   MountedOperation
 } from './recording-scenario'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import { createWriteOrdinal } from './write-ordinal'
 
 export async function runRecording(
   scenario: RecordingScenario,
   mount: MountAdapter,
   scheduler: RecordingScheduler
 ): Promise<Recording> {
-  scheduler.start()
-  const transport = new ScriptedRpcTransport(scheduler.elapsed)
-  const effects: { name: string; value: RecordedValue; sent: number }[] = []
+  await scheduler.start()
+  // One counter per recording, shared by requests, payloads and effects. Each list is append-only
+  // and independent of the other two, so without a shared ordinal a send reordered ahead of a
+  // device write, or ahead of a subscribe, moves no list and no golden notices. The request count
+  // this replaced ordered payloads and effects against sends only, never against each other, so in
+  // a family that sends no requests every stamp was `0` and subscribe-vs-effect order was unpinned.
+  const nextWriteOrdinal = createWriteOrdinal()
+  const transport = new ScriptedRpcTransport(scheduler.elapsed, nextWriteOrdinal)
+  const effects: { name: string; ordinal: number; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
   const effect = (name: string, value: unknown) => {
-    // Why the send count: sender and effects are two independent lists, so a send reordered ahead of
-    // a device write moves neither of them. Stamping the count at push time orders them against
-    // each other, and that reordering becomes a golden diff.
-    effects.push({ name, value: captureValue(value), sent: transport.requests.length })
+    effects.push({ name, ordinal: nextWriteOrdinal(), value: captureValue(value) })
   }
   const stopUnhandled = recordUnhandledRejections(effect)
   let mounted: MountedOperation | undefined
@@ -40,7 +44,24 @@ export async function runRecording(
   const teardown = async (): Promise<void> => {
     cleaned = true
     await mounted?.dispose()
+    // Drained before the set is read, not after: a cleanup that closes its stream on a due 0ms
+    // timer has not run yet when `dispose()` returns, and reading here would record it as an
+    // uncancelled registration — the one shape this observation reserves for a cleanup that never
+    // ran. With the drain first, a deferred close and a never-closed stream stop being
+    // byte-identical.
+    await scheduler.flush()
+    // A stream the product forgot to close is only visible on the wire when its method has an
+    // unsubscribe builder; `notifications.subscribe` has none, so closing it writes nothing and the
+    // leak stays a live registry record until some later cutover replays it. Observed here, after
+    // the product's own cleanup and before the transport tears the registries down, so a
+    // builder-less subscription is pinned without a scenario that cuts over to expose it.
+    const registered = transport.registeredStreams()
+    if (registered.length) {
+      effect('streams-registered-at-teardown', registered)
+    }
     transport.dispose()
+    // Again after disposal: tearing the registries down rejects what the product still awaited, and
+    // an unhandled rejection is an effect the cleanup checkpoint has to see.
     await scheduler.flush()
   }
   try {

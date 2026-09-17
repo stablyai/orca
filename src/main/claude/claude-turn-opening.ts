@@ -26,6 +26,8 @@ export type ClaudeSendEchoTurnInput = {
   /** Orca dispatched this send and the provider is replaying it back. */
   startsTurn: boolean
   observedAt: number
+  /** Host clock on the submission row that produced this send, when known. */
+  requestedAt?: number
   /** Provider key of the user row this turn is anchored to. */
   userItemId: string
 }
@@ -43,6 +45,7 @@ export function claudeTurnOpenedBySendEcho(
         sessionId: envelope.sessionId,
         turnId: envelope.uuid,
         startedAt: input.observedAt,
+        ...(input.requestedAt === undefined ? {} : { requestedAt: input.requestedAt }),
         userItemId: input.userItemId
       }
     : null

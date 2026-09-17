@@ -34,8 +34,12 @@ const target = {
   connectionHardCap: 1_000 as const,
   connectionUnobservedBound: 60
 }
+// A third general cell in the source region: never a source or target here,
+// but it is in the fleet whose safety the gate reads.
+const bystander = { ...source, id: 'us-c2', url: 'https://us-c2.relay.example.test' }
 const sourceIncarnation = '11111111-1111-4111-8111-111111111111'
 const targetIncarnation = '22222222-2222-4222-8222-222222222222'
+const bystanderIncarnation = '33333333-3333-4333-8333-333333333333'
 
 describe('regional rehome assignment state', () => {
   it('advances past a full candidate page whose destination lacks capacity', async () => {
@@ -424,7 +428,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('latches off on sustained pool pressure and logs the disable exactly once', async () => {
+  it('defers on target pool pressure without disabling, and claims once it clears', async () => {
     const context = await setup()
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -451,17 +455,59 @@ describe('regional rehome assignment state', () => {
       expect(await context.store.commitIdleRegionalRehome(candidate!, safety)).toEqual({
         outcome: 'deferred'
       })
-      // Already disabled: the next tick returns before the gate and stays silent.
-      expect(await context.store.tryIdleRehome()).toBeNull()
     } finally {
       warnings.restore()
     }
+    // A pool bar crossed between the scan and the commit skips the cell; it must
+    // not turn the durable switch off, or the worker never comes back.
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
-      generation: 2,
-      enabled: false
+      generation: 1,
+      enabled: true
     })
-    expect(warnings.entries).toMatchObject([
-      { reason: 'database_pool_pressure', databasePoolWaitersMax: 17 }
+    expect(warnings.entries).toEqual([])
+
+    await context.database.query(
+      `UPDATE relay_cell_rehome_safety SET database_pool_waiters_max = 0 WHERE cell_id = ?`,
+      [target.id]
+    )
+    expect(await context.store.tryIdleRehome()).toMatchObject({
+      userId: 'user-1',
+      sourceCellId: source.id,
+      targetCellId: target.id
+    })
+    await context.database.close()
+  })
+
+  it('keeps selecting candidates while an unrelated cell is over the pool bar', async () => {
+    // Production case: the fleet snapshot is a Math.max, so one cell with a
+    // narrow client pool used to empty every page.
+    const context = await setup()
+    await activatePreferredSource(context, {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop'
+    })
+    await context.store.reconcileCells([source, target, bystander])
+    await heartbeat(context.store, bystander, bystanderIncarnation, 3, 2, {
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 150,
+      databasePoolWaitersMax: 150,
+      databasePoolWaitMsMax: 2_005
+    })
+
+    const safety: RegionalRehomeSafetySnapshot = {
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 0,
+      databasePoolWaitersMax: 0,
+      databasePoolWaitMsMax: 0
+    }
+    expect(await context.store.selectIdleRegionalRehomeCandidates(safety)).toMatchObject([
+      { sourceCellId: source.id, targetCellId: target.id }
     ])
     await context.database.close()
   })

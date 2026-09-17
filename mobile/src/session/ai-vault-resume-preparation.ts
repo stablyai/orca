@@ -46,16 +46,12 @@ export async function prepareMobileAiVaultSessionResume(
       response.error?.message || 'Could not prepare this legacy Codex session. Retry resume.'
     )
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const result = aiVaultResumePreparationRun.interpret(response) as {
-    useRealCodexHome?: unknown
-    substituteCodexHome?: unknown
-  } | null
+  const result = aiVaultResumePreparationRun.interpret(response)
   if (result?.useRealCodexHome === true) {
     return { ...session, codexHome: null }
   }
   // Why: older hosts never send a repin home, so absence keeps the session's own home.
-  if (typeof result?.substituteCodexHome === 'string' && result.substituteCodexHome) {
+  if (result?.substituteCodexHome) {
     return { ...session, codexHome: result.substituteCodexHome }
   }
   return session

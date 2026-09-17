@@ -118,8 +118,7 @@ export function useMobileSessionContentCreateActions(
         { timeoutMs: 30_000 }
       )
       const created = interpretOrThrowRefusalMessage(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this payload unread; the reader hands it back whole.
-        () => sessionBrowserTabCreate.interpret(response) as { browserPageId?: string },
+        () => sessionBrowserTabCreate.interpret(response),
         ''
       )
       // Focus the new browser tab once it syncs; refresh a few times since the desktop registers the tab asynchronously.

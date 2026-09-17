@@ -3,9 +3,9 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "182f37fbe6ae7c0694b50d603ecd4a03bc9a8c7c9738ebb775b47eb5f3b9660f",
   "platform": "darwin",
@@ -22,21 +22,14 @@
         "message": "Update Orca desktop to review changes on mobile."
       }
     },
-    "40b17d95f271": {
+    "168d1f64ca9b": {
       "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
-    "55c07df45014": {
-      "branchCompare": "unloaded",
-      "diff": "unloaded",
-      "snapshot": {
-        "kind": "unavailable",
-        "message": "Update Orca desktop to review changes on mobile."
-      }
-    },
-    "93b9682c496c": {
+    "45d1ea7c0b42": {
       "name": "git.status#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -68,6 +61,14 @@
           "ok": false
         }
       }
+    },
+    "55c07df45014": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": {
+        "kind": "unavailable",
+        "message": "Update Orca desktop to review changes on mobile."
+      }
     }
   },
   "recording": {
@@ -76,8 +77,8 @@
       {
         "id": "unavailable",
         "observation": {
-          "sender": ["93b9682c496c"],
-          "payloads": ["40b17d95f271"],
+          "sender": ["45d1ea7c0b42"],
+          "payloads": ["168d1f64ca9b"],
           "settlements": {
             "unavailable": "14804a5e414f"
           },

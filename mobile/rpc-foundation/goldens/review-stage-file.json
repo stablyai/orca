@@ -3,10 +3,10 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
   "scenarioSha256": "793e954960d371c6477d4cd3d70a5215c0bd90764684eafdb1e1a2e09790cc86",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -48,13 +48,27 @@
         "$rpc": "null"
       }
     },
-    "3594dacbf114": {
-      "name": "git.stage#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}",
-      "sent": 1
+    "53b792409cec": {
+      "name": "load-review-data",
+      "ordinal": 3,
+      "value": {}
     },
-    "51406f060db7": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f39122ee30fc": {
       "name": "git.stage#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
+    },
+    "fd1322e39fc5": {
+      "name": "git.stage#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -86,19 +100,6 @@
           }
         }
       }
-    },
-    "543f60e3c255": {
-      "name": "load-review-data",
-      "value": {},
-      "sent": 1
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -107,13 +108,13 @@
       {
         "id": "staged",
         "observation": {
-          "sender": ["51406f060db7"],
-          "payloads": ["3594dacbf114"],
+          "sender": ["fd1322e39fc5"],
+          "payloads": ["f39122ee30fc"],
           "settlements": {
             "stage": "eb79a9b3682a"
           },
           "state": "2fc890e4b748",
-          "effects": ["543f60e3c255"]
+          "effects": ["53b792409cec"]
         }
       }
     ]

@@ -3,9 +3,9 @@
   "family": "session.terminal-gesture-input",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "9d119d5ec320e2538105d6ff673b9f4b8e3decbe46527947489dffbcf2ac0472",
   "scenarioSha256": "97e6d63c6b4bc154e94be6cf3dcd25620b4656cacd2b62cdc872ff793b39ebd2",
   "platform": "darwin",
@@ -13,31 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02fc3d4e513f": {
-      "name": "terminal.clearBuffer#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
-    },
     "0cc3e25ebff5": {
       "bucketTokens": 63,
       "crash": {
@@ -59,8 +34,75 @@
         "$rpc": "undefined"
       }
     },
-    "2bd49718b873": {
+    "3dc7f55dee2a": {
+      "name": "toast",
+      "ordinal": 7,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Terminal cleared"
+      }
+    },
+    "77d8a44e0dcc": {
       "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
+      }
+    },
+    "8224ccdb2cd8": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[<64;10;5M\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "839dec95ae1c": {
+      "status": "pending",
+      "startedAt": 16
+    },
+    "85a38010bc83": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "8716af94ca80": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "93092a2f06c5": {
+      "bucketTokens": 63,
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": false,
+      "queuedBytes": "\u001b[<64;10;5M",
+      "queuedSequences": 1
+    },
+    "94ce15ec36dc": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -94,13 +136,35 @@
         }
       }
     },
-    "3117ca4e2f5f": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[<64;10;5M\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
+    "afb61324f54a": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
+      }
     },
-    "3d116029b0b8": {
+    "c9e4131930e5": {
       "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -140,92 +204,6 @@
         }
       }
     },
-    "4c855008c56d": {
-      "name": "terminal.send#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[<64;10;5M"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
-    },
-    "819a7382ac8e": {
-      "name": "toast",
-      "value": {
-        "durationMs": {
-          "$rpc": "null"
-        },
-        "message": "Terminal cleared"
-      },
-      "sent": 3
-    },
-    "839dec95ae1c": {
-      "status": "pending",
-      "startedAt": 16
-    },
-    "93092a2f06c5": {
-      "bucketTokens": 63,
-      "crash": {
-        "$rpc": "null"
-      },
-      "inFlight": false,
-      "queuedBytes": "\u001b[<64;10;5M",
-      "queuedSequences": 1
-    },
-    "b139ed2905d3": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 2
-    },
-    "bf25f1d5c346": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
-    },
     "caa6ece1bdab": {
       "bucketTokens": 63,
       "crash": {
@@ -239,8 +217,17 @@
         "$rpc": "null"
       }
     },
-    "cbb9e8ae954a": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebaa6b64425b": {
       "name": "terminal.clearBuffer#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -272,17 +259,36 @@
         }
       }
     },
-    "d21f2e78ad50": {
-      "name": "terminal.clearBuffer#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 3
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "fd81ada317ab": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
       }
     }
   },
@@ -305,8 +311,8 @@
       {
         "id": "flushing",
         "observation": {
-          "sender": ["4c855008c56d"],
-          "payloads": ["3117ca4e2f5f"],
+          "sender": ["fd81ada317ab"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -318,8 +324,8 @@
       {
         "id": "sent",
         "observation": {
-          "sender": ["3d116029b0b8", "bf25f1d5c346"],
-          "payloads": ["3117ca4e2f5f", "b139ed2905d3"],
+          "sender": ["c9e4131930e5", "77d8a44e0dcc"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -331,8 +337,8 @@
       {
         "id": "reported",
         "observation": {
-          "sender": ["3d116029b0b8", "2bd49718b873"],
-          "payloads": ["3117ca4e2f5f", "b139ed2905d3"],
+          "sender": ["c9e4131930e5", "94ce15ec36dc"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -344,8 +350,8 @@
       {
         "id": "clearing",
         "observation": {
-          "sender": ["3d116029b0b8", "2bd49718b873", "02fc3d4e513f"],
-          "payloads": ["3117ca4e2f5f", "b139ed2905d3", "d21f2e78ad50"],
+          "sender": ["c9e4131930e5", "94ce15ec36dc", "afb61324f54a"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a",
@@ -358,15 +364,15 @@
       {
         "id": "cleared",
         "observation": {
-          "sender": ["3d116029b0b8", "2bd49718b873", "cbb9e8ae954a"],
-          "payloads": ["3117ca4e2f5f", "b139ed2905d3", "d21f2e78ad50"],
+          "sender": ["c9e4131930e5", "94ce15ec36dc", "ebaa6b64425b"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a",
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["819a7382ac8e"]
+          "effects": ["3dc7f55dee2a"]
         }
       }
     ]
