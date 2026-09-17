@@ -5,6 +5,10 @@ import { createInterface } from 'node:readline'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
 import {
+  createUsageWorktreeResolver,
+  type UsageWorktreeResolver
+} from '../usage/usage-worktree-resolver'
+import {
   canonicalizePath,
   getLegacySourceSkipBytesByPath,
   listCodexSessionFiles,
@@ -66,7 +70,7 @@ const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregat
 
 export async function parseCodexUsageFile(
   filePath: string,
-  worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
+  resolveWorktree: UsageWorktreeResolver,
   options: { skipInitialBytes?: number; claimEventKey?: (eventKey: string) => boolean } = {}
 ): Promise<CodexUsagePersistedFile> {
   const processedFile = await getProcessedFileInfo(filePath)
@@ -104,7 +108,7 @@ export async function parseCodexUsageFile(
       continue
     }
     ownedEventKeys.add(parsed.eventKey)
-    const attributed = await attributeCodexUsageEvent(parsed, worktrees)
+    const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
     if (attributed) {
       events.push(attributed)
     }
@@ -128,7 +132,10 @@ export async function scanCodexUsageFiles(
 }> {
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
-  const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
+  // Why: one resolver for the whole scan so every file shares the per-cwd memo.
+  const resolveWorktree = createUsageWorktreeResolver(
+    await buildWorktreesWithCanonicalPaths(worktrees)
+  )
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
 
   const currentPaths = new Set(files)
@@ -187,7 +194,7 @@ export async function scanCodexUsageFiles(
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
   for (const [index, filePath] of pathsToParse.entries()) {
-    const processed = await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
+    const processed = await parseCodexUsageFile(filePath, resolveWorktree, {
       skipInitialBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
       claimEventKey: (eventKey) => {
         const owner = eventOwnerByKey.get(eventKey)

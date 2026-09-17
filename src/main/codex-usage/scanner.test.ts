@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
 import { parseCodexUsageRecord } from './codex-usage-record-parser'
 
@@ -208,7 +209,7 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo/app',
@@ -223,7 +224,7 @@ describe('attributeCodexUsageEvent', () => {
           displayName: 'App 2',
           canonicalPath: '/workspace/repo/app2'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('worktree:repo-2::/workspace/repo/app2')
@@ -246,7 +247,7 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo',
@@ -254,7 +255,7 @@ describe('attributeCodexUsageEvent', () => {
           displayName: 'Repo',
           canonicalPath: '/workspace/repo'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
@@ -277,7 +278,7 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo',
@@ -285,7 +286,7 @@ describe('attributeCodexUsageEvent', () => {
           displayName: 'Repo',
           canonicalPath: '/workspace/repo'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
@@ -307,7 +308,7 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::C:\\repo',
@@ -315,7 +316,7 @@ describe('attributeCodexUsageEvent', () => {
           displayName: 'Repo',
           canonicalPath: 'C:\\repo'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
