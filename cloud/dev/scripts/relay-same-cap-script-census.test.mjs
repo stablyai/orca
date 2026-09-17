@@ -159,7 +159,8 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
           directorOrigin: 'https://relay.onorca.dev',
           cellOrigin: `https://${hostname(cellId)}.relay.onorca.dev`,
           cellId,
-          mode
+          mode,
+          paceWindowMs: 0
         })
       }
     }
@@ -190,6 +191,14 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.match(call, /--approved-cells same-cap/)
       assert.match(call, /--mode (isolate|drain|activate)/)
     }
+  })
+
+  it('paces the drain it sends to the selected cell', () => {
+    const drain = workflow.split('--mode drain')[1] ?? ''
+    assert.match(drain.split('\n').slice(0, 2).join(' '), /--pace-window-ms "\$\{DRAIN_PACE_WINDOW_MS\}"/)
+    assert.match(workflow, /DRAIN_PACE_WINDOW_MS: '120000'/)
+    // The transition wait has to outlast the pacing window on top of the leases it waits on.
+    assert.match(workflow, /--activity restart-safe[\s\S]*?--timeout-ms 1020000/)
   })
 
   it('passes this cell\'s rehome protocol and pool on every plan validation the job runs', () => {

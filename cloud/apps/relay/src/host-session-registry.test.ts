@@ -1696,3 +1696,98 @@ describe('host data attach owner lookup', () => {
     expect(h.owner.activeConnIds.size).toBe(0)
   })
 })
+
+describe('paced drain', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  async function connectHosts(count: number): Promise<{
+    registry: HostSessionRegistry
+    sockets: FakeSocket[]
+  }> {
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:1')
+    const { registry, activate } = createRegistry(activateControl)
+    const sockets: FakeSocket[] = []
+    for (let index = 0; index < count; index += 1) {
+      const socket = new FakeSocket()
+      sockets.push(socket)
+      await activate(
+        socket as unknown as WebSocket,
+        { ...identity, sub: `user-${index}` },
+        null,
+        1,
+        false,
+        1
+      )
+      socket.send.mockClear()
+    }
+    return { registry, sockets }
+  }
+
+  function drainsSent(sockets: FakeSocket[]): number {
+    return sockets.filter((socket) =>
+      socket.send.mock.calls.some(([payload]) => String(payload).includes('"type":"drain"'))
+    ).length
+  }
+
+  it('sends every drain at once when no window is given', async () => {
+    const { registry, sockets } = await connectHosts(4)
+    registry.drain(0)
+    expect(drainsSent(sockets)).toBe(4)
+  })
+
+  // Windows here stay under the 75s control-silence watchdog, which would otherwise close
+  // a test socket that never heartbeats before its paced send is due.
+  it('spreads the sends evenly across the window', async () => {
+    const { registry, sockets } = await connectHosts(5)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    // The first host is sent synchronously; the last lands on the window's closing edge.
+    expect(drainsSent(sockets)).toBe(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drainsSent(sockets)).toBe(2)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(drainsSent(sockets)).toBe(4)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drainsSent(sockets)).toBe(5)
+  })
+
+  it('fences admission for every session before the first paced send lands', async () => {
+    const { registry, sockets } = await connectHosts(3)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    expect(registry.isDraining()).toBe(true)
+    // A host whose drain has not been sent yet must already be non-authoritative.
+    const socket = new FakeSocket()
+    registry.acceptControl(socket as unknown as WebSocket, { ...identity, sub: 'user-late' })
+    expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+    expect(drainsSent(sockets)).toBe(1)
+  })
+
+  it('gives each host its own grace after its own send, not after the call', async () => {
+    const { registry, sockets } = await connectHosts(2)
+    registry.drain(10_000, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(sockets[0]!.readyState).toBe(sockets[0]!.CLOSED)
+    expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
+    // Its own send at 40s plus its own 10s grace, not 10s from the drain call.
+    await vi.advanceTimersByTimeAsync(39_999)
+    expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(sockets[1]!.readyState).toBe(sockets[1]!.CLOSED)
+  })
+
+  it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
+    const { registry, sockets } = await connectHosts(4)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    expect(drainsSent(sockets)).toBe(1)
+    registry.drain(0)
+    expect(drainsSent(sockets)).toBe(4)
+    const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect(sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sendsAfterEmergency)
+  })
+})

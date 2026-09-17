@@ -90,7 +90,8 @@ describe('production Relay capacity cell admission', () => {
       directorOrigin: 'https://relay.onorca.dev',
       cellOrigin: 'https://c7.relay.onorca.dev',
       cellId: 'production-gce-c7',
-      mode: 'isolate'
+      mode: 'isolate',
+      paceWindowMs: 0
     })
     assert.throws(() => parseProductionCapacityCellArguments([
       '--director-origin', 'https://relay.onorca.dev',
@@ -125,7 +126,8 @@ describe('production Relay capacity cell admission', () => {
         directorOrigin: 'https://relay.onorca.dev',
         cellOrigin: `https://${hostname}.relay.onorca.dev`,
         cellId,
-        mode: 'isolate'
+        mode: 'isolate',
+        paceWindowMs: 0
       })
     }
     for (const cellId of ['production-gce-c17', 'production-gce-c18', 'production-gce-c30']) {
@@ -168,11 +170,75 @@ describe('production Relay capacity cell admission', () => {
       { ...config, mode: 'drain' },
       { fetch: fake.fetch, token: 'token' }
     )
-    assert.deepEqual(result, { changed: false, drained: true })
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 0 })
     assert.deepEqual(fake.calls, [{
       path: '/v1/admin/drain',
       body: { v: 1, graceMs: 0 }
     }])
+  })
+
+  it('paces the drain send when the roll asks for a window', async () => {
+    const fake = canaryFetch()
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain', paceWindowMs: 120_000 },
+      { fetch: fake.fetch, token: 'token' }
+    )
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 120_000 })
+    assert.deepEqual(fake.calls, [{
+      path: '/v1/admin/drain',
+      body: { v: 1, graceMs: 0, paceWindowMs: 120_000 }
+    }])
+  })
+
+  it('drains unpaced when the cell image rejects the pacing field', async () => {
+    const bodies = []
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain', paceWindowMs: 120_000 },
+      {
+        token: 'token',
+        wait: async () => {},
+        fetch: async (url, init) => {
+          assert.equal(new URL(url).pathname, '/v1/admin/drain')
+          const body = JSON.parse(init.body)
+          bodies.push(body)
+          if (body.paceWindowMs !== undefined) return response({ error: 'invalid_request' }, 400)
+          return response({ v: 1, draining: true })
+        }
+      }
+    )
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 0 })
+    assert.deepEqual(bodies, [
+      { v: 1, graceMs: 0, paceWindowMs: 120_000 },
+      { v: 1, graceMs: 0 }
+    ])
+  })
+
+  it('fails a paced drain that the cell rejects for any other reason', async () => {
+    await assert.rejects(
+      prepareProductionCapacityCell(
+        { ...config, mode: 'drain', paceWindowMs: 120_000 },
+        {
+          token: 'token',
+          wait: async () => {},
+          fetch: async () => response({ error: 'invalid_token' }, 401)
+        }
+      ),
+      /returned 401/
+    )
+  })
+
+  it('refuses a pacing window that is not a bounded integer', () => {
+    const argv = (value) => [
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c26.relay.onorca.dev',
+      '--cell-id', 'production-gce-c26',
+      '--mode', 'drain',
+      '--pace-window-ms', value
+    ]
+    for (const value of ['-1', '300001', '1.5', 'soon']) {
+      assert.throws(() => parseProductionCapacityCellArguments(argv(value)), /pace-window-ms/)
+    }
+    assert.equal(parseProductionCapacityCellArguments(argv('300000')).paceWindowMs, 300_000)
   })
 
   it('restores only the selected cell to general admission', async () => {
@@ -228,7 +294,7 @@ describe('production Relay capacity cell admission', () => {
       }
     )
     assert.equal(calls, 2)
-    assert.deepEqual(result, { changed: false, drained: true })
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 0 })
   })
 
   it('fails when both drain attempts return a transient 503', async () => {

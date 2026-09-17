@@ -136,7 +136,7 @@ export function createRelayServer(
   const app = createRelayApp(config, {
     store,
     assignments,
-    drain: (graceMs) => sessions.drain(graceMs),
+    drain: (graceMs, options) => sessions.drain(graceMs, options ?? {}),
     drainHost: (input) => sessions.drainHost(input),
     idleRehome: (input) => {
       const now = (options.now ?? Date.now)()

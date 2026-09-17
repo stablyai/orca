@@ -58,6 +58,8 @@ const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
 
 const ASSIGNMENT_REJECTION_LOG_WINDOW_MS = 10_000
 const REGION_CATALOG_CACHE_MS = 30_000
+// A drain that outlives the roll step it belongs to is an outage, not a pacing win.
+const DRAIN_PACE_WINDOW_MAX_MS = 5 * 60 * 1_000
 
 type AdmissionRejectionLogEntry = {
   route: 'assign' | 'resolve'
@@ -72,7 +74,7 @@ export function createRelayApp(
   operations: {
     store: RelayCredentialStore
     assignments: RelayAssignmentStore
-    drain: (graceMs: number) => void
+    drain: (graceMs: number, options?: { paceWindowMs?: number }) => void
     idleRehome?: (input: IdleRegionalRehomeRequest & {
       cohortPercent: number
       directorSafety: RegionalRehomeSafetySnapshot
@@ -488,12 +490,18 @@ export function createRelayApp(
       return context.json({ error: 'invalid_token' }, 401)
     }
     const body = z
-      .object({ v: z.literal(1), graceMs: z.number().int().nonnegative().max(60 * 60 * 1000) })
+      .object({
+        v: z.literal(1),
+        graceMs: z.number().int().nonnegative().max(60 * 60 * 1000),
+        // Spreads the drain sends, and so the re-dials, over this window.
+        paceWindowMs: z.number().int().nonnegative().max(DRAIN_PACE_WINDOW_MAX_MS).optional()
+      })
       .strict()
       .safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
-    operations.drain(body.data.graceMs)
-    return context.json({ ok: true })
+    const paceWindowMs = body.data.paceWindowMs ?? 0
+    operations.drain(body.data.graceMs, { paceWindowMs })
+    return context.json({ ok: true, paceWindowMs })
   })
   app.post('/v1/admin/host-idle-rehome', async (context) => {
     if (config.role !== 'cell' || !operations.idleRehome) {

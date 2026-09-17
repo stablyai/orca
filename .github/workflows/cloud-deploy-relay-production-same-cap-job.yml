@@ -57,6 +57,9 @@ jobs:
       GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
       GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
       OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-monitor-evidence
+      # ~800 controls over 2 min is ~7 re-dials/s per cell, well under the director's
+      # 5 x 80 in-flight assign cap. A cell on an older image ignores it and drains at once.
+      DRAIN_PACE_WINDOW_MS: '120000'
     steps:
       - name: Require exact reusable-workflow configuration
         working-directory: .
@@ -479,14 +482,16 @@ jobs:
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
           node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain \
+            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}"
+          # The wait has to outlast the pacing window as well as the leases it waits on.
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
             --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
             --heartbeat either --admission migration-only --draining required \
             --activity restart-safe --expected-image-digests "${CURRENT_IMAGE_DIGEST}" \
-            --timeout-ms 900000
+            --timeout-ms 1020000
 
       - id: capacity-auth
         if: ${{ inputs.mode != 'verify' }}

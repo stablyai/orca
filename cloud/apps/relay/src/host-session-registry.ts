@@ -179,6 +179,7 @@ export class HostSessionRegistry {
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
   private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
   private draining = false
+  private drainEpoch = 0
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -846,15 +847,39 @@ export class HostSessionRegistry {
     return { controls, splices, pendingSplices }
   }
 
-  drain(graceMs: number): void {
+  drain(graceMs: number, options: { paceWindowMs?: number } = {}): void {
     this.draining = true
+    const epoch = ++this.drainEpoch
+    const paceWindowMs = Math.max(0, Math.trunc(options.paceWindowMs ?? 0))
+    const targets: HostSession[] = []
     for (const session of this.sessions.values()) {
       if (session.state === 'closed') continue
+      // Fence admission for every session up front: pacing spreads the send, not the authority.
       session.authorityRevision += 1
       session.state = 'drain-only'
-      if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
-      setTimeout(() => this.closeDrainedSession(session), graceMs)
+      targets.push(session)
     }
+    // The desktop re-dials the director as soon as it reads `drain`, whatever graceMs says,
+    // so spreading the send is the only thing that spreads the reconnect load.
+    const step = paceWindowMs > 0 && targets.length > 1 ? paceWindowMs / (targets.length - 1) : 0
+    for (const [index, session] of targets.entries()) {
+      const delay = Math.round(step * index)
+      if (delay === 0) {
+        this.sendDrain(session, graceMs)
+        continue
+      }
+      setTimeout(() => {
+        // A later drain (emergency or shutdown) supersedes the sends still queued here.
+        if (this.drainEpoch !== epoch) return
+        this.sendDrain(session, graceMs)
+      }, delay)
+    }
+  }
+
+  private sendDrain(session: HostSession, graceMs: number): void {
+    if (session.state === 'closed') return
+    if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
+    setTimeout(() => this.closeDrainedSession(session), graceMs)
   }
 
   drainHost(input: {
