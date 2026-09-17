@@ -5,6 +5,7 @@ import { getCodexAccountDisplayDetail } from '@/lib/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { AccountsPaneRemoteActionWrapper } from './accounts-pane-remote-action-wrapper'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import {
   getProviderAccountRuntime,
@@ -19,6 +20,7 @@ export function renderCodexAccountRow(
 ): React.JSX.Element {
   const {
     accountRuntime,
+    accountRuntimeSentenceLabel,
     accountRuntimeUnavailable,
     accountVisibilityOptions,
     activeCodexAccountId,
@@ -136,30 +138,48 @@ export function renderCodexAccountRow(
           {/* Why: selecting an account is the primary action in this row.
           Keeping maintenance actions visually lighter prevents re-auth/remove
           controls from overpowering the selection affordance in a dense list. */}
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={(event) => {
-              event.stopPropagation()
-              void runCodexAccountAction(
-                `reauth:${account.id}`,
-                () =>
-                  window.api.codexAccounts.reauthenticate({
-                    accountId: account.id
-                  }),
-                getProviderAccountRuntime(account)
-              )
-            }}
-            disabled={isRemoteAccountScope || isBusy}
-            className="h-6 px-2 text-muted-foreground hover:text-foreground"
-          >
-            {isReauthing ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3" />
+          <AccountsPaneRemoteActionWrapper
+            isRemote={isRemoteAccountScope}
+            notice={translate(
+              'auto.components.settings.AccountsPane.remoteReauthCodexNotice',
+              'Re-authenticate accounts on {{value0}} by running: orca account add --agent codex',
+              { value0: accountRuntimeSentenceLabel }
             )}
-            {translate('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
-          </Button>
+            tooltip={translate(
+              'auto.components.settings.AccountsPane.remoteReauthCodexTooltip',
+              'Re-authenticate accounts on {{value0}} by running: orca account add --agent codex',
+              { value0: accountRuntimeSentenceLabel }
+            )}
+            actionLabel={translate(
+              'auto.components.settings.AccountsPane.8a0f870153',
+              'Re-authenticate'
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation()
+                void runCodexAccountAction(
+                  `reauth:${account.id}`,
+                  () =>
+                    window.api.codexAccounts.reauthenticate({
+                      accountId: account.id
+                    }),
+                  getProviderAccountRuntime(account)
+                )
+              }}
+              disabled={isRemoteAccountScope || isBusy}
+              className="h-6 px-2 text-muted-foreground hover:text-foreground"
+            >
+              {isReauthing ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3" />
+              )}
+              {translate('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
+            </Button>
+          </AccountsPaneRemoteActionWrapper>
           <Button
             variant="ghost"
             size="xs"

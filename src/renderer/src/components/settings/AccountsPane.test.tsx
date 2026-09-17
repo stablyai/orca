@@ -7,6 +7,13 @@ import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
 
+vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+}))
+
 function renderPane(
   settings: GlobalSettings,
   props: Partial<React.ComponentProps<typeof AccountsPane>> = {}
@@ -126,11 +133,13 @@ describe('AccountsPane', () => {
     expect(markup).not.toContain('Remote server: the remote server')
     // The WSL account-location toggle is a local concern; a remote owner hides it.
     expect(markup).not.toContain('aria-label="Account location"')
-    const addAccountIndex = markup.indexOf('Add Account')
+    const addAccountIndex = markup.indexOf('Add Account</button>')
     expect(addAccountIndex).toBeGreaterThan(0)
     expect(markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)).toContain(
       'disabled=""'
     )
+    expect(markup).toContain('orca account add --agent claude')
+    expect(markup).toContain('orca account add --agent codex')
   })
 
   it('omits the scope control on the web client, which cannot select Local desktop', () => {
@@ -166,5 +175,7 @@ describe('AccountsPane', () => {
     expect(
       markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)
     ).not.toContain('disabled=""')
+    expect(markup).not.toContain('orca account add --agent claude')
+    expect(markup).not.toContain('orca account add --agent codex')
   })
 })
