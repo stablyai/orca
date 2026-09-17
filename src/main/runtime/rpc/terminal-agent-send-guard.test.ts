@@ -7,6 +7,7 @@ import { TERMINAL_METHODS } from './methods/terminal'
 function stubRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    recordTerminalInputSource: vi.fn(),
     ...overrides
   } as OrcaRuntimeService
 }

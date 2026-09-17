@@ -22,6 +22,7 @@ import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
+import type { TerminalInputSourceResolver } from './terminal-input-source-route'
 import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status-subject'
@@ -88,6 +89,9 @@ export abstract class AgentHookServerState {
   protected env = 'production'
   protected onAgentStatus: ServerAgentStatusListener = null
   protected onClaudeStatusLine: ServerStatusLineListener = null
+  // Why: a hook GET for a pane's last input source is answered by the runtime that owns the
+  // PTY, so the host wires a resolver in; null until then means the route reports not found.
+  protected onResolveTerminalInputSource: TerminalInputSourceResolver | null = null
   protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()

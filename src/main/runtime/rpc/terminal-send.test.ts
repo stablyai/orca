@@ -22,6 +22,7 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
       },
       rollback: vi.fn()
     })),
+    recordTerminalInputSource: vi.fn(),
     ...overrides
   } as OrcaRuntimeService
 }
@@ -233,6 +234,7 @@ describe('terminal send RPC', () => {
       },
       {
         beforeWrite: undefined,
+        inputSource: {},
         reserveWrite: expect.any(Function),
         afterWrite: expect.any(Function)
       }
@@ -370,7 +372,7 @@ describe('terminal send RPC', () => {
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: '\x1b[3;4R', enter: false, interrupt: false },
-      { beforeWrite: undefined }
+      { beforeWrite: undefined, inputSource: {} }
     )
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })
@@ -570,7 +572,7 @@ describe('terminal send RPC', () => {
         enter: false,
         interrupt: false
       },
-      { beforeWrite: undefined }
+      { beforeWrite: undefined, inputSource: {} }
     )
   })
 
@@ -653,7 +655,7 @@ describe('terminal send RPC', () => {
         enter: true,
         interrupt: false
       },
-      { beforeWrite: expect.any(Function) }
+      { beforeWrite: expect.any(Function), inputSource: {} }
     )
   })
 

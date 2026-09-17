@@ -241,11 +241,11 @@ describe('terminal multiplex RPC', () => {
       )!
     )
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'still interactive\r',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        { text: 'still interactive\r', enter: false, interrupt: false },
+        { inputSource: expect.any(Object) }
+      )
     )
 
     handlers.get(16)?.(
@@ -434,11 +434,11 @@ describe('terminal multiplex RPC', () => {
       )!
     )
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-8', {
-        text: 'remote-still-interactive\r',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-8',
+        { text: 'remote-still-interactive\r', enter: false, interrupt: false },
+        { inputSource: expect.any(Object) }
+      )
     )
 
     const frameCountBeforeAck = binaryFrames.length

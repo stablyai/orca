@@ -14,6 +14,7 @@
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
+import { resolveTerminalInputSourceForPane } from '../agent-hooks/terminal-input-source-resolver'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
@@ -200,6 +201,12 @@ async function startOrcadRuntime(
   uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
     observedStatusCapture.observe(enriched)
   )
+  // Why a holder: the listener starts before the runtime exists, and a PTY that outlived the
+  // previous orcad can already be asking; until the runtime is up the route answers 404.
+  let inputSourceRuntime: InstanceType<typeof OrcaRuntimeService> | null = null
+  agentHookServer.setTerminalInputSourceResolver((paneKey) =>
+    resolveTerminalInputSourceForPane(inputSourceRuntime, paneKey)
+  )
   if (isAgentStatusHooksEnabled(store.getSettings())) {
     await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
   }
@@ -214,6 +221,9 @@ async function startOrcadRuntime(
   let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
 
   const runtime = new OrcaRuntimeService(store, undefined, {
+    // Why lazy: the RPC server that owns the device registry is constructed after this runtime.
+    getPairedDeviceName: (pairedDeviceId) =>
+      rpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
     // reference would freeze the pre-daemon one.
     getLocalProvider: () => getLocalPtyProvider(),
@@ -260,6 +270,7 @@ async function startOrcadRuntime(
       }
     }
   })
+  inputSourceRuntime = runtime
 
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({

@@ -11,6 +11,7 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    recordTerminalInputSource: vi.fn(),
     ...overrides
   } as OrcaRuntimeService
 }
@@ -46,7 +47,8 @@ describe('terminal agent prompt send RPC', () => {
     expect(runtime.isTerminalRunningSettledPromptAgent).toHaveBeenCalledWith('terminal-1')
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
       beforeWrite: undefined,
-      signal: undefined
+      signal: undefined,
+      inputSource: {}
     })
     expect(sendTerminal).not.toHaveBeenCalled()
   })
@@ -81,7 +83,7 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: 'echo x', enter: true, interrupt: false },
-      { beforeWrite: undefined, signal: undefined }
+      { beforeWrite: undefined, signal: undefined, inputSource: {} }
     )
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })

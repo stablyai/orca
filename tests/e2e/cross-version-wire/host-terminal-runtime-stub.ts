@@ -162,6 +162,8 @@ export function createHostTerminalRuntimeStub(
       return { accepted: true }
     },
     beginMobileInputFloor: () => ({ commit: () => {}, rollback: () => {} }),
+    // Who typed is host bookkeeping for agent hooks, not part of the wire; accept and drop it.
+    recordTerminalInputSource: () => {},
     isTerminalInputLocked: () => false,
     getTerminalInputLock: () => null,
     // Source-range accounting is a host-internal ledger, not part of the wire; decline it.

@@ -1,9 +1,9 @@
 import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
-import { InvalidArgumentError, defineMethod } from '../../core'
-import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
+import { defineMethod } from '../../core'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import { TerminalSend } from './unary-schemas'
+import { assertTerminalQueryReplyParams } from './terminal-send-query-reply-params'
 import {
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
@@ -29,6 +29,8 @@ export const TERMINAL_SEND_METHODS = [
       {
         runtime,
         clientId,
+        pairedDeviceId,
+        clientKind,
         signal,
         orchestrationMutation,
         recordMutationReceipt,
@@ -49,20 +51,7 @@ export const TERMINAL_SEND_METHODS = [
         )
       }
       const queryReplyClientId = clientId ?? params.client?.id
-      if (
-        params.inputKind === 'query-reply' &&
-        (!params.text ||
-          !isTerminalQueryReply(params.text) ||
-          params.enter === true ||
-          params.interrupt === true ||
-          params.agentPrompt === true ||
-          params.requireAgentStatus !== undefined ||
-          params.client?.type !== 'mobile' ||
-          !queryReplyClientId ||
-          (clientId !== undefined && params.client.id !== clientId))
-      ) {
-        throw new InvalidArgumentError('Invalid terminal query reply')
-      }
+      assertTerminalQueryReplyParams(params, clientId, queryReplyClientId)
       const replayObservation = await observeReplayedTerminalPrompt(
         runtime,
         params.terminal,
@@ -182,6 +171,7 @@ export const TERMINAL_SEND_METHODS = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
+      const inputSource = { pairedDeviceId, clientKind }
       const beforeWrite =
         orchestrationMutation && params.agentPrompt === true
           ? async (ptyId?: string): Promise<void> => {
@@ -213,6 +203,7 @@ export const TERMINAL_SEND_METHODS = [
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               beforeWrite,
               signal,
+              inputSource,
               ...(orchestrationMutation
                 ? {
                     acceptQueued: true,
@@ -235,6 +226,7 @@ export const TERMINAL_SEND_METHODS = [
               {
                 beforeWrite,
                 signal,
+                inputSource,
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

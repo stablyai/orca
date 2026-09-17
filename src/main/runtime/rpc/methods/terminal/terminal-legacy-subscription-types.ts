@@ -14,6 +14,8 @@ export type TerminalSubscriptionArgs = {
   params: TerminalSubscribeParams
   runtime: RpcContext['runtime']
   connectionId: RpcContext['connectionId']
+  pairedDeviceId: RpcContext['pairedDeviceId']
+  clientKind: RpcContext['clientKind']
   sendBinary: RpcContext['sendBinary']
   registerBinaryStreamHandler: RpcContext['registerBinaryStreamHandler']
   signal: RpcContext['signal']

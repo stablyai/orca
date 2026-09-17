@@ -21,7 +21,8 @@ function makeRuntime(accepted: boolean): OrcaRuntimeService {
       accepted,
       bytesWritten: accepted ? 1 : 0
     }),
-    notifyNativeChatLaunchDraftResolved: vi.fn()
+    notifyNativeChatLaunchDraftResolved: vi.fn(),
+    recordTerminalInputSource: vi.fn()
   } as unknown as OrcaRuntimeService
 }
 

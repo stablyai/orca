@@ -98,6 +98,8 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 The execution host owns agent status in one store, the hook server's, and every reader (sidebar, `worktree ps`, mobile, dashboard) subscribes to it. Before adding a producer, a cache, or a reader-side precedence rule, read [`docs/reference/agent-status-store.md`](./docs/reference/agent-status-store.md): new producers write into that store, and readers keep only presentation policy.
 
+An agent hook can ask the hook listener which paired device last typed into its pane (`GET /pane/<paneKey>/last-input`, same token as the status POSTs). The route, its statuses and its trust boundary are in [`docs/reference/agent-hook-last-input.md`](./docs/reference/agent-hook-last-input.md).
+
 ## Agent Terminal Screens
 
 A rule that reads what an agent CLI paints on a terminal — readiness, blocked prompts, idle — must be written against a captured transcript, not a remembered screen. Record one with [`docs/reference/agent-pty-transcript-capture.md`](./docs/reference/agent-pty-transcript-capture.md), which keeps escapes and wrapping intact and scrubs account identifiers before they reach git. Antigravity readiness has no transcript yet and five failed attempts without one; before touching it, read [`docs/reference/antigravity-readiness-evidence.md`](./docs/reference/antigravity-readiness-evidence.md).

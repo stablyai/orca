@@ -11,6 +11,7 @@ import {
   isTerminalInputTooLargeWithYield
 } from '../../../../../shared/terminal-input'
 import type { TerminalViewportClient } from './terminal-stream-types'
+import type { TerminalInputCaller } from '../../../terminal-input-source'
 
 export function isTerminalInputLockedForClient(
   runtime: OrcaRuntimeService,
@@ -108,6 +109,7 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    inputSource: TerminalInputCaller
   }
 ): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
@@ -115,10 +117,13 @@ export async function sendTerminalStreamInput(
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action)
+      const result = await runtime.sendTerminal(args.terminal, action, {
+        inputSource: args.inputSource
+      })
       return result.accepted ? 'delivered' : 'rejected'
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
+      inputSource: args.inputSource,
       reserveWrite: (writePtyId) => {
         const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
         if (!claim) {
