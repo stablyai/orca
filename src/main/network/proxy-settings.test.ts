@@ -15,11 +15,16 @@ vi.mock('electron', () => ({
 
 import {
   applyElectronProxySettings,
+  applyProxySettingsToSession,
   ensureElectronProxyFromEnvironment,
   resetProxyApplicationForTests,
   setDefaultProxySessionResolver
 } from './proxy-settings'
 import { handleElectronProxyLogin } from './electron-proxy-credentials'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { PROXY_CA } from './__fixtures__/proxy-ca-fixtures'
 
 function createProxySession(resolveProxy = 'DIRECT') {
   return {
@@ -31,7 +36,8 @@ function createProxySession(resolveProxy = 'DIRECT') {
         proxyBypassRules?: string
       }) => {}
     ),
-    closeAllConnections: vi.fn(async () => {})
+    closeAllConnections: vi.fn(async () => {}),
+    setCertificateVerifyProc: vi.fn()
   }
 }
 
@@ -39,6 +45,27 @@ describe('Electron proxy settings', () => {
   beforeEach(() => {
     resetProxyApplicationForTests()
     setDefaultProxySessionResolver(() => defaultSessionMock)
+  })
+
+  it('does not let an env-driven apply clear a CA installed from settings', async () => {
+    // Regression: the CA install used to sit in resolveAndApplySessionProxy, which
+    // ensureElectronProxyFromEnvironment also reaches with no settings, clearing
+    // the anchor the OAuth usage request needs.
+    //
+    // The CA must be set WITHOUT a proxy URL to reach it: with a URL applied the
+    // env path short-circuits on the memoized result, and an earlier version of
+    // this test set both and passed against the bug.
+    const dir = mkdtempSync(join(tmpdir(), 'orca-proxy-settings-ca-'))
+    const caPath = join(dir, 'ca.pem')
+    writeFileSync(caPath, PROXY_CA)
+    const proxySession = createProxySession()
+
+    await applyProxySettingsToSession(proxySession, { httpProxyCaPath: caPath })
+    expect(proxySession.setCertificateVerifyProc).toHaveBeenCalledWith(expect.any(Function))
+
+    proxySession.setCertificateVerifyProc.mockClear()
+    await ensureElectronProxyFromEnvironment({ proxySession, env: {} })
+    expect(proxySession.setCertificateVerifyProc).not.toHaveBeenCalled()
   })
 
   it('resolves proxy policy without a Chromium session on Node hosts', async () => {

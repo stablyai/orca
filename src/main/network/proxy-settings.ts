@@ -15,7 +15,9 @@ import {
 } from './electron-proxy-credentials'
 import { runBoundedProxyApplication } from './bounded-proxy-application'
 import { defaultProxySession, type ProxySession } from './electron-default-proxy-session'
-import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
+import { proxyMemoKey, resolveProxyPolicyWithoutSession } from './proxy-policy-resolution'
+import type { ProxyApplyResult } from './proxy-policy-resolution'
+import { applyProxyCaTrustToSession } from './proxy-ca-trust'
 
 export { setDefaultProxySessionResolver } from './electron-default-proxy-session'
 export type { ProxyApplyResult } from './proxy-policy-resolution'
@@ -30,12 +32,6 @@ type SessionProxyApplicationState = {
   retired: boolean
 }
 let sessionProxyApplications = new WeakMap<ProxySession, SessionProxyApplicationState>()
-
-function proxyMemoKey(result: ProxyApplyResult): string {
-  return result.source === 'settings' || result.source === 'env'
-    ? `${result.source}\0${result.proxyRules}\0${result.proxyBypassRules ?? ''}`
-    : result.source
-}
 
 export function resetProxyApplicationForTests(): void {
   sessionProxyApplications = new WeakMap()
@@ -171,6 +167,11 @@ export function applyProxySettingsToSession(
   settings: NetworkProxySettings,
   options: { env?: Record<string, string | undefined>; probeUrl?: string } = {}
 ): Promise<ProxyApplyResult> {
+  // Why here and not in resolveAndApplySessionProxy: that is shared with
+  // ensureElectronProxyFromEnvironment, which carries no settings and would pass
+  // `{}`, clearing the anchor — and one of its callers is the usage request that
+  // needs it most. Only entry points that know the settings may touch it.
+  applyProxyCaTrustToSession(proxySession, settings)
   return enqueueSessionProxyApplication(proxySession, (state) =>
     resolveAndApplySessionProxy(proxySession, state, settings, options)
   )
