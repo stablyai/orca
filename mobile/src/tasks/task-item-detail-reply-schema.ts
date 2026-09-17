@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {
+  MERGEABLE_STATE,
   prCount,
   prNullableText,
   prStringList,
@@ -20,8 +21,6 @@ import {
 // src/shared/github/work-item-types.ts, GitLabWorkItemDetails in src/shared/gitlab-types.ts,
 // LinearIssue in src/shared/linear/issue-types.ts, and `Promise<string[]>` from
 // src/main/github/issue-field-options.ts:15.
-
-const MERGEABLE_STATE = ['MERGEABLE', 'CONFLICTING', 'UNKNOWN'] as const
 
 /**
  * A GitHub work item's detail pane.
