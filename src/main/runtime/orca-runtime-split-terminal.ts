@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from './orca-runtime-stop-explicitly-closed-tab-ptys'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../shared/runtime-types'
+import type { RuntimeTerminalEqualize, RuntimeTerminalSplit } from '../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 
 export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
@@ -44,6 +44,33 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
       tabId: leaf.tabId,
       paneRuntimeId: leaf.paneRuntimeId,
       leafId: newLeafId
+    }
+  }
+
+  // Why: equalizes pane sizes in the tab enclosing the target terminal handle by notifying the
+  // renderer to invoke the existing equalizePaneSizes logic; no new layout math.
+  async equalizeTerminal(handle: string): Promise<RuntimeTerminalEqualize> {
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty) {
+      if (!livePty.pty.connected) {
+        throw new Error('terminal_exited')
+      }
+      const tabId = livePty.pty.tabId ?? livePty.record.tabId
+      if (!tabId) {
+        throw new Error('terminal_handle_stale')
+      }
+      this.notifier?.equalizeTerminal?.(tabId)
+      return {
+        handle,
+        tabId
+      }
+    }
+    this.assertGraphReady()
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    this.notifier?.equalizeTerminal?.(leaf.tabId)
+    return {
+      handle,
+      tabId: leaf.tabId
     }
   }
 }

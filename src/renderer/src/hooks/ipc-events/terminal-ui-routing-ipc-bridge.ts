@@ -1,4 +1,8 @@
-import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import {
+  EQUALIZE_TERMINAL_PANES_EVENT,
+  type EqualizeTerminalPanesDetail,
+  type SplitTerminalPaneDetail
+} from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
   dispatchTerminalPaneSplitRequest,
@@ -108,6 +112,16 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
 
 export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(window.api.ui.onSplitTerminal(routeRuntimeTerminalSplitRequest))
+
+  unsubs.push(
+    window.api.ui.onEqualizeTerminal(({ tabId }) => {
+      window.dispatchEvent(
+        new CustomEvent<EqualizeTerminalPanesDetail>(EQUALIZE_TERMINAL_PANES_EVENT, {
+          detail: { tabId }
+        })
+      )
+    })
+  )
 
   unsubs.push(
     window.api.ui.onRenameTerminal(({ tabId, title }) => {

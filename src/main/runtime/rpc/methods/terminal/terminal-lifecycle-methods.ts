@@ -9,6 +9,7 @@ import {
   AgentTeamsTmuxCompat,
   TerminalCloseAll,
   TerminalCreateParams,
+  TerminalEqualize,
   TerminalFocus,
   TerminalHandle,
   TerminalSleep,
@@ -89,6 +90,13 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         env: params.env,
         telemetrySource: params.telemetrySource
       })
+    })
+  }),
+  defineMethod({
+    name: 'terminal.equalize',
+    params: TerminalEqualize,
+    handler: async (params, { runtime }) => ({
+      equalize: await runtime.equalizeTerminal(params.terminal)
     })
   }),
   defineMethod({

@@ -124,6 +124,7 @@ orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
+orca terminal equalize --terminal <handle> --json
 orca terminal rename --terminal <handle> --title "runner" --json
 orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json

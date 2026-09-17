@@ -1,5 +1,10 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { CLOSE_TERMINAL_PANE_EVENT, type CloseTerminalPaneDetail } from '@/constants/terminal'
+import {
+  CLOSE_TERMINAL_PANE_EVENT,
+  EQUALIZE_TERMINAL_PANES_EVENT,
+  type CloseTerminalPaneDetail,
+  type EqualizeTerminalPanesDetail
+} from '@/constants/terminal'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -110,9 +115,26 @@ export function installTerminalPaneMountEvents(args: {
     deps.persistLayoutSnapshot()
   }
 
+  // Why: handle on-demand terminal pane equalization requested from the CLI/runtime for this tab.
+  // Calls the existing equalizePaneSizes logic on the pane manager without introducing new layout math.
+  const onCliEqualizePanes = (event: Event): void => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: window event listener receives CustomEvent with EqualizeTerminalPanesDetail dispatched by terminal-ui-routing-ipc-bridge.
+    const detail = (event as CustomEvent<EqualizeTerminalPanesDetail>).detail
+    if (!detail?.tabId || detail.tabId !== deps.tabId) {
+      return
+    }
+    const mgr = deps.managerRef.current
+    if (!mgr) {
+      return
+    }
+    mgr.equalizePaneSizes()
+  }
+
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+  window.addEventListener(EQUALIZE_TERMINAL_PANES_EVENT, onCliEqualizePanes)
   return () => {
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+    window.removeEventListener(EQUALIZE_TERMINAL_PANES_EVENT, onCliEqualizePanes)
   }
 }
