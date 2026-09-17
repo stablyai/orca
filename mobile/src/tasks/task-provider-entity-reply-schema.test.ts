@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import {
   assignableUserListSchema,
   detailCheckListSchema,
+  DETAIL_FILE_STATUS,
   detailCommentListSchema,
   detailFileListSchema,
   reviewSummaryListSchema,
@@ -154,15 +155,8 @@ describe('a check row and a file row', () => {
   })
 
   it('carries every file status the host will accept back and drops one it would refuse', () => {
-    for (const status of [
-      'added',
-      'modified',
-      'removed',
-      'renamed',
-      'copied',
-      'changed',
-      'unchanged'
-    ]) {
+    // The arm list is pinned to GitHubPRFile['status'] in the schema module, where tsc looks.
+    for (const status of DETAIL_FILE_STATUS) {
       expect(reads(detailFileListSchema, [{ path: 'a', status }])[0]?.status).toBe(status)
     }
     // Absent is what the call site turns into `'modified'`; the host's own params enum would

@@ -1,9 +1,17 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingRecord } from '../../../src/shared/zod-salvage'
+import type { SetupRunPolicy } from '../../../src/shared/orca-yaml-hook-types'
+import { hostUnionArms, salvagedOptional, salvagingRecord } from '../../../src/shared/zod-salvage'
 
 // The New Workspace drawer's own two reads. Checked against `repo.hooks`
 // (src/main/runtime/rpc/methods/repo.ts:190 → runtime.getRepoHooks) and `ui.get`
 // (src/main/runtime/rpc/methods/client-ui.ts:60), which answers `{ ui }` and nothing else.
+
+// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+export const SETUP_RUN_POLICIES = hostUnionArms<SetupRunPolicy>({
+  ask: true,
+  'run-by-default': true,
+  'skip-by-default': true
+})
 
 /**
  * The repo's setup hook, as the drawer decorates its advanced section with it.
@@ -19,7 +27,8 @@ import { salvagedOptional, salvagingRecord } from '../../../src/shared/zod-salva
  * site's `?? 'run-by-default'` still doing the defaulting: the only two comparisons against it are
  * `!== 'skip-by-default'` and `=== 'ask'`, so an arm this build does not know behaves exactly as
  * main's unrecognised string did. The arms are the host's `SetupRunPolicy`
- * (src/shared/orca-yaml-hook-types.ts:1), which is what `getEffectiveSetupRunPolicy` answers. `setupTrust` is nullable as well as optional because the
+ * (src/shared/orca-yaml-hook-types.ts:1), which is what `getEffectiveSetupRunPolicy` answers, and
+ * they are pinned to it above. `setupTrust` is nullable as well as optional because the
  * `components-setup-ask` fixture sends an explicit `null` — salvaging that as a drop would move a
  * `normal` golden for a reply the host really sends.
  */
@@ -36,10 +45,7 @@ export const newWorkspaceRepoHooksSchema = z.looseObject({
       .nullable()
   ),
   source: z.string().nullable(),
-  setupRunPolicy: salvagedOptional(
-    'setupRunPolicy',
-    z.enum(['ask', 'run-by-default', 'skip-by-default'])
-  ),
+  setupRunPolicy: salvagedOptional('setupRunPolicy', z.enum(SETUP_RUN_POLICIES)),
   setupTrust: salvagedOptional(
     'setupTrust',
     z.looseObject({ contentHash: z.string(), scriptContent: z.string() }).nullable()

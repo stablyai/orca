@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import type { GitHubPRFile } from '../../../src/shared/github/pull-request-types'
+import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { prCount, prFlag, prNullableText, prText } from '../session/github-pr-entity-reply-schema'
 
 // The entities the tasks screen's provider replies are built out of: the mutation envelope every
@@ -22,15 +23,16 @@ import { prCount, prFlag, prNullableText, prText } from '../session/github-pr-en
 // plain salvaged-member combinators over zod-salvage, and one definition is what keeps "absent
 // stays absent, malformed reads as absent" identical on both surfaces.
 
-const DETAIL_FILE_STATUS = [
-  'added',
-  'modified',
-  'removed',
-  'renamed',
-  'copied',
-  'changed',
-  'unchanged'
-] as const
+// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+export const DETAIL_FILE_STATUS = hostUnionArms<GitHubPRFile['status']>({
+  added: true,
+  modified: true,
+  removed: true,
+  renamed: true,
+  copied: true,
+  changed: true,
+  unchanged: true
+})
 
 /**
  * One conversation comment, as every task sheet holds it.

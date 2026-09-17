@@ -86,7 +86,9 @@ function recordEntryKeys(raw: unknown): string[] | null {
  * instead of rejecting the reply. A non-string stays fatal, so this widens the vocabulary without
  * also accepting the wrong type. Not `.catch()`, which would swallow absence too.
  */
-export function openEnum<T extends readonly [string, ...string[]], F extends T[number] | undefined>(
+// `readonly string[]` rather than a non-empty tuple so a hostUnionArms list can feed it; z.enum
+// takes the same, so the tuple constraint only excluded callers zod itself accepts.
+export function openEnum<T extends readonly string[], F extends T[number] | undefined>(
   values: T,
   fallback: F
 ): z.ZodType<T[number] | F, unknown> {

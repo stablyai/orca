@@ -7,6 +7,7 @@ import {
   repoSetupHooksSchema,
   repoSparsePresetListSchema,
   repoSparsePresetSaveSchema,
+  SSH_CONNECTION_STATUS,
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
 
@@ -57,22 +58,10 @@ describe('the SSH connection record', () => {
 })
 
 describe('status is an open enum that degrades to disconnected', () => {
-  // Keyed by SshConnectionStatus so the compiler, not this list, decides what "every arm" means:
-  // an arm added to or removed from the host union fails tsc here before any test runs. That is
-  // the check the schema's own arm list cannot make about itself.
-  const HOST_ARMS: Record<SshConnectionStatus, true> = {
-    disconnected: true,
-    connecting: true,
-    'auth-failed': true,
-    'deploying-relay': true,
-    connected: true,
-    reconnecting: true,
-    'reconnection-failed': true,
-    error: true
-  }
-
+  // The arm list is pinned to SshConnectionStatus in the schema module, where tsc looks; this loop
+  // proves every pinned arm survives the parse rather than degrading.
   it('takes every arm the host declares, so nothing it sends today degrades', () => {
-    for (const status of Object.keys(HOST_ARMS)) {
+    for (const status of SSH_CONNECTION_STATUS) {
       const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status } })
       expect(parsed.success && parsed.data).toMatchObject({ status })
     }

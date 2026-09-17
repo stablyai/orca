@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import type { SshConnectionStatus } from '../../../src/shared/ssh-types'
+import {
+  hostUnionArms,
+  openEnum,
+  salvagedOptional,
+  salvagingArray
+} from '../../../src/shared/zod-salvage'
 
 // The repo and SSH reads the workspace-create drawer runs. Checked against
 // src/main/runtime/rpc/methods/ssh.ts:30-46 (getPublicSshState, SshConnectionState in
@@ -7,16 +13,17 @@ import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/
 // answer a bare `string[]`), and repo.ts:87-103/:184-192 (the sparse preset envelopes, the ref
 // search and the orca.yaml hooks).
 
-const SSH_CONNECTION_STATUS = [
-  'disconnected',
-  'connecting',
-  'auth-failed',
-  'deploying-relay',
-  'connected',
-  'reconnecting',
-  'reconnection-failed',
-  'error'
-] as const
+// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+export const SSH_CONNECTION_STATUS = hostUnionArms<SshConnectionStatus>({
+  disconnected: true,
+  connecting: true,
+  'auth-failed': true,
+  'deploying-relay': true,
+  connected: true,
+  reconnecting: true,
+  'reconnection-failed': true,
+  error: true
+})
 
 const sourceText = (name: string) => salvagedOptional(name, z.string())
 

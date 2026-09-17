@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import type { GitHubProjectOwnerType } from '../../../src/shared/github/project-types'
+import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {
   assignableUserListSchema,
   detailCheckListSchema,
@@ -42,7 +43,11 @@ import {
  * The corpus exercises `'organization'` (`tk-project-board-load`); `'user'` is unexercised but
  * inside the set, so no reply can drop on it.
  */
-const PROJECT_OWNER_TYPE = ['organization', 'user'] as const
+// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+export const PROJECT_OWNER_TYPE = hostUnionArms<GitHubProjectOwnerType>({
+  organization: true,
+  user: true
+})
 
 const projectMessage = (name: string) => salvagedOptional(name, z.string())
 const projectCount = (name: string) => salvagedOptional(name, z.number())

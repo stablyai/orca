@@ -3,6 +3,8 @@ import type { z } from 'zod'
 import {
   missedNotificationsSchema,
   notificationUnreadReplySchema,
+  PUSH_REGISTER_REFUSAL_REASONS,
+  PUSH_TEST_REFUSAL_REASONS,
   pushDeliveryTestResultSchema,
   pushRouteRegistrationSchema
 } from './notification-reply-schema'
@@ -72,6 +74,17 @@ describe('closed enums degrade to the copy main showed', () => {
     expect(
       reads(pushRouteRegistrationSchema, { registered: false, reason: 'moon-phase' })?.reason
     ).toBe(undefined)
+  })
+
+  // Both arm lists are pinned to the host's refusal unions in the schema module, where tsc looks;
+  // these loops prove every pinned arm survives the parse, not just the ones picked above.
+  it('keeps every refusal reason the host declares for either route', () => {
+    for (const reason of PUSH_TEST_REFUSAL_REASONS) {
+      expect(reads(pushDeliveryTestResultSchema, { accepted: false, reason })?.reason).toBe(reason)
+    }
+    for (const reason of PUSH_REGISTER_REFUSAL_REASONS) {
+      expect(reads(pushRouteRegistrationSchema, { registered: false, reason })?.reason).toBe(reason)
+    }
   })
 })
 

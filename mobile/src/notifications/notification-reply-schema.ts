@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import type {
+  MobilePushRegisterResult,
+  MobilePushTestResult
+} from '../../../src/shared/mobile-push-contract'
+import { hostUnionArms, salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // The four notification replies mobile reads: the push-route register/unregister pair, the
 // settings screen's delivery probe, and the tray catch-up. Checked against the handlers in
@@ -20,6 +24,26 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  */
 export const notificationUnreadReplySchema = z.unknown()
 
+// Both reason vocabularies are pinned to the host's own refusal arms through hostUnionArms, so an
+// arm added or dropped host-side fails tsc here instead of degrading silently on the phone.
+export const PUSH_TEST_REFUSAL_REASONS = hostUnionArms<
+  Extract<MobilePushTestResult, { accepted: false }>['reason']
+>({
+  not_registered: true,
+  unavailable: true,
+  rate_limited: true,
+  rejected: true
+})
+export const PUSH_REGISTER_REFUSAL_REASONS = hostUnionArms<
+  Extract<MobilePushRegisterResult, { registered: false }>['reason']
+>({
+  gateway_unreachable: true,
+  gateway_rejected: true,
+  not_mobile: true,
+  registration_storage_failed: true,
+  throttled: true
+})
+
 /**
  * Whether Orca's push service took a test notification.
  *
@@ -28,7 +52,7 @@ export const notificationUnreadReplySchema = z.unknown()
  * `reason` is a closed enum because those two comparisons are the whole of what it decides — an arm
  * this build does not know degrades to the generic "Could not send" copy, which is the arm main took
  * for every unrecognised string too — pinned by the `notifications-display-test-unknown-reason`
- * golden. The arms are the host's own (mobile-push-contract.ts:99).
+ * golden. The arms are the host's own (mobile-push-contract.ts:99), pinned to it above.
  *
  * Total, so a result that is not an object degrades the same way. A refusal here would not be
  * silent: the call site's `try` turns it into the reader's own sentence in the message slot where
@@ -38,10 +62,7 @@ export const notificationUnreadReplySchema = z.unknown()
 export const pushDeliveryTestResultSchema = z
   .looseObject({
     accepted: salvagedOptional('accepted', z.boolean()),
-    reason: salvagedOptional(
-      'reason',
-      z.enum(['not_registered', 'unavailable', 'rate_limited', 'rejected'])
-    )
+    reason: salvagedOptional('reason', z.enum(PUSH_TEST_REFUSAL_REASONS))
   })
   .nullish()
   .catch(undefined)
@@ -52,23 +73,14 @@ export const pushDeliveryTestResultSchema = z
  * `registered` is the only member read — push-registration.ts:117 compares it to `true` through
  * `?.` on a payload main already typed as nullable — so the reply stays nullish and every member
  * optional. `registrationId` and `reason` are declared because the host sends them
- * (MobilePushRegisterResult, mobile-push-contract.ts:38-49, whose five reason arms these are) and a
- * future reader should find them here rather than re-assert them.
+ * (MobilePushRegisterResult, mobile-push-contract.ts:38-49, whose five reason arms these are,
+ * pinned to it above) and a future reader should find them here rather than re-assert them.
  */
 export const pushRouteRegistrationSchema = z
   .looseObject({
     registered: salvagedOptional('registered', z.boolean()),
     registrationId: salvagedOptional('registrationId', z.string()),
-    reason: salvagedOptional(
-      'reason',
-      z.enum([
-        'gateway_unreachable',
-        'gateway_rejected',
-        'not_mobile',
-        'registration_storage_failed',
-        'throttled'
-      ])
-    )
+    reason: salvagedOptional('reason', z.enum(PUSH_REGISTER_REFUSAL_REASONS))
   })
   .nullish()
 
