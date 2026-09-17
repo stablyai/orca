@@ -7,11 +7,12 @@ import {
 } from './relay-cloud-sql-connection-budget.mjs'
 
 test('production shared consumers keep allowance and reserve below the ceiling', () => {
+  // cells: 230 - 20 for fencing c4 and c5. Rebasing onto the asia-pool change makes it 228.
   const report = readRelayCloudSqlConnectionBudget()
 
-  assert.deepEqual(report.consumers, { cells: 230, directors: 15, auth: 20, api: 50 })
+  assert.deepEqual(report.consumers, { cells: 210, directors: 15, auth: 20, api: 50 })
   assert.deepEqual(report.asia, { cells: 3, poolMax: 10 })
-  assert.equal(report.configuredMaximum, 315)
+  assert.equal(report.configuredMaximum, 295)
   assert.equal(report.rolloutOverlap.relayDirectorCandidate, 30)
   assert.equal(report.rolloutOverlap.apiCandidate, 65)
   assert.equal(report.rolloutOverlap.authCandidate, 35)
@@ -21,10 +22,10 @@ test('production shared consumers keep allowance and reserve below the ceiling',
   assert.equal(report.maintenanceAdminAllowance, 5)
   assert.equal(report.explicitReserve, 10)
   assert.equal(report.usableCeiling, 390)
-  assert.equal(report.operatingMaximum, 385)
-  assert.equal(report.remainingWithinUsableCeiling, 5)
-  assert.equal(report.budgetedTotal, 395)
-  assert.equal(report.unallocated, 5)
+  assert.equal(report.operatingMaximum, 365)
+  assert.equal(report.remainingWithinUsableCeiling, 25)
+  assert.equal(report.budgetedTotal, 375)
+  assert.equal(report.unallocated, 25)
   assert.equal(report.withinBudget, true)
 })
 

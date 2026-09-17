@@ -32,7 +32,20 @@ relay_gce_subnetwork_cidr = "10.42.0.0/24"
 relay_gce_additional_region_subnetwork_cidrs = {
   "asia-east2" = "10.42.1.0/24"
 }
-relay_gce_fenced_cells = ["production-gce-c1", "production-gce-c2", "production-gce-c3", "production-gce-c6", "production-gce-c11", "production-gce-c12"]
+# Fenced cells are retired existing-only capacity: the selector can never place on them again,
+# so their MIGs run at zero rather than holding a VM and 10 Postgres connections each.
+relay_gce_fenced_cells = [
+  "production-gce-c1",
+  "production-gce-c2",
+  "production-gce-c3",
+  # Merge immediately before fence-source runs for c4 and then c5. Terraform reads target_size
+  # straight from this list, so an entry sitting here is a standing instruction to resize.
+  "production-gce-c4",
+  "production-gce-c5",
+  "production-gce-c6",
+  "production-gce-c11",
+  "production-gce-c12"
+]
 # Initial cells stay admission-disabled until production preflight and go-live approval.
 relay_gce_cells = {
   "production-gce-c1" = {
