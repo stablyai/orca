@@ -140,6 +140,7 @@ export function buildDefaultSettings(args: {
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,
+    expandProjectFolderOnAutomationRun: true,
     artifactsEnabled: true,
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,

@@ -8,6 +8,7 @@ import {
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -41,7 +42,9 @@ export function useSidebarRevealRequests(args: {
   folderWorkspaces: readonly FolderWorkspace[]
   hasFilters: boolean
   clearFilters: () => void
-}): void {
+  projectGroups?: readonly ProjectGroup[]
+  defaultHostId?: ExecutionHostId
+}) {
   const {
     groupBy,
     renderedSidebarRowKeys,
@@ -53,7 +56,9 @@ export function useSidebarRevealRequests(args: {
     worktrees,
     folderWorkspaces,
     hasFilters,
-    clearFilters
+    clearFilters,
+    projectGroups,
+    defaultHostId
   } = args
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
@@ -116,7 +121,9 @@ export function useSidebarRevealRequests(args: {
         worktreeMap,
         folderWorkspaces,
         worktrees,
-        currentSidebarExecutionHostId
+        currentSidebarExecutionHostId,
+        projectGroups,
+        defaultHostId
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
