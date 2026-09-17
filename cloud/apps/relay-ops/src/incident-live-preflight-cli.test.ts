@@ -183,24 +183,31 @@ describe('relay incident live preflight', () => {
     await expect(runIncidentLivePreflight(
       ['--state-file', oneRollOld, '--wave-index', '1'], deps
     )).resolves.toBeUndefined()
-    // Both edges of one predecessor job timeout: 5min + 75min exactly.
+    // Wave 0 edges: the 10-minute bound covers same-cap job start-up latency.
     await expect(runIncidentLivePreflight(
-      ['--state-file', agedState(80 * 60_000), '--wave-index', '1'], deps
+      ['--state-file', agedState(10 * 60_000), '--wave-index', '0'], deps
     )).resolves.toBeUndefined()
     await expect(runIncidentLivePreflight(
-      ['--state-file', agedState(80 * 60_000 + 1), '--wave-index', '1'], deps
+      ['--state-file', agedState(10 * 60_000 + 1), '--wave-index', '0'], deps
+    )).rejects.toThrow('monitor evidence is incomplete or stale')
+    // Both edges of one predecessor job timeout: 10min + 75min exactly.
+    await expect(runIncidentLivePreflight(
+      ['--state-file', agedState(85 * 60_000), '--wave-index', '1'], deps
+    )).resolves.toBeUndefined()
+    await expect(runIncidentLivePreflight(
+      ['--state-file', agedState(85 * 60_000 + 1), '--wave-index', '1'], deps
     )).rejects.toThrow('monitor evidence is incomplete or stale')
     await expect(runIncidentLivePreflight(
-      ['--state-file', agedState(155 * 60_000), '--wave-index', '2'], deps
+      ['--state-file', agedState(160 * 60_000), '--wave-index', '2'], deps
     )).resolves.toBeUndefined()
     await expect(runIncidentLivePreflight(
-      ['--state-file', agedState(155 * 60_000 + 1), '--wave-index', '2'], deps
+      ['--state-file', agedState(160 * 60_000 + 1), '--wave-index', '2'], deps
     )).rejects.toThrow('monitor evidence is incomplete or stale')
     await expect(runIncidentLivePreflight(
-      ['--state-file', agedState(230 * 60_000), '--wave-index', '3'], deps
+      ['--state-file', agedState(235 * 60_000), '--wave-index', '3'], deps
     )).resolves.toBeUndefined()
     await expect(runIncidentLivePreflight(
-      ['--state-file', agedState(230 * 60_000 + 1), '--wave-index', '3'], deps
+      ['--state-file', agedState(235 * 60_000 + 1), '--wave-index', '3'], deps
     )).rejects.toThrow('monitor evidence is incomplete or stale')
     // The wave index is a strict single-use 0-3 argument.
     await expect(runIncidentLivePreflight(
@@ -454,7 +461,7 @@ describe('relay incident live preflight', () => {
   })
 
   it('stops retrying when the next wait would exceed the evidence-age bound', async () => {
-    const completedAt = now - 290_000
+    const completedAt = now - 590_000
     const stale = sample()
     stale.sources['cloud-monitoring']!.observedAt = new Date(now - (INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs + 1)).toISOString()
     const collect = vi.fn(async () => stale)

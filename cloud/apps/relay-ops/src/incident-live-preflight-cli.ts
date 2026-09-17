@@ -18,7 +18,10 @@ import { createIncidentSampleCollector } from './incident-monitor-sources.js'
 
 const FRESHNESS_RETRY_ATTEMPTS = 5
 const FRESHNESS_RETRY_INTERVAL_MS = 15_000
-const MONITOR_EVIDENCE_MAX_AGE_MS = 5 * 60_000
+// 10 min, not 5: the same-cap job reaches this check ~5 min after the monitor
+// completes (runner queue ~2 min, gate job ~80 s, checkout ~60 s); on 2026-09-17
+// a green gate died at 302 s. The live samples below hold every wave to now.
+const MONITOR_EVIDENCE_MAX_AGE_MS = 10 * 60_000
 // Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
 const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
 const WAVE_INDEX_PATTERN = /^[0-3]$/
