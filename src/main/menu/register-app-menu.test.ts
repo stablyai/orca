@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 
 const isMac = process.platform === 'darwin'
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
 function buildMenuOptions() {
   return {
@@ -557,15 +558,28 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
 
-  it('claims the Window menu as the macOS windows menu', () => {
-    registerAppMenu(buildMenuOptions())
-
+  it('claims the Window menu as the system Window menu on darwin only', () => {
     // Why: the role is what routes this submenu to -[NSApp setWindowsMenu:],
     // which is what makes macOS insert the open-window list and the
-    // multi-display "Move to <display>" entries. Losing it silently drops
-    // those system items, so pin it here.
-    const windowItem = getTemplate().find((entry) => entry.label === 'Window')
-    expect(windowItem?.role).toBe(isMac ? 'window' : undefined)
-    expect(windowItem?.submenu).toEqual([{ role: 'minimize' }, { role: 'zoom' }])
+    // multi-display "Move to <display>" entries. Both branches run here
+    // because reading the host process.platform would leave whichever branch
+    // the runner is not on unasserted.
+    try {
+      for (const [value, expected] of [
+        ['darwin', 'window'],
+        ['win32', undefined],
+        ['linux', undefined]
+      ] as const) {
+        Object.defineProperty(process, 'platform', { value })
+        buildFromTemplateMock.mockClear()
+        registerAppMenu(buildMenuOptions())
+
+        const windowItem = getTemplate().find((entry) => entry.label === 'Window')
+        expect(windowItem?.role, value).toBe(expected)
+        expect(windowItem?.submenu).toEqual([{ role: 'minimize' }, { role: 'zoom' }])
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', hostPlatform)
+    }
   })
 })
