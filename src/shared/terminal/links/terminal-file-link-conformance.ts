@@ -43,6 +43,12 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     }
   },
   {
+    name: 'relative path with line range',
+    lineText: 'see fakesnow/cursor.py:447-464 here',
+    tapText: 'cursor',
+    expected: { pathText: 'fakesnow/cursor.py', line: 447, column: null }
+  },
+  {
     name: 'tilde path',
     lineText: 'wrote ~/Documents/notes.md',
     tapText: 'notes',
