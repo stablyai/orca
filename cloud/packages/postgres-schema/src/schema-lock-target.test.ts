@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { schemaDeferrable } from './apply-postgres-schema.js'
 import {
   requireSchemaLockTarget,
   schemaLockTarget,
@@ -459,5 +460,63 @@ describe('schemaLockTarget storage parameters', () => {
 
   it('takes a relation lock, so the census requires it to carry a target', () => {
     expect(takesRelationLock('ALTER TABLE t SET (fillfactor = 70)')).toBe(true)
+  })
+})
+
+describe('schemaLockTarget dropped indexes', () => {
+  it('resolves a dropped index by name, with no table to name', () => {
+    expect(schemaLockTarget('DROP INDEX IF EXISTS i')).toEqual({
+      kind: 'index-by-name',
+      name: 'i',
+      skipWhen: 'absent'
+    })
+  })
+
+  it('reads CONCURRENTLY as a modifier rather than the index name', () => {
+    expect(schemaLockTarget('DROP INDEX CONCURRENTLY IF EXISTS i')?.name).toBe('i')
+  })
+
+  it('folds an unquoted name and keeps a quoted one, the way relname stores it', () => {
+    expect(schemaLockTarget('DROP INDEX IF EXISTS MyIndex')?.name).toBe('myindex')
+    expect(schemaLockTarget('DROP INDEX IF EXISTS "MyIndex"')?.name).toBe('MyIndex')
+  })
+
+  it('takes a relation lock, because the index is there on the boot that has to drop it', () => {
+    expect(takesRelationLock('DROP INDEX IF EXISTS i')).toBe(true)
+  })
+
+  it('requires IF EXISTS, so a bare DROP fails the boot instead of running unchecked', () => {
+    // Same contract as DROP CONSTRAINT: a bare DROP on a missing index is an error the server is
+    // supposed to raise, and a pre-check that skipped it would swallow that.
+    expect(() => requireSchemaLockTarget('DROP INDEX i')).toThrow(/unparsed_schema_lock_target/)
+  })
+
+  it('refuses a multi-index DROP rather than pre-checking only the first name', () => {
+    // Skipping on one name would leave the other index in place for the life of the database.
+    expect(() => requireSchemaLockTarget('DROP INDEX IF EXISTS a, b')).toThrow(
+      /unparsed_schema_lock_target/
+    )
+  })
+
+  it('derives the target through a leading deferrable marker', () => {
+    // The real shape in relay's schema: the marker is a comment, so classification must see past
+    // it or the statement would reach the server with no pre-check at all.
+    const statement = '-- schema-deferrable: reason\nDROP INDEX IF EXISTS i'
+    expect(sqlWithoutComments(statement)).toBe('DROP INDEX IF EXISTS i')
+    expect(schemaLockTarget(statement)?.name).toBe('i')
+  })
+})
+
+describe('schemaDeferrable', () => {
+  it('reads the marker only from a leading comment, never from the SQL body', () => {
+    // A name or a string containing the word must not make a statement deferrable.
+    expect(schemaDeferrable('-- schema-deferrable: reason\nDROP INDEX IF EXISTS i')).toBe(true)
+    expect(schemaDeferrable('DROP INDEX IF EXISTS schema_deferrable')).toBe(false)
+    expect(schemaDeferrable("CREATE TABLE t (c TEXT DEFAULT 'schema-deferrable')")).toBe(false)
+  })
+
+  it('treats an unmarked statement as fatal on a lock timeout, which is the default', () => {
+    expect(schemaDeferrable('DROP INDEX IF EXISTS i')).toBe(false)
+    expect(schemaDeferrable('ALTER TABLE t SET (fillfactor = 70)')).toBe(false)
   })
 })

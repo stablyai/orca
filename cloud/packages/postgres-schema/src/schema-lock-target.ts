@@ -2,14 +2,20 @@
 // already exists before the statement joins the lock queue. `table` is kept exactly as the
 // statement wrote it, schema qualification and quoting included, because it is fed to
 // `to_regclass`; `name` is the bare identifier the catalog stores in `relname`/`attname`.
-export type SchemaLockTarget = {
-  kind: 'index' | 'column' | 'constraint' | 'reloption'
-  table: string
-  name: string
-  // The catalog answer that means this statement has nothing left to do. Creating statements skip
-  // on present; `DROP CONSTRAINT IF EXISTS` is the inverse, because nothing to drop is done.
-  skipWhen: 'present' | 'absent'
-}
+export type SchemaLockTarget =
+  | {
+      kind: 'index' | 'column' | 'constraint' | 'reloption'
+      table: string
+      name: string
+      // The catalog answer that means this statement has nothing left to do. Creating statements
+      // skip on present; `DROP CONSTRAINT IF EXISTS` is the inverse, because nothing to drop is
+      // done.
+      skipWhen: 'present' | 'absent'
+    }
+  // A `DROP INDEX` names no table, and needs none: an index name that resolves to nothing is
+  // nothing to drop, whatever table it used to belong to. Resolution is by name through the
+  // search_path, which is how the DROP itself would resolve it.
+  | { kind: 'index-by-name'; name: string; skipWhen: 'absent' }
 
 // Keywords that sit in an identifier position when the optional clause before them is absent.
 // Without this, `CREATE UNIQUE INDEX CONCURRENTLY ON t(c)` reads CONCURRENTLY as the index name and
@@ -119,6 +125,11 @@ const DROP_CONSTRAINT = new RegExp(
   'i'
 )
 
+// `IF EXISTS` is required for the same reason it is on DROP CONSTRAINT: a bare `DROP INDEX` on a
+// missing index is an error the server is supposed to raise. Without a target the statement throws
+// at boot instead, which tells the author to write `IF EXISTS`.
+const DROP_INDEX = new RegExp(`^DROP\\s+INDEX\\s+(?:CONCURRENTLY\\s+)?IF\\s+EXISTS\\s+${QUALIFIED}\\s*$`, 'i')
+
 // One option per statement, and a literal value: the catalog stores reloptions as `name=value`
 // text, so the pre-check compares the written pair against that array verbatim. A list of options
 // is refused by `hasTopLevelComma` before it reaches here, the same as a multi-action ALTER TABLE.
@@ -131,7 +142,10 @@ const SET_RELOPTION = new RegExp(
 // Every statement shape that takes a relation lock before Postgres evaluates its existence test.
 // `CREATE TABLE IF NOT EXISTS` is absent on purpose: it resolves a name against the schema and
 // takes no lock on an existing table.
-const TAKES_RELATION_LOCK = /^(?:CREATE\s+(?:UNIQUE\s+)?INDEX|ALTER\s+TABLE)\b/i
+// `DROP INDEX` is here because it takes ACCESS EXCLUSIVE on the index's table whenever the index is
+// actually there, which is every boot until the first one wins. That it takes no lock once the
+// index is gone is what the pre-check turns into the steady state, not a reason to omit it.
+const TAKES_RELATION_LOCK = /^(?:CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX|ALTER\s+TABLE)\b/i
 
 export function takesRelationLock(statement: string): boolean {
   return TAKES_RELATION_LOCK.test(sqlWithoutComments(statement))
@@ -187,7 +201,8 @@ const MUST_PARSE = [
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+COLUMN\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+CONSTRAINT\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i,
-  /^ALTER\s+TABLE\b[\s\S]*\bSET\s+\(/i
+  /^ALTER\s+TABLE\b[\s\S]*\bSET\s+\(/i,
+  /^DROP\s+INDEX\b/i
 ]
 
 // Derived from the statement itself so a renamed index cannot drift away from its pre-check.
@@ -218,6 +233,10 @@ export function schemaLockTarget(statement: string): SchemaLockTarget | undefine
       name: catalogName(dropped[2]),
       skipWhen: 'absent'
     }
+  }
+  const droppedIndex = DROP_INDEX.exec(sql)
+  if (droppedIndex?.[1]) {
+    return { kind: 'index-by-name', name: catalogName(droppedIndex[1]), skipWhen: 'absent' }
   }
   const option = SET_RELOPTION.exec(sql)
   if (option?.[1] && option[2] && option[3]) {

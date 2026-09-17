@@ -84,7 +84,7 @@ describe('applyPostgresSchema classification', () => {
       wait: async () => undefined
     })
     expect(query).toHaveBeenCalledTimes(3)
-    expect(summary).toEqual({ ran: 1, skipped: 0 })
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 0 })
   })
 
   it('treats an already-applied constraint as skipped rather than an error', async () => {
@@ -94,7 +94,7 @@ describe('applyPostgresSchema classification', () => {
       throw postgresError('42710')
     })
     const summary = await applyPostgresSchema(['ALTER TABLE t ADD CONSTRAINT c CHECK (x > 0)'], query)
-    expect(summary).toEqual({ ran: 0, skipped: 1 })
+    expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
   })
 
   it('treats an index another director already dropped as skipped rather than an error', async () => {
@@ -104,7 +104,7 @@ describe('applyPostgresSchema classification', () => {
       throw postgresError('42704')
     })
     const summary = await applyPostgresSchema(['DROP INDEX IF EXISTS i'], query)
-    expect(summary).toEqual({ ran: 0, skipped: 1 })
+    expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
     expect(query).toHaveBeenCalledTimes(1)
   })
 
@@ -116,6 +116,88 @@ describe('applyPostgresSchema classification', () => {
     await expect(
       applyPostgresSchema(['ALTER TABLE t ADD COLUMN IF NOT EXISTS c BIGINT'], query)
     ).rejects.toThrow(/42704/)
+  })
+
+  it('leaves a deferrable statement unapplied on a lock timeout instead of failing the boot', async () => {
+    // The crash loop this prevents: 28 directors reach the same DROP INDEX at once on a table
+    // under continuous write, all of them time out, and every one restarts to re-queue the same
+    // DDL behind the same writers.
+    const warned: string[] = []
+    vi.spyOn(console, 'warn').mockImplementation((line: string) => {
+      warned.push(line)
+    })
+    const query = vi.fn(async () => {
+      throw postgresError('55P03')
+    })
+    const summary = await applyPostgresSchema(
+      ['-- schema-deferrable: reason\nDROP INDEX IF EXISTS i'],
+      query
+    )
+    expect(summary).toEqual({ ran: 0, skipped: 0, deferred: 1 })
+    expect(query).toHaveBeenCalledTimes(1)
+    const event = JSON.parse(warned[warned.length - 1] ?? '{}')
+    expect(event.event).toBe('orca_relay_postgres_schema_object_deferred')
+    expect(event.code).toBe('55P03')
+    expect(event.name).toBe('i')
+  })
+
+  it('runs the statements after a deferral, rather than abandoning the boot at that point', async () => {
+    // A deferral is not a failure, so nothing behind it may be skipped: the schema still has
+    // tables to create, and a boot that stopped here would come up against a partial schema.
+    const sent: string[] = []
+    const query = vi.fn(async (statement: string) => {
+      sent.push(statement)
+      if (statement.includes('DROP INDEX')) throw postgresError('55P03')
+      return undefined
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const summary = await applyPostgresSchema(
+      ['-- schema-deferrable: reason\nDROP INDEX IF EXISTS i', 'CREATE TABLE IF NOT EXISTS t (id TEXT)'],
+      query
+    )
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 1 })
+    expect(sent).toHaveLength(2)
+  })
+
+  it('still fails the boot on a lock timeout for a statement that is not marked deferrable', async () => {
+    // Keeps the marker meaningful. An unmarked statement retains the old contract: fail once and
+    // loudly, because retrying parks every writer behind the same queue again.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const query = vi.fn(async () => {
+      throw postgresError('55P03')
+    })
+    await expect(applyPostgresSchema(['DROP INDEX IF EXISTS i'], query)).rejects.toMatchObject({
+      code: '55P03'
+    })
+  })
+
+  it('defers only on a lock timeout, not on any other error from a deferrable statement', async () => {
+    // A deferrable statement is not a statement whose failures stop mattering. A permission error
+    // is still a boot failure.
+    const query = vi.fn(async () => {
+      throw postgresError('42501')
+    })
+    await expect(
+      applyPostgresSchema(['-- schema-deferrable: reason\nDROP INDEX IF EXISTS i'], query)
+    ).rejects.toThrow(/42501/)
+  })
+
+  it('asks the catalog for a dropped index by name and skips the DROP once it is gone', async () => {
+    const query = vi.fn(async (_statement: string) => undefined)
+    const { catalogQuery, asked } = catalogAnswers([])
+    const summary = await applyPostgresSchema(['DROP INDEX IF EXISTS i'], query, { catalogQuery })
+    // One parameter, the index name: the statement names no table, and the query references no $2.
+    expect(asked).toEqual([[expect.stringContaining("relkind = 'i'"), 'i']])
+    expect(query).not.toHaveBeenCalled()
+    expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
+  })
+
+  it('sends the DROP while the index is still there, which is the boot that has to win', async () => {
+    const query = vi.fn(async (_statement: string) => undefined)
+    const { catalogQuery } = catalogAnswers([{}])
+    const summary = await applyPostgresSchema(['DROP INDEX IF EXISTS i'], query, { catalogQuery })
+    expect(query).toHaveBeenCalledTimes(1)
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 0 })
   })
 
   it('propagates an unrelated error without retrying', async () => {
@@ -189,7 +271,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
     expect(asked).toEqual([
       [expect.stringContaining('pg_catalog.pg_index'), 'relay_connection_bases', 'relay_bases_active']
     ])
-    expect(summary).toEqual({ ran: 1, skipped: 1 })
+    expect(summary).toEqual({ ran: 1, skipped: 1, deferred: 0 })
   })
 
   it('skips an index the catalog reports as invalid rather than rebuilding it', async () => {
@@ -227,7 +309,8 @@ describe('applyPostgresSchema catalog pre-check', () => {
     expect(JSON.parse(logged[logged.length - 1] ?? '{}')).toEqual({
       event: 'orca_push_postgres_schema_applied',
       ran: 1,
-      skipped: 1
+      skipped: 1,
+      deferred: 0
     })
   })
 
@@ -240,7 +323,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
       [expect.stringContaining('pg_catalog.pg_attribute'), 'relay_control_capabilities', 'idle']
     ])
     expect(query.mock.calls.map(([sql]) => sql)).toEqual([statement])
-    expect(summary).toEqual({ ran: 1, skipped: 0 })
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 0 })
   })
 
   it('never probes the catalog for a statement that takes no relation lock', async () => {
@@ -268,7 +351,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
       ]
     ])
     expect(query).not.toHaveBeenCalled()
-    expect(summary).toEqual({ ran: 0, skipped: 1 })
+    expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
   })
 
   it('skips a DROP CONSTRAINT IF EXISTS when the constraint is already gone', async () => {
@@ -286,7 +369,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
       { catalogQuery }
     )
     expect(query).not.toHaveBeenCalled()
-    expect(summary).toEqual({ ran: 0, skipped: 1 })
+    expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
     expect(logged).toContainEqual({
       event: 'orca_relay_postgres_schema_object_absent',
       kind: 'constraint',
@@ -302,7 +385,7 @@ describe('applyPostgresSchema catalog pre-check', () => {
     const statement = 'ALTER TABLE t DROP CONSTRAINT IF EXISTS region_check'
     const summary = await applyPostgresSchema([statement], query, { catalogQuery })
     expect(query.mock.calls.map(([sql]) => sql)).toEqual([statement])
-    expect(summary).toEqual({ ran: 1, skipped: 0 })
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 0 })
   })
 
   it('sends an ADD CONSTRAINT the catalog does not name yet', async () => {
@@ -311,14 +394,14 @@ describe('applyPostgresSchema catalog pre-check', () => {
     const statement = 'ALTER TABLE t ADD CONSTRAINT region_valid CHECK (r IN (1))'
     const summary = await applyPostgresSchema([statement], query, { catalogQuery })
     expect(query.mock.calls.map(([sql]) => sql)).toEqual([statement])
-    expect(summary).toEqual({ ran: 1, skipped: 0 })
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 0 })
   })
 
   it('sends every statement when no catalog query is supplied', async () => {
     const query = vi.fn(async (_statement: string) => undefined)
     const summary = await applyPostgresSchema([COMMENTED_TABLE, COMMENTED_INDEX], query)
     expect(query).toHaveBeenCalledTimes(2)
-    expect(summary).toEqual({ ran: 2, skipped: 0 })
+    expect(summary).toEqual({ ran: 2, skipped: 0, deferred: 0 })
   })
 })
 
@@ -337,7 +420,7 @@ describe('applyPostgresSchema concurrent creates', () => {
     })
     expect(query).toHaveBeenCalledTimes(1)
     expect(asked).toHaveLength(2)
-    expect(summary).toEqual({ ran: 0, skipped: 1 })
+    expect(summary).toEqual({ ran: 0, skipped: 1, deferred: 0 })
   })
 
   it('still retries when the catalog says the object is not there after all', async () => {
@@ -353,7 +436,7 @@ describe('applyPostgresSchema concurrent creates', () => {
       wait: async () => undefined
     })
     expect(query).toHaveBeenCalledTimes(2)
-    expect(summary).toEqual({ ran: 1, skipped: 0 })
+    expect(summary).toEqual({ ran: 1, skipped: 0, deferred: 0 })
   })
 
   it('retries a CREATE TABLE collision without a catalog re-ask, having no target to ask about', async () => {

@@ -647,17 +647,23 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
      DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`,
   `ALTER TABLE relay_control_capabilities ADD COLUMN IF NOT EXISTS idle_regional_rehome BIGINT NOT NULL DEFAULT 0`,
   `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS source_generation BIGINT NOT NULL DEFAULT 0`,
-  // Dropped, not created: see the comment on relay_assignment_activity_leases. Postgres resolves
-  // the index name before it locks anything, so once the index is gone this is a catalog miss and
-  // a NOTICE on every later boot, with no lock on the table - which is why it needs no pre-check.
-  `DROP INDEX IF EXISTS relay_assignment_activity_expiry`,
+  // Dropped, not created: see the comment on relay_assignment_activity_leases. Deferrable because
+  // this is the one boot where it has to take ACCESS EXCLUSIVE on a table under continuous write,
+  // and all 28 directors reach it at once; a lock timeout here must not restart the instance, which
+  // would only re-queue the same DDL behind the same writers. Once it wins, the pre-check answers
+  // absent and no later boot sends it at all.
+  `-- schema-deferrable: one boot has to win ACCESS EXCLUSIVE on a table written ~475/s
+   DROP INDEX IF EXISTS relay_assignment_activity_expiry`,
   // The drop is what makes HOT legal; this is what makes it possible. A renewal can only reuse the
   // row's own page when that page has room for a second version, and at the default fillfactor of
   // 100 a freshly filled page has none - measured at 0.5% HOT with the index gone and the default,
   // against 100% at 70. Takes SHARE UPDATE EXCLUSIVE, which blocks vacuum and DDL but no reader or
   // writer, and only for the catalog write. Applies to pages as they refill, so the table converges
   // over its own renewal cycle rather than at boot.
-  `ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`
+  // Deferrable for the same reason, though SHARE UPDATE EXCLUSIVE blocks only vacuum and DDL: it
+  // buys nothing until the drop lands, so a boot that deferred the drop should defer this too.
+  `-- schema-deferrable: buys nothing until the drop above lands
+   ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`
 ]
 
 // The exact statement list a Postgres boot applies, in order, so the lock-target census can read

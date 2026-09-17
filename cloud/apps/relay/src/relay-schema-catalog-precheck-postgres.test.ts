@@ -1,5 +1,5 @@
 import pg from 'pg'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyPostgresSchema,
   catalogObjectPresence,
@@ -188,6 +188,79 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
       await holder.query('ROLLBACK')
       await holder.end()
     }
+  })
+
+  it('defers the activity-lease migrations and still boots while their table is locked', async () => {
+    // The migration boot, reproduced: the index is there, the table is locked by someone else, and
+    // all the drop can do is time out. It has to leave the statement for the next boot rather than
+    // fail, or 28 directors crash-loop through a stall on a table written ~475/s.
+    const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+    opened.push(cold)
+    // Put the database back in its pre-migration shape, which is what makes the drop lock-taking.
+    await pool.query(
+      `CREATE INDEX relay_assignment_activity_expiry
+         ON ${schema}.relay_assignment_activity_leases(expires_at)`
+    )
+    await pool.query(`ALTER TABLE ${schema}.relay_assignment_activity_leases RESET (fillfactor)`)
+
+    const warned: string[] = []
+    const warn = vi.spyOn(console, 'warn').mockImplementation((line: string) => {
+      warned.push(line)
+    })
+    const holder = new pg.Client({ connectionString: url })
+    await holder.connect()
+    await holder.query('BEGIN')
+    await holder.query(
+      `LOCK TABLE ${schema}.relay_assignment_activity_leases IN ACCESS EXCLUSIVE MODE`
+    )
+    let summary: Awaited<ReturnType<typeof applyPostgresSchema>>
+    try {
+      summary = await applyPostgresSchema(
+        relayPostgresSchemaStatements(),
+        (statement) => pool.query(statement),
+        { catalogQuery: async (sql, params) => (await pool.query(sql, params)).rows }
+      )
+    } finally {
+      await holder.query('ROLLBACK')
+      await holder.end()
+      warn.mockRestore()
+    }
+
+    // Both statements deferred, and the boot still applied everything else.
+    expect(summary.deferred).toBe(2)
+    expect(summary.ran).toBeGreaterThan(0)
+    const deferred = warned
+      .map((line) => JSON.parse(line) as { event?: string; name?: string })
+      .filter((event) => event.event === 'orca_relay_postgres_schema_object_deferred')
+    expect(deferred.map((event) => event.name)).toEqual([
+      'relay_assignment_activity_expiry',
+      'fillfactor=70'
+    ])
+    // Nothing was applied, so the next boot has the same work to do, not half of it.
+    const stillThere = await pool.query(
+      `SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2`,
+      [schema, 'relay_assignment_activity_expiry']
+    )
+    expect(stillThere.rowCount).toBe(1)
+
+    // And the next boot, with the lock gone, finishes the job.
+    const retry = await applyPostgresSchema(
+      relayPostgresSchemaStatements(),
+      (statement) => pool.query(statement),
+      { catalogQuery: async (sql, params) => (await pool.query(sql, params)).rows }
+    )
+    expect(retry.deferred).toBe(0)
+    const gone = await pool.query(
+      `SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2`,
+      [schema, 'relay_assignment_activity_expiry']
+    )
+    expect(gone.rowCount).toBe(0)
+    const options = await pool.query(
+      `SELECT reloptions FROM pg_class WHERE oid = to_regclass($1)`,
+      [`${schema}.relay_assignment_activity_leases`]
+    )
+    expect(options.rows[0]?.reloptions).toEqual(['fillfactor=70'])
+    await pool.end()
   })
 
   it('fails that same boot with 55P03 when the pre-check is not wired in', async () => {

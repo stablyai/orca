@@ -26,6 +26,14 @@ WHERE attrelid = to_regclass($1) AND attname = $2 AND attnum > 0 AND NOT attisdr
 const CONSTRAINT_PRESENT = `SELECT 1 FROM pg_catalog.pg_constraint
 WHERE conrelid = to_regclass($1) AND conname = $2`
 
+// By name through the search_path, with no table condition, because a DROP INDEX has no table to
+// condition on and does not need one: a name that resolves to no visible index is nothing to drop.
+// `relkind = 'i'` keeps a same-named table or view from answering for an index. Partitioned indexes
+// are 'I', which this deliberately does not match - relay has none, and dropping one is not a
+// boot-time operation.
+const INDEX_BY_NAME_PRESENT = `SELECT 1 FROM pg_catalog.pg_class c
+WHERE c.relname = $1 AND c.relkind = 'i' AND pg_catalog.pg_table_is_visible(c.oid)`
+
 // reloptions is a text[] of `name=value` pairs, absent entirely while the option is at its
 // default. Comparing the whole pair is what makes a changed value re-run: `@>` on a different
 // value answers no, and the statement runs and overwrites it.
@@ -36,7 +44,8 @@ const PRESENCE_SQL = {
   index: INDEX_PRESENT,
   column: COLUMN_PRESENT,
   constraint: CONSTRAINT_PRESENT,
-  reloption: RELOPTION_PRESENT
+  reloption: RELOPTION_PRESENT,
+  'index-by-name': INDEX_BY_NAME_PRESENT
 } as const
 
 export type SchemaCatalogPresence = { present: boolean; indisvalid: unknown }
@@ -49,7 +58,10 @@ export async function catalogObjectPresence(
   target: SchemaLockTarget
 ): Promise<SchemaCatalogPresence> {
   const sql = PRESENCE_SQL[target.kind]
-  const rows = await query(sql, [target.table, target.name])
+  // The name-only lookup binds one parameter; every other shape binds the table first. Passing a
+  // parameter the SQL never references is a bind error, not a harmless extra.
+  const params = target.kind === 'index-by-name' ? [target.name] : [target.table, target.name]
+  const rows = await query(sql, params)
   const row = rows[0]
   return row ? { present: true, indisvalid: row.indisvalid } : { present: false, indisvalid: undefined }
 }

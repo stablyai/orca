@@ -25,7 +25,7 @@ export type SchemaStartupOptions = {
   wait?: (delayMs: number) => Promise<void>
 }
 
-export type SchemaApplySummary = { ran: number; skipped: number }
+export type SchemaApplySummary = { ran: number; skipped: number; deferred: number }
 
 function retryDelayMs(attempt: number, random: () => number): number {
   const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
@@ -40,6 +40,16 @@ const CREATE_TABLE_IF_NOT_EXISTS = /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b/i
 const CREATE_INDEX_IF_NOT_EXISTS = /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\b/i
 const ALTER_TABLE_ADD_CONSTRAINT = /^ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\b/i
 const DROP_INDEX_IF_EXISTS = /^DROP\s+INDEX\s+(?:CONCURRENTLY\s+)?IF\s+EXISTS\b/i
+
+// Marked in the schema text, beside the SQL it applies to, and read from the raw statement because
+// classification strips comments. Says: this boot may leave the statement unapplied rather than
+// fail. Only sound for a statement that is idempotent AND that nothing this boot goes on to do
+// depends on, because the database is then simply as it was and the next boot re-sends it.
+const DEFERRABLE = /^\s*--[^\n]*\bschema-deferrable\b/
+
+export function schemaDeferrable(statement: string): boolean {
+  return DEFERRABLE.test(statement)
+}
 
 // `IF NOT EXISTS` only checks the name before the catalog inserts, so the loser of a concurrent
 // CREATE can fail on the catalog unique index (23505) or, when the winner has already committed by
@@ -99,7 +109,7 @@ async function nothingToDo(
     JSON.stringify({
       event: `${eventPrefix}_object_${target.skipWhen}`,
       kind: target.kind,
-      table: target.table,
+      table: target.kind === 'index-by-name' ? undefined : target.table,
       name: target.name,
       indisvalid: presence.indisvalid
     })
@@ -117,7 +127,7 @@ export async function applyPostgresSchema(
   const random = options.random ?? Math.random
   const pause = options.wait ?? wait
   const deadlineAt = now() + (options.retryDeadlineMs ?? DEFAULT_RETRY_DEADLINE_MS)
-  const summary: SchemaApplySummary = { ran: 0, skipped: 0 }
+  const summary: SchemaApplySummary = { ran: 0, skipped: 0, deferred: 0 }
 
   for (const statement of statements) {
     // Throws when an index or column statement's target cannot be read, rather than sending it
@@ -144,6 +154,24 @@ export async function applyPostgresSchema(
         // this boot lost the queue. Relation locks are granted in queue order, so each retry parks
         // every writer behind it again for another timeout. Fail once, loudly.
         if (code === LOCK_NOT_AVAILABLE && !options.retryLockTimeout) {
+          // A deferrable statement yields the queue instead of crash-looping the instance. Every
+          // director boots at once on a migration, so a table under continuous write can hand the
+          // whole fleet a lock timeout on the one statement that has to win once; failing the boot
+          // for it restarts the instance, which re-queues the same DDL behind the same writers.
+          if (schemaDeferrable(statement)) {
+            console.warn(
+              JSON.stringify({
+                event: `${eventPrefix}_object_deferred`,
+                code,
+                kind: target?.kind,
+                name: target?.name,
+                statement: sql.split('\n')[0],
+                detail: 'could not take its lock; left unapplied for the next boot to retry'
+              })
+            )
+            summary.deferred += 1
+            break
+          }
           console.error(
             JSON.stringify({
               event: `${eventPrefix}_lock_timeout`,

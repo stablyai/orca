@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   requireSchemaLockTarget,
+  schemaDeferrable,
   schemaLockTarget,
   sqlWithoutComments,
   takesRelationLock,
@@ -111,6 +112,7 @@ const GOLDEN_LOCK_TAKING: SchemaLockTarget[] = [
   { kind: 'column', table: 'relay_region_rehome_control', name: 'host_cooldown_ms', skipWhen: 'present' },
   { kind: 'column', table: 'relay_control_capabilities', name: 'idle_regional_rehome', skipWhen: 'present' },
   { kind: 'column', table: 'relay_region_rehome_attempts', name: 'source_generation', skipWhen: 'present' },
+  { kind: 'index-by-name', name: 'relay_assignment_activity_expiry', skipWhen: 'absent' },
   {
     kind: 'reloption',
     table: 'relay_assignment_activity_leases',
@@ -153,7 +155,8 @@ describe('relay boot-time lock targets', () => {
       // pg_class stores reloptions as `name=value` text and the value is half the question.
       const shape = target.kind === 'reloption' ? /^[a-z_][a-z0-9_]*=[A-Za-z0-9_.]+$/ : /^[a-z_][a-z0-9_]*$/
       expect(target.name).toMatch(shape)
-      expect(target.table).toMatch(/^[a-z_][a-z0-9_]*$/)
+      // A DROP INDEX names no table, so there is none to check.
+      if (target.kind !== 'index-by-name') expect(target.table).toMatch(/^[a-z_][a-z0-9_]*$/)
     }
   })
 
@@ -201,11 +204,10 @@ describe('relay boot-time lock targets', () => {
     }
   })
 
-  it('sends the activity-expiry drop with no pre-check, because it takes no relation lock', () => {
-    // The one statement in the schema that is neither pre-checked nor lock-taking. Postgres
-    // resolves a DROP INDEX name before it locks, so IF EXISTS on an index that is already gone
-    // costs a catalog miss and a NOTICE. Pinned so a future DROP cannot arrive unnoticed: anything
-    // that reaches here is exempt from the invariant the rest of this file enforces.
+  it('pre-checks the activity-expiry drop by name, and skips it once the index is gone', () => {
+    // A DROP INDEX takes ACCESS EXCLUSIVE on the index's table for as long as the index is there,
+    // so it is in the census like any other lock-taking statement. Its target resolves by name
+    // alone, because the statement names no table and needs none.
     const drops = relayPostgresSchemaStatements().filter((statement) =>
       /^DROP\s/i.test(sqlWithoutComments(statement))
     )
@@ -213,10 +215,23 @@ describe('relay boot-time lock targets', () => {
       'DROP INDEX IF EXISTS relay_assignment_activity_expiry'
     ])
     for (const statement of drops) {
-      expect(takesRelationLock(statement)).toBe(false)
-      expect(schemaLockTarget(statement)).toBeUndefined()
-      expect(() => requireSchemaLockTarget(statement)).not.toThrow()
+      expect(takesRelationLock(statement)).toBe(true)
+      expect(schemaLockTarget(statement)).toEqual({
+        kind: 'index-by-name',
+        name: 'relay_assignment_activity_expiry',
+        skipWhen: 'absent'
+      })
     }
+  })
+
+  it('marks both activity-lease migrations deferrable, and nothing else', () => {
+    // The two statements a lock timeout must not turn into a crash loop, and the only two: every
+    // other statement still fails the boot loudly, which is what keeps the marker meaningful.
+    const deferrable = relayPostgresSchemaStatements().filter(schemaDeferrable)
+    expect(deferrable.map(sqlWithoutComments)).toEqual([
+      'DROP INDEX IF EXISTS relay_assignment_activity_expiry',
+      'ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)'
+    ])
   })
 
   it('no longer creates an index on the column every control renewal writes', () => {
