@@ -1,6 +1,4 @@
-import { realpath } from 'node:fs/promises'
-import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
-import { normalizeComparablePath, normalizeFsPath } from '../usage/usage-path-comparison'
+import { normalizeComparablePath } from '../usage/usage-path-comparison'
 import type { UsageScanWorktreeRef } from '../usage/usage-provider-contract'
 import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import type { OpenCodeUsageAttributedEvent, OpenCodeUsageParsedEvent } from './types'
@@ -27,20 +25,6 @@ function localDayFromTimestamp(timestamp: string): string | null {
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-export async function buildWorktreesWithCanonicalPaths(
-  worktrees: OpenCodeUsageWorktreeRef[]
-): Promise<(OpenCodeUsageWorktreeRef & { canonicalPath: string })[]> {
-  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
-}
-
-async function canonicalizePath(pathValue: string): Promise<string> {
-  try {
-    return normalizeFsPath(await realpath(pathValue))
-  } catch {
-    return normalizeFsPath(pathValue)
-  }
 }
 
 export async function attributeOpenCodeUsageEvent(

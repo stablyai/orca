@@ -209,20 +209,18 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      createUsageWorktreeResolver([
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo/app',
           path: '/workspace/repo/app',
-          displayName: 'App',
-          canonicalPath: '/workspace/repo/app'
+          displayName: 'App'
         },
         {
           repoId: 'repo-2',
           worktreeId: 'repo-2::/workspace/repo/app2',
           path: '/workspace/repo/app2',
-          displayName: 'App 2',
-          canonicalPath: '/workspace/repo/app2'
+          displayName: 'App 2'
         }
       ])
     )
@@ -247,13 +245,12 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      createUsageWorktreeResolver([
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo',
           path: '/workspace/repo',
-          displayName: 'Repo',
-          canonicalPath: '/workspace/repo'
+          displayName: 'Repo'
         }
       ])
     )
@@ -278,13 +275,12 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      createUsageWorktreeResolver([
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo',
           path: '/workspace/repo',
-          displayName: 'Repo',
-          canonicalPath: '/workspace/repo'
+          displayName: 'Repo'
         }
       ])
     )
@@ -308,13 +304,12 @@ describe('attributeCodexUsageEvent', () => {
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      createUsageWorktreeResolver([
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::C:\\repo',
           path: 'C:\\repo',
-          displayName: 'Repo',
-          canonicalPath: 'C:\\repo'
+          displayName: 'Repo'
         }
       ])
     )

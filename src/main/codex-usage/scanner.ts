@@ -2,14 +2,12 @@ import { basename } from 'node:path'
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
-import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
 import {
   createUsageWorktreeResolver,
   type UsageWorktreeResolver
 } from '../usage/usage-worktree-resolver'
 import {
-  canonicalizePath,
   getLegacySourceSkipBytesByPath,
   listCodexSessionFiles,
   yieldToEventLoop
@@ -36,12 +34,6 @@ export async function getProcessedFileInfo(filePath: string): Promise<CodexUsage
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size
   }
-}
-
-async function buildWorktreesWithCanonicalPaths(
-  worktrees: CodexUsageWorktreeRef[]
-): Promise<(CodexUsageWorktreeRef & { canonicalPath: string })[]> {
-  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
 }
 
 type CodexUsageMetric = { hasInferredPricing: boolean }
@@ -133,9 +125,7 @@ export async function scanCodexUsageFiles(
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   // Why: one resolver for the whole scan so every file shares the per-cwd memo.
-  const resolveWorktree = createUsageWorktreeResolver(
-    await buildWorktreesWithCanonicalPaths(worktrees)
-  )
+  const resolveWorktree = await createUsageWorktreeResolver(worktrees)
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
 
   const currentPaths = new Set(files)

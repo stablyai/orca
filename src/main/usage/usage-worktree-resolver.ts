@@ -1,9 +1,11 @@
+import { realpath } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import { looksLikeWindowsPath, normalizeFsPath } from './usage-path-comparison'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
-export type CanonicalizedUsageWorktreeRef = UsageScanWorktreeRef & { canonicalPath: string }
+type CanonicalizedUsageWorktreeRef = UsageScanWorktreeRef & { canonicalPath: string }
 
 /** Maps an event's `cwd` to the worktree that contains it, or null when it is outside every one. */
 export type UsageWorktreeResolver = (cwd: string) => UsageScanWorktreeRef | null
@@ -33,6 +35,14 @@ function isContainingPath(candidatePath: string, targetPath: string): boolean {
   )
 }
 
+async function canonicalizePath(pathValue: string): Promise<string> {
+  try {
+    return normalizeFsPath(await realpath(pathValue))
+  } catch {
+    return normalizeFsPath(pathValue)
+  }
+}
+
 function findContainingWorktree(
   cwd: string,
   worktrees: readonly CanonicalizedUsageWorktreeRef[]
@@ -56,9 +66,10 @@ function findContainingWorktree(
  * unmemoized search costs `events × worktrees` — 1.6M events against a few hundred remembered
  * worktrees is minutes of main-thread CPU (STA-7724).
  */
-export function createUsageWorktreeResolver(
-  worktrees: readonly CanonicalizedUsageWorktreeRef[]
-): UsageWorktreeResolver {
+export async function createUsageWorktreeResolver(
+  worktrees: readonly UsageScanWorktreeRef[]
+): Promise<UsageWorktreeResolver> {
+  const canonicalized = await canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
   const worktreeByCwd = new Map<string, UsageScanWorktreeRef | null>()
   return (cwd) => {
     const memoized = worktreeByCwd.get(cwd)
@@ -66,7 +77,7 @@ export function createUsageWorktreeResolver(
     if (memoized !== undefined) {
       return memoized
     }
-    const resolved = findContainingWorktree(cwd, worktrees)
+    const resolved = findContainingWorktree(cwd, canonicalized)
     worktreeByCwd.set(cwd, resolved)
     return resolved
   }

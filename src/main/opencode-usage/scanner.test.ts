@@ -20,14 +20,13 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db: new Database(path), path }
 }
 
-function resolveWorktree() {
+async function resolveWorktree() {
   return createUsageWorktreeResolver([
     {
       repoId: 'repo-1',
       worktreeId: 'repo-1::/workspace/repo',
       path: WORKTREE,
-      displayName: 'Repo',
-      canonicalPath: WORKTREE
+      displayName: 'Repo'
     }
   ])
 }
@@ -139,7 +138,7 @@ describe('attributeOpenCodeUsageEvent', () => {
   it('attributes cwd paths under dotdot-prefixed child directories to the worktree', async () => {
     const attributed = await attributeOpenCodeUsageEvent(
       usageEvent(`${WORKTREE}/..fixtures/session`),
-      resolveWorktree()
+      await resolveWorktree()
     )
 
     expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
@@ -150,7 +149,7 @@ describe('attributeOpenCodeUsageEvent', () => {
   it('does not attribute true parent-directory escapes to the worktree', async () => {
     const attributed = await attributeOpenCodeUsageEvent(
       usageEvent(`${WORKTREE}/../other/session`),
-      resolveWorktree()
+      await resolveWorktree()
     )
 
     expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
@@ -160,13 +159,12 @@ describe('attributeOpenCodeUsageEvent', () => {
   it('does not treat different Windows drives as containing paths', async () => {
     const attributed = await attributeOpenCodeUsageEvent(
       usageEvent('D:\\other\\repo'),
-      createUsageWorktreeResolver([
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::C:\\repo',
           path: 'C:\\repo',
-          displayName: 'Repo',
-          canonicalPath: 'C:\\repo'
+          displayName: 'Repo'
         }
       ])
     )
@@ -226,7 +224,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, resolveWorktree())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions).toHaveLength(1)
     expect(parsed.sessions[0]).toMatchObject({
@@ -296,7 +294,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, resolveWorktree())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions[0]).toMatchObject({
       primaryModel: 'openai/gpt-5.5',
@@ -312,7 +310,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     insertSessionTotalsRow(db, 'session-1', 1000)
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, resolveWorktree())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.ownedSessionIds).toEqual(['session-1'])
   })
@@ -376,7 +374,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, resolveWorktree())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions[0]?.totalTokens).toBe(120)
     expect(parsed.sessions[0]?.eventCount).toBe(1)

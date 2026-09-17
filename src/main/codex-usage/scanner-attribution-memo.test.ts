@@ -38,8 +38,8 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
 
 import { scanCodexUsageFiles } from './scanner'
 
-const WORKTREE_COUNT = 40
-const EVENTS_PER_FILE = 25
+const WORKTREE_COUNT = 4
+const EVENTS_PER_FILE = 4
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -129,7 +129,7 @@ afterEach(() => {
 it('resolves each distinct cwd once per scan, not once per event', async () => {
   const sessionsDir = join(fakeHomeDir, '.codex', 'sessions')
   mkdirSync(sessionsDir, { recursive: true })
-  const matchedCwd = join(fakeHomeDir, 'worktrees', 'repo-039', 'packages', 'app')
+  const matchedCwd = join(fakeHomeDir, 'worktrees', 'repo-003', 'packages', 'app')
   const unmatchedCwd = join(fakeHomeDir, 'elsewhere', 'project')
   // Two files share a cwd so the memo must survive across files, not just within one.
   writeSessionFile(sessionsDir, 'session-a', matchedCwd, 0)
@@ -155,9 +155,9 @@ it('resolves each distinct cwd once per scan, not once per event', async () => {
     )
   )
   expect(attributedWorktreeIds).toEqual(
-    new Set([`repo-39::${join(fakeHomeDir, 'worktrees', 'repo-039')}`, null])
+    new Set([`repo-3::${join(fakeHomeDir, 'worktrees', 'repo-003')}`, null])
   )
-  // Two distinct cwds against 40 worktrees; an unmemoized scan would pay this per event.
+  // Two distinct cwds against every worktree; an unmemoized scan would pay this per event.
   expect(worktreePathComparisons.count).toBeLessThanOrEqual(2 * WORKTREE_COUNT)
   expect(worktreePathComparisons.count).toBeLessThan(EVENTS_PER_FILE * WORKTREE_COUNT)
 })

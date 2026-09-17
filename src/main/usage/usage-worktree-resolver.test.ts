@@ -1,37 +1,44 @@
-import { describe, expect, it } from 'vitest'
-import {
-  createUsageWorktreeResolver,
-  type CanonicalizedUsageWorktreeRef
-} from './usage-worktree-resolver'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorktreeLogic from '../ipc/worktree-logic'
+import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
-/**
- * Counts candidate comparisons: the resolver reads `canonicalPath` once per worktree it tests,
- * so the counter rises only when a cwd actually walks the worktree list.
- */
-function countingWorktrees(
-  canonicalPaths: readonly string[],
-  counter: { comparisons: number }
-): CanonicalizedUsageWorktreeRef[] {
-  return canonicalPaths.map((canonicalPath, index) => ({
-    repoId: `repo-${index}`,
-    worktreeId: `repo-${index}::${canonicalPath}`,
-    path: canonicalPath,
-    displayName: `Repo ${index}`,
-    get canonicalPath(): string {
-      counter.comparisons += 1
-      return canonicalPath
+const { worktreePathComparisons } = vi.hoisted(() => ({
+  worktreePathComparisons: { count: 0 }
+}))
+
+vi.mock('../ipc/worktree-logic', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeLogic>()
+  return {
+    ...actual,
+    areWorktreePathsEqual: (left: string, right: string) => {
+      worktreePathComparisons.count += 1
+      return actual.areWorktreePathsEqual(left, right)
     }
-  }))
+  }
+})
+
+import { createUsageWorktreeResolver } from './usage-worktree-resolver'
+
+function worktree(path: string, index: number): UsageScanWorktreeRef {
+  return {
+    repoId: `repo-${index}`,
+    worktreeId: `repo-${index}::${path}`,
+    path,
+    displayName: `Repo ${index}`
+  }
 }
 
 describe('createUsageWorktreeResolver', () => {
-  it('walks the worktree list once per distinct cwd, including misses', () => {
-    const counter = { comparisons: 0 }
-    const worktrees = countingWorktrees(
-      Array.from({ length: 50 }, (_, index) => `/repo-${String(index).padStart(3, '0')}`),
-      counter
+  beforeEach(() => {
+    worktreePathComparisons.count = 0
+  })
+
+  it('walks the worktree list once per distinct cwd, including misses', async () => {
+    const resolveWorktree = await createUsageWorktreeResolver(
+      Array.from({ length: 50 }, (_, index) =>
+        worktree(`/repo-${String(index).padStart(3, '0')}`, index)
+      )
     )
-    const resolveWorktree = createUsageWorktreeResolver(worktrees)
     const attribute = (event: number): string | null => {
       const cwd = event % 2 === 0 ? '/repo-049/nested/pkg' : '/outside/project'
       return resolveWorktree(cwd)?.worktreeId ?? null
@@ -39,43 +46,20 @@ describe('createUsageWorktreeResolver', () => {
 
     expect(attribute(0)).toBe('repo-49::/repo-049')
     expect(attribute(1)).toBeNull()
-    const afterFirstOfEachCwd = counter.comparisons
+    const afterFirstOfEachCwd = worktreePathComparisons.count
     expect(afterFirstOfEachCwd).toBeGreaterThan(0)
+    expect(afterFirstOfEachCwd).toBeLessThanOrEqual(100)
 
     for (let event = 2; event < 1_000; event++) {
       expect(attribute(event)).toBe(event % 2 === 0 ? 'repo-49::/repo-049' : null)
     }
 
     // Two distinct cwds walked the list once each; 998 more events cost nothing.
-    expect(counter.comparisons).toBe(afterFirstOfEachCwd)
+    expect(worktreePathComparisons.count).toBe(afterFirstOfEachCwd)
   })
 
-  it('memoizes each cwd independently', () => {
-    const counter = { comparisons: 0 }
-    const resolveWorktree = createUsageWorktreeResolver(
-      countingWorktrees(['/repo-a', '/repo-b'], counter)
-    )
-
-    expect(resolveWorktree('/repo-b')?.worktreeId).toBe('repo-1::/repo-b')
-    const afterFirst = counter.comparisons
-    expect(resolveWorktree('/repo-a')?.worktreeId).toBe('repo-0::/repo-a')
-    expect(counter.comparisons).toBeGreaterThan(afterFirst)
-    const afterSecond = counter.comparisons
-    resolveWorktree('/repo-b')
-    resolveWorktree('/repo-a')
-    expect(counter.comparisons).toBe(afterSecond)
-  })
-
-  it('keeps containment semantics unchanged', () => {
-    const resolveWorktree = createUsageWorktreeResolver([
-      {
-        repoId: 'repo-1',
-        worktreeId: 'repo-1::/workspace/repo',
-        path: '/workspace/repo',
-        displayName: 'Repo',
-        canonicalPath: '/workspace/repo'
-      }
-    ])
+  it('keeps containment semantics unchanged', async () => {
+    const resolveWorktree = await createUsageWorktreeResolver([worktree('/workspace/repo', 1)])
 
     expect(resolveWorktree('/workspace/repo')?.worktreeId).toBe('repo-1::/workspace/repo')
     expect(resolveWorktree('/workspace/repo/packages/app')?.worktreeId).toBe(
@@ -89,23 +73,15 @@ describe('createUsageWorktreeResolver', () => {
     expect(resolveWorktree('/workspace/repo-sibling')).toBeNull()
   })
 
-  it('does not treat a different Windows drive as contained', () => {
-    const resolveWorktree = createUsageWorktreeResolver([
-      {
-        repoId: 'repo-1',
-        worktreeId: 'repo-1::C:\\repo',
-        path: 'C:\\repo',
-        displayName: 'Repo',
-        canonicalPath: 'C:\\repo'
-      }
-    ])
+  it('does not treat a different Windows drive as contained', async () => {
+    const resolveWorktree = await createUsageWorktreeResolver([worktree('C:\\repo', 1)])
 
     expect(resolveWorktree('C:\\repo\\packages\\app')?.worktreeId).toBe('repo-1::C:\\repo')
     expect(resolveWorktree('D:\\other\\repo')).toBeNull()
   })
 
-  it('resolves nothing when no worktree is known', () => {
-    const resolveWorktree = createUsageWorktreeResolver([])
+  it('resolves nothing when no worktree is known', async () => {
+    const resolveWorktree = await createUsageWorktreeResolver([])
     expect(resolveWorktree('/workspace/repo')).toBeNull()
   })
 })

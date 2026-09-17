@@ -14,7 +14,6 @@ import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
 import { selectUsageRows } from './opencode-usage-row-queries'
 import {
   attributeOpenCodeUsageEvent,
-  buildWorktreesWithCanonicalPaths,
   type OpenCodeUsageWorktreeRef
 } from './opencode-usage-worktree-attribution'
 import type {
@@ -111,9 +110,7 @@ export async function scanOpenCodeUsageDatabases(
     previousProcessedDatabases.map((database) => [database.path, database])
   )
   // Why: one resolver for the whole scan so every database shares the per-cwd memo.
-  const resolveWorktree = createUsageWorktreeResolver(
-    await buildWorktreesWithCanonicalPaths(worktrees)
-  )
+  const resolveWorktree = await createUsageWorktreeResolver(worktrees)
 
   const currentPaths = new Set(dbPaths)
   // Why: when a database that owned sessions is deleted, remaining siblings
