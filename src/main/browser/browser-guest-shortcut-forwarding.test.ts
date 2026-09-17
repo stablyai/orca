@@ -224,6 +224,21 @@ describe('setupGuestShortcutForwarding', () => {
     }
   })
 
+  it('forwards tab-reorder shortcuts from focused guest pages', () => {
+    const guest = makeGuest()
+    setupGuestShortcutForwarding({ browserTabId, guest, resolveRenderer: () => makeRenderer() })
+
+    const preventDefault = triggerBeforeInput({
+      key: 'PageUp',
+      meta: false,
+      control: true,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:moveActiveTab', -1)
+  })
+
   // Why: Orca claims these on every repeat but acts once, so a held chord's repeats never reach the page.
   it.each([
     ['workspace delete', { code: 'Backspace', key: 'Backspace' }],

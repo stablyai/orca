@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   structuredSessionBusy: vi.fn<() => boolean>(),
   floatingFocused: false,
   targetInsideFloatingPanel: false,
+  mirrorWebRuntimeTabMove: vi.fn(),
   resolveAgentShortcut: vi.fn<
     (
       args: Parameters<typeof AgentTabShortcuts.resolveTerminalAgentTabShortcut>[0]
@@ -71,6 +72,9 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()
+}))
+vi.mock('@/components/tab-bar/web-runtime-tab-move-mirror', () => ({
+  mirrorWebRuntimeTabMove: mocks.mirrorWebRuntimeTabMove
 }))
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
@@ -391,6 +395,67 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+
+  it('reorders the active tab from the terminal workspace keydown path', () => {
+    const worktreeId = controller.activeWorktreeId!
+    const groupId = 'group-1'
+    const tab = (id: string) => ({
+      id,
+      entityId: id.replace('tab-', 'terminal-'),
+      groupId,
+      worktreeId,
+      contentType: 'terminal',
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const reorderUnifiedTabs = vi.fn()
+    mocks.state = {
+      activeWorktreeId: worktreeId,
+      activeGroupIdByWorktree: { [worktreeId]: groupId },
+      browserTabsByWorktree: {},
+      groupsByWorktree: {
+        [worktreeId]: [
+          {
+            id: groupId,
+            worktreeId,
+            activeTabId: 'tab-b',
+            tabOrder: ['tab-a', 'tab-b', 'tab-c']
+          }
+        ]
+      },
+      openFiles: [],
+      reorderUnifiedTabs,
+      tabBarOrderByWorktree: {},
+      tabsByWorktree: {
+        [worktreeId]: [{ id: 'terminal-a' }, { id: 'terminal-b' }, { id: 'terminal-c' }]
+      },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [tab('tab-a'), tab('tab-b'), tab('tab-c')]
+      }
+    }
+
+    const event = new KeyboardEvent('keydown', {
+      code: 'PageUp',
+      key: 'PageUp',
+      ctrlKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    handleTerminalWorkspaceKeyDown(event, controller, 'linux')
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).toHaveBeenCalledWith(groupId, ['tab-b', 'tab-a', 'tab-c'])
+    expect(mocks.mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
+      kind: 'reorder',
+      worktreeId,
+      tabId: 'tab-b',
+      targetGroupId: groupId,
+      tabOrder: ['tab-b', 'tab-a', 'tab-c']
+    })
   })
 })
 

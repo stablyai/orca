@@ -264,6 +264,19 @@ export function handleTerminalWorkspaceKeyDown(
       scope: switchAllTypesDirection !== null ? 'all-types' : 'same-type'
     })
   }
+  const moveTabDirection = matchShortcut('tab.moveLeft')
+    ? -1
+    : matchShortcut('tab.moveRight')
+      ? 1
+      : null
+  if (!event.repeat && moveTabDirection !== null) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    notifyTerminalCapture(moveTabDirection === -1 ? 'tab.moveLeft' : 'tab.moveRight')
+    dispatchWorkspaceTabCommand({ type: 'move-active', direction: moveTabDirection })
+    return
+  }
   const terminalTabDirection = matchShortcut('tab.nextTerminal')
     ? 1
     : matchShortcut('tab.previousTerminal')

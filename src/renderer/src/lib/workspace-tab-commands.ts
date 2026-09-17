@@ -16,9 +16,15 @@ import {
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
+import { moveFloatingWorkspaceTab } from './floating-workspace-tab-reorder'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { closeWorkspaceBrowserTab } from './workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
+import {
+  getActiveTabNavOrder,
+  moveTabIdWithinGroupOrder
+} from '@/components/tab-bar/group-tab-order'
+import { mirrorWebRuntimeTabMove } from '@/components/tab-bar/web-runtime-tab-move-mirror'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -34,6 +40,7 @@ export type WorkspaceTabCommand =
       floatingPanelGuestOwned?: boolean
     }
   | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
+  | { type: 'move-active'; direction: -1 | 1 }
   | { type: 'previous-recent' }
 
 type TabState = ReturnType<typeof useAppStore.getState>
@@ -101,6 +108,41 @@ function resolveCloseTarget(
     return resolveCloseTarget(state, { kind: 'browser-source', sourceId: state.activeBrowserTabId })
   }
   return null
+}
+
+function moveActiveWorkspaceTab(state: TabState, direction: -1 | 1): boolean {
+  const worktreeId = state.activeWorktreeId
+  if (!worktreeId) {
+    return false
+  }
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = groupId
+    ? (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
+    : undefined
+  if (!group?.activeTabId) {
+    return false
+  }
+  const visibleTabIds = getActiveTabNavOrder(state, worktreeId).flatMap((tab) =>
+    tab.tabId ? [tab.tabId] : []
+  )
+  const nextOrder = moveTabIdWithinGroupOrder(
+    group.tabOrder,
+    visibleTabIds,
+    group.activeTabId,
+    direction
+  )
+  if (!nextOrder) {
+    return false
+  }
+  state.reorderUnifiedTabs(group.id, nextOrder)
+  mirrorWebRuntimeTabMove({
+    kind: 'reorder',
+    worktreeId,
+    tabId: group.activeTabId,
+    targetGroupId: group.id,
+    tabOrder: nextOrder
+  })
+  return true
 }
 
 /** Input adapters describe intent; targeting and tab operations live here. */
@@ -172,6 +214,12 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
+  }
+  if (command.type === 'move-active') {
+    if (isFloatingWorkspacePanelFocused()) {
+      return moveFloatingWorkspaceTab(state, command.direction)
+    }
+    return moveActiveWorkspaceTab(state, command.direction)
   }
   if (isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)

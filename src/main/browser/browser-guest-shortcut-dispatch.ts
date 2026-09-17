@@ -85,6 +85,23 @@ export function forwardGuestShortcutInput(
     return true
   }
 
+  const moveTabDirection = keybindingMatchesAction(
+    'tab.moveLeft',
+    input,
+    process.platform,
+    keybindings
+  )
+    ? -1
+    : keybindingMatchesAction('tab.moveRight', input, process.platform, keybindings)
+      ? 1
+      : null
+  if (moveTabDirection !== null) {
+    event.preventDefault()
+    const renderer = resolveRenderer(browserTabId)
+    renderer?.send('ui:moveActiveTab', moveTabDirection)
+    return true
+  }
+
   if (keybindingMatchesAction('tab.previousRecent', input, process.platform, keybindings)) {
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
