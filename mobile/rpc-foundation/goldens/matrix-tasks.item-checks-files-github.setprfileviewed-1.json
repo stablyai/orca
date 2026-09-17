@@ -3,11 +3,11 @@
   "family": "tasks.item-checks-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "732ce53b564927e7d61511e406b4e6b407c4572e",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
-  "scenarioSha256": "eefa7111ee94d5966692fb6f9bed1b3ccd7e1fe40c540438c005731d0cae305c",
+  "scenarioSha256": "984dd772f207f674d511d2711819855c7c6923d858ef87ea159842c337ed3ea0",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -54,17 +54,6 @@
       "name": "error",
       "ordinal": 21,
       "value": ""
-    },
-    "04c163c9d858": {
-      "name": "prFileContents",
-      "ordinal": 24,
-      "value": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      }
     },
     "04df4241c3b7": {
       "name": "mutatingStatus",
@@ -430,12 +419,13 @@
         }
       }
     },
-    "38d90ed8a1ee": {
+    "47ac5bdaffbe": {
       "contents": {
         "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
         }
       },
       "drafts": {},
@@ -951,6 +941,51 @@
       },
       "refreshSeq": 1
     },
+    "747ae3d77900": {
+      "name": "github.prFileContents#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 12,
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "modified": "b",
+            "modifiedIsBinary": false,
+            "original": "a",
+            "originalIsBinary": false
+          }
+        }
+      }
+    },
     "78f13a8847a8": {
       "name": "github.prFileContents#1",
       "ordinal": 23,
@@ -998,6 +1033,60 @@
       "name": "expandedPrFilePath",
       "ordinal": 19,
       "value": "src/index.ts"
+    },
+    "7c616ddf083d": {
+      "contents": {},
+      "drafts": {
+        "src/index.ts:12": "a review comment"
+      },
+      "error": "Failed to sync viewed state with GitHub.",
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "refreshSeq": 1
     },
     "7fda96277de7": {
       "name": "github.resolveReviewThread#1",
@@ -1073,136 +1162,10 @@
       "ordinal": 20,
       "value": "src/index.ts"
     },
-    "8a6843ac346a": {
-      "contents": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      },
-      "drafts": {},
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a review comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 901,
-            "line": 12,
-            "path": "src/index.ts"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
-    },
     "8fd3df41c79d": {
       "name": "github.resolveReviewThread#1",
       "ordinal": 16,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"threadId\":\"thread-1\",\"resolve\":true}}"
-    },
-    "93e1660aeb33": {
-      "contents": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      },
-      "drafts": {
-        "src/index.ts:12": "a review comment"
-      },
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
     },
     "94ee78801c50": {
       "name": "github.setPRFileViewed#1",
@@ -1313,12 +1276,17 @@
       "ordinal": 18,
       "value": false
     },
-    "a3c0a5cdd953": {
-      "contents": {},
-      "drafts": {
-        "src/index.ts:12": "a review comment"
+    "b1ea2cd73d6a": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
       },
-      "error": "The host sent a reply this app could not read (github.setPRFileViewed)",
+      "drafts": {},
+      "error": "",
       "mutating": false,
       "payload": {
         "assignees": ["octocat"],
@@ -1331,7 +1299,7 @@
             "body": "please fix",
             "createdAt": "2020-01-01T00:00:00.000Z",
             "id": 501,
-            "isResolved": false,
+            "isResolved": true,
             "line": 12,
             "path": "src/index.ts",
             "threadId": "thread-1"
@@ -1341,6 +1309,14 @@
             "body": "a thought",
             "createdAt": "2020-01-01T00:00:00.000Z",
             "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a review comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 901,
+            "line": 12,
+            "path": "src/index.ts"
           }
         ],
         "files": [
@@ -1367,54 +1343,71 @@
       },
       "refreshSeq": 1
     },
-    "b6fc0b12fd0b": {
-      "name": "github.rerunPRChecks#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"failedOnly\":true}}"
-    },
-    "b7302ece9856": {
-      "name": "github.prFileContents#1",
-      "ordinal": 22,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prFileContents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseSha": "base-sha",
-            "headSha": "head-sha",
+    "b68ec3f01a39": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "drafts": {
+        "src/index.ts:12": "a review comment"
+      },
+      "error": "",
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": true,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
             "oldPath": {
               "$rpc": "undefined"
             },
             "path": "src/index.ts",
-            "prNumber": 12,
-            "repo": "id:repo-1",
-            "status": "modified"
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
           }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
         },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "newContent": "b",
-            "oldContent": "a",
-            "truncated": false
-          }
-        }
-      }
+        "reviewRequests": []
+      },
+      "refreshSeq": 1
+    },
+    "b6fc0b12fd0b": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"failedOnly\":true}}"
     },
     "b7c692656632": {
       "name": "github.setPRFileViewed#1",
@@ -1564,66 +1557,6 @@
         "reviewRequests": []
       }
     },
-    "c3ea578fcb3f": {
-      "contents": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      },
-      "drafts": {
-        "src/index.ts:12": "a review comment"
-      },
-      "error": "",
-      "mutating": false,
-      "payload": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": true,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "VIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "refreshSeq": 1
-    },
     "c5221050cf37": {
       "name": "github.addPRReviewComment#1",
       "ordinal": 28,
@@ -1670,6 +1603,67 @@
           }
         }
       }
+    },
+    "c56610f326df": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "drafts": {
+        "src/index.ts:12": "a review comment"
+      },
+      "error": "",
+      "mutating": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": true,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "refreshSeq": 1
     },
     "cdbe0a4858fa": {
       "name": "prFileLoadingPath",
@@ -1742,6 +1736,18 @@
       "ordinal": 32,
       "value": false
     },
+    "e2dba3496560": {
+      "name": "prFileContents",
+      "ordinal": 24,
+      "value": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -1770,15 +1776,15 @@
       "ordinal": 13,
       "value": true
     },
+    "f8cc6012f21b": {
+      "name": "error",
+      "ordinal": 11,
+      "value": "Failed to sync viewed state with GitHub."
+    },
     "fd2fad47bec2": {
       "name": "mutatingStatus",
       "ordinal": 1,
       "value": true
-    },
-    "febe6d923070": {
-      "name": "error",
-      "ordinal": 11,
-      "value": "The host sent a reply this app could not read (github.setPRFileViewed)"
     }
   },
   "recording": {
@@ -1874,7 +1880,7 @@
       {
         "id": "tk-item-checks-files.normal:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "372c9f84cf26", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "372c9f84cf26", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1883,7 +1889,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "c3ea578fcb3f",
+          "state": "b68ec3f01a39",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1900,7 +1906,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -1912,7 +1918,7 @@
             "01a8f1e0db1b",
             "372c9f84cf26",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -1930,7 +1936,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "38d90ed8a1ee",
+          "state": "47ac5bdaffbe",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1947,7 +1953,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -1967,7 +1973,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "a3c0a5cdd953",
+          "state": "7c616ddf083d",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -1975,7 +1981,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13"
           ]
         }
@@ -1999,7 +2005,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2011,7 +2017,7 @@
       {
         "id": "tk-item-checks-files.result-absent:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "1ffe2b83c7b5", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "1ffe2b83c7b5", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2020,7 +2026,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2028,7 +2034,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2037,7 +2043,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2049,7 +2055,7 @@
             "01a8f1e0db1b",
             "1ffe2b83c7b5",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2067,7 +2073,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2075,7 +2081,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2084,7 +2090,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2104,7 +2110,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "a3c0a5cdd953",
+          "state": "7c616ddf083d",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2112,7 +2118,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13"
           ]
         }
@@ -2136,7 +2142,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2148,7 +2154,7 @@
       {
         "id": "tk-item-checks-files.result-null:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "b7c692656632", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "b7c692656632", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2157,7 +2163,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2165,7 +2171,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2174,7 +2180,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2186,7 +2192,7 @@
             "01a8f1e0db1b",
             "b7c692656632",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2204,7 +2210,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2212,7 +2218,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2221,7 +2227,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2241,7 +2247,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "a3c0a5cdd953",
+          "state": "7c616ddf083d",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2249,7 +2255,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13"
           ]
         }
@@ -2273,7 +2279,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2285,7 +2291,7 @@
       {
         "id": "tk-item-checks-files.inner-ok-missing:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "1cf0e07a6038", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "1cf0e07a6038", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2294,7 +2300,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2302,7 +2308,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2311,7 +2317,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2323,7 +2329,7 @@
             "01a8f1e0db1b",
             "1cf0e07a6038",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2341,7 +2347,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2349,7 +2355,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2358,7 +2364,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2378,7 +2384,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "a3c0a5cdd953",
+          "state": "7c616ddf083d",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2386,7 +2392,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13"
           ]
         }
@@ -2410,7 +2416,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2422,7 +2428,7 @@
       {
         "id": "tk-item-checks-files.inner-false-string-error:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "792f1977a814", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "792f1977a814", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2431,7 +2437,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2439,7 +2445,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2448,7 +2454,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2460,7 +2466,7 @@
             "01a8f1e0db1b",
             "792f1977a814",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2478,7 +2484,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2486,7 +2492,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2495,7 +2501,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2515,7 +2521,7 @@
             "rerun-0": "eb79a9b3682a",
             "viewed-1": "eb79a9b3682a"
           },
-          "state": "a3c0a5cdd953",
+          "state": "7c616ddf083d",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2523,7 +2529,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13"
           ]
         }
@@ -2547,7 +2553,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2559,7 +2565,7 @@
       {
         "id": "tk-item-checks-files.inner-false-object-error:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "94ee78801c50", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "94ee78801c50", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2568,7 +2574,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2576,7 +2582,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2585,7 +2591,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2597,7 +2603,7 @@
             "01a8f1e0db1b",
             "94ee78801c50",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2615,7 +2621,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2623,7 +2629,7 @@
             "ecf9003e4ef1",
             "04df4241c3b7",
             "104bf14d3af8",
-            "febe6d923070",
+            "f8cc6012f21b",
             "9de8a1be3f13",
             "f277230bcf24",
             "ef8932b03a8c",
@@ -2632,7 +2638,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2696,7 +2702,7 @@
       {
         "id": "tk-item-checks-files.outer-refused:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "48d2edb4295f", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "48d2edb4295f", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2705,7 +2711,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2722,7 +2728,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2734,7 +2740,7 @@
             "01a8f1e0db1b",
             "48d2edb4295f",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2752,7 +2758,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2769,7 +2775,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2833,7 +2839,7 @@
       {
         "id": "tk-item-checks-files.outer-refused-no-message:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "242699b71082", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "242699b71082", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2842,7 +2848,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2859,7 +2865,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -2871,7 +2877,7 @@
             "01a8f1e0db1b",
             "242699b71082",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -2889,7 +2895,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2906,7 +2912,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -2970,7 +2976,7 @@
       {
         "id": "tk-item-checks-files.method-not-found:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "3104449d9301", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "3104449d9301", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -2979,7 +2985,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -2996,7 +3002,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -3008,7 +3014,7 @@
             "01a8f1e0db1b",
             "3104449d9301",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -3026,7 +3032,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -3043,7 +3049,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -3107,7 +3113,7 @@
       {
         "id": "tk-item-checks-files.transport-rejection:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "5403bda47538", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "5403bda47538", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -3116,7 +3122,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -3133,7 +3139,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -3145,7 +3151,7 @@
             "01a8f1e0db1b",
             "5403bda47538",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -3163,7 +3169,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -3180,7 +3186,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",
@@ -3244,7 +3250,7 @@
       {
         "id": "tk-item-checks-files.transport-rejection-no-message:expand-settled",
         "observation": {
-          "sender": ["01a8f1e0db1b", "8095c53f7e5e", "7fda96277de7", "b7302ece9856"],
+          "sender": ["01a8f1e0db1b", "8095c53f7e5e", "7fda96277de7", "747ae3d77900"],
           "payloads": ["b6fc0b12fd0b", "60ec2d836410", "8fd3df41c79d", "78f13a8847a8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -3253,7 +3259,7 @@
             "thread-2": "eb79a9b3682a",
             "expand-3": "eb79a9b3682a"
           },
-          "state": "93e1660aeb33",
+          "state": "c56610f326df",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -3270,7 +3276,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa"
           ]
         }
@@ -3282,7 +3288,7 @@
             "01a8f1e0db1b",
             "8095c53f7e5e",
             "7fda96277de7",
-            "b7302ece9856",
+            "747ae3d77900",
             "c5221050cf37"
           ],
           "payloads": [
@@ -3300,7 +3306,7 @@
             "expand-3": "eb79a9b3682a",
             "file-comment-4": "eb79a9b3682a"
           },
-          "state": "8a6843ac346a",
+          "state": "b1ea2cd73d6a",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",
@@ -3317,7 +3323,7 @@
             "7a9925855d5f",
             "856c3f5b4b50",
             "029bb83f402f",
-            "04c163c9d858",
+            "e2dba3496560",
             "cdbe0a4858fa",
             "1fc00c6935cc",
             "6d512f848a18",

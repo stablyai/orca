@@ -12185,9 +12185,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "oldContent": "a",
-              "newContent": "b",
-              "truncated": false
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
             }
           }
         },
@@ -13526,9 +13527,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "oldContent": "a",
-              "newContent": "b",
-              "truncated": false
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
             }
           }
         },

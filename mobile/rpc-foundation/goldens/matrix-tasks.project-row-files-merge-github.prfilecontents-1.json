@@ -3,11 +3,11 @@
   "family": "tasks.project-row-files-merge",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "732ce53b564927e7d61511e406b4e6b407c4572e",
+  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b228732762828412ad3d9eec3ece00a897d866046e37044322c3911758d6e0a9",
-  "scenarioSha256": "d8838276fb40a8ccb2dbedc269b970f85c1c800466b9813ac06f409ea44ffaff",
+  "scenarioSha256": "1b2ead3380b546c94c5da2ed61c9208cd158db9a56ca87e3e72e450668e1e507",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -92,6 +92,34 @@
         "itemType": "PULL_REQUEST"
       }
     },
+    "12e05fa04fb0": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
     "18d4d3ace98b": {
       "name": "prFileContents",
       "ordinal": 6,
@@ -100,6 +128,59 @@
           "error": "inner refused",
           "ok": false
         }
+      }
+    },
+    "22fd0e0131d4": {
+      "contents": {
+        "src/index.ts": {
+          "$rpc": "undefined"
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "2bfaca740ca3": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
       }
     },
     "2ed5fbe0536e": {
@@ -154,59 +235,22 @@
       "ordinal": 22,
       "value": true
     },
-    "35308e39a23b": {
-      "name": "github.prFileContents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prFileContents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseSha": "base-sha",
-            "headSha": "head-sha",
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "prNumber": 2,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repo": "id:repo-1",
-            "status": "modified"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "newContent": "b",
-            "oldContent": "a",
-            "truncated": false
-          }
-        }
-      }
-    },
     "383fbfbc5ed2": {
       "name": "projectMutating",
       "ordinal": 14,
       "value": false
+    },
+    "3a279df97d13": {
+      "name": "prFileContents",
+      "ordinal": 6,
+      "value": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      }
     },
     "3dd32a9906b0": {
       "name": "github.prFileContents#1",
@@ -261,33 +305,6 @@
       "ordinal": 9,
       "value": ""
     },
-    "4737ca53031e": {
-      "contents": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      },
-      "error": "",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "issueType": {
-            "$rpc": "null"
-          },
-          "labels": [],
-          "number": 2,
-          "repository": "owner/repo",
-          "state": "MERGED",
-          "url": "https://github.com/owner/repo/pull/2"
-        },
-        "fieldValuesByFieldId": {},
-        "id": "item-2",
-        "itemType": "PULL_REQUEST"
-      }
-    },
     "4778f4df22e3": {
       "contents": {
         "src/index.ts": {
@@ -316,27 +333,6 @@
     "49630b84cbb4": {
       "contents": {},
       "error": "transport failure",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "issueType": {
-            "$rpc": "null"
-          },
-          "labels": [],
-          "number": 2,
-          "repository": "owner/repo",
-          "state": "OPEN",
-          "url": "https://github.com/owner/repo/pull/2"
-        },
-        "fieldValuesByFieldId": {},
-        "id": "item-2",
-        "itemType": "PULL_REQUEST"
-      }
-    },
-    "497e8164a930": {
-      "contents": {},
-      "error": "The host sent a reply this app could not read (github.prFileContents)",
       "mutating": false,
       "row": {
         "content": {
@@ -542,6 +538,65 @@
         "itemType": "PULL_REQUEST"
       }
     },
+    "7851b73bc42c": {
+      "name": "github.prFileContents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "modified": "b",
+            "modifiedIsBinary": false,
+            "original": "a",
+            "originalIsBinary": false
+          }
+        }
+      }
+    },
+    "7a4f3a65b174": {
+      "name": "prFileContents",
+      "ordinal": 6,
+      "value": {
+        "src/index.ts": {
+          "$rpc": "undefined"
+        }
+      }
+    },
     "801bda6a9198": {
       "name": "error",
       "ordinal": 29,
@@ -618,6 +673,31 @@
             "ok": true
           }
         }
+      }
+    },
+    "88a25ad142bb": {
+      "contents": {
+        "src/index.ts": {
+          "$rpc": "undefined"
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
       }
     },
     "948edbfc0f6a": {
@@ -1030,11 +1110,6 @@
         }
       }
     },
-    "b7a136fdeba4": {
-      "name": "projectRowDetailError",
-      "ordinal": 6,
-      "value": "The host sent a reply this app could not read (github.prFileContents)"
-    },
     "be2bf5177055": {
       "contents": {
         "src/index.ts": {
@@ -1070,6 +1145,15 @@
       "name": "github.addPRReviewComment#1",
       "ordinal": 11,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commitId\":\"head-sha\",\"path\":\"src/index.ts\",\"line\":12,\"body\":\"a review comment\"}}"
+    },
+    "c07f9dc341c1": {
+      "name": "prFileContents",
+      "ordinal": 6,
+      "value": {
+        "src/index.ts": {
+          "$rpc": "null"
+        }
+      }
     },
     "c24da637c6f9": {
       "name": "github.addPRReviewComment#1",
@@ -1260,17 +1344,6 @@
       "ordinal": 2,
       "value": "src/index.ts"
     },
-    "e85494df9cc7": {
-      "name": "prFileContents",
-      "ordinal": 6,
-      "value": {
-        "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
-        }
-      }
-    },
     "eafeb0235606": {
       "name": "actionItem",
       "ordinal": 32,
@@ -1290,6 +1363,31 @@
       "name": "projectRowDetailError",
       "ordinal": 6,
       "value": "transport failure"
+    },
+    "f462ab28ddde": {
+      "contents": {
+        "src/index.ts": {
+          "$rpc": "null"
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
     },
     "f7fc11593793": {
       "name": "github.prFileContents#1",
@@ -1350,12 +1448,10 @@
       "ordinal": 31,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
     },
-    "fdf15056fb68": {
+    "fe5e9e5c827c": {
       "contents": {
         "src/index.ts": {
-          "newContent": "b",
-          "oldContent": "a",
-          "truncated": false
+          "$rpc": "null"
         }
       },
       "error": "",
@@ -1369,7 +1465,7 @@
           "labels": [],
           "number": 2,
           "repository": "owner/repo",
-          "state": "OPEN",
+          "state": "MERGED",
           "url": "https://github.com/owner/repo/pull/2"
         },
         "fieldValuesByFieldId": {},
@@ -1384,18 +1480,18 @@
       {
         "id": "tk-project-row-files-merge.normal:expand-settled",
         "observation": {
-          "sender": ["35308e39a23b"],
+          "sender": ["7851b73bc42c"],
           "payloads": ["62a79bf8d7aa"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a"
           },
-          "state": "fdf15056fb68",
+          "state": "2bfaca740ca3",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "e85494df9cc7",
+            "3a279df97d13",
             "662cbccd78cb"
           ]
         }
@@ -1403,19 +1499,19 @@
       {
         "id": "tk-project-row-files-merge.normal:file-comment-settled",
         "observation": {
-          "sender": ["35308e39a23b", "c24da637c6f9"],
+          "sender": ["7851b73bc42c", "c24da637c6f9"],
           "payloads": ["62a79bf8d7aa", "c0706151fdcc"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a",
             "file-comment-1": "eb79a9b3682a"
           },
-          "state": "fdf15056fb68",
+          "state": "2bfaca740ca3",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "e85494df9cc7",
+            "3a279df97d13",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1428,7 +1524,7 @@
       {
         "id": "tk-project-row-files-merge.normal:merge-settled",
         "observation": {
-          "sender": ["35308e39a23b", "c24da637c6f9", "65c6b60b2a1c"],
+          "sender": ["7851b73bc42c", "c24da637c6f9", "65c6b60b2a1c"],
           "payloads": ["62a79bf8d7aa", "c0706151fdcc", "a943cc6b7a3c"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1436,12 +1532,12 @@
             "file-comment-1": "eb79a9b3682a",
             "merge-2": "eb79a9b3682a"
           },
-          "state": "4737ca53031e",
+          "state": "12e05fa04fb0",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "e85494df9cc7",
+            "3a279df97d13",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1459,7 +1555,7 @@
       {
         "id": "tk-project-row-files-merge.normal:issue-state-settled",
         "observation": {
-          "sender": ["35308e39a23b", "c24da637c6f9", "65c6b60b2a1c", "a2462ffcc807"],
+          "sender": ["7851b73bc42c", "c24da637c6f9", "65c6b60b2a1c", "a2462ffcc807"],
           "payloads": ["62a79bf8d7aa", "c0706151fdcc", "a943cc6b7a3c", "a05f949ea04b"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1468,12 +1564,12 @@
             "merge-2": "eb79a9b3682a",
             "issue-state-3": "eb79a9b3682a"
           },
-          "state": "4737ca53031e",
+          "state": "12e05fa04fb0",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "e85494df9cc7",
+            "3a279df97d13",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1496,7 +1592,7 @@
         "id": "tk-project-row-files-merge.normal:pr-state-settled",
         "observation": {
           "sender": [
-            "35308e39a23b",
+            "7851b73bc42c",
             "c24da637c6f9",
             "65c6b60b2a1c",
             "a2462ffcc807",
@@ -1517,12 +1613,12 @@
             "issue-state-3": "eb79a9b3682a",
             "pr-state-4": "eb79a9b3682a"
           },
-          "state": "4737ca53031e",
+          "state": "12e05fa04fb0",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "e85494df9cc7",
+            "3a279df97d13",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1554,12 +1650,12 @@
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a"
           },
-          "state": "497e8164a930",
+          "state": "22fd0e0131d4",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "7a4f3a65b174",
             "662cbccd78cb"
           ]
         }
@@ -1574,12 +1670,12 @@
             "expand-0": "eb79a9b3682a",
             "file-comment-1": "eb79a9b3682a"
           },
-          "state": "9d1e84daf78b",
+          "state": "22fd0e0131d4",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "7a4f3a65b174",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1600,12 +1696,12 @@
             "file-comment-1": "eb79a9b3682a",
             "merge-2": "eb79a9b3682a"
           },
-          "state": "688948cddf49",
+          "state": "88a25ad142bb",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "7a4f3a65b174",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1632,12 +1728,12 @@
             "merge-2": "eb79a9b3682a",
             "issue-state-3": "eb79a9b3682a"
           },
-          "state": "688948cddf49",
+          "state": "88a25ad142bb",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "7a4f3a65b174",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1681,12 +1777,12 @@
             "issue-state-3": "eb79a9b3682a",
             "pr-state-4": "eb79a9b3682a"
           },
-          "state": "688948cddf49",
+          "state": "88a25ad142bb",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "7a4f3a65b174",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1718,12 +1814,12 @@
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a"
           },
-          "state": "497e8164a930",
+          "state": "f462ab28ddde",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "c07f9dc341c1",
             "662cbccd78cb"
           ]
         }
@@ -1738,12 +1834,12 @@
             "expand-0": "eb79a9b3682a",
             "file-comment-1": "eb79a9b3682a"
           },
-          "state": "9d1e84daf78b",
+          "state": "f462ab28ddde",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "c07f9dc341c1",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1764,12 +1860,12 @@
             "file-comment-1": "eb79a9b3682a",
             "merge-2": "eb79a9b3682a"
           },
-          "state": "688948cddf49",
+          "state": "fe5e9e5c827c",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "c07f9dc341c1",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1796,12 +1892,12 @@
             "merge-2": "eb79a9b3682a",
             "issue-state-3": "eb79a9b3682a"
           },
-          "state": "688948cddf49",
+          "state": "fe5e9e5c827c",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "c07f9dc341c1",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
@@ -1845,12 +1941,12 @@
             "issue-state-3": "eb79a9b3682a",
             "pr-state-4": "eb79a9b3682a"
           },
-          "state": "688948cddf49",
+          "state": "fe5e9e5c827c",
           "effects": [
             "83849325358f",
             "e80faf8c3d27",
             "d03a99b98103",
-            "b7a136fdeba4",
+            "c07f9dc341c1",
             "662cbccd78cb",
             "b0f2d0edec6a",
             "44c2e6541ebd",
