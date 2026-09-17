@@ -31,13 +31,25 @@ on:
       - '.github/workflows/mobile.yml'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/mobile-ios-release.yml'
+  # Why main too: a behaviour-change branch legitimately pins its own last fenced commit, and that
+  # commit only stops being reachable when the branch squash-merges. The pull_request run cannot
+  # see that; this one is where the pin guard finds it.
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
 
 concurrency:
   group: mobile-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # A superseded PR head is worth nothing; a superseded main commit still has a verdict of its own,
+  # and cancelling it is how a broken pin slips through between two merges.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     env:
@@ -101,3 +113,55 @@ jobs:
 
       - name: Check formatting
         run: pnpm format:check
+
+  recording-pin:
+    name: RPC recording pin
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # The ancestry verdict is read straight off history. On a shallow checkout
+          # `git merge-base --is-ancestor` answers from grafted parents, so the guard refuses to
+          # answer at all rather than reporting a pass it has no evidence for -- and the pinned tree
+          # below has to be checkable out.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Seconds. `github.sha` on a push is the merged commit; on a pull_request the checked-out ref
+      # is the merge preview, whose second parent is the base -- so a pin reachable only from main
+      # would pass there and fail after the squash. The head sha is the branch's own claim.
+      - name: Check the recording pin is reachable
+        shell: bash
+        env:
+          PIN_GUARD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry --ref "$PIN_GUARD_REF"
+
+      # ~2 min locally for the record itself, so it is gated rather than run twice over. A pull
+      # request that moves none of the corpus, the manifest or the recorder cannot move this
+      # verdict away from the one the base commit already published, and `verify` replays the
+      # corpus against the branch tree in the meantime. A push to main has no `verify` job and is
+      # where a squash lands a spliced corpus, so there it always runs.
+      - name: Reproduce the corpus from the pinned tree
+        shell: bash
+        env:
+          PIN_GUARD_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$PIN_GUARD_BASE" ]; then
+            pnpm exec tsx scripts/rpc-recording-pin-guard.mts reproduce --if-changed-since "$PIN_GUARD_BASE"
+          else
+            pnpm exec tsx scripts/rpc-recording-pin-guard.mts reproduce
+          fi

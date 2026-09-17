@@ -13,6 +13,8 @@ export default defineConfig({
     onConsoleLog: (log) => !log.includes('react-test-renderer is deprecated'),
     // .tsx too: component tests exist (react-test-renderer + mocked react-native) and were
     // silently never collected, so render-level regressions shipped untested.
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx']
+    // scripts/ too: the CI guards under it (the RPC recording pin) had no runnable test home,
+    // and a test vitest never collects is not a gate.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts']
   }
 })
