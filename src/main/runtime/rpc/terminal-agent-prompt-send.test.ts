@@ -11,6 +11,7 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    recordTerminalInputSource: vi.fn(),
     ...overrides
   } as OrcaRuntimeService
 }

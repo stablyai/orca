@@ -190,6 +190,29 @@ export function createPtyWriteInput(deps: {
     mainWebContents: WebContents
   ): boolean => isMainWindowPtyIpcEvent(event, mainWindow, mainWebContents)
 
+  // Why: the desktop renderer writes over IPC, not RPC, so it is the one input path with no
+  // RpcContext; record it as in-process so a hook does not keep reporting the last remote device.
+  const recordLocalInputWhenWritten = (
+    id: string,
+    written: boolean | Promise<boolean>
+  ): boolean | Promise<boolean> => {
+    if (!runtime) {
+      return written
+    }
+    if (typeof written === 'boolean') {
+      if (written) {
+        runtime.recordTerminalInputSource(id, {})
+      }
+      return written
+    }
+    return written.then((ok) => {
+      if (ok) {
+        runtime.recordTerminalInputSource(id, {})
+      }
+      return ok
+    })
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -210,7 +233,10 @@ export function createPtyWriteInput(deps: {
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data, admitted)
+      return recordLocalInputWhenWritten(
+        args.id,
+        writePtyProviderInput(provider, args.id, args.data, admitted)
+      )
     } catch {
       return false
     }
@@ -239,7 +265,10 @@ export function createPtyWriteInput(deps: {
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data, admitted)
+      return recordLocalInputWhenWritten(
+        args.id,
+        writePtyProviderInput(provider, args.id, args.data, admitted)
+      )
     } catch {
       return false
     }

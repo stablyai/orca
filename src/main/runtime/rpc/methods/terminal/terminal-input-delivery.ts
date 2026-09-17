@@ -11,6 +11,10 @@ import {
   isTerminalInputTooLargeWithYield
 } from '../../../../../shared/terminal-input'
 import type { TerminalViewportClient } from './terminal-stream-types'
+import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
+import type { TerminalSend } from './unary-schemas'
+import type { z } from 'zod'
+import type { TerminalInputCaller } from '../../../../../shared/terminal-input-source'
 
 export function isTerminalInputLockedForClient(
   runtime: OrcaRuntimeService,
@@ -25,6 +29,31 @@ export function isTerminalInputLockedForClient(
     return false
   }
   return runtime.getDriver(ptyId).kind === 'mobile'
+}
+
+// Why: a query reply is a mobile-only, bare-text answer to a terminal prompt; any other shape on
+// that input kind is a malformed client request, not a guard outcome.
+export function assertTerminalQueryReplyParams(
+  params: z.infer<typeof TerminalSend>,
+  clientId: string | undefined
+): void {
+  if (params.inputKind !== 'query-reply') {
+    return
+  }
+  const queryReplyClientId = clientId ?? params.client?.id
+  if (
+    !params.text ||
+    !isTerminalQueryReply(params.text) ||
+    params.enter === true ||
+    params.interrupt === true ||
+    params.agentPrompt === true ||
+    params.requireAgentStatus !== undefined ||
+    params.client?.type !== 'mobile' ||
+    !queryReplyClientId ||
+    (clientId !== undefined && params.client.id !== clientId)
+  ) {
+    throw new InvalidArgumentError('Invalid terminal query reply')
+  }
 }
 
 export async function assertTerminalSendTextWithinLimit(text: string | undefined): Promise<void> {
@@ -105,9 +134,11 @@ export async function sendTerminalStreamInput(
   runtime: OrcaRuntimeService,
   args: {
     terminal: string
+    ptyId: string
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    caller: TerminalInputCaller
   }
 ): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
@@ -116,7 +147,11 @@ export async function sendTerminalStreamInput(
   try {
     if (!clientId) {
       const result = await runtime.sendTerminal(args.terminal, action)
-      return result.accepted ? 'delivered' : 'rejected'
+      if (!result.accepted) {
+        return 'rejected'
+      }
+      runtime.recordTerminalInputSource(args.ptyId, args.caller)
+      return 'delivered'
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
       reserveWrite: (writePtyId) => {
@@ -132,6 +167,7 @@ export async function sendTerminalStreamInput(
       floorClaim.current?.rollback()
       return 'rejected'
     }
+    runtime.recordTerminalInputSource(args.ptyId, args.caller)
     return 'delivered'
   } catch (error) {
     floorClaim.current?.rollback()

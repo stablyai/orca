@@ -22,6 +22,7 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
       },
       rollback: vi.fn()
     })),
+    recordTerminalInputSource: vi.fn(),
     ...overrides
   } as OrcaRuntimeService
 }

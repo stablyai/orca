@@ -15,7 +15,15 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
     params: TerminalSubscribe,
     handler: async (
       params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        pairedDeviceId,
+        clientKind,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal
+      },
       emit
     ) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
@@ -64,6 +72,8 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         params,
         runtime,
         connectionId,
+        pairedDeviceId,
+        clientKind,
         sendBinary,
         registerBinaryStreamHandler,
         signal,

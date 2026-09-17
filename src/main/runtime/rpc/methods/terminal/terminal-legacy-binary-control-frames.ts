@@ -29,6 +29,8 @@ export function registerLegacyBinaryControlFrames(
     registerBinaryStreamHandler,
     ptyId,
     clientId,
+    pairedDeviceId,
+    clientKind,
     isMobile,
     supportsDesktopViewportClaims,
     supportsWriteUnavailable
@@ -54,9 +56,11 @@ export function registerLegacyBinaryControlFrames(
         }
         const outcome = await sendTerminalStreamInput(runtime, {
           terminal: params.terminal,
+          ptyId,
           text,
           client: params.client,
-          isMobile
+          isMobile,
+          caller: { pairedDeviceId, clientKind }
         })
         if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
           controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)
