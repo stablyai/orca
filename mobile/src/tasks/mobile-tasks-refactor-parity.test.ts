@@ -68,9 +68,17 @@ const hash = (parts: string[] | string): string =>
 // full span, so a comment nested inside one is hashed with it. They move once more when the two
 // halves are deduplicated: the project pane's five collection casts and the assignee list's are
 // deleted where the entity schemas from the item half now type those rows.
-const SCREEN_RPC_SCREEN_HOOKS = 'be63ac18b4e008033c80b090023eac5df08b1e60d077221df06b89e884916c19'
+//
+// Round 2 of tasks-2 moves the hook and statement hashes a last time, and only those two. One
+// statement changes: the Linear list cast (`found as LinearIssue[]`) becomes `found`, because the
+// nine members linearIssueRowSchema requires make the value assignable to the mobile alias without
+// it. The rest is comment text nested inside statements — three `SAFETY:` lines rewritten to argue
+// from the schemas that landed instead of the fixtures round 1 deleted. Counts are unchanged at 350
+// hooks and 417 statements; the declaration, semantic, render and style hashes do not move, which
+// is the evidence that deleting the cast changed no type and no call.
+const SCREEN_RPC_SCREEN_HOOKS = '150d10bb727392fa0637edabb23147075e2079a33bb720dbb4abc96322c632ec'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'f54ecccb128f94c1db8429846bc7082e4c4fd1a9183ad2036b83cf7b6aad41ce'
+const SCREEN_RPC_STATEMENTS = '65debbd9781017e537d950cbff45ccb4ae5d449df58db93303be6734ef2bc51a'
 const MAIN_REBASED_DECLARATIONS = '920a1b66445d10e2a64fbdbe9d7138a4ebe21bbccde1b9ac9c89267cecc584b9'
 const SCREEN_RPC_SEMANTICS = '763f4ffc60b8b335eaab4a51820dc782be430ada879564888a5d28929c9e938b'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
