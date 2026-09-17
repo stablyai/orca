@@ -6,39 +6,17 @@ afterEach(() => {
 })
 
 describe('RelayRetrySchedule', () => {
-  it('exposes no settle signal while nothing is armed', () => {
-    const schedule = new RelayRetrySchedule(() => 0.5)
-    expect(schedule.pending).toBe(false)
-    expect(schedule.settled).toBeNull()
-  })
-
-  it('settles after the retry has run, so a woken waiter sees its effect', async () => {
-    vi.useFakeTimers()
-    const schedule = new RelayRetrySchedule(() => 0.5)
-    const order: string[] = []
-    schedule.schedule(0, () => order.push('retry'))
-    const settled = schedule.settled
-    expect(settled).not.toBeNull()
-    void settled!.then(() => order.push('settled'))
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(order).toEqual(['retry', 'settled'])
-    expect(schedule.pending).toBe(false)
-    expect(schedule.settled).toBeNull()
-  })
-
-  it('settles on cancel without running the retry', async () => {
+  it('clears the timer on cancel without running the retry', async () => {
     vi.useFakeTimers()
     const schedule = new RelayRetrySchedule(() => 0.5)
     const retry = vi.fn()
     schedule.schedule(0, retry)
-    const settled = schedule.settled!
+    expect(schedule.pending).toBe(true)
 
     schedule.cancel()
-    await expect(settled).resolves.toBeUndefined()
+    expect(schedule.pending).toBe(false)
     await vi.advanceTimersByTimeAsync(10_000)
     expect(retry).not.toHaveBeenCalled()
-    expect(schedule.settled).toBeNull()
   })
 
   it('keeps the attempt count across cancel so a superseded retry does not restart the ladder', async () => {

@@ -33,6 +33,12 @@ export type RelayAuthCoordinatorOptions = {
     refreshAccessToken: () => Promise<string | null>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
+  /**
+   * Test seam, not a policy knob. The only production construction is in `desktop-relay-service.ts`
+   * and it passes neither this nor `random`, so every shipped build lingers for the hardcoded
+   * ten-minute default in `relay-auth-coordinator.ts`. Read it as such before tuning it: changing
+   * the default is the only thing a user can feel.
+   */
   lingerMs?: number
   random?: () => number
 }
