@@ -13,6 +13,9 @@ import {
   stopAllSyntheticTitleSpinners
 } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { enrichAgentStatusIpcPayload } from '../ipc/agent-status-ipc-boundary'
+
+let uninstallReplicaStatusListener: (() => void) | null = null
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
@@ -27,6 +30,8 @@ export type MainWindowAgentStatusOptions = {
 }
 
 export function installMainWindowAgentStatusListeners(options: MainWindowAgentStatusOptions): void {
+  uninstallReplicaStatusListener?.()
+  uninstallReplicaStatusListener = null
   agentHookServer.setListener(
     ({
       paneKey,
@@ -139,6 +144,38 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       })
     }
   })
+  const replicaStore = state.runtime?.getAgentStatusHostReplicaStore()
+  if (replicaStore) {
+    uninstallReplicaStatusListener = replicaStore.subscribeStatusRowMutations((mutation) => {
+      const window = state.mainWindow
+      const runtime = state.runtime
+      if (!window || window.isDestroyed() || !runtime) {
+        return
+      }
+      const paneKeys = new Set(
+        [mutation.before?.paneKey, mutation.after?.paneKey].filter(
+          (paneKey): paneKey is string => paneKey !== undefined
+        )
+      )
+      for (const paneKey of paneKeys) {
+        const rows = runtime
+          .getAgentStatusSnapshot()
+          .filter((row) => row.paneKey === paneKey && row.structuredHost === undefined)
+        if (rows.length === 0) {
+          window.webContents.send('agentStatus:clear', { paneKey })
+          getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', { paneKey })
+          continue
+        }
+        for (const row of rows) {
+          const statusEvent = enrichAgentStatusIpcPayload(row, runtime)
+          window.webContents.send('agentStatus:set', statusEvent)
+          if (row.providerSessionOnly !== true) {
+            getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+          }
+        }
+      }
+    })
+  }
 }
 
 export function clearMainWindowAgentStatusListeners(): void {
@@ -146,6 +183,8 @@ export function clearMainWindowAgentStatusListeners(): void {
   agentHookServer.setListener(null)
   agentHookServer.setPaneStatusClearListener(null)
   setMigrationUnsupportedPtyListener(null)
+  uninstallReplicaStatusListener?.()
+  uninstallReplicaStatusListener = null
   // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.
   stopAllSyntheticTitleSpinners()
 }

@@ -122,6 +122,8 @@ export function selectRuntimeHookAgentRowForPane(
   let live: AgentStatusIpcPayload | null = null
   const freshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
   for (const entry of rows) {
+    const evidenceAt =
+      entry.replicaEvidenceReceivedAt ?? entry.evidenceObservedAt ?? entry.receivedAt
     if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
       session = entry
     }
@@ -129,7 +131,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
         (entry.agentType === 'pi' && entry.providerSession != null)) &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      evidenceAt >= freshAfter &&
       (!agent || entry.receivedAt > agent.receivedAt)
     ) {
       agent = entry
@@ -138,7 +140,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
       entry.restoredUnconfirmed !== true &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      evidenceAt >= freshAfter &&
       (!live || entry.receivedAt > live.receivedAt)
     ) {
       live = entry
@@ -154,8 +156,10 @@ export function selectRuntimeHookAgentRowForPane(
       ? {
           payload: pickParsedAgentStatusPayload(live),
           updatedAt: live.receivedAt,
-          ...(live.evidenceObservedAt !== undefined
-            ? { evidenceObservedAt: live.evidenceObservedAt }
+          ...((live.replicaEvidenceReceivedAt ?? live.evidenceObservedAt) !== undefined
+            ? {
+                evidenceObservedAt: live.replicaEvidenceReceivedAt ?? live.evidenceObservedAt
+              }
             : {}),
           stateStartedAt: live.stateStartedAt ?? live.receivedAt,
           ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})

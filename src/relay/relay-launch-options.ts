@@ -1,6 +1,7 @@
 import { chmodSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../shared/execution-host'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const DEFAULT_SOCKET_NAME = 'relay.sock'
@@ -22,6 +23,8 @@ export type RelayLaunchOptions = {
   endpointDir?: string
   logFile?: string
   credentialFile?: string
+  /** Explicit host scope stamped into replicated status frames. Legacy launches omit it and stay local. */
+  executionHostId?: ExecutionHostId
 }
 
 export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
@@ -33,6 +36,7 @@ export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
   let endpointDir: string | undefined
   let logFile: string | undefined
   let credentialFile: string | undefined
+  let executionHostId: ExecutionHostId | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = Number.parseInt(argv[i + 1], 10)
@@ -59,6 +63,9 @@ export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
     } else if (argv[i] === '--credential-file' && argv[i + 1]) {
       credentialFile = argv[i + 1]
       i++
+    } else if (argv[i] === '--execution-host-id' && argv[i + 1]) {
+      executionHostId = normalizeExecutionHostId(argv[i + 1]) ?? undefined
+      i++
     }
   }
   if (!sockPath) {
@@ -72,7 +79,8 @@ export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
     sockPath,
     endpointDir,
     logFile,
-    credentialFile
+    credentialFile,
+    ...(executionHostId ? { executionHostId } : {})
   }
 }
 

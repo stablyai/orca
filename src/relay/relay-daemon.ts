@@ -53,7 +53,8 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     primaryChannel.dispatcher,
     runtime.ptyHandler,
     options.sockPath,
-    options.endpointDir
+    options.endpointDir,
+    options.executionHostId
   )
   const lifecycle = new RelayGraceLifecycle({
     dispatcher: primaryChannel.dispatcher,

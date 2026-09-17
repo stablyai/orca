@@ -581,6 +581,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeStatus': null,
   'agentSession.unsubscribe': UnsubscribeParams,
+  'agentStatus.getStoreSnapshot': null,
+  'agentStatus.subscribeStore': null,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
   'aiVault.listSessions': AiVaultListSessionsParams,

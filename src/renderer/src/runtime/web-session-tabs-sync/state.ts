@@ -210,6 +210,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'recentlyRetiredAgentStatusPaneKeys'
       | 'retainedAgentsByPaneKey'
       | 'retentionSuppressedPaneKeys'
+      | 'runtimeStatusByEnvironmentId'
     >
   >
 

@@ -53,6 +53,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
+  /** Replica-local receipt of the current evidence. Never published by the execution host. */
+  replicaEvidenceReceivedAt?: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
   /** Resume identity update only; the status-shaped fields are transport placeholders. */

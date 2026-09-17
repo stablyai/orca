@@ -19,12 +19,16 @@ type AgentHookHandlerDependencies = {
   getPtyIdForPaneKey?: (paneKey: string) => string | undefined
 }
 
+type AgentStatusRuntime = AgentStatusRuntimeEnrichment & {
+  getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+}
+
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
 export function registerAgentHookHandlers(
-  runtime?: AgentStatusRuntimeEnrichment,
+  runtime?: AgentStatusRuntime,
   dependencies: AgentHookHandlerDependencies = {}
 ): void {
   // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
@@ -50,8 +54,7 @@ export function registerAgentHookHandlers(
     // lose replayed statuses while its local store is still empty. Match the
     // live push enrichment in main/index.ts so parent/child rows survive replay.
     return (
-      agentHookServer
-        .getStatusSnapshot()
+      (runtime?.getAgentStatusSnapshot?.() ?? agentHookServer.getStatusSnapshot())
         // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
         .filter((entry) => entry.structuredHost === undefined)
         .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))

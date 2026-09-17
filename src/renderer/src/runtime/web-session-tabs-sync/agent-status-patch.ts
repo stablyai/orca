@@ -61,7 +61,8 @@ export function buildMirroredAgentStatusPatch(
   terminalSurfaceTabs: readonly TerminalSurface[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
   now: number,
-  batchContext?: WebSessionTabsBatchContext
+  batchContext?: WebSessionTabsBatchContext,
+  options: { hostOwnsAgentStatus?: boolean } = {}
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
@@ -112,10 +113,13 @@ export function buildMirroredAgentStatusPatch(
     // state (still adopting the host's identity fields below) unless the host
     // carries a state class the client's bytes can never see.
     const clientOwnsEntry =
+      options.hostOwnsAgentStatus !== true &&
       isFencedClientAgentStatus(entry.paneKey, existing, now) &&
       !hostAgentStatusPiercesClientAuthority(entry)
     const nextEntry =
-      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
+      options.hostOwnsAgentStatus !== true &&
+      existing &&
+      (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'
@@ -161,7 +165,10 @@ export function buildMirroredAgentStatusPatch(
     // there is nothing to arbitrate, and a client asleep past the stale
     // boundary would otherwise erase every pane it owns on the first snapshot
     // after wake (STA-3107) instead of decaying it like a local pane.
-    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
+    if (
+      options.hostOwnsAgentStatus !== true &&
+      isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])
+    ) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {

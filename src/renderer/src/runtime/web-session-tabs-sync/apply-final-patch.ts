@@ -6,6 +6,7 @@ import {
   buildRetractedMirroredTabSweepPatch
 } from './agent-status-primitives'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
+import { AGENT_STATUS_STORE_REPLICA_CAPABILITY } from '../../../../shared/protocol-version'
 
 type FinalPatchContext = ReturnType<typeof applyActiveStateUpdates>
 
@@ -15,6 +16,7 @@ export function buildWebSessionTabsFinalPatch(
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const {
     state,
+    environmentId,
     snapshot,
     worktreeId,
     now,
@@ -58,7 +60,13 @@ export function buildWebSessionTabsFinalPatch(
     terminalSurfaceTabs,
     mirroredTerminalTabs,
     now,
-    batchContext
+    batchContext,
+    {
+      hostOwnsAgentStatus:
+        state.runtimeStatusByEnvironmentId
+          ?.get(environmentId)
+          ?.status?.capabilities?.includes(AGENT_STATUS_STORE_REPLICA_CAPABILITY) === true
+    }
   )
   // A tombstone clears all environments' view of a worktree; it is not a terminal retraction.
   const retractedTabSweepPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)

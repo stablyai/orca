@@ -114,6 +114,7 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 
 export type RelayDeployResult = {
   transport: MultiplexerTransport
@@ -1700,6 +1701,7 @@ async function launchRelay(
   const escapedNode = shellEscape(nodePath)
   // Why: remoteRelayDir is shared across Orca targets for one account; hashing the target ID into the socket name stops cross-target attach.
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
+  const executionHostId = relayInstanceId ? toSshExecutionHostId(relayInstanceId) : undefined
   const defaultSockFile = relayEndpointForHost(hostPlatform, remoteDir, sockName)
   const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, defaultSockFile)
   const credentialFile = joinRemotePath(hostPlatform, remoteDir, `${sockName}.credential`)
@@ -1733,7 +1735,8 @@ async function launchRelay(
         graceTime,
         activePipeMarkerPath,
         reconnectFallback: fallbackEndpoint,
-        credentialFile
+        credentialFile,
+        executionHostId
       },
       signal
     )
@@ -1799,7 +1802,10 @@ async function launchRelay(
   // Why: the relay derives its hook endpoint dir from the socket path; pin it back under the relay dir when the socket moved to /tmp.
   const endpointDirArg =
     sockFile === defaultSockFile ? '' : ` --endpoint-dir ${shellEscape(endpointDir)}`
-  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  const executionHostIdArg = executionHostId
+    ? ` --execution-host-id ${shellEscape(executionHostId)}`
+    : ''
+  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)}${executionHostIdArg} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -1991,6 +1997,7 @@ type WindowsRelayLaunchOptions = {
   graceTime: number
   activePipeMarkerPath: string
   credentialFile: string
+  executionHostId?: string
 } & WindowsRelayEndpoint & {
     reconnectFallback?: WindowsRelayEndpoint
   }
@@ -2073,7 +2080,8 @@ async function launchWindowsRelay(
       launchOpts.graceTime,
       logFile,
       errFile,
-      launchOpts.credentialFile
+      launchOpts.credentialFile,
+      launchOpts.executionHostId
     ),
     { signal }
   )
@@ -2165,7 +2173,8 @@ function windowsRelayLaunchCommand(
   graceTime: number,
   logFile: string,
   errFile: string,
-  credentialFile: string
+  credentialFile: string,
+  executionHostId?: string
 ): string {
   const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
   // Why: Windows sshd kills the exec channel's process tree on close; WMI re-parents the detached relay to survive.
@@ -2180,6 +2189,7 @@ function windowsRelayLaunchCommand(
     quoted(sockPath),
     '--credential-file',
     quoted(credentialFile),
+    ...(executionHostId ? ['--execution-host-id', quoted(executionHostId)] : []),
     '--endpoint-dir',
     quoted(endpointDir),
     // Why: --log-file owns rotation; shell redirects still capture pre-JS boot/crash output.

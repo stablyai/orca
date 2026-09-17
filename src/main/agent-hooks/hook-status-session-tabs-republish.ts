@@ -7,7 +7,8 @@ type SessionTabsRepublisher = {
   touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 
-type StatusStore = Pick<AgentHookServer, 'subscribeStatusFreshness' | 'subscribeStatusRowMutations'>
+type StatusStore = Pick<AgentHookServer, 'subscribeStatusRowMutations'> &
+  Partial<Pick<AgentHookServer, 'subscribeStatusFreshness'>>
 
 /**
  * Republish `session.tabs` whenever a pane's status row changes.
@@ -50,16 +51,17 @@ export function installHookStatusSessionTabsRepublish(
       runtime.touchMobileSessionTabsForWorktree(worktreeId)
     }
   })
-  const unsubscribeFreshness = statusStore.subscribeStatusFreshness((status) => {
-    const runtime = getRuntime()
-    if (!runtime) {
-      return
-    }
-    const worktreeId = resolveWorktreeId(status, runtime)
-    if (worktreeId) {
-      runtime.scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId)
-    }
-  })
+  const unsubscribeFreshness =
+    statusStore.subscribeStatusFreshness?.((status) => {
+      const runtime = getRuntime()
+      if (!runtime) {
+        return
+      }
+      const worktreeId = resolveWorktreeId(status, runtime)
+      if (worktreeId) {
+        runtime.scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId)
+      }
+    }) ?? (() => {})
   return () => {
     unsubscribeMutations()
     unsubscribeFreshness()

@@ -6,6 +6,8 @@ import type { IPtyProvider } from '../providers/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusStorePublisher } from '../../shared/agent-status-store-publisher'
+import type { AgentStatusHostReplicaStore } from './agent-status-host-replica-store'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
@@ -41,6 +43,18 @@ import { registerConptyDa1OverrideInstaller } from './terminal-model-query-autho
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  getAgentStatusStorePublisher(): AgentStatusStorePublisher | null {
+    return this.agentStatusStorePublisherFn
+  }
+
+  getAgentStatusHostReplicaStore(): AgentStatusHostReplicaStore | null {
+    return this.agentStatusHostReplicaStoreFn
+  }
+
+  getAgentStatusSnapshot(): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.() ?? this.getAgentStatusSnapshotFn?.() ?? []
+  }
+
   constructor(
     store: RuntimeStore | null = null,
     stats?: StatsCollector,
@@ -54,6 +68,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      agentStatusStorePublisher?: AgentStatusStorePublisher
+      agentStatusHostReplicaStore?: AgentStatusHostReplicaStore
       /** Where structured (native chat) sessions publish into that same store, so the snapshot
        *  above lists them like every other agent. */
       structuredAgentStatusSink?: StructuredAgentSessionStatusSink
@@ -204,6 +220,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.agentStatusStorePublisherFn = deps?.agentStatusStorePublisher ?? null
+    this.agentStatusHostReplicaStoreFn = deps?.agentStatusHostReplicaStore ?? null
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))

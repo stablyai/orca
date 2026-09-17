@@ -5,6 +5,11 @@ import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import type {
+  AgentStatusStoreFrame,
+  AgentStatusStoreSnapshot
+} from '../../shared/agent-status-store-replication'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import { RelayDispatcher } from '../../relay/dispatcher'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -16,6 +21,12 @@ import { agentHookServer, _internals as agentHookInternals } from '../agent-hook
 import { getSshPtyProvider } from '../ipc/pty'
 import { toAppSshPtyId } from '../providers/ssh-pty-id'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
+import { AgentStatusHostReplicaStore } from '../runtime/agent-status-host-replica-store'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  notifyFakeAgentStatusFrame,
+  registerFakeAgentStatusRelayHandlers
+} from './ssh-relay-agent-status-test-support'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -64,16 +75,16 @@ type FakeRelay = {
   replayEnvelopes: AgentHookRelayEnvelope[]
   notifyAgentHook: (envelope: AgentHookRelayEnvelope | Record<string, unknown>) => void
   dispose: () => void
+  notifyStatusFrame: (frame: AgentStatusStoreFrame) => void
 }
 
-// Why: mock below SSH at the relay transport boundary so CI covers session,
-// mux, provider, and hook-ingest wiring without relying on a local sshd.
-function createFakeRelay(): FakeRelay {
+function createFakeRelay(options: { statusSnapshot?: AgentStatusStoreSnapshot } = {}): FakeRelay {
   let relayFeed: ((data: Buffer) => void) | null = null
   const clientDataCallbacks: ((data: Buffer) => void)[] = []
   const clientCloseCallbacks: (() => void)[] = []
   const ptySpawnRequests: Record<string, unknown>[] = []
   const replayEnvelopes: AgentHookRelayEnvelope[] = []
+  let statusSubscribed = false
 
   const transport: MultiplexerTransport = {
     write: (data) => {
@@ -137,6 +148,9 @@ function createFakeRelay(): FakeRelay {
     }
     return { replayed: replayEnvelopes.length }
   })
+  registerFakeAgentStatusRelayHandlers(dispatcher, options, () => {
+    statusSubscribed = true
+  })
 
   return {
     transport,
@@ -146,11 +160,15 @@ function createFakeRelay(): FakeRelay {
     notifyAgentHook: (envelope) => {
       dispatcher.notify(AGENT_HOOK_NOTIFICATION_METHOD, envelope as Record<string, unknown>)
     },
-    dispose: () => dispatcher.dispose()
+    dispose: () => dispatcher.dispose(),
+    notifyStatusFrame: (frame) => notifyFakeAgentStatusFrame(dispatcher, statusSubscribed, frame)
   }
 }
 
-function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
+function createSession(
+  targetId: string,
+  runtime?: OrcaRuntimeService
+): InstanceType<typeof SshRelaySession> {
   const store = {
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
@@ -175,7 +193,7 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   })
-  return new SshRelaySession(targetId, getMainWindow, store, portForwardManager)
+  return new SshRelaySession(targetId, getMainWindow, store, portForwardManager, runtime)
 }
 
 async function waitForStatusCount(events: CapturedStatus[], count: number): Promise<void> {
@@ -303,6 +321,126 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         agentType: 'codex',
         toolName: undefined
       }
+    })
+  })
+
+  it('uses the host-owned replica stream for a capable relay instead of legacy ingest', async () => {
+    const targetId = 'conn-capable'
+    const executionHostId = toSshExecutionHostId(targetId)
+    const statusSnapshot: AgentStatusStoreSnapshot = {
+      type: 'snapshot',
+      executionHostId,
+      ownerEpoch: 'epoch-capable',
+      cursor: 0,
+      complete: true,
+      rows: [
+        {
+          paneKey: `tab-capable:${SSH_LEAF_ID}`,
+          connectionId: null,
+          receivedAt: 1,
+          stateStartedAt: 1,
+          state: 'working',
+          prompt: 'host-owned'
+        }
+      ]
+    }
+    relay = createFakeRelay({ statusSnapshot })
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const replicaStore = new AgentStatusHostReplicaStore()
+    const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The integration seam only reads the replica accessor during status negotiation.
+    session = createSession(targetId, {
+      getAgentStatusHostReplicaStore: () => replicaStore
+    } as unknown as OrcaRuntimeService)
+
+    await session.establish({} as SshConnection)
+    expect(ingestSpy).not.toHaveBeenCalled()
+    expect(replicaStore.getHostSnapshot(executionHostId)).toMatchObject({
+      membershipConfirmed: true,
+      contact: 'live',
+      rows: [
+        expect.objectContaining({ paneKey: statusSnapshot.rows[0].paneKey, connectionId: targetId })
+      ]
+    })
+
+    relay.notifyStatusFrame({
+      type: 'delta',
+      executionHostId,
+      ownerEpoch: 'epoch-capable',
+      previousCursor: 0,
+      cursor: 1,
+      changes: [
+        {
+          type: 'set',
+          row: {
+            ...statusSnapshot.rows[0],
+            state: 'waiting',
+            receivedAt: 2,
+            stateStartedAt: 2
+          }
+        }
+      ]
+    })
+    await vi.waitFor(() =>
+      expect(replicaStore.getHostSnapshot(executionHostId).rows[0]).toMatchObject({
+        state: 'waiting'
+      })
+    )
+
+    expect(relay).not.toBeNull()
+    const activeRelay = relay!
+    activeRelay.transport.close?.()
+    activeRelay.dispose()
+    expect(replicaStore.getHostSnapshot(executionHostId)).toMatchObject({
+      contact: 'unverifiable',
+      rows: [expect.objectContaining({ state: 'waiting' })]
+    })
+    ingestSpy.mockRestore()
+  })
+
+  it('abandons stale replica membership when a reconnect falls back to a legacy relay', async () => {
+    const targetId = 'conn-legacy-fallback'
+    const executionHostId = toSshExecutionHostId(targetId)
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const replicaStore = new AgentStatusHostReplicaStore()
+    replicaStore.apply(
+      {
+        type: 'snapshot',
+        executionHostId,
+        ownerEpoch: 'old-epoch',
+        cursor: 0,
+        complete: true,
+        rows: [
+          {
+            paneKey: `tab-legacy:${SSH_LEAF_ID}`,
+            connectionId: null,
+            receivedAt: 1,
+            stateStartedAt: 1,
+            state: 'working',
+            prompt: 'stale replica'
+          }
+        ]
+      },
+      { executionHostId, connectionId: targetId }
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The integration seam only reads the replica accessor during status negotiation.
+    session = createSession(targetId, {
+      getAgentStatusHostReplicaStore: () => replicaStore
+    } as unknown as OrcaRuntimeService)
+
+    await session.establish({} as SshConnection)
+    expect(replicaStore.getHostSnapshot(executionHostId)).toMatchObject({
+      membershipConfirmed: false,
+      rows: []
     })
   })
 

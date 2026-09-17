@@ -13,6 +13,10 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
+import {
+  AgentStatusStorePublisher,
+  type AgentStatusStorePublisherOptions
+} from '../../../shared/agent-status-store-publisher'
 
 function toMutationIdentity(
   row: EnrichedAgentHookEventPayload | null | undefined
@@ -50,6 +54,24 @@ function wslDistroForWorktree(worktreeId: string | undefined): string | null {
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  /** Host-owned status source for runtime replicas. The publisher observes committed row
+   * mutations; callers must not write to the returned stream or mirror rows back to this host. */
+  createStatusStorePublisher(
+    options: Omit<AgentStatusStorePublisherOptions, 'source'>
+  ): AgentStatusStorePublisher {
+    return new AgentStatusStorePublisher({
+      ...options,
+      source: {
+        getSnapshot: () => this.getStatusSnapshot(),
+        getRowsForPane: (paneKey) => this.getStatusSnapshotForPane(paneKey),
+        subscribeMutations: (listener) =>
+          this.subscribeStatusRowMutations((mutation) =>
+            listener({ before: mutation.before, after: mutation.after })
+          )
+      }
+    })
+  }
+
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
   }

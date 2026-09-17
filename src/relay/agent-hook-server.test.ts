@@ -80,6 +80,44 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('preserves state start across same-state delivery and resets it on transition', async () => {
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward: vi.fn() })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (hookEventName: 'UserPromptSubmit' | 'Stop') =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            payload: {
+              hook_event_name: hookEventName,
+              prompt: 'status timing'
+            }
+          })
+        })
+
+      expect((await post('UserPromptSubmit')).status).toBe(204)
+      const first = server.getStatusSnapshot()[0]
+      expect((await post('UserPromptSubmit')).status).toBe(204)
+      const repeated = server.getStatusSnapshot()[0]
+      expect((await post('Stop')).status).toBe(204)
+      const transitioned = server.getStatusSnapshot()[0]
+
+      expect(repeated.state).toBe('working')
+      expect(repeated.stateStartedAt).toBe(first.stateStartedAt)
+      expect(repeated.receivedAt).toBeGreaterThan(first.receivedAt)
+      expect(transitioned.state).toBe('done')
+      expect(transitioned.stateStartedAt).toBeGreaterThan(repeated.stateStartedAt)
+    } finally {
+      server.stop()
+    }
+  })
+
   it('normalizes and forwards raw spooled hooks on startup', async () => {
     const spoolDir = join(dir, 'spool')
     const spoolFile = join(spoolDir, 'pane-codex.jsonl')

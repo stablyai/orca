@@ -231,6 +231,9 @@ export function createAgentStatusEventApplicator(args: {
         ...(data.evidenceObservedAt !== undefined
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),
+        ...(data.replicaEvidenceReceivedAt !== undefined
+          ? { mirroredEvidenceReceivedAt: data.replicaEvidenceReceivedAt }
+          : {}),
         stateStartedAt: data.stateStartedAt
       },
       routing: {

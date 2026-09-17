@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { AGENT_STATUS_STORE_REPLICA_CAPABILITY } from '../../../shared/protocol-version'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
 import {
   ENV,
@@ -52,7 +53,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ]),
       ENV,
       NOW
-    ) as Partial<WebSessionTabsSyncState>
+    )
 
     const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
     const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
@@ -69,6 +70,79 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.agentStatusByPaneKey?.[hostPaneKey]).toBeUndefined()
     expect(patch.agentStatusEpoch).toBe(1)
     expect(patch.sortEpoch).toBe(1)
+  })
+
+  it('lets a capable host replace a newer client row and reconcile an omitted row', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const hostTerminal = {
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      title: 'codex [working]',
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      isActive: true,
+      status: 'ready' as const,
+      terminal: 'terminal-1',
+      agentStatus: {
+        state: 'working' as const,
+        prompt: 'host evidence',
+        updatedAt: NOW,
+        stateStartedAt: NOW,
+        agentType: 'codex',
+        paneKey: hostPaneKey,
+        worktreeId: WT,
+        stateHistory: []
+      }
+    }
+    const capableState = makeState({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          ENV,
+          {
+            checkedAt: NOW,
+            status: {
+              runtimeId: ENV,
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              capabilities: [AGENT_STATUS_STORE_REPLICA_CAPABILITY]
+            }
+          }
+        ]
+      ])
+    })
+    const initial = applyWebSessionTabsSnapshot(
+      capableState,
+      makeSnapshot([hostTerminal]),
+      ENV,
+      NOW
+    )
+    const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+    const newerClientRow = {
+      ...initial.agentStatusByPaneKey![mirroredPaneKey]!,
+      state: 'waiting' as const,
+      updatedAt: NOW + 10_000,
+      stateStartedAt: NOW + 10_000
+    }
+    const hostWins = applyWebSessionTabsSnapshot(
+      { ...capableState, ...initial, agentStatusByPaneKey: { [mirroredPaneKey]: newerClientRow } },
+      makeSnapshot([{ ...hostTerminal, agentStatus: { ...hostTerminal.agentStatus } }], {
+        snapshotVersion: 2
+      }),
+      ENV,
+      NOW + 1
+    )
+    expect(hostWins.agentStatusByPaneKey?.[mirroredPaneKey]?.state).toBe('working')
+
+    const omitted = applyWebSessionTabsSnapshot(
+      { ...capableState, ...initial, agentStatusByPaneKey: { [mirroredPaneKey]: newerClientRow } },
+      makeSnapshot([{ ...hostTerminal, agentStatus: undefined }], { snapshotVersion: 3 }),
+      ENV,
+      NOW + 2
+    )
+    expect(omitted.agentStatusByPaneKey?.[mirroredPaneKey]).toBeUndefined()
   })
 
   it('clears stale tool-output provenance when a newer host preview is assistant prose', () => {

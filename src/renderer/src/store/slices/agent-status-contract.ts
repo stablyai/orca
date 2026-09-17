@@ -98,6 +98,8 @@ export type AgentStatusTiming = {
   updatedAt?: number
   /** Observation clock for staleness; see `AgentStatusEntry.evidenceObservedAt`. */
   evidenceObservedAt?: number
+  /** Local receipt clock for evidence replicated from another execution host. */
+  mirroredEvidenceReceivedAt?: number
   stateStartedAt?: number
 }
 
