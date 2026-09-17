@@ -504,14 +504,16 @@
 
 /* Baseline xterm-container layout — padding is driven by CSS custom properties
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
+   The horizontal padding is doubled in the width calculation to balance both edges.
    The fallback 4px preserves the legacy default. */
 .xterm-container {
   box-sizing: border-box;
   position: relative;
-  width: calc(100% - var(--pane-padding-x, 4px));
+  width: calc(100% - var(--pane-padding-x, 4px) * 2);
   height: calc(100% - var(--pane-padding-y, 4px));
   margin-top: var(--pane-padding-y, 4px);
   margin-left: var(--pane-padding-x, 4px);
+  margin-right: var(--pane-padding-x, 4px);
   /* Why (#10481): a blinking cursor otherwise invalidates paint all the way up
      the pane ancestry. The link tooltip and drag handle are .pane siblings, so
      clipping to this box costs no visible chrome. */
