@@ -51,6 +51,42 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
   return store
 }
 
+function createWorktreeUsageSession(worktreeId: string) {
+  const tokens = {
+    turnCount: 1,
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheReadTokens: 200,
+    cacheWriteTokens: 100,
+    cacheWrite1hTokens: 0
+  }
+  return {
+    sessionId: 'session-1',
+    firstTimestamp: '2026-04-09T15:00:00.000Z',
+    lastTimestamp: '2026-04-09T15:05:00.000Z',
+    model: 'claude-sonnet-4-6',
+    lastCwd: '/workspace/repo-a',
+    lastGitBranch: 'feature/a',
+    primaryWorktreeId: worktreeId,
+    primaryRepoId: 'repo-1',
+    totalInputTokens: 1000,
+    totalOutputTokens: 500,
+    totalCacheReadTokens: 200,
+    totalCacheWriteTokens: 100,
+    totalCacheWrite1hTokens: 0,
+    ...tokens,
+    locationBreakdown: [
+      {
+        locationKey: `worktree:${worktreeId}`,
+        projectLabel: 'Repo A',
+        repoId: 'repo-1',
+        worktreeId,
+        ...tokens
+      }
+    ]
+  }
+}
+
 describe('ClaudeUsageStore', () => {
   let tempUserData: string
 
@@ -582,38 +618,7 @@ describe('ClaudeUsageStore', () => {
         lastScanCompletedAt: 2,
         lastScanError: null
       },
-      sessions: [
-        {
-          sessionId: 'session-1',
-          firstTimestamp: '2026-04-09T15:00:00.000Z',
-          lastTimestamp: '2026-04-09T15:05:00.000Z',
-          model: 'claude-sonnet-4-6',
-          lastCwd: '/workspace/repo-a',
-          lastGitBranch: 'feature/a',
-          primaryWorktreeId: worktreeId,
-          primaryRepoId: 'repo-1',
-          turnCount: 1,
-          totalInputTokens: 1000,
-          totalOutputTokens: 500,
-          totalCacheReadTokens: 200,
-          totalCacheWriteTokens: 100,
-          totalCacheWrite1hTokens: 0,
-          locationBreakdown: [
-            {
-              locationKey: `worktree:${worktreeId}`,
-              projectLabel: 'Repo A',
-              repoId: 'repo-1',
-              worktreeId,
-              turnCount: 1,
-              inputTokens: 1000,
-              outputTokens: 500,
-              cacheReadTokens: 200,
-              cacheWriteTokens: 100,
-              cacheWrite1hTokens: 0
-            }
-          ]
-        }
-      ]
+      sessions: [createWorktreeUsageSession(worktreeId)]
     })
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
@@ -705,5 +710,62 @@ describe('ClaudeUsageStore', () => {
 
     expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
     expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+  })
+
+  it('joins a scan that is already in flight when the run finished before it started', async () => {
+    const worktreeId = 'repo-1::/workspace/repo-a'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    // Prime the worktree fingerprint so an unforced refresh can return early.
+    vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
+      processedFiles: [],
+      sessions: [],
+      dailyAggregates: []
+    })
+    await store.refresh(true)
+
+    const completedAt = Date.now() + 10_000
+    vi.setSystemTime(new Date(completedAt + 1_000))
+
+    let startScan = () => {}
+    let finishScan = () => {}
+    const scanStarted = new Promise<void>((resolve) => {
+      startScan = resolve
+    })
+    const scanFinished = new Promise<void>((resolve) => {
+      finishScan = resolve
+    })
+    vi.mocked(scanClaudeUsageFiles).mockImplementationOnce(async () => {
+      startScan()
+      await scanFinished
+      return {
+        processedFiles: [],
+        sessions: [createWorktreeUsageSession(worktreeId)],
+        dailyAggregates: []
+      }
+    })
+
+    const inFlight = store.refresh(true)
+    await scanStarted
+
+    const usage = store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'session-1',
+      startedAt: completedAt - 60_000,
+      completedAt
+    })
+    finishScan()
+    await inFlight
+
+    // The in-flight scan's start time is not a finished attempt, so the lookup
+    // forces and rides that scan instead of reading a pre-run cache.
+    expect((await usage).status).toBe('known')
+    expect((await usage).providerSessionId).toBe('session-1')
   })
 })
