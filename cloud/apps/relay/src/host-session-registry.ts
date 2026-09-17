@@ -179,7 +179,10 @@ export class HostSessionRegistry {
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
   private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
   private draining = false
-  private drainEpoch = 0
+  private readonly drainTimers = new Set<ReturnType<typeof setTimeout>>()
+  // Hosts whose drain has been sent. Paced sends land minutes apart, so "this cell is
+  // draining" is not the same question as "this host has been told to leave".
+  private readonly drainSentHosts = new Set<string>()
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -331,7 +334,10 @@ export class HostSessionRegistry {
     credential: string,
     capacityReservation?: PendingHostDataReservation
   ): Promise<void> {
-    if (this.draining) {
+    // Not `this.draining`: a paced drain tells hosts minutes apart, and the director keeps
+    // pointing phones here until their own host has moved. Refusing them for the whole
+    // window would turn a 2 min drain into a 2 min outage for hosts not yet told.
+    if (this.drainSentHosts.has(hostId)) {
       capacityReservation?.release()
       this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
       return
@@ -451,7 +457,7 @@ export class HostSessionRegistry {
     }
     // Admission may have crossed a drain or control replacement while persisting activity.
     if (
-      this.draining ||
+      this.drainSentHosts.has(hostId) ||
       this.sessions.get(sessionKey) !== session ||
       session.state !== 'active' ||
       session.socket !== admittingSocket ||
@@ -593,7 +599,7 @@ export class HostSessionRegistry {
     }
     // Already admitted attachments may finish a regional drain, but never a retired generation.
     if (
-      this.draining ||
+      this.drainSentHosts.has(identity.relayHostId) ||
       this.sessions.get(this.key(identity.userId, identity.relayHostId)) !== session ||
       this.get(identity)?.state === 'closed' ||
       !session.activeConnIds.has(connId) ||
@@ -849,16 +855,13 @@ export class HostSessionRegistry {
 
   drain(graceMs: number, options: { paceWindowMs?: number } = {}): void {
     this.draining = true
-    const epoch = ++this.drainEpoch
+    // A later drain (an emergency one, or shutdown) owns every session again, so nothing
+    // queued by an earlier paced drain may still fire: it would re-send and, worse, keep
+    // the event loop alive for the rest of a window the operator just cut short.
+    for (const timer of this.drainTimers) clearTimeout(timer)
+    this.drainTimers.clear()
     const paceWindowMs = Math.max(0, Math.trunc(options.paceWindowMs ?? 0))
-    const targets: HostSession[] = []
-    for (const session of this.sessions.values()) {
-      if (session.state === 'closed') continue
-      // Fence admission for every session up front: pacing spreads the send, not the authority.
-      session.authorityRevision += 1
-      session.state = 'drain-only'
-      targets.push(session)
-    }
+    const targets = [...this.sessions.values()].filter((session) => session.state !== 'closed')
     // The desktop re-dials the director as soon as it reads `drain`, whatever graceMs says,
     // so spreading the send is the only thing that spreads the reconnect load.
     const step = paceWindowMs > 0 && targets.length > 1 ? paceWindowMs / (targets.length - 1) : 0
@@ -868,18 +871,29 @@ export class HostSessionRegistry {
         this.sendDrain(session, graceMs)
         continue
       }
-      setTimeout(() => {
-        // A later drain (emergency or shutdown) supersedes the sends still queued here.
-        if (this.drainEpoch !== epoch) return
-        this.sendDrain(session, graceMs)
-      }, delay)
+      this.scheduleDrainTimer(delay, () => this.sendDrain(session, graceMs))
     }
   }
 
+  // A session is only fenced when it is told, not when the drain starts: until its send
+  // lands it is an ordinary live host, and its phones have to keep being able to reach it.
   private sendDrain(session: HostSession, graceMs: number): void {
     if (session.state === 'closed') return
+    session.authorityRevision += 1
+    session.state = 'drain-only'
+    this.drainSentHosts.add(session.relayHostId)
     if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
-    setTimeout(() => this.closeDrainedSession(session), graceMs)
+    this.scheduleDrainTimer(graceMs, () => this.closeDrainedSession(session))
+  }
+
+  // Unref'd so a drain in flight never holds the process open past its own work.
+  private scheduleDrainTimer(delayMs: number, run: () => void): void {
+    const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+      this.drainTimers.delete(timer)
+      run()
+    }, delayMs)
+    timer.unref?.()
+    this.drainTimers.add(timer)
   }
 
   drainHost(input: {

@@ -336,15 +336,15 @@ describe('host session cleanup races', () => {
     session.activeSplices.set('conn-a', () => session.activeSplices.delete('conn-a'))
 
     // POST /v1/admin/drain has no idempotency guard, and SIGTERM then SIGINT both
-    // reach drain(), so a second teardown can be scheduled for the same session.
+    // reach drain(), so a retry re-sends to every session. It must re-arm the pending
+    // teardown rather than stack a second one: across a paced cell that is 800 orphaned
+    // timers per retry, each one holding the loop open for the rest of the window.
     registry.drain(0)
     const scheduled = vi.getTimerCount()
     registry.drain(0)
-    // Pin the premise: if drain ever gains an idempotency guard, the retry schedules no
-    // second teardown and the assertion below stops defending the write-once snapshot
-    // while still passing. Compare against the count before the retry rather than an
-    // absolute, since the session's heartbeat interval is also pending.
-    expect(vi.getTimerCount()).toBe(scheduled + 1)
+    // Compare against the count before the retry rather than an absolute, since the
+    // session's heartbeat interval is also pending.
+    expect(vi.getTimerCount()).toBe(scheduled)
     vi.advanceTimersByTime(1)
 
     // Asserting registry state, not the log line: FakeSocket closes synchronously, so
@@ -1778,6 +1778,32 @@ describe('paced drain', () => {
     expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
     await vi.advanceTimersByTimeAsync(10_001)
     expect(sockets[1]!.readyState).toBe(sockets[1]!.CLOSED)
+  })
+
+  it('leaves no timer behind once an emergency drain cuts a window short', async () => {
+    const { registry } = await connectHosts(4)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
+    // Every session is closed, so anything still pending is an orphan of the cut window.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the first teardown snapshot when a regional drain fires before the fleet one', async () => {
+    const { registry, sockets } = await connectHosts(1)
+    const session = registry.get({ userId: 'user-0', relayHostId: identity.relayHostId })!
+    session.activeSplices.set('conn-a', () => session.activeSplices.delete('conn-a'))
+    registry.drainHost({
+      attemptId: 'attempt',
+      userId: 'user-0',
+      relayHostId: identity.relayHostId,
+      sourceAssignmentEpoch: 1,
+      graceMs: 0
+    })
+    registry.drain(10)
+    await vi.advanceTimersByTimeAsync(11)
+    expect(session.closingCounts).toEqual({ splices: 1, pending: 0 })
+    expect(sockets[0]!.readyState).toBe(sockets[0]!.CLOSED)
   })
 
   it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
