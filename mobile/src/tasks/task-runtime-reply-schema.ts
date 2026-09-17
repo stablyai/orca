@@ -64,13 +64,21 @@ export const taskUiStateSchema = z
  * (use-mobile-tasks-runtime-hydration.tsx:295, mobile-home-host-requests.ts:95) and the
  * `readProbeMember` pair in use-new-workspace-runtime-context.ts:92. `git` and `gh` are declared
  * non-optional by PreflightStatus but no mobile consumer reads them, so they pass through.
+ *
+ * Total on purpose. This read is advertised as advisory, but `success-result-or-skip` accepts an
+ * envelope whose `result` is absent or null and then asks the reader to decode it, and a refusal
+ * there throws out of the whole hydration -- the corpus records main hydrating the Tasks screen on
+ * that reply and this reader leaving it unhydrated. `.catch` restores main's answer exactly,
+ * because every consumer guards to the leaf and reads absence as "not installed".
  */
-export const taskPreflightSchema = z.looseObject({
-  glab: salvagedOptional(
-    'glab',
-    z.looseObject({ installed: salvagedOptional('installed', z.boolean()) })
-  )
-})
+export const taskPreflightSchema = z
+  .looseObject({
+    glab: salvagedOptional(
+      'glab',
+      z.looseObject({ installed: salvagedOptional('installed', z.boolean()) })
+    )
+  })
+  .catch({ glab: undefined })
 
 /**
  * Whether Linear is connected.
@@ -80,10 +88,15 @@ export const taskPreflightSchema = z.looseObject({
  * `false` already mean the same thing and nothing is required. `workspaces` is not declared: the
  * picker reads it through a different operation on this same method, and listing a member ahead of
  * a reader is how a schema starts refusing replies no consumer here would have noticed.
+ *
+ * Total for the same reason as the preflight read above: absence and `false` already mean the same
+ * thing here, so a nullish payload must read as "not connected" rather than throw.
  */
-export const taskLinearStatusSchema = z.looseObject({
-  connected: salvagedOptional('connected', z.boolean())
-})
+export const taskLinearStatusSchema = z
+  .looseObject({
+    connected: salvagedOptional('connected', z.boolean())
+  })
+  .catch({ connected: undefined })
 
 /**
  * The three writes whose reply body no call site reads.

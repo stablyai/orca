@@ -87,6 +87,24 @@ describe('the two advisory probes', () => {
       gh: { installed: true, authenticated: true }
     })
   })
+
+  // `success-result-or-skip` accepts an envelope whose `result` is absent or null and then asks
+  // the reader to decode it, so a refusal here throws out of the caller's whole hydration. Main
+  // hydrated on both of these replies; the recorded settings.task-hydration and
+  // settings.workspace-context partitions are what caught the difference.
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['a bare string', 'preflight'],
+    ['an array', []]
+  ])('reads a %s payload as "nothing advertised" rather than refusing it', (_label, reply) => {
+    const preflight = taskPreflightSchema.safeParse(reply)
+    expect(preflight.success).toBe(true)
+    expect(preflight.success && preflight.data.glab?.installed).toBeUndefined()
+    const linear = taskLinearStatusSchema.safeParse(reply)
+    expect(linear.success).toBe(true)
+    expect(linear.success && linear.data.connected).toBeUndefined()
+  })
 })
 
 describe('the three preference writes', () => {
