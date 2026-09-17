@@ -71,6 +71,13 @@ function installBeforeQuitHandler(): void {
       })
     }
     state.isQuitting = true
+    // Why the fence here and the terminal stop() in will-quit: this handler is vetoable, and
+    // stop() latches `stopped` with nothing to clear it — a renderer beforeunload that cancelled
+    // the quit would leave the relay dead for the rest of the session. The fence closes the broker
+    // just as promptly and latches `fenced`, which refreshDemand also refuses, so a settling mint,
+    // an invite expiry or a power-resume cannot reopen one in the window before will-quit either.
+    // On a veto the next auth mutation clears `fenced` and Relay comes back; on the committed path
+    // will-quit makes it terminal. Same reasoning as desktopPushService, one handler down.
     state.desktopRelayService?.fenceAndCloseNow()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
@@ -107,6 +114,10 @@ function installWillQuitHandler(): void {
     }
     // A renderer can veto before-quit; push must survive until quit is committed.
     state.desktopPushService?.stop()
+    // Same reason, and the one the fence in before-quit defers to: stop() is terminal and nothing
+    // clears `stopped`, so it only belongs on the committed path. before-quit already fenced the
+    // broker closed; this is what stops it coming back.
+    state.desktopRelayService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
     // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
