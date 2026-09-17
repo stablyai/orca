@@ -62,7 +62,7 @@ export function fenceCurrencyIsAProbeNotALease(): void {
   void paths.load(scope, { query: 'a' }, async (currency) => {
     // @ts-expect-error the probe answers currency and is not the lease, so it cannot publish
     paths.commit(currency, ['a'])
-    // @ts-expect-error the probe carries the generation privately, exactly as the lease does
+    // @ts-expect-error the probe exposes no generation at all, so there is no member to read
     void currency.generation
     return null
   })
