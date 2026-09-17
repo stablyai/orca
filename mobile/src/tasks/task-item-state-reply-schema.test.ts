@@ -65,9 +65,19 @@ describe('the checks read', () => {
 })
 
 describe('the file-contents read', () => {
-  it('reads the recorded reply through untouched, because nothing in it is required', () => {
-    const recorded = { oldContent: 'a', newContent: 'b', truncated: false }
+  it('reads the recorded reply, which is now the shape getPRFileContents returns', () => {
+    const recorded = {
+      original: 'a',
+      modified: 'b',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
     expect(reads(githubPullRequestFileContentsSchema, recorded)).toEqual(recorded)
+  })
+
+  it('keeps the too-large flags a skipped side carries', () => {
+    const skipped = { original: '', modified: '', originalTooLarge: true, modifiedTooLarge: true }
+    expect(reads(githubPullRequestFileContentsSchema, skipped)).toMatchObject(skipped)
   })
 
   it('still names a payload that is not the container', () => {
@@ -75,9 +85,8 @@ describe('the file-contents read', () => {
     expect(refuses(githubPullRequestFileContentsSchema, 'a\nb')).toBe(true)
   })
 
-  it('reads the host contract when a host sends it', () => {
-    const host = { original: 'a', modified: 'b', originalIsBinary: false, modifiedIsBinary: false }
-    expect(reads(githubPullRequestFileContentsSchema, host)).toMatchObject(host)
+  it('reads a payload carrying none of the six, because no member is required', () => {
+    expect(reads(githubPullRequestFileContentsSchema, {})).toEqual({})
   })
 })
 

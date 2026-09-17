@@ -71,13 +71,13 @@ export const githubPullRequestChecksSchema = detailCheckListSchema
 /**
  * One file's two sides of a pull-request diff.
  *
- * Every member is optional even though `getPRFileContents`
- * (src/main/github/pull-request-file-contents.ts:121) always returns the first four. The corpus is
- * why: the recorded `normal` reply at both sites is `{ oldContent, newContent, truncated }`, a
- * shape the host cannot produce, so requiring `original` would reject this surface's only success
- * control. The call site reads nothing off the payload — it files it under the file path and the
- * diff view reads it later — so nothing here is a member this reader can justify requiring.
- * What the schema does add is the container: a string or a `null` reply is now named.
+ * The shape is `getPRFileContents`' return at src/main/github/pull-request-file-contents.ts:121-128:
+ * the two contents, the two binary flags, and the two too-large flags it sets only when a side was
+ * skipped for size (:54). Every member stays optional because nothing reads one unguarded — the
+ * call site files the payload under the file path (use-mobile-tasks-github-check-file-actions.tsx
+ * :203), the review panels reach each flag through `?.`, and `splitContentLines`
+ * (github-pr-file-diff.ts:21) takes `string | undefined` behind a falsy guard.
+ * What the schema adds is the container: a string or a `null` reply is now named.
  */
 export const githubPullRequestFileContentsSchema = z.looseObject({
   original: prText('original'),
