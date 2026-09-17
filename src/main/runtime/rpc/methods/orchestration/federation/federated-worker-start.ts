@@ -29,7 +29,8 @@ import {
 import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration-timing-budgets'
 import {
   federatedUnknownReceipt,
-  isKnownRemoteStartFailure
+  isKnownRemoteStartFailure,
+  preserveFederatedWorkerStartUnknown
 } from './federated-worker-start-receipts'
 import { parseTaskDeps } from '../worker/task-deps-argument'
 
@@ -239,12 +240,14 @@ export async function startFederatedWorker(args: {
       }
     }
     if (remote.state === 'outcome_unknown') {
-      const worker = db.markWorkerStartUnknown(
-        started.dispatch.id,
-        remote.failedStage ?? 'remote_attach',
-        remote.lastError ?? 'The worker server reported an unknown start outcome.'
-      )
-      return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch)
+      return preserveFederatedWorkerStartUnknown({
+        db,
+        dispatchId: started.dispatch.id,
+        taskId: taskForRemote.id,
+        serverName: server.name,
+        launch,
+        remote
+      })
     }
     const worker = db.failWorkerStart(
       started.dispatch.id,

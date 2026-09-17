@@ -55,7 +55,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('resolves tui-idle when a stale Codex prompt is followed by Antigravity readiness', async () => {
+  it('keeps Antigravity readiness unsupported after a stale Codex prompt', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -80,7 +80,8 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
-      satisfied: true,
+      satisfied: false,
+      readiness: { state: 'unsupported', agent: 'antigravity' },
       status: 'running'
     })
   })
@@ -264,10 +265,13 @@ describe('OrcaRuntimeService', () => {
       Date.now()
     )
 
-    // Busy Cursor is neither blocked nor idle, so the wait times out honestly instead of returning a stale trust block.
+    // Busy Cursor is neither blocked nor idle, so the bounded wait remains explicitly unknown.
     await expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 200 })
-    ).rejects.toThrow('timeout')
+    ).resolves.toMatchObject({
+      satisfied: false,
+      readiness: { state: 'unknown' }
+    })
   })
 
   it('returns an agent-neutral blocked wait result for cwd selection prompts', async () => {
@@ -411,17 +415,20 @@ describe('OrcaRuntimeService', () => {
         condition: 'tui-idle',
         timeoutMs: 1_000
       })
-      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+      const unknownAssertion = expect(waitPromise).resolves.toMatchObject({
+        satisfied: false,
+        readiness: { state: 'unknown' }
+      })
 
       await vi.advanceTimersByTimeAsync(2_000)
 
-      await timeoutAssertion
+      await unknownAssertion
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('resolves tui-idle for quiet background PTY agents without OSC titles', async () => {
+  it('keeps quiet background PTY agents without readiness evidence unknown', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -441,10 +448,12 @@ describe('OrcaRuntimeService', () => {
       const waitAssertion = expect(waitPromise).resolves.toMatchObject({
         handle,
         condition: 'tui-idle',
+        satisfied: false,
+        readiness: { state: 'unknown' },
         status: 'running'
       })
 
-      await vi.advanceTimersByTimeAsync(6_000)
+      await vi.advanceTimersByTimeAsync(10_000)
 
       await waitAssertion
     } finally {

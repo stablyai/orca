@@ -1,5 +1,4 @@
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
@@ -24,6 +23,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
+import { prepareFederatedReadinessOutcome } from './federation-readiness-outcome'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
@@ -217,34 +217,27 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           timeoutMs: readinessTimeoutMs
         })
         persistFederatedSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
-          if (setup.state === 'failed') {
-            failedStage = 'setup_wait'
-          }
-          throw new Error(
-            wait.blockedReason
-              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
-              : `Agent did not become ready (${wait.status}).`
-          )
-        }
-        const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
-        const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
-        const processIncarnation =
-          authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
-        if (!paneKey || !processIncarnation) {
-          throw new Error('stable_pane_required')
-        }
-        const capability = db.prepareRemoteAttachmentAuthority({
+        const readiness = prepareFederatedReadinessOutcome({
+          runtime,
+          db,
           dispatchId: params.dispatchId,
-          paneKey,
-          processIncarnation,
           worktreeId: worktree.id,
           terminalHandle,
-          setupState: setup.state,
-          effects,
-          hostScope: authority?.hostScope ? JSON.stringify(authority.hostScope) : null,
-          terminalOwnership: params.terminal ? 'external' : 'created'
+          terminalOwnership: params.terminal ? 'external' : 'created',
+          wait,
+          setup,
+          launch: launch.receipt,
+          effects
         })
+        if (readiness.state === 'failed') {
+          failedStage = readiness.stage
+          throw new Error(readiness.reason)
+        }
+        if (readiness.state === 'unknown') {
+          monitorFederatedSetup({ ...setupStage, runtime })
+          return readiness.receipt
+        }
+        const { capability } = readiness
         failedStage = 'dispatch_input'
         const prompt = await runtime.sendTerminalAgentPrompt(
           terminalHandle,

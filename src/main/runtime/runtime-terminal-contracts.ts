@@ -19,6 +19,7 @@ import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
+import type { TuiIdleEvidenceCursor } from './tui-idle-evidence'
 
 export type TerminalCreateOptions = {
   command?: string
@@ -167,6 +168,11 @@ export type OrchestrationCompatibilitySshAttachmentAuthority = Extract<
 
 export type TerminalWaiter = {
   handle: string
+  /** PTY/process incarnation captured when the wait was registered. */
+  processIncarnation: string | null
+  /** Readiness evidence captured when this operation was registered; retained bytes before this
+   *  cursor are historical replay and cannot settle the operation. */
+  evidenceCursor?: TuiIdleEvidenceCursor
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
@@ -181,6 +187,8 @@ export type RuntimeProviderSnapshotReadOptions = {
   timeoutMs?: number
   retireOnTimeout?: boolean
   visibleScreenOnly?: boolean
+  /** Force an actual screen capture; cache reuse keeps the prior provenance. */
+  freshVisibleCapture?: boolean
 }
 
 /** Agent-prompt writes add the correlation inputs a queued-acceptance receipt needs. */

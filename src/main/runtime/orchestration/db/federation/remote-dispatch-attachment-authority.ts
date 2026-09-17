@@ -137,6 +137,29 @@ export function markRemoteAttachmentReady(
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
 }
 
+/** Preserve a prepared attachment and its capability when readiness remains unverifiable. */
+export function markRemoteAttachmentStartUnknown(
+  this: OrchestrationDb,
+  dispatchId: string,
+  stage: string,
+  reason: string
+): RemoteDispatchAttachmentRow {
+  const result = this.db
+    .prepare(
+      `UPDATE remote_dispatch_attachments
+       SET state = 'start_unknown', stage = ?, last_error = ?, updated_at = datetime('now')
+       WHERE dispatch_id = ? AND state = 'starting'`
+    )
+    .run(stage, reason, dispatchId)
+  if (result.changes !== 1) {
+    throw new OrchestrationError(
+      'dispatch_inactive',
+      `Remote Dispatch ${dispatchId} is not starting.`
+    )
+  }
+  return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
+}
+
 export function failRemoteAttachment(
   this: OrchestrationDb,
   dispatchId: string,
@@ -209,6 +232,7 @@ export function isRemoteAttachmentProcessCurrent(
 export type RemoteDispatchAttachmentAuthorityMethods = {
   prepareRemoteAttachmentAuthority: typeof prepareRemoteAttachmentAuthority
   markRemoteAttachmentReady: typeof markRemoteAttachmentReady
+  markRemoteAttachmentStartUnknown: typeof markRemoteAttachmentStartUnknown
   failRemoteAttachment: typeof failRemoteAttachment
   verifyRemoteAttachmentAuthority: typeof verifyRemoteAttachmentAuthority
   isRemoteAttachmentProcessCurrent: typeof isRemoteAttachmentProcessCurrent
@@ -218,6 +242,7 @@ export function attachRemoteDispatchAttachmentAuthority(ctor: { prototype: objec
   Object.assign(ctor.prototype, {
     prepareRemoteAttachmentAuthority,
     markRemoteAttachmentReady,
+    markRemoteAttachmentStartUnknown,
     failRemoteAttachment,
     verifyRemoteAttachmentAuthority,
     isRemoteAttachmentProcessCurrent

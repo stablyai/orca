@@ -30,7 +30,11 @@ export type AutomationRunTerminalHost = {
   waitForTerminal(
     handle: string,
     options?: { condition?: 'tui-idle'; timeoutMs?: number; signal?: AbortSignal }
-  ): Promise<{ satisfied: boolean; blockedReason?: string }>
+  ): Promise<{
+    satisfied: boolean
+    blockedReason?: string
+    readiness?: { state?: 'ready' | 'blocked' | 'busy' | 'unsupported' | 'unknown' }
+  }>
   readTerminal(handle: string, opts?: { limit?: number }): Promise<{ tail: string[] }>
 }
 
@@ -65,15 +69,23 @@ async function isTuiIdleSatisfiedNow(
   runtime: AutomationRunTerminalHost,
   handle: string,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<boolean | null> {
   try {
     const wait = await runtime.waitForTerminal(handle, {
       condition: 'tui-idle',
       timeoutMs: AGENT_START_PROBE_TIMEOUT_MS,
       signal
     })
-    // A blocked pane is not "already finished"; let the real wait report it.
-    return wait.satisfied
+    // A blocked pane is not "already finished"; let the real wait report it. An explicit unknown
+    // result is different from the legacy timeout rejection: it is not evidence that this run
+    // started, so the caller must keep looking for an attributable turn edge.
+    if (wait.satisfied) {
+      return true
+    }
+    if (wait.readiness?.state === 'unknown' || wait.readiness?.state === 'unsupported') {
+      return null
+    }
+    return false
   } catch (error) {
     if (isTerminalWaitTimeout(error)) {
       return false
@@ -92,7 +104,8 @@ async function waitForAgentStart(
 ): Promise<boolean> {
   while (Date.now() < deadlineAt) {
     await sleep(AGENT_START_POLL_INTERVAL_MS, signal)
-    if (!(await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
+    const idle = await isTuiIdleSatisfiedNow(runtime, handle, signal)
+    if (idle === false) {
       return true
     }
   }
@@ -158,7 +171,8 @@ export function createRuntimeAutomationRunTerminalObserver(
       // Evidence that predates dispatch proves nothing about this run, so require
       // the pane to leave that state first — the busy edge the renderer's own
       // dispatch observer requires on reuse (requireWorkingAfterStart).
-      if (await isTuiIdleSatisfiedNow(runtime, handle, signal)) {
+      const idle = await isTuiIdleSatisfiedNow(runtime, handle, signal)
+      if (idle !== false) {
         const started = await waitForAgentStart(
           runtime,
           handle,
@@ -177,6 +191,19 @@ export function createRuntimeAutomationRunTerminalObserver(
       for (;;) {
         try {
           const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
+          // New hosts settle a bounded wait with an explicit unknown/busy readiness facet instead
+          // of rejecting `timeout`. Keep the observer's historical re-arm semantics for that
+          // non-terminal result; only an actionable interaction is a completion failure.
+          if (!wait.satisfied && !wait.blockedReason) {
+            if (Date.now() >= deadlineAt) {
+              return await buildUnobservedObservation(
+                runtime,
+                handle,
+                'Orca stopped watching this run after 6h without a completion signal.'
+              )
+            }
+            continue
+          }
           return await buildObservation(runtime, handle, wait)
         } catch (error) {
           // Why: tui-idle waits expire on their own schedule; an agent still

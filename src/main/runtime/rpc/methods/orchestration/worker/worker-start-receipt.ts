@@ -17,6 +17,7 @@ export function failWorkerStartWithReceipt(args: {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
+  terminalHandle?: string
 }): unknown {
   const agentSessionRefusal = isAgentSessionPtyWriteRefusedError(args.error)
     ? args.error.refusal
@@ -62,6 +63,9 @@ export function failWorkerStartWithReceipt(args: {
       ? {
           nextCommands: [
             `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
+            ...(args.terminalHandle
+              ? [`orca terminal read --terminal ${args.terminalHandle} --screen`]
+              : []),
             `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
           ]
         }

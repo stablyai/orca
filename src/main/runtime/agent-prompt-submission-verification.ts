@@ -1,11 +1,10 @@
 export { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { supportsAgentPromptTurnStart } from '../../shared/agent-readiness-capabilities'
 
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
-
-const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
 
 /** The prompt bytes are written before verification, so this only ever means "not observed". */
 export const AGENT_PROMPT_STALLED_ERROR = 'agent_prompt_stalled'
@@ -45,7 +44,7 @@ type AgentPromptVerificationOptions = {
 }
 
 export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
-  return agent && HOOK_OBSERVED_TURN_START_AGENTS.has(agent)
+  return agent && supportsAgentPromptTurnStart(agent)
     ? AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     : AGENT_PROMPT_EFFECT_TIMEOUT_MS
 }
@@ -54,7 +53,7 @@ export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undef
 export function isTerminalSendSettlementAgent(
   agent: TuiAgent | null | undefined
 ): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
+  return (agent === 'claude' || agent === 'codex') && supportsAgentPromptTurnStart(agent)
 }
 
 export function isAgentPromptStalledError(error: unknown): boolean {

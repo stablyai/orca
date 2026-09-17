@@ -97,7 +97,25 @@ export const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
 
 export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 
-export type RuntimeTerminalProjection = { lines: string[]; draft?: string }
+/** Host-owned provenance for one rendered terminal-screen capture.
+ *
+ * The revision advances only when a provider/renderer/emulator actually captures a
+ * frame. Reusing a cache entry preserves its revision; consumers must never mint a
+ * wall-clock timestamp while projecting that entry.
+ */
+export type RuntimeScreenCapture = {
+  attachmentId: string
+  generation: number
+  outputSequence: number
+  revision: number
+  source: 'provider' | 'renderer' | 'headless'
+}
+
+export type RuntimeTerminalProjection = {
+  lines: string[]
+  draft?: string
+  screenCapture?: RuntimeScreenCapture
+}
 
 export function assertAgentPromptRequestActive(signal?: AbortSignal): void {
   if (signal?.aborted) {

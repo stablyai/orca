@@ -70,6 +70,19 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  /**
+   * Resolve one host-owned attachment identity for evidence that has no provider
+   * incarnation. The lifecycle generation is retired on every exit/replacement,
+   * so a legacy/null-incarnation PTY is never treated as an anonymous wildcard.
+   */
+  protected getPtyAttachmentId(ptyId: string): string {
+    const incarnationId = this.ptysById.get(ptyId)?.incarnationId
+    if (incarnationId) {
+      return `${ptyId}:${incarnationId}`
+    }
+    return `${this.runtimeId}:${ptyId}:generation:${this.getPtyLifecycleGeneration(ptyId)}`
+  }
+
   protected getPtyLifecycleGeneration(ptyId: string): number {
     const existing = this.ptyLifecycleGenerationById.get(ptyId)
     if (existing !== undefined) {
@@ -89,6 +102,10 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.lastExplicitAgentStatus = null
+    }
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
     // Why: a respawn under the same session id needs its own subscriber-driven attach.
     this.terminalViewSubscribers.resetGeneration(ptyId)
@@ -96,6 +113,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleStateByPtyId.delete(ptyId)
+    this.visibleScreenCaptureByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
   }
 

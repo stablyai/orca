@@ -89,6 +89,7 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
       return read
     }
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
+    const forceVisibleCapture = providerSnapshot.freshVisibleCapture === true
     const recoveredWorkerFallback =
       read.tail.length === 0 && this.legacyWorkerRecovery.hasRecoveredPty(ptyId)
     // Why: a live daemon session no pane ever attached has ingested zero bytes,
@@ -116,6 +117,7 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
     if (
+      !forceVisibleCapture &&
       !blankFallback &&
       !recoveredWorkerFallback &&
       !providerModeUnknown &&
@@ -124,8 +126,11 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     ) {
       return read
     }
-    const visibleState = await this.readVisibleTerminalState(ptyId)
+    const visibleState = await this.readVisibleTerminalState(ptyId, {
+      freshCapture: providerSnapshot.freshVisibleCapture
+    })
     if (
+      !forceVisibleCapture &&
       !blankFallback &&
       !recoveredWorkerFallback &&
       !knownAlternateScreen &&
@@ -149,6 +154,7 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalProjection> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    const attachmentId = this.getPtyAttachmentId(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
@@ -163,10 +169,17 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     if (snapshotOptions.visibleScreenOnly) {
       const projection = await this.parseVisibleSnapshot(snapshot)
       // Live bytes ordered after the provider frame make that frame stale.
-      return this.getPtyLifecycleGeneration(ptyId) === generation &&
-        this.getPtyOutputSequence(ptyId) <= snapshot.seq
-        ? projection
-        : { lines: [] }
+      if (
+        this.getPtyLifecycleGeneration(ptyId) !== generation ||
+        this.getPtyOutputSequence(ptyId) > snapshot.seq ||
+        this.getPtyAttachmentId(ptyId) !== attachmentId
+      ) {
+        return { lines: [] }
+      }
+      return {
+        ...projection,
+        screenCapture: this.recordVisibleScreenCapture(ptyId, generation, snapshot.seq, 'provider')
+      }
     }
     const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
     if (data.length === 0) {

@@ -160,8 +160,6 @@ export type {
   RuntimeTerminalOrphanTopologyGroup,
   RuntimeTerminalOrphanTopologyTab,
   RuntimeTerminalPresentation,
-  RuntimeTerminalPromptDelivery,
-  RuntimeTerminalPromptStage,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalResolvePane,
@@ -182,6 +180,11 @@ export type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from './runtime-terminal-contracts'
+export type {
+  RuntimeTerminalPromptDelivery,
+  RuntimeTerminalPromptStage
+} from './runtime-terminal-prompt-delivery'
+export type { RuntimeTerminalReadiness } from './runtime-terminal-readiness'
 export type {
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches,

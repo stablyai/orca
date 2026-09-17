@@ -182,16 +182,23 @@ export async function startLocalWorker(args: {
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {
-        if (setupReceipt.state === 'failed') {
-          failedStage = 'setup_wait'
+        const setupFailed =
+          setupReceipt.startupPolicy === 'wait-for-setup' &&
+          (setupReceipt.state === 'failed' || wait.status === 'exited')
+        const knownAgentExit =
+          setupReceipt.startupPolicy !== 'wait-for-setup' && wait.status === 'exited'
+        if (setupFailed || knownAgentExit) {
+          if (setupFailed) {
+            failedStage = 'setup_wait'
+          }
+          throw new Error(
+            wait.blockedReason
+              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+              : structuredSession
+                ? `Setup did not finish before the structured worker started (${wait.status}).`
+                : `Agent did not become ready (${wait.status}).`
+          )
         }
-        throw new Error(
-          wait.blockedReason
-            ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
-            : structuredSession
-              ? `Setup did not finish before the structured worker started (${wait.status}).`
-              : `Agent did not become ready (${wait.status}).`
-        )
       }
     }
     const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
@@ -204,6 +211,29 @@ export async function startLocalWorker(args: {
       setupState: setupReceipt.state,
       terminalOwnership: params.terminal ? 'external' : 'created'
     })
+
+    if (wait && !wait.satisfied) {
+      // The terminal and dispatch authority already exist. Preserve both when startup readiness
+      // is unsupported or unobserved; no prompt bytes have been written yet, so no retry is safe.
+      const readinessState = 'readiness' in wait ? wait.readiness?.state : undefined
+      const reason = wait.blockedReason
+        ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+        : readinessState === 'unsupported'
+          ? `Agent startup readiness is unsupported for ${agent ?? 'this terminal'}; no prompt was submitted.`
+          : `Agent startup readiness could not be verified (${wait.status}); no prompt was submitted.`
+      return failWorkerStartWithReceipt({
+        db,
+        runId: run.id,
+        taskId: task.id,
+        dispatchId: started.dispatch.id,
+        failedStage: 'agent_readiness',
+        error: Object.assign(new Error(reason), { code: 'operation_unknown' }),
+        setup: setupReceipt,
+        launch: launch.receipt,
+        mode,
+        terminalHandle
+      })
+    }
 
     return await deliverAndSettleWorkerStartReadiness({
       runtime,
@@ -244,7 +274,8 @@ export async function startLocalWorker(args: {
       error,
       setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
       launch: launch.receipt,
-      mode
+      mode,
+      terminalHandle
     })
   }
 }

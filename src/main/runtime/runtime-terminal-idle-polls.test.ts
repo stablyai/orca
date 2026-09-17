@@ -41,6 +41,7 @@ function makeLeaf(tabId: string, overrides: Partial<RuntimeLeafRecord> = {}) {
 function makeWaiter(handle: string): TerminalWaiter {
   return {
     handle,
+    processIncarnation: null,
     condition: 'tui-idle',
     resolve: () => {},
     reject: () => {},
@@ -67,9 +68,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     const resolved: { handle: string; result: RuntimeTerminalWait }[] = []
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
-      quiescenceMs: 1500,
       getTabTitle: () => null,
-      getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
@@ -81,7 +80,10 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       const waiter = makeWaiter(`handle-${index}`)
       // Already idle: an independent interval would have resolved this on its own
       // first tick at exactly intervalMs, and so must the shared sweep.
-      polls.startPty(waiter, makePty(`pty-${index}`, { lastAgentStatus: 'idle' }))
+      polls.startPty(
+        waiter,
+        makePty(`pty-${index}`, { lastAgentStatus: 'idle', lastOscTitle: 'Codex ready' })
+      )
       return waiter
     })
 
@@ -102,9 +104,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
   it('keeps one interval across mixed leaf and pty waiters and re-arms after going idle', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
-      quiescenceMs: 1500,
       getTabTitle: () => null,
-      getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
@@ -127,9 +127,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
   it('retires the shared timer when the last waiter is cancelled through the waiter record', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
-      quiescenceMs: 1500,
       getTabTitle: () => null,
-      getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
@@ -149,17 +147,11 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     expect(polls.activeTimerCount).toBe(0)
   })
 
-  it('runs the foreground read per waiter without one waiter blocking another', async () => {
+  it('does not infer readiness from a quiet foreground process', async () => {
     const resolved: string[] = []
-    const gates: ((value: string | null) => void)[] = []
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
-      quiescenceMs: 1500,
       getTabTitle: () => null,
-      getForegroundProcess: () =>
-        new Promise<string | null>((resolve) => {
-          gates.push(resolve)
-        }),
       getAdoptedPtyIdleStatus: () => null,
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
@@ -167,21 +159,11 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       resolve: (waiter) => resolved.push(waiter.handle)
     })
 
-    polls.startPty(makeWaiter('slow'), makePty('pty-slow', { lastOutputAt: Date.now() - 10_000 }))
-    polls.startPty(makeWaiter('fast'), makePty('pty-fast', { lastOutputAt: Date.now() - 10_000 }))
+    polls.startPty(makeWaiter('quiet'), makePty('pty-quiet', { lastOutputAt: Date.now() - 10_000 }))
 
     vi.advanceTimersByTime(INTERVAL_MS)
-    // Both waiters issued their read in the same sweep — a sequential sweep would
-    // have blocked the second behind the first's unresolved promise.
-    expect(gates).toHaveLength(2)
-
-    gates[1]('node')
     await vi.advanceTimersByTimeAsync(0)
-    expect(resolved).toEqual(['fast'])
-
-    gates[0]('node')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(resolved).toEqual(['fast', 'slow'])
-    expect(polls.activeTimerCount).toBe(0)
+    expect(resolved).toEqual([])
+    expect(polls.activeTimerCount).toBe(1)
   })
 })

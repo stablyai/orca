@@ -2,10 +2,7 @@ import type {
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
@@ -14,12 +11,17 @@ import {
   getTerminalState
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { isTuiIdleSatisfied, type FirstPartyAgentStatus } from './tui-idle-evidence'
+import type { FirstPartyAgentStatus } from './tui-idle-evidence'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
+import { RuntimeTerminalWaitEvidence } from './runtime-terminal-wait-evidence'
+import {
+  resolveLeafTuiIdleTimeout,
+  resolvePtyTuiIdleTimeout
+} from './runtime-terminal-wait-timeouts'
 import type { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 
 type RuntimeTerminalWaitDependencies = {
@@ -27,42 +29,24 @@ type RuntimeTerminalWaitDependencies = {
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
+  getAdoptedPtyTitle?(pty: RuntimePtyWorktreeRecord): string | null
   getTabTitle(tabId: string): string | null
-  quiescenceMs: number
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
+  getAttachmentId?(ptyId: string | null | undefined): string | null
+  getTerminalProcessIncarnation(handle: string): string | null
   startVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void
 }
 
 export class RuntimeTerminalWait {
+  private readonly evidence: RuntimeTerminalWaitEvidence
+
   constructor(
     private readonly deps: RuntimeTerminalWaitDependencies,
     private readonly waiters: RuntimeTerminalWaiterRegistry,
     private readonly polls: RuntimeTerminalIdlePolls
-  ) {}
-
-  /** Why one helper per record kind: every satisfaction site must rank the same way,
-   *  or the immediate check and the poll disagree about the same pane. */
-  private ptySatisfied(pty: RuntimePtyWorktreeRecord, waitText: string): boolean {
-    return isTuiIdleSatisfied({
-      record: pty,
-      readPositiveBodyEvidence: () =>
-        this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' || isKnownReadyPromptPreview(waitText),
-      agent: this.deps.getPaneAgent(pty.ptyId),
-      firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
-      quiescenceMs: this.deps.quiescenceMs
-    })
-  }
-
-  private leafSatisfied(leaf: RuntimeLeafRecord, waitText: string): boolean {
-    return isTuiIdleSatisfied({
-      record: leaf,
-      rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-      readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
-      agent: this.deps.getPaneAgent(leaf.ptyId),
-      firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
-      quiescenceMs: this.deps.quiescenceMs
-    })
+  ) {
+    this.evidence = new RuntimeTerminalWaitEvidence(deps)
   }
 
   async wait(
@@ -76,6 +60,8 @@ export class RuntimeTerminalWait {
     const condition = options?.condition ?? 'exit'
     const pty = this.deps.getLivePty(handle)
     if (pty) {
+      const ptyEvidenceCursor =
+        condition === 'tui-idle' ? this.evidence.capturePty(pty.pty) : undefined
       if (condition === 'exit' && !pty.pty.connected) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
@@ -88,8 +74,18 @@ export class RuntimeTerminalWait {
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && this.ptySatisfied(pty.pty, ptyWaitText)) {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      // No cursor here, deliberately: the fence exists so a DEFERRED decision cannot settle on
+      // evidence that predates this operation. This read is the operation, and an already-idle
+      // agent's evidence necessarily predates it — fencing it against a snapshot of itself asks
+      // for a transition that already happened and can never arrive, so the wait times out on a
+      // terminal that was idle the whole time.
+      if (condition === 'tui-idle' && this.evidence.isPtySatisfied(pty.pty, ptyWaitText)) {
+        return buildPtyTerminalWaitResult(
+          handle,
+          condition,
+          pty.pty,
+          this.evidence.result(this.evidence.observePty(pty.pty, ptyWaitText))
+        )
       }
       return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
         const effectiveTimeoutMs =
@@ -100,6 +96,8 @@ export class RuntimeTerminalWait {
               : 0
         const waiter: TerminalWaiter = {
           handle,
+          processIncarnation: this.deps.getTerminalProcessIncarnation(handle),
+          ...(ptyEvidenceCursor ? { evidenceCursor: ptyEvidenceCursor } : {}),
           condition,
           resolve,
           reject,
@@ -114,7 +112,19 @@ export class RuntimeTerminalWait {
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
             this.waiters.remove(waiter)
-            reject(new Error('timeout'))
+            if (condition !== 'tui-idle') {
+              reject(new Error('timeout'))
+              return
+            }
+            resolvePtyTuiIdleTimeout(
+              handle,
+              resolve,
+              reject,
+              this.deps,
+              this.evidence,
+              waiter.evidenceCursor,
+              waiter.processIncarnation
+            )
           }, effectiveTimeoutMs)
         }
         this.waiters.add(waiter)
@@ -136,11 +146,29 @@ export class RuntimeTerminalWait {
               waiter,
               buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
             )
-          } else if (this.ptySatisfied(live.pty, livePtyWaitText)) {
-            this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+          } else if (
+            this.evidence.isPtySatisfied(live.pty, livePtyWaitText, waiter.evidenceCursor)
+          ) {
+            this.waiters.resolve(
+              waiter,
+              buildPtyTerminalWaitResult(
+                handle,
+                condition,
+                live.pty,
+                this.evidence.result(
+                  this.evidence.observePty(live.pty, livePtyWaitText, waiter.evidenceCursor)
+                )
+              )
+            )
           } else {
             this.polls.startPty(waiter, live.pty)
-            if (live.pty.lastAgentStatus === null && livePtyWaitText.length === 0) {
+            // A fresh screen capture can prove an unchanged ready CLI even when
+            // retained stream text is non-empty; generic bytes still never count
+            // as readiness without the provider's positive matcher.
+            if (
+              live.pty.lastAgentStatus !== 'working' &&
+              live.pty.lastAgentStatus !== 'permission'
+            ) {
               this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
             }
           }
@@ -163,8 +191,17 @@ export class RuntimeTerminalWait {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && this.leafSatisfied(leaf, leafWaitText)) {
-      return buildTerminalWaitResult(handle, condition, leaf)
+    const leafEvidenceCursor =
+      condition === 'tui-idle' ? this.evidence.captureLeaf(leaf) : undefined
+    // Unfenced for the same reason as the PTY read above: this synchronous look IS the operation,
+    // so requiring evidence newer than it would reject the already-idle case it exists to catch.
+    if (condition === 'tui-idle' && this.evidence.isLeafSatisfied(leaf, leafWaitText)) {
+      return buildTerminalWaitResult(
+        handle,
+        condition,
+        leaf,
+        this.evidence.result(this.evidence.observeLeaf(leaf, leafWaitText))
+      )
     }
 
     return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -180,6 +217,8 @@ export class RuntimeTerminalWait {
 
       const waiter: TerminalWaiter = {
         handle,
+        processIncarnation: this.deps.getTerminalProcessIncarnation(handle),
+        ...(leafEvidenceCursor ? { evidenceCursor: leafEvidenceCursor } : {}),
         condition,
         resolve,
         reject,
@@ -196,15 +235,24 @@ export class RuntimeTerminalWait {
       if (effectiveTimeoutMs > 0) {
         waiter.timeout = setTimeout(() => {
           this.waiters.remove(waiter)
-          reject(new Error('timeout'))
+          if (condition !== 'tui-idle') {
+            reject(new Error('timeout'))
+            return
+          }
+          resolveLeafTuiIdleTimeout(
+            handle,
+            resolve,
+            reject,
+            this.deps,
+            this.evidence,
+            waiter.evidenceCursor,
+            waiter.processIncarnation
+          )
         }, effectiveTimeoutMs)
       }
 
       this.waiters.add(waiter)
 
-      // Why: the handle may go stale or exit in the small gap between the first
-      // validation and waiter registration. Re-checking here keeps wait --for
-      // exit honest instead of hanging on a terminal that already changed.
       try {
         const live = this.deps.getLiveLeaf(handle)
         if (getTerminalState(live.leaf) === 'exited') {
@@ -221,18 +269,26 @@ export class RuntimeTerminalWait {
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (this.leafSatisfied(live.leaf, liveLeafWaitText)) {
-            // Why: don't clear lastAgentStatus here. It's a factual record of the
-            // last detected OSC state, not a one-shot signal. Clearing it causes
-            // subsequent tui-idle waiters to hang even though the agent is idle —
-            // the first waiter consumes the status and all later ones see null.
-            this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
+          } else if (
+            this.evidence.isLeafSatisfied(live.leaf, liveLeafWaitText, waiter.evidenceCursor)
+          ) {
+            this.waiters.resolve(
+              waiter,
+              buildTerminalWaitResult(
+                handle,
+                condition,
+                live.leaf,
+                this.evidence.result(
+                  this.evidence.observeLeaf(live.leaf, liveLeafWaitText, waiter.evidenceCursor)
+                )
+              )
+            )
           } else {
-            // Why: renderer-synced previews can show a known ready prompt even
-            // while the last OSC title is still "working"; keep polling the
-            // preview/title until the waiter resolves or hits its timeout.
             this.polls.startLeaf(waiter, live.leaf)
-            if (live.leaf.lastAgentStatus === null && liveLeafWaitText.length === 0) {
+            if (
+              live.leaf.lastAgentStatus !== 'working' &&
+              live.leaf.lastAgentStatus !== 'permission'
+            ) {
               this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
             }
           }

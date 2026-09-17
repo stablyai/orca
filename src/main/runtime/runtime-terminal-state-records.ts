@@ -14,6 +14,7 @@ import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { RuntimeScreenCapture } from './orca-runtime-core'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]
@@ -41,6 +42,8 @@ export type RuntimeLeafRecord = RuntimeSyncedLeaf &
     lastAgentStatusObservedLive: boolean
     lastOscTitle: string | null
     lastOscTitleAt: number | null
+    /** Host wall-clock time for the title observation; used to fence historical screen state. */
+    lastOscTitleObservedAt?: number | null
     paneTitleUpdatedAt: number | null
   }
 
@@ -69,7 +72,12 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** Latest first-party state from the agent's own OSC 9999 status stream — what the
    *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
    *  OSC title. Optional: absent until a payload lands. */
-  lastExplicitAgentStatus?: { state: AgentStatusState; updatedAt: number } | null
+  lastExplicitAgentStatus?: {
+    state: AgentStatusState
+    updatedAt: number
+    outputSequence?: number
+    attachmentId?: string | null
+  } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   lastOscTitle: string | null
@@ -114,6 +122,7 @@ export type RuntimeVisibleTerminalState = {
   isAlternateScreen: boolean
   sequence: number
   generation: number
+  screenCapture: RuntimeScreenCapture
 }
 
 export type ProviderBufferAcquisition = {

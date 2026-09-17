@@ -46,11 +46,7 @@ import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoin
 import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
-import {
-  TUI_IDLE_DEFAULT_TIMEOUT_MS,
-  TUI_IDLE_POLL_INTERVAL_MS,
-  TUI_IDLE_QUIESCENCE_MS
-} from './orca-runtime-postlude'
+import { TUI_IDLE_DEFAULT_TIMEOUT_MS, TUI_IDLE_POLL_INTERVAL_MS } from './orca-runtime-postlude'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from './runtime-terminal-wait'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 
@@ -274,9 +270,6 @@ export class OrcaRuntimeWithRuntimeId {
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 
-  /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
-  protected deliveryRecheckTimersByLeafKey = new Map<string, ReturnType<typeof setTimeout>>()
-
   protected leaves = new Map<string, RuntimeLeafRecord>()
 
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
@@ -327,13 +320,22 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
-    quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
-    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
+    getAdoptedPtyTitle: (pty) => this.getAdoptedPtyTitle(pty),
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
-    getFirstPartyAgentStatus: (ptyId) =>
-      (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+    getFirstPartyAgentStatus: (ptyId) => {
+      const status = ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null
+      return status ?? null
+    },
+    getAttachmentId: (ptyId) => (ptyId ? this.getPtyAttachmentId(ptyId) : null),
+    getScreenCapture: (ptyId) =>
+      ptyId ? (this.visibleScreenCaptureByPtyId.get(ptyId) ?? null) : null,
+    getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+    retire: (waiter, reason) => {
+      this.terminalWaiters.remove(waiter)
+      waiter.reject(new Error(reason))
+    },
     getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })
@@ -344,11 +346,17 @@ export class OrcaRuntimeWithRuntimeId {
       getLivePty: (handle) => this.getLivePtyForHandle(handle),
       getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
       getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
+      getAdoptedPtyTitle: (pty) => this.getAdoptedPtyTitle(pty),
       getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
-      quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
       getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
-      getFirstPartyAgentStatus: (ptyId) =>
-        (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+      getFirstPartyAgentStatus: (ptyId) => {
+        const status = ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null
+        return status ?? null
+      },
+      getAttachmentId: (ptyId) => (ptyId ? this.getPtyAttachmentId(ptyId) : null),
+      getScreenCapture: (ptyId) =>
+        ptyId ? (this.visibleScreenCaptureByPtyId.get(ptyId) ?? null) : null,
+      getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
       startVisibleReadProbe: (waiter, waiterTimeoutMs) =>
         this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     },

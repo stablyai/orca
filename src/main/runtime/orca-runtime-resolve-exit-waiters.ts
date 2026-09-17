@@ -6,11 +6,14 @@ import { buildPtyTerminalWaitResult, buildTerminalWaitResult } from './terminal-
 import type { AgentStatus } from '../../shared/agent-detection'
 import {
   detectExplicitIdleStatusFromTitle,
-  isKnownReadyPromptPreview
+  detectKnownReadyPromptAgent
 } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { isTuiIdleSatisfied } from './tui-idle-evidence'
-import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
+import {
+  observeTuiIdle,
+  type TuiIdleEvidenceCursor,
+  type TuiIdleObservation
+} from './tui-idle-evidence'
 
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
@@ -49,15 +52,30 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     if (!waiters || waiters.size === 0) {
       return
     }
-    // Why re-rank rather than resolve outright: the transition that brought us here is
-    // only a title sample, and a name-only title arriving mid-turn is the weakest tier
-    // there is (#6011). Leave such a waiter on its poll to be corroborated instead.
-    if (!this.isTuiIdleSatisfiedForLeaf(leaf)) {
-      return
-    }
+    // A title transition is only usable when the shared evidence evaluator identifies a
+    // provider-supported readiness fact; name-only or otherwise unbound observations stay open.
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
+        if (
+          waiter.processIncarnation === null ||
+          this.getTerminalProcessIncarnation(handle) !== waiter.processIncarnation
+        ) {
+          this.removeWaiter(waiter)
+          waiter.reject(new Error('terminal_handle_stale'))
+          continue
+        }
+        const observation = this.observeTuiIdleForLeaf(leaf, waiter.evidenceCursor)
+        if (observation.state !== 'ready') {
+          continue
+        }
+        this.resolveWaiter(
+          waiter,
+          buildTerminalWaitResult(handle, 'tui-idle', leaf, {
+            state: observation.state,
+            source: observation.source,
+            ...(observation.agent ? { agent: observation.agent } : {})
+          })
+        )
       }
     }
   }
@@ -91,86 +109,65 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     // Why: same re-ranking as resolveTuiIdleWaiters above.
-    if (!this.isTuiIdleSatisfiedForPty(pty)) {
-      return
-    }
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
+        if (
+          waiter.processIncarnation === null ||
+          this.getTerminalProcessIncarnation(handle) !== waiter.processIncarnation
+        ) {
+          this.removeWaiter(waiter)
+          waiter.reject(new Error('terminal_handle_stale'))
+          continue
+        }
+        const observation = this.observeTuiIdleForPty(pty, waiter.evidenceCursor)
+        if (observation.state !== 'ready') {
+          continue
+        }
+        this.resolveWaiter(
+          waiter,
+          buildPtyTerminalWaitResult(handle, 'tui-idle', pty, {
+            state: observation.state,
+            source: observation.source,
+            ...(observation.agent ? { agent: observation.agent } : {})
+          })
+        )
       }
     }
   }
 
-  // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
+  // Why: daemon-hosted terminals may have no PTY bytes; a title or screen fact can still prove readiness.
   protected isTuiIdleSatisfiedForLeaf(leaf: RuntimeLeafRecord): boolean {
-    return isTuiIdleSatisfied({
-      record: leaf,
+    return this.observeTuiIdleForLeaf(leaf).state === 'ready'
+  }
+
+  protected observeTuiIdleForLeaf(
+    leaf: RuntimeLeafRecord,
+    evidenceCursor?: TuiIdleEvidenceCursor
+  ): TuiIdleObservation {
+    const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    const promptAgent = detectKnownReadyPromptAgent(waitText)
+    return observeTuiIdle({
+      record: {
+        ...leaf,
+        attachmentId: leaf.ptyId ? this.getPtyAttachmentId(leaf.ptyId) : null,
+        screenCapture: leaf.ptyId
+          ? (this.visibleScreenCaptureByPtyId.get(leaf.ptyId) ?? null)
+          : null
+      },
       rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
-      readPositiveBodyEvidence: () =>
-        isKnownReadyPromptPreview(
-          buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-        ),
+      readPositiveBodyEvidence: () => promptAgent !== null,
+      positiveBodyEvidenceAgent: promptAgent,
       agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
       firstPartyStatus:
         (leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.lastExplicitAgentStatus : null) ?? null,
-      quiescenceMs: TUI_IDLE_QUIESCENCE_MS
+      evidenceCursor
     })
   }
 
-  /**
-   * Settled-enough-to-type check that also arms a retry when it says no.
-   *
-   * Why the retry: the wait path POLLS, so weak evidence that only becomes valid with the
-   * passage of time (a pane going quiet) eventually satisfies it. Delivery is edge-driven —
-   * a title transition, a graph sync, a new message — with no poll behind it, so a refusal
-   * at an edge is final unless another edge happens to arrive. A hookless Codex pane never
-   * emits an explicit `X ready`, so the refusal below would strand the queued message
-   * permanently once the pane fell quiet. One-shot timer, armed only for a leaf that
-   * actually refused, cleared as soon as any path delivers.
-   */
   protected checkDeliverySettledAndArmRecheck(leaf: { tabId: string; leafId: string }): boolean {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    if (this.isAgentSettledForDelivery(leaf)) {
-      this.clearDeliveryRecheck(leafKey)
-      return true
-    }
-    this.armDeliveryRecheck(leafKey)
-    return false
-  }
-
-  protected clearDeliveryRecheck(leafKey: string): void {
-    const timer = this.deliveryRecheckTimersByLeafKey.get(leafKey)
-    if (timer) {
-      clearTimeout(timer)
-      this.deliveryRecheckTimersByLeafKey.delete(leafKey)
-    }
-  }
-
-  private armDeliveryRecheck(leafKey: string): void {
-    if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
-      return
-    }
-    const live = this.leaves.get(leafKey)
-    // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
-    // stream to go quiet, so wake just after the window could have elapsed. A pane that is
-    // still producing output re-arms from its own fresher timestamp rather than spinning.
-    const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
-    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
-    const timer = setTimeout(() => {
-      this.deliveryRecheckTimersByLeafKey.delete(leafKey)
-      const current = this.leaves.get(leafKey)
-      if (!current) {
-        return
-      }
-      // Why the gate again here: delivery sites gate at the CALL, not inside
-      // deliverPendingMessagesForLeaf, so firing straight into it would hand the retry the
-      // very injection the gate exists to prevent. A pane that went busy again re-arms.
-      if (this.checkDeliverySettledAndArmRecheck(current)) {
-        this.deliverPendingMessagesForLeaf(current)
-      }
-    }, delay)
-    timer.unref?.()
-    this.deliveryRecheckTimersByLeafKey.set(leafKey, timer)
+    // Readiness is evidence-driven. A failed check stays parked until a new title, screen, or
+    // hook fact arrives; elapsed silence is never allowed to unlock a write into a TUI.
+    return this.isAgentSettledForDelivery(leaf)
   }
 
   /**
@@ -188,16 +185,31 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
   }
 
   protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {
-    return isTuiIdleSatisfied({
-      record: pty,
-      readPositiveBodyEvidence: () =>
-        this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-        isKnownReadyPromptPreview(
-          buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-        ),
+    return this.observeTuiIdleForPty(pty).state === 'ready'
+  }
+
+  protected observeTuiIdleForPty(
+    pty: RuntimePtyWorktreeRecord,
+    evidenceCursor?: TuiIdleEvidenceCursor
+  ): TuiIdleObservation {
+    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const promptAgent = detectKnownReadyPromptAgent(waitText)
+    const adoptedIdle = this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle'
+    const adoptedTitle = this.getAdoptedPtyTitle(pty)
+    return observeTuiIdle({
+      record: {
+        ...pty,
+        lastOscTitleObservedAt: pty.lastOscTitleEpochMs,
+        attachmentId: this.getPtyAttachmentId(pty.ptyId),
+        screenCapture: this.visibleScreenCaptureByPtyId.get(pty.ptyId) ?? null
+      },
+      rendererTitle: adoptedTitle,
+      readPositiveBodyEvidence: () => adoptedIdle || promptAgent !== null,
+      positiveBodyEvidenceAgent: promptAgent,
+      positiveBodyEvidenceSource: adoptedIdle ? 'title' : 'screen',
       agent: this.getPaneAgentForTuiIdle(pty.ptyId),
       firstPartyStatus: pty.lastExplicitAgentStatus ?? null,
-      quiescenceMs: TUI_IDLE_QUIESCENCE_MS
+      evidenceCursor
     })
   }
 

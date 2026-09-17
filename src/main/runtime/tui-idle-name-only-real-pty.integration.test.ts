@@ -32,7 +32,10 @@ afterEach(() => {
   }
 })
 
-async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: number) {
+async function startRealAgentPane(
+  mode: 'explicit-idle' | 'quiet' | 'ready-screen',
+  workMs: number
+) {
   const child = pty.spawn(process.execPath, [FIXTURE, mode, String(workMs)], {
     name: 'xterm-256color',
     cols: 120,
@@ -128,13 +131,14 @@ describe.skipIf(process.platform === 'win32')('tui-idle against a real agent pty
     expect(outcome.elapsedMs).toBeGreaterThanOrEqual(1_500)
   }, 28_000)
 
-  it('satisfies once the real process goes quiet with the agent still in foreground', async () => {
-    const { runtime, handle } = await startRealAgentPane('quiet', 3_000)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  it('satisfies an unchanged real ready screen through a fresh capture', async () => {
+    const { runtime, handle } = await startRealAgentPane('ready-screen', 3_000)
+    await new Promise((resolve) => setTimeout(resolve, 3_500))
 
     const outcome = await terminalWait(runtime, handle, 20_000)
     expect(outcome.satisfied).toBe(true)
-    // Corroboration is never instant: quiescence must elapse after the last byte.
-    expect(outcome.elapsedMs).toBeGreaterThanOrEqual(3_000)
+    // The body was retained before registration; readiness comes from a current
+    // host-owned screen capture, not from requiring another PTY byte.
+    expect(outcome.elapsedMs).toBeLessThan(5_000)
   }, 28_000)
 })

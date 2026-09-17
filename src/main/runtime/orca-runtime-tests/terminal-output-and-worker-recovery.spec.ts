@@ -621,7 +621,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('still auto-submits to a non-Cursor agent when its idle title mentions Cursor Agent', async () => {
+  it('does not auto-submit when only a title mentions Cursor Agent', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -645,11 +645,7 @@ describe('OrcaRuntimeService', () => {
       runtime.deliverPendingMessagesForHandle(terminal.handle)
       await vi.advanceTimersByTimeAsync(500)
 
-      expect(write).toHaveBeenCalledWith(
-        'pty-1',
-        expect.stringContaining('You have 1 orchestration message')
-      )
-      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(write).not.toHaveBeenCalled()
       db.close()
     } finally {
       vi.useRealTimers()

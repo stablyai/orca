@@ -19,7 +19,7 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('tui-idle times out when PTY data has no agent OSC title transitions', async () => {
+  it('tui-idle returns unknown when PTY data has no readiness evidence', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -52,11 +52,14 @@ describe('OrcaRuntimeService', () => {
         condition: 'tui-idle',
         timeoutMs: 1_000
       })
-      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+      const unknownAssertion = expect(waitPromise).resolves.toMatchObject({
+        satisfied: false,
+        readiness: { state: 'unknown' }
+      })
 
       await vi.advanceTimersByTimeAsync(12_000)
 
-      await timeoutAssertion
+      await unknownAssertion
     } finally {
       vi.useRealTimers()
     }

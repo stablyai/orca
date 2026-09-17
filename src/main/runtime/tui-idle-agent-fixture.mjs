@@ -11,6 +11,8 @@ const streaming = setInterval(() => {
     clearInterval(streaming)
     if (mode === 'explicit-idle') {
       process.stdout.write(osc('Codex ready'))
+    } else if (mode === 'ready-screen') {
+      process.stdout.write('\nOpenAI Codex\nModel: gpt-5\nDirectory: /tmp/tui-idle-real-pty\n')
     }
     return
   }

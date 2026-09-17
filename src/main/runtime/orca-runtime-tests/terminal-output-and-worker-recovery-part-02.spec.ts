@@ -582,7 +582,7 @@ describe('OrcaRuntimeService', () => {
     })
     await expect(
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
-    ).rejects.toThrow('timeout')
+    ).resolves.toMatchObject({ satisfied: false, readiness: { state: 'unknown' } })
     const lateReadySnapshot = deferred<{
       data: string
       scrollbackAnsi: string
@@ -609,7 +609,10 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       alternateScreen: false
     })
-    await expect(staleReadyWait).rejects.toThrow('timeout')
+    await expect(staleReadyWait).resolves.toMatchObject({
+      satisfied: false,
+      readiness: { state: 'unknown' }
+    })
     serializeProviderBuffer.mockResolvedValueOnce({
       data: 'Do you trust this workspace directory?\r\n1. Yes\r\n2. No\r\n',
       scrollbackAnsi: '',
@@ -628,7 +631,7 @@ describe('OrcaRuntimeService', () => {
     serializeProviderBuffer.mockImplementationOnce(() => new Promise(() => {}))
     await expect(
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
-    ).rejects.toThrow('timeout')
+    ).resolves.toMatchObject({ satisfied: false, readiness: { state: 'unknown' } })
     expect(serializeProviderBuffer).toHaveBeenCalledTimes(6)
     // Why args, not counts: the one-shot responses above ignore their options,
     // so only this asserts every idle probe asked for the visible grid alone.

@@ -1,6 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './orca-runtime-capture-provider-terminal-buffer'
-import type { RuntimeTerminalProjection } from './orca-runtime-core'
+import type { RuntimeScreenCapture, RuntimeTerminalProjection } from './orca-runtime-core'
 import { buildPreview } from './terminal-tail-state'
 import type { RuntimeVisibleTerminalState } from './runtime-terminal-state-records'
 import {
@@ -31,26 +31,33 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
   }
 
   protected async readVisibleTerminalState(
-    ptyId: string
+    ptyId: string,
+    options: { freshCapture?: boolean } = {}
   ): Promise<RuntimeVisibleTerminalState | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const pending = this.providerVisibleStateReadsByPtyId.get(ptyId)
-    if (pending?.generation === generation) {
+    const freshCapture = options.freshCapture === true
+    if (pending?.generation === generation && (!freshCapture || pending.freshCapture)) {
       return pending.promise
     }
-    let entry: { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
-    const promise = this.loadVisibleTerminalState(ptyId).finally(() => {
+    let entry: {
+      generation: number
+      freshCapture: boolean
+      promise: Promise<RuntimeVisibleTerminalState | null>
+    }
+    const promise = this.loadVisibleTerminalState(ptyId, options).finally(() => {
       if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
         this.providerVisibleStateReadsByPtyId.delete(ptyId)
       }
     })
-    entry = { generation, promise }
+    entry = { generation, freshCapture, promise }
     this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
     return promise
   }
 
   protected async loadVisibleTerminalState(
-    ptyId: string
+    ptyId: string,
+    options: { freshCapture?: boolean } = {}
   ): Promise<RuntimeVisibleTerminalState | null> {
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
@@ -61,6 +68,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     const cached = this.providerVisibleStateByPtyId.get(ptyId)
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
     if (
+      !options.freshCapture &&
       cached?.generation === generation &&
       outputSequence <= cached.sequence &&
       (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
@@ -69,25 +77,23 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     }
     if (trackedMode && !trackedMode.isAlternateScreen) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
-      return headlessState
-        ? { ...headlessState, isAlternateScreen: false }
-        : {
-            lines: [],
-            isAlternateScreen: false,
-            sequence: outputSequence,
-            generation
-          }
+      return headlessState ? { ...headlessState, isAlternateScreen: false } : null
     }
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
       return null
     }
 
+    const attachmentId = this.getPtyAttachmentId(ptyId)
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (
+      !snapshot ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      this.getPtyAttachmentId(ptyId) !== attachmentId
+    ) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
@@ -107,11 +113,18 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     ) {
       return null
     }
+    const screenCapture = this.recordVisibleScreenCapture(
+      ptyId,
+      generation,
+      snapshot.seq,
+      'provider'
+    )
     const visibleState: RuntimeVisibleTerminalState = {
       ...projection,
       isAlternateScreen: snapshot.alternateScreen ?? false,
       sequence: snapshot.seq,
-      generation
+      generation,
+      screenCapture
     }
     this.providerVisibleStateByPtyId.set(ptyId, visibleState)
     return visibleState
@@ -125,10 +138,12 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       return null
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    const attachmentId = this.getPtyAttachmentId(ptyId)
     await state.writeChain
     if (
       this.headlessTerminals.get(ptyId) !== state ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      this.getPtyAttachmentId(ptyId) !== attachmentId
     ) {
       return null
     }
@@ -136,7 +151,13 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       ...projectTerminalVisibleLines(state.emulator),
       isAlternateScreen: state.emulator.isAlternateScreen,
       sequence: state.outputSequence,
-      generation
+      generation,
+      screenCapture: this.recordVisibleScreenCapture(
+        ptyId,
+        generation,
+        state.outputSequence,
+        'headless'
+      )
     }
   }
 
@@ -183,9 +204,46 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
-      return this.parseVisibleSnapshot(snapshot)
+      const generation = this.getPtyLifecycleGeneration(ptyId)
+      const attachmentId = this.getPtyAttachmentId(ptyId)
+      const outputSequence =
+        typeof snapshot.seq === 'number' ? snapshot.seq : this.getPtyOutputSequence(ptyId)
+      const projection = await this.parseVisibleSnapshot(snapshot)
+      if (
+        this.getPtyLifecycleGeneration(ptyId) !== generation ||
+        this.getPtyAttachmentId(ptyId) !== attachmentId ||
+        this.getPtyOutputSequence(ptyId) > outputSequence
+      ) {
+        return { lines: [] }
+      }
+      return {
+        ...projection,
+        screenCapture: this.recordVisibleScreenCapture(
+          ptyId,
+          generation,
+          outputSequence,
+          'renderer'
+        )
+      }
     } catch {
       return { lines: [] }
     }
+  }
+
+  protected recordVisibleScreenCapture(
+    ptyId: string,
+    generation: number,
+    outputSequence: number,
+    source: RuntimeScreenCapture['source']
+  ): RuntimeScreenCapture {
+    const capture: RuntimeScreenCapture = {
+      attachmentId: this.getPtyAttachmentId(ptyId),
+      generation,
+      outputSequence,
+      revision: this.nextVisibleScreenCaptureRevision++,
+      source
+    }
+    this.visibleScreenCaptureByPtyId.set(ptyId, capture)
+    return capture
   }
 }

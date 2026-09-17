@@ -70,7 +70,16 @@ describe('orchestration new-worktree workers', () => {
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
-      bytesWritten: 1
+      bytesWritten: 1,
+      prompt: {
+        requestId: 'request-worker',
+        stages: ['input_accepted', 'turn_started'],
+        provider: 'codex',
+        observation: 'supported',
+        processIncarnation: 'runtime_test:term_worker:1',
+        generation: 1,
+        baselineWorkingSequence: 0
+      }
     })
   })
 
@@ -445,13 +454,14 @@ describe('orchestration new-worktree workers', () => {
       exitCode: null
     })
 
-    const { result } = await startWorker()
+    const { result, task } = await startWorker()
 
     expect(result).toMatchObject({
-      state: 'failed',
+      state: 'outcome_unknown',
       failedStage: 'agent_readiness',
       setup: { state: 'running' }
     })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
@@ -729,7 +739,20 @@ describe('orchestration new-worktree workers', () => {
       })
     )
 
-    finishPrompt?.({ handle: 'term_worker', accepted: true, bytesWritten: 1 })
+    finishPrompt?.({
+      handle: 'term_worker',
+      accepted: true,
+      bytesWritten: 1,
+      prompt: {
+        requestId: 'request-worker',
+        stages: ['input_accepted', 'turn_started'],
+        provider: 'codex',
+        observation: 'supported',
+        processIncarnation: 'runtime_test:term_worker:1',
+        generation: 1,
+        baselineWorkingSequence: 0
+      }
+    })
     await expect(pending).resolves.toMatchObject({
       result: { state: 'ready', stage: 'input_accepted' }
     })

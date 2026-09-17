@@ -1,8 +1,8 @@
-import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 import {
   detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
+  detectKnownReadyPromptAgent
 } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
@@ -12,35 +12,27 @@ import {
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
-  isTuiIdleSatisfied,
-  quietForegroundProcessProvesTuiIdle,
-  type FirstPartyAgentStatus
+  observeTuiIdle,
+  type FirstPartyAgentStatus,
+  type TuiIdleEvidenceRecord
 } from './tui-idle-evidence'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { RuntimeScreenCapture } from './orca-runtime-core'
 
-/**
- * Why null counts as quiet: a record with no output timestamp has produced nothing the
- * RUNTIME OBSERVED since it was created. That is not the same as silence — the reachable
- * case is a daemon-hosted pane whose bytes never reach the runtime, which may still be
- * streaming. The trade is deliberate: "never settles" becomes "settles uncorroborated",
- * the caller keeps its timeout, and delivery cannot reach this lane. Reading it as `0ms since output`
- * inverted that — `0 >= quiescenceMs` is false forever, so an adopted pane that never
- * emitted could not settle no matter how long the caller waited.
- */
-function isQuietForQuiescence(lastOutputAt: number | null, quiescenceMs: number): boolean {
-  return lastOutputAt === null ? true : Date.now() - lastOutputAt >= quiescenceMs
-}
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 type RuntimeTerminalIdlePollDependencies = {
   intervalMs: number
-  quiescenceMs: number
   getTabTitle(tabId: string): string | null
-  getForegroundProcess(ptyId: string): Promise<string | null> | null
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
+  getAdoptedPtyTitle?(pty: RuntimePtyWorktreeRecord): string | null
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
+  getAttachmentId?(ptyId: string | null | undefined): string | null
+  getScreenCapture?(ptyId: string | null | undefined): RuntimeScreenCapture | null
+  getTerminalProcessIncarnation?(handle: string): string | null
+  retire?(waiter: TerminalWaiter, reason: string): void
   /** Re-read the record the waiter registered against; see `liveLeaf` below. */
   getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
@@ -51,13 +43,11 @@ type IdlePollEntry =
       kind: 'leaf'
       waiter: TerminalWaiter
       leaf: RuntimeLeafRecord
-      foregroundPollInFlight: boolean
     }
   | {
       kind: 'pty'
       waiter: TerminalWaiter
       pty: RuntimePtyWorktreeRecord
-      foregroundPollInFlight: boolean
     }
 
 export class RuntimeTerminalIdlePolls {
@@ -67,11 +57,11 @@ export class RuntimeTerminalIdlePolls {
   constructor(private readonly deps: RuntimeTerminalIdlePollDependencies) {}
 
   startLeaf(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
-    this.start({ kind: 'leaf', waiter, leaf, foregroundPollInFlight: false })
+    this.start({ kind: 'leaf', waiter, leaf })
   }
 
   startPty(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
-    this.start({ kind: 'pty', waiter, pty, foregroundPollInFlight: false })
+    this.start({ kind: 'pty', waiter, pty })
   }
 
   /** Test/diagnostic seam: live sweep handles, which must stay at most one. */
@@ -105,15 +95,22 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     const { waiter } = entry
+    if (
+      this.deps.getTerminalProcessIncarnation &&
+      waiter.processIncarnation !== this.deps.getTerminalProcessIncarnation(waiter.handle)
+    ) {
+      this.stop(entry)
+      this.deps.retire?.(waiter, 'terminal_handle_stale')
+      return
+    }
     // Why re-read: `syncWindowGraph` rebuilds `this.leaves` with fresh objects on every
-    // renderer publish, so the record captured at registration stops advancing. Its
-    // `lastOutputAt` freezes, the quiescence gate below then reads an ever-growing
-    // elapsed time, and the waiter settles while the pane is in fact still streaming.
+    // renderer publish, so the record captured at registration stops advancing. Reading the
+    // live record keeps readiness and first-party status tied to the current attachment.
     const leaf = this.deps.getLiveLeaf(entry.leaf)
     const agent = this.deps.getPaneAgent(leaf.ptyId)
-    let startedForegroundPoll = false
     try {
       const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+      const promptAgent = detectKnownReadyPromptAgent(waitText)
       const blockedReason = detectTerminalWaitBlockedReason(waitText)
       if (blockedReason) {
         this.stop(entry)
@@ -123,49 +120,32 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
-      if (
-        isTuiIdleSatisfied({
-          record: leaf,
-          rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-          readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        })
-      ) {
+      const observation = observeTuiIdle({
+        record: {
+          ...leaf,
+          attachmentId: this.deps.getAttachmentId?.(leaf.ptyId) ?? null,
+          screenCapture: this.deps.getScreenCapture?.(leaf.ptyId) ?? null
+        } satisfies TuiIdleEvidenceRecord,
+        rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
+        readPositiveBodyEvidence: () => promptAgent !== null,
+        positiveBodyEvidenceAgent: promptAgent,
+        agent,
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
+        evidenceCursor: waiter.evidenceCursor
+      })
+      if (observation.state === 'ready') {
         this.stop(entry)
-        this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-        return
-      }
-      if (
-        leaf.lastAgentStatus === null &&
-        quietForegroundProcessProvesTuiIdle(agent) &&
-        leaf.ptyId &&
-        !entry.foregroundPollInFlight
-      ) {
-        const foregroundRead = this.deps.getForegroundProcess(leaf.ptyId)
-        if (!foregroundRead) {
-          return
-        }
-        entry.foregroundPollInFlight = true
-        startedForegroundPoll = true
-        const foreground = await foregroundRead
-        const live = this.deps.getLiveLeaf(entry.leaf)
-        if (
-          foreground &&
-          !isShellProcess(foreground) &&
-          isQuietForQuiescence(live.lastOutputAt, this.deps.quiescenceMs)
-        ) {
-          this.stop(entry)
-          this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', live))
-        }
+        this.deps.resolve(
+          waiter,
+          buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf, {
+            state: observation.state,
+            source: observation.source,
+            ...(observation.agent ? { agent: observation.agent } : {})
+          })
+        )
       }
     } catch {
       // Transient process inspection errors do not retire the waiter.
-    } finally {
-      if (startedForegroundPoll) {
-        entry.foregroundPollInFlight = false
-      }
     }
   }
 
@@ -174,12 +154,20 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     const { waiter, pty } = entry
+    if (
+      this.deps.getTerminalProcessIncarnation &&
+      waiter.processIncarnation !== this.deps.getTerminalProcessIncarnation(waiter.handle)
+    ) {
+      this.stop(entry)
+      this.deps.retire?.(waiter, 'terminal_handle_stale')
+      return
+    }
     // Why no re-read here: `ptysById` has a single create-once `set` site, so PTY
     // records are mutated in place rather than swapped, and a capture stays live.
     const agent = this.deps.getPaneAgent(pty.ptyId)
-    let startedForegroundPoll = false
     try {
       const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+      const promptAgent = detectKnownReadyPromptAgent(waitText)
       const blockedReason = detectTerminalWaitBlockedReason(waitText)
       if (blockedReason) {
         this.stop(entry)
@@ -189,48 +177,36 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
-      if (
-        isTuiIdleSatisfied({
-          record: pty,
-          readPositiveBodyEvidence: () =>
-            this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-            isKnownReadyPromptPreview(waitText),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        })
-      ) {
+      const adoptedIdle = this.deps.getAdoptedPtyIdleStatus(pty) === 'idle'
+      const adoptedTitle = this.deps.getAdoptedPtyTitle?.(pty) ?? null
+      const observation = observeTuiIdle({
+        record: {
+          ...pty,
+          lastOscTitleObservedAt: pty.lastOscTitleEpochMs,
+          attachmentId: this.deps.getAttachmentId?.(pty.ptyId) ?? pty.incarnationId,
+          screenCapture: this.deps.getScreenCapture?.(pty.ptyId) ?? null
+        } satisfies TuiIdleEvidenceRecord,
+        rendererTitle: adoptedTitle,
+        readPositiveBodyEvidence: () => adoptedIdle || promptAgent !== null,
+        positiveBodyEvidenceAgent: promptAgent,
+        positiveBodyEvidenceSource: adoptedIdle ? 'title' : 'screen',
+        agent,
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
+        evidenceCursor: waiter.evidenceCursor
+      })
+      if (observation.state === 'ready') {
         this.stop(entry)
-        this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-        return
-      }
-      if (
-        pty.lastAgentStatus === null &&
-        quietForegroundProcessProvesTuiIdle(agent) &&
-        !entry.foregroundPollInFlight
-      ) {
-        const foregroundRead = this.deps.getForegroundProcess(pty.ptyId)
-        if (!foregroundRead) {
-          return
-        }
-        entry.foregroundPollInFlight = true
-        startedForegroundPoll = true
-        const foreground = await foregroundRead
-        if (
-          foreground &&
-          !isShellProcess(foreground) &&
-          isQuietForQuiescence(pty.lastOutputAt, this.deps.quiescenceMs)
-        ) {
-          this.stop(entry)
-          this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-        }
+        this.deps.resolve(
+          waiter,
+          buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty, {
+            state: observation.state,
+            source: observation.source,
+            ...(observation.agent ? { agent: observation.agent } : {})
+          })
+        )
       }
     } catch {
       // Transient process inspection errors do not retire the waiter.
-    } finally {
-      if (startedForegroundPoll) {
-        entry.foregroundPollInFlight = false
-      }
     }
   }
 

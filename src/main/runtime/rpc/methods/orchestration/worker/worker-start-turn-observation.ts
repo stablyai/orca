@@ -1,5 +1,5 @@
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
-import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-prompt-delivery'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 /**
@@ -82,5 +82,14 @@ export function describeUnobservedWorkerTurnStart(agent: string | null): string 
     'worker is dead: the agent may still be starting, may be wedged (for example waiting on ' +
     'network), or may be holding the task unsent in its composer. If the worker recovers and ' +
     'reports, this Dispatch settles normally.'
+  )
+}
+
+export function describeUnsupportedWorkerTurnStart(agent: string | null): string {
+  const name = agent ?? 'the agent'
+  return (
+    `Dispatch input was accepted by ${name}, but this launch path has no correlated turn-start ` +
+    'observation. The prompt was submitted once; its turn outcome is unknown and no automatic ' +
+    'resend is safe. Inspect the terminal or let the worker report before abandoning it.'
   )
 }

@@ -3,6 +3,7 @@ import type { OrchestrationWorkerLaunchReceipt } from '../worker/worker-launch-p
 export type RemoteFederatedWorkerStartReceipt = {
   dispatchId: string
   state: string
+  stage?: string
   runtimeEpoch?: string
   worktreeId?: string
   terminalHandle?: string

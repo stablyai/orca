@@ -183,7 +183,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('repoints on the retry edge when live idle won the send race', async () => {
+  it('does not repoint when idle status lacks provider-bound readiness', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -228,10 +228,7 @@ describe('OrcaRuntimeService', () => {
       leaf.lastAgentStatusObservedLive = true
 
       await vi.advanceTimersByTimeAsync(2_000)
-      expect(write).toHaveBeenCalledWith(
-        'pty-1',
-        expect.stringContaining('You have 1 orchestration message')
-      )
+      expect(write).not.toHaveBeenCalled()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -434,7 +431,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('points already-idle Run mail after Codex replaces its completion title', async () => {
+  it('keeps Run mail pending after Codex replaces its completion title', async () => {
     const runtime = new OrcaRuntimeService(store)
     const db = new InMemoryOrchestrationMessages()
     const write = vi.fn().mockReturnValue(true)
@@ -469,12 +466,8 @@ describe('OrcaRuntimeService', () => {
     runtime.notifyMessageArrived('run:run_codex_native_title', 'worker_done')
     await Promise.resolve()
 
-    await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith(
-        'pty-1',
-        '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_codex_native_title`.\n'
-      )
-    })
+    await Promise.resolve()
+    expect(write).not.toHaveBeenCalled()
     db.close()
   })
 

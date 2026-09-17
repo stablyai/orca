@@ -136,8 +136,11 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     if (incarnationId) {
       return `${record.ptyId}:${incarnationId}`
     }
-    // Why: legacy providers may omit process incarnation; retain the prior restart-degraded fence.
-    return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
+    // Legacy providers may omit process incarnation. Reuse the host-owned
+    // lifecycle attachment identity used by readiness evidence so polls,
+    // title resolution, timeout settlement, and screen probes fence the same
+    // replacement boundary.
+    return this.getPtyAttachmentId(record.ptyId)
   }
 
   getExactWorkerProviderSession(

@@ -305,6 +305,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/main/runtime/runtime-terminal-agent-status-query.ts', 3],
       ['src/main/runtime/runtime-worktree-status-projection.ts', 4],
       ['src/main/runtime/terminal-wait-detection.ts', 2],
+      ['src/main/runtime/tui-idle-evidence.ts', 2],
       ['src/renderer/src/components/terminal-pane/agent-completion-title-observer.ts', 2],
       ['src/renderer/src/components/terminal-pane/pty-connection/shell-command-inference.ts', 4],
       ['src/renderer/src/components/terminal-pane/pty-output-title-observer.ts', 2],

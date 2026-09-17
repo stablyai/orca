@@ -484,11 +484,14 @@ describe('OrcaRuntimeService', () => {
         condition: 'tui-idle',
         timeoutMs: 1_000
       })
-      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+      const unknownAssertion = expect(waitPromise).resolves.toMatchObject({
+        satisfied: false,
+        readiness: { state: 'unknown' }
+      })
 
       await vi.advanceTimersByTimeAsync(2_000)
 
-      await timeoutAssertion
+      await unknownAssertion
       expect(serializeProviderBuffer).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -519,11 +522,13 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
+      satisfied: true,
+      readiness: { state: 'ready', agent: 'codex' },
       status: 'running'
     })
   })
 
-  it('resolves tui-idle from an Antigravity ready prompt preview', async () => {
+  it('keeps an Antigravity ready prompt unsupported', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -539,6 +544,8 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
+      satisfied: false,
+      readiness: { state: 'unsupported', agent: 'antigravity' },
       status: 'running'
     })
   })
@@ -576,7 +583,8 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
-      satisfied: true,
+      satisfied: false,
+      readiness: { state: 'unsupported', agent: 'antigravity' },
       status: 'running'
     })
     const splitReadyTail = splitSpy.mock.contexts.some((context) => {
@@ -610,7 +618,8 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
-      satisfied: true,
+      satisfied: false,
+      readiness: { state: 'unsupported', agent: 'antigravity' },
       status: 'running'
     })
   })

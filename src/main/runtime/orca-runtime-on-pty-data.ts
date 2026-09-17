@@ -224,7 +224,9 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         if (ptyRecord) {
           ptyRecord.lastExplicitAgentStatus = {
             state: latestAgentStatus.state,
-            updatedAt: Date.now()
+            updatedAt: at,
+            outputSequence,
+            attachmentId: this.getPtyAttachmentId(ptyId)
           }
         }
       }

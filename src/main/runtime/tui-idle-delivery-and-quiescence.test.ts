@@ -6,7 +6,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 
 // Follow-ons to #6011. The evidence ranking that fixed the wait path did not reach two
 // other consumers of the same signal: mailbox delivery, which TYPES INTO the pane, and
-// the idle poll's quiescence gate, which read a missing output clock as "never quiet".
+// the idle poll, which used to promote missing output to readiness.
 
 const WORKTREE_ID = 'repo-1::/tmp/followups'
 const TAB_ID = 'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1'
@@ -64,9 +64,8 @@ function watchDelivery(runtime: OrcaRuntimeService) {
     .mockImplementation(() => {})
 }
 
-// Why fake timers: the retry fires on a real 3s quiescence window, and asserting around it
-// with wall-clock sleeps made the result depend on how promptly a loaded CI runner schedules
-// an interval. The clock is the thing under test, so it has to be the deterministic part.
+// Why fake timers: readiness waits and delivery observations are time-sensitive; wall-clock
+// sleeps make the assertions depend on how promptly a loaded CI runner schedules an interval.
 describe('mailbox delivery honours the tui-idle evidence ranking', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -96,31 +95,29 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     expect(deliver).toHaveBeenCalled()
   })
 
-  // Why this case exists: the wait path POLLS, so weak evidence that only becomes valid
-  // with time eventually satisfies it. Delivery is edge-driven with no poll behind it, so a
-  // refusal at an edge is final unless another edge arrives. A hookless Codex never emits an
-  // explicit `X ready`, so without a retry the queued message strands permanently once the
-  // pane falls quiet — trading a visible mis-delivery for an invisible lost message.
-  it('retries a refused delivery once the pane falls quiet', async () => {
+  // Why this case exists: the wait path can re-evaluate evidence, but delivery is edge-driven
+  // with no time-based promotion behind it. A refusal remains parked until an actual readiness
+  // fact arrives. A hookless Codex never
+  // emits an explicit `X ready`, so its queued message stays visible for manual recovery rather
+  // than trading an unsafe injection for an invisible lost message.
+  it('does not unlock a refused delivery when the pane merely falls quiet', async () => {
     const { runtime } = await makeRuntime('codex')
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(PTY_ID, `${osc('\u280b Codex')}working\n`, Date.now())
     runtime.onPtyData(PTY_ID, `${osc('Codex')}output\n`, Date.now())
     expect(deliver).not.toHaveBeenCalled()
 
-    // Output stops. No further title frame and no renderer graph sync — a daemon-hosted
-    // pane has nobody publishing one, so nothing re-fires an edge on its own.
+    // Output stops. No readiness fact arrived, so silence cannot unlock a write into the pane.
     await vi.advanceTimersByTimeAsync(5_000)
-    expect(deliver).toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 
   it('does not retry into a pane that went busy again', async () => {
     const { runtime } = await makeRuntime('codex')
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(PTY_ID, `${osc('Codex')}output\n`, Date.now())
-    // Keep the stream alive across the whole retry window.
-    // Deterministic streaming: one chunk every 250ms of virtual time, so the gap between
-    // chunks can never drift past the quiescence window the way a real interval can.
+    // Keep the stream active while the shared poll runs; no elapsed-silence retry may fire.
+    // Deterministic streaming uses one chunk every 250ms of virtual time.
     for (let tick = 0; tick < 20; tick += 1) {
       runtime.onPtyData(PTY_ID, 'more output\n', Date.now())
       await vi.advanceTimersByTimeAsync(250)
@@ -141,14 +138,14 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
 
     await vi.advanceTimersByTimeAsync(100)
     runtime.onPtyData(PTY_ID, osc('Codex ready'), Date.now())
-    // Promptly, on the ready title itself — not after waiting out a quiescence window.
+    // Promptly, on the ready title itself — not after an elapsed-silence delay.
     expect(deliver).toHaveBeenCalled()
   })
 
   // Case C: the agent's own status stream vetoes the idle title, then reports done with no
   // edge behind it. `working` stays fresh for 30 minutes, so without a re-offer the veto
   // outlives the turn it described.
-  it('delivers when a done status lands after the idle title was vetoed', async () => {
+  it('does not treat a done status without a current readiness fact as delivery permission', async () => {
     const { runtime } = await makeRuntime('claude')
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(
@@ -161,20 +158,20 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
 
     runtime.onPtyData(PTY_ID, agentStatus('done', 'claude'), Date.now())
     await vi.advanceTimersByTimeAsync(4_500)
-    expect(deliver).toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 
-  it('still delivers for an agent whose name is its only rest signal', async () => {
+  it('does not deliver for an agent whose name is its only rest signal', async () => {
     const { runtime } = await makeRuntime('grok', 'grok')
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(PTY_ID, `${osc('⠋ Grok')}working\n`, Date.now())
     runtime.onPtyData(PTY_ID, `${osc('grok')}banner\n`, Date.now())
-    expect(deliver).toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 })
 
-describe('quiescence treats a missing output clock as quiet', () => {
-  it('settles a pane that has never produced output but holds a live agent process', async () => {
+describe('missing output remains unknown', () => {
+  it('does not settle a pane that has never produced output even with a live agent process', async () => {
     // No launch metadata: Orca did not start this agent, so the quiet-foreground lane is
     // the only evidence available, and `lastOutputAt` is null because nothing ever arrived.
     const { runtime, handle } = await makeRuntime(null, 'codex')
@@ -184,7 +181,11 @@ describe('quiescence treats a missing output clock as quiet', () => {
     expect([...leaves.values()][0].lastOutputAt).toBeNull()
 
     await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 8_000 })
-    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({
+      condition: 'tui-idle',
+      satisfied: false,
+      readiness: { state: 'unknown' }
+    })
   }, 20_000)
 })

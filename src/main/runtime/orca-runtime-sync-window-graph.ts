@@ -132,6 +132,10 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
         lastAgentStatusObservedLive: tailSource?.lastAgentStatusObservedLive ?? false,
         lastOscTitle: tailSource?.lastOscTitle ?? null,
         lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
+        lastOscTitleObservedAt:
+          existing?.ptyId === ptyId
+            ? (existing.lastOscTitleObservedAt ?? null)
+            : (existingPty?.lastOscTitleEpochMs ?? null),
         paneTitleUpdatedAt:
           existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
             ? existing.paneTitleUpdatedAt

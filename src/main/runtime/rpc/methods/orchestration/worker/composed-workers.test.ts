@@ -62,7 +62,16 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_worker',
         accepted: true,
-        bytesWritten: 1
+        bytesWritten: 1,
+        prompt: {
+          requestId: 'request-worker',
+          stages: ['input_accepted', 'turn_started'],
+          provider: 'codex',
+          observation: 'supported',
+          processIncarnation: 'runtime_test:term_worker:1',
+          generation: 1,
+          baselineWorkingSequence: 0
+        }
       })
     }
 
@@ -415,7 +424,7 @@ describe('orchestration RPC methods', () => {
       expect(createWorktree).not.toHaveBeenCalled()
     })
 
-    it('returns a failed receipt and preserves a created terminal as residual', async () => {
+    it('returns an unknown receipt and preserves a created terminal as residual', async () => {
       setup()
       mockCurrentWorkerStart({ ready: false })
       const task = db.createTask({ spec: 'worker timeout' })
@@ -426,9 +435,9 @@ describe('orchestration RPC methods', () => {
         agent: 'codex'
       })) as { state: string; failedStage: string; residualResources: { id: string }[] }
 
-      expect(result).toMatchObject({ state: 'failed', failedStage: 'agent_readiness' })
+      expect(result).toMatchObject({ state: 'outcome_unknown', failedStage: 'agent_readiness' })
       expect(result.residualResources).toEqual([expect.objectContaining({ id: 'term_worker' })])
-      expect(db.getTask(task.id)?.status).toBe('failed')
+      expect(db.getTask(task.id)?.status).toBe('blocked')
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
@@ -504,7 +513,7 @@ describe('orchestration RPC methods', () => {
         })) as { state: string; failedStage: string; lastError: string }
 
         expect(result).toMatchObject({
-          state: 'failed',
+          state: 'outcome_unknown',
           failedStage: 'agent_readiness',
           lastError: `Agent startup blocked: ${expectedReason}`
         })

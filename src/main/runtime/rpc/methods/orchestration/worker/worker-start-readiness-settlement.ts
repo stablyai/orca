@@ -6,6 +6,7 @@ import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preambl
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,
+  describeUnsupportedWorkerTurnStart,
   observeWorkerTurnStart,
   type WorkerTurnStartObservation
 } from './worker-start-turn-observation'
@@ -18,8 +19,8 @@ import {
 
 /**
  * Delivers the dispatch preamble and settles the worker's start state on the strongest
- * evidence available: `ready` only with a positive turn-start (or a provider that cannot
- * prove one), `start_unknown` when observation is supported and nothing started.
+ * evidence available: `ready` only with a positive turn-start, and `start_unknown` when
+ * turn-start observation is unsupported or remains unobserved.
  */
 export async function deliverAndSettleWorkerStartReadiness(args: {
   runtime: OrcaRuntimeService
@@ -88,20 +89,26 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // A worker report can settle the dispatch while turn observation is outstanding.
   const currentWorker = db.getWorkerDispatch(args.dispatchId)
   const alreadySettled = currentWorker && currentWorker.state !== 'starting'
-  if (turnStart.verdict === 'unobserved' && !alreadySettled) {
+  if (
+    (turnStart.verdict === 'unobserved' || turnStart.verdict === 'unsupported') &&
+    !alreadySettled
+  ) {
     // Honest `unverifiable`: keep the dispatch capability and the terminal — the worker may
     // still recover and report (worker-report settlement reconnects a start_unknown worker) —
     // but never claim ready for a turn nobody observed.
+    const turnUnknown = turnStart.verdict === 'unobserved'
     effects.push({
       kind: 'dispatch_input',
       role: 'agent',
       id: terminalHandle,
-      state: 'turn_unobserved'
+      state: turnUnknown ? 'turn_unobserved' : 'turn_start_unsupported'
     })
-    const reason = describeUnobservedWorkerTurnStart(args.agent)
+    const reason = turnUnknown
+      ? describeUnobservedWorkerTurnStart(args.agent)
+      : describeUnsupportedWorkerTurnStart(args.agent)
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
-      'turn_start_unobserved',
+      turnUnknown ? 'turn_start_unobserved' : 'turn_start_unsupported',
       reason,
       effects
     )

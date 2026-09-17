@@ -67,7 +67,16 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
-      bytesWritten: 1
+      bytesWritten: 1,
+      prompt: {
+        requestId: 'request-worker',
+        stages: ['input_accepted', 'turn_started'],
+        provider: 'codex',
+        observation: 'supported',
+        processIncarnation: 'runtime_test:term_worker:1',
+        generation: 1,
+        baselineWorkingSequence: 0
+      }
     })
     vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue(null)

@@ -2,7 +2,8 @@ import type {
   RuntimeTerminalState,
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason,
-  RuntimeTerminalWaitCondition
+  RuntimeTerminalWaitCondition,
+  RuntimeTerminalReadiness
 } from '../../shared/runtime-types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
@@ -25,7 +26,8 @@ export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerm
 export function buildTerminalWaitResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
-  leaf: ReadonlyTerminalStateRecord
+  leaf: ReadonlyTerminalStateRecord,
+  readiness?: RuntimeTerminalReadiness
 ): RuntimeTerminalWait {
   return buildTerminalWait(
     handle,
@@ -33,7 +35,8 @@ export function buildTerminalWaitResult(
     getTerminalState(leaf),
     leaf.lastExitCode,
     undefined,
-    leaf.lastExitCause
+    leaf.lastExitCause,
+    readiness
   )
 }
 
@@ -41,7 +44,8 @@ export function buildTerminalWaitBlockedResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
   leaf: ReadonlyTerminalStateRecord,
-  blockedReason: RuntimeTerminalWaitBlockedReason
+  blockedReason: RuntimeTerminalWaitBlockedReason,
+  readiness?: RuntimeTerminalReadiness
 ): RuntimeTerminalWait {
   return buildTerminalWait(
     handle,
@@ -49,14 +53,16 @@ export function buildTerminalWaitBlockedResult(
     getTerminalState(leaf),
     leaf.lastExitCode,
     blockedReason,
-    leaf.lastExitCause
+    leaf.lastExitCause,
+    readiness ?? { state: 'blocked', source: 'screen' }
   )
 }
 
 export function buildPtyTerminalWaitResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
-  pty: ReadonlyTerminalStateRecord
+  pty: ReadonlyTerminalStateRecord,
+  readiness?: RuntimeTerminalReadiness
 ): RuntimeTerminalWait {
   return buildTerminalWait(
     handle,
@@ -64,7 +70,8 @@ export function buildPtyTerminalWaitResult(
     getPtyTerminalState(pty),
     pty.lastExitCode,
     undefined,
-    pty.lastExitCause
+    pty.lastExitCause,
+    readiness
   )
 }
 
@@ -72,7 +79,8 @@ export function buildPtyTerminalWaitBlockedResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
   pty: ReadonlyTerminalStateRecord,
-  blockedReason: RuntimeTerminalWaitBlockedReason
+  blockedReason: RuntimeTerminalWaitBlockedReason,
+  readiness?: RuntimeTerminalReadiness
 ): RuntimeTerminalWait {
   return buildTerminalWait(
     handle,
@@ -80,7 +88,8 @@ export function buildPtyTerminalWaitBlockedResult(
     getPtyTerminalState(pty),
     pty.lastExitCode,
     blockedReason,
-    pty.lastExitCause
+    pty.lastExitCause,
+    readiness ?? { state: 'blocked', source: 'screen' }
   )
 }
 
@@ -90,16 +99,22 @@ export function buildTerminalWait(
   status: RuntimeTerminalState,
   exitCode: number | null,
   blockedReason?: RuntimeTerminalWaitBlockedReason,
-  exitCause?: TerminalExitCause | null
+  exitCause?: TerminalExitCause | null,
+  readiness?: RuntimeTerminalReadiness
 ): RuntimeTerminalWait {
+  const satisfied =
+    condition === 'tui-idle' && readiness
+      ? readiness.state === 'ready'
+      : blockedReason === undefined
   return {
     handle,
     condition,
-    satisfied: blockedReason === undefined,
+    satisfied,
     status,
     exitCode,
     ...(exitCause ? { exitCause } : {}),
-    ...(blockedReason ? { blockedReason } : {})
+    ...(blockedReason ? { blockedReason } : {}),
+    ...(readiness ? { readiness } : {})
   }
 }
 

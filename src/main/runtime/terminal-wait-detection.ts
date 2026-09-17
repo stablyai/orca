@@ -45,16 +45,35 @@ export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus |
   memoizeTitleClassification(computeExplicitIdleStatusFromTitle)
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
+  return detectKnownReadyPromptAgent(preview) !== null
+}
+
+export type KnownReadyPromptAgent = 'codex' | 'cursor' | 'antigravity'
+
+/**
+ * Identifies the provider behind a positive prompt preview instead of returning a bare boolean.
+ * Callers use this identity to keep screen evidence attached to the provider that rendered it.
+ */
+export function detectKnownReadyPromptAgent(preview: string): KnownReadyPromptAgent | null {
   const normalized = preview.toLowerCase()
-  const readyIndex = findKnownReadyPromptIndex(normalized)
-  if (readyIndex === null) {
-    return false
+  const ready = [
+    { agent: 'codex' as const, index: findCodexReadyPromptIndex(normalized) },
+    { agent: 'cursor' as const, index: findCursorReadyPromptIndex(normalized) },
+    { agent: 'antigravity' as const, index: findAntigravityReadyPromptIndex(normalized) }
+  ]
+    .filter(
+      (candidate): candidate is { agent: KnownReadyPromptAgent; index: number } =>
+        candidate.index !== null
+    )
+    .sort((left, right) => right.index - left.index)[0]
+  if (!ready) {
+    return null
   }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
-    return false
+  if (blockedSignal !== null && blockedSignal.index > ready.index) {
+    return null
   }
-  return true
+  return ready.agent
 }
 
 export function detectTerminalWaitBlockedReason(
@@ -84,15 +103,6 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
     findCursorActivePromptIndex(normalized)
-  ].filter((index): index is number => index !== null)
-  return indexes.length > 0 ? Math.max(...indexes) : null
-}
-
-function findKnownReadyPromptIndex(normalized: string): number | null {
-  const indexes = [
-    findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized),
-    findCursorReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
 }

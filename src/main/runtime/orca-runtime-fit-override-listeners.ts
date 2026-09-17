@@ -9,6 +9,7 @@ import type {
   RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
 } from './runtime-terminal-state-records'
+import type { RuntimeScreenCapture } from './orca-runtime-core'
 import type { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { WaitBlockedCheckState } from './wait-blocked-check-state'
@@ -66,10 +67,20 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
 
   protected providerVisibleStateReadsByPtyId = new Map<
     string,
-    { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
+    {
+      generation: number
+      freshCapture: boolean
+      promise: Promise<RuntimeVisibleTerminalState | null>
+    }
   >()
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
+
+  /** Latest host-owned screen provenance observed for each PTY. This is a bridge
+   *  for wait evaluation; the projection itself carries the same provenance. */
+  protected visibleScreenCaptureByPtyId = new Map<string, RuntimeScreenCapture>()
+
+  protected nextVisibleScreenCaptureRevision = 1
 
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
 

@@ -62,8 +62,6 @@ export const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
 export const TUI_IDLE_POLL_INTERVAL_MS = 2000
 
-export const TUI_IDLE_QUIESCENCE_MS = 3000
-
 // Clamp for mobileAutoRestoreFitMs: floor above the legacy 300ms debounce, 1h ceiling (a held PTY beyond that is "I forgot", not intentional).
 export const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
 

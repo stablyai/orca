@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-prompt-delivery'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { observeWorkerTurnStart } from './worker-start-turn-observation'
 
