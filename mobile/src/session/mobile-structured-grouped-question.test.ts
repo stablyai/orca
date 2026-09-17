@@ -76,7 +76,7 @@ describe('mobile structured grouped questions', () => {
     })
     const second = projectGroupedQuestion(
       questions,
-      advance!.kind === 'advance' ? advance.draft : null,
+      advance?.kind === 'advance' ? advance.draft : null,
       PROMPT_KEY
     )
     expect(second).toMatchObject({ question: 'Which regions? (2 of 2)', multiSelect: true })

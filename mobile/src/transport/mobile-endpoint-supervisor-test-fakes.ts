@@ -26,7 +26,8 @@ export class FakeSession implements RpcClient {
 
   getState = () => this.state
   getReconnectAttempt = () => 0
-  getLastConnectedAt = () => null
+  // Nullable: the escalation suites replace this with a real timestamp.
+  getLastConnectedAt: () => number | null = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)

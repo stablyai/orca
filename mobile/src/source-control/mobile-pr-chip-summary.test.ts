@@ -26,7 +26,7 @@ function check(
 }
 
 function ready(prInfo: PRInfo, checks: PRCheckDetail[]): PrSidebarState {
-  return { kind: 'ready', data: { pr: prInfo, checks, details: null } }
+  return { kind: 'ready', data: { pr: prInfo, checks, details: null, checksError: null } }
 }
 
 describe('buildMobilePrChipSummary', () => {

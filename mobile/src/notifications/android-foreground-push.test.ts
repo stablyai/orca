@@ -38,7 +38,9 @@ function notification(trigger: unknown = { type: 'push', remoteMessage: { notifi
         }
       }
     }
-  } as unknown as Notification
+    // `data` stays required here: Expo declares it optional, and the dismissal cases below assign
+    // through it.
+  } as unknown as Notification & { request: { content: { data: Record<string, unknown> } } }
 }
 
 beforeEach(() => {
