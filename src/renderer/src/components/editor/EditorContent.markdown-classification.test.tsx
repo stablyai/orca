@@ -134,6 +134,7 @@ function renderEditPath({
       isMermaid={model.isMermaid}
       isCsv={model.isCsv}
       isNotebook={model.isNotebook}
+      isSqlite={model.isSqlite}
       mdViewMode={model.mdViewMode}
       inlineMarkdownRenderState={model.inlineMarkdownRenderState}
       isChangesMode={false}
