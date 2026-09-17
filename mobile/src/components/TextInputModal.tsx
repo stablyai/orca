@@ -87,19 +87,29 @@ export function TextInputModal({
 
       <View style={styles.actions}>
         <Pressable
-          style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.cancelButton,
+            pressed && styles.buttonPressed
+          ]}
           onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
         >
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
+            styles.actionButton,
             styles.submitButton,
             pressed && styles.buttonPressed,
             !canSubmit && styles.submitButtonDisabled
           ]}
           disabled={!canSubmit}
           onPress={handleSubmit}
+          accessibilityRole="button"
+          accessibilityLabel={submitLabel}
+          accessibilityState={{ disabled: !canSubmit }}
         >
           <Text style={styles.submitText}>{submitLabel}</Text>
         </Pressable>
@@ -142,6 +152,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.md
+  },
+  actionButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   cancelButton: {
     paddingHorizontal: spacing.lg,
