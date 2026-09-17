@@ -52,9 +52,8 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
                   projectRef: item.source.projectRef
                 })
               )
-        const result = updated
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         setActionItem(null)
         await loadTasks({ silent: true })

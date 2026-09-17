@@ -73,23 +73,22 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
                   body: createBody
                 })
               )
-        const result = created
-        if (result.ok === false) {
+        if (created.ok === false) {
           throw new Error(
-            result.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
+            created.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
           )
         }
-        if (typeof result.number === 'number') {
+        if (typeof created.number === 'number') {
           const createdAt = new Date().toISOString()
           if (provider === 'github') {
             setActionItem(
               createGitHubTask(repo, {
-                id: `issue:${result.number}`,
+                id: `issue:${created.number}`,
                 type: 'issue',
-                number: result.number,
+                number: created.number,
                 title,
                 state: 'open',
-                url: result.url ?? '',
+                url: created.url ?? '',
                 labels: [],
                 updatedAt: createdAt,
                 author: null
@@ -98,12 +97,12 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           } else {
             setActionItem(
               createGitLabTask(repo, {
-                id: `issue:${result.number}`,
+                id: `issue:${created.number}`,
                 type: 'issue',
-                number: result.number,
+                number: created.number,
                 title,
                 state: 'opened',
-                url: result.url ?? '',
+                url: created.url ?? '',
                 labels: [],
                 updatedAt: createdAt,
                 author: null
@@ -122,19 +121,19 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           description: createBody.trim() || undefined,
           workspaceId: team.workspaceId
         })
-        const result = linearIssueCreate.interpret(reply)
-        if (result.ok === false || !result.id || !result.identifier) {
-          throw new Error(result.error ?? 'Failed to create Linear issue')
+        const created = linearIssueCreate.interpret(reply)
+        if (created.ok === false || !created.id || !created.identifier) {
+          throw new Error(created.error ?? 'Failed to create Linear issue')
         }
         setActionItem(
           createLinearTask({
-            id: result.id,
+            id: created.id,
             workspaceId: team.workspaceId,
             workspaceName: team.workspaceName,
-            identifier: result.identifier,
-            title: result.title ?? title,
+            identifier: created.identifier,
+            title: created.title ?? title,
             description: createBody.trim(),
-            url: result.url ?? '',
+            url: created.url ?? '',
             state: { name: 'Open', type: 'unstarted', color: colors.accentBlue },
             team,
             labels: [],

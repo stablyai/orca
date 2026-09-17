@@ -88,11 +88,10 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
                 { timeoutMs: 30_000 }
               )
             )
-        const envelope = replyResult
-        if (envelope.ok === false) {
-          throw new Error(envelope.error ?? 'Failed to reply')
+        if (replyResult.ok === false) {
+          throw new Error(replyResult.error ?? 'Failed to reply')
         }
-        const reply: DetailComment = envelope.comment ?? {
+        const reply: DetailComment = replyResult.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -166,9 +165,8 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
                   { timeoutMs: 60_000 }
                 )
               )
-        const result = merged
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to merge')
+        if (merged.ok === false) {
+          throw new Error(merged.error ?? 'Failed to merge')
         }
         setActionItem(null)
         await loadTasks({ silent: true })

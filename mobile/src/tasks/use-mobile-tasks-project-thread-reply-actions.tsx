@@ -196,11 +196,10 @@ export function useMobileTasksProjectThreadReplyActions(
                 { timeoutMs: 30_000 }
               )
             )
-        const result = written
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to reply')
+        if (written.ok === false) {
+          throw new Error(written.error ?? 'Failed to reply')
         }
-        const reply: DetailComment = result.comment ?? {
+        const reply: DetailComment = written.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),

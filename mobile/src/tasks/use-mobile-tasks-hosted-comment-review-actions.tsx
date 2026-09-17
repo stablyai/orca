@@ -93,11 +93,10 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
                     { timeoutMs: 30_000 }
                   )
                 )
-        const result = written
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to add comment')
+        if (written.ok === false) {
+          throw new Error(written.error ?? 'Failed to add comment')
         }
-        const comment: DetailComment = result.comment ?? {
+        const comment: DetailComment = written.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),

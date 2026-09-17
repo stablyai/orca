@@ -142,9 +142,8 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
                   { timeoutMs: 30_000 }
                 )
               )
-        const result = updated
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         const nextLabels = [
           ...new Set([

@@ -265,9 +265,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
                   updates: { state: nextState }
                 })
               )
-        const result = updated
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitHub status')
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitHub status')
         }
         setActionItem(null)
         await loadTasks({ silent: true })
