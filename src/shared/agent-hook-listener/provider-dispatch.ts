@@ -22,6 +22,8 @@ import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
+import { normalizeAuggieEvent } from './providers/aug-events'
+import { readString } from './tool-input-preview'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -147,6 +149,19 @@ export function normalizeProviderEvent(input: {
       break
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'aug':
+      // Why: Auggie's only prompt field is nested conversation.userPrompt (Stop only); extractPromptText misses it.
+      if (typeof hookPayload.conversation === 'object' && hookPayload.conversation !== null) {
+        const conversationPrompt = readString(
+          hookPayload.conversation as Record<string, unknown>,
+          'userPrompt'
+        )
+        if (conversationPrompt) {
+          resolvedPromptText = conversationPrompt
+        }
+      }
+      payload = normalizeAuggieEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
       break
   }
 
