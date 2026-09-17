@@ -14,6 +14,7 @@
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
@@ -259,6 +260,10 @@ async function startOrcadRuntime(
         sessionSearch?.apply(next)
       }
     }
+  })
+  agentHookServer.setTerminalInputSourceResolver((paneKey) => {
+    const ptyId = getPtyIdForPaneKey(paneKey)
+    return ptyId ? runtime.getTerminalInputSource(ptyId) : null
   })
 
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')

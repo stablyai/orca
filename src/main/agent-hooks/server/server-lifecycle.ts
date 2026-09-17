@@ -12,10 +12,34 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
 import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
+import { parseTerminalInputSourcePath } from '../../../shared/terminal-input-source'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
+  // Why a read route on the hook listener: a hook already holds this port and token in its env,
+  // and the pane key it was launched with, so it can ask which device typed the prompt it is
+  // handling without any new credential. Same token check as the POST routes, loopback only.
+  private handleTerminalInputSourceRequest(req: IncomingMessage, res: ServerResponse): void {
+    if (req.headers['x-orca-agent-hook-token'] !== this.token) {
+      res.writeHead(403)
+      res.end()
+      return
+    }
+    const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    const paneKey = parseTerminalInputSourcePath(pathname)
+    const source = paneKey
+      ? (this.onResolveTerminalInputSource?.(this.resolvePaneKeyAlias(paneKey)) ?? null)
+      : null
+    if (!source) {
+      res.writeHead(404)
+      res.end()
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(source))
+  }
+
   /** Start the loopback listener after hydration and spool replay have settled. */
   async start(options?: {
     env?: string
@@ -54,6 +78,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       this.ownerStateInitialized = true
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+      if (req.method === 'GET') {
+        this.handleTerminalInputSourceRequest(req, res)
+        return
+      }
       if (req.method !== 'POST') {
         res.writeHead(404)
         res.end()
