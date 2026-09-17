@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
@@ -118,6 +119,9 @@ function pendingCount(calls: PendingCall[], method: string): number {
  *  per render would re-send the status load and hide the schedule these cases are written in. */
 const IGNORE_ACTION_ERROR = (): void => {}
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `setRootRef` compares the node against null and returns; it reads no member of it.
+const ROOT_NODE = {} as View
+
 describe('useMobileSourceControlLoaders branch compare', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -221,6 +225,23 @@ describe('useMobileSourceControlLoaders branch compare', () => {
         summary: expect.objectContaining({ baseRef: 'origin/main' })
       })
     })
+  })
+
+  it('sends no compare for an attempt the route detached under', async () => {
+    const calls: PendingCall[] = []
+    const read: { loaders: Loaders | null } = { loaders: null }
+    await mount(fakeClient(calls), read)
+    await act(async () => read.loaders?.setRootRef(ROOT_NODE))
+
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    expect(pendingCount(calls, 'worktree.show')).toBe(1)
+
+    // The route detaches mid base-ref lookup. Dropping the mount latch is not enough on its own:
+    // only the detach's `reset()` retires the attempt, and the probe is what reads that.
+    await act(async () => read.loaders?.setRootRef(null))
+
+    await settleBaseRefLookup(calls, 'origin/dev')
+    expect(pendingCount(calls, 'git.branchCompare')).toBe(0)
   })
 
   it('refuses a compare whose route identity moved while it was out', async () => {
