@@ -30,20 +30,28 @@ const sourceText = (name: string) => salvagedOptional(name, z.string())
  * it, and `error` is a tri-state the UI shows — `null` means "connected cleanly", a string is the
  * failure text, and the two are not interchangeable.
  *
- * `status` is an OPEN enum. It is a wire surface (remote-wire-compatibility.md rule 4), so an arm
- * this build has not heard of must not refuse the record or drop it. It degrades to
- * `'disconnected'`, which is main's own answer for a state it did not receive
- * (use-new-workspace-execution-target.ts:63, use-mobile-tasks-workspace-sparse-actions.tsx:144):
- * the readiness gate is an equality test against `'connected'`, so the degrade never grants a
- * create it should not, and it leaves the Connect affordance the user needs.
+ * `status` is an OPEN enum whose eight arms are SshConnectionStatus verbatim, arm for arm
+ * (src/shared/ssh-types.ts:167-175), so nothing the current host can send degrades at all. It is a
+ * wire surface (remote-wire-compatibility.md rule 4), so an arm a newer host adds must not refuse
+ * the record or drop it; it degrades to `'disconnected'`.
+ *
+ * That degrade is allowed only because it is invisible to every reader of `status`. Main passed an
+ * unknown arm through as a raw string, and the one function that turns it into text,
+ * workspaceSshStatusLabel, falls through to `return 'Disconnected'` (workspace-ssh-gate.ts:36) —
+ * the same label the degraded value produces. isWorkspaceSshConnectInProgress (:10) answers false
+ * for both, the readiness gate is an equality test against `'connected'`
+ * (use-mobile-tasks-workspace-ssh-state.tsx:88/:97, use-new-workspace-execution-target.ts:47/:82)
+ * which both fail, and `error` is read off the record untouched. The parity is pinned in
+ * workspace-source-reply-schema.test.ts rather than argued here.
  *
  * The whole member stays nullable and optional because that is what the two call sites read:
  * `state ?? fallback…` at use-mobile-tasks-workspace-ssh-state.tsx:62 and :96.
  *
- * `providerEpoch`, `supportsFolderDownload` and `remotePlatform` are NOT declared. Nothing in this
- * domain reads them, and a loose object forwards them to the file-mutation owner check and the
- * download gate exactly as main did — listing a member ahead of its reader is how a schema starts
- * refusing replies no consumer here would have noticed.
+ * `providerEpoch`, `supportsFolderDownload` and `remotePlatform` are NOT declared. No mobile code
+ * reads any of the three; the file-mutation owner check asks ssh.getState through a reader of its
+ * own (src/files/mobile-file-ownership-operations.ts:24), not this one. The loose object forwards
+ * them verbatim either way. Listing a member ahead of its reader is how a schema starts refusing
+ * replies no consumer would have noticed.
  */
 export const sshConnectionStateSchema = z
   .looseObject({

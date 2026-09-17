@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { SshConnectionStatus } from '../../../src/shared/ssh-types'
+import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from './workspace-ssh-gate'
 import {
   detectedAgentIdsSchema,
   repoBaseRefSearchSchema,
@@ -55,17 +57,22 @@ describe('the SSH connection record', () => {
 })
 
 describe('status is an open enum that degrades to disconnected', () => {
-  it('takes every arm this build knows', () => {
-    for (const status of [
-      'disconnected',
-      'connecting',
-      'auth-failed',
-      'deploying-relay',
-      'connected',
-      'reconnecting',
-      'reconnection-failed',
-      'error'
-    ]) {
+  // Keyed by SshConnectionStatus so the compiler, not this list, decides what "every arm" means:
+  // an arm added to or removed from the host union fails tsc here before any test runs. That is
+  // the check the schema's own arm list cannot make about itself.
+  const HOST_ARMS: Record<SshConnectionStatus, true> = {
+    disconnected: true,
+    connecting: true,
+    'auth-failed': true,
+    'deploying-relay': true,
+    connected: true,
+    reconnecting: true,
+    'reconnection-failed': true,
+    error: true
+  }
+
+  it('takes every arm the host declares, so nothing it sends today degrades', () => {
+    for (const status of Object.keys(HOST_ARMS)) {
       const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status } })
       expect(parsed.success && parsed.data).toMatchObject({ status })
     }
@@ -91,6 +98,38 @@ describe('status is an open enum that degrades to disconnected', () => {
   it('stays fatal for a non-string status, which is the wrong type and not a newer arm', () => {
     const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status: 7 } })
     expect(parsed.success && parsed.data).toBeUndefined()
+  })
+})
+
+// The degrade above is only allowed because it is invisible to every reader. Main passed an arm it
+// did not know straight through as a string; these pin that the degraded value reaches the same
+// verdict, so a newer host's arm renders what main rendered.
+describe('the degrade is inert at the gate that reads status', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models the status arm a newer host sends, which is precisely what SshConnectionStatus cannot express: the union names every arm this build knows, so the value under test has to enter as one the compiler would reject.
+  const newerArm = 'handshaking-v2' as SshConnectionStatus
+
+  it('labels a newer arm and the degraded value identically', () => {
+    expect(workspaceSshStatusLabel('disconnected')).toBe('Disconnected')
+    expect(workspaceSshStatusLabel(newerArm)).toBe(workspaceSshStatusLabel('disconnected'))
+  })
+
+  it('gates a newer arm and the degraded value identically', () => {
+    const gateArgs = { connectionId: 'ssh-1', connecting: false }
+    const asMainSawIt = deriveWorkspaceSshGate({
+      ...gateArgs,
+      state: { ...connected, status: newerArm, error: null }
+    })
+    const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status: newerArm } })
+    const afterDegrade = deriveWorkspaceSshGate({
+      ...gateArgs,
+      state: parsed.success ? (parsed.data ?? null) : null
+    })
+    expect(afterDegrade.requiresConnection).toBe(asMainSawIt.requiresConnection)
+    expect(afterDegrade.connectInProgress).toBe(asMainSawIt.connectInProgress)
+    expect(afterDegrade.error).toBe(asMainSawIt.error)
+    expect(workspaceSshStatusLabel(afterDegrade.status)).toBe(
+      workspaceSshStatusLabel(asMainSawIt.status)
+    )
   })
 })
 

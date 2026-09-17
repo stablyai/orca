@@ -22,7 +22,19 @@ import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvag
 // recorded row to check a deeper requirement against, so requiring one would be a claim about the
 // wire that this corpus cannot support.
 
-/** `owner`/`ownerType`/`number` compose the persisted project key, so every row carries them. */
+/**
+ * `owner`/`ownerType`/`number` compose the persisted project key, so every row carries them.
+ *
+ * CLOSED, and the one enum here that is. The two arms are GitHubProjectOwnerType verbatim
+ * (src/shared/github/project-types.ts:8), which is the type the handler's own params and results
+ * are declared in — not mobile's restatement of it. It stays closed because a decoded `ownerType`
+ * is echoed straight back into the params of the next project call
+ * (mobile-tasks-github-project-pickers.tsx:227, use-mobile-tasks-project-loading-actions.tsx:75,
+ * :110, :269), and remote-wire-compatibility.md rule 4 forbids letting a fallback shape a param
+ * the host reads back. An unknown arm therefore drops its row rather than inventing an owner type.
+ * The corpus exercises `'organization'` (`tk-project-board-load`); `'user'` is unexercised but
+ * inside the set, so no reply can drop on it.
+ */
 const PROJECT_OWNER_TYPE = ['organization', 'user'] as const
 
 const projectMessage = (name: string) => salvagedOptional(name, z.string())

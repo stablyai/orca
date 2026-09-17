@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { GitHubProjectOwnerType } from '../../../src/shared/github/project-types'
 import {
   taskProjectAccessibleListSchema,
   taskProjectCommentMutationSchema,
@@ -49,7 +50,13 @@ describe('project envelopes', () => {
 
 describe('ownerType is a closed enum', () => {
   it('takes both arms the host validates', () => {
-    for (const ownerType of ['organization', 'user'] as const) {
+    // Keyed by the host's own type, so an arm added to GitHubProjectOwnerType fails tsc here
+    // rather than silently dropping every row that carries it.
+    const HOST_OWNER_TYPES: Record<GitHubProjectOwnerType, true> = {
+      organization: true,
+      user: true
+    }
+    for (const ownerType of Object.keys(HOST_OWNER_TYPES)) {
       const parsed = taskProjectRefSchema.safeParse({ ok: true, owner: 'o', ownerType, number: 3 })
       expect(parsed.success && parsed.data).toMatchObject({ ownerType })
     }
