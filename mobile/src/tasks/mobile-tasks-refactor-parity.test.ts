@@ -35,9 +35,9 @@ const hash = (parts: string[] | string): string =>
 // use-mobile-tasks-project-detail-loading.tsx — `'DISMISSED'`, `'VIEWED'`, `'UNVIEWED'` and the
 // `['status']` index into GitHubDetailFile. No method literal and no `rpc:` call signature moves,
 // which is the property this family exists to hold.
-const SCREEN_RPC_SCREEN_HOOKS = 'e411eacf12226f44f78ef2d8381c30c22adec7490f1a37dc9b87790ed5e2d2b9'
+const SCREEN_RPC_SCREEN_HOOKS = '7150b07135c3860cd5d5adaadf25f9734c2821aeb35b903f1119270c2645fc84'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = '354ec8b67bea034bfc3f45d8edfe35ca9f02ff4b31997fd57090e88594356060'
+const SCREEN_RPC_STATEMENTS = 'cb202f3a132166121ea4fa7a191af4bcb1e475d67a94e718224fcbc3edb647ff'
 const MAIN_REBASED_DECLARATIONS = 'f6f5fe2cc09dfd91f8f7048ab0ce11579cd2618e234079d2ab403bea4fb7161d'
 const SCREEN_RPC_SEMANTICS = '9bea10a73a501bbb09b825ca62119f808640e40940b3a5f1dce0493aa5452314'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
