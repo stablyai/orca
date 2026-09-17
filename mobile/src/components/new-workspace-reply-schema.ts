@@ -8,7 +8,7 @@ import { salvagedOptional, salvagingRecord } from '../../../src/shared/zod-salva
 /**
  * The repo's setup hook, as the drawer decorates its advanced section with it.
  *
- * `source` is the one required member: use-new-workspace-setup-script.ts:57 assigns it straight
+ * `source` is the one required member: use-new-workspace-setup-script.ts:51 assigns it straight
  * into `SetupHookDetails.source`, whose type is `string | null`, with no guard in between — and the
  * handler always answers it, `null` when no orca.yaml parsed. Nullable rather than optional so the
  * "no hooks file" answer keeps its explicit `null` instead of collapsing to absent.
@@ -68,7 +68,7 @@ const trustedOrcaHookRepoSchema = z.looseObject({
  *
  * Nullish at both levels because the drawer always read it that way: main's reader answered
  * `undefined` for a null result rather than throwing on it, and
- * use-new-workspace-runtime-context.ts:79 takes `ui.value?.trustedOrcaHooks ?? {}`. The record
+ * use-new-workspace-runtime-context.ts:80 takes `ui.value?.trustedOrcaHooks ?? {}`. The record
  * salvages per repo, so one unreadable repo's approvals cannot cost every other repo its trust.
  */
 export const newWorkspaceUiTrustSchema = z

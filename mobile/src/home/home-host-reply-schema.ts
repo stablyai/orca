@@ -9,7 +9,7 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * One host's lifetime-usage row.
  *
  * Nothing here is required, not even the object. `totalHomeStats` is the reader and it guards the
- * row itself (`if (!host || typeof host !== 'object') continue`, home-stats-total.ts:36), so
+ * row itself (`if (!host || typeof host !== 'object') continue`, home-stats-total.ts:40), so
  * requiring the object would buy nothing at the read and would cost the row upstream: the refusal
  * reaches `fetchMobileHomeStats`'s `.catch`, the per-host slot is never written, `hostIds.filter`
  * finds no host and the header draws no stats row where main drew a zeroed one.

@@ -15,7 +15,7 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * The reply body no call site reads.
  *
  * The stream unsubscribe is sent by the disposer under `.catch(() => {})`, and the unregister is
- * decided by its acceptance alone (push-registration.ts:126 reads `accepted` and nothing else).
+ * decided by its acceptance alone (push-registration.ts:124 reads `accepted` and nothing else).
  * Declaring a member on either would be a requirement with no reader behind it.
  */
 export const notificationUnreadReplySchema = z.unknown()
@@ -24,7 +24,7 @@ export const notificationUnreadReplySchema = z.unknown()
  * Whether Orca's push service took a test notification.
  *
  * Both members are optional and both are read through `?.`:
- * notification-display-test.tsx:54 tests `result?.accepted` and :57/:61 branch on `result?.reason`.
+ * notification-display-test.tsx:51 tests `result?.accepted` and :55/:60 branch on `result?.reason`.
  * `reason` is a closed enum because those two comparisons are the whole of what it decides — an arm
  * this build does not know degrades to the generic "Could not send" copy, which is the arm main took
  * for every unrecognised string too — pinned by the `notifications-display-test-unknown-reason`
@@ -43,7 +43,7 @@ export const pushDeliveryTestResultSchema = z
 /**
  * Whether the host committed this device's push route.
  *
- * `registered` is the only member read — push-registration.ts:118 compares it to `true` through
+ * `registered` is the only member read — push-registration.ts:117 compares it to `true` through
  * `?.` on a payload main already typed as nullable — so the reply stays nullish and every member
  * optional. `registrationId` and `reason` are declared because the host sends them
  * (MobilePushRegisterResult, mobile-push-contract.ts:38-49, whose five reason arms these are) and a
@@ -69,11 +69,12 @@ export const pushRouteRegistrationSchema = z
 /**
  * Which of this device's delivered pushes the host has already dismissed elsewhere.
  *
- * The rows stay `z.unknown()`: push-dismissal-reconciliation.ts:66 hands each one to
- * `readPushNotificationIdentity`, which is the identity validator both delivery routes share, and
- * narrowing the element here would drop a row that function still accepts. `dismissedPushes` is
- * optional because the host omits it unless the caller sent `deliveredPushes`
- * (notifications.ts:68), and the call site's `Array.isArray` guard is what main relied on.
+ * The rows stay `z.unknown()`: push-dismissal-reconciliation.ts:66 iterates them and :70 hands each
+ * one to `readPushNotificationIdentity`, which is the identity validator both delivery routes
+ * share, and narrowing the element here would drop a row that function still accepts.
+ * `dismissedPushes` is optional because the host omits it unless the caller sent `deliveredPushes`
+ * (src/main/runtime/rpc/methods/notifications.ts:70), and the call site's `Array.isArray` guard is
+ * what main relied on.
  */
 export const missedNotificationsSchema = z
   .looseObject({

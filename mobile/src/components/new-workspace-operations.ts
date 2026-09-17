@@ -18,7 +18,7 @@ import {
  *
  * The skip is also what carries an unreadable reply: the reader answers `compatible: false`, this
  * policy raises `RpcIncompatibleReplyError` naming `repo.hooks`, and
- * use-new-workspace-setup-script.ts:65 catches it into the same default details a property-read
+ * use-new-workspace-setup-script.ts:61 catches it into the same default details a property-read
  * throw already landed on.
  */
 export const newWorkspaceSetupHooksRead = bindDeferredRpcOperation(

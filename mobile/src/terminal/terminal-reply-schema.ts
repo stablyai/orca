@@ -30,11 +30,14 @@ export const terminalSendAcceptedSchema = z
 /**
  * What the runtime did with a viewport the refit sent in place.
  *
- * Both members are optional and both project through `=== true`, which is main's own rule at
- * terminal-viewport-refit.ts:153: `updated` decides whether the subscription record moves and
- * `applied` whether local scrollback is reflowed, and anything that is not exactly `true` falls
- * through to the legacy resubscribe. The host also answers `seq`, which no caller reads; it passes
- * through the loose object rather than being declared as a requirement with no reader.
+ * Both members are optional and both project through `=== true`. That is main's reader's rule, not
+ * the call site's: main's `terminalViewportUpdateReader` booleanised both members before the refit
+ * saw them, so the refit's own reads are plain truthiness — terminal-viewport-refit.ts:154 moves
+ * the subscription record on `updated` and :156 reflows local scrollback on `applied`. Keeping the
+ * `=== true` here is therefore what holds those two reads where main had them; anything that is not
+ * exactly `true` falls through to the legacy resubscribe. The host also answers `seq`, which no
+ * caller reads; it passes through the loose object rather than being declared as a requirement with
+ * no reader.
  */
 export const terminalViewportUpdatedSchema = z
   .looseObject({

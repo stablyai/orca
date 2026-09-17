@@ -11,9 +11,9 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * The six writes whose reply body no call site reads.
  *
  * Rename, close, tab-close, focus, tab-activate and the review-notes write are all decided by the
- * acceptance verdict alone — use-mobile-session-close-actions.ts:50/78/109 read `accepted` and
+ * acceptance verdict alone — use-mobile-session-close-actions.ts:50/76/113 read `accepted` and
  * nothing else, the two activation sends are never interpreted at all, and
- * use-mobile-session-diff-comments.ts:56 discards the interpretation. Declaring a member on any of
+ * use-mobile-session-diff-comments.ts:53 discards the interpretation. Declaring a member on any of
  * them would be a requirement with no reader behind it.
  */
 export const sessionWriteUnreadReplySchema = z.unknown()
