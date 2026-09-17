@@ -138,6 +138,16 @@ export function buildBoundedSessionTranscript(capturedText: string): string | nu
   return transcript || null
 }
 
+/**
+ * Full cleaned transcript for the standalone Copy Context action (#10395).
+ * Unlike fork prompts, this does not drop earlier scrollback to a char budget —
+ * users paste into external tools and need the complete session.
+ */
+export function buildFullSessionTranscript(capturedText: string): string | null {
+  const transcript = cleanAgentSessionForkTranscript(capturedText)
+  return transcript || null
+}
+
 export function buildAgentSessionForkPrompt({
   capturedText,
   sourceLabel,
