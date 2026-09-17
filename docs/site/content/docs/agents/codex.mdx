@@ -38,6 +38,8 @@ When Codex exits, the restart chip relaunches the agent with the same account. I
 
 Orca reads local Codex usage state for the active account and surfaces it in the status bar. See [Usage & rate-limit tracking](/docs/agents/usage-tracking).
 
+If [Pi](https://pi.dev) already owns your OpenAI Codex login, use **Settings → Accounts → Codex → Import from Pi**. Orca asks Pi for a current bearer token and reads usage directly, so this usage-only account does not require Codex CLI. Sign in again through Pi if it can no longer refresh the credential; if Pi switches to a different OpenAI account, import that account separately.
+
 ## Codex on Windows (WSL)
 
 On Windows, Orca can run Codex either from your host install or from a WSL distro. Add a WSL-hosted Codex account from the account switcher — Orca creates an isolated account home inside the distro (under `~/.local/share/orca/codex-accounts/<id>/home`), maps it back to the host as a `\\wsl.localhost\<distro>\...` path for auth reads, and routes launches, hot-swap, and rate-limit fetches through the selected distro. If Codex isn't installed in the target distro, the **Add account** dialog fails with an actionable message telling you which distro is missing the binary.

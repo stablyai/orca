@@ -11,6 +11,7 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
+  importPi: () => Promise<CodexRateLimitAccountsState>
   reauthenticate: (args: {
     accountId: string
     /** Local-only: activate the re-authed account when its runtime lane had no selection. */

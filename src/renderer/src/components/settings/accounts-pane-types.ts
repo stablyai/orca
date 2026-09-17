@@ -31,6 +31,7 @@ export type LocalAccountRuntime = {
 export type CodexAccountAction =
   | 'idle'
   | 'adding'
+  | 'importing-pi'
   | `reauth:${string}`
   | `remove:${string}`
   | `select:${string}`

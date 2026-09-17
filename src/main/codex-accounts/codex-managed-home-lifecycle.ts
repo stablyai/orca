@@ -13,6 +13,12 @@ import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-ac
 import { writeFileAtomically } from './fs-utils'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
+import {
+  createCodexAuthJsonFromPiCredential,
+  PI_CODEX_AUTH_SOURCE_FILENAME,
+  serializePiCodexAuthSource,
+  type PiCodexCredential
+} from './pi-codex-auth'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
@@ -77,6 +83,24 @@ export class CodexManagedHomeLifecycle {
     }
     const trustedHome = this.paths.assert(managedHomePath, accountId)
     writeFileAtomically(join(trustedHome, 'auth.json'), sourceAuthContents, { mode: 0o600 })
+  }
+
+  importAuthFromPi(
+    credential: PiCodexCredential,
+    managedHomePath: string,
+    accountId: string
+  ): void {
+    const trustedHome = this.paths.assert(managedHomePath, accountId)
+    writeFileAtomically(
+      join(trustedHome, 'auth.json'),
+      createCodexAuthJsonFromPiCredential(credential),
+      { mode: 0o600 }
+    )
+    writeFileAtomically(
+      join(trustedHome, PI_CODEX_AUTH_SOURCE_FILENAME),
+      serializePiCodexAuthSource({ providerAccountId: credential.providerAccountId }),
+      { mode: 0o600 }
+    )
   }
 
   /**

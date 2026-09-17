@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, Download, Loader2, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
@@ -18,6 +18,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     accountRuntimeUnavailable,
     activeCodexAccountId,
     activeCodexAuthWarning,
+    codexAccounts,
     codexAction,
     codexConfigSync,
     codexConfigSyncWarning,
@@ -32,6 +33,9 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     visibleCodexAccounts,
     wslCapabilitiesLoading
   } = model
+  const activeCodexAccountIsPi = codexAccounts.accounts.some(
+    (account) => account.id === activeCodexAccountId && account.credentialSource === 'pi'
+  )
   return (
     <section key="codex-accounts" id="accounts-codex" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -92,10 +96,15 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                     { value0: accountRuntimeSentenceLabel }
                   )
                 : activeCodexAccountId
-                  ? translate(
-                      'auto.components.settings.AccountsPane.75ca9b718e',
-                      'Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.'
-                    )
+                  ? activeCodexAccountIsPi
+                    ? translate(
+                        'auto.components.settings.AccountsPane.piActiveSignInOutOfDate',
+                        'Pi could not refresh this Codex sign-in. Sign in again through Pi to restore usage updates.'
+                      )
+                    : translate(
+                        'auto.components.settings.AccountsPane.75ca9b718e',
+                        'Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.'
+                      )
                   : translate(
                       'auto.components.settings.AccountsPane.e4a28e8894',
                       'Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.',
@@ -152,34 +161,61 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                   )}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() =>
-              void runCodexAccountAction('adding', () =>
-                window.api.codexAccounts.add({
-                  runtime: accountRuntime.runtime,
-                  wslDistro: accountRuntime.wslDistro
-                })
-              )
-            }
-            disabled={
-              // Why: interactive `codex login` needs a desktop browser and
-              // would authenticate against this device, not the server.
-              isRemoteAccountScope ||
-              codexAction !== 'idle' ||
-              wslCapabilitiesLoading ||
-              accountRuntimeUnavailable
-            }
-            className="gap-1.5"
-          >
-            {codexAction === 'adding' ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <Plus className="size-3" />
-            )}
-            {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {accountRuntime.runtime === 'host' ? (
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  void runCodexAccountAction('importing-pi', () =>
+                    window.api.codexAccounts.importPi()
+                  )
+                }
+                disabled={
+                  isRemoteAccountScope || codexAction !== 'idle' || accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {codexAction === 'importing-pi' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Download className="size-3" />
+                )}
+                {translate(
+                  'auto.components.settings.AccountsPane.importCodexFromPi',
+                  'Import from Pi'
+                )}
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() =>
+                void runCodexAccountAction('adding', () =>
+                  window.api.codexAccounts.add({
+                    runtime: accountRuntime.runtime,
+                    wslDistro: accountRuntime.wslDistro
+                  })
+                )
+              }
+              disabled={
+                // Why: interactive `codex login` needs a desktop browser and
+                // would authenticate against this device, not the server.
+                isRemoteAccountScope ||
+                codexAction !== 'idle' ||
+                wslCapabilitiesLoading ||
+                accountRuntimeUnavailable
+              }
+              className="gap-1.5"
+            >
+              {codexAction === 'adding' ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Plus className="size-3" />
+              )}
+              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+            </Button>
+          </div>
         </div>
         {remoteAccountScopeNotice}
 

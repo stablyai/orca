@@ -6,6 +6,11 @@ import {
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
+import {
+  getPiCodexCredential,
+  hasPiCodexAuthSource,
+  readPiCodexAuthSource
+} from '../codex-accounts/pi-codex-auth'
 
 const BACKEND_TIMEOUT_MS = 10_000
 
@@ -78,8 +83,27 @@ export async function getCodexBackendAuthHeaders(
   if (signal.aborted) {
     return null
   }
-  const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
-  const auth = JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile
+  const codexHomePath = getCodexHomePath(options?.codexHomePath)
+  const piSource = readPiCodexAuthSource(codexHomePath)
+  if (hasPiCodexAuthSource(codexHomePath) && !piSource) {
+    throw new Error('The Pi-linked Codex account metadata is invalid. Import the account again.')
+  }
+  const authPath = join(codexHomePath, 'auth.json')
+  const auth = piSource
+    ? await getPiCodexCredential(signal).then((credential): CodexAuthFile => {
+        if (credential.providerAccountId !== piSource.providerAccountId) {
+          throw new Error(
+            'Pi is signed in to a different Codex account. Remove this account and import it again.'
+          )
+        }
+        return {
+          tokens: {
+            access_token: credential.accessToken,
+            account_id: credential.providerAccountId
+          }
+        }
+      })
+    : (JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile)
   const accessToken = auth.tokens?.access_token
   if (!accessToken) {
     return null
