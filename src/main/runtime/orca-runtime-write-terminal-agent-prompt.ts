@@ -10,6 +10,7 @@ import {
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import {
   AGENT_PROMPT_SUBMIT,
+  agentPromptSubmitJoinsPasteFrame,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
@@ -37,6 +38,12 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    // Why: OMP holds one paste as a draft until Enter arrives in the same read; its large-paste
+    // menu would otherwise eat the delayed Enter and leave the Task unsubmitted (#21248).
+    const submitJoinsPasteFrame = agentPromptSubmitJoinsPasteFrame(this.getPtyAgent(ptyId))
+    const promptPayload = submitJoinsPasteFrame
+      ? `${pastePayload}${AGENT_PROMPT_SUBMIT}`
+      : pastePayload
     try {
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
@@ -51,7 +58,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
-      if (!this.ptyController?.write(ptyId, pastePayload)) {
+      if (!this.ptyController?.write(ptyId, promptPayload)) {
         throw new Error('terminal_not_writable')
       }
     } catch (error) {
@@ -59,17 +66,19 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       throw error
     }
 
-    if (renderGate) {
-      try {
-        await waitForAgentPromptPromise(renderGate.wait(), options.signal)
-      } finally {
-        renderGate.dispose()
+    if (!submitJoinsPasteFrame) {
+      if (renderGate) {
+        try {
+          await waitForAgentPromptPromise(renderGate.wait(), options.signal)
+        } finally {
+          renderGate.dispose()
+        }
+      } else {
+        await waitForAgentPromptDelay(
+          getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
+          options.signal
+        )
       }
-    } else {
-      await waitForAgentPromptDelay(
-        getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
-        options.signal
-      )
     }
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
@@ -86,10 +95,12 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     this.assertAgentPromptGeneration(ptyId, generation)
     const waitTextCache: AgentPromptWaitTextCache = {}
     const baseline = this.getAgentPromptActivity(handle, ptyId, waitTextCache)
-    this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-    if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
-      throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+    if (!submitJoinsPasteFrame) {
+      this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
+      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
+        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+      }
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {

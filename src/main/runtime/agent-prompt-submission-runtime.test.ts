@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
+  AGENT_PROMPT_SUBMIT,
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs
 } from '../../shared/agent-prompt-injection'
@@ -52,6 +53,22 @@ describe('agent prompt submission runtime', () => {
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('writes Enter inside the paste frame for an OMP worker', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined, 'omp')
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    // OMP leaves its draft only when Enter arrives with the paste frame (#21248); a separate
+    // delayed Enter is consumed by OMP's large-paste menu instead.
+    await vi.runAllTimersAsync()
+    await stalled
+
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toBe(`${buildAgentPromptPasteBytes('review this')}${AGENT_PROMPT_SUBMIT}`)
   })
 
   it('accepts a working-to-idle cycle completed before the first poll', async () => {

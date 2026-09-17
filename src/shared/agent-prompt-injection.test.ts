@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
+  agentPromptSubmitJoinsPasteFrame,
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
   getAgentPromptSubmitDelayMs,
@@ -19,6 +20,16 @@ describe('agent prompt injection bytes', () => {
     expect(buildAgentPromptPasteBytes('line one\nline two')).toBe(
       `${BEGIN}line one\nline two${END}`
     )
+  })
+
+  it('joins Enter to the paste frame for OMP only', () => {
+    // OMP's large-paste menu would consume a later Enter; codex misreads a paste that carries its
+    // own Enter (#11343), so the join stays per-agent rather than becoming the default.
+    expect(agentPromptSubmitJoinsPasteFrame('omp')).toBe(true)
+    expect(agentPromptSubmitJoinsPasteFrame('codex')).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame('claude')).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame(null)).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame(undefined)).toBe(false)
   })
 
   it('keeps submit separate from the paste frame', () => {

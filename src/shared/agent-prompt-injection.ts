@@ -1,4 +1,5 @@
 import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './terminal-input'
+import type { TuiAgent } from './tui-agent'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
@@ -86,6 +87,15 @@ export function buildAgentPromptPasteBytes(prompt: string): string {
 
 export function buildAgentPromptSubmitBytes(): string {
   return AGENT_PROMPT_SUBMIT
+}
+
+// Why: OMP keeps a pasted prompt as a draft unless Enter arrives in the same read. Its "Pasted N
+// lines" menu opens first for any paste at `paste.largeMenuThreshold` lines (default 100) -- the
+// size a worker Task prompt reaches once Orca's dispatch preamble is included -- and a later Enter
+// then accepts that menu's default option instead of submitting the Task. Agents whose composer
+// misreads a paste carrying its own Enter (codex, #11343) stay out of this.
+export function agentPromptSubmitJoinsPasteFrame(agent: TuiAgent | null | undefined): boolean {
+  return agent === 'omp'
 }
 
 export function* iterateAgentPromptPasteChunks(
