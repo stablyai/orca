@@ -35,6 +35,7 @@ export function registerAgentHookHandlers(
   // future-proofs this file.
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
+  ipcMain.removeHandler('agentStatus:recordInterruptInputWritten')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
@@ -62,6 +63,16 @@ export function registerAgentHookHandlers(
       return false
     }
     return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
+  })
+  ipcMain.handle('agentStatus:recordInterruptInputWritten', (_event, paneKey: unknown): boolean => {
+    if (typeof paneKey !== 'string') {
+      return false
+    }
+    // Fire-and-forget transports have no remote write acknowledgement. Record the user's intent
+    // and local delivery evidence, while the shared reducer still waits for provider ack/recovery.
+    const requested = agentHookServer.requestAgentTurnInterrupt(paneKey)
+    const written = agentHookServer.recordAgentTurnInterruptInputWritten(paneKey)
+    return requested !== null || written !== null
   })
   ipcMain.handle('agentStatus:inferQuestionAnswered', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {

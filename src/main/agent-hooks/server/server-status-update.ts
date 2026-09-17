@@ -30,6 +30,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
+    // Provider evidence is reduced independently of the legacy row projection. A terminal record
+    // or interrupt acknowledgement must not be lost merely because a presentation guard rejects
+    // the accompanying status payload.
+    this.applyProviderTurnEvidence(payload)
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }

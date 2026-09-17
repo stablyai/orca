@@ -654,6 +654,7 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInput).toHaveBeenCalledWith('\x03')
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+    expect(window.api.agentStatus.recordInterruptInputWritten).toHaveBeenCalledWith(paneKey)
   })
 
   it('removes agent status and pane title on PTY exit after inferred interrupt', async () => {

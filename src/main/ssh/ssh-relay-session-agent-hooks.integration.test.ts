@@ -593,6 +593,14 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       makeEnvelope({
         source: 'pi',
         hookEventName: 'session_start',
+        providerTurnId: 'turn-remote-1',
+        providerTurnTerminal: true,
+        providerTurnInventoryComplete: true,
+        providerTurnInventory: {
+          turnId: 'turn-remote-1',
+          joinedChildren: [],
+          residentBackground: []
+        },
         promptInteractionKey: 'command-code-transcript-user-3',
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
@@ -617,6 +625,14 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       expect(ingestSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           hookEventName: 'session_start',
+          providerTurnId: 'turn-remote-1',
+          providerTurnTerminal: true,
+          providerTurnInventoryComplete: true,
+          providerTurnInventory: {
+            turnId: 'turn-remote-1',
+            joinedChildren: [],
+            residentBackground: []
+          },
           promptInteractionKey: 'command-code-transcript-user-3',
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',

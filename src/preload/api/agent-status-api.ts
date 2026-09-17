@@ -16,6 +16,8 @@ export type AgentStatusApi = {
   /** Return the current main-process hook cache after renderer hydration. */
   getSnapshot: () => Promise<AgentStatusIpcPayload[]>
   inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
+  /** Record fire-and-forget interrupt input without treating delivery as provider acknowledgement. */
+  recordInterruptInputWritten?: (paneKey: string) => Promise<boolean>
   /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no hook at answer time, so the renderer reports the submit keystroke. */
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
   /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */

@@ -28,6 +28,8 @@ export const agentStatusApi = {
     ipcRenderer.invoke('agentStatus:getSnapshot'),
   inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferInterrupt', request),
+  recordInterruptInputWritten: (paneKey: string): Promise<boolean> =>
+    ipcRenderer.invoke('agentStatus:recordInterruptInputWritten', paneKey),
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferQuestionAnswered', request),
   onMigrationUnsupported: (

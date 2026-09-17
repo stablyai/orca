@@ -6,6 +6,11 @@ import type { PtySourceReceivingActivation } from '../../shared/pty-source-recei
 import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type PtySpawnResult = {
+  /**
+   * Committed or adopted execution ownership. Its owner.statusBinding is the
+   * only attributable launch identity; a bare create-operation response
+   * intentionally has no status binding.
+   */
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */

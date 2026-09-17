@@ -17,14 +17,15 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
+import { AgentHookServerTurnLifecycle } from './server-turn-lifecycle'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 
 // Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
+/** Status/listener fanout built on top of the host-local turn lifecycle adapter. */
+export abstract class AgentHookServerListeners extends AgentHookServerTurnLifecycle {
   protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
@@ -176,8 +177,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   }
 
   /** Multi-subscriber tap on pane status clears. Unlike `setPaneStatusClearListener`
-   *  (a single slot the main window owns and drops on close) this survives window
-   *  teardown and exists at all under headless serve, which never opens one. */
+   * (a single slot the main window owns and drops on close) this survives window teardown
+   * and exists at all under headless serve, which never opens one. */
   subscribePaneStatusClear(listener: (clear: AgentStatusClearIpcPayload) => void): () => void {
     this.paneStatusClearListeners.add(listener)
     return () => {
@@ -199,7 +200,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   }
 
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
-   *  dashboard catches up on hook events that fired during startup. */
+   * dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
     return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
   }

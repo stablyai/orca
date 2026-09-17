@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from '../../shared/agent-status-run'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -9,6 +10,12 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+
+const statusBinding: AgentStatusExecutionBinding = {
+  runId: 'run-agent-pty',
+  attachment: { executionId: 'execution-agent-pty' },
+  role: 'root'
+}
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -205,7 +212,8 @@ describe('registerPtyHandlers', () => {
         tabId: 'tab',
         leafId: '11111111-1111-4111-8111-111111111111',
         terminalHandle: 'term_claimed'
-      }
+      },
+      statusBinding
     }
     setLocalPtyProvider({
       spawn: vi.fn(),

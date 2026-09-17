@@ -8,6 +8,7 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, sshProviders, tryGetProviderForPty } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
+import { finishPtyShutdownAfterExit } from '../runtime/pty-shutdown-reconciliation'
 
 export type PtyKillIpcDeps = {
   store?: Store
@@ -59,7 +60,14 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
       // Why: detached SSH PTYs intentionally keep ownership after their
       // provider is unregistered; hydrated app-scoped ids can also arrive
       // before ownership is rebuilt. Tombstone instead of falling back local.
-      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+      const incarnationId = finishPtyShutdownAfterExit(
+        runtime,
+        finishPtyShutdown,
+        args.id,
+        connectionId,
+        store,
+        -1
+      )
       // The relay was never asked, so the remote shell is still running. Keep the order.
       recordUndeliveredSshPtyKill({
         store,
@@ -69,7 +77,6 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
         incarnationId
       })
       runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
-      runtime?.onPtyExit(args.id, -1, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({
         id: args.id,
@@ -97,9 +104,10 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
     }
     // Why: some shutdown paths do not emit onExit through the provider listener.
     // Explicit cleanup is idempotent and covers already-dead PTYs.
-    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+    const incarnationId = providerExitObserved
+      ? finishPtyShutdown(args.id, connectionId, store)
+      : finishPtyShutdownAfterExit(runtime, finishPtyShutdown, args.id, connectionId, store, -1)
     if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({
         id: args.id,

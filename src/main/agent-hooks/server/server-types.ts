@@ -32,6 +32,9 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'claudeRunningNonAgentTask'
   | 'launchToken'
   | 'promptInteractionKey'
+  | 'providerTurnEvidence'
+  | 'providerTurnInventory'
+  | 'providerTurnInventoryComplete'
   | 'restoredUnconfirmed'
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.

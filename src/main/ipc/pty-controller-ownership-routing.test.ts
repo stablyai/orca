@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from '../../shared/agent-status-run'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import {
   registerPtyHandlers,
@@ -17,6 +18,14 @@ import {
   writeUnverifiable,
   type WriteSettlement
 } from '../../shared/pty-write-settlement'
+
+function statusBinding(suffix: string): AgentStatusExecutionBinding {
+  return {
+    runId: `run-${suffix}`,
+    attachment: { executionId: `execution-${suffix}` },
+    role: 'root'
+  }
+}
 
 type SettledControllerDouble = {
   writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
@@ -308,7 +317,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-canonical-exited',
       phase: 'live',
       ptyId: 'pty-canonical-exited',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('canonical-exited')
     }
     const physicalSpawn = vi.fn(async () => ({
       id: canonicalOwner.ptyId,

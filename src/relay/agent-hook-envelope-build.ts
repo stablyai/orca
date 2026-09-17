@@ -25,6 +25,14 @@ export function buildRelayHookEnvelope(
     promptInteractionKey: event.promptInteractionKey,
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
+    providerTurnId: event.providerTurnId,
+    providerTurnTerminal: event.providerTurnTerminal,
+    ...(event.providerTurnInventoryComplete === true
+      ? {
+          providerTurnInventoryComplete: true as const,
+          providerTurnInventory: event.providerTurnInventory ?? null
+        }
+      : {}),
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,

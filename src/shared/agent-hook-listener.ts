@@ -19,13 +19,22 @@ import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
 import { readString } from './agent-hook-listener/tool-input-preview'
+import {
+  normalizeProviderTurnId,
+  readProviderTurnEvidence
+} from './agent-hook-listener/provider-turn-evidence'
+import type { ProviderCurrentTurnInventory } from './agent-hook-listener/provider-turn-evidence-types'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: { deferCompactOwnershipToClient?: boolean } = {}
+  options: {
+    deferCompactOwnershipToClient?: boolean
+    /** Optional complete inventory supplied by a provider query adapter. */
+    providerTurnInventory?: ProviderCurrentTurnInventory | null
+  } = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -50,6 +59,23 @@ export function normalizeHookPayload(
       : source === 'grok'
         ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
         : undefined
+  // Providers disagree on the field name for a serialized turn. Keep this additive
+  // identity separate from the conversation/session alias; an absent field remains
+  // anonymous and cannot be promoted to a root outcome by the host.
+  const providerTurnId = normalizeProviderTurnId(
+    readFirstString(hookPayloadRecord, [
+      'turn_id',
+      'turnId',
+      'turnID',
+      'current_turn_id',
+      'currentTurnId'
+    ])
+  )
+  const providerTurnTerminal =
+    hookPayloadRecord['terminal'] === true ||
+    hookPayloadRecord['final'] === true ||
+    hookPayloadRecord['turn_completed'] === true ||
+    hookPayloadRecord['turnCompleted'] === true
   const compactTrigger =
     source === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&
@@ -135,7 +161,7 @@ export function normalizeHookPayload(
   }
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
 
-  return {
+  const normalizedEvent: AgentHookEventPayload = {
     paneKey,
     source,
     launchToken,
@@ -160,6 +186,14 @@ export function normalizeHookPayload(
     hookEventName: typeof eventName === 'string' ? eventName : undefined,
     providerPromptId:
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
+    ...(providerTurnId ? { providerTurnId } : {}),
+    ...(providerTurnTerminal ? { providerTurnTerminal: true } : {}),
+    ...(options.providerTurnInventory !== undefined
+      ? {
+          providerTurnInventory: options.providerTurnInventory,
+          providerTurnInventoryComplete: true as const
+        }
+      : {}),
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
     toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
@@ -180,4 +214,18 @@ export function normalizeHookPayload(
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     payload: transportPayload
   }
+  const providerEvidence = readProviderTurnEvidence({
+    event: {
+      ...normalizedEvent,
+      ...(normalizedEvent.providerTurnInventoryComplete === true
+        ? {
+            currentTurnInventory: normalizedEvent.providerTurnInventory ?? null,
+            currentTurnInventoryComplete: true
+          }
+        : {})
+    }
+  }).evidence
+  return providerEvidence.length > 0
+    ? { ...normalizedEvent, providerTurnEvidence: providerEvidence }
+    : normalizedEvent
 }

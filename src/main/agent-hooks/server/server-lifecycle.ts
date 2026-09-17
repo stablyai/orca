@@ -209,6 +209,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.connectionTimestampWatermarkById.clear()
     this.evidenceObservedAtByPaneKey.clear()
     this.activeHookTurnCompletedAtByPaneKey.clear()
+    this.agentTurnLifecycleByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
     this.paneKeyAliasPersistenceListener = null
     this.ownerStateInitialized = false

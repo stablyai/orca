@@ -1595,6 +1595,12 @@ export class SshRelaySession {
             typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
           source: envelope.source,
           providerPromptId: envelope.providerPromptId,
+          providerTurnId:
+            typeof envelope.providerTurnId === 'string' ? envelope.providerTurnId : undefined,
+          providerTurnTerminal: envelope.providerTurnTerminal === true ? true : undefined,
+          providerTurnInventory: envelope.providerTurnInventory,
+          providerTurnInventoryComplete:
+            envelope.providerTurnInventoryComplete === true ? true : undefined,
           grokPromptBoundary: envelope.grokPromptBoundary === true ? true : undefined,
           compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
@@ -2278,6 +2284,7 @@ export class SshRelaySession {
   private retireExitedPty(payload: SshPtyExitPayload, deliveryHandled = false): void {
     const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
     this.retiredSourceDeliveries.activate(relayPtyId)
+    this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
     clearProviderPtyState(payload.id)
     deletePtyOwnership(payload.id)
     this.rejectedPtyRecoveryAttempts.delete(payload.id)
@@ -2289,7 +2296,6 @@ export class SshRelaySession {
     if (deliveryHandled) {
       return
     }
-    this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
     const win = this.getMainWindow()
     if (win && !win.isDestroyed()) {
       win.webContents.send('pty:exit', payload)

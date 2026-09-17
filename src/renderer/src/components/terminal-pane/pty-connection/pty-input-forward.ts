@@ -22,6 +22,8 @@ import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
+import { recordFireAndForgetInterruptInput } from './pty-interrupt-input-evidence'
+import { installPtyPaneGeometryState } from './pty-pane-geometry-state'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -101,8 +103,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     const intent = session.pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
-    // infer for local/remote acknowledged writes; SSH fire-and-forget remains
-    // excluded because those transports do not expose sendInputAccepted.
+    // infer for local/remote acknowledged writes; fire-and-forget transports
+    // record input delivery separately and never settle the turn.
     const acknowledgedIntent = intent ?? session.inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && session.transport.sendInputAccepted) {
       const interruptStatusBaseline =
@@ -154,6 +156,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
         session.observeAcceptedTerminalInput(data, intent)
+        recordFireAndForgetInterruptInput(session.cacheKey)
       } else {
         session.requestRecoveryForUndeliverableInput()
       }
@@ -165,6 +168,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)
+      const fireAndForgetIntent = session.inferIntentFromExactTerminalInput(data)
+      if (fireAndForgetIntent) {
+        recordFireAndForgetInterruptInput(session.cacheKey)
+      }
       session.observeSentTerminalInputIntent(data)
     } else {
       session.clearPendingTerminalInputIntent()
@@ -370,19 +377,6 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     })
   }
 
-  // Why: observe the outer pane as the layout signal for both desktop drift
-  // healing and mobile take-back. Normal desktop panes compare xterm against
-  // the PTY's applied size; mobile-fit panes only report desktop geometry so
-  // the parked phone-sized PTY is not resized. See docs/mobile-fit-hold.md.
-  session.pendingGeometryReportRaf = null
-  session.lastObservedDesktopGrid = null
-  session.readPaneSize = (): { width: number; height: number } | null => {
-    if (typeof session.pane.container.getBoundingClientRect !== 'function') {
-      return null
-    }
-    const rect = session.pane.container.getBoundingClientRect()
-    return { width: rect.width, height: rect.height }
-  }
-  session.lastObservedPaneSize = session.readPaneSize()
-  session.pendingPaneGeometryChanged = false
+  // Observe the outer pane for desktop drift healing and mobile take-back.
+  installPtyPaneGeometryState(session)
 }

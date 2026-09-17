@@ -16,6 +16,7 @@ export type {
   AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload
 } from './server/server-types'
+export type { AgentTurnLifecycleChange } from './server/server-turn-lifecycle'
 export type { AgentHookSource }
 export {
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
@@ -46,6 +47,7 @@ export const _internals = {
     agentHookServer._resetRowOwnershipForTests()
     agentHookServer._resetPromptSentDedupeForTests()
     agentHookServer._resetConnectionTimestampWatermarksForTests()
+    agentHookServer._resetAgentTurnLifecycleForTests()
   }
 }
 

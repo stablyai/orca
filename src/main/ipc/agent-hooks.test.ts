@@ -16,6 +16,8 @@ const transferPaneAuthority = vi.fn()
 const canTransferPaneAuthority = vi.fn(() => true)
 const getStatusSnapshot = vi.fn()
 const inferInterrupt = vi.fn()
+const requestAgentTurnInterrupt = vi.fn()
+const recordAgentTurnInterruptInputWritten = vi.fn()
 const clearMigrationUnsupportedPtysByTabPrefix = vi.fn()
 const clearMigrationUnsupportedPtysForPaneKey = vi.fn()
 const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>()
@@ -53,7 +55,9 @@ vi.mock('../agent-hooks/server', async () => {
       transferPaneAuthority,
       canTransferPaneAuthority,
       getStatusSnapshot,
-      inferInterrupt
+      inferInterrupt,
+      requestAgentTurnInterrupt,
+      recordAgentTurnInterruptInputWritten
     }
   }
 })
@@ -119,6 +123,8 @@ beforeEach(() => {
   canTransferPaneAuthority.mockReturnValue(true)
   getStatusSnapshot.mockReset()
   inferInterrupt.mockReset()
+  requestAgentTurnInterrupt.mockReset()
+  recordAgentTurnInterruptInputWritten.mockReset()
   clearMigrationUnsupportedPtysByTabPrefix.mockReset()
   clearMigrationUnsupportedPtysForPaneKey.mockReset()
   onHandlers.clear()
@@ -278,6 +284,34 @@ describe('agentStatus:inferInterrupt IPC', () => {
       expect(handler!({}, value)).toBe(false)
     }
     expect(inferInterrupt).not.toHaveBeenCalled()
+  })
+})
+
+describe('agentStatus:recordInterruptInputWritten IPC', () => {
+  it('records request and input evidence without requiring a transport acknowledgement', async () => {
+    requestAgentTurnInterrupt.mockReturnValue(null)
+    recordAgentTurnInterruptInputWritten.mockReturnValue({ disposition: 'accepted' })
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentStatus:recordInterruptInputWritten')
+    expect(handler).toBeDefined()
+    expect(handler!({}, PANE_KEY)).toBe(true)
+    expect(requestAgentTurnInterrupt).toHaveBeenCalledWith(PANE_KEY)
+    expect(recordAgentTurnInterruptInputWritten).toHaveBeenCalledWith(PANE_KEY)
+  })
+
+  it('rejects malformed pane keys before the hook server boundary', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentStatus:recordInterruptInputWritten')
+    expect(handler).toBeDefined()
+    for (const value of [null, undefined, 123, true]) {
+      expect(handler!({}, value)).toBe(false)
+    }
+    expect(requestAgentTurnInterrupt).not.toHaveBeenCalled()
+    expect(recordAgentTurnInterruptInputWritten).not.toHaveBeenCalled()
   })
 })
 

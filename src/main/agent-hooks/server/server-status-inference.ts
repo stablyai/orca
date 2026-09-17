@@ -88,6 +88,20 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     ) {
       return false
     }
+    const lifecycleSnapshot = this.getAgentTurnLifecycleSnapshot(existing.paneKey)
+    if (lifecycleSnapshot?.currentTurnId) {
+      // The keypress is delivery evidence only. Keep the turn active until the provider
+      // acknowledges interruption or bounded recovery settles it; input acceptance is not proof.
+      const observedAt = Date.now()
+      this.requestAgentTurnInterrupt(existing.paneKey, observedAt)
+      this.recordAgentTurnInterruptInputWritten(existing.paneKey, observedAt)
+      console.debug('[agent-hooks] recorded interrupt input for agent turn', {
+        paneKey: existing.paneKey,
+        agentType,
+        intent: request.intent
+      })
+      return true
+    }
     // Why: keep the Claude lead-turn record in sync, or a later child event re-emits the stale 'working' state and resurrects the cancelled pane.
     if (agentType === 'claude') {
       markClaudeLeadTurnInterrupted(this.state, existing.paneKey)

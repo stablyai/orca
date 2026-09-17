@@ -46,6 +46,7 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
+import type { AgentTurnLifecycleState, AgentTurnOwner } from '../../../shared/agent-turn-lifecycle'
 
 /** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
@@ -157,6 +158,12 @@ export abstract class AgentHookServerState {
   protected readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )
+
+  /** Host-local C1 lifecycle projections keyed by the pane they are attached to. */
+  protected agentTurnLifecycleByPaneKey = new Map<
+    string,
+    { owner: AgentTurnOwner; state: AgentTurnLifecycleState }
+  >()
 
   protected abstract withdrawReplayObservation(paneKey: string): void
   protected abstract ingestSpoolRecord(record: SpoolRecord): void
