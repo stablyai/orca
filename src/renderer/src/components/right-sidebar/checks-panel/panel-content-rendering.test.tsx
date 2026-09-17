@@ -4,6 +4,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
+import type { PRComment } from '../../../../../shared/github/comment-types'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChecksPanelReviewHeader } from '../ChecksPanel'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
@@ -155,6 +157,7 @@ describe('checks panel concrete content', () => {
       isRefreshing: false,
       isResolvingConflictsWithAI: false,
       linkedGitLabMR: null,
+      linkedBitbucketPR: null,
       pendingCommentResolutionRef: { current: null },
       pr: null,
       prRefreshState: undefined,
@@ -174,7 +177,9 @@ describe('checks panel concrete content', () => {
     } satisfies ChecksPanelActiveContentModel
 
     render(
-      <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+      <TooltipProvider>
+        <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+      </TooltipProvider>
     )
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
@@ -184,5 +189,128 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: '#42' }).getAttribute('title')).toContain(
       'Open on GitHub'
     )
+  })
+
+  function createBitbucketActiveContentModel(
+    overrides: Partial<ChecksPanelActiveContentModel> = {}
+  ): ChecksPanelActiveContentModel {
+    return {
+      activeConnectionId: null,
+      activeConflictReview: null,
+      activeGitLabReview: null,
+      activeReview: {
+        provider: 'bitbucket',
+        number: 42,
+        state: 'open',
+        title: 'Bitbucket PR review',
+        url: 'https://bitbucket.org/ws/repo/pull-requests/42',
+        status: 'neutral',
+        updatedAt: '2026-08-23T00:00:00.000Z',
+        mergeable: 'UNKNOWN'
+      },
+      activeSourceControlLaunchPlatform: 'darwin',
+      activeWorktree: null,
+      activeWorktreeId: 'worktree-1',
+      agentComposerState: null,
+      aiActionDisabledReason: undefined,
+      canTargetPRComments: false,
+      checks: [],
+      checksLoading: false,
+      claimedCommentResolutionRef: { current: null },
+      commentResolutionLaunchAcceptedRef: { current: false },
+      comments: [],
+      commentsDisabledReason: undefined,
+      commentsLoading: false,
+      commentsSelectionClearRequest: null,
+      conflictDetailsRefreshing: false,
+      consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
+      detachedHeadDisplay: null,
+      editingTitle: false,
+      getGitLabProjectRef: vi.fn(() => null),
+      handleAddPRComment: vi.fn(),
+      handleCancelEdit: vi.fn(),
+      handleDeleteComment: vi.fn(),
+      handleEditComment: vi.fn(),
+      handleFixChecksWithAI: vi.fn(),
+      handleLaunchAborted: vi.fn(),
+      handleLaunchAccepted: vi.fn(),
+      handleLinkAnotherReview: vi.fn(),
+      handleLoadCheckDetails: vi.fn(),
+      handleOpenPR: vi.fn(),
+      handleRefresh: vi.fn(),
+      handleOpenStackPR: vi.fn(),
+      handleReplyToComment: vi.fn(),
+      handleResolve: vi.fn(),
+      handleResolveCommentsWithAI: vi.fn(),
+      handleResolveConflictsWithAI: vi.fn(),
+      handleSaveTitle: vi.fn(),
+      handleSetReaction: vi.fn(),
+      handleStartEdit: vi.fn(),
+      handleTitleKeyDown: vi.fn(),
+      handleUnlinkReview: vi.fn(),
+      isFixingChecksWithAI: false,
+      isRefreshing: false,
+      isResolvingConflictsWithAI: false,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      pendingCommentResolutionRef: { current: null },
+      pr: null,
+      prRefreshState: undefined,
+      repo: null,
+      refreshHostedReviewAfterMutation: vi.fn(),
+      resolveCommentsWithAIDisabledReason: undefined,
+      saveLaunchActionDefault: vi.fn(),
+      setAgentComposerState: vi.fn(),
+      setChecksPanelContentRef: vi.fn(),
+      settings: null,
+      sourceControlAiActionsVisible: false,
+      stateRequestKey: 'review-42',
+      titleDraft: '',
+      setTitleDraft: vi.fn(),
+      titleInputRef: { current: null },
+      titleSaving: false,
+      ...overrides
+    }
+  }
+
+  it('omits checks section while rendering comments section for Bitbucket reviews', () => {
+    const model = createBitbucketActiveContentModel()
+
+    render(
+      <TooltipProvider>
+        <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+      </TooltipProvider>
+    )
+
+    expect(screen.getByText('Bitbucket PR review')).toBeTruthy()
+    expect(screen.queryByText('No checks configured')).toBeNull()
+    expect(screen.getByText('Comments')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start conversation' })).toBeTruthy()
+  })
+
+  it('renders comments for Bitbucket reviews', () => {
+    const bitbucketComment: PRComment = {
+      id: 1,
+      author: 'Aiden',
+      authorAvatarUrl: '',
+      body: 'Bitbucket comment body',
+      createdAt: '2026-08-23T00:00:00.000Z',
+      url: 'https://bitbucket.org/ws/repo/pull-requests/42#comment-1',
+      isResolved: false,
+      threadId: 'bb-comment-1'
+    }
+
+    const model = createBitbucketActiveContentModel({
+      canTargetPRComments: true,
+      comments: [bitbucketComment]
+    })
+
+    render(
+      <TooltipProvider>
+        <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+      </TooltipProvider>
+    )
+
+    expect(screen.getByText('Bitbucket comment body')).toBeTruthy()
   })
 })

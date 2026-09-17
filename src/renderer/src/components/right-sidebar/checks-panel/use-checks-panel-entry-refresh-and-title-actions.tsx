@@ -115,6 +115,9 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         if (activeGitLabReview) {
           void fetchGitLabDetails()
         }
+        if (activeReview?.provider === 'bitbucket') {
+          void fetchComments({ force: true })
+        }
         return
       }
       enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
@@ -127,6 +130,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     },
     [
       activeGitLabReview,
+      activeReview?.provider,
       activeWorktree?.head,
       activeWorktreeId,
       branch,
@@ -223,6 +227,20 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       }
       return
     }
+    if (activeReview?.provider === 'bitbucket') {
+      await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+        repoPath: repo.path,
+        repoId: repo.id,
+        branch,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
+      })
+      return
+    }
     const refreshedPR = await fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
@@ -259,7 +277,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
   ])
 
   const handleStartEdit = useCallback(() => {
-    if (!activeReview) {
+    if (!activeReview || activeReview.provider === 'bitbucket') {
       return
     }
     setTitleDraft(activeReview.title)

@@ -9,7 +9,7 @@ import type {
 } from '../../../../shared/crash-reporting'
 
 type ChecksPanelPRRefreshBreadcrumbEvent = 'start' | 'done' | 'stale_cleared'
-type ChecksPanelReviewProvider = 'github' | 'gitlab'
+type ChecksPanelReviewProvider = 'github' | 'gitlab' | 'bitbucket'
 
 type ChecksPanelPRRefreshBreadcrumbArgs = {
   event: ChecksPanelPRRefreshBreadcrumbEvent
