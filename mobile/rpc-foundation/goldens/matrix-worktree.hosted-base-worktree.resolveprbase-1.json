@@ -3,9 +3,9 @@
   "family": "worktree.hosted-base",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
   "scenarioSha256": "45783a7cbb44b04dbbd6bfd6735799bb4c75e503f43f1821cf8640d11f7464ad",
   "platform": "darwin",
@@ -216,16 +216,6 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "2c7f810cc819": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "[object Object]",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "31a22b101a8c": {
       "name": "worktree.resolvePrBase#1",
       "ordinal": 1,
@@ -271,6 +261,17 @@
         "category": "Error",
         "message": "outer refused",
         "isRpcDeliveryUnknown": false
+      }
+    },
+    "3aecf21b9f18": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (worktree.resolvePrBase)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
       }
     },
     "3cca8119f144": {
@@ -402,16 +403,6 @@
         }
       }
     },
-    "7214459608bf": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot use 'in' operator to search for 'error' in null",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "92df85b51d0c": {
       "name": "worktree.resolveMrBase#1",
       "ordinal": 4,
@@ -467,16 +458,6 @@
       "name": "worktree.resolvePrBase#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
-    },
-    "ae5862eb7a20": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot use 'in' operator to search for 'error' in undefined",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "b948e8307e81": {
       "status": "rejected",
@@ -634,7 +615,7 @@
           "sender": ["c61debc4c0da"],
           "payloads": ["aafcb4cd89c9"],
           "settlements": {
-            "pr": "ae5862eb7a20"
+            "pr": "3aecf21b9f18"
           },
           "state": "c57e06c96492",
           "effects": []
@@ -646,7 +627,7 @@
           "sender": ["c61debc4c0da", "d29aaf6d46d3"],
           "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
-            "pr": "ae5862eb7a20",
+            "pr": "3aecf21b9f18",
             "mr": "fd552ecb03da"
           },
           "state": "0ace0141301c",
@@ -659,7 +640,7 @@
           "sender": ["002fc122fadf"],
           "payloads": ["aafcb4cd89c9"],
           "settlements": {
-            "pr": "7214459608bf"
+            "pr": "3aecf21b9f18"
           },
           "state": "c57e06c96492",
           "effects": []
@@ -671,7 +652,7 @@
           "sender": ["002fc122fadf", "d29aaf6d46d3"],
           "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
-            "pr": "7214459608bf",
+            "pr": "3aecf21b9f18",
             "mr": "fd552ecb03da"
           },
           "state": "0ace0141301c",
@@ -734,7 +715,7 @@
           "sender": ["2960b5e672d1"],
           "payloads": ["aafcb4cd89c9"],
           "settlements": {
-            "pr": "2c7f810cc819"
+            "pr": "3aecf21b9f18"
           },
           "state": "c57e06c96492",
           "effects": []
@@ -746,7 +727,7 @@
           "sender": ["2960b5e672d1", "d29aaf6d46d3"],
           "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
-            "pr": "2c7f810cc819",
+            "pr": "3aecf21b9f18",
             "mr": "fd552ecb03da"
           },
           "state": "0ace0141301c",

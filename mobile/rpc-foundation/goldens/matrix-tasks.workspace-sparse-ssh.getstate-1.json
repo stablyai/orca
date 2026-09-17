@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3453024581230908d1e0e9335f5310e7b4ae03faf50d93654b9ff28c464fb95f",
   "platform": "darwin",
@@ -13,10 +13,31 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "003266639675": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "The host sent a reply this app could not read (ssh.getState)",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
     "02daf4600c50": {
       "name": "repo.saveSparsePreset#1",
       "ordinal": 7,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    },
+    "0ca333d433d1": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "The host sent a reply this app could not read (ssh.getState)",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
     },
     "196cd7f8b6a9": {
       "name": "ssh.getState#1",
@@ -97,16 +118,6 @@
         }
       }
     },
-    "328fb20b8fbf": {
-      "name": "workspaceSshState",
-      "ordinal": 3,
-      "value": {
-        "error": "Cannot read properties of undefined (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "3f5e10171cd3": {
       "name": "workspaceSparsePresetId",
       "ordinal": 10,
@@ -128,17 +139,6 @@
         },
         "reconnectAttempt": 0,
         "status": "connected",
-        "targetId": "ssh-1"
-      }
-    },
-    "44ca8518769a": {
-      "presets": [],
-      "presetsError": "",
-      "saving": false,
-      "ssh": {
-        "error": "Cannot read properties of undefined (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
         "targetId": "ssh-1"
       }
     },
@@ -243,23 +243,6 @@
         "targetId": "ssh-1"
       }
     },
-    "7a26c9dceb4c": {
-      "presets": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ],
-      "presetsError": "",
-      "saving": false,
-      "ssh": {
-        "error": "Cannot read properties of undefined (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "7e5ba73897a1": {
       "presets": [],
       "presetsError": "",
@@ -271,40 +254,12 @@
         "targetId": "ssh-1"
       }
     },
-    "80431b2fc9cd": {
-      "presets": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ],
-      "presetsError": "",
-      "saving": false,
-      "ssh": {
-        "error": "Cannot read properties of null (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "813df5a46a4a": {
       "presets": [],
       "presetsError": "",
       "saving": false,
       "ssh": {
         "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "81af687a998a": {
-      "presets": [],
-      "presetsError": "",
-      "saving": false,
-      "ssh": {
-        "error": "Cannot read properties of null (reading 'state')",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -451,16 +406,6 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
-    "a15d9c7aae00": {
-      "name": "workspaceSshState",
-      "ordinal": 3,
-      "value": {
-        "error": "Cannot read properties of null (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "a16210531185": {
       "presets": [],
       "presetsError": "",
@@ -477,6 +422,23 @@
       "ordinal": 3,
       "value": {
         "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "af0d2d6c02df": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "The host sent a reply this app could not read (ssh.getState)",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -857,8 +819,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "44ca8518769a",
-          "effects": ["328fb20b8fbf"]
+          "state": "0ca333d433d1",
+          "effects": ["003266639675"]
         }
       },
       {
@@ -870,9 +832,9 @@
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
-          "state": "7a26c9dceb4c",
+          "state": "af0d2d6c02df",
           "effects": [
-            "328fb20b8fbf",
+            "003266639675",
             "ea6e5bf810d9",
             "973f31a4e64b",
             "1bc7cf6bcbaf",
@@ -891,8 +853,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "81af687a998a",
-          "effects": ["a15d9c7aae00"]
+          "state": "0ca333d433d1",
+          "effects": ["003266639675"]
         }
       },
       {
@@ -904,9 +866,9 @@
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
-          "state": "80431b2fc9cd",
+          "state": "af0d2d6c02df",
           "effects": [
-            "a15d9c7aae00",
+            "003266639675",
             "ea6e5bf810d9",
             "973f31a4e64b",
             "1bc7cf6bcbaf",

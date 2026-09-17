@@ -3,9 +3,9 @@
   "family": "tasks.project-board-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "7f748bb55df907bba315ea6899c585837d97fa0ea9b312330cf35d95bda87bd1",
   "platform": "darwin",
@@ -343,6 +343,44 @@
       "ordinal": 29,
       "value": "Connection closed"
     },
+    "50c2d0683abb": {
+      "error": "The host sent a reply this app could not read (github.project.listViews)",
+      "loading": false,
+      "pasteError": "",
+      "projects": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ],
+      "table": {
+        "fields": [],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [],
+        "selectedView": {
+          "filter": "is:open",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      },
+      "views": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
     "512d99654670": {
       "name": "githubProjectError",
       "ordinal": 29,
@@ -480,11 +518,6 @@
           "title": "Board"
         }
       ]
-    },
-    "714a5fb133aa": {
-      "name": "githubProjectError",
-      "ordinal": 29,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "74ace6b26c7d": {
       "name": "github.project.listViews#2",
@@ -685,49 +718,6 @@
     },
     "9fb985a7d8f6": {
       "error": "transport failure",
-      "loading": false,
-      "pasteError": "",
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "fields": [],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [],
-        "selectedView": {
-          "filter": "is:open",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
-    },
-    "a250c57b1330": {
-      "name": "githubProjectError",
-      "ordinal": 29,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "a3fbce1fcf8a": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
       "loading": false,
       "pasteError": "",
       "projects": [
@@ -965,6 +955,11 @@
         }
       ]
     },
+    "bff57ba49c8b": {
+      "name": "githubProjectError",
+      "ordinal": 29,
+      "value": "The host sent a reply this app could not read (github.project.listViews)"
+    },
     "c180286bc513": {
       "name": "githubProjectError",
       "ordinal": 29,
@@ -1184,44 +1179,6 @@
           "ok": false
         }
       }
-    },
-    "f1dd827578d3": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "loading": false,
-      "pasteError": "",
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "fields": [],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [],
-        "selectedView": {
-          "filter": "is:open",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
     },
     "fa1d1b339394": {
       "name": "appliedGithubProjectSearch",
@@ -1449,7 +1406,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "a3fbce1fcf8a",
+          "state": "50c2d0683abb",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1469,7 +1426,7 @@
             "c4c4250b0567",
             "7a9df0d1a484",
             "8792541c60ad",
-            "a250c57b1330",
+            "bff57ba49c8b",
             "88db645d6267",
             "53954ecf4db4"
           ]
@@ -1499,7 +1456,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "f1dd827578d3",
+          "state": "50c2d0683abb",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1519,7 +1476,7 @@
             "c4c4250b0567",
             "7a9df0d1a484",
             "8792541c60ad",
-            "714a5fb133aa",
+            "bff57ba49c8b",
             "88db645d6267",
             "53954ecf4db4"
           ]
@@ -1549,7 +1506,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "2ab1b35ff194",
+          "state": "50c2d0683abb",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1569,7 +1526,7 @@
             "c4c4250b0567",
             "7a9df0d1a484",
             "8792541c60ad",
-            "512d99654670",
+            "bff57ba49c8b",
             "88db645d6267",
             "53954ecf4db4"
           ]
@@ -1599,7 +1556,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "2ab1b35ff194",
+          "state": "50c2d0683abb",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1619,7 +1576,7 @@
             "c4c4250b0567",
             "7a9df0d1a484",
             "8792541c60ad",
-            "512d99654670",
+            "bff57ba49c8b",
             "88db645d6267",
             "53954ecf4db4"
           ]

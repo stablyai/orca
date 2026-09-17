@@ -3,9 +3,9 @@
   "family": "settings.workspace-context",
   "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "30b3f8d79589e9fb3d7ef804233554fa231f68ab88e5130ddfa78e79221e3c78",
   "platform": "darwin",
@@ -199,6 +199,17 @@
           }
         }
       }
+    },
+    "8a63b85fee0c": {
+      "providers": [],
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      },
+      "trust": {}
     },
     "903ba5a79900": {
       "name": "preflight.check#1",
@@ -430,6 +441,16 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
+      }
+    },
+    "b7622f5d52b6": {
+      "name": "unhandled-rejection",
+      "ordinal": 9,
+      "value": {
+        "category": "RpcIncompatibleReplyError",
+        "code": "incompatible_reply",
+        "isRpcDeliveryUnknown": false,
+        "message": "The host sent a reply this app could not read (linear.status)"
       }
     },
     "d57386932daa": {
@@ -683,8 +704,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "2a7485a88169",
-          "effects": []
+          "state": "8a63b85fee0c",
+          "effects": ["b7622f5d52b6"]
         }
       },
       {
@@ -695,8 +716,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "2a7485a88169",
-          "effects": []
+          "state": "8a63b85fee0c",
+          "effects": ["b7622f5d52b6"]
         }
       },
       {

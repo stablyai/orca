@@ -3,9 +3,9 @@
   "family": "settings.task-hydration",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "0931b3d35868e5452cb550962f2408b6ce7cd6c89e90a9cf2897425edbb4b42d",
   "platform": "darwin",
@@ -78,6 +78,16 @@
       "ordinal": 29,
       "value": {
         "$rpc": "null"
+      }
+    },
+    "1825a87a7ca8": {
+      "hydrated": false,
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
       }
     },
     "1f75fb0d92bd": {
@@ -263,6 +273,11 @@
           "ok": true
         }
       }
+    },
+    "4a9fd3b5e80c": {
+      "name": "taskStateHydrated",
+      "ordinal": 55,
+      "value": false
     },
     "4b56cb68bf1b": {
       "name": "preflight.check#1",
@@ -1022,6 +1037,11 @@
       "ordinal": 67,
       "value": "is:issue is:open"
     },
+    "f4b66c6b3d9a": {
+      "name": "error",
+      "ordinal": 54,
+      "value": "The host sent a reply this app could not read (preflight.check)"
+    },
     "f7c2d2661209": {
       "name": "selectedLinearWorkspaceId",
       "ordinal": 58,
@@ -1212,7 +1232,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "58c52d8b7c76",
+          "state": "1825a87a7ca8",
           "effects": [
             "301bdbdf1dec",
             "7b0ad7b958dd",
@@ -1257,22 +1277,8 @@
             "e7538ac5908a",
             "9490fcb6d06d",
             "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "f4b66c6b3d9a",
+            "4a9fd3b5e80c"
           ]
         }
       },
@@ -1296,7 +1302,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "58c52d8b7c76",
+          "state": "1825a87a7ca8",
           "effects": [
             "301bdbdf1dec",
             "7b0ad7b958dd",
@@ -1341,22 +1347,8 @@
             "e7538ac5908a",
             "9490fcb6d06d",
             "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "f4b66c6b3d9a",
+            "4a9fd3b5e80c"
           ]
         }
       },

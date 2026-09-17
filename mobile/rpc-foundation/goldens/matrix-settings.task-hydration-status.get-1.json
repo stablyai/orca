@@ -3,9 +3,9 @@
   "family": "settings.task-hydration",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "3f448feff463b59c3927dae020ecd8d4931bb4a6036df6d6af080de2ec5fcf2b",
   "platform": "darwin",
@@ -615,11 +615,6 @@
         }
       }
     },
-    "60b0fde8ea88": {
-      "name": "error",
-      "ordinal": 41,
-      "value": "Cannot read properties of undefined (reading 'capabilities')"
-    },
     "644df42439c4": {
       "name": "linearWorkspaces",
       "ordinal": 55,
@@ -921,6 +916,11 @@
       "ordinal": 52,
       "value": {}
     },
+    "962af04c16e6": {
+      "name": "error",
+      "ordinal": 41,
+      "value": "The host sent a reply this app could not read (status.get)"
+    },
     "983ee07db023": {
       "name": "status.get#1",
       "ordinal": 39,
@@ -1192,11 +1192,6 @@
       "name": "preflight.check#1",
       "ordinal": 49,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
-    "e2892cada877": {
-      "name": "error",
-      "ordinal": 41,
-      "value": "Cannot read properties of null (reading 'capabilities')"
     },
     "e2c613587259": {
       "name": "showGitHubProjectPicker",
@@ -1503,7 +1498,7 @@
             "2d1b83d7dc85",
             "1221fd1c3ae9",
             "da3527bc5f58",
-            "60b0fde8ea88",
+            "962af04c16e6",
             "1eb9c1e3ee82"
           ]
         }
@@ -1556,7 +1551,7 @@
             "2d1b83d7dc85",
             "1221fd1c3ae9",
             "da3527bc5f58",
-            "60b0fde8ea88",
+            "962af04c16e6",
             "1eb9c1e3ee82"
           ]
         }
@@ -1609,7 +1604,7 @@
             "2d1b83d7dc85",
             "1221fd1c3ae9",
             "da3527bc5f58",
-            "e2892cada877",
+            "962af04c16e6",
             "1eb9c1e3ee82"
           ]
         }
@@ -1662,7 +1657,7 @@
             "2d1b83d7dc85",
             "1221fd1c3ae9",
             "da3527bc5f58",
-            "e2892cada877",
+            "962af04c16e6",
             "1eb9c1e3ee82"
           ]
         }

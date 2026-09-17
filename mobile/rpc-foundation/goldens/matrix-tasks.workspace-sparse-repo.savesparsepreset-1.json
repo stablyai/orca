@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3d4637406e2d658b72f73153f0a5e176cb8b143593b72bce0cdf979bc6e4cbdd",
   "platform": "darwin",
@@ -236,10 +236,23 @@
       "ordinal": 8,
       "value": "Connection closed"
     },
-    "6507bcd3f279": {
+    "5c6943c3209d": {
       "name": "workspaceSparsePresetsError",
       "ordinal": 8,
-      "value": "Cannot read properties of undefined (reading 'preset')"
+      "value": "The host sent a reply this app could not read (repo.saveSparsePreset)"
+    },
+    "6060569496ff": {
+      "presets": [],
+      "presetsError": "The host sent a reply this app could not read (repo.saveSparsePreset)",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
     },
     "6acbe9247ed7": {
       "name": "repo.saveSparsePreset#1",
@@ -347,19 +360,6 @@
             "$rpc": "null"
           }
         }
-      }
-    },
-    "8e410711e308": {
-      "presets": [],
-      "presetsError": "Cannot read properties of undefined (reading 'preset')",
-      "saving": false,
-      "ssh": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connected",
-        "targetId": "ssh-1"
       }
     },
     "973f31a4e64b": {
@@ -528,11 +528,6 @@
         }
       }
     },
-    "b7145acda208": {
-      "name": "workspaceSparsePresetsError",
-      "ordinal": 8,
-      "value": "Cannot read properties of null (reading 'preset')"
-    },
     "bcfc7df6e4f2": {
       "presets": [],
       "presetsError": "",
@@ -644,19 +639,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "e52233a9ff71": {
-      "presets": [],
-      "presetsError": "Cannot read properties of null (reading 'preset')",
-      "saving": false,
-      "ssh": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connected",
-        "targetId": "ssh-1"
       }
     },
     "e91b0fb80adc": {
@@ -795,12 +777,12 @@
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
-          "state": "8e410711e308",
+          "state": "6060569496ff",
           "effects": [
             "de95b19c6158",
             "ea6e5bf810d9",
             "973f31a4e64b",
-            "6507bcd3f279",
+            "5c6943c3209d",
             "37c5cc533ab4"
           ]
         }
@@ -814,12 +796,12 @@
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
-          "state": "e52233a9ff71",
+          "state": "6060569496ff",
           "effects": [
             "de95b19c6158",
             "ea6e5bf810d9",
             "973f31a4e64b",
-            "b7145acda208",
+            "5c6943c3209d",
             "37c5cc533ab4"
           ]
         }

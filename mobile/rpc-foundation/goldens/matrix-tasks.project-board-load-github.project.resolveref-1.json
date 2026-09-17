@@ -3,9 +3,9 @@
   "family": "tasks.project-board-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "4ab4e4022cafd69cbc7af45ddf72d2dad3e8215df363511651d7faea014147d3",
   "platform": "darwin",
@@ -58,44 +58,6 @@
       "name": "githubProjectError",
       "ordinal": 11,
       "value": ""
-    },
-    "12ff41170090": {
-      "error": "",
-      "loading": false,
-      "pasteError": "Cannot read properties of undefined (reading 'ok')",
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "fields": [],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [],
-        "selectedView": {
-          "filter": "is:open",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
     },
     "15cb97c93333": {
       "name": "github.project.listViews#1",
@@ -288,46 +250,6 @@
       "ordinal": 23,
       "value": ""
     },
-    "47aa692d7dc9": {
-      "error": "",
-      "loading": false,
-      "pasteError": {
-        "$rpc": "undefined"
-      },
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "fields": [],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [],
-        "selectedView": {
-          "filter": "is:open",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
-    },
     "4eb521bbefdd": {
       "name": "githubProjectSearch",
       "ordinal": 15,
@@ -462,13 +384,6 @@
       "ordinal": 23,
       "value": "inner refused"
     },
-    "5dd3eb62a8bd": {
-      "name": "githubProjectPasteError",
-      "ordinal": 23,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "5f5f56db9d64": {
       "name": "github.project.viewTable#1",
       "ordinal": 12,
@@ -546,44 +461,6 @@
         }
       ]
     },
-    "7a234b9d2ae3": {
-      "error": "",
-      "loading": false,
-      "pasteError": "Cannot read properties of null (reading 'ok')",
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "fields": [],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [],
-        "selectedView": {
-          "filter": "is:open",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
-    },
     "7a9df0d1a484": {
       "name": "githubProjectLoading",
       "ordinal": 25,
@@ -630,6 +507,11 @@
           "ok": true
         }
       }
+    },
+    "8adfaab42f53": {
+      "name": "githubProjectPasteError",
+      "ordinal": 23,
+      "value": "The host sent a reply this app could not read (github.project.resolveRef)"
     },
     "8e4dec1aad1f": {
       "name": "github.project.listViews#2",
@@ -774,6 +656,44 @@
       "ordinal": 2,
       "value": []
     },
+    "afec7622eabf": {
+      "error": "",
+      "loading": false,
+      "pasteError": "The host sent a reply this app could not read (github.project.resolveRef)",
+      "projects": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ],
+      "table": {
+        "fields": [],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [],
+        "selectedView": {
+          "filter": "is:open",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      },
+      "views": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
     "b42c8edc0d53": {
       "name": "github.project.listAccessible#1",
       "ordinal": 4,
@@ -851,11 +771,6 @@
       "ordinal": 23,
       "value": "Connection closed"
     },
-    "bd159cd4270a": {
-      "name": "githubProjectPasteError",
-      "ordinal": 23,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "be0da5b53ffb": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -868,11 +783,6 @@
           "number": 1
         }
       ]
-    },
-    "c3ebaad2e657": {
-      "name": "githubProjectPasteError",
-      "ordinal": 23,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     },
     "c453f220a7e2": {
       "name": "githubProjectLoading",
@@ -1402,7 +1312,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "12ff41170090",
+          "state": "afec7622eabf",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1418,7 +1328,7 @@
             "a4a1ff5df287",
             "7b9d3b33c08b",
             "fb9764680a74",
-            "c3ebaad2e657",
+            "8adfaab42f53",
             "c515348730c9"
           ]
         }
@@ -1435,7 +1345,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "7a234b9d2ae3",
+          "state": "afec7622eabf",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1451,7 +1361,7 @@
             "a4a1ff5df287",
             "7b9d3b33c08b",
             "fb9764680a74",
-            "bd159cd4270a",
+            "8adfaab42f53",
             "c515348730c9"
           ]
         }
@@ -1468,7 +1378,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "47aa692d7dc9",
+          "state": "afec7622eabf",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1484,7 +1394,7 @@
             "a4a1ff5df287",
             "7b9d3b33c08b",
             "fb9764680a74",
-            "5dd3eb62a8bd",
+            "8adfaab42f53",
             "c515348730c9"
           ]
         }
@@ -1501,7 +1411,7 @@
             "table-2": "eb79a9b3682a",
             "paste-3": "eb79a9b3682a"
           },
-          "state": "47aa692d7dc9",
+          "state": "afec7622eabf",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1517,7 +1427,7 @@
             "a4a1ff5df287",
             "7b9d3b33c08b",
             "fb9764680a74",
-            "5dd3eb62a8bd",
+            "8adfaab42f53",
             "c515348730c9"
           ]
         }

@@ -3,9 +3,9 @@
   "family": "tasks.project-row-metadata-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "8b75854487566ca6da98d391b6822c81c99e61011fc094458ae038905c1c9287",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "09317122b8cc": {
-      "name": "projectIssueTypesError",
-      "ordinal": 20,
-      "value": "Failed to load issue types"
-    },
     "0bf9ac2a3d0a": {
       "name": "projectIssueTypesError",
       "ordinal": 20,
@@ -213,6 +208,19 @@
       "ordinal": 16,
       "value": ["bug"]
     },
+    "6394983c1b0a": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [],
+      "typesError": "The host sent a reply this app could not read (github.project.listIssueTypesBySlug)",
+      "users": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": ""
+    },
     "64492996b2ef": {
       "name": "github.project.listIssueTypesBySlug#1",
       "ordinal": 12,
@@ -253,19 +261,6 @@
       "name": "projectLabelsLoading",
       "ordinal": 3,
       "value": true
-    },
-    "78836b1c1374": {
-      "labels": ["bug"],
-      "labelsError": "",
-      "types": [],
-      "typesError": "Cannot read properties of undefined (reading 'ok')",
-      "users": [
-        {
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": ""
     },
     "7c837b386969": {
       "labels": ["bug"],
@@ -329,24 +324,6 @@
           "ok": false
         }
       }
-    },
-    "8cec5485d355": {
-      "labels": ["bug"],
-      "labelsError": "",
-      "types": [],
-      "typesError": "Cannot read properties of null (reading 'ok')",
-      "users": [
-        {
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": ""
-    },
-    "9376eddaaf7f": {
-      "name": "projectIssueTypesError",
-      "ordinal": 20,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "982e4e890e08": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -437,11 +414,6 @@
         }
       }
     },
-    "a0d20dd617cc": {
-      "name": "projectIssueTypesError",
-      "ordinal": 20,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
     "a5fc70778afe": {
       "labels": ["bug"],
       "labelsError": "",
@@ -491,6 +463,11 @@
           "ok": false
         }
       }
+    },
+    "aa05f01a4255": {
+      "name": "projectIssueTypesLoading",
+      "ordinal": 22,
+      "value": false
     },
     "af11ecca4274": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -656,6 +633,22 @@
       ],
       "usersError": ""
     },
+    "da8be96a48a0": {
+      "name": "reply-salvage",
+      "ordinal": 20,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.project.listIssueTypesBySlug",
+        "operation": "github.project.issue-types",
+        "variant": "github-project-issue-types"
+      }
+    },
+    "dccbed4e785f": {
+      "name": "projectIssueTypesError",
+      "ordinal": 20,
+      "value": "The host sent a reply this app could not read (github.project.listIssueTypesBySlug)"
+    },
     "e004f7afb559": {
       "name": "projectLabelsLoading",
       "ordinal": 17,
@@ -764,6 +757,11 @@
       "name": "projectAssignableUsersError",
       "ordinal": 6,
       "value": ""
+    },
+    "f8df235cff2e": {
+      "name": "projectIssueTypesError",
+      "ordinal": 21,
+      "value": "Failed to load issue types"
     }
   },
   "recording": {
@@ -805,7 +803,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "78836b1c1374",
+          "state": "6394983c1b0a",
           "effects": [
             "5dd15ec04d86",
             "d36a9b596499",
@@ -820,7 +818,7 @@
             "e004f7afb559",
             "21ea4fab050f",
             "25899527b47b",
-            "a0d20dd617cc",
+            "dccbed4e785f",
             "4b33e1366553"
           ]
         }
@@ -833,7 +831,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "8cec5485d355",
+          "state": "6394983c1b0a",
           "effects": [
             "5dd15ec04d86",
             "d36a9b596499",
@@ -848,7 +846,7 @@
             "e004f7afb559",
             "21ea4fab050f",
             "25899527b47b",
-            "9376eddaaf7f",
+            "dccbed4e785f",
             "4b33e1366553"
           ]
         }
@@ -876,8 +874,9 @@
             "e004f7afb559",
             "21ea4fab050f",
             "25899527b47b",
-            "09317122b8cc",
-            "4b33e1366553"
+            "da8be96a48a0",
+            "f8df235cff2e",
+            "aa05f01a4255"
           ]
         }
       },
@@ -904,8 +903,9 @@
             "e004f7afb559",
             "21ea4fab050f",
             "25899527b47b",
-            "09317122b8cc",
-            "4b33e1366553"
+            "da8be96a48a0",
+            "f8df235cff2e",
+            "aa05f01a4255"
           ]
         }
       },

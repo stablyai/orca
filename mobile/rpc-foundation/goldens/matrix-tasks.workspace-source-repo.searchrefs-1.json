@@ -3,9 +3,9 @@
   "family": "tasks.workspace-source",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "9e91d46870cd69279cc7d8ebfd317ab8b13136ccff9662876c7601a3a83ecafe",
   "platform": "darwin",
@@ -13,19 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0045016f4149": {
-      "branchError": "Cannot read properties of null (reading 'refDetails')",
-      "branches": [],
-      "presets": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ],
-      "presetsError": "",
-      "presetsLoaded": true
-    },
     "02e24a49522e": {
       "name": "repo.sparsePresets#1",
       "ordinal": 8,
@@ -301,6 +288,11 @@
       "ordinal": 2,
       "value": false
     },
+    "742be05f358a": {
+      "name": "workspaceBaseBranchError",
+      "ordinal": 18,
+      "value": "The host sent a reply this app could not read (repo.searchRefs)"
+    },
     "802594b0307e": {
       "name": "workspaceBaseBranchLoading",
       "ordinal": 6,
@@ -404,11 +396,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "977695d19ae3": {
-      "name": "workspaceBaseBranchError",
-      "ordinal": 18,
-      "value": "Cannot read properties of undefined (reading 'refDetails')"
     },
     "a135d4b358aa": {
       "name": "workspaceBaseBranchResults",
@@ -563,6 +550,19 @@
       "presetsError": "",
       "presetsLoaded": true
     },
+    "c9f98134ce15": {
+      "branchError": "The host sent a reply this app could not read (repo.searchRefs)",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
     "ce8866aa2620": {
       "name": "repo.searchRefs#1",
       "ordinal": 15,
@@ -613,24 +613,6 @@
       "name": "workspaceBaseBranchLoading",
       "ordinal": 19,
       "value": false
-    },
-    "e4bad139cb5f": {
-      "branchError": "Cannot read properties of undefined (reading 'refDetails')",
-      "branches": [],
-      "presets": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ],
-      "presetsError": "",
-      "presetsLoaded": true
-    },
-    "e6c05ef46848": {
-      "name": "workspaceBaseBranchError",
-      "ordinal": 18,
-      "value": "Cannot read properties of null (reading 'refDetails')"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -750,7 +732,7 @@
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
           },
-          "state": "e4bad139cb5f",
+          "state": "c9f98134ce15",
           "effects": [
             "faf6e6083f43",
             "666bd27e7019",
@@ -765,7 +747,7 @@
             "215f6b1d86cd",
             "d8718329d555",
             "8fe83a6c2d9c",
-            "977695d19ae3",
+            "742be05f358a",
             "e3d6000f59c4"
           ]
         }
@@ -779,7 +761,7 @@
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
           },
-          "state": "0045016f4149",
+          "state": "c9f98134ce15",
           "effects": [
             "faf6e6083f43",
             "666bd27e7019",
@@ -794,7 +776,7 @@
             "215f6b1d86cd",
             "d8718329d555",
             "8fe83a6c2d9c",
-            "e6c05ef46848",
+            "742be05f358a",
             "e3d6000f59c4"
           ]
         }

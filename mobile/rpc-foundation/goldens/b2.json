@@ -3,9 +3,9 @@
   "family": "project-explicit-false",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "b31992be2f91bd61fbe1b8a5400da3b7a56753564b0b0b2b38bc5d549812d693",
   "platform": "darwin",
@@ -67,20 +67,6 @@
         }
       }
     },
-    "204a5c5728c2": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
     "5d32aa29303c": {
       "name": "projectMutating",
       "ordinal": 1,
@@ -118,6 +104,20 @@
         "startedAt": 0
       }
     },
+    "87a06aebc58e": {
+      "error": "The host sent a reply this app could not read (github.project.updateIssueBySlug)",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -126,6 +126,11 @@
       "name": "github.project.updateIssueBySlug#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
+    },
+    "cee96a551fcd": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "The host sent a reply this app could not read (github.project.updateIssueBySlug)"
     },
     "e9296dde8e41": {
       "name": "projectMutating",
@@ -139,11 +144,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f2f279e9fa21": {
-      "name": "projectRowDetailError",
-      "ordinal": 4,
-      "value": "Cannot read properties of null (reading 'ok')"
     }
   },
   "recording": {
@@ -171,8 +171,8 @@
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "204a5c5728c2",
-          "effects": ["5d32aa29303c", "f2f279e9fa21", "e9296dde8e41"]
+          "state": "87a06aebc58e",
+          "effects": ["5d32aa29303c", "cee96a551fcd", "e9296dde8e41"]
         }
       }
     ]

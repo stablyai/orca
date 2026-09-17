@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "5cc1773d06d49d2616da72f2790753322edda6d67e12b5e41116971d34787391",
   "platform": "darwin",
@@ -371,6 +371,16 @@
         }
       }
     },
+    "6b6100c1c1e4": {
+      "name": "workspaceSshState",
+      "ordinal": 11,
+      "value": {
+        "error": "The host sent a reply this app could not read (ssh.connect)",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
     "6d2db0d7fee0": {
       "agent": "claude",
       "connecting": false,
@@ -418,11 +428,13 @@
         }
       }
     },
-    "6e8ee29ff682": {
-      "name": "workspaceSshState",
-      "ordinal": 11,
-      "value": {
-        "error": "Cannot read properties of null (reading 'state')",
+    "7dd30a2d39c7": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "error": "The host sent a reply this app could not read (ssh.connect)",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -565,16 +577,6 @@
         }
       }
     },
-    "b8589ebe20a6": {
-      "name": "workspaceSshState",
-      "ordinal": 11,
-      "value": {
-        "error": "Cannot read properties of undefined (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "b8c64c3eae3b": {
       "name": "ssh.connect#1",
       "ordinal": 9,
@@ -622,19 +624,7 @@
       "ordinal": 14,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "cabfead2f0ff": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": ["codex"],
-      "setup": "unresolved",
-      "ssh": {
-        "error": "Cannot read properties of null (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "ce5554d7557b": {
+    "cf105a6ee444": {
       "agent": "claude",
       "connecting": false,
       "detected": ["codex"],
@@ -648,7 +638,7 @@
         "source": "repo"
       },
       "ssh": {
-        "error": "Cannot read properties of undefined (reading 'state')",
+        "error": "The host sent a reply this app could not read (ssh.connect)",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -754,26 +744,6 @@
         "targetId": "ssh-1"
       }
     },
-    "e17430747d93": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": ["codex"],
-      "setup": {
-        "command": "pnpm install",
-        "kind": "prompt",
-        "setupTrust": {
-          "contentHash": "hash-1",
-          "scriptContent": "pnpm install"
-        },
-        "source": "repo"
-      },
-      "ssh": {
-        "error": "Cannot read properties of null (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "e44d3b580ab0": {
       "name": "workspaceSshConnecting",
       "ordinal": 12,
@@ -870,18 +840,6 @@
             }
           }
         }
-      }
-    },
-    "f066aa754e25": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": ["codex"],
-      "setup": "unresolved",
-      "ssh": {
-        "error": "Cannot read properties of undefined (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
       }
     },
     "f3578583dfdc": {
@@ -1008,7 +966,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "f066aa754e25",
+          "state": "7dd30a2d39c7",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -1016,7 +974,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "b8589ebe20a6",
+            "6b6100c1c1e4",
             "e44d3b580ab0"
           ]
         }
@@ -1031,7 +989,7 @@
             "connect": "eb79a9b3682a",
             "setup": "0ba2cee4b538"
           },
-          "state": "ce5554d7557b",
+          "state": "cf105a6ee444",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -1039,7 +997,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "b8589ebe20a6",
+            "6b6100c1c1e4",
             "e44d3b580ab0"
           ]
         }
@@ -1053,7 +1011,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "cabfead2f0ff",
+          "state": "7dd30a2d39c7",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -1061,7 +1019,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "6e8ee29ff682",
+            "6b6100c1c1e4",
             "e44d3b580ab0"
           ]
         }
@@ -1076,7 +1034,7 @@
             "connect": "eb79a9b3682a",
             "setup": "0ba2cee4b538"
           },
-          "state": "e17430747d93",
+          "state": "cf105a6ee444",
           "effects": [
             "11405363c62d",
             "a9ec92743b9e",
@@ -1084,7 +1042,7 @@
             "13e6d0c47ca4",
             "d68ba9a6772a",
             "84149cfb1467",
-            "6e8ee29ff682",
+            "6b6100c1c1e4",
             "e44d3b580ab0"
           ]
         }

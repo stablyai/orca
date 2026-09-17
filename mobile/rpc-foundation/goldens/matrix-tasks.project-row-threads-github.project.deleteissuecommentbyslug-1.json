@@ -3,9 +3,9 @@
   "family": "tasks.project-row-threads",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "5bc59cfd0d951ae5193df5c49ce3618d9536be0bc8f8192a7b03000963c2001b",
   "platform": "darwin",
@@ -238,103 +238,10 @@
       "error": "",
       "mutating": false
     },
-    "31aef5de0b63": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "mutating": false
-    },
-    "3202574ed4db": {
-      "detail": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      },
-      "error": "Cannot read properties of null (reading 'ok')",
-      "mutating": false
+    "32dd8a928ba1": {
+      "name": "projectRowDetailError",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (github.project.deleteIssueCommentBySlug)"
     },
     "403b13184ce0": {
       "name": "itemReplyDrafts",
@@ -342,11 +249,6 @@
       "value": {
         "comment-2": "a reply"
       }
-    },
-    "48a0d697f700": {
-      "name": "projectRowDetailError",
-      "ordinal": 5,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     },
     "49a0fd5a9cb8": {
       "name": "projectRowDetail",
@@ -1018,6 +920,55 @@
       "ordinal": 5,
       "value": ""
     },
+    "ba62560eb2ed": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "The host sent a reply this app could not read (github.project.deleteIssueCommentBySlug)",
+      "mutating": false
+    },
     "bb6b127da045": {
       "name": "github.project.deleteIssueCommentBySlug#1",
       "ordinal": 3,
@@ -1396,11 +1347,6 @@
           }
         }
       }
-    },
-    "d77f6fa8d216": {
-      "name": "projectRowDetailError",
-      "ordinal": 5,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "e2d6e04c1984": {
       "detail": {
@@ -1815,8 +1761,8 @@
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a"
           },
-          "state": "31aef5de0b63",
-          "effects": ["5d32aa29303c", "19346a719903", "48a0d697f700", "72332e237f1f"]
+          "state": "ba62560eb2ed",
+          "effects": ["5d32aa29303c", "19346a719903", "32dd8a928ba1", "72332e237f1f"]
         }
       },
       {
@@ -1833,7 +1779,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "48a0d697f700",
+            "32dd8a928ba1",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -1857,7 +1803,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "48a0d697f700",
+            "32dd8a928ba1",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -1887,7 +1833,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "48a0d697f700",
+            "32dd8a928ba1",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -1915,8 +1861,8 @@
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a"
           },
-          "state": "3202574ed4db",
-          "effects": ["5d32aa29303c", "19346a719903", "d77f6fa8d216", "72332e237f1f"]
+          "state": "ba62560eb2ed",
+          "effects": ["5d32aa29303c", "19346a719903", "32dd8a928ba1", "72332e237f1f"]
         }
       },
       {
@@ -1933,7 +1879,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "d77f6fa8d216",
+            "32dd8a928ba1",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -1957,7 +1903,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "d77f6fa8d216",
+            "32dd8a928ba1",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",
@@ -1987,7 +1933,7 @@
           "effects": [
             "5d32aa29303c",
             "19346a719903",
-            "d77f6fa8d216",
+            "32dd8a928ba1",
             "72332e237f1f",
             "f39ed9ab521e",
             "510db4658728",

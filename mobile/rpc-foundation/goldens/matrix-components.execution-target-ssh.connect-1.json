@@ -3,9 +3,9 @@
   "family": "components.execution-target",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "8b8f7fe7227d44330e216e0bf5d366c41b54d9bf76acfb24df2c1770984b9f27",
   "platform": "darwin",
@@ -527,17 +527,6 @@
         }
       }
     },
-    "c04e51232b36": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": false,
-        "error": "Cannot read properties of null (reading 'state')",
-        "requiresConnection": true,
-        "status": "error"
-      }
-    },
     "c06edc5665d7": {
       "name": "ssh.connect#1",
       "ordinal": 5,
@@ -585,13 +574,13 @@
         }
       }
     },
-    "d714ad0ce8fb": {
+    "eaf7ed4ebea4": {
       "detected": {
         "$rpc": "null"
       },
       "gate": {
         "connectInProgress": false,
-        "error": "Cannot read properties of undefined (reading 'state')",
+        "error": "The host sent a reply this app could not read (ssh.connect)",
         "requiresConnection": true,
         "status": "error"
       }
@@ -677,7 +666,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "d714ad0ce8fb",
+          "state": "eaf7ed4ebea4",
           "effects": []
         }
       },
@@ -690,7 +679,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "c04e51232b36",
+          "state": "eaf7ed4ebea4",
           "effects": []
         }
       },

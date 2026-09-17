@@ -3,9 +3,9 @@
   "family": "tasks.project-board-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "cf64dd43e708ff953ba2cbb2a70378aa8ab5d13ede157af7ba0967d913755b82",
   "platform": "darwin",
@@ -147,6 +147,11 @@
         "$rpc": "undefined"
       }
     },
+    "0efd754f1a5c": {
+      "name": "githubProjectError",
+      "ordinal": 15,
+      "value": "The host sent a reply this app could not read (github.project.viewTable)"
+    },
     "15cb97c93333": {
       "name": "github.project.listViews#1",
       "ordinal": 8,
@@ -171,36 +176,6 @@
       "name": "githubProjectError",
       "ordinal": 1,
       "value": ""
-    },
-    "23ca3d223b19": {
-      "name": "githubProjectError",
-      "ordinal": 15,
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "2538fbdb9ee1": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "loading": false,
-      "pasteError": "",
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "$rpc": "null"
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
     },
     "26921f3a7c09": {
       "name": "githubProjectPasteError",
@@ -308,6 +283,31 @@
         }
       ]
     },
+    "2fc294f6693b": {
+      "error": "The host sent a reply this app could not read (github.project.viewTable)",
+      "loading": false,
+      "pasteError": "",
+      "projects": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ],
+      "table": {
+        "$rpc": "null"
+      },
+      "views": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
     "3493818a7239": {
       "name": "githubProjectPasteBusy",
       "ordinal": 33,
@@ -349,11 +349,6 @@
       "name": "githubProjectPasteBusy",
       "ordinal": 17,
       "value": true
-    },
-    "3eb90efe4306": {
-      "name": "githubProjectError",
-      "ordinal": 15,
-      "value": "Cannot read properties of null (reading 'ok')"
     },
     "43352776b1e1": {
       "name": "githubProjectTable",
@@ -925,31 +920,6 @@
       "ordinal": 33,
       "value": false
     },
-    "c4615593811a": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "loading": false,
-      "pasteError": "",
-      "projects": [
-        {
-          "host": "github.com",
-          "number": 3,
-          "owner": "owner",
-          "ownerType": "organization",
-          "title": "Board"
-        }
-      ],
-      "table": {
-        "$rpc": "null"
-      },
-      "views": [
-        {
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      ]
-    },
     "c4c4250b0567": {
       "name": "showGitHubProjectPicker",
       "ordinal": 24,
@@ -1506,7 +1476,7 @@
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
-          "state": "2538fbdb9ee1",
+          "state": "2fc294f6693b",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1516,7 +1486,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "23ca3d223b19",
+            "0efd754f1a5c",
             "842c950ee7cc"
           ]
         }
@@ -1555,7 +1525,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "23ca3d223b19",
+            "0efd754f1a5c",
             "842c950ee7cc",
             "3985399034a2",
             "26921f3a7c09",
@@ -1584,7 +1554,7 @@
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
-          "state": "c4615593811a",
+          "state": "2fc294f6693b",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1594,7 +1564,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "3eb90efe4306",
+            "0efd754f1a5c",
             "842c950ee7cc"
           ]
         }
@@ -1633,7 +1603,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "3eb90efe4306",
+            "0efd754f1a5c",
             "842c950ee7cc",
             "3985399034a2",
             "26921f3a7c09",
@@ -1662,7 +1632,7 @@
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
-          "state": "376c9e8bd72a",
+          "state": "2fc294f6693b",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1672,7 +1642,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "5abab014ad66",
+            "0efd754f1a5c",
             "842c950ee7cc"
           ]
         }
@@ -1711,7 +1681,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "5abab014ad66",
+            "0efd754f1a5c",
             "842c950ee7cc",
             "3985399034a2",
             "26921f3a7c09",
@@ -1740,7 +1710,7 @@
             "views-1": "be0da5b53ffb",
             "table-2": "eb79a9b3682a"
           },
-          "state": "376c9e8bd72a",
+          "state": "2fc294f6693b",
           "effects": [
             "2085118de92f",
             "a5a3530ec11c",
@@ -1750,7 +1720,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "5abab014ad66",
+            "0efd754f1a5c",
             "842c950ee7cc"
           ]
         }
@@ -1789,7 +1759,7 @@
             "654693493b51",
             "0388fa155721",
             "da50b440ea30",
-            "5abab014ad66",
+            "0efd754f1a5c",
             "842c950ee7cc",
             "3985399034a2",
             "26921f3a7c09",

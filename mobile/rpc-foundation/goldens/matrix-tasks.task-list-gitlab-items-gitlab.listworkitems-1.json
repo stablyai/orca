@@ -3,9 +3,9 @@
   "family": "tasks.task-list-gitlab-items",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "baseline": "d4cfac98b45ba21aa7dad62cd4151e275b772ba8",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "038221907a57f5bb25338f9b07a744dbac3ea0a7ea2ba43281f171912f45a586",
   "platform": "darwin",
@@ -288,12 +288,6 @@
         }
       }
     },
-    "4913662b5375": {
-      "error": "Cannot read properties of undefined (reading 'error')",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
     "4b933ef4d8e8": {
       "name": "gitlab.listWorkItems#1",
       "ordinal": 3,
@@ -334,12 +328,6 @@
           "ok": false
         }
       }
-    },
-    "4f894b5fafff": {
-      "error": "Cannot read properties of null (reading 'error')",
-      "items": [],
-      "loading": false,
-      "refreshing": false
     },
     "59ae87905e65": {
       "name": "gitlab.listWorkItems#1",
@@ -396,10 +384,11 @@
       "ordinal": 2,
       "value": true
     },
-    "6510b18b6b22": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "Cannot read properties of undefined (reading 'error')"
+    "63f4bd373653": {
+      "error": "The host sent a reply this app could not read (gitlab.listWorkItems)",
+      "items": [],
+      "loading": false,
+      "refreshing": false
     },
     "820944a2683d": {
       "error": "outer refused",
@@ -496,11 +485,6 @@
         }
       }
     },
-    "9c00e902782d": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "Cannot read properties of undefined (reading 'map')"
-    },
     "a2f93be0d571": {
       "name": "items",
       "ordinal": 5,
@@ -568,10 +552,10 @@
         }
       }
     },
-    "a6e42d3d0cf5": {
+    "c0eea71a0827": {
       "name": "error",
       "ordinal": 6,
-      "value": "Cannot read properties of null (reading 'error')"
+      "value": "The host sent a reply this app could not read (gitlab.listWorkItems)"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -634,12 +618,6 @@
       "name": "error",
       "ordinal": 6,
       "value": "outer refused"
-    },
-    "f8405106f8fb": {
-      "error": "Cannot read properties of undefined (reading 'map')",
-      "items": [],
-      "loading": false,
-      "refreshing": false
     }
   },
   "recording": {
@@ -674,12 +652,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "4913662b5375",
+          "state": "63f4bd373653",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "6510b18b6b22",
+            "c0eea71a0827",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -694,12 +672,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "4f894b5fafff",
+          "state": "63f4bd373653",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "a6e42d3d0cf5",
+            "c0eea71a0827",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -714,12 +692,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f8405106f8fb",
+          "state": "63f4bd373653",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "9c00e902782d",
+            "c0eea71a0827",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -734,12 +712,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f8405106f8fb",
+          "state": "63f4bd373653",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "9c00e902782d",
+            "c0eea71a0827",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -754,12 +732,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f8405106f8fb",
+          "state": "63f4bd373653",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "9c00e902782d",
+            "c0eea71a0827",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
