@@ -11557,15 +11557,16 @@
             "result": [
               {
                 "id": 1,
+                "actionName": "review_requested",
                 "targetType": "Issue",
-                "target": {
-                  "id": "gid://1",
-                  "iid": 4,
-                  "title": "A GitLab todo",
-                  "webUrl": "",
-                  "state": "opened",
-                  "updatedAt": "2020-01-01T00:00:00.000Z"
-                }
+                "targetIid": 4,
+                "targetTitle": "A GitLab todo",
+                "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+                "projectPath": "group/project",
+                "authorUsername": "octocat",
+                "authorAvatarUrl": "",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "state": "pending"
               }
             ]
           }
