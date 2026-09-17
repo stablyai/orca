@@ -556,4 +556,16 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it('claims the Window menu as the macOS windows menu', () => {
+    registerAppMenu(buildMenuOptions())
+
+    // Why: the role is what routes this submenu to -[NSApp setWindowsMenu:],
+    // which is what makes macOS insert the open-window list and the
+    // multi-display "Move to <display>" entries. Losing it silently drops
+    // those system items, so pin it here.
+    const windowItem = getTemplate().find((entry) => entry.label === 'Window')
+    expect(windowItem?.role).toBe(isMac ? 'window' : undefined)
+    expect(windowItem?.submenu).toEqual([{ role: 'minimize' }, { role: 'zoom' }])
+  })
 })
