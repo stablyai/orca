@@ -94,6 +94,7 @@ export function launchSleepingAgentSession(
       : {}),
     ...(sessionOptions ? { sessionOptions, sessionOptionsOverrideAgentArgs: true } : {}),
     platform: resumeTarget.platform,
+    isRemote: resumeTarget.isRemote,
     shell: resumeTarget.shell
   })
   if (!startupPlan) {

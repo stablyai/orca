@@ -10,6 +10,8 @@ export type AgentResumeLaunchTarget = {
   platform: NodeJS.Platform
   /** undefined keeps the platform default: PowerShell on win32, POSIX elsewhere. */
   shell: AgentStartupShell | undefined
+  /** True when the resume target is an SSH connection or a non-local execution host. */
+  isRemote: boolean
 }
 
 export type AgentResumeLaunchTargetArgs = {
@@ -47,12 +49,14 @@ export function resolveAgentResumeLaunchTarget(
   args: AgentResumeLaunchTargetArgs
 ): AgentResumeLaunchTarget {
   const platform = resolveResumeLaunchPlatform(args)
+  const isRemote =
+    Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local'
   return {
     platform,
+    isRemote,
     shell: resolveLocalWindowsAgentStartupShell({
       platform,
-      isRemote:
-        Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local',
+      isRemote,
       terminalWindowsShell: resolveWindowsShellOverride(
         args.tabShellOverride,
         args.terminalWindowsShell

@@ -82,6 +82,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         : {}),
       ...(sessionOptions ? { sessionOptions, sessionOptionsOverrideAgentArgs: true } : {}),
       platform: resumeTarget.platform,
+      isRemote: resumeTarget.isRemote,
       shell: resumeTarget.shell
     })
     if (!startupPlan) {
