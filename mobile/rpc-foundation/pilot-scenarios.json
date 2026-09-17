@@ -5821,6 +5821,64 @@
       ]
     },
     {
+      "id": "tw-create-retry-agent-launched",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.agent-launch-create",
+      "sites": [
+        "mobile/src/tasks/worktree-create-retry.ts",
+        "mobile/src/tasks/agent-launch-worktree-create.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agentLaunch": true
+          }
+        },
+        {
+          "checkpoint": "sent"
+        },
+        {
+          "complete": "agent.launch#1",
+          "params": {
+            "agent": "codex",
+            "target": {
+              "kind": "create-worktree",
+              "create": {
+                "repo": "id:repo-1",
+                "name": "kestrel",
+                "clientMutationId": "mutation-1"
+              }
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "structured",
+                "sessionId": "sess-1",
+                "handle": "t-1"
+              },
+              "worktreeId": "repo-1::/w",
+              "warning": "  startup terminal failed  ",
+              "receipt": {
+                "mode": "structured",
+                "preferred": "structured",
+                "reason": "user_default",
+                "detail": "Structured session created."
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "launched"
+        }
+      ]
+    },
+    {
       "id": "tw-capabilities-advertised",
       "operation": "tasks.worktree-capabilities",
       "version": 1,
