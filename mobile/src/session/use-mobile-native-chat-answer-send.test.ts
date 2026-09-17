@@ -139,15 +139,15 @@ describe('useMobileNativeChatAnswerSend', () => {
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '1', enter: false })
 
     await act(async () => {
-      vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
     })
     expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: '3', enter: false })
     await act(async () => {
-      vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
     })
     expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({ text: '\x1b[C', enter: false })
     await act(async () => {
-      vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
     })
     await expect(result).resolves.toBe(true)
     expect(sendRequest.mock.calls[3]?.[1]).toMatchObject({ text: '\r', enter: false })
@@ -168,7 +168,7 @@ describe('useMobileNativeChatAnswerSend', () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
     })
     await act(async () => {
-      vi.runAllTimersAsync()
+      await vi.runAllTimersAsync()
     })
 
     await expect(result).resolves.toBe(true)
@@ -200,10 +200,10 @@ describe('useMobileNativeChatAnswerSend', () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
     })
     await act(async () => {
-      vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
     })
     await act(async () => {
-      vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS)
     })
 
     await expect(result).resolves.toBe(true)
@@ -222,7 +222,7 @@ describe('useMobileNativeChatAnswerSend', () => {
       result = answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [], other: 'zeta\nspaces' }])
     })
     await act(async () => {
-      vi.runAllTimersAsync()
+      await vi.runAllTimersAsync()
     })
 
     await expect(result).resolves.toBe(true)
@@ -267,7 +267,7 @@ describe('useMobileNativeChatAnswerSend', () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
     })
     await act(async () => {
-      vi.runAllTimersAsync()
+      await vi.runAllTimersAsync()
     })
 
     await expect(result).resolves.toBe(true)
@@ -371,7 +371,7 @@ describe('useMobileNativeChatAnswerSend', () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
     })
     await act(async () => {
-      vi.runAllTimersAsync()
+      await vi.runAllTimersAsync()
     })
 
     await expect(result).resolves.toBe(false)
@@ -417,7 +417,7 @@ describe('useMobileNativeChatAnswerSend', () => {
 
     await setEnabled(false)
     await act(async () => {
-      vi.runAllTimersAsync()
+      await vi.runAllTimersAsync()
     })
 
     await expect(result).resolves.toBe(false)
@@ -476,7 +476,7 @@ describe('useMobileNativeChatAnswerSend', () => {
       second = answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])
     })
     await act(async () => {
-      vi.runAllTimersAsync()
+      await vi.runAllTimersAsync()
     })
 
     await expect(first).resolves.toBe(false)

@@ -57,12 +57,12 @@ describe('useMobileNativeChatFileSearch', () => {
       state?.loadNativeChatFiles('app')
     })
     await act(async () => {
-      vi.advanceTimersByTimeAsync(119)
+      await vi.advanceTimersByTimeAsync(119)
     })
     expect(sendRequest).not.toHaveBeenCalled()
 
     await act(async () => {
-      vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
     })
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest).toHaveBeenCalledWith('files.searchPaths', {
@@ -89,13 +89,13 @@ describe('useMobileNativeChatFileSearch', () => {
 
     act(() => state?.loadNativeChatFiles('apple'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
 
     act(() => state?.loadNativeChatFiles('readme'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
     expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
@@ -113,7 +113,7 @@ describe('useMobileNativeChatFileSearch', () => {
     // Populate the cache for 'app'.
     act(() => state?.loadNativeChatFiles('app'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
@@ -126,7 +126,7 @@ describe('useMobileNativeChatFileSearch', () => {
 
     // The cancelled 'beta' request must never fire and overwrite the cached result.
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
     expect(
@@ -154,7 +154,7 @@ describe('useMobileNativeChatFileSearch', () => {
       sendRequest.mock.calls.filter(([method]) => method === 'files.list').length
     act(() => state?.loadNativeChatFiles('apple'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
     expect(listCalls()).toBe(1)
@@ -162,7 +162,7 @@ describe('useMobileNativeChatFileSearch', () => {
     // Control: a fresh query under the same epoch is answered from the inventory already held.
     act(() => state?.loadNativeChatFiles('readme'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(listCalls()).toBe(1)
 
@@ -172,7 +172,7 @@ describe('useMobileNativeChatFileSearch', () => {
     generation = 2
     act(() => state?.loadNativeChatFiles('guide'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(listCalls()).toBe(2)
     expect(state?.nativeChatFilePaths).toEqual(['docs/guide.md'])
@@ -198,11 +198,11 @@ describe('useMobileNativeChatFileSearch', () => {
 
     act(() => state?.loadNativeChatFiles('apple'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     act(() => state?.loadNativeChatFiles('readme'))
     await act(async () => {
-      vi.advanceTimersByTimeAsync(120)
+      await vi.advanceTimersByTimeAsync(120)
     })
     expect(sendRequest.mock.calls.filter(([method]) => method === 'files.list')).toHaveLength(1)
 
