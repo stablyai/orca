@@ -6,6 +6,7 @@ import { runProcess } from '../../src/shared/child-process/run-process'
 import {
   checkPinAncestry,
   corpusProvenanceChanged,
+  removeScratchWorktree,
   repinInstruction
 } from './rpc-recording-pin-guard.mts'
 
@@ -32,6 +33,19 @@ async function commit(repository: string, body: string): Promise<string> {
   await git(repository, 'add', 'product.ts')
   await git(repository, 'commit', '--quiet', '--no-verify', '--message', body)
   return await git(repository, 'rev-parse', 'HEAD')
+}
+async function commitAt(repository: string, path: string, body: string): Promise<string> {
+  await mkdir(dirname(join(repository, path)), { recursive: true })
+  await writeFile(join(repository, path), `${body}\n`)
+  await git(repository, 'add', path)
+  await git(repository, 'commit', '--quiet', '--no-verify', '--message', path)
+  return await git(repository, 'rev-parse', 'HEAD')
+}
+const RECORDER_FILE = 'mobile/src/test-support/rpc-recording/run-recording.ts'
+/** Both provenance paths: the gate refuses to answer when either one names nothing. */
+async function seedProvenance(repository: string): Promise<string> {
+  await commitAt(repository, 'mobile/rpc-foundation/pilot-scenarios.json', 'pin')
+  return await commitAt(repository, RECORDER_FILE, 'recorder')
 }
 const MISSING_SHA = '0123456789abcdef0123456789abcdef01234567'
 
@@ -63,6 +77,27 @@ describe('recording pin ancestry', () => {
     const branchPin = await commit(repository, 'two')
     const branchHead = await commit(repository, 'three')
     expect(await checkPinAncestry(repository, branchPin, branchHead)).toMatchObject({ ok: true })
+  })
+
+  it('passes a branch cut before main repinned, judged against the merge preview', async () => {
+    const repository = await throwawayRepository()
+    const branchPoint = await commitAt(repository, 'mobile/src/session/route.ts', 'base')
+    const mainPin = await commitAt(
+      repository,
+      'mobile/rpc-foundation/pilot-scenarios.json',
+      'repin'
+    )
+    await git(repository, 'switch', '--quiet', '--create', 'refactor', branchPoint)
+    const branchHead = await commitAt(repository, 'mobile/src/session/route.ts', 'migrated')
+    await git(repository, 'merge', '--quiet', '--no-edit', 'main')
+    const preview = await git(repository, 'rev-parse', 'HEAD')
+    // The preview is the tree CI checks out and reads the pin from, so it is the tree to judge.
+    expect(await checkPinAncestry(repository, mainPin, preview)).toMatchObject({ ok: true })
+    // The head sha would have failed this ordinary branch, and told the author to repin to it.
+    expect(await checkPinAncestry(repository, mainPin, branchHead)).toMatchObject({
+      ok: false,
+      failure: 'not-an-ancestor'
+    })
   })
 
   it('fails once that branch squash-merges and the pin leaves the history', async () => {
@@ -114,17 +149,9 @@ describe('recording pin ancestry', () => {
 })
 
 describe('what a reproduction reads from the candidate tree', () => {
-  async function commitAt(repository: string, path: string, body: string): Promise<string> {
-    await mkdir(dirname(join(repository, path)), { recursive: true })
-    await writeFile(join(repository, path), `${body}\n`)
-    await git(repository, 'add', path)
-    await git(repository, 'commit', '--quiet', '--no-verify', '--message', path)
-    return await git(repository, 'rev-parse', 'HEAD')
-  }
-
   it('skips the run when only product sources moved', async () => {
     const repository = await throwawayRepository()
-    await commitAt(repository, 'mobile/rpc-foundation/goldens/a.json', '{}')
+    await seedProvenance(repository)
     const base = await commitAt(repository, 'mobile/src/session/route.ts', 'before')
     await commitAt(repository, 'mobile/src/session/route.ts', 'after')
     expect(await corpusProvenanceChanged(repository, base)).toBe(false)
@@ -132,6 +159,7 @@ describe('what a reproduction reads from the candidate tree', () => {
 
   it('runs when a golden moved', async () => {
     const repository = await throwawayRepository()
+    await seedProvenance(repository)
     const base = await commitAt(repository, 'mobile/rpc-foundation/goldens/a.json', '{}')
     await commitAt(repository, 'mobile/rpc-foundation/goldens/a.json', '{"spliced": true}')
     expect(await corpusProvenanceChanged(repository, base)).toBe(true)
@@ -139,6 +167,7 @@ describe('what a reproduction reads from the candidate tree', () => {
 
   it('runs when the pin itself moved', async () => {
     const repository = await throwawayRepository()
+    await seedProvenance(repository)
     const base = await commitAt(repository, 'mobile/rpc-foundation/pilot-scenarios.json', 'one')
     await commitAt(repository, 'mobile/rpc-foundation/pilot-scenarios.json', 'two')
     expect(await corpusProvenanceChanged(repository, base)).toBe(true)
@@ -146,6 +175,7 @@ describe('what a reproduction reads from the candidate tree', () => {
 
   it('ignores a corpus change the base branch made without this branch', async () => {
     const repository = await throwawayRepository()
+    await seedProvenance(repository)
     const branchPoint = await commitAt(repository, 'mobile/rpc-foundation/goldens/a.json', '{}')
     await commitAt(repository, 'mobile/rpc-foundation/goldens/b.json', '{}')
     const baseTip = await git(repository, 'rev-parse', 'HEAD')
@@ -156,9 +186,34 @@ describe('what a reproduction reads from the candidate tree', () => {
 
   it('runs when the recorder moved, because every golden pins it by digest', async () => {
     const repository = await throwawayRepository()
-    const recorder = 'mobile/src/test-support/rpc-recording/run-recording.ts'
-    const base = await commitAt(repository, recorder, 'one')
-    await commitAt(repository, recorder, 'two')
+    const base = await seedProvenance(repository)
+    await commitAt(repository, RECORDER_FILE, 'two')
     expect(await corpusProvenanceChanged(repository, base)).toBe(true)
+  })
+
+  it('refuses to answer when a provenance path names nothing, instead of skipping forever', async () => {
+    const repository = await throwawayRepository()
+    const base = await seedProvenance(repository)
+    await git(repository, 'mv', 'mobile/rpc-foundation', 'mobile/rpc-corpus')
+    await git(repository, 'commit', '--quiet', '--no-verify', '--message', 'rename the corpus')
+    await expect(corpusProvenanceChanged(repository, base)).rejects.toThrow('not a tracked path')
+  })
+})
+
+describe('scratch worktree teardown', () => {
+  it('leaves an unrelated worktree registered when its directory is missing', async () => {
+    const repository = await throwawayRepository()
+    await commit(repository, 'one')
+    const trees = join(repository, '..', 'trees')
+    for (const name of ['scratch', 'kept', 'unmounted']) {
+      await git(repository, 'worktree', 'add', '--quiet', '--detach', join(trees, name))
+    }
+    // Stands in for a worktree on an unmounted volume: `git worktree prune` would deregister it.
+    await rm(join(trees, 'unmounted'), { recursive: true, force: true })
+    await removeScratchWorktree(repository, join(trees, 'scratch'))
+    const registered = await git(repository, 'worktree', 'list', '--porcelain')
+    expect(registered).toContain('trees/kept')
+    expect(registered).toContain('trees/unmounted')
+    expect(registered).not.toContain('trees/scratch')
   })
 })

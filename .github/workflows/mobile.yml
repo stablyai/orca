@@ -42,10 +42,11 @@ on:
       - '.github/workflows/mobile.yml'
 
 concurrency:
-  group: mobile-${{ github.event.pull_request.number || github.ref }}
-  # A superseded PR head is worth nothing; a superseded main commit still has a verdict of its own,
-  # and cancelling it is how a broken pin slips through between two merges.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Per commit on main, not per branch. GitHub cancels any PENDING run in a group when a new one
+  # queues, whatever `cancel-in-progress` says, so one shared main group drops the middle merge of
+  # three -- and a pin that breaks there is exactly what this workflow now checks for.
+  group: mobile-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -141,14 +142,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Seconds. `github.sha` on a push is the merged commit; on a pull_request the checked-out ref
-      # is the merge preview, whose second parent is the base -- so a pin reachable only from main
-      # would pass there and fail after the squash. The head sha is the branch's own claim.
+      # Seconds. No `--ref`, so the pin is judged against the same tree it was read out of. On a
+      # pull request that is the merge preview, which already carries main's repins; judging the
+      # branch head instead fails every branch cut before the day's repin, and its instruction would
+      # tell the author to pin their own head -- creating the break this guard exists to catch. A
+      # branch that pins its own commit passes here and fails on the push after the squash, which is
+      # where the pin actually leaves the history.
       - name: Check the recording pin is reachable
         shell: bash
-        env:
-          PIN_GUARD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry --ref "$PIN_GUARD_REF"
+        run: pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry
 
       # ~2 min locally for the record itself, so it is gated rather than run twice over. A pull
       # request that moves none of the corpus, the manifest or the recorder cannot move this

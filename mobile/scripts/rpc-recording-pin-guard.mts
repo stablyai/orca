@@ -18,18 +18,20 @@ import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/recording-d
 import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
 
 /** The recorder is exempt from the fence, so a reproduction lays the candidate copy over the pin. */
-export const RECORDER_OVERLAY = 'mobile/src/test-support/rpc-recording'
+const RECORDER_OVERLAY = 'mobile/src/test-support/rpc-recording'
 /**
  * Everything a reproduction takes from the candidate tree rather than from the pin: the corpus it
  * compares against, the manifest that names the pin and derives the scenarios, and the recorder it
  * lays over the pinned sources. A revision that moves none of these cannot move the verdict, which
  * is what lets a pull request skip the run.
  */
-export const CORPUS_PROVENANCE_PATHS = ['mobile/rpc-foundation', RECORDER_OVERLAY] as const
+const CORPUS_PROVENANCE_PATHS = ['mobile/rpc-foundation', RECORDER_OVERLAY] as const
 /**
- * The corpus readers that are not drivers. Boundary: every suite that resolves its directory from
- * `RPC_FOUNDATION_GOLDENS` runs here, so the pinned-tree run makes the whole claim. `derived-goldens`
- * is the census a whole golden spliced in by a merge trips, which no per-golden compare can see.
+ * The corpus readers that are not drivers. Boundary: a suite belongs here when its verdict is a
+ * function of the corpus bytes themselves. The `mutants/` suites read the same directory but assert
+ * that the corpus DETECTS a planted mutation, which is a different claim than reproducing it.
+ * `derived-goldens` is the census a whole golden spliced in by a merge trips, which no per-golden
+ * compare can see.
  */
 const CORPUS_CENSUS_SUITES = [
   'derived-goldens.test.ts',
@@ -47,7 +49,7 @@ export type PinAncestryVerdict =
 async function git(cwd: string, args: readonly string[]) {
   return await runProcess({ program: 'git', args: [...args], cwd })
 }
-export function readPinnedBaseline(root: string): string {
+function readPinnedBaseline(root: string): string {
   return readScenarios(resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')).baseline
 }
 export function repinInstruction(baseline: string, ref: string, cause: string): string {
@@ -127,8 +129,20 @@ export async function checkPinAncestry(
 
 /** Whether anything a reproduction reads from the candidate tree moved since `since`. */
 export async function corpusProvenanceChanged(root: string, since: string): Promise<boolean> {
+  // Fail closed on a rename: `git diff --quiet` reports "nothing changed" for a pathspec that
+  // matches no file, which would skip the reproduction forever and report success.
+  for (const path of CORPUS_PROVENANCE_PATHS) {
+    const tracked = await git(root, ['ls-files', '--error-unmatch', '--', path])
+    if (tracked.code !== 0) {
+      throw new Error(
+        `${path} is not a tracked path. This gate decides whether to reproduce the corpus by ` +
+          'diffing it, so a rename has to move this list with it.'
+      )
+    }
+  }
   // The branch point, not the base tip: a base that moved on without this branch would otherwise
-  // read as this branch's change and buy a run whose verdict the base push already published.
+  // read as this branch's change. This is for local invocations, which pass a branch tip. Under CI
+  // `HEAD` is the merge preview whose first parent is the base, so it resolves to `since` itself.
   const branchPoint = await git(root, ['merge-base', since, 'HEAD'])
   const from = branchPoint.code === 0 ? branchPoint.stdout.trim() : since
   const diff = await git(root, ['diff', '--quiet', from, '--', ...CORPUS_PROVENANCE_PATHS])
@@ -145,7 +159,7 @@ export async function corpusProvenanceChanged(root: string, since: string): Prom
  * comparison is `compareGolden`, so lockfile and platform stay masked the way they are on every
  * other run.
  */
-export async function reproduceFromPin(root: string, baseline: string): Promise<boolean> {
+async function reproduceFromPin(root: string, baseline: string): Promise<boolean> {
   const scratch = await mkdtemp(join(tmpdir(), 'rpc-recording-pin-'))
   const tree = join(scratch, 'tree')
   try {
@@ -190,13 +204,27 @@ export async function reproduceFromPin(root: string, baseline: string): Promise<
     }
     return result.code === 0
   } finally {
-    await git(root, ['worktree', 'remove', '--force', tree])
-    await git(root, ['worktree', 'prune'])
+    await removeScratchWorktree(root, tree)
     await rm(scratch, { recursive: true, force: true })
   }
 }
 
-export const REPRODUCTION_FAILURE = [
+/**
+ * Deregisters the scratch checkout and nothing else. Never `git worktree prune`: that is
+ * repository-wide, and this git directory is shared by every worktree on the machine, so a prune
+ * deregisters any of them whose directory is momentarily missing.
+ */
+export async function removeScratchWorktree(root: string, tree: string): Promise<void> {
+  const removed = await git(root, ['worktree', 'remove', '--force', tree])
+  if (removed.code !== 0) {
+    process.stderr.write(
+      `Could not deregister the scratch worktree ${tree}: ${removed.stderr.trim()}\n` +
+        'It stays registered against this repository until you prune it yourself.\n'
+    )
+  }
+}
+
+const REPRODUCTION_FAILURE = [
   'The goldens on disk are not what the recorder produces from the pinned tree.',
   '',
   'Each divergence above is a golden whose header names a tree that does not produce it. A merge',
