@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { normalizeLoadedUiState } from './persistence/loading-store/normalize-loaded-ui-state'
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { PersistedState } from '../shared/persisted-state-types'
 import {
@@ -335,6 +336,77 @@ describe('Store', () => {
     expect(store.getUI().setupGuideBrowserMilestoneMigrated).toBe(false)
     expect(store.getUI().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
   })
+
+  it('migrates a previously dismissed onboarding checklist to the Settings preference', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: { dismissed: true }
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSettingsDismissed).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).ui?.setupGuideSettingsDismissed).toBe(true)
+  })
+
+  it('preserves an explicit Settings preference over the legacy checklist dismissal', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: { dismissed: true }
+      },
+      ui: { setupGuideSettingsDismissed: false }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSettingsDismissed).toBe(false)
+  })
+
+  it.each(['true', 1, null, {}])(
+    'persists an invalid Settings preference after normalization: %j',
+    async (raw) => {
+      const defaults = getDefaultPersistedState(testState.dir)
+      const baselineSave = vi.fn()
+      normalizeLoadedUiState(defaults, defaults, defaults.onboarding, false, false, baselineSave)
+      const repairSave = vi.fn()
+      const repaired = normalizeLoadedUiState(
+        {
+          ...defaults,
+          ui: { ...defaults.ui, setupGuideSettingsDismissed: raw as unknown as boolean }
+        },
+        defaults,
+        defaults.onboarding,
+        false,
+        false,
+        repairSave
+      )
+      expect(repaired.setupGuideSettingsDismissed).toBe(false)
+      expect(repairSave.mock.calls.length).toBeGreaterThan(baselineSave.mock.calls.length)
+      const initial = await createStore()
+      initial.flush()
+      const settled = readDataFile() as PersistedState
+      writeDataFile({
+        ...settled,
+        ui: { ...settled.ui, setupGuideSettingsDismissed: raw }
+      })
+
+      const store = await createStore()
+      expect(store.getUI().setupGuideSettingsDismissed).toBe(false)
+      store.flush()
+      expect((readDataFile() as PersistedState).ui.setupGuideSettingsDismissed).toBe(false)
+    }
+  )
 
   it('persists the existing-user onboarding backfill back to disk', async () => {
     // Why: the upgrade-cohort backfill is derived at load; assert it round-trips through a write intact (load-time scheduleSave via loadNeedsSave, no manual flush).
