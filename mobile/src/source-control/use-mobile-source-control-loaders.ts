@@ -181,10 +181,11 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         }
         return false
       }
-      // What retires a compare: this host, this route identity, this workspace. The route identity
-      // is in it as well as in the render-phase retire, so a scope the owner has not seen still
-      // retires on its own if a load ever reaches it before that block does.
-      const scope: RequestScope = [client, statusIdentityKey, worktreeId]
+      // What retires a compare: this host and this route identity, which is `${hostId}\0${worktreeId}`
+      // and so carries the workspace already. It is in the scope as well as in the render-phase
+      // retire, so a scope the owner has not seen still retires on its own if a load ever reaches it
+      // before that block does.
+      const scope: RequestScope = [client, statusIdentityKey]
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
