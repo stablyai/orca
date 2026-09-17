@@ -183,7 +183,7 @@ off the context `client-context.tsx` keeps module-private, and each used to carr
 `exports.recorderHostClientContext = Ctx;`. That string names a local no type checker follows, so
 five spellings were five independent ways to reach a `ReferenceError` seconds into a recording.
 `hostClientContextExposure` is the one copy; the trade is that it sits inside `recorderSha256`, so
-editing it re-records all 727 goldens rather than the five families. A rename of the local is still
+editing it re-records all 778 goldens rather than the five families. A rename of the local is still
 invisible to `tsc` — nothing short of editing the product module makes a private local checkable —
 so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a sixth
 inline copy.
@@ -378,8 +378,11 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 368 manifest scenarios against frozen goldens and fails on any divergence: 727 goldens
-over 888 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+It replays 393 manifest scenarios against frozen goldens and fails on any divergence: 778 goldens
+over 781 tests, all inside `pnpm --dir mobile test`. Counted with
+`python3 -c "import json;print(len(json.load(open('mobile/rpc-foundation/pilot-scenarios.json'))['scenarios']))"`,
+`find mobile/rpc-foundation/goldens -type f | wc -l`, and the reported total of
+`vitest run src/test-support/rpc-recording/{pilot,family}-recordings.test.ts src/test-support/rpc-recording/derived-goldens.test.ts`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?
@@ -610,10 +613,10 @@ the drop happened under, and records a non-empty report as a `reply-salvage` eff
 operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
 tree changes: the report was already being built and thrown away.
 
-No golden carries one. All 19,384 checked reads in the corpus decode their reply whole, on every
-reply partition — the matrix varies the envelope a host sends, not the shape of a row inside a
-result — so this observation pins the absence rather than a recorded drop. What it buys is the
-next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
+44 of the 778 goldens carry one, and every other checked read in the corpus decodes its reply
+whole (`grep -l reply-salvage mobile/rpc-foundation/goldens/*.json | wc -l`). The matrix varies the
+envelope a host sends rather than the shape of a row inside a result, so on most families this
+observation pins an absence rather than a recorded drop. What it buys is the next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
 golden even where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
 observation itself honest, driving a malformed row and a malformed optional through the real
 `git.status` reply schema, because a refactor that stopped reporting would otherwise leave every
