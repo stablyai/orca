@@ -5,9 +5,10 @@ import { applyAgentPaneRimToManager, subscribeAgentPaneRim } from './agent-pane-
 export function useTerminalPaneAgentRim(context: {
   managerRef: React.MutableRefObject<PaneManager | null>
   tabId: string
+  cwd: string | undefined
   paneCount: number
 }): void {
-  const { managerRef, tabId, paneCount } = context
+  const { managerRef, tabId, cwd, paneCount } = context
   const applyAgentPaneRim = useCallback(() => {
     const manager = managerRef.current
     if (!manager) {
@@ -17,8 +18,9 @@ export function useTerminalPaneAgentRim(context: {
   }, [managerRef, tabId])
 
   // Why: layout effect so the rim lands before paint when panes are added or swapped.
+  // Why cwd: a same-tab cwd change rebuilds the pane manager, so re-apply onto the replacement.
   useLayoutEffect(() => {
     applyAgentPaneRim()
     return subscribeAgentPaneRim(tabId, applyAgentPaneRim)
-  }, [tabId, paneCount, applyAgentPaneRim])
+  }, [tabId, cwd, paneCount, applyAgentPaneRim])
 }
