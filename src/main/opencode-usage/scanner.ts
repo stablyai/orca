@@ -97,7 +97,7 @@ export async function parseOpenCodeUsageDatabase(
 export async function scanOpenCodeUsageDatabases(
   worktrees: OpenCodeUsageWorktreeRef[],
   previousProcessedDatabases: OpenCodeUsagePersistedDatabase[],
-  onFileScanned?: () => void
+  onFilesScanned?: (count: number) => void
 ): Promise<{
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
@@ -195,7 +195,7 @@ export async function scanOpenCodeUsageDatabases(
     })
     parsedByPath.set(dbPath, processed)
 
-    onFileScanned?.()
+    onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_DATABASES === 0) {
       await yieldToEventLoop()
     }

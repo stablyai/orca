@@ -39,11 +39,11 @@ const port = parentPort
 // reads as "still moving".
 const PROGRESS_POST_INTERVAL_MS = 1_000
 
-function createProgressReporter(id: number): () => void {
+function createProgressReporter(id: number): (count: number) => void {
   let filesScanned = 0
   let lastPostedAt = 0
-  return () => {
-    filesScanned++
+  return (count) => {
+    filesScanned += count
     const now = Date.now()
     if (now - lastPostedAt < PROGRESS_POST_INTERVAL_MS) {
       return
@@ -56,13 +56,13 @@ function createProgressReporter(id: number): () => void {
 
 async function runScan(
   request: UsageScanWorkerRequest,
-  onFileScanned: () => void
+  onFilesScanned: (count: number) => void
 ): Promise<UsageScanWorkerValue> {
   // Switched, not table-driven: each branch narrows `previous` to that
   // provider's own record type, so nothing here needs a type assertion.
   switch (request.providerId) {
     case 'claude': {
-      const result = await scanClaudeUsageFiles(request.worktrees, request.previous, onFileScanned)
+      const result = await scanClaudeUsageFiles(request.worktrees, request.previous, onFilesScanned)
       return {
         providerId: 'claude',
         source: result.processedFiles,
@@ -71,7 +71,7 @@ async function runScan(
       }
     }
     case 'codex': {
-      const result = await scanCodexUsageFiles(request.worktrees, request.previous, onFileScanned)
+      const result = await scanCodexUsageFiles(request.worktrees, request.previous, onFilesScanned)
       return {
         providerId: 'codex',
         source: result.processedFiles,
@@ -83,7 +83,7 @@ async function runScan(
       const result = await scanOpenCodeUsageDatabases(
         request.worktrees,
         request.previous,
-        onFileScanned
+        onFilesScanned
       )
       return {
         providerId: 'opencode',
