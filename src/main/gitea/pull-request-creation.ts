@@ -13,6 +13,7 @@ import { readHostedPullRequestTemplate } from '../source-control/pull-request-te
 import { getGiteaPullRequestForBranch, invalidateGiteaPullRequestScanForRepo } from './client'
 import { mapGiteaPullRequest, type RawGiteaPullRequest } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import { refreshGiteaEnvOverlay } from './client'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
@@ -33,6 +34,15 @@ function configuredApiBaseUrl(repo: GiteaRepoRef): string {
 
 export function isGiteaReviewCreationAuthenticated(): boolean {
   return envValue('ORCA_GITEA_TOKEN') !== null
+}
+
+/**
+ * Refresh the Windows registry env overlay before reading credentials.
+ * Why (#14740): the same stale-Explorer-snapshot problem hits PR creation's
+ * token read; the status check refreshes on its own, this covers the rest.
+ */
+export async function refreshGiteaCreationEnv(): Promise<void> {
+  await refreshGiteaEnvOverlay()
 }
 
 function authHeaders(): Record<string, string> {
@@ -122,6 +132,7 @@ export async function createGiteaPullRequest(
   input: CreateHostedReviewInput,
   executionHostId: ExecutionHostId
 ): Promise<CreateHostedReviewResult> {
+  await refreshGiteaEnvOverlay()
   if (input.provider !== 'gitea') {
     return {
       ok: false,
