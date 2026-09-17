@@ -68,6 +68,17 @@ export function boundJournalPromptBody(
                 : { ruleContent: boundPromptText(body.matchedAskRule.ruleContent) })
             }
           }),
+      ...(body.subject === undefined
+        ? {}
+        : {
+            subject: {
+              kind: 'plan',
+              text: boundPromptText(body.subject.text),
+              ...(body.subject.filePath === undefined
+                ? {}
+                : { filePath: boundPromptText(body.subject.filePath) })
+            }
+          }),
       detail: body.detail === null ? null : boundPromptText(body.detail),
       options: boundPromptOptions(body.options)
     }

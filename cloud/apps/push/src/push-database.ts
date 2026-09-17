@@ -213,7 +213,10 @@ async function applySchemaOnUntimedPool(
   const database = new PostgresDatabase(pool)
   try {
     await applyPostgresSchema(pushSchemaStatements(), (statement) => database.query(statement), {
-      eventPrefix: 'orca_push_postgres_schema'
+      eventPrefix: 'orca_push_postgres_schema',
+      // Push has no catalog pre-check, so a lock timeout here says nothing about whether the
+      // object already exists and the old bounded retry is still the right answer.
+      retryLockTimeout: true
     })
   } finally {
     await database.close().catch(() => undefined)

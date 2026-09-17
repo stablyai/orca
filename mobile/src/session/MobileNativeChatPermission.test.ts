@@ -12,6 +12,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion', X: 'X' }))
+vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 describe('MobileNativeChatPermission', () => {
   let renderer: ReactTestRenderer | null = null
@@ -108,5 +109,40 @@ describe('MobileNativeChatPermission', () => {
     expect(content.findAllByProps({ children: 'Allow' })).toHaveLength(0)
     expect(actions.findAllByProps({ children: 'Allow' })).toHaveLength(1)
     expect(actions.props.style).toMatchObject({ flexShrink: 0 })
+  })
+
+  it('renders a plan as markdown inside the same bounded scroller', async () => {
+    const planText = '# Release plan\n\n- Run the tests'
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Claude wants to present its plan',
+            subject: { kind: 'plan', text: planText, filePath: '/repo/PLAN.md' },
+            detail: 'raw json that must not be shown',
+            options: [{ label: 'Approve plan', send: '1' }]
+          },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+
+    const content = renderer.root.findByProps({ testID: 'native-chat-approval-content' })
+    const actions = renderer.root.findByProps({ testID: 'native-chat-approval-actions' })
+
+    // Same shared region as every other context row, so it inherits the cap.
+    expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
+    expect(content.findByType('MobileMarkdown').props.content).toBe(planText)
+    // The path renders as an interpolated child, so match within the children.
+    const planFileShown = content.findAllByType('Text').some((node) => {
+      const children = Array.isArray(node.props.children)
+        ? node.props.children
+        : [node.props.children]
+      return children.includes('/repo/PLAN.md')
+    })
+    expect(planFileShown).toBe(true)
+    // A typed plan replaces the generic detail rather than rendering both.
+    expect(content.findAllByProps({ children: 'raw json that must not be shown' })).toHaveLength(0)
+    expect(actions.findAllByProps({ children: 'Approve plan' })).toHaveLength(1)
   })
 })

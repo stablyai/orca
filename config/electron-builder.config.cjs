@@ -16,7 +16,7 @@ const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cj
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
-  verifyPackagedNodePtyJobOwnership
+  verifyPackagedWindowsNodePty
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
@@ -353,11 +353,7 @@ module.exports = {
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
-      if (process.platform === 'win32' && canExecuteTargetArch) {
-        verifyPackagedNodePtyJobOwnership(resourcesDir)
-      } else {
-        console.log('[verify-packaged-node-pty] skipped cross-platform or cross-arch package')
-      }
+      verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch

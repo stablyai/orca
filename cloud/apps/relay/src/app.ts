@@ -43,6 +43,7 @@ import {
   type AssignmentAdmissionRejection
 } from './public-assignment-admission.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
+import type { RelayReadinessDependency } from './relay-readiness.js'
 import type { RegionalRehomeSafetySnapshot, RelayRuntimeCounts } from './relay-observability.js'
 import {
   isRegionalRehomeTrustProbe,
@@ -96,6 +97,7 @@ export function createRelayApp(
     regionalRehomeSafetySnapshot?: () => RegionalRehomeSafetySnapshot
     runtimeCounts?: () => RelayRuntimeCounts
     ready: () => Promise<boolean>
+    readinessDegradation?: () => RelayReadinessDependency[]
     recordAssignmentAdmission?: (
       outcome: 'sticky' | 'sticky-rejected' | 'placement' | 'placement-rejected'
     ) => void
@@ -212,11 +214,13 @@ export function createRelayApp(
   app.get('/health', (context) =>
     context.json({ ok: true, connectionCapacityProtocol: 2 })
   )
-  app.get('/ready', async (context) =>
-    (await operations.ready())
-      ? context.json({ ok: true })
-      : context.json({ error: 'dependency_unavailable' }, 503)
-  )
+  app.get('/ready', async (context) => {
+    if (!(await operations.ready())) return context.json({ error: 'dependency_unavailable' }, 503)
+    const dependency = operations.readinessDegradation?.() ?? []
+    // Still the 200 the load balancer needs, with the marker that says the answer is remembered.
+    if (dependency.length === 0) return context.json({ ok: true })
+    return context.json({ ok: true, degraded: true, dependency })
+  })
   app.get('/v1/regions', async (context) => {
     if (config.role === 'cell') return context.json({ error: 'director_only' }, 404)
     return context.json({ v: 1, regions: await regionCatalog() })

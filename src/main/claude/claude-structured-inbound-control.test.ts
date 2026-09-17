@@ -100,6 +100,26 @@ describe('Claude permission callbacks', () => {
     await expect(answered).resolves.toMatchObject({ behavior: 'deny' })
   })
 
+  it('classifies a plan before generic permission registration', async () => {
+    const control = callbacksFor()
+    const register = vi.spyOn(control.prompts, 'register')
+    const answered = control.canUseTool(
+      'ExitPlanMode',
+      { plan: '# Release\n\n- Run tests', planFilePath: '/repo/plan.md' },
+      permissionOptions('perm-plan', 'tool-plan', new AbortController().signal)
+    )
+
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: { kind: 'plan', text: '# Release\n\n- Run tests', filePath: '/repo/plan.md' }
+      })
+    )
+    const prompt = control.prompts.find('perm-plan')?.prompt
+    expect(prompt?.subject?.kind).toBe('plan')
+    prompt?.settle({ behavior: 'deny', message: 'done', toolUseID: 'tool-plan' })
+    await expect(answered).resolves.toMatchObject({ behavior: 'deny' })
+  })
+
   it('denies a malformed permission request without registering a prompt', async () => {
     const control = callbacksFor()
     const answered = control.canUseTool(

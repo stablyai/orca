@@ -1,5 +1,8 @@
 import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentJournalApprovalMatchedAskRule } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalSubject
+} from '../../shared/agent-session-journal-types'
 
 /** Settles the SDK's `canUseTool` promise; `null` writes no provider response. */
 export type ClaudePromptSettle = (response: PermissionResult | null) => void
@@ -11,6 +14,7 @@ export type ClaudePromptPresentation = {
   decisionReason?: string
   blockedPath?: string
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
+  subject?: AgentJournalApprovalSubject
 }
 
 export type ClaudePendingPrompt = ClaudePromptPresentation & {
@@ -105,6 +109,7 @@ export class ClaudePromptRegistry {
       ...(registration.decisionReason ? { decisionReason: registration.decisionReason } : {}),
       ...(registration.blockedPath ? { blockedPath: registration.blockedPath } : {}),
       ...(registration.matchedAskRule ? { matchedAskRule: registration.matchedAskRule } : {}),
+      ...(registration.subject ? { subject: registration.subject } : {}),
       questionIds: questions.map(questionId),
       answers: new Map(),
       settle: registration.settle,

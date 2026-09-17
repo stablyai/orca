@@ -14,7 +14,12 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
   runningNamed: 'Running {{toolName}}',
   countOne: '1 tool call',
   countN: '{{value0}} tool calls',
-  moreCalls: '+{{value0}} more'
+  moreCalls: '+{{value0}} more',
+  /** Quiet decoration on a settled collapsed header; the run's lines carry the
+   *  detail. Count-agnostic wording so one entry serves any number. */
+  failedCount: '{{value0}} failed',
+  /** Spoken form of the same mark — `1 failed` alone does not say failed what. */
+  failedCallsLabel: 'Failed tool calls: {{value0}}'
 } as const
 
 /** Tools whose call is a shell command, so the row reads as terminal activity

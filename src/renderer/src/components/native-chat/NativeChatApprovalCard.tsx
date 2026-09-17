@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 import { ShieldQuestion, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import CommentMarkdown, {
+  type CommentMarkdownLinkClickHandler
+} from '@/components/sidebar/CommentMarkdown'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import type { ChatApproval } from './native-chat-interactive-prompt'
 
 export type NativeChatApprovalCardProps = {
@@ -11,6 +15,9 @@ export type NativeChatApprovalCardProps = {
   /** Cancel the active provider turn while this card owns the composer region. */
   onCancel?: () => void
   shouldFocus?: boolean
+  /** A plan body renders as markdown; these make its file paths clickable. */
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks?: boolean
 }
 
 /**
@@ -22,7 +29,9 @@ export function NativeChatApprovalCard({
   approval,
   onChoose,
   onCancel,
-  shouldFocus = false
+  shouldFocus = false,
+  onLinkClick,
+  allowFileUriLinks = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const hasContext = Boolean(
@@ -30,6 +39,7 @@ export function NativeChatApprovalCard({
     approval.decisionReason ||
     approval.blockedPath ||
     approval.matchedAskRule ||
+    approval.subject ||
     approval.detail
   )
   useEffect(() => {
@@ -111,7 +121,27 @@ export function NativeChatApprovalCard({
                   </span>
                 </p>
               ) : null}
-              {approval.detail ? (
+              {approval.subject?.kind === 'plan' ? (
+                <div data-native-chat-approval-plan="true">
+                  <CommentMarkdown
+                    content={approval.subject.text}
+                    variant="document"
+                    className="text-sm"
+                    renderCodeBlock={NativeChatCodeBlock}
+                    {...(onLinkClick ? { onLinkClick } : {})}
+                    allowFileUriLinks={allowFileUriLinks}
+                    linkifyFilePaths={onLinkClick !== undefined}
+                  />
+                  {approval.subject.filePath ? (
+                    <p className="mt-2 break-all">
+                      <span className="font-medium text-foreground/80">
+                        {translate('components.native-chat.approval.plan.file', 'Plan file')}:{' '}
+                      </span>
+                      <span className="font-mono">{approval.subject.filePath}</span>
+                    </p>
+                  ) : null}
+                </div>
+              ) : approval.detail ? (
                 <div
                   data-native-chat-approval-detail="true"
                   className="whitespace-pre-wrap break-words font-mono"

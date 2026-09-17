@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -84,11 +85,25 @@ function nextJson(ws: WebSocket): Promise<Record<string, unknown>> {
 describe('RelayControlClient', () => {
   const servers: WebSocketServer[] = []
   const clients: RelayControlClient[] = []
+  /** Raw TCP listeners that accept but never upgrade; they have no WebSocketServer to close. */
+  const silentServers: Server[] = []
+  const silentSockets: Socket[] = []
 
   afterEach(async () => {
     for (const client of clients.splice(0)) {
       client.closeNow()
     }
+    for (const socket of silentSockets.splice(0)) {
+      socket.destroy()
+    }
+    await Promise.all(
+      silentServers.splice(0).map(
+        (server) =>
+          new Promise<void>((resolve) => {
+            server.close(() => resolve())
+          })
+      )
+    )
     await Promise.all(
       servers.splice(0).map(
         (server) =>
@@ -127,6 +142,38 @@ describe('RelayControlClient', () => {
       onDrain: vi.fn(),
       onClose: vi.fn(),
       connectDeadlineMs: 20
+    })
+    clients.push(client)
+
+    await expect(client.connect()).rejects.toThrow('relay_control_connect_timeout')
+  })
+
+  // Why: the connect deadline is armed in the same tick as the socket and expires from
+  // 'opening' too, so it already bounds a connect that never opens. Without this a reader
+  // concludes the phase is uncovered and adds a second, transport-level bound for it.
+  it('expires a connect whose upgrade is never answered', async () => {
+    const server = createServer((socket) => {
+      silentSockets.push(socket)
+    })
+    silentServers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('expected TCP relay test server')
+    }
+    const keypair = nacl.box.keyPair()
+    const client = new RelayControlClient({
+      cellUrl: `http://127.0.0.1:${address.port}`,
+      relayJwt: 'scoped-token',
+      relayHostId: createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16),
+      assignmentEpoch: 1,
+      identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+      keypair: { ...keypair, publicKeyB64: Buffer.from(keypair.publicKey).toString('base64') },
+      appVersion: '1.2.3',
+      onConnectionOpen: vi.fn(),
+      onDrain: vi.fn(),
+      onClose: vi.fn(),
+      connectDeadlineMs: 150
     })
     clients.push(client)
 

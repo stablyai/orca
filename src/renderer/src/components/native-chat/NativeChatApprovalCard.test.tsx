@@ -100,4 +100,43 @@ describe('NativeChatApprovalCard', () => {
     expect(actions?.contains(allow)).toBe(true)
     expect(actions?.classList.contains('shrink-0')).toBe(true)
   })
+
+  it('renders a plan as markdown inside the same bounded scroller', () => {
+    render(
+      <NativeChatApprovalCard
+        approval={{
+          title: 'Claude wants to present its plan',
+          subject: {
+            kind: 'plan',
+            text: '# Release plan\n\n- Run the tests',
+            filePath: '/repo/PLAN.md'
+          },
+          detail: '{"plan":"raw json that must not be shown"}',
+          options: [
+            { label: 'Approve plan', send: 'allow' },
+            { label: 'Keep planning', send: 'deny' }
+          ]
+        }}
+        onChoose={() => {}}
+      />
+    )
+
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    const plan = document.querySelector('[data-native-chat-approval-plan="true"]')
+    const actions = document.querySelector('[data-native-chat-approval-actions="true"]')
+    const approve = screen.getByRole('button', { name: 'Approve plan' })
+
+    // Living in the shared region is what gives a plan the cap and the scroll.
+    expect(content?.contains(plan)).toBe(true)
+    expect(content?.classList.contains('max-h-72')).toBe(true)
+    expect(content?.classList.contains('overflow-auto')).toBe(true)
+    // A document, not a payload.
+    expect(screen.getByRole('heading', { name: 'Release plan' })).toBeTruthy()
+    expect(content?.textContent).toContain('/repo/PLAN.md')
+    // A typed plan replaces the generic detail rather than rendering both.
+    expect(document.querySelector('[data-native-chat-approval-detail="true"]')).toBeNull()
+    expect(content?.textContent).not.toContain('raw json that must not be shown')
+    expect(actions?.contains(approve)).toBe(true)
+    expect(content?.contains(approve)).toBe(false)
+  })
 })

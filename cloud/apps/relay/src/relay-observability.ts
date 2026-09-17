@@ -3,7 +3,7 @@ import { RELAY_REGION_METRIC_SEGMENTS, type RelayRegion } from '@orca-cloud/rela
 import type { ControlRenewalOutcome } from './assignment-store.js'
 import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
-import type { RelayReadinessObservation } from './relay-readiness.js'
+import type { RelayReadinessGraceEvent, RelayReadinessObservation } from './relay-readiness.js'
 
 export type RelayRuntimeCounts = {
   totalConnections: number
@@ -281,12 +281,26 @@ export class RelayObservability implements RelayRuntimeObserver {
 
   recordReadiness(observation: RelayReadinessObservation): void {
     this.write({
-      severity: observation.ready ? 'INFO' : 'WARNING',
+      severity: observation.ready && !observation.degraded ? 'INFO' : 'WARNING',
       message: 'Orca Relay readiness check',
       event: 'orca_relay_readiness_check',
       metricVersion: 1,
       ...this.identity,
       ...observation
+    })
+  }
+
+  recordReadinessGrace(event: RelayReadinessGraceEvent): void {
+    const entered = event.grace === 'entered'
+    this.write({
+      severity: event.grace === 'recovered' ? 'INFO' : 'WARNING',
+      message: entered
+        ? 'Orca Relay readiness entered last-known-good grace'
+        : 'Orca Relay readiness left last-known-good grace',
+      event: entered ? 'orca_relay_readiness_grace_entered' : 'orca_relay_readiness_grace_left',
+      metricVersion: 1,
+      ...this.identity,
+      ...event
     })
   }
 

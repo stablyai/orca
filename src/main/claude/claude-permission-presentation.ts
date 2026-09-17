@@ -1,4 +1,5 @@
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentJournalApprovalSubject } from '../../shared/agent-session-journal-types'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
@@ -43,5 +44,24 @@ export function claudePermissionPresentation(
           }
         }
       : {})
+  }
+}
+
+export function claudePermissionSubject(
+  toolName: string,
+  input: Record<string, unknown>
+): AgentJournalApprovalSubject | undefined {
+  if (toolName !== 'ExitPlanMode') {
+    return undefined
+  }
+  const text = presentationText(input.plan)
+  if (!text) {
+    return undefined
+  }
+  const filePath = presentationText(input.planFilePath) ?? presentationText(input.plan_file_path)
+  return {
+    kind: 'plan',
+    text,
+    ...(filePath ? { filePath } : {})
   }
 }

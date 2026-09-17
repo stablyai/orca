@@ -13,11 +13,14 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
+import { placeCreatedSessionTab } from '../../../src/shared/session-tab-placement'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
     worktreeId,
     client,
+    hostCapabilities,
     connState,
     setTerminals,
     terminalsRef,
@@ -105,9 +108,12 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           return
         }
       }
+      const afterTabId = activeSessionTabId ?? undefined
+      const hostSupportsGroupedPlacement =
+        hostCapabilities?.includes(SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY) === true
       const response = await sessionTabCreateTerminal.request(client, {
         worktree: `id:${worktreeId}`,
-        afterTabId: activeSessionTabId ?? undefined,
+        afterTabId,
         clientMutationId,
         ...(options?.startupCommand ? { command: options.startupCommand } : {}),
         ...(options?.startupCommandDelivery
@@ -135,12 +141,18 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       pendingActiveSessionTabIdRef.current = created.id
       activeSessionTabTypeRef.current = 'terminal'
       setActiveSessionTabId(created.id)
-      setSessionTabs((prev) => {
-        if (prev.some((tab) => tab.id === created.id)) {
-          return prev
-        }
-        return [...prev, { ...created, isActive: true }]
-      })
+      // An older headed host places after the parent while an older headless host places after the
+      // leaf. Without the capability, wait for the host snapshot instead of guessing.
+      if (hostSupportsGroupedPlacement) {
+        setSessionTabs((prev) => {
+          if (prev.some((tab) => tab.id === created.id)) {
+            return prev
+          }
+          return placeCreatedSessionTab(prev, { ...created, isActive: true }, afterTabId, {
+            afterParentGroup: true
+          })
+        })
+      }
       if (typeof created.terminal === 'string') {
         const createdHandle = created.terminal
         defaultTerminalHandlesToLiveInput([createdHandle])

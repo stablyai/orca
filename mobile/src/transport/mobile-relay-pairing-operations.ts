@@ -8,9 +8,9 @@ import { rpcUncheckedPayloadReader } from './rpc-reader-payload'
 
 /**
  * Authorizes one resume credential against the host's install journal, keyed by `reqId` so a
- * replay is idempotent. Every caller throws `code: message` on a refusal; two of them read the raw
- * envelope for `method_not_found` first, because an old host that does not know the method means
- * "this build has no relay", not "the install failed".
+ * replay is idempotent. Every caller throws `code: message` on a refusal; two of them first read the
+ * raw envelope for a host that will not serve relay pairing at all (`isPairingRelayRpcUnavailable`),
+ * because that means "this build has no relay", not "the install failed".
  */
 export const relayCredentialProvision = bindDeferredRpcOperation(
   defineRpcOperation({

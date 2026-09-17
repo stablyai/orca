@@ -4,12 +4,12 @@
   "authPoolMax": 10,
   "apiInstances": 10,
   "apiPoolMax": 5,
-  "maxConnections": 400,
+  "maxConnections": 500,
   "sources": {
     "authInstances": "private apps tfvars: auth service max instances",
     "authPoolMax": "private auth service: pg.Pool max",
     "apiInstances": "private apps tfvars: API service max instances",
     "apiPoolMax": "private API service: pg.Pool max",
-    "maxConnections": "Cloud SQL tier default; no max_connections flag is set"
+    "maxConnections": "measured SHOW max_connections = 500 on the live instance 2026-09-16; no max_connections flag is set, so this is the tier default and the previous 400 was an unverified assumption about it"
   }
 }

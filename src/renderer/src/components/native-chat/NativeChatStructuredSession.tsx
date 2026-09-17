@@ -113,6 +113,7 @@ export function NativeChatStructuredSession(
         ...(approvalBody.decisionReason ? { decisionReason: approvalBody.decisionReason } : {}),
         ...(approvalBody.blockedPath ? { blockedPath: approvalBody.blockedPath } : {}),
         ...(approvalBody.matchedAskRule ? { matchedAskRule: approvalBody.matchedAskRule } : {}),
+        ...(approvalBody.subject ? { subject: approvalBody.subject } : {}),
         ...(approvalBody.detail ? { detail: approvalBody.detail } : {}),
         options: approvalBody.options.map((option) => ({
           label: option.label,
@@ -245,6 +246,8 @@ export function NativeChatStructuredSession(
           onChoose={(optionId) => void controller.respond(prompt, optionId)}
           onCancel={cancelPrompt}
           shouldFocus={props.isVisible && props.isFocusedGroup}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={onLinkClick !== undefined}
         />
       ) : null}
       {prompt && questionBody ? (

@@ -119,15 +119,21 @@ describe('PostgreSQL relay deadlines', () => {
       dataDir: './unused'
     })
 
-    expect(ddl.length).toBeGreaterThan(0)
-    expect(ddl).toContain(POSTGRES_STATEMENT_STATS_MIGRATION)
+    // The catalog pre-check reads pg_catalog on the same untimed connection before each
+    // lock-taking statement, so the schema pool now carries reads as well as DDL.
+    const probes = ddl.filter((statement) => /^SELECT\b/i.test(statement))
+    const statements = ddl.filter((statement) => !/^SELECT\b/i.test(statement))
+    expect(probes.length).toBeGreaterThan(0)
+    expect(probes.every((statement) => statement.includes('pg_catalog'))).toBe(true)
+    expect(statements.length).toBeGreaterThan(0)
+    expect(statements).toContain(POSTGRES_STATEMENT_STATS_MIGRATION.trim())
     // Statements can open with a leading `--` rationale comment.
     const body = (statement: string): string =>
       statement.replace(/^(?:\s*--[^\n]*\n)*\s*/, '')
     expect(
-      ddl.every(
+      statements.every(
         (statement) =>
-          statement === POSTGRES_STATEMENT_STATS_MIGRATION ||
+          statement === POSTGRES_STATEMENT_STATS_MIGRATION.trim() ||
           /^(?:CREATE|ALTER TABLE)\b/i.test(body(statement))
       )
     ).toBe(true)
@@ -201,11 +207,11 @@ describe('PostgreSQL relay deadlines', () => {
 })
 
 describe('PostgreSQL schema startup', () => {
-  it('retries lock and statement timeouts with bounded backoff', async () => {
+  it('retries statement timeouts with bounded backoff', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const query = vi
       .fn<(statement: string) => Promise<unknown>>()
-      .mockRejectedValueOnce(Object.assign(new Error('lock timeout'), { code: '55P03' }))
+      .mockRejectedValueOnce(Object.assign(new Error('statement timeout'), { code: '57014' }))
       .mockRejectedValueOnce(Object.assign(new Error('statement timeout'), { code: '57014' }))
       .mockResolvedValue(undefined)
     const delays: number[] = []
@@ -219,6 +225,31 @@ describe('PostgreSQL schema startup', () => {
 
     expect(query).toHaveBeenCalledTimes(3)
     expect(delays).toEqual([125, 250])
+  })
+
+  it('fails the boot on a lock timeout instead of re-entering the lock queue', async () => {
+    // The catalog pre-check already answered that the object is missing, so a lock timeout means
+    // this boot lost the queue. Relation locks are granted in queue order, so each retry parks
+    // every writer behind it for another timeout.
+    const errors: string[] = []
+    vi.spyOn(console, 'error').mockImplementation((line: string) => {
+      errors.push(line)
+    })
+    const error = Object.assign(new Error('lock timeout'), { code: '55P03' })
+    const query = vi.fn<(statement: string) => Promise<unknown>>().mockRejectedValue(error)
+    const pause = vi.fn(async () => undefined)
+
+    await expect(
+      applyPostgresSchema(['CREATE INDEX IF NOT EXISTS i ON t(c)'], query, { wait: pause })
+    ).rejects.toBe(error)
+
+    expect(query).toHaveBeenCalledTimes(1)
+    expect(pause).not.toHaveBeenCalled()
+    expect(JSON.parse(errors[0] ?? '{}')).toMatchObject({
+      event: 'orca_relay_postgres_schema_lock_timeout',
+      code: '55P03',
+      statement: 'CREATE INDEX IF NOT EXISTS i ON t(c)'
+    })
   })
 
   it('retries only the PostgreSQL concurrent type-creation collision', async () => {
@@ -386,7 +417,7 @@ describe('PostgreSQL schema startup', () => {
 
   it('stops retrying at the shared startup deadline', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const error = Object.assign(new Error('lock timeout'), { code: '55P03' })
+    const error = Object.assign(new Error('statement timeout'), { code: '57014' })
     const delays: number[] = []
     let now = 0
     const query = vi
@@ -413,7 +444,7 @@ describe('PostgreSQL schema startup', () => {
     expect(console.warn).toHaveBeenLastCalledWith(
       JSON.stringify({
         event: 'orca_relay_postgres_schema_retry_exhausted',
-        code: '55P03',
+        code: '57014',
         attempts: 2
       })
     )
