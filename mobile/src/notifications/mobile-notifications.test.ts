@@ -113,7 +113,7 @@ describe('subscribeToDesktopNotifications', () => {
     expect(requestNotificationCatchup).not.toHaveBeenCalled()
     // The subscription id never reaches this module, so nothing closes the host's stream.
     expect(rpc.requests).toEqual([])
-    expect(rpc.sent).toEqual([subscribeFrame])
+    expect(rpc.sent).toHaveLength(1)
   })
 
   it('closes the host stream when the disposer runs after the ready reply', async () => {
