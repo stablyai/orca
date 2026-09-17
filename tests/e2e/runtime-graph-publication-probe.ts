@@ -205,6 +205,9 @@ export async function startRuntimeGraphPublicationProbe(
     }
     probeWindow.__orcaGraphPublicationRendererProbe = {
       stop: () => {
+        for (const entry of observer.takeRecords()) {
+          longTasks.push({ start: entry.startTime, duration: entry.duration })
+        }
         observer.disconnect()
         delete probeWindow.__orcaGraphPublicationRendererProbe
         return { timeOrigin: performance.timeOrigin, longTasks }
