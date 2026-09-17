@@ -16,8 +16,8 @@ import {
 /**
  * Creating a GitHub or GitLab issue.
  *
- * Nothing is required beyond the envelope itself: use-mobile-tasks-task-create-actions.tsx:83
- * tests `ok === false`, :88 gates the optimistic row on `typeof number === 'number'` and :98 reads
+ * Nothing is required beyond the envelope itself: use-mobile-tasks-task-create-actions.tsx:76
+ * tests `ok === false`, :81 gates the optimistic row on `typeof number === 'number'` and :91 reads
  * `url ?? ''`. What the schema adds is the container — main read `result.ok` off a string reply
  * and silently reported success, and off a `null` one it threw a property-read TypeError.
  */
@@ -33,7 +33,7 @@ export const hostedIssueCreatedSchema = z.looseObject({
  *
  * Also all-optional, for the same reason: both call sites gate on
  * `result.ok === false || !result.id || !result.identifier`
- * (use-mobile-tasks-task-create-actions.tsx:140, use-mobile-tasks-linear-item-actions.tsx:138) and
+ * (use-mobile-tasks-task-create-actions.tsx:125, use-mobile-tasks-linear-item-actions.tsx:123) and
  * read `title` and `url` behind `??`. `id` and `identifier` are therefore a refusal the call site
  * already words, not a decode failure.
  */
@@ -64,7 +64,7 @@ export const taskItemMutationSchema = taskMutationEnvelopeSchema
  * An array, and each row needs the `name` and `status` the list renders unguarded; a row without
  * either drops rather than failing the refresh. Both call sites hand the decoded list straight to
  * `buildGitHubCheckSummary`, whose classifier reads the same two members
- * (use-mobile-tasks-hosted-comment-review-actions.tsx:256).
+ * (use-mobile-tasks-hosted-comment-review-actions.tsx:245).
  */
 export const githubPullRequestChecksSchema = detailCheckListSchema
 
@@ -92,8 +92,8 @@ export const githubPullRequestFileContentsSchema = z.looseObject({
  * Syncing one file's viewed state.
  *
  * `z.boolean()`, the same reader the session domain's two boolean mutations use: `!== true` is the
- * confirmation rule at both call sites (use-mobile-tasks-project-review-check-actions.tsx:219,
- * use-mobile-tasks-github-check-file-actions.tsx:99), so a non-boolean read as "not confirmed" was
+ * confirmation rule at both call sites (use-mobile-tasks-project-review-check-actions.tsx:210,
+ * use-mobile-tasks-github-check-file-actions.tsx:94), so a non-boolean read as "not confirmed" was
  * indistinguishable from a host that declined the write. A real `false` still reaches that rule.
  */
 export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } from '../session/github-pr-mutation-reply-schema'
@@ -101,7 +101,7 @@ export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } 
 /**
  * Setting a Linear issue's workflow state.
  *
- * The reply body is unread: use-mobile-tasks-github-reply-merge-actions.tsx:207 interprets the
+ * The reply body is unread: use-mobile-tasks-github-reply-merge-actions.tsx:199 interprets the
  * envelope for its acceptance and looks at nothing in it, so there is no member to declare. The
  * acceptance still carries a refusal to the callback's `catch`, which is the whole verdict here.
  */

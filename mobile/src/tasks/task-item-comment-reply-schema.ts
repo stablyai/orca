@@ -22,7 +22,7 @@ export const taskCommentWrittenSchema = taskCommentWriteEnvelopeSchema
 /**
  * Linear's comment write, which answers with an id rather than a comment.
  *
- * `id` is optional because use-mobile-tasks-linear-item-actions.tsx:58 reads
+ * `id` is optional because use-mobile-tasks-linear-item-actions.tsx:52 reads
  * `result.id ?? 'local-<now>'`: a reply without one still puts the comment the user typed on the
  * sheet, and that is the behaviour worth keeping.
  */

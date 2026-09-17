@@ -14,8 +14,8 @@ const GITLAB_TODO_STATE = ['pending', 'done'] as const
 /**
  * Linear account status for provider hydration.
  *
- * The container is required and nothing in it is: use-mobile-tasks-provider-load-actions.tsx:58
- * compares `connected` to `true`, :66 reads `workspaces ?? []`, and :68 walks
+ * The container is required and nothing in it is: use-mobile-tasks-provider-load-actions.tsx:56
+ * compares `connected` to `true`, :64 reads `workspaces ?? []`, and :66 walks
  * `selectedWorkspaceId ?? activeWorkspaceId ?? workspaces[0]?.id ?? null`. Main read those members
  * off `null` and threw a property-read TypeError the Tasks screen showed as its load error.
  *
@@ -71,7 +71,7 @@ export const githubWorkItemCountSchema = z.number().finite()
  * `!todo.targetIid` (mobile-tasks-item-mapping.ts:237-258), and `authorUsername` and `state` are
  * carried but unread on this screen.
  */
-export const gitlabTodoSchema = z.looseObject({
+const gitlabTodoSchema = z.looseObject({
   id: z.number().finite(),
   actionName: z.string(),
   targetType: prText('targetType'),
@@ -100,7 +100,7 @@ export const gitlabTodoListSchema = salvagingArray(gitlabTodoSchema).nullish()
 /**
  * Connecting a Linear account with a pasted API key, and the repository issue-source write.
  *
- * The connect reply is the standard envelope: use-mobile-tasks-task-pagination-actions.tsx:56
+ * The connect reply is the standard envelope: use-mobile-tasks-task-pagination-actions.tsx:54
  * reads `ok === false` and raises `error` or its own copy, and nothing else in the reply.
  */
 export const linearAccountConnectedSchema = taskMutationEnvelopeSchema
@@ -108,7 +108,7 @@ export const linearAccountConnectedSchema = taskMutationEnvelopeSchema
 /**
  * The repository issue-source preference write.
  *
- * Deliberately unread: use-mobile-tasks-task-create-actions.tsx:199 interprets the envelope for
+ * Deliberately unread: use-mobile-tasks-task-create-actions.tsx:184 interprets the envelope for
  * its acceptance and then re-reads the repo list rather than patching its cached copy, so there is
  * no member to declare and a narrower reader would only invent a failure the screen never had.
  */

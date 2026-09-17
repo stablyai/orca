@@ -26,7 +26,7 @@ import {
  * A GitHub work item's detail pane.
  *
  * Object or `null`, and nothing inside is required: `if (!details) throw` at
- * use-mobile-tasks-item-detail-loading.tsx:85 is the whole identity test, and :91-102 reads every
+ * use-mobile-tasks-item-detail-loading.tsx:51 is the whole identity test, and :58-69 reads every
  * member behind `??` or `?.`. What the schema adds is the container — main read `details.body` off
  * a string reply and published an empty sheet as if the host had answered, and off `null` it threw
  * a property-read TypeError the sheet showed verbatim.
@@ -59,7 +59,7 @@ export const githubWorkItemDetailSchema = z
 
 /**
  * A GitLab work item's detail pane, read the same way and required the same amount: not at all
- * past the container (use-mobile-tasks-item-detail-loading.tsx:136-158).
+ * past the container (use-mobile-tasks-item-detail-loading.tsx:87-110).
  *
  * `mergeable` is a closed arm set that degrades to absent rather than to an arm. The three arms
  * are what the row's merge affordance is keyed on, so coercing an arm this build has not heard of
@@ -165,7 +165,7 @@ export const linearIssueSchema = z
  * The comment list beside a Linear issue.
  *
  * Nullish as well as an array, because the call site reads it as `accepted.value ?? []`
- * (use-mobile-tasks-item-detail-loading.tsx:215): a host that answers `null` still means "no
+ * (use-mobile-tasks-item-detail-loading.tsx:164): a host that answers `null` still means "no
  * comments", and rejecting it would turn a reply main rendered into an error the sheet shows.
  */
 export const linearIssueCommentsSchema = detailCommentListSchema.nullish()
@@ -186,7 +186,7 @@ export const githubAssignableUsersSchema = assignableUserListSchema
  *
  * `id`, `name` and `type` are what `LinearState` declares non-optional and what the picker rows
  * and `setLinearStatus` read unguarded; `color` is reached through
- * `state.color ?? item.source.state.color` (use-mobile-tasks-github-reply-merge-actions.tsx:211).
+ * `state.color ?? item.source.state.color` (use-mobile-tasks-github-reply-merge-actions.tsx:203).
  */
 export const linearTeamStatesSchema = salvagingArray(
   z.looseObject({
