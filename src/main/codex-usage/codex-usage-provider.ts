@@ -1,5 +1,5 @@
 import type { UsageProvider } from '../usage/usage-provider-contract'
-import { scanCodexUsageFiles } from './scanner'
+import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 import type { CodexUsageDailyAggregate, CodexUsagePersistedFile, CodexUsageSession } from './types'
 
 // Why: v5 keys Codex ownership on raw token_count identity without session id
@@ -11,7 +11,7 @@ export const codexUsageProvider = {
   id: 'codex',
   label: 'Codex',
   schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
-  scan: scanCodexUsageFiles
+  scan: scanCodexUsageFilesViaWorker
 } satisfies UsageProvider<
   'processedFiles',
   CodexUsagePersistedFile,

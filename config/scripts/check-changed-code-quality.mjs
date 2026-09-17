@@ -25,6 +25,17 @@ export const OXLINT_SCANS = [
     args: ['--config', 'config/oxlint-code-quality-casting.json']
   },
   {
+    // Why the allow: CI's `audit:code-quality:native` runs before the mobile install, so it can
+    // never see a cycle inside mobile/ — locally, where mobile/node_modules exists, it would.
+    label: 'focused plugins',
+    args: [
+      '--config',
+      'config/oxlint-code-quality-native-plugins.json',
+      '--allow',
+      'import/no-cycle'
+    ]
+  },
+  {
     label: 'type-aware code quality',
     args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
   },

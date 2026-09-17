@@ -18,13 +18,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', () => ({
-  scanOpenCodeUsageDatabases: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanOpenCodeUsageDatabasesViaWorker: vi.fn()
 }))
 
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './store'
 import { normalizePersistedState } from './persisted-state-normalization'
-import { scanOpenCodeUsageDatabases } from './scanner'
+import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 function createEmptyScanResult() {
   return {
@@ -163,8 +163,8 @@ describe('OpenCodeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initOpenCodeUsagePath()
-    vi.mocked(scanOpenCodeUsageDatabases).mockReset()
-    vi.mocked(scanOpenCodeUsageDatabases).mockResolvedValue(createEmptyScanResult())
+    vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockReset()
+    vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-10T12:00:00.000-04:00'))
   })
@@ -187,7 +187,7 @@ describe('OpenCodeUsageStore', () => {
     await store.refresh(true)
 
     const persistedJson = readFileSync(join(tempUserData, 'orca-opencode-usage.json'), 'utf-8')
-    expect(scanOpenCodeUsageDatabases).toHaveBeenCalledWith([], [])
+    expect(scanOpenCodeUsageDatabasesViaWorker).toHaveBeenCalledWith([], [])
     expect(persistedJson).toContain('\n')
   })
 

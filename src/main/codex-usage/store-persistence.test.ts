@@ -14,12 +14,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', () => ({
-  scanCodexUsageFiles: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanCodexUsageFilesViaWorker: vi.fn()
 }))
 
 import { normalizePersistedState } from './store'
-import { scanCodexUsageFiles } from './scanner'
+import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 describe('CodexUsageStore', () => {
   const storeEnv = setupCodexUsageStoreEnv(getPathMock)
@@ -41,7 +41,7 @@ describe('CodexUsageStore', () => {
       join(storeEnv.tempUserData, 'orca-codex-usage.json'),
       'utf-8'
     )
-    expect(scanCodexUsageFiles).toHaveBeenCalledWith([], [])
+    expect(scanCodexUsageFilesViaWorker).toHaveBeenCalledWith([], [])
     expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
   })
 

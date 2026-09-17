@@ -38,8 +38,10 @@ import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 /**
  * Advertising `agent.launch.v2` is a client's statement that it understands EITHER outcome — a
  * structured session it can open, or a terminal agent. A client that can only render one of the
- * two must keep using the surface-specific methods instead. In-process callers are the same build
- * as the host and negotiate nothing.
+ * two must keep using the surface-specific methods instead. The `clientKind === undefined` branch
+ * is not "whatever ships in this build": it is the `orca` CLI over the runtime socket and the
+ * SSH-remote CLI bridges, which carry no capability list at all. The desktop renderer ships in
+ * this build and still arrives as `clientKind: 'runtime'`, so it advertises like any other client.
  */
 export function supportsAgentLaunch(
   context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>

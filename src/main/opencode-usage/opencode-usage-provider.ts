@@ -1,5 +1,5 @@
 import type { UsageProvider } from '../usage/usage-provider-contract'
-import { scanOpenCodeUsageDatabases } from './scanner'
+import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedDatabase,
@@ -14,7 +14,7 @@ export const openCodeUsageProvider = {
   id: 'opencode',
   label: 'OpenCode',
   schemaVersion: OPENCODE_USAGE_SCHEMA_VERSION,
-  scan: scanOpenCodeUsageDatabases
+  scan: scanOpenCodeUsageDatabasesViaWorker
 } satisfies UsageProvider<
   'processedDatabases',
   OpenCodeUsagePersistedDatabase,

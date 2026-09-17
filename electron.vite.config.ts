@@ -241,6 +241,10 @@ export const electronViteConfig: UserConfig = {
           'port-scan-command-worker-entry': resolve(
             'src/main/ports/port-scan-command-worker-entry.ts'
           ),
+          // Why: the Claude/Codex/OpenCode usage scans walk whole history
+          // corpora and read SQLite synchronously; a worker thread keeps that
+          // off the main-process event loop.
+          'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
