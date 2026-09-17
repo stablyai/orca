@@ -1,22 +1,35 @@
 import { z } from 'zod'
+import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
 
-// Node's own platform domain, not Orca's: `host.platform` answers `process.platform` verbatim, so
-// a string outside this set is not a platform the phone can reason about and reads as unknown.
-const NODE_PLATFORMS = [
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd'
-] as const
+// The closed arm sets on this screen are the desktop's own unions, pinned through hostUnionArms so
+// an arm the desktop adds or drops fails tsc here rather than degrading silently on the phone.
+export const WORKSPACE_GROUP_BY_ARMS = hostUnionArms<PersistedUIState['groupBy']>({
+  none: true,
+  'workspace-status': true,
+  repo: true,
+  'pr-status': true
+})
+export const WORKSPACE_SORT_BY_ARMS = hostUnionArms<PersistedUIState['sortBy']>({
+  name: true,
+  smart: true,
+  recent: true,
+  repo: true,
+  manual: true
+})
+
+// One branch per RepoIcon arm; `satisfies` over the mapped union fails tsc on a missing or stale arm.
+const repoIconBranches = {
+  lucide: z.looseObject({ type: z.literal('lucide'), name: z.string() }),
+  emoji: z.looseObject({ type: z.literal('emoji'), emoji: z.string() }),
+  image: z.looseObject({
+    type: z.literal('image'),
+    src: z.string(),
+    label: salvagedOptional('label', z.string())
+  })
+} satisfies Readonly<Record<RepoIcon['type'], z.ZodType>>
 
 // What the host screen reads to label its rows and to mirror the desktop's workspace view store.
 // Checked against src/main/runtime/rpc/methods/repo.ts:29, ssh.ts:55, host-capabilities.ts:8 and
@@ -54,15 +67,7 @@ export const hostRepoCatalogSchema = z
         badgeColor: salvagedOptional('badgeColor', z.string()),
         repoIcon: salvagedOptional(
           'repoIcon',
-          z.union([
-            z.looseObject({ type: z.literal('lucide'), name: z.string() }),
-            z.looseObject({ type: z.literal('emoji'), emoji: z.string() }),
-            z.looseObject({
-              type: z.literal('image'),
-              src: z.string(),
-              label: salvagedOptional('label', z.string())
-            })
-          ])
+          z.union([repoIconBranches.lucide, repoIconBranches.emoji, repoIconBranches.image])
         ),
         connectionId: salvagedOptional('connectionId', z.string().nullable()),
         executionHostId: salvagedOptional('executionHostId', z.string().nullable())
@@ -107,7 +112,7 @@ export const hostSshTargetSummariesSchema = z
  * payload, so a non-object reply degrades here instead of throwing past the label write.
  */
 export const hostPlatformSchema = z
-  .looseObject({ platform: salvagedOptional('platform', z.enum(NODE_PLATFORMS)) })
+  .looseObject({ platform: salvagedOptional('platform', z.enum(NODE_PLATFORM_NAMES)) })
   .transform((reply) => reply.platform ?? null)
   .catch(() => null)
 
@@ -131,11 +136,8 @@ export const hostPlatformSchema = z
 export const hostViewSettingsSchema = z
   .looseObject({
     ui: z.looseObject({
-      groupBy: salvagedOptional(
-        'groupBy',
-        z.enum(['none', 'workspace-status', 'repo', 'pr-status'])
-      ),
-      sortBy: salvagedOptional('sortBy', z.enum(['name', 'smart', 'recent', 'repo', 'manual'])),
+      groupBy: salvagedOptional('groupBy', z.enum(WORKSPACE_GROUP_BY_ARMS)),
+      sortBy: salvagedOptional('sortBy', z.enum(WORKSPACE_SORT_BY_ARMS)),
       hideSleepingWorkspaces: salvagedOptional('hideSleepingWorkspaces', z.boolean()),
       hideDefaultBranchWorkspace: salvagedOptional('hideDefaultBranchWorkspace', z.boolean()),
       alwaysShowDefaultBranchWorkspace: salvagedOptional(

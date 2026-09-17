@@ -133,11 +133,11 @@ export const OPERATION_MUTATIONS = {
   // platform the host never reported — is unchanged.
   'repo-metadata-platform': {
     file: 'host-screen-reply-schema.ts',
-    before: `  .looseObject({ platform: salvagedOptional('platform', z.enum(NODE_PLATFORMS)) })
+    before: `  .looseObject({ platform: salvagedOptional('platform', z.enum(NODE_PLATFORM_NAMES)) })
   .transform((reply) => reply.platform ?? null)`,
     after: `  .looseObject({
-    platform: salvagedOptional('platform', z.enum(NODE_PLATFORMS)),
-    hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORMS))
+    platform: salvagedOptional('platform', z.enum(NODE_PLATFORM_NAMES)),
+    hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES))
   })
   .transform((reply) => reply.hostPlatform ?? null)`
   },

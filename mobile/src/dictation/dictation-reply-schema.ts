@@ -1,19 +1,24 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import type { RuntimeSpeechModelSummary } from '../../../src/shared/runtime-worktree-contracts'
+import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // The dictation setup sheet's reads and writes, and the three sends one dictation session makes.
 // Checked against src/main/runtime/rpc/methods/speech.ts:12-59 and the shared results the speech
 // catalog and dictation controller return: RuntimeSpeechSetupState and RuntimeSpeechModelSummary in
 // src/shared/runtime-worktree-contracts.ts:81-96.
 
-const SPEECH_MODEL_PROVIDERS = ['local', 'openai'] as const
-const SPEECH_MODEL_STATUSES = [
-  'ready',
-  'not-downloaded',
-  'downloading',
-  'extracting',
-  'error'
-] as const
+// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+export const SPEECH_MODEL_PROVIDERS = hostUnionArms<RuntimeSpeechModelSummary['provider']>({
+  local: true,
+  openai: true
+})
+export const SPEECH_MODEL_STATUSES = hostUnionArms<RuntimeSpeechModelSummary['status']>({
+  ready: true,
+  'not-downloaded': true,
+  downloading: true,
+  extracting: true,
+  error: true
+})
 
 /**
  * One model row in the setup sheet.

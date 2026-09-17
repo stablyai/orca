@@ -93,6 +93,18 @@ export function openEnum<T extends readonly [string, ...string[]], F extends T[n
   return z.enum(values).or(z.string().transform(() => fallback))
 }
 
+/**
+ * The arms of a closed enum, spelled as a coverage record over the host's own union so tsc holds
+ * the schema to that union both ways: an arm the host adds is a missing property here, one it drops
+ * is an excess property. Call it with the host union as the explicit type argument, or the record
+ * only pins itself. It has to sit in the schema module, not its test: mobile's tsc excludes test
+ * files, so a `Record<Union, true>` there checks nothing.
+ */
+export function hostUnionArms<U extends string>(coverage: Readonly<Record<U, true>>): readonly U[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mapped parameter type makes every key exactly a U; Object.keys only loses that at the type level.
+  return Object.keys(coverage) as U[]
+}
+
 /** Array that drops the elements it cannot parse instead of failing.
  *  Absence stays fatal on its own: both containers issue on `undefined` and, being bare transforms,
  *  set neither optin nor optout, and zod only swallows an absent key's issues when a field is both.

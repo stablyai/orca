@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { dictationSetupSchema } from './dictation-reply-schema'
+import {
+  dictationSetupSchema,
+  SPEECH_MODEL_PROVIDERS,
+  SPEECH_MODEL_STATUSES
+} from './dictation-reply-schema'
 
 const setup = (overrides: Record<string, unknown> = {}) => ({
   enabled: true,
@@ -80,5 +84,20 @@ describe('dictation setup reply schema', () => {
     expect(dictationSetupSchema.parse(setup({ hotword: 'orca' }))).toMatchObject({
       hotword: 'orca'
     })
+  })
+})
+
+describe('provider and status are closed over the host union', () => {
+  // The arm lists are pinned to RuntimeSpeechModelSummary in the schema module, where tsc looks;
+  // this loop proves every pinned arm survives the parse, not just the two the tests above pick.
+  it('keeps every arm the host declares, so nothing it sends today degrades', () => {
+    for (const provider of SPEECH_MODEL_PROVIDERS) {
+      for (const status of SPEECH_MODEL_STATUSES) {
+        const [model] = dictationSetupSchema.parse(
+          setup({ models: [{ id: 'a', provider, status }] })
+        ).models
+        expect(model).toMatchObject({ provider, status })
+      }
+    }
   })
 })
