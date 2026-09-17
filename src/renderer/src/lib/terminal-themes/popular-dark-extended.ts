@@ -216,5 +216,29 @@ export const POPULAR_DARK_EXTENDED_TERMINAL_THEMES: TerminalThemeMap = {
     brightMagenta: '#c792ea',
     brightCyan: '#7fdbca',
     brightWhite: '#ffffff'
+  },
+  Slatewave: {
+    background: '#282c34',
+    foreground: '#e2e8f0',
+    cursor: '#5eead4',
+    cursorAccent: '#282c34',
+    selectionBackground: '#334155',
+    selectionForeground: '#e2e8f0',
+    black: '#1e293b',
+    red: '#fb7185',
+    green: '#5eead4',
+    yellow: '#f59e0b',
+    blue: '#38bdf8',
+    magenta: '#b388ff',
+    cyan: '#0e7490',
+    white: '#e2e8f0',
+    brightBlack: '#475569',
+    brightRed: '#ef5350',
+    brightGreen: '#99f6e4',
+    brightYellow: '#fcd34d',
+    brightBlue: '#7dd3fc',
+    brightMagenta: '#c4b5fd',
+    brightCyan: '#67e8f9',
+    brightWhite: '#f1f5f9'
   }
 }
