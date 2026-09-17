@@ -101,8 +101,9 @@ export function openEnum<const T extends readonly string[], F extends T[number] 
  * the schema to that union both ways: an arm the host adds is a missing property here, one it drops
  * is an excess property. `NoInfer` keeps U from being read off the record, so omitting the type
  * argument leaves it at its `never` default and the parameter becomes `never` — the call fails to
- * compile rather than pinning the record only to itself. It has to sit in the schema module, not its test: mobile's tsc excludes test files, so
- * a `Record<Union, true>` there checks nothing.
+ * compile rather than pinning the record only to itself. It belongs in the schema module rather
+ * than its test because the list is what feeds `z.enum`: the coverage record and the arms the
+ * schema actually accepts are then one object, and a test-side copy could drift from it.
  */
 export function hostUnionArms<U extends string = never>(
   coverage: [U] extends [never] ? never : Readonly<Record<NoInfer<U>, true>>

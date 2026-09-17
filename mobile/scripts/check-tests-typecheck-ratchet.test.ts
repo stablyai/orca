@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest'
 import {
   diffBaseline,
   diffCensus,
+  hasTsNocheckDirective,
   parseBaseline,
   parseFailingFiles,
+  parseProgramTestFiles,
   TESTS_OUTSIDE_PROGRAM
 } from './check-tests-typecheck-ratchet.mjs'
 
@@ -118,5 +120,55 @@ describe('the program census', () => {
     for (const entry of TESTS_OUTSIDE_PROGRAM.keys()) {
       expect(fs.existsSync(path.join(root, entry))).toBe(true)
     }
+  })
+})
+
+// One `tsc --noEmit --listFiles` pass answers both questions, so both parsers read the same stream.
+describe('the single-pass output split', () => {
+  const output = [
+    '/repo/mobile/node_modules/typescript/lib/lib.es2020.d.ts',
+    '/repo/mobile/src/session/a.test.ts',
+    '/repo/mobile/src/session/a.ts',
+    '/repo/mobile/scripts/b.test.tsx',
+    'src/session/a.test.ts(12,5): error TS2345: Argument of type x.',
+    'scripts/b.test.tsx(3,3): error TS18047: z is possibly null.'
+  ].join('\n')
+
+  it('takes only the listed test paths as the program', () => {
+    expect(parseProgramTestFiles(output, '/repo/mobile')).toEqual([
+      'scripts/b.test.tsx',
+      'src/session/a.test.ts'
+    ])
+  })
+
+  it('takes only the diagnostics as the failures, from that same stream', () => {
+    expect(parseFailingFiles(output)).toEqual(['scripts/b.test.tsx', 'src/session/a.test.ts'])
+  })
+
+  it('strips a Windows root the same way it strips the separators', () => {
+    expect(parseProgramTestFiles('C:\\repo\\mobile\\src\\a.test.ts', 'C:\\repo\\mobile')).toEqual([
+      'src/a.test.ts'
+    ])
+  })
+})
+
+// tsc exits 0 on a @ts-nocheck file, so without this a baselined test could be "fixed" with one
+// line, pruned off the baseline, and never checked again.
+describe('the @ts-nocheck guard', () => {
+  it('sees the directive in a leading line comment', () => {
+    expect(hasTsNocheckDirective('// @ts-nocheck\nimport { it } from "vitest"\n')).toBe(true)
+  })
+
+  it('sees it in a leading block comment', () => {
+    expect(hasTsNocheckDirective('/**\n * @ts-nocheck\n */\nexport {}\n')).toBe(true)
+  })
+
+  // TypeScript only honours it before the first statement, so neither should this.
+  it('ignores it once code has started', () => {
+    expect(hasTsNocheckDirective('import { it } from "vitest"\n// @ts-nocheck\n')).toBe(false)
+  })
+
+  it('stays quiet for an ordinary header comment', () => {
+    expect(hasTsNocheckDirective('// Tests the reply schema.\nexport {}\n')).toBe(false)
   })
 })

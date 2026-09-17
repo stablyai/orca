@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url'
 //
 // mobile/tsconfig.json excludes *.test.ts so Metro never compiles tests into the release bundle,
 // and vitest transpiles without typechecking. Nothing checked a mobile test until tsconfig.test.json
-// existed, so 144 of the 630 test files had accumulated type errors — overwhelmingly one seam, the
+// existed, so 144 of the 632 test files had accumulated type errors — overwhelmingly one seam, the
 // react-test-renderer / mocked-react-native pair, whose fix is a test-support typing decision rather
 // than 587 local edits. This check freezes that set and fails when a test file that typechecks today
 // stops doing so. The baseline may only shrink.
@@ -74,15 +74,43 @@ export function collectTestFilesOnDisk(root = process.cwd()) {
   return found.sort()
 }
 
-// tsc prints absolute real paths, so the root is realpath'd before stripping it.
-export function collectProgramTestFiles(root = process.cwd()) {
-  const result = runTsc(root, ['--listFilesOnly', '-p', PROJECT])
-  const prefix = toPosix(`${fs.realpathSync(root)}${path.sep}`)
-  return `${result.stdout ?? ''}`
-    .split('\n')
-    .map((line) => toPosix(line.trim()))
-    .filter((line) => /\.test\.tsx?$/.test(line) && line.startsWith(prefix))
-    .map((line) => line.slice(prefix.length))
+// --listFiles prints one absolute real path per line into the same stream as the diagnostics; a
+// diagnostic carries `(line,col): error` and a path relative to cwd, so neither filter can take the
+// other's lines.
+export function parseProgramTestFiles(tscOutput, realRoot) {
+  const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`
+  return [
+    ...new Set(
+      tscOutput
+        .split('\n')
+        .map((line) => toPosix(line.trim()))
+        .filter((line) => /\.test\.tsx?$/.test(line) && line.startsWith(prefix))
+        .map((line) => line.slice(prefix.length))
+    )
+  ].sort()
+}
+
+// A baselined test could otherwise be "fixed" with one `@ts-nocheck`, pruned, and never checked
+// again: tsc exits 0 on such a file and nothing else here would notice.
+export function hasTsNocheckDirective(source) {
+  for (const line of source.split('\n')) {
+    const text = line.trim()
+    if (text === '') {
+      continue
+    }
+    if (!text.startsWith('//') && !text.startsWith('/*') && !text.startsWith('*')) {
+      return false
+    }
+    if (text.includes('@ts-nocheck')) {
+      return true
+    }
+  }
+  return false
+}
+
+export function findTsNocheckFiles(root, files) {
+  return files
+    .filter((file) => hasTsNocheckDirective(fs.readFileSync(path.join(root, file), 'utf8')))
     .sort()
 }
 
@@ -133,13 +161,18 @@ function runTsc(root, args) {
 }
 
 // tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
-function runTypecheck(root) {
-  const result = runTsc(root, ['--noEmit', '-p', PROJECT])
-  return `${result.stdout ?? ''}${result.stderr ?? ''}`
+// One pass answers both questions: --listFiles names the program, the diagnostics name the failures.
+export function collectTypecheckPass(root = process.cwd()) {
+  const result = runTsc(root, ['--noEmit', '--listFiles', '-p', PROJECT])
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  return {
+    failing: parseFailingFiles(output),
+    programTestFiles: parseProgramTestFiles(output, fs.realpathSync(root))
+  }
 }
 
 export function collectCurrentFailingFiles(root = process.cwd()) {
-  return parseFailingFiles(runTypecheck(root))
+  return collectTypecheckPass(root).failing
 }
 
 function printAddedFailure(added) {
@@ -188,12 +221,15 @@ function printStaleFailure(stale) {
   console.error('')
 }
 
-function printCensusFailure(missing, staleAllowance) {
+function printCensusFailure(missing, staleAllowance, nocheck = []) {
   for (const entry of missing) {
     console.error(`::error::Test file is not in the typecheck program: ${entry}`)
   }
   for (const entry of staleAllowance) {
     console.error(`::error::Stale TESTS_OUTSIDE_PROGRAM entry: ${entry}`)
+  }
+  for (const entry of nocheck) {
+    console.error(`::error::Test file opts out of checking with @ts-nocheck: ${entry}`)
   }
   console.error('')
   console.error('╭────────────────────────────────────────────────────────────────────────────╮')
@@ -222,6 +258,15 @@ function printCensusFailure(missing, staleAllowance) {
     }
     console.error('')
   }
+  if (nocheck.length > 0) {
+    console.error(`  ${nocheck.length} test file(s) carry @ts-nocheck, which makes tsc exit 0 on`)
+    console.error('  them. That would let a baselined file be pruned and never checked again:')
+    console.error('')
+    for (const entry of nocheck) {
+      console.error(`    • ${entry}`)
+    }
+    console.error('')
+  }
 }
 
 export function main(root = process.cwd()) {
@@ -232,14 +277,16 @@ export function main(root = process.cwd()) {
     )
     return 1
   }
-  const census = diffCensus(collectTestFilesOnDisk(root), collectProgramTestFiles(root))
-  if (census.missing.length > 0 || census.staleAllowance.length > 0) {
-    printCensusFailure(census.missing, census.staleAllowance)
+  const pass = collectTypecheckPass(root)
+  const census = diffCensus(collectTestFilesOnDisk(root), pass.programTestFiles)
+  const nocheck = findTsNocheckFiles(root, pass.programTestFiles)
+  if (census.missing.length > 0 || census.staleAllowance.length > 0 || nocheck.length > 0) {
+    printCensusFailure(census.missing, census.staleAllowance, nocheck)
     return 1
   }
 
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
-  const current = collectCurrentFailingFiles(root)
+  const current = pass.failing
   const { added, stale } = diffBaseline(current, baseline)
 
   if (added.length > 0) {
@@ -254,7 +301,7 @@ export function main(root = process.cwd()) {
     return 1
   }
   console.log(
-    `mobile tests typecheck ratchet OK — every test file on disk is in the program (${TESTS_OUTSIDE_PROGRAM.size} excluded on purpose), ${current.length} grandfathered file(s), every other test file checks.`
+    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) in the program (${TESTS_OUTSIDE_PROGRAM.size} excluded on purpose, none @ts-nocheck), ${current.length} grandfathered file(s), every other test file checks.`
   )
   return 0
 }
