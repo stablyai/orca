@@ -101,8 +101,12 @@ export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } 
 /**
  * Setting a Linear issue's workflow state.
  *
- * The reply body is unread: use-mobile-tasks-github-reply-merge-actions.tsx:199 interprets the
- * envelope for its acceptance and looks at nothing in it, so there is no member to declare. The
- * acceptance still carries a refusal to the callback's `catch`, which is the whole verdict here.
+ * The reply body is unread: use-mobile-tasks-github-reply-merge-actions.tsx:199 calls `interpret`
+ * and discards what it returns, so there is no member to declare. The body is also where this
+ * method refuses — the host answers a rejected update with an in-band `{ ok: false, error }` on an
+ * otherwise successful envelope (src/main/ipc/linear-issue-handlers.ts:117), and
+ * `require-result-or-throw-message` throws only on an outer refusal (rpc-operation.ts:129), so that
+ * refusal reaches no `catch` and the screen moves the issue anyway. Main does the same: it read the
+ * identical payload through `rpcUncheckedPayloadReader` and dropped it on the floor.
  */
 export const linearIssueUpdatedSchema = z.unknown()
