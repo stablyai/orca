@@ -10,7 +10,9 @@ import {
   EMPTY_WORKTREE_TERMINAL_TABS,
   EMPTY_WORKTREE_UNIFIED_TABS,
   EMPTY_LAYOUT_BY_WORKTREE,
-  graphState
+  getMobileSessionAgentStatusCache,
+  graphState,
+  setMobileSessionAgentStatusCache
 } from './graph-state'
 import type {
   MobileSessionAgentStatusByWorktree,
@@ -51,13 +53,27 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
   return graphState.cachedOpenFileIndexes
 }
 
+/**
+ * Memoized on both source slices: the tab->worktree map it rebuilds is proportional to every tab
+ * in the store, yet one OSC frame replaces only `agentStatusByPaneKey`. Both slices are
+ * copy-on-write, so an unchanged pair of references cannot hide a changed grouping.
+ */
 export function buildMobileSessionAgentStatusByWorktree(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
   tabsByWorktree: AppState['tabsByWorktree']
 ): MobileSessionAgentStatusByWorktree {
+  const cached = getMobileSessionAgentStatusCache()
+  if (cached?.agentStatusSource === agentStatusByPaneKey && cached.tabsSource === tabsByWorktree) {
+    return cached.byWorktreeId
+  }
   const byWorktreeId = new Map<string, Map<string, AppState['agentStatusByPaneKey'][string]>>()
   const paneKeys = Object.keys(agentStatusByPaneKey)
   if (paneKeys.length === 0) {
+    setMobileSessionAgentStatusCache({
+      agentStatusSource: agentStatusByPaneKey,
+      tabsSource: tabsByWorktree,
+      byWorktreeId
+    })
     return byWorktreeId
   }
   const worktreeIdByTabId = new Map<string, string>()
@@ -79,6 +95,11 @@ export function buildMobileSessionAgentStatusByWorktree(
     }
     bucket.set(paneKey, agentStatusByPaneKey[paneKey])
   }
+  setMobileSessionAgentStatusCache({
+    agentStatusSource: agentStatusByPaneKey,
+    tabsSource: tabsByWorktree,
+    byWorktreeId
+  })
   return byWorktreeId
 }
 

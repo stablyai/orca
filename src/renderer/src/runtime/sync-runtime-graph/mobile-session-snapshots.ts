@@ -7,6 +7,7 @@ import type {
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
+  EMPTY_AGENT_STATUS_BY_PANE_KEY,
   graphState,
   jsonContentEquals,
   mobilePublicationEpoch
@@ -48,7 +49,8 @@ export function buildMobileSessionTabSnapshots(
     openFileIndexes,
     editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts),
     agentStatusByWorktreeId: buildMobileSessionAgentStatusByWorktree(
-      state.agentStatusByPaneKey ?? {},
+      // A fresh `{}` literal per call would miss the identity memo on every publication.
+      state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY,
       state.tabsByWorktree
     ),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,

@@ -7,9 +7,11 @@ import type {
 } from '../../../../shared/runtime-types'
 import type {
   AgentStatusProjectionCache,
+  AmbiguousTerminalTabIdsCache,
   BrowserPagesProjectionCache,
   BrowserWorkspacesProjectionCache,
   EditorDraftHashCache,
+  MobileSessionAgentStatusCache,
   MobileSessionWorktreeInputs,
   OpenFileIndexes,
   OpenFilesProjectionCache,
@@ -39,6 +41,8 @@ export type RegisteredTerminalTabKey = string
 
 export const graphState = {
   registeredTabs: new Map<RegisteredTerminalTabKey, RegisteredTerminalTab>(),
+  /** Derived from `registeredTabs`; lets the publication loops reject an unmounted tab without building its key. */
+  registeredTabIdsByWorktree: new Map<string, Set<string>>(),
   tabRegisteredAt: new Map<RegisteredTerminalTabKey, number>(),
   syncScheduled: false,
   syncInFlight: false,
@@ -70,6 +74,24 @@ export const graphState = {
   hasCachedMobileTerminalTheme: false
 }
 
+// Why module-local and not `graphState` fields: these are scan memos owned by this module,
+// and a plain `let` carries its nullable type without a cast.
+let ambiguousTerminalTabIdsCache: AmbiguousTerminalTabIdsCache | null = null
+let mobileSessionAgentStatusCache: MobileSessionAgentStatusCache | null = null
+
+export function getMobileSessionAgentStatusCache(): MobileSessionAgentStatusCache | null {
+  return mobileSessionAgentStatusCache
+}
+
+export function setMobileSessionAgentStatusCache(cache: MobileSessionAgentStatusCache): void {
+  mobileSessionAgentStatusCache = cache
+}
+
+export function resetRuntimeGraphSliceScanCaches(): void {
+  ambiguousTerminalTabIdsCache = null
+  mobileSessionAgentStatusCache = null
+}
+
 export function registeredTerminalTabKey(
   worktreeId: string,
   tabId: string
@@ -77,11 +99,45 @@ export function registeredTerminalTabKey(
   return `${worktreeId}\0${tabId}`
 }
 
+/** Both registration maps move together; callers must never touch `registeredTabs` directly. */
+export function addRegisteredTerminalTab(tab: RegisteredTerminalTab): RegisteredTerminalTabKey {
+  const key = registeredTerminalTabKey(tab.worktreeId, tab.tabId)
+  graphState.registeredTabs.set(key, tab)
+  graphState.tabRegisteredAt.set(key, Date.now())
+  let tabIds = graphState.registeredTabIdsByWorktree.get(tab.worktreeId)
+  if (!tabIds) {
+    tabIds = new Set()
+    graphState.registeredTabIdsByWorktree.set(tab.worktreeId, tabIds)
+  }
+  tabIds.add(tab.tabId)
+  return key
+}
+
+export function removeRegisteredTerminalTab(tab: RegisteredTerminalTab): void {
+  const key = registeredTerminalTabKey(tab.worktreeId, tab.tabId)
+  graphState.registeredTabs.delete(key)
+  graphState.tabRegisteredAt.delete(key)
+  const tabIds = graphState.registeredTabIdsByWorktree.get(tab.worktreeId)
+  if (!tabIds) {
+    return
+  }
+  tabIds.delete(tab.tabId)
+  // Drop the empty bucket so a long-lived session does not retain one Set per visited worktree.
+  if (tabIds.size === 0) {
+    graphState.registeredTabIdsByWorktree.delete(tab.worktreeId)
+  }
+}
+
 export function findRegisteredTerminalTab(
   tabId: string,
   worktreeId?: string
 ): { key: RegisteredTerminalTabKey; tab: RegisteredTerminalTab } | null {
   if (worktreeId !== undefined) {
+    // The publication loops ask this for every persisted tab, but only mounted panes register.
+    // Rejecting on the index first keeps the common miss free of key-string allocation.
+    if (!graphState.registeredTabIdsByWorktree.get(worktreeId)?.has(tabId)) {
+      return null
+    }
     const key = registeredTerminalTabKey(worktreeId, tabId)
     const tab = graphState.registeredTabs.get(key)
     return tab ? { key, tab } : null
@@ -101,10 +157,19 @@ export function findRegisteredTerminalTab(
   return match
 }
 
-/** IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely. */
+/**
+ * IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely.
+ *
+ * Memoized on slice identity: every publication scanned all tabs in all worktrees, but
+ * `tabsByWorktree` is copy-on-write, so an unchanged reference cannot hide a new duplicate.
+ */
 export function collectAmbiguousTerminalTabIds(
   tabsByWorktree: AppState['tabsByWorktree']
 ): ReadonlySet<string> {
+  const cached = ambiguousTerminalTabIdsCache
+  if (cached?.source === tabsByWorktree) {
+    return cached.ambiguousTabIds
+  }
   const seen = new Set<string>()
   const ambiguous = new Set<string>()
   for (const tabs of Object.values(tabsByWorktree)) {
@@ -116,6 +181,7 @@ export function collectAmbiguousTerminalTabIds(
       }
     }
   }
+  ambiguousTerminalTabIdsCache = { source: tabsByWorktree, ambiguousTabIds: ambiguous }
   return ambiguous
 }
 

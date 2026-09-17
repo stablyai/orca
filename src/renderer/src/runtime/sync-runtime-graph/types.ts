@@ -115,6 +115,16 @@ export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
   ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
 >
+/** Both sources are copy-on-write store slices, so identity equality proves contents are unchanged. */
+export type MobileSessionAgentStatusCache = {
+  agentStatusSource: AppState['agentStatusByPaneKey']
+  tabsSource: AppState['tabsByWorktree']
+  byWorktreeId: MobileSessionAgentStatusByWorktree
+}
+export type AmbiguousTerminalTabIdsCache = {
+  source: AppState['tabsByWorktree']
+  ambiguousTabIds: ReadonlySet<string>
+}
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
   browserTabsByWorktree: AppState['browserTabsByWorktree']

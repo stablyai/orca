@@ -40,6 +40,8 @@ const knobByFlag = {
   '--metadata-status': 'ORCA_TYPING_BENCH_METADATA_STATUS',
   '--metadata-titles': 'ORCA_TYPING_BENCH_METADATA_TITLES',
   '--instrumentation': 'ORCA_TYPING_BENCH_INSTRUMENTATION',
+  '--graph-probe': 'ORCA_TYPING_BENCH_GRAPH_PROBE',
+  '--cpu-throttle': 'ORCA_TYPING_BENCH_CPU_THROTTLE',
   '--label': 'ORCA_TYPING_BENCH_LABEL'
 }
 
