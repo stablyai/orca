@@ -86,4 +86,14 @@ describe('the trust record salvages per repo', () => {
     expect(reads(newWorkspaceUiTrustSchema, {})).toBe(undefined)
     expect(reads(newWorkspaceUiTrustSchema, { ui: null })).toBe(null)
   })
+
+  // The call site interprets this reply inside an unawaited `void (async () => {})()` with no
+  // catch, so a refusal here is an unhandled rejection that also skips the provider computation
+  // below it. Main cast the value and read `?.trustedOrcaHooks ?? {}`, which tolerated any shape.
+  it('reads a non-object ui.get result as absent rather than refusing it', () => {
+    for (const value of ['not-an-object', 42, true, [], [{ ui: {} }]]) {
+      expect(refuses(newWorkspaceUiTrustSchema, value)).toBe(false)
+      expect(reads(newWorkspaceUiTrustSchema, value)).toBe(undefined)
+    }
+  })
 })

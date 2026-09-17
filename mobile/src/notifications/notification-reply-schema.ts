@@ -29,6 +29,11 @@ export const notificationUnreadReplySchema = z.unknown()
  * this build does not know degrades to the generic "Could not send" copy, which is the arm main took
  * for every unrecognised string too — pinned by the `notifications-display-test-unknown-reason`
  * golden. The arms are the host's own (mobile-push-contract.ts:99).
+ *
+ * Total, so a result that is not an object degrades the same way. A refusal here would not be
+ * silent: the call site's `try` turns it into the reader's own sentence in the message slot where
+ * main printed "Could not send through Orca's push service", which is a different screen for a
+ * reply main tolerated.
  */
 export const pushDeliveryTestResultSchema = z
   .looseObject({
@@ -39,6 +44,7 @@ export const pushDeliveryTestResultSchema = z
     )
   })
   .nullish()
+  .catch(undefined)
 
 /**
  * Whether the host committed this device's push route.

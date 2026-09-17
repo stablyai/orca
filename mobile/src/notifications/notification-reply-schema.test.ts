@@ -27,6 +27,17 @@ describe('notification replies tolerate the shapes their call sites guard', () =
     expect(reads(pushDeliveryTestResultSchema, { error: 'refused' })?.accepted).toBe(undefined)
   })
 
+  // The screen interprets this inside a `try` that prints the thrown message, so a refusal would
+  // replace main's "Could not send through Orca's push service" with the reader's own sentence.
+  it('reads a non-object test-push result as absent, which takes the generic copy', () => {
+    for (const value of ['garbage', 7, true, []]) {
+      expect(refuses(pushDeliveryTestResultSchema, value)).toBe(false)
+      const result = reads(pushDeliveryTestResultSchema, value)
+      expect(result?.accepted).toBe(undefined)
+      expect(result?.reason).toBe(undefined)
+    }
+  })
+
   it('reads a registration reply the reconciler reaches through optional chaining', () => {
     expect(reads(pushRouteRegistrationSchema, { registered: true })?.registered).toBe(true)
     expect(reads(pushRouteRegistrationSchema, null)).toBe(null)
