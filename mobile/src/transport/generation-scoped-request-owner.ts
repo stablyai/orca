@@ -137,7 +137,8 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
   ): Promise<LoadedRequest<Value> | null> {
     const state: RequestLeaseState = { key, generation: this.currentGeneration, owner: this.owner }
     const lease: RequestLease<Value> = { [LEASE_STATE]: state }
-    // The one request's own probe: joiners share it, which is right, because they share its reply.
+    // One probe per physical request. A joiner never sees it: its `fn` is never invoked, it awaits
+    // this promise, and `retire()` clears `inFlight`, so no joiner can join across a generation bump.
     const currency: RequestCurrency = {
       isCurrent: () => state.generation === this.currentGeneration
     }

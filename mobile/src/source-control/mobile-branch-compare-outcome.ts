@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RequestCurrency } from '../transport/generation-scoped-request-owner'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
@@ -24,7 +24,7 @@ export type BranchCompareOutcome =
  * the superseded answer, which the owner reads as no value at all.
  */
 export async function readBranchCompareOutcome(
-  client: RpcClient,
+  client: RpcOperationSender,
   worktreeId: string,
   currency: RequestCurrency
 ): Promise<BranchCompareOutcome | null> {
