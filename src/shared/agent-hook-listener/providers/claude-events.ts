@@ -264,16 +264,15 @@ export function normalizeClaudeEvent(
   // Why: the renderer infers an interrupt from a bare Escape, which it can't tell apart from an Escape
   // that only dismisses a /model or /btw overlay. Claude emits NO hook on a real interrupt, so a clean
   // lead-turn completion — only `Stop`, never a `StopFailure` error boundary — proves the turn was
-  // never interrupted, and drops the provisional flag. It clears even while a subagent still holds the
-  // pane `working` (that gate ignores `interrupted`), but stays engaged while a background shell/cron
-  // drives monitoring, so the interrupt-suppresses-monitoring behavior (#16201) is intact. A
-  // hook-confirmed `is_interrupt` is never provisional.
+  // never interrupted, and drops the provisional flag (even while a subagent still holds the pane
+  // `working`). Only the DISPLAYED flag is dropped: `resolvedStatus` above already ran with the raw
+  // `interrupted`, so a shell/cron turn still settled `done` not monitoring (#16201). A hook-confirmed
+  // `is_interrupt` is never provisional.
   const clearsInferredInterrupt =
     eventName === 'Stop' &&
     eventAgentId === undefined &&
     !hookConfirmedInterrupt &&
-    previousLead?.interruptedInferred === true &&
-    resolvedStatus.workingMode !== 'monitoring'
+    previousLead?.interruptedInferred === true
   const finalInterrupted = clearsInferredInterrupt ? undefined : interrupted
   // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
   const turnCompletedAt =
