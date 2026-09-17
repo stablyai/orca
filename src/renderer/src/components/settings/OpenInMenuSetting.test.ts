@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   createPresetOpenInApplication,
-  shouldCommitOpenInApplicationsDraft
+  shouldCommitOpenInApplicationsDraft,
+  withOpenInApplicationIcon
 } from './OpenInMenuSetting'
+import { getOpenInAppIconGlyph } from '@/lib/open-in-app-icon-set'
 import {
   getOpenInAppPresets,
   isOpenInAppPresetAdded,
@@ -39,6 +41,46 @@ describe('OpenInMenuSetting presets', () => {
     const icon = OpenInApplicationIcon({ application: { command: 'zed' } })
 
     expect(icon.props.className).toContain('dark:invert')
+  })
+})
+
+describe('OpenInMenuSetting custom icons', () => {
+  it('prefers a chosen bundled icon over the command preset favicon', () => {
+    const chosen = OpenInApplicationIcon({
+      application: { command: 'zed', icon: { type: 'bundled', id: 'Braces' } }
+    })
+    const preset = OpenInApplicationIcon({ application: { command: 'zed' } })
+
+    expect(chosen.type).toBe(getOpenInAppIconGlyph('Braces'))
+    expect(preset.type).toBe('img')
+  })
+
+  it('renders an icon extracted from an installed app', () => {
+    const src = 'data:image/png;base64,aGk='
+    const icon = OpenInApplicationIcon({
+      application: { command: 'idea', icon: { type: 'image', src } }
+    })
+
+    expect(icon.type).toBe('img')
+    expect(icon.props.src).toBe(src)
+  })
+
+  it('falls back to the generic glyph when a row has neither icon nor preset', () => {
+    const icon = OpenInApplicationIcon({ application: { command: 'idea' } })
+
+    expect(icon.type).not.toBe('img')
+  })
+
+  it('sets and clears a row icon without leaving the key behind', () => {
+    const application = { id: 'idea', label: 'IntelliJ IDEA', command: 'idea' }
+    const icon = { type: 'bundled', id: 'Braces' } as const
+
+    const withIcon = withOpenInApplicationIcon(application, icon)
+    expect(withIcon).toEqual({ ...application, icon })
+
+    const cleared = withOpenInApplicationIcon(withIcon, null)
+    expect(cleared).toEqual(application)
+    expect(cleared).not.toHaveProperty('icon')
   })
 })
 
