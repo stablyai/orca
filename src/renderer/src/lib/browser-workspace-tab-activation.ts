@@ -1,3 +1,4 @@
+import { activateWorkspaceTab } from './workspace-tab-activation'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -51,8 +52,11 @@ export function activateBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): 
     return false
   }
   const state = useAppStore.getState()
-  state.focusGroup(params.worktreeId, unifiedTab.groupId)
-  state.activateTab(unifiedTab.id, { worktreeId: params.worktreeId })
+  activateWorkspaceTab(state, {
+    worktreeId: params.worktreeId,
+    groupId: unifiedTab.groupId,
+    tabId: unifiedTab.id
+  })
   state.setActiveBrowserTab(params.workspaceId)
   if (params.pageId) {
     state.setActiveBrowserPage(params.workspaceId, params.pageId)
