@@ -10,6 +10,8 @@ import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-wo
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import { resolveHydratedEditorFileSelection } from '../file-ids/hydrated-editor-file-selection'
 import { resolveHydratedEditorFrontmatter } from '../file-ids/hydrated-editor-frontmatter'
+import { isEditorTextDirectionOverride } from '../../../../../../shared/editor-text-direction'
+import { hydrateFileKeyedOverrides } from './hydrate-file-keyed-overrides'
 import {
   addEditorFileIdMigration,
   migrateHydratedEditorTabsAndGroups,
@@ -28,6 +30,7 @@ export function createHydrateEditorSession(
         const persistedActiveFileIdByWorktree = session.activeFileIdByWorktree ?? {}
         const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
         const persistedMarkdownFrontmatterVisible = session.markdownFrontmatterVisible ?? {}
+        const persistedEditorTextDirectionByFile = session.editorTextDirectionByFile ?? {}
 
         const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
           s,
@@ -138,16 +141,25 @@ export function createHydrateEditorSession(
         // Why: transient diff/conflict surfaces aren't restored, so clear a stale "editor" marker and fall back to terminal.
         const nextActiveTabType =
           nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
+        // Why: upstream's frontmatter resolver hardcodes the visible-by-default filter, so the
+        // direction override keeps the generic helper rather than reshaping their tuned path.
         const markdownFrontmatterVisible = resolveHydratedEditorFrontmatter(
           persistedMarkdownFrontmatterVisible,
           usedOpenFileIds,
           editorFileIdMigrationsByWorktree
+        )
+        const editorTextDirectionByFile = hydrateFileKeyedOverrides(
+          persistedEditorTextDirectionByFile,
+          usedOpenFileIds,
+          editorFileIdMigrationsByWorktree,
+          (direction) => (isEditorTextDirectionOverride(direction) ? direction : undefined)
         )
 
         return {
           openFiles,
           editorDrafts,
           markdownFrontmatterVisible,
+          editorTextDirectionByFile,
           activeFileId: nextActiveFileId,
           activeFileIdByWorktree: filteredActiveFileIdByWorktree,
           activeTabType: nextActiveTabType,

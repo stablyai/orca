@@ -12,6 +12,8 @@ import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
+import { buildEditorTextDirectionClass } from './editor-text-direction-class'
+import { resolveEditorTextDirection } from '../../../../shared/editor-text-direction'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
@@ -95,6 +97,10 @@ export default function MonacoEditor({
   )
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
+  const textDirectionOverride = useAppStore((s) => s.editorTextDirectionByFile[fileId])
+  const textDirectionClass = buildEditorTextDirectionClass(
+    resolveEditorTextDirection(settings?.editorTextDirection, textDirectionOverride)
+  )
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -216,7 +222,7 @@ export default function MonacoEditor({
   return (
     <div
       ref={editorContainerRef}
-      className={autoHeight ? 'relative' : 'relative h-full'}
+      className={`${autoHeight ? 'relative' : 'relative h-full'}${textDirectionClass ? ` ${textDirectionClass}` : ''}`}
       style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
     >
       <MonacoMarkdownAnnotationOverlay

@@ -4,28 +4,8 @@ import {
   configureLazyArabicShapingJoiner,
   ensureArabicShapingJoinerForText,
   findRtlJoinRanges,
-  isStrongRtlCodePoint,
   registerArabicShapingJoiner
 } from './terminal-arabic-shaping-joiner'
-
-describe('isStrongRtlCodePoint', () => {
-  it('classifies Arabic and Hebrew letters as strong RTL', () => {
-    expect(isStrongRtlCodePoint('م'.codePointAt(0)!)).toBe(true)
-    expect(isStrongRtlCodePoint('ش'.codePointAt(0)!)).toBe(true)
-    expect(isStrongRtlCodePoint('א'.codePointAt(0)!)).toBe(true)
-    // Arabic presentation forms (legacy shaped codepoints).
-    expect(isStrongRtlCodePoint(0xfe8d)).toBe(true)
-    // Adlam (supplementary plane).
-    expect(isStrongRtlCodePoint(0x1e900)).toBe(true)
-  })
-
-  it('does not classify Latin, box drawing, CJK, or emoji as RTL', () => {
-    expect(isStrongRtlCodePoint('a'.codePointAt(0)!)).toBe(false)
-    expect(isStrongRtlCodePoint('│'.codePointAt(0)!)).toBe(false)
-    expect(isStrongRtlCodePoint('漢'.codePointAt(0)!)).toBe(false)
-    expect(isStrongRtlCodePoint(0x1f600)).toBe(false)
-  })
-})
 
 describe('findRtlJoinRanges', () => {
   it('returns no ranges for plain ASCII text', () => {

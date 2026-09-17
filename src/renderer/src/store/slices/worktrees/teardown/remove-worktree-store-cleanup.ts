@@ -107,6 +107,7 @@ export function applyRemoveWorktreeSuccessState(
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
       editorViewMode: omitByFileId(s.editorViewMode),
       markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
+      editorTextDirectionByFile: omitByFileId(s.editorTextDirectionByFile),
       // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
       editorCursorLine: omitByFileId(s.editorCursorLine),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
