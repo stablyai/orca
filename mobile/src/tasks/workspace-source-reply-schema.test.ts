@@ -85,7 +85,7 @@ describe('status is an open enum that degrades to disconnected', () => {
     const parsed = sshConnectionStateSchema.safeParse({
       state: { ...connected, status: 'whatever' }
     })
-    expect(parsed.success && (parsed.data as { status: string }).status).not.toBe('connected')
+    expect(parsed.success ? parsed.data?.status : 'unparsed').not.toBe('connected')
   })
 
   it('stays fatal for a non-string status, which is the wrong type and not a newer arm', () => {
@@ -97,7 +97,7 @@ describe('status is an open enum that degrades to disconnected', () => {
 describe('error is a tri-state the drawer renders', () => {
   it('keeps an explicit null', () => {
     const parsed = sshConnectionStateSchema.safeParse({ state: connected })
-    expect(parsed.success && (parsed.data as { error: unknown }).error).toBeNull()
+    expect(parsed.success ? parsed.data?.error : 'unparsed').toBeNull()
   })
 
   it('keeps the host message', () => {

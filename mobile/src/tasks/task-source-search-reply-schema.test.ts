@@ -62,8 +62,8 @@ describe('a work-item row preserves author as a tri-state', () => {
 
   it('keeps absence absent rather than collapsing it to null', () => {
     const parsed = taskGitHubWorkItemListSchema.safeParse({ items: [{ number: 1 }] })
-    const rows = parsed.success ? (parsed.data.items as object[]) : []
-    expect('author' in rows[0]!).toBe(false)
+    const row = parsed.success ? parsed.data.items[0] : undefined
+    expect(row && Object.keys(row)).toEqual(['number'])
   })
 })
 

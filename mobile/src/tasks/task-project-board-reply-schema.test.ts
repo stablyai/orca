@@ -131,18 +131,13 @@ describe('the row detail pane preserves reviewDecision as a tri-state', () => {
     expect(parsed.success && parsed.data).toMatchObject({
       details: { item: { reviewDecision: null } }
     })
-    expect(
-      parsed.success &&
-        'reviewDecision' in (parsed.data as { details: { item: object } }).details.item
-    ).toBe(true)
+    // JSON drops an absent key and keeps an explicit null, which is the whole distinction here.
+    expect(JSON.stringify(parsed)).toContain('"reviewDecision":null')
   })
 
   it('keeps absence absent rather than collapsing it to null', () => {
     const parsed = detail({ labels: [] })
-    expect(
-      parsed.success &&
-        'reviewDecision' in (parsed.data as { details: { item: object } }).details.item
-    ).toBe(false)
+    expect(JSON.stringify(parsed)).not.toContain('reviewDecision')
   })
 
   it('keeps a decision the host reports', () => {
@@ -189,7 +184,7 @@ describe('the comment replies', () => {
 
   it('drops a comment with no id rather than appending an unkeyed row', () => {
     const parsed = taskProjectCommentWriteSchema.safeParse({ ok: true, comment: { body: 'hi' } })
-    expect(parsed.success && (parsed.data as { comment?: unknown }).comment).toBeUndefined()
+    expect(parsed.success && parsed.data).toEqual({ ok: true })
   })
 
   it('keeps a bare-string error, which both mutation call sites branch on', () => {

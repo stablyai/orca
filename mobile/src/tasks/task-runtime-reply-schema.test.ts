@@ -32,10 +32,9 @@ describe('the runtime status', () => {
     for (const advertised of [undefined, null, 'nonsense', { dedupeTtlMs: 45_000 }]) {
       const parsed = taskRuntimeStatusSchema.safeParse({ worktreeCreateIdempotency: advertised })
       expect(parsed.success).toBe(true)
-      expect(
-        parsed.success &&
-          (parsed.data as { worktreeCreateIdempotency?: unknown }).worktreeCreateIdempotency
-      ).toEqual(advertised)
+      expect(parsed.success ? parsed.data.worktreeCreateIdempotency : 'unparsed').toEqual(
+        advertised
+      )
     }
   })
 })
@@ -79,7 +78,7 @@ describe('the two advisory probes', () => {
 
   it('drops a malformed glab rather than reading it as installed', () => {
     const parsed = taskPreflightSchema.safeParse({ glab: 'yes' })
-    expect(parsed.success && (parsed.data as { glab?: unknown }).glab).toBeUndefined()
+    expect(parsed.success ? parsed.data.glab : 'unparsed').toBeUndefined()
   })
 
   it('passes a host member no mobile consumer reads straight through', () => {
