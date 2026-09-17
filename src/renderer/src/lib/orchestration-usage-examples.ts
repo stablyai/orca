@@ -4,27 +4,30 @@ import type { SkillUsageExample } from './skill-usage-example'
 
 export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsageExample[] => [
   {
-    id: 'handoff',
-    title: translate('auto.lib.orchestration.usage.examples.5e0d489fe1', 'Hand off an active task'),
+    id: 'supervised-worker',
+    title: translate(
+      'auto.lib.orchestration.usage.examples.superviseTitle',
+      'Supervise a worker to completion'
+    ),
     summary: translate(
-      'auto.lib.orchestration.usage.examples.handoffSummary',
-      'Move ownership to another agent with enough context to continue.'
+      'auto.lib.orchestration.usage.examples.superviseSummary',
+      'Dispatch a task and wait for the worker to report done or escalate.'
     ),
     prompt:
-      'Use /orchestration to hand this billing settings task to the idle Claude agent. Include the goal, current context, and what they should finish next.'
+      'Use /orchestration to dispatch the billing settings migration to an idle Claude agent, then wait for worker_done before starting the follow-up.'
   },
   {
-    id: 'worktree-handoff',
+    id: 'decision-gate',
     title: translate(
-      'auto.lib.orchestration.usage.examples.ab0e9803b7',
-      'Hand off to another worktree'
+      'auto.lib.orchestration.usage.examples.decisionGateTitle',
+      'Pause for a decision before continuing'
     ),
     summary: translate(
-      'auto.lib.orchestration.usage.examples.worktreeHandoffSummary',
-      'Move work to an agent that is already running in a different branch.'
+      'auto.lib.orchestration.usage.examples.decisionGateSummary',
+      'Gate the next dispatch on your approval instead of letting agents guess.'
     ),
     prompt:
-      'Use /orchestration to hand this settings cleanup to the agent in the settings-polish worktree. Send the goal, relevant files, and expected result.'
+      'Use /orchestration to run this schema change and open a decision gate before dispatching the destructive migration step, so it waits for my approval.'
   },
   {
     id: 'child-sequence',
