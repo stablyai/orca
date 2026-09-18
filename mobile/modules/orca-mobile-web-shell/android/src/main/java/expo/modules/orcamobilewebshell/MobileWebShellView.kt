@@ -213,14 +213,7 @@ internal class OrcaMobileWebShellView(
     val path = resolveMobileWebShellRequestPath(parts, current.originHost) ?: return null
     val asset = current.generation.entries[path] ?: return null
     val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
-    val headers = mutableMapOf(
-      "Content-Length" to bytes.size.toString(),
-      "Cache-Control" to "no-store",
-      "X-Content-Type-Options" to "nosniff"
-    )
-    if (path == "/") {
-      headers["Content-Security-Policy"] = MOBILE_WEB_SHELL_CSP
-    }
+    val headers = mobileWebShellResponseHeaders(path, bytes.size)
     val (mimeType, charset) = splitMobileWebShellContentType(asset.contentType)
     return WebResourceResponse(mimeType, charset, 200, "OK", headers, ByteArrayInputStream(bytes))
   }

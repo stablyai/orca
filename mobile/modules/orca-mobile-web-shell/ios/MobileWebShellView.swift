@@ -50,7 +50,6 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
       fail(urlSchemeTask, key)
       return
     }
-    let isDocument = path == "/"
     readQueue.async { [weak self] in
       let data = try? Data(contentsOf: asset.file)
       DispatchQueue.main.async {
@@ -61,7 +60,7 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
             url: url,
             asset: asset,
             byteCount: data.count,
-            isDocument: isDocument
+            path: path
           )
         else {
           self.fail(urlSchemeTask, key)
@@ -88,22 +87,17 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
     url: URL,
     asset: MobileWebShellAsset,
     byteCount: Int,
-    isDocument: Bool
+    path: String
   ) -> HTTPURLResponse? {
-    var headers = [
-      "Content-Type": asset.contentType,
-      "Content-Length": String(byteCount),
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff"
-    ]
-    if isDocument {
-      headers["Content-Security-Policy"] = MobileWebShellCsp.header
-    }
-    return HTTPURLResponse(
+    HTTPURLResponse(
       url: url,
       statusCode: 200,
       httpVersion: "HTTP/1.1",
-      headerFields: headers
+      headerFields: MobileWebShellResponseHeaders.forPath(
+        path,
+        contentType: asset.contentType,
+        byteCount: byteCount
+      )
     )
   }
 }

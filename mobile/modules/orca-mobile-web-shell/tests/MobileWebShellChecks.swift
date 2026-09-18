@@ -6,7 +6,7 @@ import Foundation
 //
 //   swiftc -O -o /tmp/mobile-web-shell-checks \
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
-//     ios/MobileWebShellLoadState.swift \
+//     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -226,6 +226,31 @@ import Foundation
     precondition(refused.failed(.generationUnreadable)?.reason == "generation-unreadable")
   }
 
+  static func checkResponseHeaders() {
+    let document = MobileWebShellResponseHeaders.forPath(
+      "/",
+      contentType: "text/html; charset=utf-8",
+      byteCount: 12
+    )
+    precondition(document["Content-Security-Policy"] == MobileWebShellCsp.header)
+    precondition(document["Content-Type"] == "text/html; charset=utf-8")
+    precondition(document["Content-Length"] == "12")
+    precondition(document["Cache-Control"] == "no-store")
+    precondition(document["X-Content-Type-Options"] == "nosniff")
+
+    // The policy rides the document alone; on a subresource response it is inert.
+    for path in ["/index.html", "/assets/aa.js", "/manifest.json", "/assets/bb.png"] {
+      let headers = MobileWebShellResponseHeaders.forPath(
+        path,
+        contentType: "text/javascript; charset=utf-8",
+        byteCount: 0
+      )
+      precondition(headers["Content-Security-Policy"] == nil)
+      precondition(headers["Cache-Control"] == "no-store")
+      precondition(headers["X-Content-Type-Options"] == "nosniff")
+    }
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -234,6 +259,7 @@ import Foundation
     checkGenerationMap()
     checkCsp()
     checkLoadStateMachine()
+    checkResponseHeaders()
     print("mobile web shell checks OK")
   }
 }
