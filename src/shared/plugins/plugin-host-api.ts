@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
+import { PLUGIN_HOST_FILE_API_SPECS } from './plugin-host-file-api'
+
+export { PLUGIN_HOST_FILE_API_SPECS, pluginWorkspaceRefSchema } from './plugin-host-file-api'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -103,6 +106,7 @@ export type PluginHostMethodSpec = {
   scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
   stability: 'experimental'
   capability: PluginCapabilityKind
+  authorization: 'capability-only' | 'resource'
   /** Mutations are audit-logged with actor `plugin:<id>`. */
   mutation: boolean
   /** Whether sandboxed panels may call this over the postMessage bridge.
@@ -112,12 +116,31 @@ export type PluginHostMethodSpec = {
   result: z.ZodTypeAny
 }
 
+const AUTHORIZATION_BY_CAPABILITY: Record<
+  PluginCapabilityKind,
+  PluginHostMethodSpec['authorization']
+> = {
+  'workspace:read': 'capability-only',
+  'terminal:send': 'capability-only',
+  'notifications:show': 'capability-only',
+  storage: 'capability-only',
+  secrets: 'capability-only',
+  'events:subscribe': 'capability-only',
+  'settings:own': 'capability-only',
+  'workspace:list': 'capability-only',
+  'files:read': 'resource'
+}
+
 const spec = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(
-  entry: Omit<PluginHostMethodSpec, 'params' | 'result' | 'stability'> & {
+  entry: Omit<PluginHostMethodSpec, 'params' | 'result' | 'stability' | 'authorization'> & {
     params: P
     result: R
   }
-): PluginHostMethodSpec => ({ ...entry, stability: 'experimental' })
+): PluginHostMethodSpec => ({
+  ...entry,
+  authorization: AUTHORIZATION_BY_CAPABILITY[entry.capability],
+  stability: 'experimental'
+})
 
 export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   spec({
@@ -249,7 +272,8 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
-  })
+  }),
+  ...PLUGIN_HOST_FILE_API_SPECS
 ]
 
 const SPEC_BY_NAME = new Map(PLUGIN_HOST_API_V0.map((entry) => [entry.name, entry]))

@@ -59,6 +59,7 @@ export type PluginPanelActionErrorCode =
   | 'invalid_params'
   | 'rate_limited'
   | 'unavailable'
+  | 'resource_denied'
   | 'action_failed'
 
 /** Result message posted back into the panel iframe. */

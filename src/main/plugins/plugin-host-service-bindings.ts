@@ -1,6 +1,12 @@
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
+import type { PluginWorkspaceRef } from '../../shared/plugins/plugin-host-file-api'
 import type { PluginHostServices } from './plugin-host-methods'
+import type { PluginCapability } from '../../shared/plugins/plugin-capabilities'
+import type {
+  PluginFileExecutionResult,
+  PluginFileMethod
+} from '../runtime/runtime-file-commands-search-remote-quick-open-file-paths'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
 import {
@@ -10,6 +16,7 @@ import {
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
+  listPluginWorkspaces(): Promise<unknown>
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
     path: string
@@ -30,6 +37,60 @@ export type PluginRuntimeDelegate = {
     title: string
     body?: string
   }): Promise<{ delivered: boolean }>
+  executePluginFileMethod(
+    method: PluginFileMethod,
+    worktreeSelector: string,
+    relativePath: string,
+    grant: { paths: readonly string[] }
+  ): Promise<PluginFileExecutionResult>
+}
+
+export type PluginWorkspaceAuthorityRef =
+  | { scope: 'worktree-identity'; identity: string }
+  | { scope: 'folder-workspace'; folderWorkspaceId: string }
+
+export function translatePluginWorkspaceRef(ref: PluginWorkspaceRef): PluginWorkspaceAuthorityRef {
+  return ref.type === 'worktree'
+    ? { scope: 'worktree-identity', identity: ref.identity }
+    : { scope: 'folder-workspace', folderWorkspaceId: ref.id }
+}
+
+function readPluginWorkspaceRef(params: unknown): PluginWorkspaceRef | null {
+  if (typeof params !== 'object' || params === null || !('workspaceRef' in params)) {
+    return null
+  }
+  const workspaceRef = (params as { workspaceRef?: unknown }).workspaceRef
+  if (typeof workspaceRef !== 'object' || workspaceRef === null || !('type' in workspaceRef)) {
+    return null
+  }
+  return workspaceRef as PluginWorkspaceRef
+}
+
+function readPluginFileParams(
+  params: unknown
+): { workspaceRef: PluginWorkspaceRef; relativePath: string } | null {
+  const workspaceRef = readPluginWorkspaceRef(params)
+  if (
+    !workspaceRef ||
+    typeof params !== 'object' ||
+    params === null ||
+    !('relativePath' in params)
+  ) {
+    return null
+  }
+  const relativePath = (params as { relativePath?: unknown }).relativePath
+  return typeof relativePath === 'string' ? { workspaceRef, relativePath } : null
+}
+
+function pluginWorkspaceSelector(ref: PluginWorkspaceRef): string {
+  const authority = translatePluginWorkspaceRef(ref)
+  return authority.scope === 'worktree-identity'
+    ? `identity:${authority.identity}`
+    : `id:${authority.folderWorkspaceId}`
+}
+
+function readGrant(grant: PluginCapability): { paths: readonly string[] } | null {
+  return grant.kind === 'files:read' ? grant : null
 }
 
 export function bindPluginHostServices(input: {
@@ -39,6 +100,24 @@ export function bindPluginHostServices(input: {
 }): PluginHostServices {
   const { delegate, pluginsDataDir, subscribeEvents } = input
   return {
+    executeAuthorizedPluginHostCall: async (method, params, grant) => {
+      const fileParams = readPluginFileParams(params)
+      const scopedGrant = readGrant(grant)
+      if (
+        !['files.read', 'files.stat', 'files.readDir'].includes(method) ||
+        !fileParams ||
+        !scopedGrant
+      ) {
+        return { authorized: false }
+      }
+      return delegate.executePluginFileMethod(
+        method as PluginFileMethod,
+        pluginWorkspaceSelector(fileParams.workspaceRef),
+        fileParams.relativePath,
+        scopedGrant
+      )
+    },
+    listPluginWorkspaces: () => delegate.listPluginWorkspaces(),
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {

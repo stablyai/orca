@@ -1,7 +1,7 @@
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { gatePluginHostCall as decidePluginHostCall } from '../../shared/plugins/plugin-capability-gate'
-import type { PluginCapabilityKind } from '../../shared/plugins/plugin-capabilities'
+import type { PluginCapability } from '../../shared/plugins/plugin-capabilities'
 import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginAuditLog } from './plugin-audit-log'
 
@@ -22,8 +22,8 @@ export type ExecutePluginHostCallInput = {
   params: unknown
   /** True when the call arrives over the sandboxed panel bridge. */
   viaPanel: boolean
-  /** Consented capability kinds; null = unknown/disabled/consent-stale. */
-  grantedCapabilities: readonly PluginCapabilityKind[] | null
+  /** Consented full capabilities; null = unknown/disabled/consent-stale. */
+  grantedCapabilities: readonly PluginCapability[] | null
   services: PluginHostServices | null
   audit?: Pick<PluginAuditLog, 'record'>
 }
@@ -57,6 +57,24 @@ export async function executePluginHostCall(
   }
   if (!input.services) {
     return { ok: false, code: 'unavailable', error: 'runtime is not available' }
+  }
+  if (bound.spec.authorization === 'resource') {
+    try {
+      const execution = await input.services.executeAuthorizedPluginHostCall(
+        input.method,
+        parsedParams.data,
+        gate.grant
+      )
+      if (!execution.authorized) {
+        return resourceDeniedOutcome()
+      }
+      const validated = bound.spec.result.safeParse(execution.value)
+      return validated.success
+        ? { ok: true, value: validated.data }
+        : { ok: false, code: 'action_failed', error: `internal: malformed ${input.method} result` }
+    } catch {
+      return { ok: false, code: 'action_failed', error: 'host action failed' }
+    }
   }
   const auditMutation = async (outcome: 'attempt' | 'ok' | 'error'): Promise<void> => {
     if (bound.spec.mutation && input.audit) {
@@ -92,7 +110,8 @@ export async function executePluginHostCall(
   try {
     const value = await bound.handler(parsedParams.data, {
       pluginId: input.pluginId,
-      services: input.services
+      services: input.services,
+      grant: gate.grant
     })
     const validated = bound.spec.result.safeParse(value)
     if (!validated.success) {
@@ -107,14 +126,18 @@ export async function executePluginHostCall(
     }
     await auditMutation('ok').catch(() => undefined)
     return { ok: true, value: validated.data }
-  } catch (error) {
+  } catch {
     await auditMutation('error').catch(() => undefined)
     return {
       ok: false,
       code: 'action_failed',
-      error: error instanceof Error ? error.message : String(error)
+      error: 'host action failed'
     }
   }
+}
+
+function resourceDeniedOutcome(): PluginPanelActionOutcome {
+  return { ok: false, code: 'resource_denied', error: 'requested resource is unavailable' }
 }
 
 /** Bounded, content-free summaries for the audit log. */

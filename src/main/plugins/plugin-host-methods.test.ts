@@ -8,6 +8,10 @@ import { AgentSessionPtyWriteRefusedError } from '../../shared/agent-session-pty
 
 function createServices(storageSet: PluginHostServices['storage']['set']): PluginHostServices {
   return {
+    executeAuthorizedPluginHostCall: vi
+      .fn()
+      .mockRejectedValue(new Error('scoped file access unavailable')),
+    listPluginWorkspaces: vi.fn().mockRejectedValue(new Error('workspace listing unavailable')),
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
@@ -32,6 +36,84 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
 }
 
 describe('executePluginHostCall mutation auditing', () => {
+  it('passes the exact scoped grant into the bound handler service', async () => {
+    const services = createServices(vi.fn().mockReturnValue({ ok: true }))
+    const grant = { kind: 'files:read' as const, paths: ['docs/**'] }
+    vi.mocked(services.executeAuthorizedPluginHostCall).mockResolvedValue({
+      authorized: true,
+      value: { content: 'hello', encoding: 'utf8' }
+    })
+
+    await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'files.read',
+      params: { workspaceRef: 'id:folder-1', relativePath: 'docs/readme.md' },
+      viaPanel: false,
+      grantedCapabilities: [grant],
+      services
+    })
+
+    expect(services.executeAuthorizedPluginHostCall).toHaveBeenCalledWith(
+      'files.read',
+      {
+        workspaceRef: { type: 'folder', id: 'folder-1' },
+        relativePath: 'docs/readme.md'
+      },
+      grant
+    )
+  })
+
+  it('executes scoped methods atomically after parsing', async () => {
+    const services = createServices(vi.fn().mockReturnValue({ ok: true }))
+    vi.mocked(services.executeAuthorizedPluginHostCall).mockResolvedValue({
+      authorized: true,
+      value: { entries: [] }
+    })
+
+    const malformed = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'files.readDir',
+      params: {},
+      viaPanel: false,
+      grantedCapabilities: [{ kind: 'files:read', paths: ['src/**'] }],
+      services
+    })
+    expect(malformed).toMatchObject({ code: 'invalid_params' })
+    expect(services.executeAuthorizedPluginHostCall).not.toHaveBeenCalled()
+
+    await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'files.readDir',
+      params: { workspaceRef: 'id:folder-1', relativePath: 'src' },
+      viaPanel: false,
+      grantedCapabilities: [{ kind: 'files:read', paths: ['src/**'] }],
+      services
+    })
+
+    expect(services.executeAuthorizedPluginHostCall).toHaveBeenCalledOnce()
+  })
+
+  it('denies scoped calls before handler work when authorization is unavailable', async () => {
+    const services = createServices(vi.fn().mockReturnValue({ ok: true }))
+    vi.mocked(services.executeAuthorizedPluginHostCall).mockResolvedValue({ authorized: false })
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'files.stat',
+      params: { workspaceRef: 'identity:worktree-1', relativePath: 'src/index.ts' },
+      viaPanel: false,
+      grantedCapabilities: [{ kind: 'files:read', paths: ['src/**'] }],
+      services
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      code: 'resource_denied',
+      error: 'requested resource is unavailable'
+    })
+    expect(services.executeAuthorizedPluginHostCall).toHaveBeenCalledOnce()
+  })
+
   it('rejects prototype-sensitive storage keys before any host service call', async () => {
     const storageSet = vi.fn().mockReturnValue({ ok: true })
     const outcome = await executePluginHostCall({
@@ -39,7 +121,7 @@ describe('executePluginHostCall mutation auditing', () => {
       method: 'storage.set',
       params: { key: '__proto__', value: 42 },
       viaPanel: false,
-      grantedCapabilities: ['storage'],
+      grantedCapabilities: [{ kind: 'storage' }],
       services: createServices(storageSet),
       audit: { record: vi.fn().mockResolvedValue(undefined) }
     })
@@ -55,7 +137,7 @@ describe('executePluginHostCall mutation auditing', () => {
       method: 'storage.set',
       params: { key: 'created', value: new Date() },
       viaPanel: false,
-      grantedCapabilities: ['storage'],
+      grantedCapabilities: [{ kind: 'storage' }],
       services: createServices(storageSet),
       audit: { record: vi.fn().mockResolvedValue(undefined) }
     })
@@ -71,7 +153,7 @@ describe('executePluginHostCall mutation auditing', () => {
       method: 'storage.set',
       params: { key: 'answer', value: 42 },
       viaPanel: false,
-      grantedCapabilities: ['storage'],
+      grantedCapabilities: [{ kind: 'storage' }],
       services: createServices(storageSet),
       audit: { record: vi.fn().mockRejectedValue(new Error('disk full')) }
     })
@@ -95,7 +177,7 @@ describe('executePluginHostCall mutation auditing', () => {
       method: 'storage.set',
       params: { key: 'answer', value: 42 },
       viaPanel: false,
-      grantedCapabilities: ['storage'],
+      grantedCapabilities: [{ kind: 'storage' }],
       services: createServices(storageSet),
       audit: { record }
     })
@@ -111,7 +193,7 @@ describe('executePluginHostCall mutation auditing', () => {
       method: 'storage.set',
       params: { key: 'answer', value: 42 },
       viaPanel: false,
-      grantedCapabilities: ['storage'],
+      grantedCapabilities: [{ kind: 'storage' }],
       services: createServices(storageSet)
     })
 
@@ -125,6 +207,7 @@ function createTerminalHarness(terminalHandles: string[]): {
   services: PluginHostServices
 } {
   const delegate: PluginRuntimeDelegate = {
+    listPluginWorkspaces: vi.fn().mockResolvedValue({ workspaces: [] }),
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue({
       worktreeId: 'worktree-1',
       path: '/Users/private/repo',
@@ -135,7 +218,8 @@ function createTerminalHarness(terminalHandles: string[]): {
       terminals: terminalHandles.map((handle) => ({ handle, title: null }))
     }),
     sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
-    dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true })
+    dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
+    executePluginFileMethod: vi.fn()
   }
   return {
     delegate,
@@ -156,7 +240,7 @@ async function sendTerminalText(
     method: 'terminal.sendText',
     params: { terminalId, text: 'echo hi', enter: true },
     viaPanel: true,
-    grantedCapabilities: ['terminal:send'],
+    grantedCapabilities: [{ kind: 'terminal:send' }],
     services,
     audit: { record: vi.fn().mockResolvedValue(undefined) }
   })
@@ -217,7 +301,7 @@ describe('terminal.sendText explicit worktree routing', () => {
       method: 'workspace.readContext',
       params: {},
       viaPanel: true,
-      grantedCapabilities: ['workspace:read'],
+      grantedCapabilities: [{ kind: 'workspace:read' }],
       services
     })
 
@@ -235,7 +319,7 @@ describe('terminal.sendText explicit worktree routing', () => {
 })
 
 describe('terminal.sendText under a refusing agent-session lease', () => {
-  it('reports who holds the session instead of an accepted-looking result', async () => {
+  it('sanitizes lease refusal details instead of returning provider state', async () => {
     const { delegate, services } = createTerminalHarness(['terminal:local:one'])
     vi.mocked(delegate.sendTerminal).mockRejectedValue(
       new AgentSessionPtyWriteRefusedError({
@@ -250,9 +334,7 @@ describe('terminal.sendText under a refusing agent-session lease', () => {
 
     const outcome = await sendTerminalText(services, 'terminal:local:one')
 
-    expect(outcome).toMatchObject({ ok: false, code: 'action_failed' })
-    expect(outcome.ok ? '' : outcome.error).toContain('session-alpha-1')
-    expect(outcome.ok ? '' : outcome.error).toContain('native chat')
+    expect(outcome).toEqual({ ok: false, code: 'action_failed', error: 'host action failed' })
   })
 
   it('sends unchanged when no lease refuses, which is every plugin send today', async () => {

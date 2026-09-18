@@ -4,6 +4,9 @@ import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
+import { PLUGIN_READ_MANDATORY_DENIED_PATH_LABELS } from '../../../../shared/plugins/plugin-read-confinement'
+import { i18n } from '../../i18n/i18n'
+import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 import { PluginConsentDialog } from './PluginConsentDialog'
 
 const plugin: PluginHostListEntry = {
@@ -17,7 +20,7 @@ const plugin: PluginHostListEntry = {
   isDev: false,
   official: false,
   bundled: false,
-  capabilities: [{ kind: 'worker', description: 'Run a background worker process' }],
+  capabilities: [{ kind: 'workspace:list', description: 'Run a background worker process' }],
   panels: [],
   commands: [],
   hasWorker: true,
@@ -37,9 +40,11 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   document.body.innerHTML = ''
   Reflect.deleteProperty(window, 'api')
+  await i18n.changeLanguage('en')
+  i18n.removeResourceBundle(PSEUDO_LOCALIZATION_LOCALE, 'translation')
 })
 
 async function renderConsent(
@@ -70,6 +75,78 @@ async function renderConsent(
 }
 
 describe('PluginConsentDialog', () => {
+  it('shows a scoped file grant and the exact host-enforced exclusions', async () => {
+    await renderConsent(
+      {
+        ...plugin,
+        capabilities: [
+          {
+            kind: 'files:read',
+            paths: ['**', 'docs/**/*.md'],
+            description: 'Read files inside worktrees'
+          }
+        ]
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent).toContain('Whole worktree')
+    expect(
+      Array.from(document.querySelectorAll('ul[aria-label="Whole worktree"] > li')).map(
+        (item) => item.textContent
+      )
+    ).toEqual(['**', 'docs/**/*.md'])
+    expect(
+      Array.from(document.querySelectorAll('ul[aria-label="Always blocked"] > li')).map(
+        (item) => item.textContent
+      )
+    ).toEqual(PLUGIN_READ_MANDATORY_DENIED_PATH_LABELS)
+    expect(document.activeElement?.textContent).toContain('Keep Disabled')
+  })
+
+  it('keeps expanded localized prose in the existing accessible scroll contract', async () => {
+    const doubled = 'Read files in your worktrees that match these patterns '.repeat(2).trim()
+    i18n.addResourceBundle(
+      PSEUDO_LOCALIZATION_LOCALE,
+      'translation',
+      {
+        auto: {
+          components: {
+            settings: {
+              PluginConsentDialog: { capability: { filesRead: doubled } }
+            }
+          }
+        }
+      },
+      true,
+      true
+    )
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+
+    await renderConsent(
+      {
+        ...plugin,
+        capabilities: [
+          { kind: 'files:read', paths: ['src/**'], description: 'Read files inside worktrees' }
+        ]
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain(doubled)
+    expect(dialog?.classList).toContain('max-h-[calc(100vh-3rem)]')
+    expect(dialog?.classList).toContain('overflow-y-auto')
+    expect(dialog?.classList).toContain('scrollbar-sleek')
+    expect(dialog?.querySelectorAll('[class*="overflow-y"]')).toHaveLength(0)
+    expect(dialog?.querySelector('ul li')?.textContent).toBe('src/**')
+    expect(dialog?.querySelector('ul li')?.classList).toContain('break-all')
+    expect(dialog?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+    expect(
+      dialog?.querySelector('ul')?.closest('.min-w-0')?.querySelectorAll('button, a')
+    ).toHaveLength(0)
+  })
+
   it('keeps the displayed fingerprint immutable during a same-key update', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -84,7 +161,7 @@ describe('PluginConsentDialog', () => {
           plugin={{
             ...plugin,
             consentFingerprint: 'sha256-unreviewed-update',
-            capabilities: [{ kind: 'secrets:read', description: 'Read a newly added secret' }]
+            capabilities: [{ kind: 'secrets', description: 'Read a newly added secret' }]
           }}
           onDecision={onDecision}
         />
@@ -112,12 +189,32 @@ describe('PluginConsentDialog', () => {
         (candidate) => candidate.textContent?.trim() === 'Source'
       )
     ).toBe(true)
-    expect(document.body.textContent).toContain('Run a background worker process')
+    expect(document.body.textContent).toContain(
+      'Read the name, branch, and host of all your worktrees'
+    )
     expect(document.body.textContent).toContain(
       'full access to your files, network, and other processes'
     )
     expect(document.querySelector('[role="dialog"]')?.classList).toContain('plugin-security-chrome')
     expect(document.activeElement?.textContent).toContain('Keep Disabled')
+  })
+
+  it('renders repeated unscoped capabilities without duplicate React-key warnings', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderConsent(
+      {
+        ...plugin,
+        capabilities: [
+          { kind: 'workspace:list', description: 'List worktrees' },
+          { kind: 'workspace:list', description: 'List worktrees' }
+        ]
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent?.match(/\(workspace:list\)/g)).toHaveLength(2)
+    expect(consoleError.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false)
   })
 
   it('explains that panel-only plugins have no worker process', async () => {
@@ -127,7 +224,7 @@ describe('PluginConsentDialog', () => {
         pluginKey: 'acme.panel',
         name: 'Acme Panel',
         hasWorker: false,
-        capabilities: [{ kind: 'panels', description: 'Add an Acme panel' }]
+        capabilities: [{ kind: 'workspace:list', description: 'Add an Acme panel' }]
       },
       vi.fn().mockResolvedValue(undefined)
     )
@@ -234,6 +331,55 @@ describe('PluginConsentDialog', () => {
       plugin.consentFingerprint,
       'keep-disabled'
     )
+  })
+
+  it('locks duplicate decisions immediately without changing reviewed scope or focus', async () => {
+    let finishDecision: (() => void) | undefined
+    const onDecision = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDecision = resolve
+          setTimeout(resolve, 100)
+        })
+    )
+    await renderConsent(
+      {
+        ...plugin,
+        capabilities: [
+          {
+            kind: 'files:read',
+            paths: ['src/**/*.ts', 'docs/**/*.md'],
+            description: 'Read files inside worktrees'
+          }
+        ]
+      },
+      onDecision
+    )
+    const buttons = Array.from(document.querySelectorAll('button'))
+    const keepDisabled = buttons.find((button) => button.textContent?.trim() === 'Keep Disabled')
+    const enable = buttons.find((button) => button.textContent?.trim() === 'Enable plugin')
+    if (!keepDisabled || !enable) {
+      throw new Error('missing consent actions')
+    }
+
+    await act(async () => {
+      enable.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise<void>((resolve) => queueMicrotask(resolve))
+    })
+    enable.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(onDecision).toHaveBeenCalledTimes(1)
+    expect(enable.disabled).toBe(true)
+    expect(keepDisabled.disabled).toBe(true)
+    expect(document.activeElement).toBe(keepDisabled)
+    expect(enable.parentElement).toBe(keepDisabled.parentElement)
+    expect(
+      Array.from(document.querySelectorAll('ul[aria-label="File patterns"] > li')).map(
+        (item) => item.textContent
+      )
+    ).toEqual(['src/**/*.ts', 'docs/**/*.md'])
+
+    await act(async () => finishDecision?.())
   })
 
   it('labels re-consent generically and enables only after an explicit action', async () => {

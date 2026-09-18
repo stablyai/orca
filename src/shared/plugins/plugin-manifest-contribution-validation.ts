@@ -141,4 +141,16 @@ export function validatePluginManifestContributions(
       message: 'events:subscribe capability required when contributes.events is non-empty'
     })
   }
+  // Why refuse rather than merge: two files:read entries split one grant across two rows a
+  // reviewer reads separately, so the consent dialog understates what is actually granted.
+  const filesReadIndices = [...manifest.capabilities.entries()]
+    .filter(([, capability]) => capability.kind === 'files:read')
+    .map(([index]) => index)
+  for (const index of filesReadIndices.slice(1)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capabilities', index],
+      message: 'duplicate files:read capability; declare all paths in a single entry'
+    })
+  }
 }

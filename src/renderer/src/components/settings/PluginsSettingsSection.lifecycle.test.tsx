@@ -100,7 +100,7 @@ const plugin: PluginHostListEntry = {
   isDev: false,
   official: false,
   bundled: false,
-  capabilities: [{ kind: 'panels', description: 'Add a Notes panel' }],
+  capabilities: [{ kind: 'workspace:list', description: 'Add a Notes panel' }],
   panels: [],
   commands: [],
   hasWorker: false,

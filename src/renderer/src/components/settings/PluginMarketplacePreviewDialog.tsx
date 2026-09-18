@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
-import { pluginCapabilityDescription } from './plugin-capability-presentation'
+import { PluginCapabilityPresentation } from './plugin-capability-presentation'
 
 export type PluginMarketplacePreviewMode = 'install' | 'update'
 
@@ -138,6 +138,11 @@ export function PluginMarketplacePreviewDialog({
   onConfirm
 }: PluginMarketplacePreviewDialogProps): React.JSX.Element {
   const contributions = preview ? contributionSummary(preview) : []
+  const capabilities =
+    preview?.manifest.capabilities.map((capability, index) => ({
+      capability,
+      key: `${JSON.stringify(capability)}\u0000${index}`
+    })) ?? []
   const blocked = preview?.blockedByKillList
   const provenanceSource: PluginConsentSource | undefined = preview
     ? {
@@ -207,7 +212,7 @@ export function PluginMarketplacePreviewDialog({
                 )}
               </div>
             </div>
-            {preview.manifest.capabilities.length > 0 ? (
+            {capabilities.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                   {translate(
@@ -215,15 +220,10 @@ export function PluginMarketplacePreviewDialog({
                     'Requested access'
                   )}
                 </p>
-                {preview.manifest.capabilities.map((capability) => (
-                  <div key={capability.kind} className="flex items-start gap-2 text-sm leading-6">
+                {capabilities.map(({ capability, key }) => (
+                  <div key={key} className="flex items-start gap-2 text-sm leading-6">
                     <Check className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
-                    <span>
-                      {pluginCapabilityDescription(capability.kind, capability.kind)}{' '}
-                      <span className="font-mono text-[11px] text-muted-foreground">
-                        ({capability.kind})
-                      </span>
-                    </span>
+                    <PluginCapabilityPresentation capability={capability} />
                   </div>
                 ))}
               </div>
@@ -269,10 +269,15 @@ export function PluginMarketplacePreviewDialog({
               ) : (
                 <>
                   <Button variant="ghost" disabled={busy} onClick={onClose}>
-                    {translate(
-                      'auto.components.settings.PluginMarketplacePreviewDialog.cancel',
-                      'Cancel'
-                    )}
+                    {mode === 'update'
+                      ? translate(
+                          'auto.components.settings.PluginMarketplacePreviewDialog.cancelUpdate',
+                          'Cancel update'
+                        )
+                      : translate(
+                          'auto.components.settings.PluginMarketplacePreviewDialog.cancelInstallation',
+                          'Cancel installation'
+                        )}
                   </Button>
                   <Button disabled={busy || Boolean(blocked)} onClick={onConfirm}>
                     {busy ? <Loader2 className="animate-spin" /> : null}
