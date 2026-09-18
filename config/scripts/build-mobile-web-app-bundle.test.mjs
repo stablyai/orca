@@ -236,6 +236,26 @@ describe('the synthesized RequireContext', () => {
   })
 })
 
+describe('the web entry', () => {
+  it('leaves the suspense boundary to expo-router', async () => {
+    const entry = await readFile(join(projectDir, 'mobile', 'web-entry', 'index.tsx'), 'utf8')
+    // A second boundary around the whole tree catches nothing the router has not already caught,
+    // and would only make the fallback ambiguous about which layer suspended.
+    expect(entry).not.toContain('Suspense')
+  })
+
+  itBundling('because the router already wraps every screen in one', async () => {
+    // The premise of the test above, read off the copy that is bundled: getQualifiedRouteComponent
+    // wraps each screen itself, which is what makes the lazy route manifest safe without a
+    // boundary of our own.
+    const useScreens = await readFile(
+      join(projectDir, 'mobile', 'node_modules', 'expo-router', 'build', 'useScreens.js'),
+      'utf8'
+    )
+    expect(useScreens).toContain('<react_1.default.Suspense fallback=')
+  })
+})
+
 describe('the CRLF pin', () => {
   it('exempts the same extensions in .gitattributes as the CRLF scan skips', async () => {
     const attributes = await readFile(join(projectDir, '.gitattributes'), 'utf8')
