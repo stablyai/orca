@@ -143,6 +143,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'elevenlabs-scribe-v2',
+    label: 'ElevenLabs Scribe v2',
+    description:
+      'Cloud transcription in 90+ languages with strong accuracy. Requires an ElevenLabs API key.',
+    type: 'elevenlabs',
+    provider: 'elevenlabs',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
   }
 ]
 

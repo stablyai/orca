@@ -45,4 +45,14 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.downloadFiles).toHaveLength(2)
     expect(model?.downloadFiles?.map(({ name }) => name)).toEqual(['model.int8.onnx', 'tokens.txt'])
   })
+
+  it('registers ElevenLabs Scribe v2 as a cloud model with nothing to download', () => {
+    const model = getCatalogModel('elevenlabs-scribe-v2')
+    expect(model).toBeDefined()
+    expect(model?.type).toBe('elevenlabs')
+    expect(model?.provider).toBe('elevenlabs')
+    expect(model?.streaming).toBe(false)
+    expect(model?.downloadFiles).toBeUndefined()
+    expect(model?.sizeBytes).toBeUndefined()
+  })
 })

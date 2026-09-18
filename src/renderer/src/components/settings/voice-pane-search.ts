@@ -28,6 +28,35 @@ export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getElevenLabsTranscriptionSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.voice.pane.search.9cdb533e82',
+      'ElevenLabs Transcription'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.d1654ccb55',
+      'Configure the ElevenLabs API key used for cloud speech-to-text models.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.3d8b853963', 'speech'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.ada0b40926',
+        'elevenlabs'
+      ),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.8c548043aa', 'scribe'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.322d457a0d',
+        'transcription'
+      )
+    ]
+  })
+)
+
 export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -99,6 +128,7 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   getOpenaiTranscriptionSearchEntry(),
+  getElevenLabsTranscriptionSearchEntry(),
   {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),
     description: translate(
