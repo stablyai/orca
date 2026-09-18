@@ -727,3 +727,19 @@ describe('openCodexAppServerConnection', () => {
     expect(exits).toHaveLength(0)
   })
 })
+
+it('cancels a pending handshake and proves the child exited', async () => {
+  const { child, spawnImpl } = stubChild()
+  const exited = vi.fn()
+  child.on('exit', exited)
+  const controller = new AbortController()
+  const opening = openCodexAppServerConnection(
+    { command: 'codex', args: ['app-server'], signal: controller.signal },
+    {},
+    spawnImpl
+  )
+  const rejected = expect(opening).rejects.toThrow()
+  controller.abort()
+  await rejected
+  expect(exited).toHaveBeenCalledOnce()
+})

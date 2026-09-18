@@ -1,4 +1,6 @@
 import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 import {
   cancelCodexAcquisitionAttempt,
@@ -32,6 +34,7 @@ export async function closeFailedCodexAcquisition(input: {
   attempt: CodexAcquisitionAttempt
   cause: unknown
   dispose: () => void
+  onExited?: () => void
 }): Promise<never> {
   if (isCodexAppServerHandshakeExitUnprovenError(input.cause)) {
     input.attempt.window.connection = input.cause.connection
@@ -41,6 +44,7 @@ export async function closeFailedCodexAcquisition(input: {
     if (!(await input.registry.closeFailedAttempt(input.sessionId, input.attempt))) {
       throw new AgentSessionAcquisitionExitUnprovenError(input.cause)
     }
+    input.onExited?.()
   } catch (cleanupError) {
     if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
       throw cleanupError
@@ -50,4 +54,21 @@ export async function closeFailedCodexAcquisition(input: {
     )
   }
   throw input.cause
+}
+
+export function bindCodexAcquisitionReading(
+  connection: CodexAppServerConnection,
+  events: StructuredAgentSessionAcquireInput['events'],
+  retry: () => void
+): (() => void) | undefined {
+  if (!connection.pauseReading || !connection.resumeReading) {
+    return undefined
+  }
+  return events?.bindReadingControl?.({
+    pauseReading: connection.pauseReading,
+    resumeReading: () => {
+      connection.resumeReading?.()
+      retry()
+    }
+  })
 }

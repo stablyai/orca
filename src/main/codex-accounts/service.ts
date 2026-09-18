@@ -1,3 +1,4 @@
+import { failoverCodexAccount, type CodexAccountFailoverInput } from './codex-account-failover'
 import { execFileSync, spawn } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import type {
@@ -22,6 +23,8 @@ import { CodexManagedHomeLifecycle } from './codex-managed-home-lifecycle'
 import { CodexResetCreditCoordinator } from './codex-reset-credit-coordinator'
 import { CodexAccountSelection } from './codex-account-selection'
 import { CodexAccountRegistration } from './codex-account-registration'
+import { CodexAutomationService } from './codex-automation-service'
+import { getCodexSelectionTargetForAccount } from './runtime-selection'
 import type {
   CodexAccountAddTarget,
   CodexAccountReauthenticateOptions,
@@ -78,6 +81,8 @@ function killLoginProcessTree(
 }
 
 export class CodexAccountService {
+  readonly automation: CodexAutomationService
+  private selectionGeneration = 0
   // Why: serialize the read-modify-write of settings; overlapping calls (e.g. double-click Add) would lose updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly identity: CodexAccountIdentity
@@ -89,11 +94,12 @@ export class CodexAccountService {
   private readonly registration: CodexAccountRegistration
 
   constructor(
-    store: Store,
+    private readonly store: Store,
     rateLimits: RateLimitService,
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
   ) {
+    this.automation = new CodexAutomationService(store, runtimeHome)
     this.managedHomePaths = new CodexManagedHomePath((distro, script) =>
       execFileSync(
         'wsl.exe',
@@ -157,7 +163,19 @@ export class CodexAccountService {
   }
 
   listAccounts(): CodexRateLimitAccountsState {
-    return this.selection.list()
+    return { ...this.selection.list(), automation: this.automation.snapshot() }
+  }
+
+  failover(input: CodexAccountFailoverInput): Promise<boolean> {
+    return failoverCodexAccount(input, {
+      settings: () => this.store.getSettings(),
+      generation: () => this.selectionGeneration,
+      findReplacement: () =>
+        this.automation.findReplacement(input.home, input.signal, input.excludedHomes),
+      serialize: (operation) => this.serializeMutation(operation),
+      select: (account) =>
+        this.selection.select(account.id, getCodexSelectionTargetForAccount(account))
+    })
   }
 
   async addAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
@@ -185,10 +203,12 @@ export class CodexAccountService {
   }
 
   async removeAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
+    this.selectionGeneration++
     return this.serializeMutation(() => this.selection.remove(accountId))
   }
 
   async selectAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
+    this.selectionGeneration++
     return this.serializeMutation(() => this.selection.select(accountId))
   }
 
@@ -196,6 +216,7 @@ export class CodexAccountService {
     accountId: string | null,
     target?: CodexAccountSelectionTarget
   ): Promise<CodexRateLimitAccountsState> {
+    this.selectionGeneration++
     return this.serializeMutation(() => this.selection.select(accountId, target))
   }
 

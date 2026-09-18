@@ -5,6 +5,7 @@ import {
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
+  bindCodexAcquisitionReading,
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
@@ -77,6 +78,7 @@ export async function acquireCodexStructuredSession(input: {
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
   const acquisition = attempt.window
   let unbindReadingControl: (() => void) | undefined
+  let releaseAccountHome: (() => void) | undefined
   let primaryThreadId =
     acquireInput.identity.providerHandle.kind === 'codex'
       ? acquireInput.identity.providerHandle.threadId
@@ -121,6 +123,10 @@ export async function acquireCodexStructuredSession(input: {
       .catch((error: unknown) => {
         throw new AgentSessionPreSpawnError(error)
       })
+    acquisitions.assertCurrent(sessionId, attempt)
+    releaseAccountHome = launch.codexHome
+      ? await deps.holdAccountHome?.(launch.codexHome)
+      : undefined
     acquisitions.assertCurrent(sessionId, attempt)
     const connection = await open(
       {
@@ -181,15 +187,9 @@ export async function acquireCodexStructuredSession(input: {
       }
     )
     acquisition.connection = connection
-    if (connection.pauseReading && connection.resumeReading) {
-      unbindReadingControl = acquireInput.events?.bindReadingControl?.({
-        pauseReading: connection.pauseReading,
-        resumeReading: () => {
-          connection.resumeReading?.()
-          notificationRetries.retry(sessionId, connection)
-        }
-      })
-    }
+    unbindReadingControl = bindCodexAcquisitionReading(connection, acquireInput.events, () =>
+      notificationRetries.retry(sessionId, connection)
+    )
     acquisitions.assertCurrent(sessionId, attempt)
     const opened = await openCodexThread(connection, launch, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
@@ -239,6 +239,8 @@ export async function acquireCodexStructuredSession(input: {
     }
     acquisitions.deleteIfCurrent(sessionId, attempt)
     const session: CodexSession = {
+      codexHome: launch.codexHome,
+      releaseAccountHome,
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
       threadId: opened.threadId,
@@ -284,6 +286,7 @@ export async function acquireCodexStructuredSession(input: {
         registry: acquisitions,
         attempt,
         cause: error,
+        onExited: releaseAccountHome,
         dispose: () => {
           unbindReadingControl?.()
           translator?.dispose()

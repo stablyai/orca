@@ -62,6 +62,7 @@ export function initializeMainProcessAccountServices(): void {
   state.codexAccounts = new CodexAccountService(store, state.rateLimits, state.codexRuntimeHome, {
     onHostSystemDefaultSelected: state.codexSessionMigration.requestRun
   })
+  void state.codexAccounts.automation.start()
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()

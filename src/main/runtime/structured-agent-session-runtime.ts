@@ -48,6 +48,8 @@ import { resolveLoginShellEnvironment } from '../startup/login-shell-environment
 import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import type { CodexAccountService } from '../codex-accounts/service'
+import { StructuredCodexAccountFailover } from './structured-codex-account-failover'
 
 /** Sibling of the journal tree rather than inside it: one file adjudicates every
  *  session's lease, while a journal is per session. */
@@ -62,6 +64,8 @@ export function hasPersistedStructuredAgentSessionStore(
 }
 
 export type StructuredAgentSessionRuntimeDeps = {
+  codexAccounts?: () => CodexAccountService | undefined
+  codexSeamlessFailover?: () => boolean
   /** Host state root. The record store and the journal tree both hang off it. */
   stateDirectory: string
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
@@ -212,6 +216,12 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   try {
     let host: StructuredAgentSessionHost | null = null
     let recoveryChain = Promise.resolve()
+    const failover = new StructuredCodexAccountFailover({
+      store,
+      accounts: () => deps.codexAccounts?.(),
+      seamless: () => deps.codexSeamlessFailover?.() === true,
+      host: () => host
+    })
     const onDispatchSettledLate = (
       settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
     ): void => {
@@ -223,6 +233,10 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       )
     }
     const codex = new CodexStructuredSessionAdapter({
+      failover: failover.failover,
+      holdAccountHome: async (home) =>
+        deps.codexAccounts?.()?.automation.holdForeground(home) ?? (() => {}),
+      onDispatch: (sessionId, clientMessageId) => failover.dispatched(sessionId, clientMessageId),
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
         resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -247,6 +261,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         recoveryChain = recoveryChain.then(async () => {
           try {
             await host?.handleAdapterEvent(event)
+            await failover.recovered(event.sessionId)
           } catch (error) {
             deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
           }

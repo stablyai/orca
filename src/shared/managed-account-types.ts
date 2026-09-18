@@ -1,3 +1,5 @@
+import type { CodexAccountAutomationState } from './codex-account-automation-state'
+
 export type CodexManagedAccount = {
   id: string
   email: string
@@ -42,6 +44,7 @@ export type CodexSystemDefaultIdentity = {
 }
 
 export type CodexRateLimitAccountsState = {
+  automation?: CodexAccountAutomationState
   accounts: CodexManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection

@@ -10,6 +10,7 @@ import { getAccountsCodexSearchEntries } from './accounts-search'
 import { getCodexSystemDefaultSubtitle } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
+import { CodexAccountAutomationSettings } from './codex-account-automation-settings'
 
 export function renderCodexAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
@@ -182,6 +183,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
           </Button>
         </div>
         {remoteAccountScopeNotice}
+        <CodexAccountAutomationSettings model={model} />
 
         <div className="space-y-2">
           <button

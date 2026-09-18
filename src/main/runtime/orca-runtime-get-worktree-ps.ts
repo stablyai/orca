@@ -141,6 +141,11 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
    */
   async ensureStructuredAgentSessionHost(): Promise<void> {
     await installStructuredAgentSessionHost({
+      codexAccounts: () => this.accounts.getCodexAccountService(),
+      codexSeamlessFailover: () => {
+        const settings = this.requireStore().getSettings()
+        return settings.codexAutomaticFailover === true && settings.codexSeamlessFailover === true
+      },
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,

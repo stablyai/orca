@@ -47,6 +47,8 @@ export function handleCodexSessionExit(input: {
     event.settlementRetryRequired = true
   }
   session.ended = true
+  session.cancelFailover?.()
+  session.releaseAccountHome?.()
   // Nothing can echo for this child any more; the journal's pending-submission
   // recovery is what settles the sends these were armed for.
   session.dispatchEchoes.clear()

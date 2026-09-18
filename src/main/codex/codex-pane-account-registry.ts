@@ -271,11 +271,11 @@ export function listRecordedCodexPaneLanes(ptyIds: readonly string[]): Record<st
 
 /** Reads restart-authoritative records without mapping an unavailable file to no attribution. */
 export function listRecordedCodexPaneAccounts(
-  ptyIds: readonly string[]
+  ptyIds?: readonly string[]
 ): ReadonlyMap<string, CodexPaneAccountRecord> {
   const registry = readRegistryOrThrow()
   const records = new Map<string, CodexPaneAccountRecord>()
-  for (const ptyId of ptyIds) {
+  for (const ptyId of ptyIds ?? Object.keys(registry.panes)) {
     const record = registry.panes[ptyId]
     if (record) {
       records.set(ptyId, record)

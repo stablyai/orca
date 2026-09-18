@@ -56,6 +56,19 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
+  holdAccountHome?: (home: string) => Promise<() => void>
+  onDispatch?: (sessionId: string, clientMessageId: string) => Promise<void>
+  failover?: (input: {
+    sessionId: string
+    home: string
+    threadId: string
+    historyPath: string | null
+    historyMode?: 'legacy' | 'paginated'
+    fence: number
+    signal: AbortSignal
+    isSafe: () => boolean
+    stop: () => Promise<boolean>
+  }) => Promise<boolean>
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
@@ -86,6 +99,10 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  codexHome?: string | null
+  releaseAccountHome?: () => void
+  failoverPending?: boolean
+  cancelFailover?: () => void
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */

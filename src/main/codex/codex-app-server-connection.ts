@@ -33,6 +33,7 @@ export { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-erro
 // the request-scoped app-server runner cannot carry approvals or streamed turns.
 
 export type CodexAppServerLaunch = {
+  signal?: AbortSignal
   command: string
   args: string[]
   /** Workspace directory used by the provider process itself. */
@@ -58,6 +59,7 @@ export async function openCodexAppServerConnection(
   handlers: CodexAppServerConnectionHandlers = {},
   spawnImpl: typeof spawnProcess = spawnProcess
 ): Promise<CodexAppServerConnection> {
+  launch.signal?.throwIfAborted()
   const childEnv: NodeJS.ProcessEnv = { ...process.env, ...launch.env }
   for (const key of launch.envToDelete ?? []) {
     delete childEnv[key]
@@ -90,6 +92,7 @@ export async function openCodexAppServerConnection(
   })
 
   function observeExit(): void {
+    launch.signal?.removeEventListener('abort', abort)
     exited = true
     exitObserved = true
     resolveExit()
@@ -262,6 +265,15 @@ export async function openCodexAppServerConnection(
       dispatcher.failPending(new Error('codex app-server connection closed'))
       return exitObserved
     })
+  }
+
+  function abort(): void {
+    dispatcher.failPending(new Error('codex app-server cancelled'))
+    void close().catch(() => {})
+  }
+  launch.signal?.addEventListener('abort', abort, { once: true })
+  if (launch.signal?.aborted) {
+    abort()
   }
 
   const connection: CodexAppServerConnection = {

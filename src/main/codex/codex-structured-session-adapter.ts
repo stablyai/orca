@@ -1,4 +1,5 @@
 import * as codexRewind from './codex-structured-rewind'
+import { observeCodexAccountFailover } from './codex-structured-account-failover'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
@@ -163,6 +164,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       this.compactions.ended(event.sessionId)
     }
     this.deps.onEvent?.(event)
+    observeCodexAccountFailover(session, event, this.deps)
     return admission
   }
 
@@ -214,8 +216,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
+    if (session.failoverPending) {
+      return {
+        state: 'rejected',
+        reason: 'Codex is switching accounts. Try again after it reconnects.'
+      }
+    }
     session.dispatchPending = true
     try {
+      await this.deps.onDispatch?.(input.sessionId, input.clientMessageId)
       await this.turnCancellation.captureBaseline(session)
       await input.beforeDispatch?.()
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)

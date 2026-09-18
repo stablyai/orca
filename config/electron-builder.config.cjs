@@ -473,6 +473,8 @@ module.exports = {
       rank: 'Alternate'
     })),
     icon: 'resources/build/icon.icns',
+    // Local builds still need renderer JIT entitlements when no Apple certificate is installed.
+    ...(!isMacRelease ? { identity: '-' } : {}),
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {

@@ -203,6 +203,21 @@
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       }
+    },
+    "codexAutomation": {
+      "waiting": "Waiting for reset",
+      "deferred": "Waiting for available quota or an idle account",
+      "attempting": "Sending warmup",
+      "unconfirmed": "Activation unconfirmed; no automatic retry",
+      "verified": "Fresh window observed",
+      "unavailable": "Warmup unavailable; check account and model support",
+      "remote": "Configure account automation on the device that owns these accounts.",
+      "failover": "Automatically switch accounts when usage limits are reached",
+      "failoverDescription": "Switch supported native chats to another available account. Terminal sessions and chats using database history require manual recovery.",
+      "seamless": "Continue automatically after switching",
+      "seamlessDescription": "Send a continuation in the same conversation after the failed turn settles. Unconfirmed requests and ongoing tools or approvals stay paused.",
+      "warming": "Activate fresh usage windows after reset",
+      "warmingDescription": "Send a small inference on each available account using its cheapest known supported model and lowest effort. Uses quota while Orca is open; waits while an account has a running session."
     }
   },
   "menu": {

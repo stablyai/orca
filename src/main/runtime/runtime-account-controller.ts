@@ -46,6 +46,10 @@ export class RuntimeAccountController {
     this.services = services
   }
 
+  getCodexAccountService(): CodexAccountService | undefined {
+    return this.services?.codexAccounts
+  }
+
   setCommitMessageAgentEnvironment(resolvers: CommitMessageAgentEnvironmentResolvers): void {
     this.commitMessageAgentEnvironment = resolvers
   }

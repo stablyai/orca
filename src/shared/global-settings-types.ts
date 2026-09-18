@@ -298,6 +298,9 @@ export type GlobalSettings = {
   promptCacheTtlMs: number
   /** Why: durable main-owned pref so Orca can prepare shared ~/.codex before the renderer hydrates. */
   codexManagedAccounts: CodexManagedAccount[]
+  codexAutomaticFailover?: boolean
+  codexSeamlessFailover?: boolean
+  codexResetWarming?: boolean
   activeCodexManagedAccountId: string | null
   activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
   /** Why: persist only per-account auth (not a CLAUDE_CONFIG_DIR swap) so switching accounts doesn't fork Claude's shared chat/session context. */

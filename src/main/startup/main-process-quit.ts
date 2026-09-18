@@ -133,6 +133,7 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceService = null
     state.pluginMarketplaceInstaller = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
+    const codexAutomationShutdown = state.codexAccounts?.automation.stop() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     // Why before the stop: teardown stamps each working session's resume marker with why the app
     // went away, and an update install is a restart the user never chose.
@@ -248,6 +249,7 @@ function installWillQuitHandler(): void {
       { name: 'grok-hooks', promise: grokHookCleanup },
       { name: 'ref-maintenance', promise: refMaintenanceShutdown },
       { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
+      { name: 'codex-account-automation', promise: codexAutomationShutdown },
       { name: 'structured-agent-session', promise: structuredAgentSessionShutdown },
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'stats', promise: statsFlush },

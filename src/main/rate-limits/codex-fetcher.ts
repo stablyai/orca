@@ -46,7 +46,7 @@ const WSL_RPC_INIT_TIMEOUT_MS = 40_000
 
 export type FetchCodexRateLimitsOptions = CodexRateLimitFetchOptions
 
-function buildWslCodexCommand(
+export function buildWslCodexCommand(
   codexHomePath: string,
   args: string[],
   isolateRpcStdio: boolean

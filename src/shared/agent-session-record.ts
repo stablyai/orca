@@ -1,5 +1,8 @@
+import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+export { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
+import { isCodexFailoverHomes } from './codex-account-automation-state'
 /**
  * Durable agent-session record and its single-writer lease.
  *
@@ -129,6 +132,7 @@ export type AgentSessionRecord = {
   provider: AgentSessionHandleProvider
   providerHandleChain: AgentSessionProviderHandleLink[]
   accountHome: AgentSessionAccountHome
+  codexFailoverHomes?: string[]
   /** Provider options acknowledged for the next turn, restored across owner replacement. */
   options?: Record<string, string>
   rewind?: AgentSessionRewindRecord
@@ -152,8 +156,6 @@ const MAX_ID_LENGTH = 512
 const MAX_PATH_LENGTH = 4096
 const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
-const MAX_LAUNCH_ARGS = 256
-const MAX_LAUNCH_ARGS_BYTES = 16 * 1024
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 function isBoundedString(value: unknown, max: number): value is string {
@@ -344,6 +346,7 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     (record.provider === 'claude' || record.provider === 'codex') &&
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
+    (record.codexFailoverHomes === undefined || isCodexFailoverHomes(record.codexFailoverHomes)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.conversationCommand === undefined ||
@@ -367,14 +370,5 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
       (validated.lease.ownerProcess !== null &&
         head?.linkId === validated.lease.provenHandleLinkId &&
         head.mintedAtFence === validated.lease.runtimeFence))
-  )
-}
-
-export function isAgentSessionLaunchArgs(value: unknown): value is AgentSessionLaunchArgs {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_LAUNCH_ARGS &&
-    value.every((arg) => typeof arg === 'string' && !arg.includes('\0')) &&
-    Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_LAUNCH_ARGS_BYTES
   )
 }
