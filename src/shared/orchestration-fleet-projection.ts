@@ -87,7 +87,7 @@ export type FleetResourceProjection =
 export type FleetNextAction = {
   /**
    * `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon.
-   * `interrupt` = abandoned Dispatch still holding a live terminal; send interrupt, not release.
+   * `interrupt` = abandoned Dispatch that still owns its terminal; send interrupt, not release.
    */
   kind: 'inspect' | 'release' | 'recover' | 'interrupt' | 'none'
   argv: string[]

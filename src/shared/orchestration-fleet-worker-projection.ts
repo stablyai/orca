@@ -133,9 +133,11 @@ export function projectFleetNextAction(
     return { kind: 'none', argv: [] }
   }
   // Abandon fences the Dispatch without killing the process. worker-release then
-  // retains identity_unproven; point at interrupt so the still-running agent can stop.
+  // retains identity_unproven; interrupt only while this worker still owns the PTY.
   if (worker.workerState === 'abandoned') {
-    return worker.agentTerminalHandle
+    return worker.agentTerminalHandle &&
+      worker.resource?.ownershipState === 'owned' &&
+      worker.resource.releaseState !== 'released'
       ? {
           kind: 'interrupt',
           argv: ['terminal', 'send', '--terminal', worker.agentTerminalHandle, '--interrupt']
