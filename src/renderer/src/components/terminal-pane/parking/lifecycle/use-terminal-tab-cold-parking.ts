@@ -31,6 +31,7 @@ import { usePendingStartupParkPresence } from '../retention/terminal-pending-sta
 import '../output-watchers/terminal-parked-tab-watchers'
 import { canWatcherCoverParkedTerminalTab } from '../output-watchers/parked-terminal-tab-coverage'
 import { captureNewlyParkedTerminalTabs } from '../capture/parked-terminal-tab-capture-episodes'
+import { whenParkedCaptureSettles } from '../capture/parked-terminal-buffer-capture'
 import { createTerminalTabActivationOrder } from '../retention/terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from '../retention/terminal-tab-park-candidates'
 import {
@@ -192,13 +193,17 @@ export function useTerminalTabColdParking(args: {
       parkVerdictRecords: parkVerdictRecordsRef.current,
       nowMs
     })
-    // Capture scrollback while panes are still mounted, before committing the park unmount.
-    captureNewlyParkedTerminalTabs(worktreeId, parkedTabIds, parkedTabCaptureDoneRef.current)
+    // Capture while panes are still mounted. A yielding capture returns a Promise; local and no-op captures stay synchronous so park-clock tests do not stall.
     // Compare via ref before dispatch: no-op updater dispatches can still hit React’s global nested-update limit inside a commit cascade.
-    if (!haveSameTerminalTabIds(coldParkedTerminalTabIdsRef.current, parkedTabIds)) {
-      coldParkedTerminalTabIdsRef.current = parkedTabIds
-      setColdParkedTerminalTabIds(parkedTabIds)
-    }
+    whenParkedCaptureSettles(
+      captureNewlyParkedTerminalTabs(worktreeId, parkedTabIds, parkedTabCaptureDoneRef.current),
+      () => {
+        if (!haveSameTerminalTabIds(coldParkedTerminalTabIdsRef.current, parkedTabIds)) {
+          coldParkedTerminalTabIdsRef.current = parkedTabIds
+          setColdParkedTerminalTabIds(parkedTabIds)
+        }
+      }
+    )
 
     const recheckDeadlineMsByTabId = new Map<string, number>()
     for (const candidate of candidates) {

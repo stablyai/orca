@@ -4,7 +4,10 @@ import {
   shutdownBufferCaptures,
   type ShutdownBufferCaptureOptions
 } from './shutdown-buffer-captures'
-import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import {
+  captureTerminalShutdownLayout,
+  captureTerminalShutdownLayoutYielding
+} from './terminal-shutdown-layout-capture'
 import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
@@ -28,7 +31,7 @@ export function useTerminalShutdownBufferCapture({
   | 'worktreeId'
 >): void {
   useEffect(() => {
-    const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
+    const captureBuffers = (options?: ShutdownBufferCaptureOptions): void | Promise<void> => {
       const manager = managerRef.current
       const state = useAppStore.getState()
       const existing = state.terminalLayoutsByTabId[tabId]
@@ -44,7 +47,7 @@ export function useTerminalShutdownBufferCapture({
       const shouldCaptureScrollbackBuffers = includeLocalBuffers
         ? true
         : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
-      const layout = captureTerminalShutdownLayout({
+      const args = {
         manager,
         paneTransports: paneTransportsRef.current,
         existingLayout: existing,
@@ -55,20 +58,26 @@ export function useTerminalShutdownBufferCapture({
         }),
         captureBuffers: shouldCaptureScrollbackBuffers,
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
-      })
-      if (options?.localOnly && layout.buffersByLeafId) {
-        // Cold parks are frequent: keep layout structure shared but buffer bytes in the local-only field excluded from remote export.
-        const { buffersByLeafId, ...structureOnly } = layout
-        setTabLayout(tabId, structureOnly)
-        setTabLocalOnlyScrollback(tabId, buffersByLeafId)
-      } else {
-        setTabLayout(tabId, layout)
-        // A shared capture supersedes whatever the last park left behind, so the local copy goes.
-        setTabLocalOnlyScrollback(tabId, null)
       }
-      for (const pane of panes) {
-        clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
+      const applyLayout = (layout: ReturnType<typeof captureTerminalShutdownLayout>): void => {
+        if (options?.localOnly && layout.buffersByLeafId) {
+          // Cold parks are frequent: keep layout structure shared but buffer bytes in the local-only field excluded from remote export.
+          const { buffersByLeafId, ...structureOnly } = layout
+          setTabLayout(tabId, structureOnly)
+          setTabLocalOnlyScrollback(tabId, buffersByLeafId)
+        } else {
+          setTabLayout(tabId, layout)
+          // A shared capture supersedes whatever the last park left behind, so the local copy goes.
+          setTabLocalOnlyScrollback(tabId, null)
+        }
+        for (const pane of panes) {
+          clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
+        }
       }
+      if (options?.yieldBetweenPanes) {
+        return captureTerminalShutdownLayoutYielding(args).then(applyLayout)
+      }
+      applyLayout(captureTerminalShutdownLayout(args))
     }
     shutdownBufferCaptures.set(tabId, captureBuffers)
     return () => {
