@@ -36,6 +36,22 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   if (itemProvider !== context.provider) {
     return false
   }
+  if (itemProvider === 'mantisBT') {
+    const identity = context.providerIdentity
+    if (
+      item.type !== 'issue' ||
+      identity?.provider !== 'mantisBT' ||
+      !identity.siteUrl ||
+      !item.url
+    ) {
+      return false
+    }
+    try {
+      return new URL(item.url).origin === new URL(identity.siteUrl).origin
+    } catch {
+      return false
+    }
+  }
   if (itemProvider !== 'jira') {
     return true
   }

@@ -10,6 +10,7 @@ import { formatRelativeTime } from '../../task-page-source-context'
 import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
+import { TaskPageMantisBTContent } from '../mantisbt/Content'
 export function TaskPageJiraContent({
   model
 }: {
@@ -152,6 +153,8 @@ export function TaskPageJiraContent({
         />
       </div>
     )
+  ) : taskSource === 'mantisBT' ? (
+    <TaskPageMantisBTContent model={model} />
   ) : (
     <TaskPageLinearContent model={model} />
   )

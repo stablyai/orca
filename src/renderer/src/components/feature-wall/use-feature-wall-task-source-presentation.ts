@@ -32,6 +32,10 @@ export function useFeatureWallTaskSourcePresentation(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const mantisBTStatus = useAppStore((s) => s.mantisBTStatus)
+  const mantisBTStatusChecked = useAppStore((s) => s.mantisBTStatusChecked)
+  const mantisBTStatusContextKey = useAppStore((s) => s.mantisBTStatusContextKey)
+  const checkMantisBTConnection = useAppStore((s) => s.checkMantisBTConnection)
   const settings = useAppStore((s) => s.settings)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -39,6 +43,7 @@ export function useFeatureWallTaskSourcePresentation(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const mantisBTStatusCurrent = mantisBTStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   useEffect(() => {
@@ -56,9 +61,13 @@ export function useFeatureWallTaskSourcePresentation(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!mantisBTStatusCurrent || !mantisBTStatusChecked) {
+      void checkMantisBTConnection()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkMantisBTConnection,
     expectedPreflightContextKey,
     isOpen,
     jiraStatusCurrent,
@@ -67,6 +76,9 @@ export function useFeatureWallTaskSourcePresentation(
     linearStatusCurrent,
     linearStatusChecked,
     linearStatusContextKey,
+    mantisBTStatusCurrent,
+    mantisBTStatusChecked,
+    mantisBTStatusContextKey,
     preflightStatusContextKey,
     preflightStatusCurrent,
     preflightStatusChecked,
@@ -87,6 +99,9 @@ export function useFeatureWallTaskSourcePresentation(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    mantisBTStatus,
+    mantisBTStatusChecked,
+    mantisBTStatusContextKey,
     providerRuntimeContextKey
   })
 

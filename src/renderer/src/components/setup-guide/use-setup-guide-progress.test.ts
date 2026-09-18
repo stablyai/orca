@@ -150,6 +150,7 @@ describe('getSetupGuideProgressReady', () => {
     preflightStatusChecked: true,
     linearStatusChecked: true,
     jiraStatusChecked: true,
+    mantisBTStatusChecked: true,
     browserUseSkillDiscoveryLoading: false,
     computerUseSkillDiscoveryLoading: false,
     orchestrationSkillDiscoveryLoading: false,
@@ -207,10 +208,11 @@ describe('getSetupGuideProgressReady', () => {
     ).toBe(false)
   })
 
-  it('waits for preflight, Linear, and Jira checks', () => {
+  it('waits for preflight, Linear, Jira, and MantisBT checks', () => {
     expect(getSetupGuideProgressReady({ ...readyInput, preflightStatusChecked: false })).toBe(false)
     expect(getSetupGuideProgressReady({ ...readyInput, linearStatusChecked: false })).toBe(false)
     expect(getSetupGuideProgressReady({ ...readyInput, jiraStatusChecked: false })).toBe(false)
+    expect(getSetupGuideProgressReady({ ...readyInput, mantisBTStatusChecked: false })).toBe(false)
   })
 })
 

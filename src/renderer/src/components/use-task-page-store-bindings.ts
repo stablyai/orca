@@ -69,6 +69,14 @@ export function useTaskPageStoreBindings() {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const mantisBTStatus = useAppStore((s) => s.mantisBTStatus)
+  const mantisBTStatusChecked = useAppStore((s) => s.mantisBTStatusChecked)
+  const mantisBTStatusContextKey = useAppStore((s) => s.mantisBTStatusContextKey)
+  const selectMantisBTSite = useAppStore((s) => s.selectMantisBTSite)
+  const listMantisBTIssues = useAppStore((s) => s.listMantisBTIssues)
+  const fetchMantisBTIssue = useAppStore((s) => s.fetchMantisBTIssue)
+  const listMantisBTProjects = useAppStore((s) => s.listMantisBTProjects)
+  const checkMantisBTConnection = useAppStore((s) => s.checkMantisBTConnection)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   // Submit handlers must fence against the current provider context immediately.
@@ -81,6 +89,9 @@ export function useTaskPageStoreBindings() {
   const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
+  const mantisBTStatusCurrent = mantisBTStatusContextKey === providerRuntimeContextKey
+  const mantisBTStatusReady = mantisBTStatusCurrent && mantisBTStatusChecked
+  const mantisBTConnected = mantisBTStatusCurrent && mantisBTStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   return {
     settings,
@@ -142,6 +153,17 @@ export function useTaskPageStoreBindings() {
     searchJiraIssues,
     listJiraIssues,
     checkJiraConnection,
+    mantisBTStatus,
+    mantisBTStatusChecked,
+    mantisBTStatusContextKey,
+    selectMantisBTSite,
+    listMantisBTIssues,
+    fetchMantisBTIssue,
+    listMantisBTProjects,
+    checkMantisBTConnection,
+    mantisBTStatusCurrent,
+    mantisBTStatusReady,
+    mantisBTConnected,
     providerRuntimeContextKey,
     providerRuntimeContextKeyRef,
     linearStatusCurrent,

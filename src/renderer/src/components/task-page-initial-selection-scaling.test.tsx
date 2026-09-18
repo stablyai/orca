@@ -7,12 +7,14 @@ import { useTaskPageRepoSelection } from './use-task-page-repo-selection'
 function resolveSelection(repos: Repo[], persisted: string[], preferred?: string) {
   let selected: readonly string[] = []
   function Probe() {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: useTaskPageRepoSelection only reads these mocked fields; TaskPageStoreBindingsModel is a large store-bindings interface no test builds in full.
     const model = {
       repos,
       settings: { defaultRepoSelection: persisted },
       pageData: { preselectedRepoId: preferred },
       linearStatus: {},
       jiraStatus: {},
+      mantisBTStatus: {},
       preflightStatus: null
     } as unknown as TaskPageStoreBindingsModel
     useTaskPageRepoSelection(model)

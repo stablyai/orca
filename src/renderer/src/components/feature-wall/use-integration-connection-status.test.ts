@@ -38,6 +38,9 @@ function statusFacts(overrides: Partial<StatusFacts> = {}): StatusFacts {
     jiraStatus: { connected: false },
     jiraStatusChecked: true,
     jiraStatusContextKey: 'local#0',
+    mantisBTStatus: { connected: false },
+    mantisBTStatusChecked: true,
+    mantisBTStatusContextKey: 'local#0',
     providerRuntimeContextKey: 'local#0',
     ...overrides
   }
@@ -169,7 +172,7 @@ describe('deriveIntegrationConnectionStatus', () => {
     })
   })
 
-  it('does not expose cached Linear or Jira tracker readiness while checks are stale', () => {
+  it('does not expose cached Linear, Jira, or MantisBT tracker readiness while checks are stale', () => {
     const staleTrackerFacts: Partial<StatusFacts>[] = [
       {
         linearStatus: { connected: true },
@@ -178,6 +181,10 @@ describe('deriveIntegrationConnectionStatus', () => {
       {
         jiraStatus: { connected: true },
         jiraStatusChecked: false
+      },
+      {
+        mantisBTStatus: { connected: true },
+        mantisBTStatusChecked: false
       }
     ]
 
@@ -258,11 +265,12 @@ describe('deriveIntegrationConnectionStatus', () => {
             glab: { installed: true, authenticated: true }
           },
           linearStatus: { connected: true },
-          jiraStatus: { connected: true }
+          jiraStatus: { connected: true },
+          mantisBTStatus: { connected: true }
         })
       )
     ).toMatchObject({
-      taskSourceNames: ['Linear', 'Jira', 'GitHub', 'GitLab']
+      taskSourceNames: ['Linear', 'Jira', 'MantisBT', 'GitHub', 'GitLab']
     })
 
     expect(

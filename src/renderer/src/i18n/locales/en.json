@@ -566,6 +566,9 @@
               }
             }
           }
+        },
+        "mantisBT": {
+          "connectionSuperseded": "MantisBT connection was superseded by a newer request."
         }
       }
     },
@@ -2330,7 +2333,26 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "mantisbtHideSource": "Hide MantisBT",
+        "mantisbtSourceLabel": "MantisBT",
+        "mantisbtSwitchSiteFailed": "Failed to switch MantisBT site.",
+        "mantisbtAllSites": "All MantisBT sites",
+        "mantisbtConnectTitle": "Connect your MantisBT site",
+        "mantisbtConnectBody": "Browse issues and start work from them directly here.",
+        "mantisbtConnectCta": "Connect MantisBT",
+        "mantisbtIssuesHeader": "MantisBT issues",
+        "mantisbtNoIssues": "No MantisBT issues found",
+        "mantisbtNoIssuesSearch": "Try a different filter.",
+        "mantisbtRefreshIssues": "Refresh MantisBT issues",
+        "mantisbtSearchPlaceholder": "Filter by title or description",
+        "mantisbtStartWorkspaceFrom": "Start workspace from #{{value0}}",
+        "mantisbtOpenInMantisBT": "Open #{{value0}} in MantisBT",
+        "mantisbtOpenInMantisBTShort": "Open in MantisBT",
+        "mantisbtSortHandler": "Handler",
+        "mantisbtLinkSourceUnavailable": "Couldn’t link this MantisBT issue. Reconnect MantisBT or pick the matching site, then try again.",
+        "mantisbtSlowLoadHint": "Still loading — this can take longer for MantisBT instances with many issues.",
+        "mantisbtAllProjects": "All projects"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8575,7 +8597,14 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "connectMantisBTTitle": "Connect MantisBT",
+          "connectMantisBTDescription": "Add a self-hosted MantisBT instance with an API token.",
+          "manageMantisBT": "Manage keys",
+          "addMantisBT": "Add MantisBT access",
+          "mantisBTProviderLabel": "MantisBT",
+          "mantisBTLabel": "MantisBT",
+          "mantisBTDescription": "Connect a self-hosted MantisBT instance and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -9871,7 +9900,12 @@
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
             "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "mantisbt01": "MantisBT Integration",
+            "mantisbt02": "Connect a self-hosted MantisBT instance with an API token.",
+            "mantisbt03": "mantisbt",
+            "mantisbt04": "mantis",
+            "mantisbt05": "self-hosted"
           }
         },
         "jira": {
@@ -10786,7 +10820,16 @@
                 "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
                 "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.",
                 "statusConnected": "Connected",
-                "statusNotConnected": "Not connected"
+                "statusNotConnected": "Not connected",
+                "mantisbtRemoteCredentialCopy": "Connect a self-hosted MantisBT instance with an API token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "mantisbtLocalCredentialCopy": "Connect a self-hosted MantisBT instance with an API token. Credentials are stored locally and encrypted when local runtime storage supports it.",
+                "mantisbtSitesConnected": "{{value0}} site{{value1}} connected",
+                "mantisbtChecking": "Checking MantisBT access before showing setup actions.",
+                "mantisbtDescription": "Browse and start work from MantisBT issues.",
+                "mantisbtAddSite": "Add MantisBT site",
+                "mantisbtConnect": "Connect MantisBT",
+                "mantisbtOneTokenPerSite": "Each connected MantisBT site has one token stored by the active runtime.",
+                "mantisbtConnectedStale": "MantisBT is connected for this runtime. Re-check if the connected site list looks stale."
               }
             }
           }
@@ -11953,6 +11996,14 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "mantisbt": {
+          "integration": {
+            "card": {
+              "statusConnected": "Connected",
+              "statusNotConnected": "Not connected"
+            }
+          }
         }
       },
       "right": {
@@ -14462,7 +14513,7 @@
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
-            "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there",
+            "code_host_tasks_summary": "issues available as tasks · add Linear, Jira, or MantisBT if your team plans work there",
             "code_host_tasks_caption": "Your code host's issues also work as tasks.",
             "review_step_title": "See PR status while agents work",
             "review_step_description": "Connect a review provider so Orca can show PR or MR status, checks, and reviews.",
@@ -17035,6 +17086,39 @@
         "9a4c6b2d7e": "Skill sharing",
         "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
         "c5b3e8a17d": "Sign in to Orca"
+      },
+      "mantisbt": {
+        "connect": {
+          "dialog": {
+            "remoteStorageCopy": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+            "localStorageCopy": "Your token is stored locally and encrypted when local runtime storage supports it.",
+            "title": "Connect MantisBT site",
+            "description": "Use a self-hosted MantisBT base URL and an API token to browse issues.",
+            "siteUrl": "MantisBT site URL",
+            "siteUrlPlaceholder": "https://mantisbt.example.com",
+            "apiToken": "API token",
+            "apiTokenPlaceholder": "MantisBT API token",
+            "tokenHint": "Create an API token from your MantisBT account preferences.",
+            "cancel": "Cancel",
+            "connecting": "Verifying…",
+            "connect": "Connect"
+          }
+        }
+      },
+      "MantisBTIssueWorkspace": {
+        "title": "MantisBT issue",
+        "description": "Preview the selected issue and start work from it.",
+        "startWorkspace": "Start workspace",
+        "close": "Close MantisBT issue preview",
+        "closeShort": "Close",
+        "noDescription": "No description provided.",
+        "copied": "{{value0}} copied",
+        "copyFailed": "Failed to copy {{value0}}",
+        "openInMantisBT": "Open in MantisBT",
+        "copyUrl": "Copy URL",
+        "copyId": "Copy id",
+        "copyBranchName": "Copy suggested branch name",
+        "copyPrompt": "Copy prompt"
       }
     },
     "i18n": {

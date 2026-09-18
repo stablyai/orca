@@ -264,7 +264,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     return buildWorkspaceSourceSelection({
       linkedWorkItem,
       baseBranch
-    }) as SmartWorkspaceNameSelection | null
+    })
   }, [baseBranch, isProjectGroupTarget, linkedWorkItem])
 
   return {

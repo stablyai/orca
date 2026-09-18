@@ -152,6 +152,7 @@ export function updateSettings(
     sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
     if ('visibleTaskProviders' in updates) {
       sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
+      sanitizedUpdates.visibleTaskProvidersDefaultedForMantisBT = true
     }
   }
   if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {

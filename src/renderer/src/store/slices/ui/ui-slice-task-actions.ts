@@ -57,6 +57,9 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
       if (data.openJiraIssue) {
         get().recordFeatureInteraction?.('jira-tasks')
       }
+      if (data.openMantisBTIssue) {
+        get().recordFeatureInteraction?.('mantisbt-tasks')
+      }
       // Why: record a Tasks visit in shared back/forward history; all task-source variants collapse to one deduped 'tasks' entry.
       const detailEntry = data.openGitHubWorkItem
         ? ({
@@ -87,7 +90,14 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
                   issue: data.openJiraIssue,
                   sourceContext: data.openJiraSourceContext
                 } as const)
-              : null
+              : data.openMantisBTIssue
+                ? ({
+                    kind: 'task-detail',
+                    source: 'mantisBT',
+                    issue: data.openMantisBTIssue,
+                    sourceContext: data.openMantisBTSourceContext
+                  } as const)
+                : null
       const currentEntry = get().worktreeNavHistory[get().worktreeNavHistoryIndex]
       const currentIsTaskStack =
         currentEntry === 'tasks' ||

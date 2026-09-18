@@ -25,6 +25,26 @@ const JIRA_CONTEXT: TaskSourceContext = {
   }
 }
 
+const MANTISBT_ITEM: WorkspaceLinkedItem = {
+  provider: 'mantisBT',
+  type: 'issue',
+  number: 123,
+  title: '#123 Fix login bug',
+  url: 'https://mantis.company.com/view.php?id=123'
+}
+
+const MANTISBT_CONTEXT: TaskSourceContext = {
+  kind: 'task-source',
+  provider: 'mantisBT',
+  projectId: 'project-1',
+  hostId: 'local',
+  providerIdentity: {
+    provider: 'mantisBT',
+    siteId: 'site-1',
+    siteUrl: 'https://mantis.company.com'
+  }
+}
+
 describe('workspace linked-item source context', () => {
   it('requires Jira key, site URL, site account, and project identity to agree', () => {
     expect(isWorkspaceLinkedItemSourceContextMatch(JIRA_ITEM, JIRA_CONTEXT)).toBe(true)
@@ -52,6 +72,28 @@ describe('workspace linked-item source context', () => {
       isWorkspaceLinkedItemSourceContextMatch(
         { ...JIRA_ITEM, jiraIdentifier: 'ORCA-999' },
         JIRA_CONTEXT
+      )
+    ).toBe(false)
+  })
+
+  it('scopes MantisBT matches to the connected site origin, not just the id', () => {
+    expect(isWorkspaceLinkedItemSourceContextMatch(MANTISBT_ITEM, MANTISBT_CONTEXT)).toBe(true)
+    // Why: MantisBT issue ids are only unique within one instance — a same-id
+    // issue from a different site must not falsely match (the bug this guards).
+    expect(
+      isWorkspaceLinkedItemSourceContextMatch(MANTISBT_ITEM, {
+        ...MANTISBT_CONTEXT,
+        providerIdentity: {
+          ...MANTISBT_CONTEXT.providerIdentity!,
+          provider: 'mantisBT',
+          siteUrl: 'https://other-mantis.example.com'
+        }
+      })
+    ).toBe(false)
+    expect(
+      isWorkspaceLinkedItemSourceContextMatch(
+        { ...MANTISBT_ITEM, url: 'not a url' },
+        MANTISBT_CONTEXT
       )
     ).toBe(false)
   })

@@ -173,12 +173,14 @@ export function createCreateWorktree(
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
-          options?.linkedTaskSourceContext?.provider === 'jira')
+          options?.linkedTaskSourceContext?.provider === 'jira' ||
+          options?.linkedWorkItem?.provider === 'mantisBT' ||
+          options?.linkedTaskSourceContext?.provider === 'mantisBT')
       ) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
+          'Update the remote runtime to link Jira or MantisBT'
         )
       }
       if (options?.provisionedRoot && target.kind !== 'local') {

@@ -221,5 +221,45 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'disconnect'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.integrations.search.mantisbt01',
+      'MantisBT Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.mantisbt02',
+      'Connect a self-hosted MantisBT instance with an API token.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.mantisbt03',
+        'mantisbt'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.mantisbt04',
+        'mantis'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.2ec2bd328c',
+        'api token'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.mantisbt05',
+        'self-hosted'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      )
+    ]
   }
 ])

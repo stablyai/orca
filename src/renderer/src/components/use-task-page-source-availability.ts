@@ -30,6 +30,8 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     selectedLinearWorkspace,
     selectedJiraSiteId,
     selectedJiraSite,
+    selectedMantisBTSiteId,
+    selectedMantisBTSite,
     taskSource,
     runtimePreflightStatusByHostId,
     taskSourceRepoContexts,
@@ -138,8 +140,34 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+  const mantisBTTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'mantisBT',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'mantisBT',
+          siteId:
+            selectedMantisBTSiteId && selectedMantisBTSiteId !== 'all'
+              ? selectedMantisBTSiteId
+              : null,
+          siteUrl: selectedMantisBTSite?.siteUrl ?? null
+        },
+        accountLabel: selectedMantisBTSite?.displayName ?? selectedMantisBTSite?.siteUrl ?? null
+      }),
+    [
+      accountBackedTaskSourceHostId,
+      fallbackTaskSourceProjectId,
+      selectedMantisBTSite,
+      selectedMantisBTSiteId
+    ]
+  )
+  const mantisBTTaskSourceScopeKey = mantisBTTaskSourceContext
+    ? getTaskSourceCacheScope(mantisBTTaskSourceContext)
+    : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'mantisBT') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -166,7 +194,11 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   nextModel.jiraTaskSourceContext = jiraTaskSourceContext
   nextModel.jiraTaskSourceScopeKey = jiraTaskSourceScopeKey
   nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability
-  return nextModel
+  return {
+    ...nextModel,
+    mantisBTTaskSourceContext,
+    mantisBTTaskSourceScopeKey
+  }
 }
 export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {
   const preludeModel = useTaskPageSourceAvailabilityPrelude(model)

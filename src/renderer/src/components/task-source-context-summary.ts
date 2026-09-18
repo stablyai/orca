@@ -1,8 +1,15 @@
 import { translate } from '@/i18n/i18n'
-import { getExecutionHostLabel } from '../../../shared/execution-host'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import {
+  formatLongList,
+  formatShortList,
+  getAvailabilityLabel,
+  getHostLabel,
+  getUnavailableHosts,
+  type HostLabelLookup
+} from './task-source-availability-formatting'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
 
@@ -29,12 +36,6 @@ export type TaskSourceHostAvailability = {
     | 'unsupported-provider'
 }
 
-type HostLabelLookup = ReadonlyMap<string, string> | undefined
-
-function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
-}
-
 export function getTaskSourceContextSummary(args: {
   provider: TaskProvider
   providerLabel: string
@@ -45,6 +46,7 @@ export function getTaskSourceContextSummary(args: {
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
   jiraSiteName?: string | null
+  mantisBTSiteName?: string | null
 }): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
@@ -60,6 +62,13 @@ export function getTaskSourceContextSummary(args: {
     case 'jira':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
         accountLabel: args.jiraSiteName,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
+    case 'mantisBT':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: args.mantisBTSiteName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -198,6 +207,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'mantisBT':
+      return identity.siteUrl ?? identity.siteId ?? null
   }
 }
 
@@ -213,104 +224,4 @@ function uniqueLabels(labels: readonly (string | null | undefined)[]): string[] 
     result.push(trimmed)
   }
   return result
-}
-
-function getUnavailableHosts(
-  hostAvailability: readonly TaskSourceHostAvailability[],
-  hostLabelById?: HostLabelLookup
-): {
-  hostLabel: string
-  statusLabel: string
-}[] {
-  const seen = new Set<string>()
-  const unavailableHosts: { hostLabel: string; statusLabel: string }[] = []
-  for (const availability of hostAvailability) {
-    const statusLabel = getAvailabilityStatusLabel(availability)
-    if (!statusLabel) {
-      continue
-    }
-    const hostLabel = getHostLabel(availability.hostId, hostLabelById)
-    const key = `${hostLabel}\u0000${statusLabel}`
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    unavailableHosts.push({ hostLabel, statusLabel })
-  }
-  return unavailableHosts
-}
-
-function getAvailabilityStatusLabel(availability: TaskSourceHostAvailability): string | null {
-  switch (availability.reason) {
-    case undefined:
-      break
-    case 'checking-task-source-capability':
-      return 'checking server capabilities'
-    case 'missing-task-source-capability':
-      return 'server update needed for task sources'
-    case 'missing-provider-auth':
-      return 'provider auth needed'
-    case 'unavailable-source-tool':
-      return 'source tool unavailable'
-    case 'unsupported-provider':
-      return 'provider unsupported on this host'
-  }
-  if (availability.status) {
-    return availability.status === 'connected' ? null : getSshStatusLabel(availability.status)
-  }
-  switch (availability.health) {
-    case 'local':
-    case 'available':
-    case undefined:
-      return null
-    case 'connecting':
-      return 'connecting'
-    case 'blocked':
-      return 'server update needed'
-    case 'disconnected':
-      return 'disconnected'
-    case 'error':
-      return 'connection issue'
-  }
-}
-
-function getAvailabilityLabel(
-  unavailableHosts: readonly { hostLabel: string; statusLabel: string }[]
-): string | null {
-  if (unavailableHosts.length === 0) {
-    return null
-  }
-  if (unavailableHosts.length === 1) {
-    return unavailableHosts[0].statusLabel
-  }
-  return `${unavailableHosts.length} unavailable`
-}
-
-function getSshStatusLabel(status: SshConnectionStatus): string {
-  switch (status) {
-    case 'connected':
-      return 'connected'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-      return 'auth needed'
-    case 'reconnection-failed':
-    case 'error':
-      return 'connection issue'
-    case 'disconnected':
-      return 'disconnected'
-  }
-}
-
-function formatShortList(labels: readonly string[]): string {
-  if (labels.length <= 2) {
-    return labels.join(', ')
-  }
-  return `${labels[0]} +${labels.length - 1}`
-}
-
-function formatLongList(labels: readonly string[]): string {
-  return labels.join(', ')
 }

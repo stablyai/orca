@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { MantisBTConnectDialog } from '@/components/mantisbt-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
@@ -116,6 +117,61 @@ export function JiraSetupSteps(
         />
       </ol>
       <JiraConnectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={props.onConnected}
+      />
+    </>
+  )
+}
+
+export function MantisBTSetupSteps(
+  props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
+): React.JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false)
+
+  return (
+    <>
+      <ol className="divide-y divide-border/50">
+        <TaskSourceStepRow
+          index={1}
+          state={getConnectStepState(props)}
+          title={translate(
+            'auto.components.settings.TasksPane.connectMantisBTTitle',
+            'Connect MantisBT'
+          )}
+          description={translate(
+            'auto.components.settings.TasksPane.connectMantisBTDescription',
+            'Add a self-hosted MantisBT instance with an API token.'
+          )}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={props.connected ? 'outline' : 'default'}
+              onClick={props.connected ? props.onOpenIntegrations : () => setDialogOpen(true)}
+            >
+              {props.connected
+                ? translate('auto.components.settings.TasksPane.manageMantisBT', 'Manage keys')
+                : translate(
+                    'auto.components.settings.TasksPane.addMantisBT',
+                    'Add MantisBT access'
+                  )}
+            </Button>
+          }
+        />
+        <TaskSourceShowInTasksStep
+          index={2}
+          providerLabel={translate(
+            'auto.components.settings.TasksPane.mantisBTProviderLabel',
+            'MantisBT'
+          )}
+          visible={props.visible}
+          canHide={props.canHide}
+          onToggleVisible={props.onToggleVisible}
+        />
+      </ol>
+      <MantisBTConnectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onConnected={props.onConnected}

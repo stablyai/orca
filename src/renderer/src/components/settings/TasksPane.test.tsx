@@ -9,6 +9,10 @@ import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 import { TasksPane } from './TasksPane'
 
+function emptyOpenIntegrationsSetupProps(): { onOpenIntegrations: () => void }[] {
+  return []
+}
+
 const mocks = vi.hoisted(() => ({
   readiness: {} as Record<TaskProvider, TaskProviderReadiness>,
   openSettingsTarget: vi.fn(),
@@ -16,12 +20,14 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   checkJiraConnection: vi.fn(),
+  checkMantisBTConnection: vi.fn(),
   linearSetupProps: [] as {
     connected: boolean
     checking: boolean
     onOpenIntegrations: () => void
   }[],
-  jiraSetupProps: [] as { onOpenIntegrations: () => void }[]
+  jiraSetupProps: emptyOpenIntegrationsSetupProps(),
+  mantisBTSetupProps: emptyOpenIntegrationsSetupProps()
 }))
 
 vi.mock('./use-task-source-provider-readiness', () => ({
@@ -65,6 +71,10 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
+  },
+  MantisBTSetupSteps: (props: { onOpenIntegrations: () => void }) => {
+    mocks.mantisBTSetupProps.push(props)
+    return <div data-testid="mantisbt-setup">MantisBT setup</div>
   }
 }))
 
@@ -76,6 +86,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: () => void
       checkLinearConnection: () => void
       checkJiraConnection: () => void
+      checkMantisBTConnection: () => void
       settingsSearchQuery: string
     }) => unknown
   ) =>
@@ -85,6 +96,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: mocks.refreshPreflightStatus,
       checkLinearConnection: mocks.checkLinearConnection,
       checkJiraConnection: mocks.checkJiraConnection,
+      checkMantisBTConnection: mocks.checkMantisBTConnection,
       settingsSearchQuery: ''
     })
 }))
@@ -124,6 +136,7 @@ describe('TasksPane', () => {
   beforeEach(() => {
     mocks.linearSetupProps = []
     mocks.jiraSetupProps = []
+    mocks.mantisBTSetupProps = []
     mocks.openSettingsPage.mockClear()
     mocks.openSettingsTarget.mockClear()
     mocks.readiness = {
@@ -137,7 +150,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      mantisBT: { connected: false, checking: false, visible: false }
     }
   })
 
@@ -250,6 +264,26 @@ describe('TasksPane', () => {
       pane: 'integrations',
       repoId: null,
       sectionId: 'integrations-jira'
+    })
+  })
+
+  it('deep-links connected MantisBT credential management to its integration card', async () => {
+    mocks.readiness.mantisBT = { connected: true, checking: false, visible: true }
+    await renderInteractivePane()
+    const expandMantisBT = Array.from(container?.querySelectorAll('button') ?? []).find(
+      (button) => button.getAttribute('aria-label') === 'Show MantisBT setup steps'
+    )
+
+    await act(async () => {
+      expandMantisBT?.click()
+    })
+    mocks.mantisBTSetupProps.at(-1)?.onOpenIntegrations()
+
+    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
+    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'integrations',
+      repoId: null,
+      sectionId: 'integrations-mantisbt'
     })
   })
 

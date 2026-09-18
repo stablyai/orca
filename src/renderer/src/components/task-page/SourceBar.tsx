@@ -23,12 +23,16 @@ export function TaskPageSourceBar({
     closeTaskPage,
     updateSettings,
     selectJiraSite,
+    selectMantisBTSite,
     linearConnected,
     jiraConnected,
+    mantisBTConnected,
     linearWorkspaces,
     selectedLinearWorkspaceId,
     jiraSites,
     selectedJiraSiteId,
+    mantisBTSites,
+    selectedMantisBTSiteId,
     visibleSourceOptions,
     taskSource,
     taskSourceAvailabilityNoticeByProvider,
@@ -39,6 +43,12 @@ export function TaskPageSourceBar({
     setJiraIssues,
     setJiraLoading,
     setJiraError,
+    setSelectedMantisBTIssueKey,
+    setSelectedMantisBTIssueFallback,
+    setSelectedMantisBTProjectId,
+    setMantisBTIssues,
+    setMantisBTLoading,
+    setMantisBTError,
     defaultLinearTeamSelection,
     linearTeamSelection,
     linearTeamOptions,
@@ -217,6 +227,45 @@ export function TaskPageSourceBar({
                   {translate('auto.components.TaskPage.e592d99051', 'All Jira sites')}
                 </SelectItem>
                 {jiraSites.map((site) => (
+                  <SelectItem key={site.id} value={site.id}>
+                    {site.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+      ) : null}
+      {taskSource === 'mantisBT' && mantisBTConnected ? (
+        <div className="flex items-center gap-2">
+          {mantisBTSites.length > 1 ? (
+            <Select
+              value={selectedMantisBTSiteId ?? undefined}
+              onValueChange={(value) => {
+                setSelectedMantisBTIssueKey(null)
+                setSelectedMantisBTIssueFallback(null)
+                setSelectedMantisBTProjectId('all')
+                setMantisBTIssues([])
+                setMantisBTError(null)
+                setMantisBTLoading(true)
+                void selectMantisBTSite(value).catch(() => {
+                  toast.error(
+                    translate(
+                      'auto.components.TaskPage.mantisbtSwitchSiteFailed',
+                      'Failed to switch MantisBT site.'
+                    )
+                  )
+                })
+              }}
+            >
+              <SelectTrigger className="h-8 w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {translate('auto.components.TaskPage.mantisbtAllSites', 'All MantisBT sites')}
+                </SelectItem>
+                {mantisBTSites.map((site) => (
                   <SelectItem key={site.id} value={site.id}>
                     {site.displayName}
                   </SelectItem>
