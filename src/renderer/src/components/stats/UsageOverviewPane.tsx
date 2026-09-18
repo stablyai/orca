@@ -1,16 +1,44 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Activity, CalendarDays, Coins, DatabaseZap, RefreshCw, Sparkles } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
-import { getRecentUsageDays } from './usage-overview-daily-series'
+import {
+  buildDailyOverview,
+  getRecentUsageDays,
+  rankUsageIntensities
+} from './usage-overview-daily-series'
+import type { UsageOverviewDailyPoint, UsageOverviewInput } from './usage-overview-types'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { translate } from '@/i18n/i18n'
 
 const RECENT_DAY_COUNT = 42
+// Why: the provider tabs default to a 30d range but the heatmap draws 42 days,
+// so it fetches its own series wide enough to cover every cell it renders.
+const HEATMAP_RANGE = '90d'
+
+type HeatmapDaily = {
+  claude: UsageOverviewInput['claude']['daily']
+  codex: UsageOverviewInput['codex']['daily']
+  opencode: UsageOverviewInput['opencode']['daily']
+}
+
+const EMPTY_HEATMAP_DAILY: HeatmapDaily = { claude: [], codex: [], opencode: [] }
+
+/**
+ * Highest-volume day in a series.
+ * @param days - Daily points, any order.
+ * @returns The day with the most tokens, or `null` for an empty series.
+ */
+function pickBestDay(days: UsageOverviewDailyPoint[]): UsageOverviewDailyPoint | null {
+  return days.reduce<UsageOverviewDailyPoint | null>(
+    (best, entry) => (!best || entry.totalTokens > best.totalTokens ? entry : best),
+    null
+  )
+}
 
 function formatPercent(value: number | null): string {
   if (value === null) {
@@ -26,6 +54,11 @@ function formatUpdatedAt(timestamp: number | null): string {
   return `Updated ${new Date(timestamp).toLocaleString()}`
 }
 
+/**
+ * Combined Claude, Codex, and OpenCode usage: totals, a 42-day intensity heatmap,
+ * token mix, and per-provider rows.
+ * @returns The Stats & Usage overview pane.
+ */
 export function UsageOverviewPane(): React.JSX.Element {
   const claudeScanState = useAppStore((state) => state.claudeUsageScanState)
   const claudeSummary = useAppStore((state) => state.claudeUsageSummary)
@@ -36,6 +69,9 @@ export function UsageOverviewPane(): React.JSX.Element {
   const openCodeScanState = useAppStore((state) => state.openCodeUsageScanState)
   const openCodeSummary = useAppStore((state) => state.openCodeUsageSummary)
   const openCodeDaily = useAppStore((state) => state.openCodeUsageDaily)
+  const claudeScope = useAppStore((state) => state.claudeUsageScope)
+  const codexScope = useAppStore((state) => state.codexUsageScope)
+  const openCodeScope = useAppStore((state) => state.openCodeUsageScope)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
@@ -84,10 +120,90 @@ export function UsageOverviewPane(): React.JSX.Element {
       openCodeSummary
     ]
   )
-  const recentDays = useMemo(
-    () => getRecentUsageDays(overview.daily, RECENT_DAY_COUNT),
-    [overview.daily]
-  )
+  const [heatmapDaily, setHeatmapDaily] = useState<HeatmapDaily>(EMPTY_HEATMAP_DAILY)
+  const claudeEnabled = claudeScanState?.enabled === true
+  const codexEnabled = codexScanState?.enabled === true
+  const openCodeEnabled = openCodeScanState?.enabled === true
+  const scanKey = [
+    claudeScanState?.lastScanCompletedAt,
+    codexScanState?.lastScanCompletedAt,
+    openCodeScanState?.lastScanCompletedAt
+  ].join('|')
+  useEffect(() => {
+    let cancelled = false
+    // Why: one provider failing must not blank the others' cells.
+    const loadDaily = <Daily,>(
+      name: string,
+      enabled: boolean,
+      fetch: () => Promise<{ daily?: Daily[] } | undefined>
+    ): Promise<Daily[]> =>
+      enabled
+        ? fetch()
+            .then((snapshot) => snapshot?.daily ?? [])
+            .catch((error: unknown) => {
+              console.error(`Failed to load ${name} usage heatmap:`, error)
+              return []
+            })
+        : Promise.resolve([])
+    const load = async (): Promise<void> => {
+      const [claude, codex, opencode] = await Promise.all([
+        loadDaily('Claude', claudeEnabled, () =>
+          window.api.claudeUsage.getSnapshot({ scope: claudeScope, range: HEATMAP_RANGE, limit: 1 })
+        ),
+        loadDaily('Codex', codexEnabled, () =>
+          window.api.codexUsage.getSnapshot({ scope: codexScope, range: HEATMAP_RANGE, limit: 1 })
+        ),
+        loadDaily('OpenCode', openCodeEnabled, () =>
+          window.api.openCodeUsage.getSnapshot({
+            scope: openCodeScope,
+            range: HEATMAP_RANGE,
+            limit: 1
+          })
+        )
+      ])
+      if (!cancelled) {
+        setHeatmapDaily({ claude, codex, opencode })
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    claudeEnabled,
+    claudeScope,
+    codexEnabled,
+    codexScope,
+    openCodeEnabled,
+    openCodeScope,
+    scanKey
+  ])
+  const recentDays = useMemo(() => {
+    const windowed = getRecentUsageDays(
+      buildDailyOverview({
+        claude: { scanState: claudeScanState, summary: claudeSummary, daily: heatmapDaily.claude },
+        codex: { scanState: codexScanState, summary: codexSummary, daily: heatmapDaily.codex },
+        opencode: {
+          scanState: openCodeScanState,
+          summary: openCodeSummary,
+          daily: heatmapDaily.opencode
+        }
+      }),
+      RECENT_DAY_COUNT
+    )
+    // Why: shades are quartiles of the days on screen, not of the whole fetched history.
+    const intensities = rankUsageIntensities(windowed.map((entry) => entry.totalTokens))
+    return windowed.map((entry, index) => ({ ...entry, intensity: intensities[index] ?? 0 }))
+  }, [
+    claudeScanState,
+    claudeSummary,
+    codexScanState,
+    codexSummary,
+    heatmapDaily,
+    openCodeScanState,
+    openCodeSummary
+  ])
+  const heatmapBestDay = useMemo(() => pickBestDay(recentDays), [recentDays])
   const isScanning = overview.providers.some((provider) => provider.isScanning)
 
   const handleRefresh = (): void => {
@@ -233,7 +349,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               </div>
             ) : (
               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                <DailyIntensityGrid days={recentDays} bestDay={overview.bestDay} />
+                <DailyIntensityGrid days={recentDays} bestDay={heatmapBestDay} />
                 <TokenMixBar overview={overview} />
               </div>
             )}
