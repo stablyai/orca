@@ -6,7 +6,8 @@ import {
 } from '../../transport/browser-screencast-protocol'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
 import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
-import { TerminalViewport } from '../../../../src/shared/rpc-contract/terminal-unary-params'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_METHOD_CHARS,
@@ -392,10 +393,20 @@ describe('type pins', () => {
     // A viewport the page sends is replayed on resubscribe by every stream naming that terminal,
     // the native screens' included. One the desktop refuses there would kill a stream the page
     // never opened, so the two bounds have to be the same number.
-    const bound = { cols: BRIDGE_MAX_VIEWPORT_COLS, rows: BRIDGE_MAX_VIEWPORT_ROWS }
-    expect(TerminalViewport.safeParse(bound).success).toBe(true)
-    expect(TerminalViewport.safeParse({ ...bound, cols: bound.cols + 1 }).success).toBe(false)
-    expect(TerminalViewport.safeParse({ ...bound, rows: bound.rows + 1 }).success).toBe(false)
+    //
+    // Read rather than imported: mobile may not pull a contract *value* into its bundle, and the
+    // boundary test that enforces that scans this file too.
+    const contract = readFileSync(
+      fileURLToPath(
+        new URL('../../../../src/shared/rpc-contract/terminal-unary-params.ts', import.meta.url)
+      ),
+      'utf8'
+    )
+    const start = contract.indexOf('export const TerminalViewport')
+    expect(start).toBeGreaterThan(-1)
+    const declaration = contract.slice(start, contract.indexOf('})', start))
+    expect(declaration).toContain(`cols: z.number().int().min(1).max(${BRIDGE_MAX_VIEWPORT_COLS})`)
+    expect(declaration).toContain(`rows: z.number().int().min(1).max(${BRIDGE_MAX_VIEWPORT_ROWS})`)
   })
 
   it('closes the binary formats over the screencast protocol', () => {
