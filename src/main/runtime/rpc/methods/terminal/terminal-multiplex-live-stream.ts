@@ -128,12 +128,12 @@ export function activateMultiplexStream(
     })
     .then((wait) => {
       if (streams.get(request.streamId) === stream) {
-        state.detachStream(
-          request.streamId,
-          wait.satisfied && wait.condition === 'exit' && wait.status === 'exited'
-            ? 'exited'
-            : 'unverifiable'
-        )
+        // Same proven-exit gate as the end verdict: unknown liveness is not a process exit.
+        const provenExit = wait.satisfied && wait.condition === 'exit' && wait.status === 'exited'
+        if (stream.supportsTerminalExited && provenExit) {
+          emit({ type: 'exited', streamId: request.streamId, exitCode: wait.exitCode })
+        }
+        state.detachStream(request.streamId, provenExit ? 'exited' : 'unverifiable')
       }
     })
     .catch(() => {
