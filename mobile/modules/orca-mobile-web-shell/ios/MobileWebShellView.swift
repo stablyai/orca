@@ -208,7 +208,14 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
-    WKContentRuleListStore.default()?.compileContentRuleList(
+    guard let store = WKContentRuleListStore.default() else {
+      // Optional-chaining past this ran no completion handler at all, so the view sat at `loading`
+      // for the rest of its life. No store is no fence, which is the same terminal answer.
+      isolationFailed = true
+      pendingDocumentUrl = nil
+      return
+    }
+    store.compileContentRuleList(
       forIdentifier: networkBlockIdentifier,
       encodedContentRuleList: networkBlockRules
     ) { [weak self] ruleList, _ in
