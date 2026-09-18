@@ -175,17 +175,27 @@ function onManifestRead(
  * bytes — renderer memory pressure and a WebView provider update look identical from here — so it
  * remounts and never deletes. `isolation-unavailable` is terminal on the first report: the fence is
  * the whole reason this view exists, and a device that cannot install it will not on a retry.
+ *
+ * Only `ready` hears any of it. The view exists in no other state, so a report arriving outside one
+ * is from a view that has already been taken off screen: the second failure of a native batch that
+ * the first one's recovery has already answered, or a mount that a wall or a retry has replaced.
+ * Acting on it would strand the recovery already in flight — the delete-and-refetch would be made
+ * terminal while its own cache read was still coming back, and that read would then drag the
+ * session back to checking behind a failure screen.
  */
 function onShellFailed(
   session: MobileWebShellSession,
   reason: MobileWebShellFailureReason
 ): MobileWebShellStep {
+  if (session.state.kind !== 'ready') {
+    return step(session, {})
+  }
   const failed = { kind: 'failed', reason, retriedOnce: session.retriedOnce } as const
   if (reason === 'isolation-unavailable') {
     return step(session, { state: failed })
   }
   if (reason === 'render-process-gone') {
-    return session.remountedOnce || session.state.kind !== 'ready'
+    return session.remountedOnce
       ? step(session, { state: failed })
       : step(session, { remountedOnce: true }, [{ kind: 'remount' }])
   }

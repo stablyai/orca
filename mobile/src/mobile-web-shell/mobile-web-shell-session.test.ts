@@ -97,6 +97,24 @@ function readySession(): MobileWebShellStep {
   )
 }
 
+/** The second half of a recovery: the refetch the delete queued, through to a mounted view. */
+function readyAgain(session: MobileWebShellSession, sessionId: string): MobileWebShellStep {
+  return run(
+    session,
+    { type: 'cache-read', generation: null },
+    { type: 'manifest-read', manifest: MANIFEST },
+    { type: 'download-staged' },
+    {
+      type: 'activated',
+      generationDirectory: '/cache/gen',
+      sessionId,
+      buildId: MANIFEST.buildId,
+      totalBytes: MANIFEST.totalBytes,
+      elapsedMs: 7
+    }
+  )
+}
+
 describe('the gates decide whether a step is taken at all', () => {
   it('waits while a connection is still being made', () => {
     const step = started({ reachability: 'connecting' })
@@ -305,7 +323,8 @@ describe('recovery follows the shell view contract', () => {
     'is terminal the second time %s is reported',
     (reason) => {
       const first = run(readySession().session, { type: 'shell-failed', reason })
-      const second = run(first.session, { type: 'shell-failed', reason })
+      const refetched = readyAgain(first.session, 'session-two')
+      const second = run(refetched.session, { type: 'shell-failed', reason })
       expect(second.effects).toEqual([])
       expect(second.session.state).toEqual({ kind: 'failed', reason, retriedOnce: true })
     }
@@ -364,7 +383,8 @@ describe('try again', () => {
       type: 'shell-failed',
       reason: 'document-load-failed'
     })
-    const failed = run(first.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const refetched = readyAgain(first.session, 'session-two')
+    const failed = run(refetched.session, { type: 'shell-failed', reason: 'document-load-failed' })
     const retried = run(failed.session, { type: 'retry-pressed' })
     expect(retried.session.retriedOnce).toBe(false)
     expect(retried.session.remountedOnce).toBe(false)
@@ -486,5 +506,32 @@ describe('the remount budget is one per session, not one per reconnect', () => {
     const restarted = run(remounted.session, { type: 'gates-changed', gates: gates() })
     expect(restarted.session.remountedOnce).toBe(true)
     expect(run(restarted.session, { type: 'retry-pressed' }).session.remountedOnce).toBe(false)
+  })
+})
+
+describe('only the state that mounted the view hears the view', () => {
+  it('ignores the second failure of one native batch, leaving the first recovery running', () => {
+    const recovering = run(readySession().session, {
+      type: 'shell-failed',
+      reason: 'document-load-failed'
+    })
+    const batched = run(recovering.session, {
+      type: 'shell-failed',
+      reason: 'render-process-gone'
+    })
+    expect(batched.session.state).toEqual({ kind: 'checking' })
+    expect(batched.effects).toEqual([])
+    expect(batched.session.flow).toBe(recovering.session.flow)
+    // And the cache read the recovery already asked for still lands on the recovery.
+    expect(run(batched.session, { type: 'cache-read', generation: null }).effects).toEqual([
+      { kind: 'read-manifest' }
+    ])
+  })
+
+  it('leaves a wall standing when a view that is no longer mounted reports a failure', () => {
+    const wall = started({ hostCapabilities: [] })
+    const step = run(wall.session, { type: 'shell-failed', reason: 'isolation-unavailable' })
+    expect(step.session.state).toEqual(wall.session.state)
+    expect(step.effects).toEqual([])
   })
 })

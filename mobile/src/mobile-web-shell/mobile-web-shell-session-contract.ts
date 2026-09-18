@@ -105,7 +105,8 @@ export type MobileWebShellSessionEffect =
  * the step that asked for them was in. Anything a superseded flow reports is dropped: a manifest
  * read that was in flight when the socket dropped still rejects afterwards, and applying that
  * rejection would replace a workspace already on screen with a download failure. The other three
- * come from outside the flow entirely — the gates, the view, the retry button — and always apply.
+ * come from outside the flow: the gates and the retry button always apply, and the view's failure
+ * applies only while its generation is the one on screen, which is the only state that mounted it.
  */
 export type MobileWebShellSessionEvent =
   | { readonly type: 'gates-changed'; readonly gates: MobileWebShellGates }
