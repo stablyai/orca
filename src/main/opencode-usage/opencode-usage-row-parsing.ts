@@ -80,11 +80,11 @@ export function parseOpenCodeUsageRow(row: OpenCodeUsageRow): OpenCodeUsageParse
   const inputTokens = ensureNumber(tokens.input)
   const outputTokens = ensureNumber(tokens.output)
   const reasoningOutputTokens = ensureNumber(tokens.reasoning)
-  const cachedInputTokens = Math.min(ensureNumber(cache?.read), inputTokens)
-  const totalTokens =
-    ensureNumber(tokens.total) > 0
-      ? ensureNumber(tokens.total)
-      : inputTokens + outputTokens + reasoningOutputTokens
+  const cachedInputTokens = ensureNumber(cache?.read)
+  const reportedTotal = ensureNumber(tokens.total)
+  const partsTotal = inputTokens + outputTokens + reasoningOutputTokens + cachedInputTokens
+  // Why: OpenCode's tokens.total omits cache reads; count them unless already included (#21440).
+  const totalTokens = Math.max(reportedTotal, partsTotal)
 
   if (inputTokens + outputTokens + reasoningOutputTokens + cachedInputTokens + totalTokens <= 0) {
     return null

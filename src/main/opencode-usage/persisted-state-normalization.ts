@@ -23,7 +23,16 @@ export function normalizePersistedState(
   state: OpenCodeUsagePersistedState
 ): OpenCodeUsagePersistedState {
   if (state.schemaVersion !== SCHEMA_VERSION) {
-    return getDefaultState()
+    // Scanner changes discard cached analytics, but preserving enabled keeps
+    // existing tracking on across schema bumps (Claude/Codex precedent).
+    const defaults = getDefaultState()
+    return {
+      ...defaults,
+      scanState: {
+        ...defaults.scanState,
+        enabled: state.scanState?.enabled ?? defaults.scanState.enabled
+      }
+    }
   }
   return {
     ...state,

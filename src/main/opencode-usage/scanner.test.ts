@@ -91,7 +91,7 @@ function usageEvent(cwd: string) {
 }
 
 describe('parseOpenCodeUsageRow', () => {
-  it('reads assistant message tokens, cost, model, cwd, and timestamp', () => {
+  it('adds cache.read onto tokens.total because OpenCode totals omit cache reads', () => {
     const parsed = parseOpenCodeUsageRow({
       id: 'message-1',
       session_id: 'session-1',
@@ -129,8 +129,70 @@ describe('parseOpenCodeUsageRow', () => {
       cachedInputTokens: 400,
       outputTokens: 250,
       reasoningOutputTokens: 100,
-      totalTokens: 1350
+      totalTokens: 1750
     })
+  })
+
+  it('keeps cache.read when it exceeds inputTokens and includes it in totalTokens', () => {
+    const parsed = parseOpenCodeUsageRow({
+      id: 'message-1',
+      session_id: 'session-1',
+      time_created: 1_777_777_700_000,
+      time_updated: null,
+      directory: `${WORKTREE}/packages/app`,
+      title: null,
+      worktree: null,
+      session_model: null,
+      data: JSON.stringify({
+        cost: 0.01,
+        tokens: {
+          input: 1000,
+          output: 250,
+          reasoning: 100,
+          cache: { read: 1_300_000, write: 0 }
+        },
+        time: {
+          completed: 1_777_777_800_000
+        }
+      })
+    })
+
+    expect(parsed).toMatchObject({
+      inputTokens: 1000,
+      cachedInputTokens: 1_300_000,
+      outputTokens: 250,
+      reasoningOutputTokens: 100,
+      totalTokens: 1_301_350
+    })
+  })
+
+  it('does not double-count cache.read when tokens.total already includes it', () => {
+    const parsed = parseOpenCodeUsageRow({
+      id: 'message-1',
+      session_id: 'session-1',
+      time_created: 1_777_777_700_000,
+      time_updated: null,
+      directory: `${WORKTREE}/packages/app`,
+      title: null,
+      worktree: null,
+      session_model: null,
+      data: JSON.stringify({
+        cost: 0.01,
+        tokens: {
+          input: 1000,
+          output: 250,
+          reasoning: 100,
+          total: 1750,
+          cache: { read: 400, write: 0 }
+        },
+        time: {
+          completed: 1_777_777_800_000
+        }
+      })
+    })
+
+    expect(parsed?.cachedInputTokens).toBe(400)
+    expect(parsed?.totalTokens).toBe(1750)
   })
 })
 
@@ -236,7 +298,7 @@ describe('parseOpenCodeUsageDatabase', () => {
       totalCachedInputTokens: 250,
       totalOutputTokens: 500,
       totalReasoningOutputTokens: 100,
-      totalTokens: 1600,
+      totalTokens: 1850,
       estimatedCostUsd: 0.06
     })
     expect(parsed.dailyAggregates).toEqual([
@@ -246,10 +308,46 @@ describe('parseOpenCodeUsageDatabase', () => {
         cachedInputTokens: 250,
         outputTokens: 500,
         reasoningOutputTokens: 100,
-        totalTokens: 1600,
+        totalTokens: 1850,
         estimatedCostUsd: 0.06
       })
     ])
+  })
+
+  it('counts session cache-read tokens that exceed inputTokens in totals', async () => {
+    const { db, path } = createTempDb()
+    createSessionTotalsSchema(db)
+    db.prepare(
+      `INSERT INTO session (
+        id, directory, title, model, cost,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+        time_created, time_updated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'session-1',
+      `${WORKTREE}/packages/app`,
+      'Cache-heavy session',
+      JSON.stringify({ providerID: 'opencode-go', id: 'deepseek-v4.1-flash' }),
+      0.01,
+      1000,
+      250,
+      100,
+      1_300_000,
+      1_777_777_700_000,
+      1_777_777_800_000
+    )
+    db.close()
+
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
+
+    expect(parsed.sessions[0]).toMatchObject({
+      totalInputTokens: 1000,
+      totalCachedInputTokens: 1_300_000,
+      totalOutputTokens: 250,
+      totalReasoningOutputTokens: 100,
+      totalTokens: 1_301_350,
+      estimatedCostUsd: 0.01
+    })
   })
 
   it('supports session_message tables without a type column', async () => {
@@ -299,7 +397,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     expect(parsed.sessions[0]).toMatchObject({
       primaryModel: 'openai/gpt-5.5',
       primaryProjectLabel: 'Repo',
-      totalTokens: 1050,
+      totalTokens: 1150,
       estimatedCostUsd: 0.03
     })
   })
@@ -376,7 +474,7 @@ describe('parseOpenCodeUsageDatabase', () => {
 
     const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
-    expect(parsed.sessions[0]?.totalTokens).toBe(120)
+    expect(parsed.sessions[0]?.totalTokens).toBe(130)
     expect(parsed.sessions[0]?.eventCount).toBe(1)
   })
 })

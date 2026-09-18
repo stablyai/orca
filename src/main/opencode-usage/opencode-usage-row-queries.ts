@@ -105,7 +105,7 @@ function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
         input: row.tokens_input,
         output: row.tokens_output,
         reasoning: row.tokens_reasoning,
-        total: row.tokens_input + row.tokens_output + row.tokens_reasoning,
+        total: row.tokens_input + row.tokens_output + row.tokens_reasoning + row.tokens_cache_read,
         cache: {
           read: row.tokens_cache_read,
           write: 0

@@ -23,6 +23,7 @@ vi.mock('../usage/usage-scan-worker-spawn', () => ({
 }))
 
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './store'
+import { OPENCODE_USAGE_SCHEMA_VERSION } from './opencode-usage-provider'
 import { normalizePersistedState } from './persisted-state-normalization'
 import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
 
@@ -36,7 +37,7 @@ function createEmptyScanResult() {
 
 function getDefaultState(): OpenCodeUsagePersistedState {
   return {
-    schemaVersion: 2,
+    schemaVersion: OPENCODE_USAGE_SCHEMA_VERSION,
     worktreeFingerprint: null,
     processedDatabases: [],
     sessions: [],
@@ -315,25 +316,36 @@ describe('OpenCodeUsageStore', () => {
   })
 
   it('normalizes persisted OpenCode state by schema version', () => {
+    const staleState: OpenCodeUsagePersistedState = {
+      ...getDefaultState(),
+      schemaVersion: 0,
+      processedDatabases: [
+        {
+          path: '/tmp/opencode.db',
+          mtimeMs: 1,
+          size: 2,
+          sessions: [makeSession()],
+          dailyAggregates: [makeDaily()],
+          ownedSessionIds: ['session-1'],
+          hasDeferredClaims: false
+        }
+      ],
+      sessions: [makeSession()],
+      dailyAggregates: [makeDaily()]
+    }
+
+    expect(normalizePersistedState(staleState)).toEqual(getDefaultState())
     expect(
       normalizePersistedState({
-        ...getDefaultState(),
-        schemaVersion: 0,
-        processedDatabases: [
-          {
-            path: '/tmp/opencode.db',
-            mtimeMs: 1,
-            size: 2,
-            sessions: [makeSession()],
-            dailyAggregates: [makeDaily()],
-            ownedSessionIds: ['session-1'],
-            hasDeferredClaims: false
-          }
-        ],
-        sessions: [makeSession()],
-        dailyAggregates: [makeDaily()]
+        ...staleState,
+        schemaVersion: 2,
+        scanState: { ...staleState.scanState, enabled: true }
       })
-    ).toEqual(getDefaultState())
+    ).toEqual({
+      ...getDefaultState(),
+      scanState: { ...getDefaultState().scanState, enabled: true }
+    })
+    expect(normalizePersistedState({ ...staleState, schemaVersion: 2 })).toEqual(getDefaultState())
 
     expect(
       normalizePersistedState({
