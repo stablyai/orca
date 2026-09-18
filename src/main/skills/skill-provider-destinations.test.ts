@@ -23,6 +23,25 @@ describe('resolveSkillProviderDestinations', () => {
     ])
   })
 
+  it('uses the canonical root for Polytoken at both scopes', () => {
+    for (const scope of ['workspace', 'global'] as const) {
+      expect(
+        resolveSkillProviderDestinations({
+          scope,
+          homeDirectory: HOME,
+          workspaceDirectory: WORKSPACE,
+          detectedProviders: ['polytoken']
+        })
+      ).toEqual([
+        {
+          provider: 'polytoken',
+          readsCanonicalRoot: true,
+          rootPath: join(scope === 'global' ? HOME : WORKSPACE, '.agents', 'skills')
+        }
+      ])
+    }
+  })
+
   // Why: Codex and Cursor read a project's .agents/skills but keep their own
   // home directory, so the same agent needs a placement at one scope only.
   it('resolves scope-specific roots for an agent that is canonical in a workspace only', () => {

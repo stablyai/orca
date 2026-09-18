@@ -23,10 +23,18 @@ describe('skill provider runtime roots', () => {
     })
   })
 
+  it('maps a relocated XDG_CONFIG_HOME to the global Polytoken skills root', () => {
+    const xdgRoot = resolve('/srv/xdg')
+    expect(resolveEnvironmentSkillProviderRoots({ XDG_CONFIG_HOME: xdgRoot })).toEqual({
+      polytoken: join(xdgRoot, 'polytoken', 'skills')
+    })
+  })
+
   it('rejects relative config roots and lets a target-specific Claude root win', () => {
     const roots = resolveEnvironmentSkillProviderRoots({
       CLAUDE_CONFIG_DIR: '../claude',
-      GROK_HOME: '../grok'
+      GROK_HOME: '../grok',
+      XDG_CONFIG_HOME: '../xdg'
     })
     expect(roots).toEqual({})
     const managedClaudeRoot = resolve('/managed/claude')

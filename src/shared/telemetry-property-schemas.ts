@@ -14,6 +14,7 @@ export const AGENT_KIND_VALUES = [
   'codex',
   'autohand',
   'opencode',
+  'polytoken',
   'mimo-code',
   'pi',
   'omp',

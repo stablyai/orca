@@ -253,7 +253,7 @@ describe('SkillInstallDialog', () => {
     })
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
     await inspectSkill()
-    await screen.findByRole('button', { name: 'Installing for: Codex' })
+    await screen.findByRole('button', { name: 'Installing for: Codex, Polytoken' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
     await waitFor(() => expect(skills.installShare).toHaveBeenCalled())

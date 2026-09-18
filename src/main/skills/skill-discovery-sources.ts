@@ -232,6 +232,15 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'aug'
+    ),
+    // Why: Polytoken's own global skills root (beside the canonical ~/.agents/skills it also reads).
+    source(
+      'home-polytoken',
+      'Polytoken home',
+      providerRootOverrides.polytoken ?? pathApi.join(home, '.config', 'polytoken', 'skills'),
+      'home',
+      ['agent-skills'],
+      'polytoken'
     )
   ]
 
@@ -306,6 +315,14 @@ export function buildSkillDiscoverySources(
         'repo',
         ['agent-skills'],
         'aug'
+      ),
+      source(
+        `repo-polytoken-${stablePathId(repoPath)}`,
+        `${label} .polytoken`,
+        pathApi.join(repoPath, '.polytoken', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'polytoken'
       )
     )
   }

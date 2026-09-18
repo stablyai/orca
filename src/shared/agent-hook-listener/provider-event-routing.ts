@@ -3,6 +3,7 @@ import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-tur
 import type { ToolSnapshot } from './listener-event'
 import type { ExtractedPromptText } from './prompt-fields'
 import { extractClaudeToolFields } from './providers/claude-tool-fields'
+import { extractPolytokenToolFields } from './providers/polytoken-tool-fields'
 import { extractCodexToolFields } from './providers/codex-tool-fields'
 import { extractGeminiToolFields } from './providers/gemini-tool-fields'
 import { extractAntigravityToolFields } from './providers/antigravity-tool-fields'
@@ -65,6 +66,8 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'polytoken':
+      return eventName === 'pre_user_prompt'
   }
 }
 
@@ -157,5 +160,7 @@ export function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'polytoken':
+      return extractPolytokenToolFields(eventName, hookPayload)
   }
 }

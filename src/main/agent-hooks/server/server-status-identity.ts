@@ -4,6 +4,7 @@ import type { AgentKind } from '../../../shared/telemetry-events'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   getAgentResumeArgv,
+  isProviderSessionOnlyAgent,
   type AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -41,12 +42,17 @@ export function isValidPaneKey(value: unknown): value is string {
   )
 }
 
-// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
-export function isValidPiProviderSessionOnly(
+// Why: a metadata-only row is only accepted from an agent that announces sessions this way and
+// only when it can actually resume from it; user-dismissed rows use an internal persisted marker.
+export function isValidProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined
 ): boolean {
-  return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
+  return Boolean(
+    providerSession &&
+    isProviderSessionOnlyAgent(agentType) &&
+    getAgentResumeArgv(agentType, providerSession)
+  )
 }
 
 export function toAgentStatusIpcPayload(

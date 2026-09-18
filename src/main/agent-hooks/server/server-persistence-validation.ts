@@ -12,7 +12,7 @@ import {
 } from '../../../shared/agent-hook-listener/listener-limits'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
-import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
+import { isValidPaneKey, isValidProviderSessionOnly } from './server-status-identity'
 
 export function dropHydratedIdleClaudeSubagents(
   payload: ParsedAgentStatusPayload
@@ -96,7 +96,7 @@ export function sanitizeHydratedEntry(
   )
   if (
     providerSessionOnly &&
-    !isValidPiProviderSessionOnly(providerSession, payload.agentType) &&
+    !isValidProviderSessionOnly(providerSession, payload.agentType) &&
     !validRetainedIdentity
   ) {
     return null

@@ -11,6 +11,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   amp: 'Amp',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  polytoken: 'Polytoken',
   'mimo-code': 'MiMo Code',
   cursor: 'Cursor',
   aider: 'Aider',
