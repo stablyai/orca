@@ -49,6 +49,25 @@ enumerate with `--include-remote`, which asks its execution host for the
 verdict. Past 100 rows the response pages, so follow `page.nextCursor` with
 `--cursor <value>` until `page.hasMore` is false.
 
+## Inspect recent Dispatches
+
+For recent work, request newest-first insertion order without fetching the whole Run:
+
+```text
+ORCA orchestration worker-list --run <run_id> --order desc --limit 20 --json
+ORCA orchestration worker-list --run <run_id> --order desc --limit 20 --cursor <nextCursor> --json
+```
+
+The cursor preserves descending order when `--order` is omitted on later pages.
+Keep the same Run and terminal-state filter. Omit `--cursor` to refresh: Dispatches
+created after the first page are excluded from that walk. Status and remote observations
+are still read per page. Add `--include-remote` when execution-host observations are needed.
+An older runtime that cannot confirm the requested order requires an update.
+
+Newest-first is for finding recent Dispatches, not prioritizing all work needing attention.
+For a complete recovery check, continue until `page.hasMore` is false regardless of order.
+The default remains oldest first, and `--limit` remains at most 100.
+
 ## Stall needs positive evidence
 
 Leave the wait only on positive proof the agent stopped: `exited` liveness, the

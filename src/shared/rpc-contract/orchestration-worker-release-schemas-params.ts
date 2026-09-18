@@ -16,6 +16,7 @@ export const WORKER_TERMINAL_LIST_STATES = [
 ] as const
 
 export const WorkerListParams = z.object({
+  order: z.enum(['asc', 'desc']).optional(),
   run: z.string().min(1).optional(),
   terminalState: z.enum(WORKER_TERMINAL_LIST_STATES).optional(),
   cursor: z.string().min(1).max(2_048).optional(),

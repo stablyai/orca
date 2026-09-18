@@ -127,6 +127,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration worker-list' && flag === 'include-remote') {
     return '--include-remote      Include connected-server worker observations'
   }
+  if (command === 'orchestration worker-list' && flag === 'order') {
+    return '--order <asc|desc>    Insertion order: asc (default) or desc'
+  }
   if (command === 'linear list-issues' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }

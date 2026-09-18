@@ -1,3 +1,4 @@
+import { withWorkerListOrder } from './worker-list-order'
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration-fleet-projection'
 import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -27,44 +28,68 @@ import { WORKER_TERMINAL_LIST_STATES, WorkerListParams } from './worker-release-
 export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
   name: 'orchestration.workerList',
   params: WorkerListParams,
-  handler: async (params, { runtime }) => {
-    const db = runtime.getOrchestrationDb()
-    const paginationRequested =
-      params.paginate === true || params.limit !== undefined || params.cursor !== undefined
-    if (!paginationRequested) {
-      const rows = db.listWorkerTerminalResources({
-        runId: params.run,
-        terminalState: params.terminalState,
-        limit: ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
-      })
-      if (rows.length > ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS) {
-        throw new OrchestrationError(
-          'worker_list_snapshot_too_large',
-          `Legacy worker-list results support at most ${ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS} rows; update the client to use pagination.`
-        )
+  handler: async (request, { runtime }) =>
+    withWorkerListOrder(request, async (params) => {
+      const db = runtime.getOrchestrationDb()
+      const paginationRequested =
+        params.order !== undefined ||
+        params.paginate === true ||
+        params.limit !== undefined ||
+        params.cursor !== undefined
+      if (!paginationRequested) {
+        const rows = db.listWorkerTerminalResources({
+          runId: params.run,
+          terminalState: params.terminalState,
+          order: params.order,
+          limit: ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
+        })
+        if (rows.length > ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS) {
+          throw new OrchestrationError(
+            'worker_list_snapshot_too_large',
+            `Legacy worker-list results support at most ${ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS} rows; update the client to use pagination.`
+          )
+        }
+        return projectWorkerListPage({
+          runtime,
+          params,
+          limit: ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS,
+          rows,
+          snapshotCursor: null,
+          completeProjection: true
+        })
       }
-      return projectWorkerListPage({
-        runtime,
-        params,
-        limit: ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS,
-        rows,
-        snapshotCursor: null,
-        completeProjection: true
-      })
-    }
-    const limit = params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX
-    let cursor: WorkerListCursor | null = params.cursor
-      ? decodeWorkerListCursor(params.cursor)
-      : null
-    if (params.cursor && !cursor) {
-      const legacyKey = db.getWorkerTerminalOrderingKey(params.cursor)
-      if (!legacyKey) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          `Unknown worker-list cursor ${params.cursor}.`
-        )
+      const limit = params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX
+      let cursor: WorkerListCursor | null = params.cursor
+        ? decodeWorkerListCursor(params.cursor)
+        : null
+      if (params.cursor && !cursor) {
+        const legacyKey = db.getWorkerTerminalOrderingKey(params.cursor)
+        if (!legacyKey) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            `Unknown worker-list cursor ${params.cursor}.`
+          )
+        }
+        const snapshot = db.getWorkerTerminalListingSnapshot(params.run)
+        if (!snapshot) {
+          return {
+            workers: [],
+            counts: {},
+            page: { limit, total: 0, hasMore: false, nextCursor: null }
+          }
+        }
+        cursor = { version: 2, snapshot, after: legacyKey }
       }
-      const snapshot = db.getWorkerTerminalListingSnapshot(params.run)
+      if (cursor?.version === 3) {
+        return projectWorkerListPage({
+          runtime,
+          params,
+          limit,
+          rows: readSnapshotRows(runtime, db, cursor, params, limit),
+          snapshotCursor: cursor
+        })
+      }
+      const snapshot = cursor?.snapshot ?? db.getWorkerTerminalListingSnapshot(params.run)
       if (!snapshot) {
         return {
           workers: [],
@@ -72,68 +97,58 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
           page: { limit, total: 0, hasMore: false, nextCursor: null }
         }
       }
-      cursor = { version: 2, snapshot, after: legacyKey }
-    }
-    if (cursor?.version === 3) {
-      return projectWorkerListPage({
-        runtime,
-        params,
-        limit,
-        rows: readSnapshotRows(runtime, db, cursor, params, limit),
-        snapshotCursor: cursor
+      const rows = db.listWorkerTerminalResources({
+        runId: params.run,
+        terminalState: params.terminalState,
+        order: params.order,
+        snapshot,
+        after: cursor?.after,
+        limit:
+          !cursor && params.terminalState
+            ? ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
+            : limit + 1
       })
-    }
-    const snapshot = cursor?.snapshot ?? db.getWorkerTerminalListingSnapshot(params.run)
-    if (!snapshot) {
-      return {
-        workers: [],
-        counts: {},
-        page: { limit, total: 0, hasMore: false, nextCursor: null }
-      }
-    }
-    const rows = db.listWorkerTerminalResources({
-      runId: params.run,
-      terminalState: params.terminalState,
-      snapshot,
-      after: cursor?.after,
-      limit:
-        !cursor && params.terminalState
-          ? ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
-          : limit + 1
-    })
-    if (!cursor && params.terminalState && 'databaseId' in snapshot) {
-      if (rows.length > ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS) {
-        throw new OrchestrationError(
-          'worker_list_snapshot_too_large',
-          `Filtered worker-list snapshots support at most ${ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS} rows.`
-        )
-      }
-      if (rows.length <= limit) {
+      if (!cursor && params.terminalState && 'databaseId' in snapshot) {
+        if (rows.length > ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS) {
+          throw new OrchestrationError(
+            'worker_list_snapshot_too_large',
+            `Filtered worker-list snapshots support at most ${ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS} rows.`
+          )
+        }
+        if (rows.length <= limit) {
+          return projectWorkerListPage({
+            runtime,
+            params,
+            limit,
+            rows,
+            snapshotCursor: null,
+            snapshot
+          })
+        }
+        const snapshotId = createWorkerListSnapshot(runtime, {
+          runId: params.run,
+          terminalState: params.terminalState,
+          order: params.order,
+          databaseId: snapshot.databaseId,
+          dispatchIds: rows.map((row) => row.dispatchId)
+        })
         return projectWorkerListPage({
           runtime,
           params,
           limit,
           rows,
-          snapshotCursor: null,
-          snapshot
+          snapshotCursor: { version: 3, snapshot: { id: snapshotId }, offset: 0 }
         })
       }
-      const snapshotId = createWorkerListSnapshot(runtime, {
-        runId: params.run,
-        terminalState: params.terminalState,
-        databaseId: snapshot.databaseId,
-        dispatchIds: rows.map((row) => row.dispatchId)
-      })
       return projectWorkerListPage({
         runtime,
         params,
         limit,
         rows,
-        snapshotCursor: { version: 3, snapshot: { id: snapshotId }, offset: 0 }
+        snapshotCursor: cursor,
+        snapshot
       })
-    }
-    return projectWorkerListPage({ runtime, params, limit, rows, snapshotCursor: cursor, snapshot })
-  }
+    })
 })
 
 function readSnapshotRows(
@@ -145,10 +160,11 @@ function readSnapshotRows(
 ) {
   const stored = readWorkerListSnapshot(runtime, cursor.snapshot.id, {
     runId: params.run,
-    terminalState: params.terminalState
+    terminalState: params.terminalState,
+    order: params.order
   })
   const dispatchIds = stored.dispatchIds.slice(cursor.offset, cursor.offset + limit + 1)
-  const rows = db.listWorkerTerminalResources({ dispatchIds })
+  const rows = db.listWorkerTerminalResources({ dispatchIds, order: params.order })
   if (
     rows.length !== dispatchIds.length ||
     rows.some((row, index) => row.dispatchId !== dispatchIds[index])
@@ -171,7 +187,8 @@ async function projectWorkerListPage(args: {
     args.snapshotCursor?.version === 3
       ? pinWorkerListSnapshot(args.runtime, args.snapshotCursor.snapshot.id, {
           runId: args.params.run,
-          terminalState: args.params.terminalState
+          terminalState: args.params.terminalState,
+          order: args.params.order
         })
       : null
   try {

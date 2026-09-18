@@ -1,3 +1,4 @@
+import { decodeWorkerListOrderCursor } from '../../../shared/worker-list-order-cursor'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import {
@@ -88,6 +89,12 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
   },
 
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
+    const order = getOptionalStringFlag(flags, 'order')
+    if (order !== undefined && order !== 'asc' && order !== 'desc') {
+      throw new RuntimeClientError('invalid_argument', 'Expected --order asc or desc.')
+    }
+    const cursor = getOptionalStringFlag(flags, 'cursor')
+    const expectedOrder = order ?? (cursor ? decodeWorkerListOrderCursor(cursor)?.order : undefined)
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')
     if (
       terminalState &&
@@ -102,7 +109,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     }
     const scope = await resolveWorkerListRunScope(flags, cwd, client)
     const requiresCurrentListSemantics =
-      flags.has('include-remote') || flags.has('cursor') || flags.has('limit')
+      flags.has('order') || flags.has('include-remote') || flags.has('cursor') || flags.has('limit')
     const result = await client.call<{
       workers: {
         dispatchId: string
@@ -125,7 +132,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       }[]
       counts: Record<string, number>
       scope?: WorkerListRunScope
-      page?: { hasMore: boolean; nextCursor: string | null; total: number }
+      page?: { order?: string; hasMore: boolean; nextCursor: string | null; total: number }
       partialHostErrors?: {
         environmentId: string
         name: string
@@ -137,13 +144,20 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       run: scope.run,
       terminalState,
       ...(flags.has('include-remote') ? { includeRemote: true } : {}),
-      cursor: getOptionalStringFlag(flags, 'cursor'),
+      cursor,
+      ...(order !== undefined ? { order } : {}),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     if (requiresCurrentListSemantics && !result.result.page) {
       throw new RuntimeClientError(
         'incompatible_runtime',
         'The connected Orca runtime did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca runtime and retry.'
+      )
+    }
+    if (expectedOrder !== undefined && result.result.page?.order !== expectedOrder) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'The connected runtime did not confirm the requested worker-list order. Update the runtime and retry; no inventory was printed.'
       )
     }
     printResult({ ...result, result: { ...result.result, scope } }, json, (value) => {

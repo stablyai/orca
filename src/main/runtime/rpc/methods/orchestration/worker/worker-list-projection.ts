@@ -8,6 +8,7 @@ import type { WorkerTerminalListState } from '../../../../orchestration/worker-t
 import type { OrchestrationDb } from '../../../../orchestration/db'
 
 export type WorkerListPageParams = {
+  order?: 'asc' | 'desc'
   run?: string
   terminalState?: WorkerTerminalListState
   includeRemote?: boolean

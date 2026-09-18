@@ -48,8 +48,10 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
 export function scanWorkerTerminalStates(
   this: OrchestrationDb,
   where: string[],
-  values: (string | number)[]
+  values: (string | number)[],
+  order: 'asc' | 'desc' = 'asc'
 ): WorkerTerminalStateRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The SELECT columns and LEFT JOIN nullability match this row type; ordering changes neither.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id,
@@ -61,7 +63,7 @@ export function scanWorkerTerminalStates(
          LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
         ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-        ORDER BY d.rowid ASC`
+        ORDER BY d.rowid ${order === 'desc' ? 'DESC' : 'ASC'}`
     )
     .all(...values) as {
     dispatch_id: string

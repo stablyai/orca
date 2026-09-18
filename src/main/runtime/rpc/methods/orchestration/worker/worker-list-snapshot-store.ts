@@ -12,6 +12,7 @@ const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRY_BYTES = 512 * 1024
 type WorkerListSnapshot = {
   runId: string | null
   terminalState: WorkerTerminalListState
+  order?: 'asc' | 'desc'
   /** Dispatch-context watermark the ids were selected under; counts reuse it so later pages
    *  never report an inventory that includes rows the cursor cannot reach. */
   databaseId: number
@@ -30,6 +31,7 @@ export function createWorkerListSnapshot(
   params: {
     runId?: string
     terminalState: WorkerTerminalListState
+    order?: 'asc' | 'desc'
     databaseId: number
     dispatchIds: string[]
   }
@@ -38,6 +40,7 @@ export function createWorkerListSnapshot(
   const snapshot = {
     runId: params.runId ?? null,
     terminalState: params.terminalState,
+    order: params.order,
     databaseId: params.databaseId,
     dispatchIds: params.dispatchIds
   }
@@ -57,7 +60,7 @@ export function createWorkerListSnapshot(
 export function readWorkerListSnapshot(
   runtime: OrcaRuntimeService,
   id: string,
-  params: { runId?: string; terminalState?: WorkerTerminalListState }
+  params: { runId?: string; terminalState?: WorkerTerminalListState; order?: 'asc' | 'desc' }
 ): WorkerListSnapshot {
   const snapshot = storeFor(runtime).snapshots.get(id)
   if (!snapshot) {
@@ -68,11 +71,12 @@ export function readWorkerListSnapshot(
   }
   if (
     snapshot.runId !== (params.runId ?? null) ||
-    snapshot.terminalState !== params.terminalState
+    snapshot.terminalState !== params.terminalState ||
+    (snapshot.order ?? 'asc') !== (params.order ?? 'asc')
   ) {
     throw new OrchestrationError(
       'invalid_argument',
-      'A worker-list cursor must be reused with the same Run and terminal-state filter.'
+      'A worker-list cursor must be reused with the same order, Run and terminal-state filter.'
     )
   }
   return snapshot
@@ -81,7 +85,7 @@ export function readWorkerListSnapshot(
 export function pinWorkerListSnapshot(
   runtime: OrcaRuntimeService,
   id: string,
-  params: { runId?: string; terminalState?: WorkerTerminalListState }
+  params: { runId?: string; terminalState?: WorkerTerminalListState; order?: 'asc' | 'desc' }
 ): { snapshot: WorkerListSnapshot; release: () => void } {
   const snapshot = readWorkerListSnapshot(runtime, id, params)
   const store = storeFor(runtime)
