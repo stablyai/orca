@@ -721,6 +721,36 @@ describe('fleet liveness and attention after a host verdict', () => {
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 
+  it.each(['transferred', 'user_owned'] as const)(
+    'asks nothing of an abandoned worker whose terminal is already %s instead of interrupting it',
+    (ownershipState) => {
+      const projected = projectOrchestrationFleet({
+        workers: [
+          worker('1', {
+            workerState: 'abandoned',
+            dispatchStatus: 'failed',
+            workerStage: 'abandoned',
+            terminalState: 'retained',
+            resource: {
+              id: 'resource-1',
+              ownerDispatchId: '1',
+              worktreeId: 'workspace-1',
+              paneKey: 'tab-1:leaf-1',
+              hostScope: null,
+              ownershipState,
+              releaseState: 'active',
+              updatedAt: '2026-09-04T00:00:00.000Z'
+            }
+          })
+        ],
+        statuses: [],
+        now: 10_000
+      })
+
+      expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+    }
+  )
+
   it('still suggests release for a succeeded worker that owns its terminal', () => {
     const projected = projectOrchestrationFleet({
       workers: [
