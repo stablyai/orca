@@ -2,6 +2,7 @@ import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { readWorkerStartModeSettings } from '../../orchestration-worker-start-mode'
 import type { FederationAttachStartInput } from '../federation/federation-start-schema'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -10,7 +11,7 @@ import {
 } from './worker-launch-preferences'
 import type { WorkerStartInput } from './worker-start-schema'
 
-type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
+type WorkerStartLaunch = Awaited<ReturnType<typeof resolveWorkerLaunchPreferences>>
 
 export function validateFederatedWorkerStartPlacement(
   params: WorkerStartInput,
@@ -48,11 +49,11 @@ export function validateFederatedWorkerStartPlacement(
   }
 }
 
-export function prepareLocalWorkerStart(args: {
+export async function prepareLocalWorkerStart(args: {
   params: WorkerStartInput
   createsWorktree: boolean
   runtime: OrcaRuntimeService
-}): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
+}): Promise<{ agent: TuiAgent | undefined; launch: WorkerStartLaunch }> {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (params.terminal && params.agent) {
@@ -76,21 +77,25 @@ export function prepareLocalWorkerStart(args: {
       'Creation and setup options apply only to new-child or new-top-level worktrees.'
     )
   }
-  return resolveWorkerStartAgent({
+  return await resolveWorkerStartAgent({
     runtime,
     terminal: params.terminal,
     agent: params.agent,
     model: params.model,
     effort: params.effort,
+    // Why only here, not federation attach: `--on` names a remote/SSH execution host for a
+    // worker created from this host, so a probe run here cannot speak for it. A federation
+    // attach's worker always executes locally on the home receiving it (I1).
+    remotePlacement: Boolean(params.on),
     missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
   })
 }
 
-export function prepareFederationAttachmentWorkerStart(args: {
+export async function prepareFederationAttachmentWorkerStart(args: {
   params: FederationAttachStartInput
   createsWorktree: boolean
   runtime: OrcaRuntimeService
-}): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
+}): Promise<{ agent: TuiAgent | undefined; launch: WorkerStartLaunch }> {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (createsWorktree && (!params.name || !params.repo)) {
@@ -120,7 +125,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
       '--terminal reuses an existing agent and cannot combine with --agent.'
     )
   }
-  return resolveWorkerStartAgent({
+  return await resolveWorkerStartAgent({
     runtime,
     terminal: params.terminal,
     agent: params.agent,
@@ -131,14 +136,17 @@ export function prepareFederationAttachmentWorkerStart(args: {
   })
 }
 
-function resolveWorkerStartAgent(args: {
+async function resolveWorkerStartAgent(args: {
   runtime: OrcaRuntimeService
   terminal?: string
   agent?: string
   model?: string
   effort?: string
+  /** True when the worker will not execute on this host (I1). Absent for federation attach:
+   *  that worker always executes locally on the home receiving it. */
+  remotePlacement?: boolean
   missingAgentMessage: string
-}): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
+}): Promise<{ agent: TuiAgent | undefined; launch: WorkerStartLaunch }> {
   if (!args.terminal && (!args.agent || !isTuiAgent(args.agent))) {
     throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
   }
@@ -147,10 +155,15 @@ function resolveWorkerStartAgent(args: {
     args.runtime.validateOrchestrationAgentLauncher(agent)
     return {
       agent,
-      launch: resolveWorkerLaunchPreferences({
+      launch: await resolveWorkerLaunchPreferences({
         agent,
         model: args.model,
-        effort: args.effort
+        effort: args.effort,
+        remotePlacement: args.remotePlacement,
+        // Why read here, not threaded from the caller: the probe below always spawns the plain
+        // CLI, so any configured override -- regardless of which call site started the worker --
+        // makes a local 'accepted' result dishonest (I1).
+        agentCommandOverride: readWorkerStartModeSettings(args.runtime)?.agentCmdOverrides?.[agent]
       })
     }
   }
@@ -158,7 +171,10 @@ function resolveWorkerStartAgent(args: {
     agent: undefined,
     launch: {
       preferences: undefined,
-      receipt: createWorkerLaunchReceipt({ agent: null })
+      // Why an explicit 'catalog' label: no agent is even selected here (--terminal reuse with
+      // no launch preferences to apply), so effective trivially equals requested, but the
+      // receipt still must not be a bare clone with no source (I1).
+      receipt: { ...createWorkerLaunchReceipt({ agent: null }), source: 'catalog' }
     }
   }
 }

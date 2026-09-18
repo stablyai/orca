@@ -9,6 +9,25 @@ import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 
+// Why: resolveWorkerLaunchPreferences now probes Codex too (I2), via this executor. Stub it so
+// the custom-model test below never spawns a real CLI process and stays deterministic across
+// hosts; the opaque id must still come back in the stubbed listing to be probe-accepted.
+vi.mock('../../../../../text-generation/commit-message-text-generation', () => ({
+  discoverCommitMessageModelsLocal: vi.fn(async () => ({
+    success: true,
+    capability: {
+      id: 'codex',
+      label: 'Codex',
+      modelSource: 'dynamic',
+      models: [{ id: 'custom-codex-model', label: 'custom-codex-model' }],
+      defaultModelId: 'custom-codex-model'
+    },
+    models: [{ id: 'custom-codex-model', label: 'custom-codex-model' }],
+    defaultModelId: 'custom-codex-model',
+    catalogOrigin: 'probe'
+  }))
+}))
+
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'

@@ -18,6 +18,36 @@ export type WorkerStartReceipt = {
   effects?: unknown[]
   residualResources?: unknown[]
   nextCommands?: string[]
+  /** How the launch model/effort were actually settled (issue #10846). Absent
+   *  on an older host, or when no --model/--effort was requested. */
+  launch?: {
+    effective: { agent: string | null; model: string | null; effort: string | null } | null
+    source?: 'probe' | 'catalog' | 'unverified'
+    unverifiedReason?: string
+  }
+}
+
+function formatEffectiveModelEffort(effective: {
+  model: string | null
+  effort: string | null
+}): string | null {
+  if (!effective.model) {
+    return null
+  }
+  return effective.effort ? `${effective.model} / effort ${effective.effort}` : effective.model
+}
+
+function formatWorkerLaunchLine(launch: NonNullable<WorkerStartReceipt['launch']>): string | null {
+  if (launch.source === 'unverified') {
+    return `Launch: unverified — ${launch.unverifiedReason ?? 'the installed CLI could not be asked.'}`
+  }
+  const effective = launch.effective ? formatEffectiveModelEffort(launch.effective) : null
+  if (!effective) {
+    return null
+  }
+  return launch.source === 'probe'
+    ? `Launch: ${effective} (verified against the installed CLI)`
+    : `Launch: ${effective} (from the static catalog, not live-verified)`
 }
 
 export function formatWorkerStart(value: WorkerStartReceipt): string {
@@ -26,6 +56,12 @@ export function formatWorkerStart(value: WorkerStartReceipt): string {
   // fallback from the user's structured default is never silent.
   if (value.mode) {
     lines.push(value.mode.detail)
+  }
+  if (value.launch?.source) {
+    const launchLine = formatWorkerLaunchLine(value.launch)
+    if (launchLine) {
+      lines.push(launchLine)
+    }
   }
   if (value.lastError) {
     lines.push(`${value.failedStage ?? 'start'}: ${value.lastError}`)
