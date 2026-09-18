@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
 import { createTerminalSnapshot, type SkillTerminalSnapshot } from './agent-skill-terminal-snapshot'
+import { AgentSkillSetupPanelActions } from './agent-skill-setup-panel-actions'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import {
-  recheckSurfacesAfterAgentSkillTerminal,
-  syncSurfacesAfterAgentSkillRecheck
-} from './agent-skill-recheck-surface-sync'
+import { recheckSurfacesAfterAgentSkillTerminal } from './agent-skill-recheck-surface-sync'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -23,6 +21,7 @@ export function AgentSkillSetupPanel({
   description,
   command,
   installedCommand,
+  removeCommand,
   terminalTitle,
   terminalAriaLabel,
   terminalWorktreeId,
@@ -79,11 +78,16 @@ export function AgentSkillSetupPanel({
   // already-open terminal pinned to the command and runtime selected at click.
   const openTerminalCommand = terminalSnapshot?.copiedCommand ?? activeCommand
 
-  const openSetupTerminal = (): void => {
+  const openSetupTerminal = (commandOverride?: string): void => {
     if (terminalOpening || setupAttemptRunning) {
       return
     }
-    const nextSnapshot = createTerminalSnapshot(activeCommand, shellOverride, runtime)
+    const nextCommand =
+      commandOverride ??
+      (setupCommandFailedCode !== null && terminalSnapshot
+        ? terminalSnapshot.copiedCommand
+        : activeCommand)
+    const nextSnapshot = createTerminalSnapshot(nextCommand, shellOverride, runtime)
     setTerminalOpening(true)
     if (setupCommandFailedCode !== null) {
       setTerminalOpen(false)
@@ -201,64 +205,25 @@ export function AgentSkillSetupPanel({
   }
 
   const actionRow = (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
-      {(!installed || showInstallWhenInstalled) && setupCommandFailedCode === null ? (
-        <Button
-          type="button"
-          variant={installVariant}
-          size="sm"
-          onClick={openSetupTerminal}
-          disabled={terminalOpen || installDisabled || terminalOpening}
-        >
-          {terminalOpening ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Terminal className="size-3.5" />
-          )}
-          {terminalOpening
-            ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
-            : installed
-              ? resolvedInstalledInstallLabel
-              : resolvedInstallLabel}
-        </Button>
-      ) : null}
-      {setupCommandFailedCode !== null || !installed || showRecheckWhenInstalled ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => {
-            if (setupCommandFailedCode !== null) {
-              openSetupTerminal()
-              return
-            }
-            void Promise.resolve(onRecheck()).then(() => {
-              syncSurfacesAfterAgentSkillRecheck(freshnessSkillName)
-            })
-          }}
-          disabled={
-            setupCommandFailedCode !== null
-              ? installDisabled || terminalOpening || setupAttemptRunning
-              : loading
-          }
-        >
-          <RefreshCw className={cn('size-3.5', (loading || terminalOpening) && 'animate-spin')} />
-          {setupCommandFailedCode !== null
-            ? translate('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')
-            : translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
-        </Button>
-      ) : null}
-      {terminalOpening ? (
-        <p className="basis-full text-[12px] leading-snug text-muted-foreground">
-          {openingHint ??
-            translate(
-              'auto.components.settings.AgentSkillSetupPanel.4c05b9d7cb',
-              'Preparing setup terminal.'
-            )}
-        </p>
-      ) : null}
-    </div>
+    <AgentSkillSetupPanelActions
+      installed={installed}
+      loading={loading}
+      installDisabled={installDisabled}
+      terminalOpen={terminalOpen}
+      terminalOpening={terminalOpening}
+      setupAttemptRunning={setupAttemptRunning}
+      setupCommandFailedCode={setupCommandFailedCode}
+      showInstallWhenInstalled={showInstallWhenInstalled}
+      showRecheckWhenInstalled={showRecheckWhenInstalled}
+      removeCommand={removeCommand}
+      installVariant={installVariant}
+      resolvedInstallLabel={resolvedInstallLabel}
+      resolvedInstalledInstallLabel={resolvedInstalledInstallLabel}
+      openingHint={openingHint}
+      freshnessSkillName={freshnessSkillName}
+      onOpenSetupTerminal={openSetupTerminal}
+      onRecheck={onRecheck}
+    />
   )
 
   return (
