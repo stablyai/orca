@@ -39,6 +39,13 @@ export type RemoteSessionSource = {
   contentDependencyPath?: (path: string) => string
   // Depth 0 denotes a direct child of rootDir.
   directoryPredicate?: (name: string, depth: number) => boolean
+  // A returned message is recorded as a 'notice' for the listed directory;
+  // depth is the listed directory's own (rootDir = 0).
+  directoryNotice?: (
+    depth: number,
+    directoryNames: readonly string[],
+    fileNames: readonly string[]
+  ) => string | null
   // A canonical file directly beneath every top-level session directory.
   fixedChildFileSegments?: readonly string[]
   // Sibling-subagent layouts (Claude `<session>/subagents/`, OMP's same-named

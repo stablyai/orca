@@ -192,7 +192,8 @@ export function isAiVaultSessionRecoverableEmpty(
 export type AiVaultScanIssue = {
   executionHostId?: ExecutionHostId
   agent: AiVaultAgent
-  // 'notice' rows are scanner commentary (issue-list overflow), never a failure.
+  // 'notice' rows are scanner commentary (issue-list overflow, a deliberately
+  // unscanned subtree), never a failure.
   kind?: 'host' | 'scope' | 'notice'
   path: string
   message: string

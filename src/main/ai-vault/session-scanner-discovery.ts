@@ -18,6 +18,7 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
+  directoryNotice?: SessionFileWalkOptions['directoryNotice']
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
   let refusedSidecar = false
@@ -29,7 +30,8 @@ export async function discoverFiles(args: {
       {
         extensions: new Set(args.extensions),
         filePredicate: args.filePredicate,
-        directoryPredicate: args.directoryPredicate
+        directoryPredicate: args.directoryPredicate,
+        directoryNotice: args.directoryNotice
       },
       async (path) => {
         try {
@@ -120,6 +122,13 @@ export type SessionFileWalkOptions = {
   // Return false to skip descending into a directory; depth 0 is a child of
   // rootDir, so pruned subtrees are never stat'd or parsed.
   directoryPredicate?: (name: string, depth: number) => boolean
+  // A returned message is recorded as a 'notice' for the listed directory;
+  // depth is the listed directory's own (rootDir = 0).
+  directoryNotice?: (
+    depth: number,
+    directoryNames: readonly string[],
+    fileNames: readonly string[]
+  ) => string | null
   readDirectory?: (dirPath: string) => Promise<Dirent[]>
   signal?: AbortSignal
 }
@@ -161,6 +170,15 @@ export async function forEachSessionFile(
       throw error
     }
     return
+  }
+
+  const notice = options.directoryNotice?.(
+    depth,
+    entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+    entries.filter((entry) => entry.isFile()).map((entry) => entry.name)
+  )
+  if (notice) {
+    recordSessionScanIssue(issues, { agent, kind: 'notice', path: dirPath, message: notice })
   }
 
   for (const entry of entries) {

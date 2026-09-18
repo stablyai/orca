@@ -12,6 +12,10 @@ import {
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
+import {
+  isOpenClawSessionDirectory,
+  openClawPrunedAgentNotice
+} from './session-scanner-openclaw-layout'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
@@ -74,6 +78,13 @@ export type AiVaultAgentSource = {
   contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
+  // Called per listed directory (depth: rootDir = 0); a returned message is
+  // recorded as a notice so a deliberately skipped subtree never vanishes silently.
+  directoryNotice?: (
+    depth: number,
+    directoryNames: readonly string[],
+    fileNames: readonly string[]
+  ) => string | null
   // Roots that are alternates for one install rather than distinct locations,
   // so the per-agent limit applies across them rather than to each.
   mergeRootDiscoveries?: boolean
@@ -224,6 +235,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ].map((stateDir) => (basename(stateDir) === 'agents' ? stateDir : join(stateDir, 'agents'))),
     extensions: ['.jsonl'],
     filePredicate: (filePath) => pathSegments(filePath).includes('sessions'),
+    // Each agent owns one sessions subtree; siblings can contain other agents' homes.
+    directoryPredicate: isOpenClawSessionDirectory,
+    directoryNotice: openClawPrunedAgentNotice,
     mergeRootDiscoveries: true
   },
   droid: {
