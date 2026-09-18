@@ -84,9 +84,30 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
   it('reports a staging failure so the renderer can retry', () => {
     const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(() => {
+        throw new Error('session serialization failed')
+      }),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
+    const event: { returnValue?: unknown } = {}
+    handler?.(event, {
+      sessions: [{ state: { activeWorktreeId: 'local' } }],
+      ui: { activeView: 'settings' }
+    })
+
+    expect(event.returnValue).toEqual({ ok: false, error: 'session serialization failed' })
+  })
+
+  it('does not veto the shutdown checkpoint when UI broadcast fails', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = {
       stageWorkspaceSessionBeforeUnload: vi.fn(),
       updateUI: vi.fn(() => {
-        throw new Error('disk full')
+        throw new Error('UI broadcast failed')
       }),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
@@ -94,29 +115,80 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
     const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
+    handler?.(event, {
+      sessions: [{ state: { activeWorktreeId: 'local' } }],
+      ui: { activeView: 'settings' }
+    })
 
-    expect(event.returnValue).toEqual({ ok: false })
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledTimes(1)
+    expect(store.updateUI).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+    expect(event.returnValue).toEqual({ ok: true })
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[app] Failed to update UI state before unload:',
+      expect.any(Error)
+    )
   })
 
-  it('does not queue persistence when staging is incomplete', async () => {
+  it('does not abort staging for remaining hosts when one session host fails', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const localSession = { activeWorktreeId: 'local' }
+    const remoteSession1 = { activeWorktreeId: 'remote-1' }
+    const remoteSession2 = { activeWorktreeId: 'remote-2' }
+
+    const stagedHosts: (string | undefined)[] = []
     const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      stageWorkspaceSessionBeforeUnload: vi.fn((_state, hostId?: string) => {
+        stagedHosts.push(hostId)
+        if (hostId === 'runtime:failing-host') {
+          throw new Error('host offline')
+        }
+      }),
       updateUI: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    store.updateUI.mockImplementation(() => {
-      throw new Error('invalid state')
-    })
     const handler = syncHandlers.get('app:stage-before-unload-sync')
     const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
+    handler?.(event, {
+      sessions: [
+        { state: localSession },
+        { state: remoteSession1, hostId: 'runtime:failing-host' },
+        { state: remoteSession2, hostId: 'runtime:working-host' }
+      ],
+      ui: { activeView: 'settings' }
+    })
+
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledTimes(3)
+    expect(stagedHosts).toEqual([undefined, 'runtime:failing-host', 'runtime:working-host'])
+    expect(event.returnValue).toEqual({ ok: false, error: 'host offline' })
+    expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not queue persistence when staging is incomplete', async () => {
+    const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(() => {
+        throw new Error('invalid state')
+      }),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
+    const event: { returnValue?: unknown } = {}
+    handler?.(event, {
+      sessions: [{ state: { activeWorktreeId: 'local' } }],
+      ui: { activeView: 'settings' }
+    })
 
     expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
-    expect(event.returnValue).toEqual({ ok: false })
-    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: false })
+    expect(event.returnValue).toEqual({ ok: false, error: 'invalid state' })
+    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({
+      ok: false,
+      error: 'invalid state'
+    })
   })
 
   it('stages synchronously without waiting on the durable write', () => {
@@ -175,7 +247,10 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     syncHandlers.get('app:stage-before-unload-sync')?.(event, { sessions: [], ui: {} })
 
     expect(event.returnValue).toEqual({ ok: true })
-    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: false })
+    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({
+      ok: false,
+      error: 'disk full'
+    })
   })
 
   it('fails the checkpoint when the durable write outlives its deadline', async () => {
@@ -195,7 +270,10 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
       await vi.advanceTimersByTimeAsync(SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
 
-      await expect(checkpoint).resolves.toEqual({ ok: false })
+      await expect(checkpoint).resolves.toEqual({
+        ok: false,
+        error: 'Timed out persisting staged renderer state'
+      })
       expect(store.flushPendingOrThrowAsync.mock.calls[0]?.[0]?.signal.aborted).toBe(true)
     } finally {
       vi.useRealTimers()

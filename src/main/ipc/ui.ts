@@ -53,8 +53,12 @@ export function registerUIHandlers(
   // another window) updates it — bi-directional sync, mirroring settings:changed.
   store.onUIChanged((ui) => {
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
+      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+        try {
+          window.webContents.send('ui:stateChanged', ui)
+        } catch (error) {
+          console.error('[ui] Failed to send ui:stateChanged:', error)
+        }
       }
     }
   })

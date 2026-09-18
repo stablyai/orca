@@ -104,6 +104,25 @@ describe('native preload destructive app actions', () => {
     )
   })
 
+  it('throws with the actual error when stageBeforeUnloadSync fails with error message', async () => {
+    const api = await loadApi()
+    sendSync.mockReturnValue({ ok: false, error: 'session write failed' })
+
+    expect(() => api.app.stageBeforeUnloadSync({ sessions: [], ui: {} })).toThrow(
+      'Failed to stage renderer state before unload: session write failed'
+    )
+    expect(sendSync).toHaveBeenCalledWith('app:stage-before-unload-sync', { sessions: [], ui: {} })
+  })
+
+  it('throws generic error when stageBeforeUnloadSync fails without error message', async () => {
+    const api = await loadApi()
+    sendSync.mockReturnValue({ ok: false })
+
+    expect(() => api.app.stageBeforeUnloadSync({ sessions: [], ui: {} })).toThrow(
+      'Failed to stage renderer state before unload.'
+    )
+  })
+
   it('preserves both macOS keyboard preload adapters', async () => {
     const api = await loadApi()
     invoke.mockResolvedValue(undefined)
