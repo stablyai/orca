@@ -10,6 +10,8 @@ import {
  *  against the 1 MiB frame ceiling on both the WebSocket and relay transports. */
 export const MOBILE_WEB_BUNDLE_CHUNK_BYTES = 48 * 1024
 
+/** Takes no params, and carries no params schema: the dispatcher substitutes `{}` for absent params,
+ *  so a `z.null()` schema could never be satisfied. The method declares `params: null` host-side. */
 export const MOBILE_WEB_BUNDLE_MANIFEST_METHOD = 'mobileWeb.bundle.manifest'
 export const MOBILE_WEB_BUNDLE_CHUNK_METHOD = 'mobileWeb.bundle.chunk'
 
@@ -35,8 +37,6 @@ export const MOBILE_WEB_BUNDLE_ERROR_CODES = hostUnionArms<MobileWebBundleErrorC
 })
 
 export const MobileWebBundleErrorCodeSchema = z.enum(MOBILE_WEB_BUNDLE_ERROR_CODES)
-
-export const MobileWebBundleManifestParamsSchema = z.null()
 
 export const MobileWebBundleManifestResultSchema = z
   .object({
@@ -73,7 +73,6 @@ export const MobileWebBundleChunkResultSchema = z
   })
   .strict()
 
-export type MobileWebBundleManifestParams = z.infer<typeof MobileWebBundleManifestParamsSchema>
 export type MobileWebBundleManifestResult = z.infer<typeof MobileWebBundleManifestResultSchema>
 export type MobileWebBundleChunkParams = z.infer<typeof MobileWebBundleChunkParamsSchema>
 export type MobileWebBundleChunkResult = z.infer<typeof MobileWebBundleChunkResultSchema>

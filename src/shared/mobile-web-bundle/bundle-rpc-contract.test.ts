@@ -10,7 +10,6 @@ import {
   MobileWebBundleChunkParamsSchema,
   MobileWebBundleChunkResultSchema,
   MobileWebBundleErrorCodeSchema,
-  MobileWebBundleManifestParamsSchema,
   MobileWebBundleManifestResultSchema,
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
@@ -85,11 +84,6 @@ describe('MobileWebBundleErrorCodeSchema', () => {
 })
 
 describe('mobileWeb.bundle.manifest payloads', () => {
-  it('takes null params', () => {
-    expect(MobileWebBundleManifestParamsSchema.safeParse(null).success).toBe(true)
-    expect(MobileWebBundleManifestParamsSchema.safeParse({}).success).toBe(false)
-  })
-
   it('carries a parsed manifest and the advertised chunk size', () => {
     const reply = { manifest: VALID_MANIFEST, chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
     const parsed = MobileWebBundleManifestResultSchema.safeParse(reply)
