@@ -131,7 +131,7 @@ describe('the app bundle', () => {
     )
     expect(shipped).not.toContain('react-native-web')
     expect(shipped).not.toContain('lucide')
-    expect(shipped).not.toContain('orca-web-route-manifest')
+    expect(shipped).not.toContain('route-manifest')
   })
 
   it('embeds no absolute path from this checkout', async () => {
