@@ -21,6 +21,17 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.io.ByteArrayInputStream
 
+/**
+ * What the interceptor is currently allowed to answer. One immutable value, because the map and the
+ * host it is keyed against are written on the main thread and read on Chromium's: two fields would
+ * let a request see a new generation against the old host, and a plain field would let it see a
+ * stale null and refuse a frame we had just served.
+ */
+private class MobileWebShellServed(
+  val generation: MobileWebShellGeneration,
+  val originHost: String
+)
+
 @SuppressLint("ViewConstructor", "SetJavaScriptEnabled")
 internal class OrcaMobileWebShellView(
   context: Context,
@@ -36,8 +47,7 @@ internal class OrcaMobileWebShellView(
   // Written on the main thread, read from onPageStarted/onPageFinished, which Chromium runs after
   // the failure that hid the view; `shouldInterceptRequest` also runs off the main thread.
   @Volatile private var documentFailed = false
-  private var generation: MobileWebShellGeneration? = null
-  private var originHost: String? = null
+  @Volatile private var served: MobileWebShellServed? = null
   private var blocker: ScriptHandler? = null
   private var webView: WebView? = createWebView()
 
@@ -91,8 +101,7 @@ internal class OrcaMobileWebShellView(
       emit(loadState.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
       return
     }
-    generation = loaded
-    originHost = host
+    served = MobileWebShellServed(loaded, host)
     view.visibility = View.VISIBLE
     view.loadUrl("$origin/")
   }
@@ -103,8 +112,7 @@ internal class OrcaMobileWebShellView(
     webView = null
     blocker?.remove()
     blocker = null
-    generation = null
-    originHost = null
+    served = null
     view.stopLoading()
     removeView(view)
     view.destroy()
@@ -164,7 +172,7 @@ internal class OrcaMobileWebShellView(
   }
 
   private fun isDocumentUrl(url: Uri): Boolean {
-    val host = originHost ?: return false
+    val host = served?.originHost ?: return false
     return resolveMobileWebShellRequestPath(requestParts(url), host) == "/"
   }
 
@@ -186,15 +194,14 @@ internal class OrcaMobileWebShellView(
   )
 
   private fun serveRequest(request: WebResourceRequest): WebResourceResponse? {
-    val host = originHost ?: return null
-    val entries = generation?.entries ?: return null
+    val current = served ?: return null
     val parts = requestParts(
       request.url,
       method = request.method,
       hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
     )
-    val path = resolveMobileWebShellRequestPath(parts, host) ?: return null
-    val asset = entries[path] ?: return null
+    val path = resolveMobileWebShellRequestPath(parts, current.originHost) ?: return null
+    val asset = current.generation.entries[path] ?: return null
     val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
     val headers = mutableMapOf(
       "Content-Length" to bytes.size.toString(),
