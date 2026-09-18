@@ -1,0 +1,20 @@
+// Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
+// Dark: built by `build:mobile-web:app` into out/mobile-web-app, shipped by nothing until C1.
+import type { PropsWithChildren } from 'react'
+import { createRoot } from 'react-dom/client'
+import { ExpoRoot } from 'expo-router'
+import { RpcClientProvider } from '../src/transport/client-context'
+// Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
+import routeContext from './route-manifest'
+
+// The route tree starts at app/h, below the native root layout that owns the provider, so the
+// page supplies it here through ExpoRoot's own wrapper rather than mounting the native shell.
+function RootProviders({ children }: PropsWithChildren) {
+  return <RpcClientProvider>{children}</RpcClientProvider>
+}
+
+const container = document.getElementById('root')
+if (!container) {
+  throw new Error('[orca-mobile-web-app] #root missing')
+}
+createRoot(container).render(<ExpoRoot context={routeContext} wrapper={RootProviders} />)
