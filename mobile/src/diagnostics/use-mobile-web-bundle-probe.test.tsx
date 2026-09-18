@@ -63,7 +63,8 @@ type ProbeHarness = {
 
 async function renderProbe(hostId: string | null): Promise<ProbeHarness> {
   let latest: ReturnType<typeof useMobileWebBundleProbe> | null = null
-  let renderer: ReactTestRenderer | null = null
+  // A box, not a `let`: assigning inside the callback leaves a `let` narrowed to `null`.
+  const rendered: { tree: ReactTestRenderer | null } = { tree: null }
 
   function Probe(): null {
     latest = useMobileWebBundleProbe(hostId)
@@ -71,9 +72,8 @@ async function renderProbe(hostId: string | null): Promise<ProbeHarness> {
   }
 
   await act(async () => {
-    renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+    rendered.tree = create(createElement(RpcClientProvider, null, createElement(Probe)))
   })
-  const mounted = renderer as ReactTestRenderer | null
   const read = () => {
     if (!latest) {
       throw new Error('probe did not render')
@@ -94,7 +94,7 @@ async function renderProbe(hostId: string | null): Promise<ProbeHarness> {
     },
     unmount: async () => {
       await act(async () => {
-        mounted?.unmount()
+        rendered.tree?.unmount()
       })
     }
   }
@@ -182,18 +182,17 @@ describe('useMobileWebBundleProbe', () => {
   })
 
   it('aborts the run it started when the screen goes away', async () => {
-    let captured: AbortSignal | null = null
+    const captured: { signal: AbortSignal | null } = { signal: null }
     fetchMock.mockImplementation((args: { signal?: AbortSignal }) => {
-      captured = args.signal ?? null
+      captured.signal = args.signal ?? null
       return new Promise(() => {})
     })
     const probe = await renderProbe(HOST.id)
     await probe.run()
 
-    const signal = captured as AbortSignal | null
-    expect(signal?.aborted).toBe(false)
+    expect(captured.signal?.aborted).toBe(false)
     await probe.unmount()
 
-    expect(signal?.aborted).toBe(true)
+    expect(captured.signal?.aborted).toBe(true)
   })
 })
