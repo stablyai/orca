@@ -9,6 +9,8 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
+  // A manually created group starts empty — no repo to move, unlike create-from-repo.
+  | { type: 'create' }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
 
@@ -81,6 +83,10 @@ export function useProjectGroupDialogs(args: {
     setNameDialog({ type: 'create-from-repo', repo })
   }, [])
 
+  const handleCreateStandaloneProjectGroup = useCallback(() => {
+    setNameDialog({ type: 'create' })
+  }, [])
+
   const handleMoveProjectToGroup = useCallback(
     (repo: Repo, groupId: string) => {
       if (repo.projectGroupId === groupId) {
@@ -115,6 +121,10 @@ export function useProjectGroupDialogs(args: {
         if (group) {
           await moveProjectToGroup(nameDialog.repo.id, group.id)
         }
+        return
+      }
+      if (nameDialog.type === 'create') {
+        await createProjectGroup(name)
         return
       }
       const renamed = await updateProjectGroup(
@@ -196,6 +206,7 @@ export function useProjectGroupDialogs(args: {
     deleteProjectNames,
     removeContainedProjects,
     handleCreateGroupFromRepo,
+    handleCreateStandaloneProjectGroup,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRenameProjectGroup,
