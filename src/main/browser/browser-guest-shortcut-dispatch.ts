@@ -98,7 +98,10 @@ export function forwardGuestShortcutInput(
   if (moveTabDirection !== null) {
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
-    renderer?.send('ui:moveActiveTab', moveTabDirection)
+    renderer?.send('ui:moveActiveTab', {
+      direction: moveTabDirection,
+      sourceId: browserTabId
+    })
     return true
   }
 

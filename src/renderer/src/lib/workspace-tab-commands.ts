@@ -40,7 +40,7 @@ export type WorkspaceTabCommand =
       floatingPanelGuestOwned?: boolean
     }
   | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
-  | { type: 'move-active'; direction: -1 | 1 }
+  | { type: 'move-active'; direction: -1 | 1; target?: WorkspaceTabTarget }
   | { type: 'previous-recent' }
 
 type TabState = ReturnType<typeof useAppStore.getState>
@@ -110,27 +110,63 @@ function resolveCloseTarget(
   return null
 }
 
-function moveActiveWorkspaceTab(state: TabState, direction: -1 | 1): boolean {
+function resolveMoveTarget(
+  state: TabState,
+  target?: WorkspaceTabTarget
+): { worktreeId: string; tab: Tab } | null {
+  if (target?.kind === 'tab') {
+    const tab = (state.unifiedTabsByWorktree[target.worktreeId] ?? []).find(
+      (candidate) => candidate.id === target.tabId
+    )
+    return tab ? { worktreeId: target.worktreeId, tab } : null
+  }
+  if (target?.kind === 'browser-source') {
+    const owner = resolveBrowserWorkspaceOwner(state, target.sourceId)
+    if (!owner) {
+      return null
+    }
+    const tab = (state.unifiedTabsByWorktree[owner.worktreeId] ?? []).find(
+      (candidate) => candidate.contentType === 'browser' && candidate.entityId === owner.workspaceId
+    )
+    return tab ? { worktreeId: owner.worktreeId, tab } : null
+  }
   const worktreeId = state.activeWorktreeId
   if (!worktreeId) {
-    return false
+    return null
   }
   const groupId = state.activeGroupIdByWorktree[worktreeId]
   const group = groupId
     ? (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
     : undefined
   if (!group?.activeTabId) {
+    return null
+  }
+  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === group.activeTabId
+  )
+  return tab ? { worktreeId, tab } : null
+}
+
+function moveActiveWorkspaceTab(
+  state: TabState,
+  direction: -1 | 1,
+  target?: WorkspaceTabTarget
+): boolean {
+  const resolved = resolveMoveTarget(state, target)
+  if (!resolved) {
     return false
   }
-  const visibleTabIds = getActiveTabNavOrder(state, worktreeId).flatMap((tab) =>
+  const { worktreeId, tab } = resolved
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === tab.groupId
+  )
+  if (!group) {
+    return false
+  }
+  const visibleTabIds = getActiveTabNavOrder(state, worktreeId, {}, group.id).flatMap((tab) =>
     tab.tabId ? [tab.tabId] : []
   )
-  const nextOrder = moveTabIdWithinGroupOrder(
-    group.tabOrder,
-    visibleTabIds,
-    group.activeTabId,
-    direction
-  )
+  const nextOrder = moveTabIdWithinGroupOrder(group.tabOrder, visibleTabIds, tab.id, direction)
   if (!nextOrder) {
     return false
   }
@@ -138,7 +174,7 @@ function moveActiveWorkspaceTab(state: TabState, direction: -1 | 1): boolean {
   mirrorWebRuntimeTabMove({
     kind: 'reorder',
     worktreeId,
-    tabId: group.activeTabId,
+    tabId: tab.id,
     targetGroupId: group.id,
     tabOrder: nextOrder
   })
@@ -219,7 +255,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if (isFloatingWorkspacePanelFocused()) {
       return moveFloatingWorkspaceTab(state, command.direction)
     }
-    return moveActiveWorkspaceTab(state, command.direction)
+    return moveActiveWorkspaceTab(state, command.direction, command.target)
   }
   if (isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)
