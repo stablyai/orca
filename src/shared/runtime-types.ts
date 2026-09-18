@@ -191,6 +191,7 @@ export type {
   RuntimeSpeechSetupState,
   RuntimeWorktreeAgentRow,
   RuntimeWorktreeCreateResult,
+  RuntimeWorktreeListHostScope,
   RuntimeWorktreeListResult,
   RuntimeWorktreePsConditionalResult,
   RuntimeWorktreePsResult,
