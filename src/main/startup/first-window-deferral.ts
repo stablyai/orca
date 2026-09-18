@@ -20,7 +20,8 @@ export function runAfterFirstWindowShown(task: () => void, fallbackMs: number): 
     clearTimeout(fallback)
     // Why setImmediate: keep the work off the event handler that reveals the window, so it paints first.
     // Why the guard: off whenReady's promise chain a synchronous throw is an uncaughtException, and
-    // installUncaughtPipeErrorGuard re-throws those fatally — deferred startup chores are never that.
+    // installUncaughtPipeErrorGuard re-throws those into Electron's handler, which raises a
+    // modal error box — deferred startup chores are never worth interrupting a user for.
     setImmediate(() => {
       try {
         task()

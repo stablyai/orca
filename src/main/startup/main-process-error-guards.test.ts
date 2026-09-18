@@ -263,4 +263,107 @@ describe('main-process fatal error guards (issue #9441)', () => {
     expect(scheduled).not.toBeNull()
     expect(() => scheduled?.()).toThrow(error)
   })
+
+  // Field evidence: win32 main 88ffccb0 recorded main_uncaught_exception at
+  // 2026-09-14T08:10:01Z (RangeError: Failed to allocate memory) and the SAME
+  // launch was still reporting at 12:30Z — 4h20m with the guard removed.
+  it('re-arms the guard when the re-throw does not end the process', async () => {
+    vi.resetModules()
+    const record = vi.fn()
+    vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
+      recordDurableCrashBreadcrumb: record
+    }))
+    const { installUncaughtPipeErrorGuard } = await import('./main-process-error-guards')
+    const originalOn = process.on.bind(process)
+    const originalOff = process.off.bind(process)
+    let handler: ((error: unknown) => void) | null = null
+    let installs = 0
+    let listenerCount = 0
+    const pending: (() => void)[] = []
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(process, 'on').mockImplementation(((event, listener) => {
+      if (event === 'uncaughtException') {
+        handler = listener as (error: unknown) => void
+        installs += 1
+        listenerCount += 1
+        return process
+      }
+      return originalOn(event, listener)
+    }) as typeof process.on)
+    vi.spyOn(process, 'off').mockImplementation(((event, listener) => {
+      if (event === 'uncaughtException') {
+        handler = null
+        listenerCount -= 1
+        return process
+      }
+      return originalOff(event, listener)
+    }) as typeof process.off)
+    vi.spyOn(globalThis, 'setImmediate').mockImplementation(((callback) => {
+      pending.push(callback as () => void)
+      return {} as NodeJS.Immediate
+    }) as typeof setImmediate)
+
+    installUncaughtPipeErrorGuard()
+    expect(installs).toBe(1)
+
+    expect(() => handler?.(new Error('survivable'))).not.toThrow()
+    expect(handler === null).toBe(true)
+    // The re-throw tick queues the re-arm, then throws; a survivor runs the queued tick.
+    const rethrow = pending.shift()
+    // Why this ordering matters: if the guard were armed BEFORE the re-throw, our own
+    // listener would catch it, record it again, and re-throw forever.
+    let armedDuringRethrow: boolean | null = null
+    expect(() => {
+      try {
+        rethrow?.()
+      } finally {
+        armedDuringRethrow = handler !== null
+      }
+    }).toThrow('survivable')
+    expect(armedDuringRethrow).toBe(false)
+    // Drain to empty, not just one: add/remove balance is the whole fix, so a second
+    // queued arm would leak a listener per exception and re-record N times.
+    while (pending.length > 0) {
+      pending.shift()?.()
+    }
+
+    expect(installs).toBe(2)
+    expect(listenerCount).toBe(1)
+    expect(handler === null).toBe(false)
+
+    // The whole point: a later uncaught exception in the same launch is still recorded.
+    record.mockClear()
+    expect(() => handler?.(new Error('after survival'))).not.toThrow()
+    expect(record).toHaveBeenCalledWith(
+      'main_uncaught_exception',
+      expect.objectContaining({ errorMessage: 'after survival' }),
+      'main_uncaught_exception'
+    )
+  })
+
+  it('windows uncaught exceptions after the first, so a survived-guard storm cannot churn', async () => {
+    vi.resetModules()
+    const record = vi.fn()
+    vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
+      recordDurableCrashBreadcrumb: record
+    }))
+    const { recordFatalMainProcessError } = await import('./main-process-error-guards')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+
+    for (let i = 0; i < 25; i += 1) {
+      recordFatalMainProcessError('main_unhandled_rejection', new Error(`storm ${i}`))
+    }
+    expect(record).toHaveBeenCalledTimes(20)
+
+    // First one stays exempt — it may be the record before a fatal re-throw.
+    recordFatalMainProcessError('main_uncaught_exception', new Error('first'))
+    expect(record).toHaveBeenCalledTimes(21)
+
+    // Every later one shares the exhausted window instead of bypassing it.
+    for (let i = 0; i < 5; i += 1) {
+      recordFatalMainProcessError('main_uncaught_exception', new Error(`later ${i}`))
+    }
+    expect(record).toHaveBeenCalledTimes(21)
+  })
 })
