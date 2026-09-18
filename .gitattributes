@@ -54,3 +54,29 @@
 /mobile/src/** text eol=lf
 /mobile/app/** text eol=lf
 /mobile/web-entry/** text eol=lf
+# The blanket pin above would mark a future binary as text; exempt the asset types an
+# RN page actually carries, the same way src/mobile-web exempts its PNG.
+/mobile/src/**/*.png -text
+/mobile/src/**/*.jpg -text
+/mobile/src/**/*.jpeg -text
+/mobile/src/**/*.webp -text
+/mobile/src/**/*.ttf -text
+/mobile/src/**/*.otf -text
+/mobile/src/**/*.woff -text
+/mobile/src/**/*.woff2 -text
+/mobile/app/**/*.png -text
+/mobile/app/**/*.jpg -text
+/mobile/app/**/*.jpeg -text
+/mobile/app/**/*.webp -text
+/mobile/app/**/*.ttf -text
+/mobile/app/**/*.otf -text
+/mobile/app/**/*.woff -text
+/mobile/app/**/*.woff2 -text
+/mobile/web-entry/**/*.png -text
+/mobile/web-entry/**/*.jpg -text
+/mobile/web-entry/**/*.jpeg -text
+/mobile/web-entry/**/*.webp -text
+/mobile/web-entry/**/*.ttf -text
+/mobile/web-entry/**/*.otf -text
+/mobile/web-entry/**/*.woff -text
+/mobile/web-entry/**/*.woff2 -text
