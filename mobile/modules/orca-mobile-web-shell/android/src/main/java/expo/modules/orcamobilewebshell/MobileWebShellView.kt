@@ -52,7 +52,9 @@ internal class OrcaMobileWebShellView(
   private val bridgeGate = MobileWebShellBridgeGate()
   // Chromium hands a reply proxy to the listener, so native cannot speak first. The envelope has
   // the page send `ready` before anything is delivered, so there is nothing to speak first about.
-  private var replyProxy: JavaScriptReplyProxy? = null
+  // Volatile for the same reason as `documentFailed`: `reportDocumentFailure` drops the proxy from
+  // whichever thread `shouldInterceptRequest` ran on, and the listener reads it on the UI thread.
+  @Volatile private var replyProxy: JavaScriptReplyProxy? = null
   private var applied: MobileWebShellAppliedProps? = null
   private val loadState = MobileWebShellLoadStateMachine()
   // Written on the main thread, read from onPageStarted/onPageFinished, which Chromium runs after

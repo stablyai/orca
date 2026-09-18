@@ -22,13 +22,16 @@ internal data class MobileWebShellLoadEmission(val state: String, val reason: St
  * generation was already refused, so without this a `ready` or a second reason lands on top of a
  * failure the caller has already acted on. Consecutive duplicates are dropped as well.
  *
- * Pure, and the same rule on both platforms, so a JVM test and a `swiftc` check can hold it.
+ * Pure, and the same rule on both platforms, so a JVM test and a `swiftc` check can hold it. The
+ * two fields a caller reads directly are volatile: Android decides a document failure from
+ * `shouldInterceptRequest`, which Chromium does not run on the UI thread.
  */
 internal class MobileWebShellLoadStateMachine {
   private var terminal = false
   private var last: MobileWebShellLoadEmission? = null
 
   /** Which load this machine is reporting on. Read before deferring work, checked on delivery. */
+  @Volatile
   var epoch: Int = 0
     private set
 
@@ -38,6 +41,7 @@ internal class MobileWebShellLoadStateMachine {
    * directory or the bridge prop changed, so without this it passes every origin check and speaks
    * for a load the caller has already been told is `loading`.
    */
+  @Volatile
   var hasCommittedDocument = false
     private set
 
