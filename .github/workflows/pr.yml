@@ -780,6 +780,12 @@ jobs:
       - name: Project web client from renderer build
         run: pnpm run build:web-from-renderer
 
+      # Why here and not inside "Build package inputs": this job assembles packaging inputs step by
+      # step instead of calling build:release, and electron-builder's beforePack guard hard-fails
+      # without out/mobile-web.
+      - name: Build mobile web bundle
+        run: pnpm run build:mobile-web
+
       - name: Build native components
         run: pnpm run build:native
 
