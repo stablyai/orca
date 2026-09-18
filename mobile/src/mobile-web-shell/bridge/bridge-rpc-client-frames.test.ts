@@ -43,19 +43,27 @@ const INIT: BridgeHostMessage = {
   grants: { rpc: { maxPendingRequests: 64, maxSubscriptions: 32 }, native: [] }
 }
 
-function createPageClient(send?: (json: string) => void) {
+type PageClientOptions = {
+  send?: (json: string) => void
+  /** A port that ignores its own unsubscribe, which is the only way to observe the read guard. */
+  keepDeliveringAfterUnsubscribe?: boolean
+}
+
+function createPageClient(options: PageClientOptions = {}) {
   const sent: string[] = []
   const diagnostics: BridgeRpcClientDiagnostic[] = []
   let handler: ((json: string) => void) | null = null
   const client = createBridgeRpcClient({
     send: (json) => {
       sent.push(json)
-      send?.(json)
+      options.send?.(json)
     },
     onMessage: (received) => {
       handler = received
       return () => {
-        handler = null
+        if (options.keepDeliveringAfterUnsubscribe !== true) {
+          handler = null
+        }
       }
     },
     onDiagnostic: (diagnostic) => {
@@ -237,6 +245,29 @@ describe('bridge client after close', () => {
     expect(page.sent).toHaveLength(2)
     expect(() => page.client.getState()).toThrow(BridgeClientClosedError)
   })
+
+  it('reads nothing more, even from a port that kept delivering', () => {
+    const page = createPageClient({ keepDeliveringAfterUnsubscribe: true })
+    page.start()
+    page.client.subscribe('terminal.stream', {}, vi.fn())
+    const id = idOf(page, 0)
+    page.client.close()
+    page.deliver(INIT)
+    page.deliver(eventFrame(id, 1, 'late'))
+    page.deliverRaw('{ not json')
+    expect(page.diagnostics).toEqual([])
+    expect(() => page.client.getState()).toThrow(BridgeClientClosedError)
+  })
+
+  it('says goodbye once, without a cancel for each stream it owned', () => {
+    const page = createPageClient()
+    page.start()
+    page.client.subscribe('terminal.stream', {}, vi.fn())
+    page.client.subscribe('terminal.stream', {}, vi.fn())
+    page.client.close()
+    expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
+    expect(page.frames().filter((frame) => frame.type === 'close')).toHaveLength(1)
+  })
 })
 
 describe('bridge client replies', () => {
@@ -314,6 +345,51 @@ describe('bridge client replies', () => {
     await expect(answer).resolves.toEqual(payload)
   })
 
+  it('gives back the assembler slot of every id it settles', async () => {
+    const page = createPageClient()
+    page.start()
+    const settled: Promise<unknown>[] = []
+    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+      const abandoned = page.client.sendRequest('worktree.ps')
+      const id = idOf(page, index)
+      page.deliver({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'reply',
+        id,
+        part: { i: 0, of: 2 },
+        chunk: '{"a":'
+      })
+      page.deliver({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'error',
+        id,
+        error: { category: 'Error', message: 'gone', isRpcDeliveryUnknown: false }
+      })
+      settled.push(abandoned.catch(() => undefined))
+    }
+    const answer = page.client.sendRequest('worktree.ps')
+    const id = idOf(page, BRIDGE_MAX_PENDING_REQUESTS)
+    const payload = { id, ok: true, result: 'assembled', _meta: { runtimeId: 'runtime-a' } }
+    const serialized = JSON.stringify(payload)
+    const cut = Math.floor(serialized.length / 2)
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id,
+      part: { i: 0, of: 2 },
+      chunk: serialized.slice(0, cut)
+    })
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id,
+      part: { i: 1, of: 2 },
+      chunk: serialized.slice(cut)
+    })
+    await expect(answer).resolves.toEqual(payload)
+    await Promise.all(settled)
+  })
+
   it('drops a reply for an id it never opened', async () => {
     const page = createPageClient()
     page.start()
@@ -345,9 +421,11 @@ describe('bridge client refusals and send failures', () => {
 
   it('fails a request whose frame never left the page, without the delivery mark', async () => {
     let live = true
-    const page = createPageClient(() => {
-      if (!live) {
-        throw new Error('the port is gone')
+    const page = createPageClient({
+      send: () => {
+        if (!live) {
+          throw new Error('the port is gone')
+        }
       }
     })
     page.start()
