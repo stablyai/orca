@@ -39,6 +39,8 @@ export type AutomationDraft = {
   prompt: string
   agentId: TuiAgent
   projectId: string
+  /** Create-only: each of these gets its own copy of the automation on save. */
+  extraProjectIds: string[]
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
   baseBranch: string
@@ -196,6 +198,7 @@ export function AutomationEditorDialog({
             destination={destination}
             isHermesTarget={isHermesTarget}
             isHermesCreate={isHermesCreate}
+            isOrcaCreate={isCreateMode && !isHermesTarget}
             repos={repos}
             projectHostSetups={projectHostSetups}
             automationYamlHooksByRepoKey={automationYamlHooksByRepoKey}

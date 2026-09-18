@@ -23,6 +23,7 @@ const BASE_DRAFT: AutomationDraft = {
   prompt: '',
   agentId: 'codex',
   projectId: '',
+  extraProjectIds: [],
   workspaceMode: 'existing',
   workspaceId: '',
   baseBranch: '',

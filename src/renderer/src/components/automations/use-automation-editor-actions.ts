@@ -64,6 +64,7 @@ export function useAutomationEditorActions({
       prompt: '',
       agentId: defaultAgent,
       projectId: target.projectId,
+      extraProjectIds: [],
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,
       baseBranch: '',
@@ -196,6 +197,7 @@ export function useAutomationEditorActions({
       setDraft((current) => ({
         ...current,
         projectId,
+        extraProjectIds: current.extraProjectIds.filter((id) => id !== projectId),
         workspaceId: currentDefaultWorktree?.id ?? '',
         baseBranch: ''
       }))
