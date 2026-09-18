@@ -5,6 +5,7 @@ import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 import { omitRecordKeys } from './record-key-omission'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -15,6 +16,7 @@ export function applyRemoveWorktreeSuccessState(
   // Why outside `set`: it is module-scope, not store state. Dropping it also
   // re-arms the once-per-workspace warning if this id is ever added back.
   forgetAmbiguousOwnerWarnings([worktreeId])
+  let removedBrowserPageIds: string[] = []
   set((s) => {
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
@@ -35,6 +37,19 @@ export function applyRemoveWorktreeSuccessState(
       }
     }
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
+    const browserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
+    const removedBrowserWorkspaceIds = new Set<string>()
+    for (const workspace of s.browserTabsByWorktree[worktreeId] ?? []) {
+      removedBrowserWorkspaceIds.add(workspace.id)
+    }
+    for (const [workspaceId, pages] of Object.entries(browserPagesByWorkspace)) {
+      if (pages.some((page) => page.worktreeId === worktreeId)) {
+        removedBrowserWorkspaceIds.add(workspaceId)
+      }
+    }
+    removedBrowserPageIds = [...removedBrowserWorkspaceIds].flatMap((workspaceId) =>
+      (browserPagesByWorkspace[workspaceId] ?? []).map((page) => page.id)
+    )
     // Why guarded: a removed worktree usually has no open file, and an unconditional
     // filter would hand openFiles a new identity anyway — the sibling purge path
     // already does this.
@@ -87,6 +102,9 @@ export function applyRemoveWorktreeSuccessState(
       activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
       openFiles: nextOpenFiles,
       browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),
+      browserPagesByWorkspace: omitRecordKeys(browserPagesByWorkspace, [
+        ...removedBrowserWorkspaceIds
+      ]),
       // Why: closeBrowserTab records a Cmd+Shift+T undo snapshot, but a deleted worktree's tabs can't be restored; purge it.
       recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
       activeFileIdByWorktree: omitByWorktree(s.activeFileIdByWorktree),
@@ -140,4 +158,7 @@ export function applyRemoveWorktreeSuccessState(
       sortEpoch: s.sortEpoch + 1
     }
   })
+  for (const pageId of removedBrowserPageIds) {
+    releaseBrowserPageMount(pageId)
+  }
 }

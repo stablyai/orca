@@ -23,6 +23,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import {
+  admitBrowserPageMount,
+  isBrowserPageMountAdmitted,
+  releaseBrowserPageMount
+} from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import {
   getAgentHibernationPaneOutputEpoch,
   recordAgentHibernationPaneOutput,
   resetAgentHibernationOutputActivityForTests
@@ -171,6 +176,42 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
   })
 
+  it('single removeWorktree evicts browser pages and their mount admissions', async () => {
+    const store = createTestStore()
+    const WS1 = 'single-ws-1'
+    const WS2 = 'single-ws-2'
+    const P1 = 'single-page-1'
+    const P2 = 'single-page-2'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: WT2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      browserTabsByWorktree: {
+        [WT1]: [makeWorkspace(WS1, WT1)],
+        [WT2]: [makeWorkspace(WS2, WT2)]
+      },
+      browserPagesByWorkspace: {
+        [WS1]: [makePage(P1, WS1, WT1)],
+        [WS2]: [makePage(P2, WS2, WT2)]
+      }
+    })
+    admitBrowserPageMount(P1)
+    admitBrowserPageMount(P2)
+
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
+
+    expect(result).toEqual({ ok: true })
+    const s = store.getState()
+    expect(s.browserPagesByWorkspace[WS1]).toBeUndefined()
+    expect(s.browserPagesByWorkspace[WS2]).toBeDefined()
+    expect(isBrowserPageMountAdmitted(P1)).toBe(false)
+    expect(isBrowserPageMountAdmitted(P2)).toBe(true)
+    releaseBrowserPageMount(P2)
+  })
+
   it('worktree removal drops the hibernation output-epoch map for the removed worktree only', () => {
     const store = createTestStore()
     const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -274,6 +315,8 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     const WS2 = 'ws-2'
     const P1 = 'page-1'
     const P2 = 'page-2'
+    admitBrowserPageMount(P1)
+    admitBrowserPageMount(P2)
     seedStore(store, {
       worktreesByRepo: {
         repo1: [
@@ -313,6 +356,8 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.pendingAddressBarFocusByTabId[WS1]).toBeUndefined()
     expect(s.pendingAddressBarFocusByTabId[P1]).toBeUndefined()
     expect(s.recentlyClosedBrowserPagesByWorkspace[WS1]).toBeUndefined()
+    expect(isBrowserPageMountAdmitted(P1)).toBe(false)
+    expect(isBrowserPageMountAdmitted(P2)).toBe(true)
     // Surviving worktree's entries remain (guard over-eviction).
     expect(s.browserAnnotationsByPageId[P2]).toBeDefined()
     expect(s.remoteBrowserPageHandlesByPageId[P2]).toBeDefined()
@@ -320,5 +365,6 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.pendingAddressBarFocusByTabId[WS2]).toBe(true)
     expect(s.pendingAddressBarFocusByTabId[P2]).toBe(true)
     expect(s.recentlyClosedBrowserPagesByWorkspace[WS2]).toBeDefined()
+    releaseBrowserPageMount(P2)
   })
 })

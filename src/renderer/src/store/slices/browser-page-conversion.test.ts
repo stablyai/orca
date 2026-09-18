@@ -3,6 +3,10 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { browserPageSchema } from '../../../../shared/workspace-session-browser-schema'
 import { createTestStore, makeWorktree } from './store-test-helpers'
+import {
+  isBrowserPageMountAdmitted,
+  releaseBrowserPageMount
+} from '../../components/browser-pane/host-guest/browser-page-mount-admission'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn(), callRuntimeRpc: vi.fn() }))
 vi.mock('@/lib/doc-preview-grants', () => ({
@@ -83,6 +87,22 @@ describe('convertBrowserPage doc→web', () => {
     expect(workspace?.url).toBe('https://example.com/')
     expect(workspace?.docLocation ?? null).toBeNull()
     expect(workspace?.activePageId).toBe(converted?.id)
+  })
+
+  it('admits the replacement URL page when converting a background document', () => {
+    const store = createStoreWithWorktree()
+    const { pageId } = createDocTab(store)
+
+    const converted = store.getState().convertBrowserPage(pageId, {
+      kind: 'web',
+      url: 'https://example.com/'
+    })
+
+    expect(converted).not.toBeNull()
+    expect(isBrowserPageMountAdmitted(converted?.id ?? '')).toBe(true)
+    if (converted) {
+      releaseBrowserPageMount(converted.id)
+    }
   })
 
   it('releases the old grant exactly once, after the store stops naming the document', () => {

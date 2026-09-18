@@ -54,6 +54,19 @@ export function collectWorktreePurgeDoomedIds(
     // Why: drop the auto-derived detached-HEAD display name so the module-level map doesn't retain removed worktrees for the session.
     forgetDetachedHeadAutoDerivedDisplayName(id)
   }
+  // Browser page maps can outlive their workspace rows after an interrupted teardown. Treat any
+  // page carrying a doomed worktree id as doomed too so purge releases its mount admission.
+  for (const [workspaceId, pages] of Object.entries(s.browserPagesByWorkspace)) {
+    if (!pages.some((page) => worktreeIdSet.has(page.worktreeId))) {
+      continue
+    }
+    doomedBrowserWorkspaceIds.add(workspaceId)
+    for (const page of pages) {
+      if (worktreeIdSet.has(page.worktreeId)) {
+        doomedPageIds.add(page.id)
+      }
+    }
+  }
   // Why: same rationale for doomed tabs' foreground last-seen timestamps and agent-startup delivery guards — retired tab ids never recur.
   forgetForegroundTerminalTabs(doomedTabIds)
   forgetAgentStartupDeliveriesForTabs(doomedTabIds)

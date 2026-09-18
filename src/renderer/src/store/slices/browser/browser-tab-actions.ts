@@ -49,7 +49,9 @@ export function createBrowserTabActions(
         browserPageId,
         options?.docLocation
       )
-      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+      // Runtime-backed pages need their pane mounted to exist as a background tab at all;
+      // the stream itself still opens only on activation. #19633 admitted local pages only.
+      if (!options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
       // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.

@@ -17,6 +17,7 @@ import {
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-doc-history'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function createBrowserHydrationActions(
   set: BrowserSliceSet,
@@ -26,6 +27,13 @@ export function createBrowserHydrationActions(
     hydrateBrowserSession: (session, options) => {
       const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
       const currentState = get()
+      // Hydration replaces the page registry wholesale and restored pages intentionally start
+      // lazy. Release admissions from the pre-hydration registry before those ids become detached.
+      for (const pages of Object.values(currentState.browserPagesByWorkspace)) {
+        for (const page of pages) {
+          releaseBrowserPageMount(page.id)
+        }
+      }
       const validWorktreeIdsForCleanup = buildValidWorktreeIdsForSessionHydration(
         currentState,
         Object.keys(persistedTabsByWorktree)

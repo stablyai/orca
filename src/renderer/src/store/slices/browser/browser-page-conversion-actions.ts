@@ -12,6 +12,10 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { isLocalBrowserPageOwner } from './browser-host-state'
+import {
+  admitBrowserPageMount,
+  releaseBrowserPageMount
+} from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,
@@ -40,6 +44,7 @@ export function createBrowserPageConversionActions(
       )
       let converted: BrowserPage | null = null
       let docPageIdToRelease: string | null = null
+      let oldPageIdToReleaseMount: string | null = null
       let remotePageToClose: { worktreeId: string; handle: RemoteBrowserPageHandle } | null = null
       set((s) => {
         const plan = planBrowserPageConversion(s, pageId, target, options)
@@ -47,6 +52,7 @@ export function createBrowserPageConversionActions(
           return s
         }
         converted = plan.newPage
+        oldPageIdToReleaseMount = plan.oldPage.id
         // Why collected rather than released inside the reducer: revoking is main-process work, and
         // it must happen exactly once even if a later set() retries the reducer.
         if (plan.oldPage.docLocation) {
@@ -109,6 +115,14 @@ export function createBrowserPageConversionActions(
       // authority the preview scheme honors — but the store row has to stop naming it first.
       if (docPageIdToRelease) {
         releaseDocPreviewGrant(docPageIdToRelease)
+      }
+      // Conversion replaces the page row, so move the mount admission to the fresh URL page after
+      // the reducer stops naming the old page. Document pages stay lazy and therefore unadmitted.
+      if (oldPageIdToReleaseMount) {
+        releaseBrowserPageMount(oldPageIdToReleaseMount)
+      }
+      if (!newPage.docLocation) {
+        admitBrowserPageMount(newPage.id)
       }
       const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
       if (workspaceAfter?.activePageId === newPage.id) {

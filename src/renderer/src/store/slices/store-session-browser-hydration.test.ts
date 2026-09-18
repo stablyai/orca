@@ -10,6 +10,10 @@ import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { resetRestoredBrowserClientHostAttachForTests } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { createTestStore, makeWorktree, makeTab } from './store-test-helpers'
 import { createStoreSessionMockApi, makeBrowserTab } from './store-session-test-harness'
+import {
+  isBrowserPageMountAdmitted,
+  releaseBrowserPageMount
+} from '../../components/browser-pane/host-guest/browser-page-mount-admission'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -334,6 +338,29 @@ describe('hydrateBrowserSession', () => {
     expect(s.activeTabType).toBe('terminal')
     expect(s.activeBrowserTabIdByWorktree[wt]).toBeUndefined()
     expect(s.activeBrowserTabId).toBeNull()
+  })
+
+  it('releases admissions for pages replaced by session hydration', () => {
+    const store = createTestStore()
+    const workspace = store.getState().createBrowserTab('wt-1', 'https://old.example/')
+    const pageId = store.getState().browserPagesByWorkspace[workspace.id]?.[0]?.id
+    expect(pageId).toBeDefined()
+    if (!pageId) {
+      return
+    }
+    expect(isBrowserPageMountAdmitted(pageId)).toBe(true)
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt-1',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {}
+    })
+
+    expect(isBrowserPageMountAdmitted(pageId)).toBe(false)
+    releaseBrowserPageMount(pageId)
   })
 })
 
