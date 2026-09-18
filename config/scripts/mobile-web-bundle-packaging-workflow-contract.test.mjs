@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { parse, stringify } from 'yaml'
+import { parseDocument } from 'yaml'
 
 const workflowsDir = fileURLToPath(new URL('../../.github/workflows', import.meta.url))
 
@@ -11,12 +11,36 @@ const workflowsDir = fileURLToPath(new URL('../../.github/workflows', import.met
 const BUNDLE_PRODUCER =
   /pnpm (?:run )?(?:build|build:desktop|build:release|build:release:parallel|build:unpack|build:mobile-web|build:mac|build:mac:release|build:linux|build:win)(?=$|[\s'"&|;])/m
 
+// Every job that packs an app and therefore runs beforePack. Listed so that a new packaging
+// workflow has to be added here deliberately, with its bundle step, rather than slipping in.
+const EXPECTED_PACKAGING_JOBS = [
+  'adhoc-mac-build.yml build-adhoc-mac',
+  'daily-mac-build.yml build-daily-mac',
+  'dev-channel-win-build.yml build-win',
+  'hourly-mac-build.yml build-hourly-mac',
+  'pr.yml package',
+  'pr.yml package_windows',
+  'release-cut.yml build',
+  'release-mac-build.yml build-mac',
+  'win-crash-survival-e2e.yml crash-survival',
+  'win-update-survival-e2e.yml survival',
+  'windows-signing-rehearsal.yml rehearse'
+]
+
+/**
+ * Raw source text per job, sliced by the parsed job boundaries. Why not yaml.stringify(job):
+ * re-serializing folds long lines, and the fold in dev-channel-win-build's build-win landed
+ * between `electron-builder` and `--config`, hiding a whole packaging job from this census.
+ */
 function packagingJobs() {
   const jobs = []
   for (const file of readdirSync(workflowsDir).filter((name) => name.endsWith('.yml'))) {
-    const document = parse(readFileSync(join(workflowsDir, file), 'utf8'))
-    for (const [jobName, job] of Object.entries(document.jobs ?? {})) {
-      const text = stringify(job)
+    const source = readFileSync(join(workflowsDir, file), 'utf8')
+    const jobsNode = parseDocument(source).get('jobs', true)
+    const items = jobsNode?.items ?? []
+    for (const [index, pair] of items.entries()) {
+      const end = index + 1 < items.length ? items[index + 1].key.range[0] : jobsNode.range[2]
+      const text = source.slice(pair.key.range[0], end)
       const invocations = [...text.matchAll(/[^\n]*electron-builder --config[^\n]*/g)].map(
         (match) => match[0]
       )
@@ -27,19 +51,21 @@ function packagingJobs() {
       if (invocations.every((invocation) => invocation.includes('--prepackaged'))) {
         continue
       }
-      jobs.push({ file, jobName, text })
+      jobs.push({ label: `${file} ${String(pair.key.value)}`, text })
     }
   }
   return jobs
 }
 
 describe('mobile web bundle packaging coverage', () => {
-  it('finds the packaging jobs', () => {
-    // A rename or a restructure that empties this list would make every assertion below vacuous.
-    expect(packagingJobs().length).toBeGreaterThanOrEqual(8)
+  it('finds every packaging job', () => {
+    // A rename or a restructure that shrank this list would make every assertion below vacuous.
+    const labels = packagingJobs().map((job) => job.label)
+    expect(labels.length).toBeGreaterThanOrEqual(EXPECTED_PACKAGING_JOBS.length)
+    expect(labels.toSorted()).toEqual(EXPECTED_PACKAGING_JOBS.toSorted())
   })
 
-  it.each(packagingJobs().map((job) => [`${job.file} ${job.jobName}`, job]))(
+  it.each(packagingJobs().map((job) => [job.label, job]))(
     'produces out/mobile-web before electron-builder packs: %s',
     (_label, job) => {
       // Job granularity, not step ordering: the failure this exists for is a job that never builds
