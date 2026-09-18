@@ -8,6 +8,7 @@ import {
   type BridgeRefusal
 } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
+import { createBridgeInitHandshake } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
@@ -39,10 +40,6 @@ export {
 
 /** Base64url, and the length the envelope's id pattern requires. Base36 digits are a subset of it. */
 const BRIDGE_ID_CHARS = 22
-
-/** The page asks again until the shell answers; a session has no other way to start. */
-export const BRIDGE_READY_RETRY_MIN_MS = 50
-export const BRIDGE_READY_RETRY_MAX_MS = 2000
 
 /** Nothing here is recoverable in place; each is worth a line in a log and none is retried. */
 export type BridgeRpcClientDiagnostic =
@@ -93,8 +90,6 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   let session: BridgeShellSession | null = null
   let closed = false
   let idCounter = 0
-  let readyTimer: ReturnType<typeof setTimeout> | null = null
-  let readyDelayMs = BRIDGE_READY_RETRY_MIN_MS
 
   function report(diagnostic: BridgeRpcClientDiagnostic): void {
     options.onDiagnostic?.(diagnostic)
@@ -128,20 +123,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   })
 
-  function askForInit(): void {
+  const handshake = createBridgeInitHandshake(() => {
     sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' })
-    readyTimer = setTimeout(() => {
-      readyDelayMs = Math.min(readyDelayMs * 2, BRIDGE_READY_RETRY_MAX_MS)
-      askForInit()
-    }, readyDelayMs)
-  }
-
-  function stopAskingForInit(): void {
-    if (readyTimer !== null) {
-      clearTimeout(readyTimer)
-      readyTimer = null
-    }
-  }
+  })
 
   /**
    * A call before `init` is a mount-order bug and throws. A call after `close` is not: an unmounting
@@ -165,7 +149,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   function acceptInit(message: Extract<BridgeHostMessage, { type: 'init' }>): void {
-    stopAskingForInit()
+    handshake.stop()
     session = { sessionId: message.sessionId, buildId: message.buildId, grants: message.grants }
     cache.prime(message.connection)
     for (const listener of readyListeners) {
@@ -180,9 +164,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       return
     }
     report({ kind: 'state-out-of-order' })
-    stopAskingForInit()
-    readyDelayMs = BRIDGE_READY_RETRY_MIN_MS
-    askForInit()
+    handshake.restart()
   }
 
   /** The shell answers a refused `subscribe` with `error` on the stream's id. Nothing is pending to
@@ -309,7 +291,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       return
     }
     closed = true
-    stopAskingForInit()
+    handshake.stop()
     subscriptions.closeAll()
     sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
     requests.closeAll()
@@ -320,7 +302,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const unsubscribeFromMessages = options.onMessage(receive)
-  askForInit()
+  handshake.start()
 
   return {
     sendRequest,

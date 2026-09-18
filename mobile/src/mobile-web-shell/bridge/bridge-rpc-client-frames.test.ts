@@ -18,7 +18,9 @@ import {
 } from './bridge-envelope'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
-  BRIDGE_READY_RETRY_MIN_MS,
+  BRIDGE_READY_RETRY_MIN_MS
+} from './bridge-client-init-handshake'
+import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
   BridgeClientNotReadyError,
