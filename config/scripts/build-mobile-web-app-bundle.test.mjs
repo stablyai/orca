@@ -101,6 +101,17 @@ describeBundling('the app bundle', () => {
     expect(entryStaticBytes).toBeLessThan(allBytes)
   }, 120_000)
 
+  it('names the chunk each route lands in', async () => {
+    const { chunks, routeChunks, routeKeys } = await bundleMobileWebApp()
+    expect(Object.keys(routeChunks).sort()).toEqual([...routeKeys].sort())
+    const emitted = new Set(chunks.map((chunk) => chunk.name))
+    for (const [key, name] of Object.entries(routeChunks)) {
+      expect(emitted, key).toContain(name)
+    }
+    // One chunk per route, never the entry: that is what a client-side navigation fetches.
+    expect(new Set(Object.values(routeChunks)).size).toBe(routeKeys.length)
+  }, 120_000)
+
   it('counts only static imports into what loads before the first route', () => {
     const metafile = {
       outputs: {

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import {
@@ -261,6 +261,29 @@ export function renameOutputsByContent(metafile, outputFiles) {
   return renamed
 }
 
+/**
+ * Which emitted chunk each route key's `import()` lands in. esbuild puts a route module in exactly
+ * one output, so the metafile's own inputs answer it; nothing downstream can, because by then
+ * every name is a hash of bytes and the route's source path is gone from the bundle.
+ */
+export function routeChunkNames(metafile, routes, renamed) {
+  const owner = new Map()
+  for (const [output, { inputs }] of Object.entries(metafile.outputs)) {
+    for (const input of Object.keys(inputs ?? {})) {
+      owner.set(input, basename(output))
+    }
+  }
+  return Object.fromEntries(
+    routes.map(({ key, module }) => {
+      const emittedName = owner.get(relative(mobileDir, module))
+      if (!emittedName) {
+        throw new Error(`[build-mobile-web-app-bundle] ${key} reached no output`)
+      }
+      return [key, renamed.get(emittedName).name]
+    })
+  )
+}
+
 const isScriptOutput = (path) => path.endsWith('.js')
 
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
@@ -296,13 +319,21 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
     ),
-    routeKeys: routes.map((route) => route.key)
+    routeKeys: routes.map((route) => route.key),
+    routeChunks: routeChunkNames(result.metafile, routes, renamed)
   }
 }
 
 export async function buildMobileWebAppBundle({ appDir, outDir = defaultOutDir } = {}) {
-  const [desktopVersion, protocolWindow, { script, chunks, images, entryStaticBytes, routeKeys }] =
-    await Promise.all([readDesktopVersion(), readProtocolWindow(), bundleMobileWebApp({ appDir })])
+  const [
+    desktopVersion,
+    protocolWindow,
+    { script, chunks, images, entryStaticBytes, routeChunks, routeKeys }
+  ] = await Promise.all([
+    readDesktopVersion(),
+    readProtocolWindow(),
+    bundleMobileWebApp({ appDir })
+  ])
   // Every output is already named by its own bytes, and a name is written inside whatever imports
   // it, so hashedAsset here reproduces the name rather than choosing one.
   const scriptAsset = hashedAsset(script, 'js')
@@ -339,6 +370,7 @@ export async function buildMobileWebAppBundle({ appDir, outDir = defaultOutDir }
   return {
     manifest,
     outDir,
+    routeChunks,
     routeKeys,
     entryStaticBytes,
     // The entry counts: it is a chunk the browser fetches, and the budget is about how many.

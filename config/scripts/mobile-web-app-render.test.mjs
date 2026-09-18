@@ -23,6 +23,7 @@ let scratch
 let server
 let browser
 let origin
+let routeChunks = {}
 let cspHeader = null
 
 /**
@@ -69,7 +70,9 @@ beforeAll(async () => {
     return
   }
   scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-render-'))
-  const { outDir } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
+  const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
+  const { outDir } = built
+  routeChunks = built.routeChunks
   server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
     // A browser asks for this on its own and the shell's WebView never does. The bundle carries
@@ -323,7 +326,13 @@ describeRender('the Route A page in a real browser', () => {
     await waitForRoute(opened, `${HOST_ROUTE}/tasks`, 'Issues')
     expect(new URL(page.url()).pathname).toBe(`${HOST_ROUTE}/tasks`)
     const fetchedOnNavigation = scripts.filter((path) => !loadedForFirstRoute.includes(path))
-    expect(fetchedOnNavigation.length, scripts.join(' ')).toBeGreaterThan(0)
+    // Not "some script arrived": the chunk the builder put the tasks route in, named by the
+    // builder rather than guessed from the bytes, which is the only thing that says the route
+    // came over the wire now and not out of what the first route had already loaded.
+    const tasksChunk = routeChunks['./h/[hostId]/tasks.tsx']
+    expect(tasksChunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
+    expect(fetchedOnNavigation, scripts.join(' ')).toContain(`/assets/${tasksChunk}`)
+    expect(loadedForFirstRoute).not.toContain(`/assets/${tasksChunk}`)
     const text = await page.evaluate(() => document.body.innerText)
     expect(text).toContain('Tasks')
     expect(text).not.toContain(UNMATCHED)
