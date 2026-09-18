@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "4a86b2dc565dea05491573afdbff17d6217806d5",
+  "baseline": "bbf8264425a772646609481b66459b65b0057832",
   "scenarios": [
     {
       "id": "b1",
@@ -23380,7 +23380,25 @@
           }
         },
         {
-          "complete": "mobileWeb.bundle.chunk#1",
+          "bind": "app-js",
+          "request": "mobileWeb.bundle.chunk#1",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          }
+        },
+        {
+          "bind": "index-head",
+          "request": "mobileWeb.bundle.chunk#2",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          }
+        },
+        {
+          "complete": "app-js",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "path": "assets/app.js",
@@ -23400,7 +23418,7 @@
           }
         },
         {
-          "complete": "mobileWeb.bundle.chunk#2",
+          "complete": "index-head",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "path": "index.html",
@@ -23420,7 +23438,16 @@
           }
         },
         {
-          "complete": "mobileWeb.bundle.chunk#3",
+          "bind": "index-tail",
+          "request": "mobileWeb.bundle.chunk#3",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 16
+          }
+        },
+        {
+          "complete": "index-tail",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "path": "index.html",
@@ -23441,6 +23468,143 @@
         },
         {
           "checkpoint": "bundle-fetched"
+        }
+      ]
+    },
+    {
+      "id": "mobile-web-bundle-unavailable",
+      "operation": "mobileWeb.bundle-fetch",
+      "version": 1,
+      "family": "mobileWeb.bundle-fetch",
+      "sites": [
+        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "mobileWeb.bundle.manifest#1",
+          "params": null,
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "invalid_argument",
+              "message": "mobile_web_bundle_unavailable"
+            }
+          }
+        },
+        {
+          "checkpoint": "bundle-unavailable"
+        }
+      ]
+    },
+    {
+      "id": "mobile-web-bundle-build-changed",
+      "operation": "mobileWeb.bundle-fetch",
+      "version": 1,
+      "family": "mobileWeb.bundle-fetch",
+      "sites": [
+        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "mobileWeb.bundle.manifest#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "result": {
+              "manifest": {
+                "schemaVersion": 1,
+                "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+                "desktopVersion": "1.4.201",
+                "minCompatibleRuntimeProtocolVersion": 2,
+                "runtimeProtocolVersion": 2,
+                "entrypoint": "index.html",
+                "totalBytes": 37,
+                "assets": [
+                  {
+                    "path": "assets/app.js",
+                    "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+                    "byteLength": 11,
+                    "contentType": "text/javascript; charset=utf-8"
+                  },
+                  {
+                    "path": "index.html",
+                    "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
+                    "byteLength": 26,
+                    "contentType": "text/html; charset=utf-8"
+                  }
+                ]
+              },
+              "chunkBytes": 16
+            }
+          }
+        },
+        {
+          "bind": "app-js",
+          "request": "mobileWeb.bundle.chunk#1",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          }
+        },
+        {
+          "bind": "index-head",
+          "request": "mobileWeb.bundle.chunk#2",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          }
+        },
+        {
+          "complete": "app-js",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "path": "assets/app.js",
+              "offset": 0,
+              "assetByteLength": 11,
+              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+              "dataBase64": "b3JjYS5ib290KCk=",
+              "eof": true
+            }
+          }
+        },
+        {
+          "complete": "index-head",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "invalid_argument",
+              "message": "mobile_web_bundle_build_changed"
+            }
+          }
+        },
+        {
+          "checkpoint": "bundle-build-changed"
         }
       ]
     }

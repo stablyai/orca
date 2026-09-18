@@ -63,7 +63,10 @@ export function mobileWebBundleMountAdapters(
       let assets: unknown = null
       return {
         action() {
-          const started = fetchMobileWebBundle({
+          // Projected rather than returned whole: the result carries a Map of Uint8Arrays, and the
+          // observation refuses a non-plain object, which loses the settlement and files an
+          // unhandled rejection in its place.
+          return fetchMobileWebBundle({
             client,
             onProgress: (progress) => {
               effect('bundle-progress', {
@@ -72,8 +75,7 @@ export function mobileWebBundleMountAdapters(
                 receivedBytes: progress.receivedBytes
               })
             }
-          })
-          started.then(
+          }).then(
             (fetched) => {
               outcome = {
                 buildId: fetched.manifest.buildId,
@@ -83,12 +85,13 @@ export function mobileWebBundleMountAdapters(
               assets = Object.fromEntries(
                 [...fetched.assets].map(([path, bytes]) => [path, new TextDecoder().decode(bytes)])
               )
+              return outcome
             },
             (error: unknown) => {
               outcome = describeFailure(operations, error)
+              throw error
             }
           )
-          return started
         },
         state: () => ({ outcome, assets }),
         dispose: () => {}
