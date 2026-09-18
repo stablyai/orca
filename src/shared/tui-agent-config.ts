@@ -288,6 +288,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  muse: {
+    detectCmd: 'muse',
+    // Why: a leading positional matching a subcommand name (resume/exec/init/…) is routed
+    // to that subcommand even after `--`, so launch the bare TUI and inject after startup.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

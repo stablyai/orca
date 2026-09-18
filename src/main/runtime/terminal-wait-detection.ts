@@ -57,6 +57,18 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
   return true
 }
 
+// Why separate from isKnownReadyPromptPreview: that one settles tier 1 immediately, while
+// a Muse ready screen only proves the TUI is up — the ranking holds it to quiescence.
+export function isMuseReadyPromptPreview(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  const readyIndex = findMuseReadyPromptIndex(normalized)
+  if (readyIndex === null) {
+    return false
+  }
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  return blockedSignal === null || blockedSignal.index <= readyIndex
+}
+
 export function detectTerminalWaitBlockedReason(
   preview: string
 ): RuntimeTerminalWaitBlockedReason | null {
@@ -115,6 +127,19 @@ function findCursorReadyPromptIndex(normalized: string): number | null {
     return null
   }
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
+}
+
+// Why: Muse titles its OSC with the bare cwd and never updates it, so only the body can
+// prove the TUI is up. Banner + skills summary + `❯` composer; the status line varies.
+function findMuseReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('muse code')
+  if (headerIndex === -1) {
+    return null
+  }
+  const segment = normalized.slice(headerIndex)
+  return segment.includes('skills:') && segment.includes('loaded') && segment.includes('❯')
+    ? headerIndex
+    : null
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {

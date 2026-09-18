@@ -52,6 +52,14 @@ describe('terminal startup command classifier', () => {
     )
   })
 
+  it('recognizes Muse startup commands including the versioned binary', () => {
+    expect(isKnownTuiAgentTerminalStartupCommand('muse')).toBe(true)
+    expect(
+      isKnownTuiAgentTerminalStartupCommand('/Users/me/.local/bin/muse-bin-1.3.0-R3401.1')
+    ).toBe(true)
+    expect(isKnownTuiAgentTerminalStartupCommand('/usr/local/bin/not-muse')).toBe(false)
+  })
+
   it('bounds pathological single-token startup commands', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const command = 'codex'.repeat(TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS)

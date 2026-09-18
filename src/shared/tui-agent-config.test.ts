@@ -18,6 +18,15 @@ describe('TUI_AGENT_CONFIG', () => {
     })
   })
 
+  it('launches Muse bare so prompts never route to a subcommand', () => {
+    expect(TUI_AGENT_CONFIG.muse).toMatchObject({
+      detectCmd: 'muse',
+      launchCmd: 'muse',
+      expectedProcess: 'muse',
+      promptInjectionMode: 'stdin-after-start'
+    })
+  })
+
   it('keeps explicit overrides where the launch line or process differs from the binary', () => {
     const overrides: Partial<Record<TuiAgent, Partial<(typeof TUI_AGENT_CONFIG)[TuiAgent]>>> = {
       'claude-agent-teams': { launchCmd: 'orca claude-teams', expectedProcess: 'claude' },

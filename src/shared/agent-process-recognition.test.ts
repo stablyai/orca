@@ -395,4 +395,37 @@ describe('agent process recognition', () => {
       processName: 'grok-0.2.51'
     })
   })
+
+  it('recognizes the versioned Muse binary execed by the launcher', () => {
+    expect(recognizeAgentProcess('muse-bin-1.3.0-r3401.1')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.3.0-r3401.1'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1')
+    ).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.3.0-r3401.1'
+    })
+    expect(isRecognizedAgentType('muse-bin-1.3.0-R3401.1')).toBe(true)
+    expect(isExpectedAgentProcess('muse', 'muse')).toBe(true)
+    expect(isExpectedAgentProcess('muse-bin-1.3.0-R3401.1', 'muse')).toBe(true)
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1', 'muse')).toBe(
+      true
+    )
+    expect(isExpectedAgentProcess('not-muse', 'muse')).toBe(false)
+  })
+
+  it('does not recognize Muse headless exec runs as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('muse exec "summarize this diff"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1 exec --session-id abc "hi"'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('muse -- yolo')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+  })
 })

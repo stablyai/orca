@@ -714,6 +714,43 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches Muse bare so prompts never route to a subcommand', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: 'resume the migration',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(plan).toEqual({
+      agent: 'muse',
+      launchCommand: 'muse',
+      expectedProcess: 'muse',
+      followupPrompt: 'resume the migration',
+      launchConfig: { agentCommand: 'muse', agentArgs: '', agentEnv: {} }
+    })
+  })
+
+  it('launches Muse with stdin-after-start prompt delivery', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: 'fix the tests',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('muse', null),
+      platform: 'linux'
+    })
+    expect(plan).toEqual({
+      agent: 'muse',
+      launchCommand: "muse '--yolo'",
+      expectedProcess: 'muse',
+      followupPrompt: 'fix the tests',
+      launchConfig: {
+        agentCommand: "muse '--yolo'",
+        agentArgs: '--yolo',
+        agentEnv: {}
+      }
+    })
+  })
+
   it('excludes transient draft prompt env from launch config', () => {
     const plan = buildAgentDraftLaunchPlan({
       agent: 'pi',

@@ -93,6 +93,11 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
+  // Why: the `muse` launcher script execs a versioned `muse-bin-<version>`
+  // binary, so the foreground name never equals `muse` itself.
+  if (normalized.startsWith('muse-')) {
+    return PROCESS_TO_AGENT.get('muse')
+  }
   return undefined
 }
 
@@ -254,6 +259,12 @@ function recognizePythonEntrypoint(
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
+// Why: `muse` execs a versioned `muse-bin-<version>` binary (see above), so the
+// exact-name check never matches and readiness/follow-up delivery would stall.
+// Scoped to muse: a generic `-suffix` rule would misclassify short agent names
+// (see the ante-obsidian test).
+const VERSIONED_EXPECTED_PROCESS_PREFIXES = new Set(['muse'])
+
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
   expectedProcess: string
@@ -265,7 +276,9 @@ export function isExpectedAgentProcess(
   }
   return (
     normalizedProcess === normalizedExpected ||
-    normalizedProcess.startsWith(`${normalizedExpected}.`)
+    normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+    (VERSIONED_EXPECTED_PROCESS_PREFIXES.has(normalizedExpected) &&
+      normalizedProcess.startsWith(`${normalizedExpected}-`))
   )
 }
 
