@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as esbuild from 'esbuild'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
@@ -196,7 +196,16 @@ export async function buildMobileWebBundle({ outDir = defaultOutDir } = {}) {
   return { manifest, outDir }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Whether this module was run as the entry script. `file://${path}` never matches on Windows,
+ * where import.meta.url is `file:///C:/...` — the builder would exit 0 having written nothing.
+ * toFileUrl is injectable so the win32 form can be exercised from a posix runner.
+ */
+export function isDirectInvocation(moduleUrl, scriptPath, toFileUrl = pathToFileURL) {
+  return Boolean(scriptPath) && moduleUrl === toFileUrl(scriptPath).href
+}
+
+if (isDirectInvocation(import.meta.url, process.argv[1])) {
   const { manifest, outDir } = await buildMobileWebBundle()
   console.log(
     `[build-mobile-web-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +

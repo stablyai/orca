@@ -1,11 +1,13 @@
-import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileWebBundle,
   computeMobileWebBundleBuildId,
+  isDirectInvocation,
   serializeMobileWebBundleAssets
 } from './build-mobile-web-bundle.mjs'
 import {
@@ -153,5 +155,41 @@ describe('computeMobileWebBundleBuildId', () => {
       )
       expect(computeMobileWebBundleBuildId(mutated)).not.toBe(baseline)
     }
+  })
+})
+
+describe('isDirectInvocation', () => {
+  const thisFile = fileURLToPath(import.meta.url)
+
+  it('matches the path this module was loaded from', () => {
+    expect(isDirectInvocation(import.meta.url, thisFile)).toBe(true)
+  })
+
+  it('does not match a different script', () => {
+    expect(isDirectInvocation(import.meta.url, join(thisFile, '..', 'other.mjs'))).toBe(false)
+  })
+
+  it('tolerates an absent argv[1]', () => {
+    expect(isDirectInvocation(import.meta.url, undefined)).toBe(false)
+    expect(isDirectInvocation(import.meta.url, '')).toBe(false)
+  })
+
+  // Why an injected converter: a win32 path cannot be exercised through node:url's pathToFileURL
+  // on a posix runner, and CI is ubuntu.
+  const toWin32FileUrl = (windowsPath) => new URL(`file:///${windowsPath.replaceAll('\\', '/')}`)
+
+  it('matches a Windows entry path, which the file:// template form never does', () => {
+    const scriptPath = 'C:\\orca\\config\\scripts\\build-mobile-web-bundle.mjs'
+    const moduleUrl = 'file:///C:/orca/config/scripts/build-mobile-web-bundle.mjs'
+    expect(isDirectInvocation(moduleUrl, scriptPath, toWin32FileUrl)).toBe(true)
+    // The regression this guards: `file://${argv[1]}` yields file://C:\orca\... on Windows,
+    // so the builder exited 0 having written nothing and packaging failed downstream.
+    expect(`file://${scriptPath}`).not.toBe(moduleUrl)
+  })
+
+  it('is not written with the file:// template form', async () => {
+    const source = await readFile(new URL('./build-mobile-web-bundle.mjs', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/file:\/\/\$\{process\.argv\[1\]\}/)
+    expect(source).toContain('pathToFileURL')
   })
 })
