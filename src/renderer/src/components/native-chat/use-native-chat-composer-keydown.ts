@@ -89,17 +89,6 @@ export function useNativeChatComposerKeyDown({
         }
       }
 
-      if (
-        nativeChatSendShortcut === 'enter' &&
-        autocomplete.mode === 'slash' &&
-        event.key === 'Enter' &&
-        !event.shiftKey
-      ) {
-        event.preventDefault()
-        send()
-        return
-      }
-
       if (nativeChatSendShortcut === 'cmd-or-ctrl-enter' && isScreenSubmitShortcut(event)) {
         event.preventDefault()
         send()
