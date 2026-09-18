@@ -72,8 +72,11 @@ beforeAll(async () => {
   const { outDir } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
-    // Any route path serves the entrypoint; the page reads location and routes client-side.
-    const file = path.startsWith('/assets/') ? path.slice(1) : 'index.html'
+    // A route path serves the entrypoint and the page routes client-side. A path naming a file
+    // has to come out of the bundle or 404, the same as the shell's manifest map: answering it
+    // with the document instead would hide a publicPath the script cannot fetch from.
+    const namesAFile = path.slice(path.lastIndexOf('/')).includes('.')
+    const file = namesAFile ? path.slice(1) : 'index.html'
     readFile(join(outDir, file)).then(
       (bytes) => {
         const headers = {
@@ -174,6 +177,23 @@ describe('the shell policy this page is tested under', () => {
   it('still refuses inline script, which is the directive that matters', () => {
     expect(cspHeader).toContain("script-src 'self';")
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
+  })
+})
+
+describeRender('the page server this check runs against', () => {
+  it('404s a file path the bundle does not contain', async () => {
+    // Without this the document answers every path, and a publicPath the script cannot fetch
+    // from still renders, because the script is fetched from the one prefix that is served.
+    expect((await fetch(`${origin}/wrong-prefix/entry.js`)).status).toBe(404)
+    expect((await fetch(`${origin}/assets/not-a-real-hash.js`)).status).toBe(404)
+  })
+
+  it('still serves the document at every route depth', async () => {
+    for (const route of ['/', HOST_ROUTE, `${HOST_ROUTE}/tasks`]) {
+      const response = await fetch(`${origin}${route}`)
+      expect(response.status, route).toBe(200)
+      expect(await response.text(), route).toContain('<div id="root">')
+    }
   })
 })
 
