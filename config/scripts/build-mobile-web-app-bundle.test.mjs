@@ -32,6 +32,7 @@ import {
   assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
 import {
+  hashedAsset,
   readDesktopVersion,
   readProtocolWindow,
   sha256Hex,
@@ -352,6 +353,58 @@ describeBundling('the app bundle', () => {
       expect(after.script.equals(before.script)).toBe(false)
     })
   }, 240_000)
+
+  /**
+   * The same route tree, bundled from two directories at different depths. esbuild's own `[hash]`
+   * is computed over the metafile's input keys, which are paths relative to absWorkingDir, so two
+   * checkouts of one commit -- at different depths, or one with mobile/node_modules as a symlink
+   * and one with it as a directory -- name a byte-identical chunk differently. The rename
+   * cascades through every importer into a different buildId, and every phone re-downloads a
+   * bundle whose bytes did not change.
+   */
+  async function bundleFromDepth(root, depth) {
+    const nested = join(root, ...Array.from({ length: depth }, (_, index) => `d${String(index)}`))
+    const directory = join(nested, MOBILE_WEB_APP_ROUTE_ROOT)
+    await mkdir(directory, { recursive: true })
+    // Two routes over one import, which is what makes esbuild emit a shared chunk to name.
+    await writeFile(join(directory, 'shared.ts'), 'export const marker = "shared-marker"\n')
+    for (const name of ['index.tsx', 'other.tsx']) {
+      await writeFile(
+        join(directory, name),
+        `import { marker } from "./shared"\nexport default function Route() { return marker + "${name}" }\n`
+      )
+    }
+    return { appDir: nested, bundle: await bundleMobileWebApp({ appDir: nested }) }
+  }
+
+  it('names every output by its bytes, so another checkout path builds the same bundle', async () => {
+    await withScratch(async (shallow) => {
+      await withScratch(async (deep) => {
+        const near = await bundleFromDepth(shallow, 1)
+        const far = await bundleFromDepth(deep, 5)
+        const names = ({ bundle }) => [...bundle.chunks, ...bundle.images].map((one) => one.name)
+        expect(names(far)).toEqual(names(near))
+        expect(far.bundle.script.equals(near.bundle.script)).toBe(true)
+        // The whole point: the manifest the phone compares is the same document.
+        const buildIdFrom = async ({ appDir }) =>
+          withScratch(async (out) => {
+            const { manifest } = await buildMobileWebAppBundle({ appDir, outDir: join(out, 'x') })
+            return manifest.buildId
+          })
+        expect(await buildIdFrom(far)).toBe(await buildIdFrom(near))
+      })
+    })
+  }, 240_000)
+
+  it("names an output the same way the manifest's own asset hash does", async () => {
+    const { script, chunks } = await bundleMobileWebApp()
+    // The name is embedded in the importer, so it cannot be recomputed later; this is what says
+    // the name inside the bytes and the manifest's sha256 of those bytes are the same string.
+    expect(hashedAsset(script, 'js').path).toBe(`assets/${sha256Hex(script)}.js`)
+    for (const chunk of chunks) {
+      expect(chunk.name).toBe(`${sha256Hex(chunk.bytes)}.js`)
+    }
+  }, 120_000)
 
   it('asks esbuild for the split the budgets assume', async () => {
     const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))

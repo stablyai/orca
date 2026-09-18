@@ -111,8 +111,9 @@ export function mobileWebAppBuildOptions(routes) {
     // static imports esbuild emitted one 8.16 MB script for all 14 routes.
     format: 'esm',
     splitting: true,
-    // Content-hashed, like the images, so a chunk's name survives into the served path unchanged
-    // and the buildId stays a pure function of the bytes.
+    // esbuild's `[hash]` is over the metafile's input keys, which are paths relative to
+    // absWorkingDir, so this name is not a function of the bytes and differs between two
+    // checkouts of one commit. It is a placeholder: renameOutputsByContent replaces it below.
     chunkNames: '[hash]',
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
@@ -121,7 +122,8 @@ export function mobileWebAppBuildOptions(routes) {
     legalComments: 'none',
     // No sourcemap: it is an emitted file and would carry this checkout's absolute paths into the
     // bundle. The metafile carries them too but is never written and never hashed; it is the only
-    // thing that says which output is the entry and which of its imports are static.
+    // thing that says which output is the entry, which of its imports are static, and which
+    // outputs each one names.
     sourcemap: false,
     metafile: true,
     logLevel: 'silent',
@@ -195,6 +197,68 @@ export function entryStaticClosure(metafile, entryOutputPath) {
   return reached
 }
 
+/**
+ * Every emitted output, renamed to the sha256 of its own final bytes.
+ *
+ * esbuild's `[hash]` is computed over the metafile's input keys, and those keys are paths
+ * relative to absWorkingDir. A tree whose mobile/node_modules is a symlink keys most of its
+ * inputs as `../../<somewhere>/...`, a tree that holds a real directory keys them as
+ * `node_modules/...`, and a byte-identical chunk comes out under a different name in each. The
+ * name is embedded in every importer, so the difference cascades into a different buildId for one
+ * commit -- and every phone re-downloads a bundle whose bytes never changed.
+ *
+ * Renaming here is what removes the path from the output. Leaves first, so an importer is hashed
+ * only once the names written inside it are final: an image before the chunk that loads it, a
+ * chunk before the chunk that imports it, the entry last. The result is what `hashedAsset` would
+ * name each of these anyway, which is how the name inside the bytes and the manifest's own sha256
+ * stay the same string.
+ */
+export function renameOutputsByContent(metafile, outputFiles) {
+  const emitted = new Map(
+    outputFiles.map((file) => [basename(file.path), Buffer.from(file.contents)])
+  )
+  const importsOf = new Map(
+    Object.entries(metafile.outputs).map(([output, { imports }]) => [
+      basename(output),
+      (imports ?? []).map((entry) => basename(entry.path)).filter((name) => emitted.has(name))
+    ])
+  )
+  const renamed = new Map()
+  const open = new Set()
+  function rename(name) {
+    const done = renamed.get(name)
+    if (done) {
+      return done
+    }
+    if (open.has(name)) {
+      // Two outputs naming each other have no content hash at all, so this is a hard stop rather
+      // than a fallback. esbuild's splitting emits a DAG; nothing in the tree has produced one.
+      throw new Error(
+        `[build-mobile-web-app-bundle] ${name} is in an output cycle and cannot be content-named`
+      )
+    }
+    open.add(name)
+    let bytes = emitted.get(name)
+    for (const child of importsOf.get(name) ?? []) {
+      const { name: childName } = rename(child)
+      // publicPath already rewrote the specifier to this exact shape, and an esbuild output name
+      // is a token that appears nowhere else.
+      bytes = Buffer.from(
+        bytes.toString('utf8').split(`/assets/${child}`).join(`/assets/${childName}`),
+        'utf8'
+      )
+    }
+    open.delete(name)
+    const result = { name: `${sha256Hex(bytes)}${extname(name)}`, bytes }
+    renamed.set(name, result)
+    return result
+  }
+  for (const name of [...emitted.keys()].sort()) {
+    rename(name)
+  }
+  return renamed
+}
+
 const isScriptOutput = (path) => path.endsWith('.js')
 
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
@@ -204,54 +268,45 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const entryOutputPath = Object.keys(result.metafile.outputs).find(
     (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
   )
-  const entryFile = result.outputFiles.find(
-    (file) => basename(file.path) === `${ENTRY_CHUNK_NAME}.js`
-  )
-  if (!entryOutputPath || !entryFile) {
+  if (!entryOutputPath) {
     throw new Error('[build-mobile-web-app-bundle] esbuild emitted no entry script')
   }
-  const named = (file) => ({ name: basename(file.path), bytes: Buffer.from(file.contents) })
+  const renamed = renameOutputsByContent(result.metafile, result.outputFiles)
+  const entry = renamed.get(basename(entryOutputPath))
   const byName = (left, right) => (left.name < right.name ? -1 : 1)
-  const others = result.outputFiles.filter((file) => file !== entryFile)
-  // Chunks keep esbuild's own names: the entry imports them by that name, and publicPath has
-  // already rewritten those specifiers to /assets/<name>.
-  const chunks = others
-    .filter((file) => isScriptOutput(file.path))
-    .map(named)
-    .sort(byName)
-  const images = others
-    .filter((file) => !isScriptOutput(file.path))
-    .map(named)
-    .sort(byName)
+  const others = [...renamed.entries()]
+    .filter(([emittedName]) => emittedName !== basename(entryOutputPath))
+    .map(([emittedName, output]) => ({ emittedName, ...output }))
+  // Chunks keep their new name into the served path: the entry imports them by it, and
+  // publicPath has already made that specifier /assets/<name>.
+  const chunks = others.filter(({ emittedName }) => isScriptOutput(emittedName)).sort(byName)
+  const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
   return {
-    script: Buffer.from(entryFile.contents),
+    script: entry.bytes,
     chunks,
     images,
-    // Counted here because only the metafile knows which import is static; see entryStaticClosure.
+    // Counted off the renamed bytes rather than the metafile's own sizes, which are from before
+    // the names inside each output grew. Only the metafile knows which import is static; see
+    // entryStaticClosure.
     entryStaticBytes: [...closure].reduce(
-      (total, path) => total + (result.metafile.outputs[path]?.bytes ?? 0),
+      (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
     ),
     routeKeys: routes.map((route) => route.key)
   }
 }
 
-export async function buildMobileWebAppBundle({ outDir = defaultOutDir } = {}) {
+export async function buildMobileWebAppBundle({ appDir, outDir = defaultOutDir } = {}) {
   const [desktopVersion, protocolWindow, { script, chunks, images, entryStaticBytes, routeKeys }] =
-    await Promise.all([readDesktopVersion(), readProtocolWindow(), bundleMobileWebApp()])
-  // Only the entry is renamed: nothing references it but the document. A chunk is named inside
-  // the bytes that import it, so renaming one would break the import it is named by.
+    await Promise.all([readDesktopVersion(), readProtocolWindow(), bundleMobileWebApp({ appDir })])
+  // Every output is already named by its own bytes, and a name is written inside whatever imports
+  // it, so hashedAsset here reproduces the name rather than choosing one.
   const scriptAsset = hashedAsset(script, 'js')
-  // esbuild already named these by content hash; keep that name so the reference inside the
-  // script stays valid, and carry the sha256 in the manifest entry as every asset does.
-  const emittedAssets = [...chunks, ...images].map(({ name, bytes }) => ({
-    bytes,
-    path: `assets/${name}`,
-    sha256: sha256Hex(bytes),
-    byteLength: bytes.byteLength,
-    contentType: contentTypeForExtension(extname(name).slice(1))
-  }))
+  const written = [
+    scriptAsset,
+    ...[...chunks, ...images].map(({ name, bytes }) => hashedAsset(bytes, extname(name).slice(1)))
+  ]
 
   // Root-absolute, unlike the Phase A bootstrap's bare relative src: this document is served at
   // every route depth (/h/<hostId>/tasks), where a relative href resolves against the route and
@@ -274,7 +329,7 @@ export async function buildMobileWebAppBundle({ outDir = defaultOutDir } = {}) {
 
   const { manifest } = await writeMobileWebBundleTree({
     outDir,
-    written: [indexAsset, scriptAsset, ...emittedAssets],
+    written: [indexAsset, ...written],
     desktopVersion,
     protocolWindow
   })
