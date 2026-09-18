@@ -281,6 +281,33 @@ describe('requests', () => {
     expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS + 1)
   })
 
+  it('holds the cap against a page that closes between batches', async () => {
+    const bridge = harness()
+    const fill = (offset: number): void => {
+      for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+        bridge.host.receive(
+          clientFrame({ type: 'request', id: bridgeId(offset + index), method: 'status.get' })
+        )
+      }
+    }
+    fill(0)
+    // `close` empties the page's ledger, but the desktop is still running all 64 and `sendRequest`
+    // has no cancel: counting the ledger would hand the cap over again to the next document.
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    fill(100)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.frames().filter((frame) => frame.type === 'error')).toHaveLength(
+      BRIDGE_MAX_PENDING_REQUESTS
+    )
+    for (const request of bridge.client.requests) {
+      request.resolve(rpcSuccess('wire-1', 'ok'))
+    }
+    await flushBridge()
+    fill(200)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS * 2)
+  })
+
   it('stops answering a cancelled request without pretending the desktop stopped running it', async () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
@@ -578,6 +605,37 @@ describe('teardown', () => {
     expect(bridge.client.stateListeners()).toBe(1)
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(1)
+    // Full service, not just an answered `ready`: the state fan-out reaches this document too.
+    bridge.client.pushState('reconnecting')
+    expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'reconnecting' } })
+    expect(bridge.diagnostics).toEqual([])
+  })
+
+  it('forwards no straggler from the document that said goodbye', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    // Frames the closed document posted before it went away. Forwarding one now would answer it
+    // into whichever document loads in next.
+    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    bridge.host.receive(subscribeFrame(OTHER))
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.client.streams).toHaveLength(0)
+    expect(bridge.client.foregroundCalls).toEqual([])
+    expect(bridge.posted).toHaveLength(0)
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 3 }, () => ({ kind: 'frame-after-close' }))
+    )
+  })
+
+  it('posts nothing into a view that belongs to no document yet', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    // The client keeps running between documents, and this listener is still attached: a `state`
+    // posted now arrives in the replacement document before its own `init`.
+    bridge.client.pushState('reconnecting')
+    bridge.client.pushState('connected')
+    expect(bridge.posted).toHaveLength(0)
     expect(bridge.diagnostics).toEqual([])
   })
 })

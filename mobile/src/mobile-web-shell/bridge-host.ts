@@ -35,6 +35,9 @@ export type BridgeHostDiagnostic =
   /** A client that threw where the bridge only forwards. Nothing is owed to the page for a notify,
    *  so the throw is reported rather than answered. */
   | { kind: 'notify-failed'; error: unknown }
+  /** A frame that arrived between a page's `close` and the next document's `ready`. It belongs to
+   *  the closed document, and serving it would answer into whatever loads in next. */
+  | { kind: 'frame-after-close' }
 
 export type BridgeHostOptions = {
   client: RpcClient
@@ -86,6 +89,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId } = options
   const pending = new Map<string, PendingRequest>()
   let closed = false
+  // Requests the client is still running. `pending` is the page's view and empties on a cancel or a
+  // `close`, but `sendRequest` has no cancel: the call keeps its slot on the wire until it settles,
+  // and a page that closed between batches would otherwise be handed the cap over again.
+  let inFlight = 0
+  // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
+  // between the two the view belongs to no document, so nothing is served and nothing is posted.
+  let serving = true
   let postFailureReported = false
   let notifyFailureReported = false
 
@@ -102,6 +112,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   function sendJson(json: string): void {
     // Defensive: teardown already settles everything that could post; this fences callers added later.
     if (closed) {
+      return
+    }
+    // Between documents the view still exists and still accepts posts, which is exactly why this is
+    // checked: a `state` frame sent now lands in the next document before it has said `ready`.
+    if (!serving) {
       return
     }
     // A `post` that throws where it should reject would escape into the client's own state-change
@@ -199,7 +214,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       sendError(id, new BridgeCapExceededError('that id is already in flight'))
       return
     }
-    if (pending.size >= BRIDGE_MAX_PENDING_REQUESTS) {
+    if (inFlight >= BRIDGE_MAX_PENDING_REQUESTS) {
       sendError(id, new BridgeCapExceededError(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests`))
       return
     }
@@ -213,13 +228,16 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       sendError(id, error)
       return
     }
+    inFlight += 1
     void answer.then(
       (payload) => {
+        inFlight -= 1
         if (settle(id, record)) {
           sendReply(id, payload)
         }
       },
       (error: unknown) => {
+        inFlight -= 1
         if (settle(id, record)) {
           sendError(id, error)
         }
@@ -298,10 +316,18 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   }
 
   function dispatch(message: BridgeClientMessage): void {
+    // `ready` is what claims the view, whether it is the first document's or a replacement's; a
+    // re-asked `ready` from the document already being served is answered the same way.
+    if (message.type === 'ready') {
+      serving = true
+      sendInit()
+      return
+    }
+    if (!serving) {
+      options.onDiagnostic?.({ kind: 'frame-after-close' })
+      return
+    }
     switch (message.type) {
-      case 'ready':
-        sendInit()
-        return
       case 'request':
         handleRequest(message)
         return
@@ -331,6 +357,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         // Not a latch. The document that loads next into this same view says `ready` over this same
         // host, and a host that had shut itself would leave that `ready` retrying forever.
         settleAll(false)
+        serving = false
         return
     }
   }
