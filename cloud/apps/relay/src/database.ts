@@ -1208,13 +1208,15 @@ async function backfillRelayCellRegions(database: RelayDatabase): Promise<void> 
   )
 }
 
-export async function openRelayDatabase(input: {
+export type RelayDatabaseOpenInput = {
   databaseUrl?: string
   dataDir: string
   poolMax?: number
   applicationName?: string
   statementTimeoutMs?: number
-}): Promise<RelayDatabase> {
+}
+
+export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<RelayDatabase> {
   let database: RelayDatabase
   if (input.databaseUrl) {
     await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)

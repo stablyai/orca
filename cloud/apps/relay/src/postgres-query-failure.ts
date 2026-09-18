@@ -21,6 +21,14 @@ const ERROR_CODES = new Set([
   'EPIPE'
 ])
 
+// A recognised SQLSTATE or errno, or 'unknown': whatever else a driver attached
+// to `code` is not a bounded log category.
+export function postgresErrorCodeCategory(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+  return typeof code === 'string' && ERROR_CODES.has(code) ? code : 'unknown'
+}
+
 export function reportPostgresQueryFailure(input: {
   error: unknown
   phase: QueryFailurePhase
@@ -32,10 +40,8 @@ export function reportPostgresQueryFailure(input: {
 }): void {
   // Emit only bounded categories: error messages and SQL can contain credentials or identities.
   try {
-    const error = input.error as { code?: unknown; message?: unknown } | null
-    const code =
-      typeof error?.code === 'string' && ERROR_CODES.has(error.code) ? error.code : 'unknown'
-    const connectionTimeout = isPostgresPoolConnectTimeout(error)
+    const code = postgresErrorCodeCategory(input.error)
+    const connectionTimeout = isPostgresPoolConnectTimeout(input.error)
     console.warn(
       JSON.stringify({
         event: 'orca_relay_postgres_query_failed',

@@ -10,10 +10,10 @@ import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
 } from './cell-admission-startup.js'
+import { openRelayDatabaseAtBoot } from './boot-database-open.js'
 import {
   consumeRelayCellInventoryHold,
   consumeRelayDatabasePoolPressure,
-  openRelayDatabase,
   readRelayDatabasePoolPressure
 } from './database.js'
 import { runAssignmentCleanup } from './assignment-cleanup-steps.js'
@@ -28,7 +28,7 @@ import {
 } from './registered-migration-inventory.js'
 
 const config = loadRelayConfig()
-const database = await openRelayDatabase({
+const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
