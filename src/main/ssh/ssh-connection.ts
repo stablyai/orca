@@ -25,6 +25,7 @@ import {
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { removeControlSocketPath } from './ssh-control-socket'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import { describeSshConnectFailure } from './ssh-connect-failure-description'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -180,6 +181,9 @@ export class SshConnection {
   private systemSshResolvedConfig: SshResolvedConfig | null = null
   /** Set by attemptConnect so doSsh2Connect can build a verifier without threading it through. */
   private hostKeyResolvedConfig: SshResolvedConfig | null = null
+  // Why: every attempt re-enters 'connecting' and would wipe the previous failure with it, leaving
+  // a spinner and no reason. Held here so the waiting states can carry it as their `error`.
+  private retryReason: string | null = null
   /**
    * The trust sources for ONE connect attempt, keyed by its generation.
    *
@@ -674,6 +678,7 @@ export class SshConnection {
     }
 
     let lastError: Error | null = null
+    this.retryReason = null
 
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
       const connectGeneration = ++this.connectGeneration
@@ -708,6 +713,7 @@ export class SshConnection {
           throw lastError
         }
 
+        this.retryReason = this.describeConnectFailure(lastError)
         if (attempt < INITIAL_RETRY_ATTEMPTS - 1) {
           await sleep(INITIAL_RETRY_DELAY_MS)
         }
@@ -715,7 +721,7 @@ export class SshConnection {
     }
 
     const finalError = lastError ?? new Error('Connection failed')
-    this.setState('error', finalError.message)
+    this.setState('error', this.describeConnectFailure(finalError))
     throw finalError
   }
 
@@ -1024,6 +1030,7 @@ export class SshConnection {
     this.closeTransportsForReconnect()
     this.state.reconnectAttempt = 0
     this.reconnectLadder.reset()
+    this.retryReason = null
     this.setState('reconnecting')
     await this.runReconnectAttempt()
   }
@@ -1627,6 +1634,7 @@ export class SshConnection {
         return
       }
       this.client = null
+      this.retryReason = `The SSH connection to ${this.target.label} dropped.`
       this.scheduleReconnect()
     }
     client.on('end', onDrop)
@@ -1637,6 +1645,7 @@ export class SshConnection {
       }
       console.warn(`[ssh] Connection error for ${this.target.label}: ${err.message}`)
       this.client = null
+      this.retryReason = this.describeConnectFailure(err)
       this.scheduleReconnect()
     })
   }
@@ -1693,6 +1702,7 @@ export class SshConnection {
         this.setState('error', error.message)
         return
       }
+      this.retryReason = this.describeConnectFailure(error)
       this.reconnectLadder.markAttemptFailed()
       this.scheduleReconnect()
     }
@@ -1825,11 +1835,23 @@ export class SshConnection {
     this.setState('disconnected')
   }
 
+  private describeConnectFailure(error: Error): string {
+    const resolved = this.hostKeyResolvedConfig ?? this.systemSshResolvedConfig
+    return describeSshConnectFailure(error, {
+      host: resolved?.hostname || this.target.host,
+      port: resolved?.port || this.target.port
+    })
+  }
+
   private setState(status: SshConnectionStatus, error?: string): void {
+    if (status === 'connected' || status === 'disconnected') {
+      this.retryReason = null
+    }
+    const waiting = status === 'connecting' || status === 'reconnecting'
     this.state = {
       ...this.state,
       status,
-      error: error ?? null,
+      error: error ?? (waiting ? this.retryReason : null),
       supportsFolderDownload: status === 'connected' && !this.useSystemSshTransport
     }
     this.callbacks.onStateChange(this.target.id, { ...this.state })

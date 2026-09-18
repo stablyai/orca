@@ -115,6 +115,28 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.getByText(/ssh-keygen -R devbox/)).toBeInTheDocument()
   })
 
+  // "Connecting…" alone left users guessing whether the host was down or their VPN was. The
+  // reason is a wait, not a failure, so it reads muted rather than red.
+  it('shows why a reconnecting terminal is still waiting, without alarm styling', () => {
+    installSshConnect(vi.fn())
+
+    const { container } = render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="mini"
+        status="reconnecting"
+        error="100.71.10.60:22 did not answer (timed out). 100.71.10.60 is a Tailscale address, so check that Tailscale is running and connected on this machine."
+      />
+    )
+
+    expect(screen.getByText(/Connecting to mini/)).toBeInTheDocument()
+    const detail = container.querySelector('[data-terminal-ssh-reconnect-detail]')
+    expect(detail).toHaveAttribute('data-terminal-ssh-reconnect-detail', 'waiting')
+    expect(detail).toHaveClass('text-muted-foreground')
+    expect(detail).not.toHaveClass('text-red-400')
+    expect(detail).toHaveTextContent(/check that Tailscale is running/)
+  })
+
   it('shows nothing extra when there is no detail', () => {
     installSshConnect(vi.fn())
 
