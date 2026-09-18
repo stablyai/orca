@@ -12,6 +12,8 @@ import {
 } from './native-chat-composer-path-attach'
 import { useNativeChatComposerPathAttach } from './use-native-chat-composer-path-attach'
 
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 type ProbeProps = {
   scopeKey: string
   caret: number
