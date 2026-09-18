@@ -477,7 +477,7 @@ describe('submission and dispatch state machine', () => {
         clientMessageId: 'cm_1',
         state: 'rejected',
         providerItemId: null,
-        reason: 'not_delivered',
+        reason: 'provider_write_failed',
         ...base(2)
       },
       {
@@ -490,7 +490,7 @@ describe('submission and dispatch state machine', () => {
       }
     ])
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
-    expect(state.submissions.get('cm_1')?.reason).toBe('not_delivered')
+    expect(state.submissions.get('cm_1')?.reason).toBe('provider_write_failed')
   })
 
   it('lets an unknown submission settle later', () => {
