@@ -65,6 +65,42 @@ describe('createPanelBridgeMessageHandler', () => {
     )
   })
 
+  it('relays a same-plugin worker command request without accepting a plugin identity', async () => {
+    const panelWindow = createFakePanelWindow()
+    const { handler, callPanelAction } = createHandler(panelWindow, {
+      ok: true,
+      value: { sessions: [{ id: 'session-one' }] }
+    })
+
+    handler(
+      messageEvent(
+        {
+          type: 'orca-panel-action',
+          requestId: 'req-command',
+          action: 'plugin.command.invoke',
+          params: { commandId: 'history-query', args: { query: 'release' } }
+        },
+        panelWindow
+      )
+    )
+    await flush()
+
+    expect(callPanelAction).toHaveBeenCalledWith({
+      sessionToken: SESSION_TOKEN,
+      action: 'plugin.command.invoke',
+      params: { commandId: 'history-query', args: { query: 'release' } }
+    })
+    expect(panelWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: 'orca-panel-action-result',
+        requestId: 'req-command',
+        ok: true,
+        value: { sessions: [{ id: 'session-one' }] }
+      },
+      '*'
+    )
+  })
+
   it('ignores messages whose source is not the panel iframe window', async () => {
     const panelWindow = createFakePanelWindow()
     const { handler, callPanelAction } = createHandler(panelWindow)
