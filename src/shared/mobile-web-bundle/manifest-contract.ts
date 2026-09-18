@@ -163,6 +163,10 @@ function validateManifestInvariants(
   }
 }
 
+/** Closed in both directions: `.strict()` rejects an unknown key and `schemaVersion` is a literal,
+ *  so there is no additive path here. Any manifest change is a `schemaVersion` bump, and a phone
+ *  reading a bundle it cached must treat an unrecognised `schemaVersion` as an unusable bundle to
+ *  re-fetch, never as a crash. */
 export const MobileWebBundleManifestSchema = z
   .object({
     schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
