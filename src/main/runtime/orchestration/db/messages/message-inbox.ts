@@ -228,6 +228,36 @@ export function getInbox(this: OrchestrationDb, limit = 20): MessageRow[] {
   )
 }
 
+// Why: read-only history for multiple handles — returns every message regardless of read/delivered state, never flips the read bit (§3.3).
+export function getAllMessagesForHandles(
+  this: OrchestrationDb,
+  handles: string[],
+  limit = 100,
+  types?: MessageType[]
+): MessageRow[] {
+  if (handles.length === 0) {
+    return []
+  }
+  const handlePlaceholders = handles.map(() => '?').join(',')
+  if (types && types.length > 0) {
+    const typePlaceholders = types.map(() => '?').join(',')
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          `SELECT * FROM messages WHERE to_handle IN (${handlePlaceholders}) AND type IN (${typePlaceholders}) ORDER BY sequence DESC LIMIT ?`
+        )
+        .all(...handles, ...types, limit) as MessageRow[]
+    )
+  }
+  return exposeMessageListTimestamps(
+    this.db
+      .prepare(
+        `SELECT * FROM messages WHERE to_handle IN (${handlePlaceholders}) ORDER BY sequence DESC LIMIT ?`
+      )
+      .all(...handles, limit) as MessageRow[]
+  )
+}
+
 // Why: read-only history for a handle — returns every message regardless of read/delivered state, never flips the read bit (§3.3).
 export function getAllMessagesForHandle(
   this: OrchestrationDb,
@@ -235,21 +265,7 @@ export function getAllMessagesForHandle(
   limit = 100,
   types?: MessageType[]
 ): MessageRow[] {
-  if (types && types.length > 0) {
-    const placeholders = types.map(() => '?').join(',')
-    return exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
-        )
-        .all(toHandle, ...types, limit) as MessageRow[]
-    )
-  }
-  return exposeMessageListTimestamps(
-    this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
-      .all(toHandle, limit) as MessageRow[]
-  )
+  return this.getAllMessagesForHandles([toHandle], limit, types)
 }
 
 // Why: ask wait-loop read — to_handle filter shows only replies to the worker; afterSequence resumes past its own outbound ask.
@@ -288,6 +304,7 @@ export type MessageInboxMethods = {
   areUnreadMessages: typeof areUnreadMessages
   markAsReadAndDelivered: typeof markAsReadAndDelivered
   getInbox: typeof getInbox
+  getAllMessagesForHandles: typeof getAllMessagesForHandles
   getAllMessagesForHandle: typeof getAllMessagesForHandle
   getThreadMessagesFor: typeof getThreadMessagesFor
 }
@@ -306,6 +323,7 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
     areUnreadMessages,
     markAsReadAndDelivered,
     getInbox,
+    getAllMessagesForHandles,
     getAllMessagesForHandle,
     getThreadMessagesFor
   })
