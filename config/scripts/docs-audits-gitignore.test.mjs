@@ -48,9 +48,8 @@ describe('docs/audits git visibility', () => {
   })
 
   it('keeps anti-slop oxlint from walking audit evidence', () => {
-    const config = JSON.parse(
-      readFileSync(resolve(repoRoot, 'config/oxlint-anti-slop.json'), 'utf8')
-    )
-    expect(config.ignorePatterns).toContain('docs/audits/**')
+    // Why: this config is JSONC (inline comments), so JSON.parse is not valid.
+    const raw = readFileSync(resolve(repoRoot, 'config/oxlint-anti-slop.json'), 'utf8')
+    expect(raw).toMatch(/"ignorePatterns"\s*:\s*\[[^\]]*"docs\/audits\/\*\*"/s)
   })
 })
