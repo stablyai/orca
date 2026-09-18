@@ -12,6 +12,7 @@ import {
   BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_FLAG,
   BRIDGED_PARITY_NAMEABLE,
+  BRIDGED_PARITY_OFF,
   classifyBridgedParity,
   type BridgedParityClass,
   type BridgedParityEvidence
@@ -43,6 +44,10 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * byte. Headers are excluded because they are provenance of the committed recording, not of this
  * run. This suite writes nothing, and it is not in `RECORDING_DRIVERS`, so `recorderSha256` does
  * not pin it — a suite that cannot put an observation in a recorded file is not provenance for one.
+ *
+ * It runs by default, in `pnpm test` and so in CI, and `RPC_FOUNDATION_BRIDGE=0` is what skips it
+ * for a local run that does not want the three minutes. Vitest gives the file a worker of its own
+ * beside the rest of the suite, so the gate costs much less in wall time than it does in test time.
  *
  * ## What it asserts today
  *
@@ -274,7 +279,7 @@ async function verdict(
   }
 }
 
-describe.runIf(process.env[BRIDGED_PARITY_FLAG] === '1')(
+describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
   'every golden replays through the page bridge, byte-identically or in a named class',
   () => {
     for (const pilot of pilotGoldens(input.scenarios)) {

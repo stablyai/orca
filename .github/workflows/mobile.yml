@@ -103,21 +103,14 @@ jobs:
       - name: Typecheck tests (ratchet)
         run: pnpm run check:tests-typecheck
 
+      # This includes the bridged replay of the whole recording corpus, which used to be a second
+      # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:
+      # it fails when a divergence class grows, when a divergence lands in no class at all, or when
+      # one of the 103 goldens inside the C1 page closure changes the verdict it is pinned to. It is
+      # ~3 min of test time on its own, and Vitest runs it on a worker beside the rest of the suite,
+      # so folding it in costs a fraction of that in wall time and one step less to skip.
       - name: Test
         run: pnpm test
-
-      # Why a second run of the same corpus: `pnpm test` leaves this suite off, because it replays
-      # every golden through the page bridge and the per-class counts it pins are the only thing
-      # that says how far that bridge is from byte-identical. It fails when a class grows or when a
-      # divergence lands in no class at all, so a change that widens the gap cannot land quietly.
-      # ~2.5 min locally, because a golden that diverges is replayed a second time with `_meta`
-      # supplied and that counterfactual is what separates the reader's share of the gap from the
-      # rest. Ungated on purpose: unlike the pin guard's reproduce, this verdict moves on any change
-      # to the bridge, which no path filter on the corpus would catch.
-      - name: Replay the recording corpus through the page bridge
-        env:
-          RPC_FOUNDATION_BRIDGE: '1'
-        run: pnpm exec vitest run src/test-support/rpc-recording/rpc-recording-through-bridge.test.ts
 
       - name: Test iOS release version resolution
         run: ruby fastlane/ios_release_version_test.rb

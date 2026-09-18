@@ -7,8 +7,18 @@
  * one level up in `test-support`.
  */
 
-/** Named once so the suite, its pin and the CI job cannot drift apart. */
+/**
+ * The switch that turns the bridged replay off, named once so the suite and its pin cannot drift.
+ *
+ * It used to be what turned the replay *on*, and CI set it. That made the gate opt-in, which is the
+ * one thing a gate must not be: a branch that widened the bridge's divergence and left the variable
+ * alone would have been measured by nobody. The replay is the default now and `=0` is for a local
+ * run that does not want the three minutes. CI sets nothing.
+ */
 export const BRIDGED_PARITY_FLAG = 'RPC_FOUNDATION_BRIDGE'
+
+/** The one value of it that skips the suite; anything else, unset included, runs it. */
+export const BRIDGED_PARITY_OFF = '0'
 
 export type BridgedParityClass =
   | 'reply-meta-required'
@@ -157,7 +167,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 /**
  * What this tree measures, per class, over all 787 goldens.
  *
- * A ratchet, not a description: the flagged run fails when a class grows past its number here, when
+ * A ratchet, not a description: the run fails when a class grows past its number here, when
  * anything lands in `unclassified`, or when fewer goldens replay byte-identically than this says.
  * Each class is an upper bound and `identical` a lower one, and this module's test pins the sum of
  * every number below to the size of the corpus — which is what stops one class being loosened on
