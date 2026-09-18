@@ -3,7 +3,7 @@
   "overrides": [
     {
       "file": "src/transport/client-context.web.tsx",
-      "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: a placeholder RpcClient until C0.4 lands BridgeRpcClient over the shell bridge."
+      "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: BridgeRpcClient over the shell bridge, and a placeholder RpcClient for a page opened outside it, which is what lets the route tree mount in a plain browser."
     },
     {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
