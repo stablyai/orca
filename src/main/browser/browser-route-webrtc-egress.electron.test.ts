@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
@@ -19,7 +20,7 @@ afterAll(() => {
   const failures: unknown[] = []
   for (const root of fixtureRoots) {
     try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+      removeTreeSync(root)
     } catch (error) {
       failures.push(error)
     }
