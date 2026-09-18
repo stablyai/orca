@@ -255,6 +255,31 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs the mobile web app job for the builder, the page source and the shell policy', () => {
+    for (const file of [
+      'config/scripts/build-mobile-web-app-bundle.mjs',
+      'config/scripts/mobile-web-app-route-manifest.mjs',
+      'mobile/web-entry/index.tsx',
+      'mobile/app/h/[hostId]/index.tsx',
+      'mobile/src/transport/client-context.web.tsx',
+      'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'
+    ]) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(true)
+    }
+  })
+
+  it('runs it on a mobile-only diff, which should_run alone would skip', () => {
+    const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
+    expect(classified.should_run).toBe(false)
+    expect(classified.mobile_web_app).toBe(true)
+  })
+
+  it('leaves it off for changes that cannot reach the page', () => {
+    for (const file of ['docs/reference/x.md', 'src/main/orcad/orcad-native-preflight.ts']) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(false)
+    }
+  })
+
   it('runs cross-version wire checks for every working-tree wire module', () => {
     for (const file of [
       'src/shared/protocol-version.ts',

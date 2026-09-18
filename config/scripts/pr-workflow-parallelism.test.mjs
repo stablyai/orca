@@ -463,6 +463,7 @@ describe('PR workflow parallelism', () => {
       'shell_contracts',
       'test',
       'orcad_browser',
+      'mobile_web_app',
       'cross-version-wire',
       'managed_hook_node18',
       'package',
@@ -479,5 +480,9 @@ describe('PR workflow parallelism', () => {
     expect(verifyStep.run).toContain('"$ORCAD_BROWSER"')
     expect(verifyStep.env.CROSS_VERSION_WIRE).toBe('${{ needs.cross-version-wire.result }}')
     expect(verifyStep.run).toContain('"$CROSS_VERSION_WIRE"')
+    // Same reason as the browser provider: the render check fails loudly on a runner with no
+    // Chrome, which only guards the page if verify reads the job's result.
+    expect(verifyStep.env.MOBILE_WEB_APP).toBe('${{ needs.mobile_web_app.result }}')
+    expect(verifyStep.run).toContain('"$MOBILE_WEB_APP"')
   })
 })

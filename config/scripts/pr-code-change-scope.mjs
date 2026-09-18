@@ -26,6 +26,7 @@ export const PR_CHECK_JOBS = [
   'shell_contracts',
   'test',
   'orcad_browser',
+  'mobile_web_app',
   'cross-version-wire',
   'managed_hook_node18',
   'package',
@@ -104,6 +105,22 @@ const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/orcad-browser-provider',
   'src/main/orcad/orcad-agent-browser-binary',
   'src/main/orcad/electron-serve-browser-process'
+]
+
+// The Route A page bundle: the builder and verifier, the entry, the route tree it mounts, the
+// mobile source those routes import, and the shell policy the render check runs the page under.
+const MOBILE_WEB_APP_PREFIXES = [
+  'config/scripts/build-mobile-web-app-bundle',
+  'config/scripts/verify-mobile-web-app-bundle',
+  'config/scripts/mobile-web-app-',
+  'config/scripts/build-mobile-web-bundle',
+  'config/scripts/verify-mobile-web-bundle',
+  'mobile/web-entry/',
+  'mobile/app/',
+  'mobile/src/',
+  'mobile/package.json',
+  'mobile/pnpm-lock.yaml',
+  'mobile/modules/orca-mobile-web-shell/'
 ]
 
 const CROSS_VERSION_WIRE_PREFIXES = [
@@ -358,6 +375,11 @@ export function classifyPrJobs(changedFiles) {
   // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
   // it then fails this same gate on every later PR's merge ref.
   jobs.static_analysis = jobs.static_analysis || changedFiles.some(isStaticAnalysisScannedPath)
+  // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
+  // that is exactly the diff that changes the page this job builds. Gated on should_run it would
+  // skip on every PR that can break it and run on none.
+  jobs.mobile_web_app =
+    jobs.mobile_web_app || changedFiles.some((file) => matchesPrefix(file, MOBILE_WEB_APP_PREFIXES))
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
@@ -380,6 +402,8 @@ function jobDetector(job) {
       return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
     case 'orcad_browser':
       return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
+    case 'mobile_web_app':
+      return (files) => files.some((file) => matchesPrefix(file, MOBILE_WEB_APP_PREFIXES))
     case 'cross-version-wire':
       return (files) => files.some((file) => matchesPrefix(file, CROSS_VERSION_WIRE_PREFIXES))
     case 'managed_hook_node18':
