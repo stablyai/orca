@@ -33,6 +33,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleCommitAction,
     handleContextMenu,
     handleOpenDiff,
+    handleOpenWorkingTreeFile,
     handleResolveConflictsWithAI,
     handleSelect,
     handleStage,
@@ -165,6 +166,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           revealInExplorer={revealInExplorer}
           activeConnectionId={activeConnectionId}
           handleOpenDiff={handleOpenDiff}
+          handleOpenWorkingTreeFile={handleOpenWorkingTreeFile}
           handleStage={handleStage}
           handleUnstage={handleUnstage}
           requestDiscardEntry={requestDiscardEntry}

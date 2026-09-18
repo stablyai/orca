@@ -25,3 +25,10 @@ export function canDiscardStatusEntry(entry: GitStatusEntry): boolean {
     (entry.area === 'unstaged' || entry.area === 'untracked')
   )
 }
+
+// Why: deleted rows and submodule gitlinks are not regular files on disk.
+export function canOpenWorkingTreeStatusEntry(
+  entry: Pick<GitStatusEntry, 'status' | 'submodule'>
+): boolean {
+  return entry.status !== 'deleted' && entry.submodule == null
+}
