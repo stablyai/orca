@@ -38,6 +38,10 @@ function isMockedHostElement(type: unknown, name: string): boolean {
   return type === name
 }
 
+function pressableCount(): number {
+  return renderer?.root.findAll((node) => isMockedHostElement(node.type, 'Pressable')).length ?? 0
+}
+
 function primaryActionUrl(): unknown {
   const pressable = renderer?.root.findAll((node) => isMockedHostElement(node.type, 'Pressable'))[0]
   act(() => pressable?.props.onPress())
@@ -106,7 +110,7 @@ describe('ProtocolBlockScreen', () => {
     expect(primaryActionUrl()).toBe('itms-apps://apps.apple.com/app/orca-ide/id6766130217')
   })
 
-  it('sends a bundle newer than this shell to the mobile update', () => {
+  it('offers no download for a cached bundle the host outgrew, because none would clear it', () => {
     const output = render({
       kind: 'blocked',
       reason: 'bundle-incompatible',
@@ -114,8 +118,21 @@ describe('ProtocolBlockScreen', () => {
       bundleRuntimeProtocolVersion: 3,
       requiredBundleRuntimeProtocolVersion: 4
     })
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain("This desktop's mobile workspace needs a newer Orca Mobile app")
+
+    expect(output).toContain('Refresh the mobile workspace')
+    expect(output).toContain(
+      'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+    )
+    // A store update cannot replace a stale cache, so neither store link is offered.
+    expect(output).not.toContain('Open App Store')
+    expect(output).not.toContain('Open GitHub Releases')
+    expect(output).not.toContain('Update Orca')
+    // Back to hosts is the only button left, and it is not a download.
+    expect(pressableCount()).toBe(1)
+    expect(output).toContain('Back to hosts')
+    // Nothing was "already updated" here; the note keeps only the pairing fallback.
+    expect(output).not.toContain('Already updated?')
+    expect(output).toContain('If this message stays, remove this host and pair it again.')
   })
 
   it('sends a host older than its own bundle to the desktop update', () => {
@@ -143,8 +160,10 @@ describe('ProtocolBlockScreen', () => {
     expect(primaryActionUrl()).toBe(RELEASES_URL)
   })
 
-  it('keeps the recovery note on every wall', () => {
+  it('keeps the update walls on two buttons and the full recovery note', () => {
     const output = render({ kind: 'blocked', reason: 'bundle-unavailable' })
     expect(output).toContain('Already updated? Go back to Hosts and refresh the connection.')
+    // The presence precondition for the absence asserted on the refresh wall above.
+    expect(pressableCount()).toBe(2)
   })
 })

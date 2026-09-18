@@ -20,64 +20,87 @@ type Props = {
 const DESKTOP_TOO_OLD_BODY =
   'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
 
-/** Which of the two apps the user has to update. Drives the copy and the store link together, so a
- *  new reason cannot ship a mobile title over a desktop button. */
-function updateSide(verdict: BlockedVerdict): 'mobile' | 'desktop' {
+/** What clears the wall. `refresh-bundle` is the one that no store can: the cached workspace is
+ *  older than this host's client floor, so a download fixes it and an app update does not. */
+type BlockRemedy = 'update-mobile' | 'update-desktop' | 'refresh-bundle'
+
+function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   switch (verdict.reason) {
     case 'mobile-too-old':
     case 'bundle-shell-too-old':
-      return 'mobile'
+      return 'update-mobile'
     case 'desktop-too-old':
     case 'bundle-unavailable':
-      return 'desktop'
+      return 'update-desktop'
     case 'bundle-incompatible':
-      return verdict.side
+      return verdict.side === 'desktop' ? 'update-desktop' : 'refresh-bundle'
   }
 }
 
-function blockBody(verdict: BlockedVerdict, storeName: string): string {
+function blockTitle(remedy: BlockRemedy): string {
+  switch (remedy) {
+    case 'update-mobile':
+      return 'Update Orca Mobile'
+    case 'update-desktop':
+      return 'Update Orca on your computer'
+    case 'refresh-bundle':
+      return 'Refresh the mobile workspace'
+  }
+}
+
+function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: string): string {
+  if (remedy === 'refresh-bundle') {
+    return 'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+  }
   if (verdict.reason === 'mobile-too-old') {
     return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
   }
   if (verdict.reason === 'bundle-unavailable') {
     return 'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
   }
-  // Both bundle walls the phone owns read the same way: this desktop's workspace outran the shell.
-  if (updateSide(verdict) === 'mobile') {
+  if (remedy === 'update-mobile') {
     return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
   }
   return DESKTOP_TOO_OLD_BODY
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
-  const updatesMobile = updateSide(verdict) === 'mobile'
+  const remedy = blockRemedy(verdict)
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
       ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
       : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
-  const primaryAction = updatesMobile
-    ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
-    : { label: 'Open GitHub Releases', url: RELEASES_URL }
+  // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
+  const primaryAction =
+    remedy === 'refresh-bundle'
+      ? null
+      : remedy === 'update-mobile'
+        ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
+        : { label: 'Open GitHub Releases', url: RELEASES_URL }
 
-  const title = updatesMobile ? 'Update Orca Mobile' : 'Update Orca on your computer'
-  const body = blockBody(verdict, mobileUpdateTarget.storeName)
+  const title = blockTitle(remedy)
+  const body = blockBody(verdict, remedy, mobileUpdateTarget.storeName)
   const recoveryNote =
-    'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
+    remedy === 'refresh-bundle'
+      ? 'If this message stays, remove this host and pair it again.'
+      : 'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-          onPress={() => {
-            void Linking.openURL(primaryAction.url)
-          }}
-        >
-          <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
-        </Pressable>
+        {primaryAction ? (
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            onPress={() => {
+              void Linking.openURL(primaryAction.url)
+            }}
+          >
+            <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
