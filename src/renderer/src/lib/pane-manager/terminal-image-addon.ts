@@ -11,6 +11,11 @@ export function createTerminalImageAddon(): ImageAddon {
     // and gates replies on replay/mobile authority; the addon must not add a
     // second, ungated responder for the same queries.
     enableSizeReports: false,
+    // Why: sixelSupport also registers the addon's own CSI c responder
+    // (`?62;4;9;22c`). Orca keeps its DA1 reply because xterm dispatches CSI
+    // handlers last-registered-first and installTerminalCapabilityReplyHandlers
+    // runs after openTerminal has loaded this addon (pinned in
+    // terminal-capability-replies.test.ts).
     sixelSupport: true,
     iipSupport: true,
     kittySupport: true,

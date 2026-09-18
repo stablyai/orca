@@ -7,6 +7,7 @@ import {
   installTerminalCapabilityReplyHandlers,
   sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
+import { createTerminalImageAddon } from '../../lib/pane-manager/terminal-image-addon'
 
 function writeTerminal(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
@@ -57,6 +58,35 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       await writeTerminal(term, '\x1b[c')
 
       expect(sendInput).toHaveBeenCalledWith(CONPTY_DA1_RESPONSE)
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('keeps the default DA1 response over the image addon SIXEL advertisement', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const onData = vi.fn()
+    term.onData(onData)
+    // Why: addon-image registers its own CSI c handler that reports SIXEL support
+    // (`?62;4;9;22c`). openTerminal loads the addon before the PTY connection installs
+    // Orca's handlers, and xterm dispatches CSI handlers last-registered-first, so
+    // Orca's reply must win. This pins that load order.
+    term.loadAddon(createTerminalImageAddon() as never)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[c')
+
+      expect(sendInput).toHaveBeenCalledTimes(1)
+      expect(sendInput).toHaveBeenCalledWith(DEFAULT_DA1_RESPONSE)
+      expect(onData).not.toHaveBeenCalled()
     } finally {
       disposable.dispose()
       term.dispose()
