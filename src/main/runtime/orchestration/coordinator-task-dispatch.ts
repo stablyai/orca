@@ -13,6 +13,20 @@ import { takesNewWork } from './db/worker-terminal/worker-terminal-transfer'
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
 export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
 
+async function resolveDispatchWorktreePath(
+  runtime: CoordinatorRuntime,
+  worktree: string | undefined
+): Promise<string | undefined> {
+  if (!worktree || !runtime.showManagedWorktree) {
+    return undefined
+  }
+  try {
+    return (await runtime.showManagedWorktree(worktree)).path
+  } catch {
+    return undefined
+  }
+}
+
 /** The pane, process and host a Dispatch to `handle` records; the census reads the same. */
 function assigneeAuthority(runtime: CoordinatorRuntime, handle: string) {
   const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(handle)
@@ -93,6 +107,7 @@ export async function dispatchTaskToWorker(params: {
     creator: { kind: 'system' },
     maxDepth: params.nestedWorkerMaxDepth
   })
+  const worktreePath = await resolveDispatchWorktreePath(runtime, params.worktree)
 
   // Dev workers need orca-dev to reach the dev socket.
   const preamble = buildDispatchPreamble({
@@ -102,6 +117,7 @@ export async function dispatchTaskToWorker(params: {
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,
+    ...(worktreePath ? { worktreePath } : {}),
     devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
     ...(runtime.getTerminalOrchestrationCliCommand
       ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(targetHandle) }

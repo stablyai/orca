@@ -263,6 +263,7 @@ export async function startLocalWorker(args: {
       structuredSession,
       terminalHandle,
       coordinatorHandle: params.from,
+      ...(resolvedWorktree?.path ? { worktreePath: resolvedWorktree.path } : {}),
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,

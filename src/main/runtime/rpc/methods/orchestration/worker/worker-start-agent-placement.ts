@@ -25,7 +25,7 @@ import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worke
 import type { ReopenedWorker, WorkerFollowUp } from './worker-follow-up-placement'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
-type PlacedWorktree = { id: string; repoId: string }
+type PlacedWorktree = { id: string; repoId: string; path?: string }
 type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>>
 
 export type WorkerAgentPlacement = {
