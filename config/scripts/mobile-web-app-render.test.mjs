@@ -20,6 +20,29 @@ let origin
 let cspHeader = null
 
 /**
+ * Both CSP constants are a list of quoted directives with `//` comments between them, and those
+ * comments quote directive text. Dropping comment lines first is what keeps a comment out of the
+ * header this test serves.
+ */
+export function parseCspDirectives(source, startMarker, endMarker) {
+  const start = source.indexOf(startMarker)
+  const end = source.indexOf(endMarker)
+  if (start < 0 || end < start) {
+    throw new Error(`could not find ${startMarker} .. ${endMarker}`)
+  }
+  const body = source
+    .slice(start, end)
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n')
+  const directives = [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1])
+  if (directives.length < 10) {
+    throw new Error('could not parse the shell CSP')
+  }
+  return directives.join('; ')
+}
+
+/**
  * The shipped policy, read from the Kotlin source so this test cannot drift from what the shell
  * actually sends. Parsed rather than imported: the constant lives in a JVM module.
  */
@@ -31,12 +54,7 @@ async function readShellCsp() {
     ),
     'utf8'
   )
-  const body = source.slice(source.indexOf('listOf('), source.indexOf(').joinToString'))
-  const directives = [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1])
-  if (directives.length < 10) {
-    throw new Error('could not parse MOBILE_WEB_SHELL_CSP')
-  }
-  return directives.join('; ')
+  return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
 beforeAll(async () => {
@@ -114,9 +132,32 @@ describe('the shell policy this page is tested under', () => {
       join(projectDir, 'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'),
       'utf8'
     )
-    const body = swift.slice(swift.indexOf('static let header = ['), swift.indexOf('].joined'))
-    const ios = [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]).join('; ')
-    expect(ios).toBe(cspHeader)
+    expect(parseCspDirectives(swift, 'static let header = [', '].joined')).toBe(cspHeader)
+  })
+
+  it('reads directives from the source and not from the comments around them', () => {
+    const source = [
+      'static let header = [',
+      "  // React Native Web needs \"style-src 'self' 'unsafe-inline'\" and nothing more.",
+      '  "default-src \'none\'",',
+      '  "script-src \'self\'",',
+      "  \"style-src 'self' 'unsafe-inline'\",",
+      '  "img-src \'self\'",',
+      '  "connect-src \'self\'",',
+      '  "worker-src \'none\'",',
+      '  "frame-src \'none\'",',
+      '  "child-src \'none\'",',
+      '  "object-src \'none\'",',
+      '  "base-uri \'none\'",',
+      '  "form-action \'none\'",',
+      '  "frame-ancestors \'none\'"',
+      '].joined'
+    ].join('\n')
+    const parsed = parseCspDirectives(source, 'static let header = [', '].joined')
+    expect(parsed.split('; ')[0]).toBe("default-src 'none'")
+    expect(parsed.split('; ').filter((entry) => entry.includes('unsafe-inline'))).toEqual([
+      "style-src 'self' 'unsafe-inline'"
+    ])
   })
 
   it('still refuses inline script, which is the directive that matters', () => {
