@@ -204,7 +204,7 @@ describe('mobile web bundle error codes', () => {
   it('answers null for anything that is not one of those six', () => {
     expect(readMobileWebBundleErrorCode(new Error('invalid_argument: some_other_code'))).toBeNull()
     expect(readMobileWebBundleErrorCode(new Error('internal_error: boom'))).toBeNull()
-    expect(readMobileWebBundleErrorCode(new Error(''))).toBeNull()
+    expect(readMobileWebBundleErrorCode(new Error(' '))).toBeNull()
     expect(readMobileWebBundleErrorCode(new Error('Network request failed'))).toBeNull()
     expect(readMobileWebBundleErrorCode('mobile_web_bundle_unavailable')).toBeNull()
     expect(readMobileWebBundleErrorCode(null)).toBeNull()
