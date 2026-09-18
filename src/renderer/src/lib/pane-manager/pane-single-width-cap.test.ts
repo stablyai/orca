@@ -23,3 +23,15 @@ describe('single-pane width cap', () => {
     expect(root.style.getPropertyValue('--pane-single-edge-width')).toBe('')
   })
 })
+
+describe('when the setting goes back to unset', () => {
+  it('clears both inline properties so the stylesheet default applies again', () => {
+    const root = document.createElement('div')
+    applyRootBackground(root, { singlePaneMaxWidth: 900 })
+    expect(root.style.getPropertyValue('--pane-single-max-width')).toBe('900px')
+
+    applyRootBackground(root, {})
+    expect(root.style.getPropertyValue('--pane-single-max-width')).toBe('')
+    expect(root.style.getPropertyValue('--pane-single-edge-width')).toBe('')
+  })
+})

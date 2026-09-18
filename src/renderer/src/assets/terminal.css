@@ -535,6 +535,10 @@
   touch-action: none;
 }
 
+.pane-single-width-handle:focus-visible {
+  outline: none;
+}
+
 .pane-single-width-handle::after {
   content: '';
   position: absolute;
@@ -549,6 +553,7 @@
 }
 
 .pane-single-width-handle:hover::after,
+.pane-single-width-handle:focus-visible::after,
 .pane-single-width-handle.is-dragging::after {
   background: var(
     --orca-terminal-divider-color-strong,

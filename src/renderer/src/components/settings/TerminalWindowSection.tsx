@@ -9,7 +9,10 @@ import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { DEFAULT_SINGLE_PANE_MAX_WIDTH } from '../terminal-pane/TerminalSinglePaneWidthHandles'
+import {
+  DEFAULT_SINGLE_PANE_MAX_WIDTH,
+  MIN_SINGLE_PANE_WIDTH
+} from '../terminal-pane/TerminalSinglePaneWidthHandles'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -246,7 +249,13 @@ export function TerminalWindowSection({
             max={4000}
             step={10}
             suffix="px"
-            onChange={(value) => updateSettings({ terminalSinglePaneMaxWidth: Math.max(0, value) })}
+            onChange={(value) =>
+              updateSettings({
+                // Below the drag floor the first drag would silently snap the
+                // value back up, so refuse the width the drag cannot hold.
+                terminalSinglePaneMaxWidth: value <= 0 ? 0 : Math.max(MIN_SINGLE_PANE_WIDTH, value)
+              })
+            }
           />
         </SearchableSetting>
 

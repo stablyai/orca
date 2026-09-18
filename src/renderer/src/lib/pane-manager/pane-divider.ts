@@ -97,7 +97,12 @@ export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOp
   if (styleOptions.paddingY !== undefined) {
     root.style.setProperty('--pane-padding-y', `${styleOptions.paddingY}px`)
   }
-  if (styleOptions.singlePaneMaxWidth !== undefined) {
+  if (styleOptions.singlePaneMaxWidth === undefined) {
+    // The root outlives a settings change, so a stale inline value would keep
+    // overriding the stylesheet's own default.
+    root.style.removeProperty('--pane-single-max-width')
+    root.style.removeProperty('--pane-single-edge-width')
+  } else {
     const capped = styleOptions.singlePaneMaxWidth > 0
     // 0 means "no cap"; a 0px max-width would collapse the pane instead.
     root.style.setProperty(

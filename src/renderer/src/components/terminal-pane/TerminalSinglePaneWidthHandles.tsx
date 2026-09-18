@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent, RefObject } from 'react'
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  RefObject
+} from 'react'
 import {
   matchesActiveDragPointer,
   releasePointerCaptureIfHeld
@@ -9,7 +14,11 @@ import { translate } from '@/i18n/i18n'
 
 /** Floor keeps a dragged terminal wide enough to stay usable; the ceiling is the
  *  tab itself, so the cap can always be dragged back in from full width. */
-const MIN_SINGLE_PANE_WIDTH = 400
+export const MIN_SINGLE_PANE_WIDTH = 400
+
+/** Pointer travel a single arrow key stands in for; Shift multiplies it. */
+const KEYBOARD_STEP_PX = 20
+const KEYBOARD_STEP_MULTIPLIER = 5
 
 /** Mirrors the fallback baked into terminal.css so an unset setting shows the
  *  width it actually renders at. Change both together. */
@@ -176,6 +185,10 @@ export function TerminalSinglePaneWidthHandles({
       if (event.button !== 0 || containerWidth <= 0 || container === null) {
         return
       }
+      // A second press (second touch, or the press after a swallowed pointerup)
+      // would otherwise orphan the previous drag's PTY hold, whose depth counter
+      // then queues every later resize forever.
+      finishDragRef.current(false)
       const startWidth = Math.min(maxWidth, containerWidth)
       const hold = holdPtyResizesForPaneSubtrees([container])
       dragRef.current = {
@@ -194,6 +207,26 @@ export function TerminalSinglePaneWidthHandles({
       event.preventDefault()
     },
     [containerRef, containerWidth, maxWidth]
+  )
+
+  const nudge = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>, direction: 1 | -1, current: number) => {
+      const step = event.key === 'ArrowLeft' ? -KEYBOARD_STEP_PX : KEYBOARD_STEP_PX
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+        return
+      }
+      event.preventDefault()
+      const next = resolveDraggedSinglePaneWidth({
+        startWidth: current,
+        deltaX: event.shiftKey ? step * KEYBOARD_STEP_MULTIPLIER : step,
+        direction,
+        containerWidth
+      })
+      if (next !== current) {
+        onCommit(next)
+      }
+    },
+    [containerWidth, onCommit]
   )
 
   if (containerWidth <= 0 || !inCapHost) {
@@ -218,11 +251,16 @@ export function TerminalSinglePaneWidthHandles({
           style={{ left: `${handle.left}px` }}
           role="separator"
           aria-orientation="vertical"
+          tabIndex={0}
+          aria-valuemin={MIN_SINGLE_PANE_WIDTH}
+          aria-valuemax={Math.round(containerWidth)}
+          aria-valuenow={Math.round(width)}
           aria-label={translate(
             'auto.components.terminal.pane.TerminalSinglePaneWidthHandles.75e1cb1f51',
             'Resize terminal width'
           )}
           onPointerDown={(event) => startDrag(event, handle.direction)}
+          onKeyDown={(event) => nudge(event, handle.direction, width)}
         />
       ))}
     </div>
