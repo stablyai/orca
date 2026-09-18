@@ -548,6 +548,25 @@ describe('generation store', () => {
     expect(fs.text('hosts.json')).toBe(JSON.stringify({ [HOST]: 10 }))
   })
 
+  it('ignores a directory under the cache root that is not a host key', async () => {
+    const fs = createFakeFileSystem()
+    let clock = 0
+    const store = createGenerationStore({ fileSystem: fs, now: () => (clock += 1) })
+    // Whatever else lives under the OS cache directory is not this store's to count or delete.
+    fs.seed('not-a-host-key/stray.txt', { kind: 'file', bytes: new Uint8Array(1) })
+    const hosts = ['a', 'b', 'c', 'd'].map((name) => deriveHostCacheKey(name))
+
+    for (const host of hosts) {
+      await activate(store, host)
+    }
+    await store.sweepStagedGenerations()
+
+    expect(fs.paths()).toContain('not-a-host-key/stray.txt')
+    for (const host of hosts) {
+      expect((await store.readActiveGeneration(host))?.buildId).toBe('a'.repeat(64))
+    }
+  })
+
   it('keeps the adapter aligned with the port', () => {
     expect(adapterSatisfiesPort).toBe(true)
   })
