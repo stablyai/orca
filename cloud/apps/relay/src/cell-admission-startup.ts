@@ -36,8 +36,8 @@ export async function reconcileCellAdmissionAtStartup(
         console.warn(
           JSON.stringify({ event: 'orca_relay_startup_reconcile_recovered', attempts })
         ),
-      onGaveUp: ({ attempts, transient }) => {
-        if (transient) {
+      onGaveUp: ({ attempts, retryable }) => {
+        if (retryable) {
           console.warn(
             JSON.stringify({ event: 'orca_relay_startup_reconcile_exhausted', attempts })
           )

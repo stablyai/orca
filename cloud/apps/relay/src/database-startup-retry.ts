@@ -6,12 +6,16 @@ export type DatabaseStartupRetryPolicy = {
   baseDelayMs: number
   maxDelayMs: number
   jitterMs: number
+  // Which failures this particular startup step may repeat. Not every caller can
+  // repeat everything the request path calls transient: what the retry re-runs
+  // decides that, so the call site owns it.
+  isRetryable?: (error: unknown) => boolean
 }
 
 export type DatabaseStartupRetryObserver = {
   onRetry?: (event: { attempt: number; delayMs: number; error: unknown }) => void
   onRecovered?: (event: { attempts: number }) => void
-  onGaveUp?: (event: { attempts: number; error: unknown; transient: boolean }) => void
+  onGaveUp?: (event: { attempts: number; error: unknown; retryable: boolean }) => void
 }
 
 function retryDelayMs(policy: DatabaseStartupRetryPolicy, attempt: number): number {
@@ -35,9 +39,9 @@ export async function retryTransientDatabaseStartup<T>(
       return result
     } catch (error) {
       const remainingMs = retryDeadline - Date.now()
-      const transient = isRelayDatabaseTransientError(error)
-      if (attempt === policy.attempts || remainingMs <= 0 || !transient) {
-        observer.onGaveUp?.({ attempts: attempt, error, transient })
+      const retryable = (policy.isRetryable ?? isRelayDatabaseTransientError)(error)
+      if (attempt === policy.attempts || remainingMs <= 0 || !retryable) {
+        observer.onGaveUp?.({ attempts: attempt, error, retryable })
         throw error
       }
       const delayMs = Math.min(retryDelayMs(policy, attempt), remainingMs)

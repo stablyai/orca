@@ -1,7 +1,20 @@
 import { openRelayDatabase, type RelayDatabase, type RelayDatabaseOpenInput } from './database.js'
 import { retryTransientDatabaseStartup } from './database-startup-retry.js'
-import { isPostgresPoolConnectTimeout } from './postgres-pool-pressure.js'
+import {
+  isPostgresPoolConnectFailure,
+  isPostgresPoolConnectTimeout
+} from './postgres-pool-pressure.js'
 import { postgresErrorCodeCategory } from './postgres-query-failure.js'
+
+// Only a failure to reach Postgres at all. A retry here re-runs the schema
+// apply, and applyPostgresSchema refuses to repeat a DDL lock timeout on
+// purpose: relation locks are granted in queue order, so a repeat parks every
+// writer behind the same statement again. 55P03, 57014 and 53300 therefore stay
+// terminal at boot even though the request path calls them transient.
+function isBootDatabaseUnreachable(error: unknown): boolean {
+  const code = postgresErrorCodeCategory(error)
+  return isPostgresPoolConnectFailure(error) || code === '08001' || code === '08006'
+}
 
 // A cell boots beside a cloud-sql-proxy that is itself still dialling, so the
 // first pool acquire can outrun the 2s connect timeout that protects the
@@ -12,7 +25,8 @@ const BOOT_OPEN_RETRY = {
   windowMs: 45_000,
   baseDelayMs: 250,
   maxDelayMs: 4_000,
-  jitterMs: 250
+  jitterMs: 250,
+  isRetryable: isBootDatabaseUnreachable
 }
 
 function bootDatabaseErrorFields(error: unknown): Record<string, unknown> {
@@ -43,12 +57,12 @@ export async function openRelayDatabaseAtBoot(
         console.warn(
           JSON.stringify({ event: 'orca_relay_boot_database_recovered', attempts })
         ),
-      onGaveUp: ({ attempts, error, transient }) =>
+      onGaveUp: ({ attempts, error, retryable }) =>
         console.warn(
           JSON.stringify({
             event: 'orca_relay_boot_database_failed',
             attempts,
-            transient,
+            retryable,
             ...bootDatabaseErrorFields(error)
           })
         )
