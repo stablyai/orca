@@ -8,7 +8,9 @@ import {
   MobileWebBundleChunkReplySchema,
   MobileWebBundleManifestReplySchema
 } from './mobile-web-bundle-reply-schemas'
+import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { defineRpcOperation } from './rpc-operation'
+import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 import { rpcResultVariant } from './rpc-operation-result-reader'
 
 // The two reads that hand a paired phone the desktop's mobile web bundle. Both are
@@ -74,4 +76,17 @@ export function readMobileWebBundleErrorCode(error: unknown): MobileWebBundleErr
   }
   const parsed = MobileWebBundleErrorCodeSchema.safeParse(nested)
   return parsed.success ? parsed.data : null
+}
+
+/**
+ * True when a bundle read failed on the link to the host rather than on the bundle it serves.
+ *
+ * Both marks come from the transport itself: delivery-unknown on every request a socket close, a
+ * relay drop or a timeout cut off, and the cutover error on a connection migration. Nothing else
+ * qualifies, on purpose — the fetch raises plain errors for a hash mismatch, a short asset and a
+ * build that changed mid-fetch, and every one of those is a verdict about the bytes that arrived.
+ * `readMobileWebBundleErrorCode` above reads the host's own refusals, which are verdicts too.
+ */
+export function isMobileWebBundleTransportFailure(error: unknown): boolean {
+  return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
 }

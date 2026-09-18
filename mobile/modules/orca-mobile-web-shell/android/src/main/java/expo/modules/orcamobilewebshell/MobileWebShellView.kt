@@ -15,8 +15,13 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.io.ByteArrayInputStream
@@ -38,11 +43,19 @@ internal class OrcaMobileWebShellView(
   appContext: AppContext
 ) : ExpoView(context, appContext) {
   private val onLoadState by EventDispatcher<Map<String, Any>>()
+  private val onBridgeMessage by EventDispatcher<Map<String, Any>>()
 
   private var generationDirectory = ""
   private var sessionId = ""
-  private var appliedDirectory: String? = null
-  private var appliedSessionId: String? = null
+  private var bridgeEnabled = false
+  private var bridgeInstalled = false
+  private val bridgeGate = MobileWebShellBridgeGate()
+  // Chromium hands a reply proxy to the listener, so native cannot speak first. The envelope has
+  // the page send `ready` before anything is delivered, so there is nothing to speak first about.
+  // Volatile for the same reason as `documentFailed`: `reportDocumentFailure` drops the proxy from
+  // whichever thread `shouldInterceptRequest` ran on, and the listener reads it on the UI thread.
+  @Volatile private var replyProxy: JavaScriptReplyProxy? = null
+  private var applied: MobileWebShellAppliedProps? = null
   private val loadState = MobileWebShellLoadStateMachine()
   // Written on the main thread, read from onPageStarted/onPageFinished, which Chromium runs after
   // the failure that hid the view; `shouldInterceptRequest` also runs off the main thread.
@@ -63,14 +76,18 @@ internal class OrcaMobileWebShellView(
     sessionId = value
   }
 
+  fun setBridgeEnabled(value: Boolean) {
+    bridgeEnabled = value
+  }
+
   /**
    * Props arrive in no defined order, so neither setter starts anything; this does, once both are
-   * in. A repeat of the same pair is not a retry: a retry is a remount under a new React key.
+   * in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
    */
   fun propsDidUpdate() {
-    if (generationDirectory == appliedDirectory && sessionId == appliedSessionId) return
-    appliedDirectory = generationDirectory
-    appliedSessionId = sessionId
+    val next = MobileWebShellAppliedProps(generationDirectory, sessionId, bridgeEnabled)
+    if (applied?.matches(next) == true) return
+    applied = next
     documentFailed = false
     loadState.reset()
     val view = webView
@@ -101,6 +118,10 @@ internal class OrcaMobileWebShellView(
       failPropUpdate(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE)
       return
     }
+    if (!applyBridgeListener(view, origin)) {
+      failPropUpdate(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE)
+      return
+    }
     served = MobileWebShellServed(loaded, host)
     view.visibility = View.VISIBLE
     view.loadUrl("$origin/")
@@ -111,14 +132,87 @@ internal class OrcaMobileWebShellView(
    * served and visible would show a page the caller has just been told is not loaded.
    */
   private fun failPropUpdate(reason: MobileWebShellFailureReason) {
+    // The listener outlives the props it was installed under, and the document it was installed
+    // for is still alive after `stopLoading`: left in place it would keep posting through an
+    // origin this mount has just stopped serving, and re-arm the reply proxy doing it.
+    removeBridgeListener()
     served = null
     webView?.visibility = View.INVISIBLE
     emit(loadState.failed(reason))
   }
 
+  /**
+   * `addWebMessageListener` is the whole install: Chromium injects an `orcaBridge` object of the
+   * agreed shape before any page script runs, and enforces the allowed origin itself, which is why
+   * the listener needs no origin check of its own. Answers false only for a provider too old to
+   * offer the listener at all.
+   */
+  private fun applyBridgeListener(view: WebView, origin: String): Boolean {
+    removeBridgeListener()
+    val outcome = mobileWebShellBridgeInstall(
+      bridgeEnabled,
+      WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+    )
+    if (outcome != MobileWebShellBridgeInstall.INSTALL) {
+      return outcome == MobileWebShellBridgeInstall.SKIP
+    }
+    return runCatching {
+      WebViewCompat.addWebMessageListener(
+        view,
+        MOBILE_WEB_SHELL_BRIDGE_OBJECT,
+        setOf(origin),
+        bridgeListener
+      )
+      bridgeInstalled = true
+    }.isSuccess
+  }
+
+  /** The one way the bridge goes away, so no disable path can leave a listener behind. */
+  private fun removeBridgeListener() {
+    val view = webView
+    if (bridgeInstalled && view != null) {
+      WebViewCompat.removeWebMessageListener(view, MOBILE_WEB_SHELL_BRIDGE_OBJECT)
+    }
+    bridgeInstalled = false
+    replyProxy = null
+  }
+
+  /** Chromium calls this on the UI thread, which is also the only thread that may reply. */
+  private val bridgeListener = WebViewCompat.WebMessageListener {
+    _, message, _, isMainFrame, proxy ->
+    val isStringMessage = message.type == WebMessageCompat.TYPE_STRING
+    val json = if (isStringMessage) message.data else null
+    if (
+      acceptsMobileWebShellBridgeFrame(
+        isMainFrame,
+        isStringMessage,
+        loadState.hasCommittedDocument
+      ) && json != null &&
+      bridgeGate.accepts(json.toByteArray(Charsets.UTF_8).size)
+    ) {
+      replyProxy = proxy
+      onBridgeMessage(mapOf("json" to json))
+    }
+  }
+
+  /**
+   * Thrown rather than dropped: the only caller is the React Native host, and a silent drop would
+   * turn a chunking bug there into a request that never settles.
+   */
+  fun postBridgeMessage(json: String) {
+    val proxy = replyProxy ?: throw MobileWebShellBridgeUnavailableException()
+    val byteCount = json.toByteArray(Charsets.UTF_8).size
+    if (!acceptsMobileWebShellBridgeByteCount(byteCount)) {
+      throw MobileWebShellBridgeMessageTooLargeException(byteCount)
+    }
+    proxy.postMessage(json)
+  }
+
   /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
   fun destroyWebView() {
     val view = webView ?: return
+    removeBridgeListener()
+    loadState.documentEnded()
     webView = null
     blocker?.remove()
     blocker = null
@@ -183,6 +277,10 @@ internal class OrcaMobileWebShellView(
    * thing on screen. `shouldInterceptRequest` also runs off the main thread.
    */
   private fun reportDocumentFailure() {
+    replyProxy = null
+    // Synchronously, unlike the emission: the error document commits before the post runs, and a
+    // page that failed is not one to hear from in the meantime.
+    loadState.documentEnded()
     // Set before the post, not inside it: onPageFinished runs in between and would otherwise
     // report `ready` over the failure and make the error page visible again.
     documentFailed = true
@@ -264,7 +362,14 @@ internal class OrcaMobileWebShellView(
       )
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+      // The document that spoke is being replaced, so its proxy stops being somewhere to post: the
+      // next one has to say `ready` first, which is what the envelope has it do.
+      replyProxy = null
+      loadState.documentEnded()
       if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
+      // The load the caller was told about is the one now on screen, so this is where the page
+      // becomes something to hear. Chromium runs page script after this.
+      loadState.committed()
       emit(loadState.started())
     }
 
@@ -303,3 +408,11 @@ internal class OrcaMobileWebShellView(
     }
   }
 }
+
+internal class MobileWebShellBridgeUnavailableException :
+  CodedException("The mobile web shell bridge is not installed on this view")
+
+internal class MobileWebShellBridgeMessageTooLargeException(byteCount: Int) : CodedException(
+  "A bridge message of $byteCount bytes exceeds the " +
+    "$MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES byte cap"
+)

@@ -23,10 +23,27 @@ final class MobileWebShellLoadStateMachine {
   private var isTerminal = false
   private var last: MobileWebShellLoadEmission?
 
+  /// Whether a document under the current prop triple has committed. The document a load replaces
+  /// stays alive between `stopLoading` and the next commit, and it is same-origin whenever only the
+  /// directory or the bridge prop changed, so without this it passes every origin check and speaks
+  /// for a load the caller has already been told is `loading`.
+  private(set) var hasCommittedDocument = false
+
   /// A new prop pair. Nothing else reopens a terminal state: a retry is a remount.
   func reset() {
     isTerminal = false
     last = nil
+    documentEnded()
+  }
+
+  func committed() {
+    guard !isTerminal else { return }
+    hasCommittedDocument = true
+  }
+
+  /// The committed document is gone: a new load, a failure, or a renderer that died.
+  func documentEnded() {
+    hasCommittedDocument = false
   }
 
   func started() -> MobileWebShellLoadEmission? {
@@ -40,6 +57,7 @@ final class MobileWebShellLoadStateMachine {
   func failed(_ reason: MobileWebShellFailureReason) -> MobileWebShellLoadEmission? {
     let emission = emit(MobileWebShellLoadEmission(state: "failed", reason: reason.rawValue))
     isTerminal = true
+    documentEnded()
     return emission
   }
 

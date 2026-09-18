@@ -1,8 +1,10 @@
 package expo.modules.orcamobilewebshell
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private fun failure(reason: String) = MobileWebShellLoadEmission("failed", reason)
@@ -19,6 +21,31 @@ class MobileWebShellLoadStateTest {
       ),
       MobileWebShellFailureReason.entries.map { it.wireName }
     )
+  }
+
+  @Test
+  fun `hears a document only between its commit and the end of that load`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertFalse(machine.hasCommittedDocument)
+    machine.started()
+    // The previous document is alive and same-origin until the next one commits.
+    assertFalse(machine.hasCommittedDocument)
+    machine.committed()
+    assertTrue(machine.hasCommittedDocument)
+
+    // A new prop triple: the committed document is the one being replaced.
+    machine.reset()
+    assertFalse(machine.hasCommittedDocument)
+    machine.committed()
+    machine.documentEnded()
+    assertFalse(machine.hasCommittedDocument)
+
+    // A failure ends the document, and nothing after it re-arms: a retry is a remount.
+    machine.committed()
+    machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE)
+    assertFalse(machine.hasCommittedDocument)
+    machine.committed()
+    assertFalse(machine.hasCommittedDocument)
   }
 
   @Test

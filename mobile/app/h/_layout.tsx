@@ -54,6 +54,8 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
       />
       <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
       <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
+      {/* Dev-flag only: redirects to the host screen unless the hybrid shell flag is on. */}
+      <Stack.Screen name="[hostId]/web" options={{ title: 'Workspace' }} />
     </Stack>
   )
 }

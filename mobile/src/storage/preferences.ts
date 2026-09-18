@@ -117,6 +117,30 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
 }
 
+const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
+
+// Why: the hybrid shell route is dark. Default-off means a store build never fetches, writes or
+// sweeps a bundle cache, and the only writer is the __DEV__ Troubleshoot toggle — anything but
+// `'true'`, including an unreadable store, is off.
+export async function loadMobileWebShellEnabled(): Promise<boolean> {
+  // A release build never reads the key at all: it shares its bundle id with the development build
+  // and the iOS data container survives an install-over, so a flag a developer left on would
+  // otherwise follow the store build in and mount the shell on a deep link.
+  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+    return false
+  }
+  try {
+    const raw = await AsyncStorage.getItem(MOBILE_WEB_SHELL_KEY)
+    return raw === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveMobileWebShellEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(MOBILE_WEB_SHELL_KEY, String(enabled))
+}
+
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {

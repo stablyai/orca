@@ -8,7 +8,7 @@ class OrcaMobileWebShellModule : Module() {
     Name("OrcaMobileWebShell")
 
     View(OrcaMobileWebShellView::class) {
-      Events("onLoadState")
+      Events("onLoadState", "onBridgeMessage")
 
       Prop("generationDirectory") { view: OrcaMobileWebShellView, value: String ->
         view.setGenerationDirectory(value)
@@ -16,6 +16,14 @@ class OrcaMobileWebShellModule : Module() {
 
       Prop("sessionId") { view: OrcaMobileWebShellView, value: String ->
         view.setSessionId(value)
+      }
+
+      Prop("bridgeEnabled") { view: OrcaMobileWebShellView, value: Boolean ->
+        view.setBridgeEnabled(value)
+      }
+
+      AsyncFunction("postBridgeMessage") { view: OrcaMobileWebShellView, json: String ->
+        view.postBridgeMessage(json)
       }
 
       OnViewDidUpdateProps { view: OrcaMobileWebShellView ->

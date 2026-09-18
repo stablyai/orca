@@ -7,6 +7,7 @@ import Foundation
 //   swiftc -O -o /tmp/mobile-web-shell-checks \
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
+//     ios/MobileWebShellBridge.swift ios/MobileWebShellAppliedProps.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -94,6 +95,16 @@ import Foundation
     precondition(resolve(parts(path: "/", hasRangeHeader: true)) == nil)
     precondition(resolve(parts(path: "/", scheme: "https")) == nil)
     precondition(resolve(parts(path: "/", scheme: nil)) == nil)
+    // The same ASCII-only fold as the bridge: a Kelvin-sign host is a host nobody minted, and a
+    // caseInsensitiveCompare here would serve it every asset.
+    precondition(MobileWebShellOrigin.resolveRequestPath(
+      parts(path: "/", host: "\u{212A}ey"),
+      sessionId: "key"
+    ) == nil)
+    precondition(MobileWebShellOrigin.resolveRequestPath(
+      parts(path: "/", host: "KEY"),
+      sessionId: "key"
+    ) == "/")
     precondition(resolve(parts(path: "/", host: "other-session")) == nil)
     precondition(resolve(parts(path: "/", host: nil)) == nil)
     precondition(resolve(parts(path: "/", port: 443)) == nil)
@@ -234,6 +245,29 @@ import Foundation
 
     refused.reset()
     precondition(refused.failed(.generationUnreadable)?.reason == "generation-unreadable")
+
+    // A document is heard only between its own commit and the end of that load.
+    let arming = MobileWebShellLoadStateMachine()
+    precondition(!arming.hasCommittedDocument)
+    _ = arming.started()
+    // The previous document is alive and same-origin until the next one commits.
+    precondition(!arming.hasCommittedDocument)
+    arming.committed()
+    precondition(arming.hasCommittedDocument)
+
+    // A new prop triple: the committed document is the one being replaced.
+    arming.reset()
+    precondition(!arming.hasCommittedDocument)
+    arming.committed()
+    arming.documentEnded()
+    precondition(!arming.hasCommittedDocument)
+
+    // A failure ends the document, and nothing after it re-arms: a retry is a remount.
+    arming.committed()
+    _ = arming.failed(.renderProcessGone)
+    precondition(!arming.hasCommittedDocument)
+    arming.committed()
+    precondition(!arming.hasCommittedDocument)
   }
 
   static func checkResponseHeaders() {
@@ -276,6 +310,182 @@ import Foundation
     precondition(!ignorable("SomeOtherDomain", 102))
   }
 
+  static func bridgeSource(
+    isOurWebView: Bool = true,
+    isMainFrame: Bool = true,
+    hasCommittedDocument: Bool = true,
+    originProtocol: String = MobileWebShellOrigin.scheme,
+    originHost: String = session
+  ) -> MobileWebShellBridgeSource {
+    MobileWebShellBridgeSource(
+      isOurWebView: isOurWebView,
+      isMainFrame: isMainFrame,
+      hasCommittedDocument: hasCommittedDocument,
+      originProtocol: originProtocol,
+      originHost: originHost
+    )
+  }
+
+  static func acceptsBridge(_ source: MobileWebShellBridgeSource) -> Bool {
+    MobileWebShellBridge.accepts(source, sessionId: session)
+  }
+
+  static func checkAppliedProps() {
+    func props(
+      directory: String = "/gen/aa",
+      session: String = session,
+      bridge: Bool = true
+    ) -> MobileWebShellAppliedProps {
+      MobileWebShellAppliedProps(
+        generationDirectory: directory,
+        sessionId: session,
+        bridgeEnabled: bridge
+      )
+    }
+
+    precondition(props().matches(props()))
+    precondition(!props().matches(props(directory: "/gen/ab")))
+    precondition(!props().matches(props(session: "sess-01JN_aZ8")))
+    precondition(!props().matches(props(bridge: false)))
+    // A triple that could not be honoured is still applied: re-entry reads the props, never whether
+    // the install succeeded, so a corrupt generation reports its failure once rather than on every
+    // commit for the life of the mount.
+    precondition(props(directory: "/gen/corrupt").matches(props(directory: "/gen/corrupt")))
+
+    // A fourth prop that nobody compared is a prop that silently never reloads, so the record's
+    // shape is pinned here rather than left to whoever adds the field.
+    let fields = Mirror(reflecting: props()).children.compactMap(\.label).sorted()
+    precondition(fields == ["bridgeEnabled", "generationDirectory", "sessionId"])
+  }
+
+  static func checkBridgeAcceptance() {
+    precondition(acceptsBridge(bridgeSource()))
+    // Simulator-measured: WebKit reports the custom scheme's host ASCII-lowercased, so the session
+    // we minted never equals the host verbatim. Exact equality here refuses every message.
+    precondition(acceptsBridge(bridgeSource(originHost: "sess-01jn_az9")))
+    precondition(acceptsBridge(bridgeSource(originHost: "SESS-01JN_AZ9")))
+
+    // A frame we did not serve.
+    precondition(!acceptsBridge(bridgeSource(originHost: "sess-01JN_aZ8")))
+    precondition(!acceptsBridge(bridgeSource(originHost: "")))
+    precondition(!acceptsBridge(bridgeSource(originHost: "sess-01JN_aZ9.evil")))
+    // ASCII folding only: U+212A KELVIN SIGN lowercases to "k" under Unicode case folding, so a
+    // caseInsensitiveCompare would accept a host nobody minted.
+    precondition(!MobileWebShellBridge.accepts(
+      bridgeSource(originHost: "\u{212A}ey"),
+      sessionId: "key"
+    ))
+    precondition(MobileWebShellOrigin.asciiLowercased("\u{212A}EY") == "\u{212A}ey")
+
+    // Another scheme reaching the same handler.
+    precondition(!acceptsBridge(bridgeSource(originProtocol: "https")))
+    precondition(!acceptsBridge(bridgeSource(originProtocol: "")))
+    precondition(!acceptsBridge(bridgeSource(originProtocol: "orca-mobile-web ")))
+
+    // A subframe, and a message routed to a WebView that is not ours.
+    precondition(!acceptsBridge(bridgeSource(isMainFrame: false)))
+    precondition(!acceptsBridge(bridgeSource(isOurWebView: false)))
+
+    // The document the current props replaced: same session, same origin, still alive between
+    // `stopLoading` and the next commit, speaking for a load already reported as `loading`.
+    precondition(!acceptsBridge(bridgeSource(hasCommittedDocument: false)))
+
+    // No applied session is not an empty one: nothing may be accepted before a load.
+    precondition(!MobileWebShellBridge.accepts(bridgeSource(originHost: ""), sessionId: ""))
+    precondition(!MobileWebShellBridge.accepts(bridgeSource(originHost: "a b"), sessionId: "a b"))
+  }
+
+  static func checkBridgePostTarget() {
+    func canPost(
+      _ host: String?,
+      _ sessionId: String = session,
+      committed: Bool = true
+    ) -> Bool {
+      MobileWebShellBridge.canPost(
+        toFrameOriginHost: host,
+        sessionId: sessionId,
+        hasCommittedDocument: committed
+      )
+    }
+
+    precondition(canPost(session))
+    // The same ASCII fold as acceptance: WebKit reports the host lowercased.
+    precondition(canPost("sess-01jn_az9"))
+
+    // Nowhere to post, all four for the same reason: no frame has been accepted. A page that has
+    // never spoken, a document whose load failed, a renderer that died, a bridge not installed.
+    precondition(!canPost(nil))
+
+    // A frame from another document, and a frame under no session at all.
+    precondition(!canPost("sess-01JN_aZ8"))
+    precondition(!canPost("\u{212A}ey", "key"))
+    precondition(!canPost(session, ""))
+    precondition(!canPost("", ""))
+
+    // In flight: a navigation has started and not committed, so there is no document to post into
+    // even while a frame from the one being replaced is still held.
+    precondition(!canPost(session, committed: false))
+  }
+
+  /// The target across one document replacing another, in the order the navigation delegate runs:
+  /// a frame armed by document A is never what a post to document B goes to.
+  static func checkBridgeTargetLifecycle() {
+    func canPost(_ target: MobileWebShellBridgeTarget<String>, committed: Bool) -> Bool {
+      MobileWebShellBridge.canPost(
+        toFrameOriginHost: target.originHost,
+        sessionId: session,
+        hasCommittedDocument: committed
+      )
+    }
+
+    var target = MobileWebShellBridgeTarget<String>()
+    precondition(target.frame == nil && target.originHost == nil)
+    precondition(!canPost(target, committed: true))
+
+    // didCommit for document A, then A's first accepted message.
+    target.clear()
+    target.arm(frame: "frame-a", originHost: session)
+    precondition(target.frame == "frame-a")
+    precondition(canPost(target, committed: true))
+
+    // didStartProvisionalNavigation for document B. Refused twice over: nothing armed, and nothing
+    // committed to post into.
+    target.clear()
+    precondition(target.frame == nil)
+    precondition(!canPost(target, committed: false))
+
+    // didCommit for document B. Arming re-opens, so the clear has to happen here as well or A's
+    // frame becomes postable again as B's.
+    target.clear()
+    precondition(!canPost(target, committed: true))
+
+    // B speaks for itself, and that is the only way a post reaches it.
+    target.arm(frame: "frame-b", originHost: session)
+    precondition(target.frame == "frame-b")
+    precondition(canPost(target, committed: true))
+  }
+
+  static func checkBridgeByteCap() {
+    let cap = MobileWebShellBridge.maxMessageByteCount
+    precondition(cap == 640 * 1024)
+    precondition(MobileWebShellBridge.acceptsByteCount(0))
+    precondition(MobileWebShellBridge.acceptsByteCount(cap - 1))
+    precondition(MobileWebShellBridge.acceptsByteCount(cap))
+    precondition(!MobileWebShellBridge.acceptsByteCount(cap + 1))
+
+    // The cap is on UTF-8 bytes, not characters: a multi-byte payload must not buy extra room.
+    let wide = String(repeating: "\u{1F600}", count: 4)
+    precondition(wide.count == 4 && wide.utf8.count == 16)
+
+    let gate = MobileWebShellBridgeGate()
+    precondition(gate.refusedCount == 0)
+    precondition(gate.accepts(byteCount: cap))
+    precondition(gate.refusedCount == 0)
+    precondition(!gate.accepts(byteCount: cap + 1))
+    precondition(!gate.accepts(byteCount: cap * 2))
+    precondition(gate.refusedCount == 2)
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -286,6 +496,11 @@ import Foundation
     checkLoadStateMachine()
     checkResponseHeaders()
     checkNavigationErrors()
+    checkAppliedProps()
+    checkBridgeAcceptance()
+    checkBridgePostTarget()
+    checkBridgeTargetLifecycle()
+    checkBridgeByteCap()
     print("mobile web shell checks OK")
   }
 }

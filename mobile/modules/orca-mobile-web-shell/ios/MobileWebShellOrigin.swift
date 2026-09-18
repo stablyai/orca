@@ -19,6 +19,22 @@ enum MobileWebShellOrigin {
     }
   }
 
+  /// Host comparison folds case, because a URL parser canonicalises a host and comparing against
+  /// the exact spelling we minted is how the reference lost every asset to a 403. ASCII-only and
+  /// never Unicode: U+212A KELVIN SIGN folds to `k` under `NSString.caseInsensitiveCompare`, which
+  /// would match a host nobody minted against a session id containing `k`.
+  static func asciiLowercased(_ value: String) -> String {
+    var scalars = String.UnicodeScalarView()
+    for scalar in value.unicodeScalars {
+      guard (65...90).contains(scalar.value), let lowered = Unicode.Scalar(scalar.value + 32) else {
+        scalars.append(scalar)
+        continue
+      }
+      scalars.append(lowered)
+    }
+    return String(scalars)
+  }
+
   static func documentUrl(sessionId: String) -> URL? {
     guard isValidSessionId(sessionId) else { return nil }
     return URL(string: "\(scheme)://\(sessionId)/")
@@ -35,10 +51,8 @@ enum MobileWebShellOrigin {
       parts.method == "GET",
       !parts.hasRangeHeader,
       parts.scheme == scheme,
-      // Case-insensitive: a URL parser may canonicalise a host, and comparing against the exact
-      // spelling we minted is how the reference lost every asset to a 403.
       let host = parts.host,
-      host.compare(sessionId, options: .caseInsensitive) == .orderedSame,
+      asciiLowercased(host) == asciiLowercased(sessionId),
       parts.port == nil,
       parts.user == nil,
       parts.query == nil,
