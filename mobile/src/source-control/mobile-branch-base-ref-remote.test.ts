@@ -47,4 +47,20 @@ describe('resolveMobileBranchCompareBaseRef remote pin', () => {
     )
     expect(calls).toEqual(['worktree.show', 'repo.list', 'repo.baseRefDefault'])
   })
+
+  it('keeps the worktree base when mobile git is unavailable', async () => {
+    const { client } = clientWith([
+      ok({ worktree: { baseRef: 'origin/release' } }),
+      ok({ repos: [{ id: 'repo-1', worktreeBaseRef: null }] }),
+      {
+        id: 'call',
+        ok: false,
+        error: { code: 'runtime_error', message: 'git is not available to mobile clients' }
+      }
+    ])
+
+    await expect(resolveMobileBranchCompareBaseRef(client, 'repo-1::/tmp/wt')).resolves.toBe(
+      'origin/release'
+    )
+  })
 })
