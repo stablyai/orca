@@ -8,7 +8,7 @@ import { assertNoCarriageReturnsInSource } from './verify-mobile-web-bundle.mjs'
 import { assertMobileWebBundleBuilt } from './verify-packaged-mobile-web-bundle.cjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
-const bundleDir = join(projectDir, 'out', 'mobile-web-app')
+const defaultBundleDir = join(projectDir, 'out', 'mobile-web-app')
 
 /** One script, one document, and the images the route tree imports. */
 export const MOBILE_WEB_APP_BUNDLE_MAX_ASSETS = 64
@@ -44,7 +44,8 @@ async function buildIntoScratch() {
   }
 }
 
-export async function verifyMobileWebAppBundle() {
+// bundleDir is a seam for the tests, which verify a scratch build; the script always verifies out/.
+export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } = {}) {
   for (const directory of MOBILE_WEB_APP_SOURCE_DIRS) {
     await assertNoCarriageReturnsInSource(directory)
   }

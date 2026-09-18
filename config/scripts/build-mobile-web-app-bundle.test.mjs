@@ -19,12 +19,19 @@ import {
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
-  MOBILE_WEB_APP_SOURCE_DIRS
+  MOBILE_WEB_APP_SOURCE_DIRS,
+  verifyMobileWebAppBundle
 } from './verify-mobile-web-app-bundle.mjs'
 import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
+import {
+  readDesktopVersion,
+  readProtocolWindow,
+  sha256Hex,
+  writeMobileWebBundleTree
+} from './build-mobile-web-bundle.mjs'
 import { MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 
@@ -273,6 +280,69 @@ describe('the Phase C budget', () => {
       expect(manifest.assets.length).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
     },
     120_000
+  )
+})
+
+describe('the verifier', () => {
+  itBundling(
+    'accepts a bundle it has just built',
+    async () => {
+      await withScratch(async (scratch) => {
+        const outDir = join(scratch, 'mobile-web-app')
+        await buildMobileWebAppBundle({ outDir })
+        await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).resolves.toBeDefined()
+      })
+    },
+    240_000
+  )
+
+  itBundling(
+    "rejects a buildId the manifest's own asset list does not derive",
+    async () => {
+      await withScratch(async (scratch) => {
+        const outDir = join(scratch, 'mobile-web-app')
+        await buildMobileWebAppBundle({ outDir })
+        const manifestPath = join(outDir, 'manifest.json')
+        const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+        manifest.buildId = 'f'.repeat(64)
+        await writeFile(manifestPath, JSON.stringify(manifest), 'utf8')
+        await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).rejects.toThrow(
+          'does not match its asset list'
+        )
+      })
+    },
+    240_000
+  )
+
+  itBundling(
+    'rejects a self-consistent bundle a fresh build does not reproduce',
+    async () => {
+      await withScratch(async (scratch) => {
+        const outDir = join(scratch, 'mobile-web-app')
+        const { manifest } = await buildMobileWebAppBundle({ outDir })
+        // What a stale out/ actually looks like: every digest agrees with its bytes and the
+        // buildId derives from the asset list, but the source has moved on. Only the two fresh
+        // builds the verifier runs can tell, which is the check this covers.
+        const assets = await Promise.all(
+          manifest.assets.map(async (asset) => ({
+            ...asset,
+            bytes: await readFile(join(outDir, asset.path))
+          }))
+        )
+        const document = assets.find((asset) => asset.path === manifest.entrypoint)
+        document.bytes = Buffer.concat([document.bytes, Buffer.from('<!-- drift -->\n', 'utf8')])
+        document.sha256 = sha256Hex(document.bytes)
+        document.byteLength = document.bytes.byteLength
+        const [desktopVersion, protocolWindow] = await Promise.all([
+          readDesktopVersion(),
+          readProtocolWindow()
+        ])
+        await writeMobileWebBundleTree({ outDir, written: assets, desktopVersion, protocolWindow })
+
+        await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).rejects.toThrow('is stale')
+      })
+    },
+    240_000
   )
 })
 
