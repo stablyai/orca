@@ -258,6 +258,12 @@ export type BridgeReplyPayload = z.infer<typeof BridgeReplyPayloadSchema>
  * answered pending for the life of the document. The id is salvaged through the same caps the
  * reader applies, never trusted: the caller settles only an exchange it already holds, so a frame
  * naming anything else still changes nothing.
+ *
+ * Two refusals are decided before an id can exist: `oversized`, on the raw string, and
+ * `malformed-json`, on a parse that did not finish. Nothing is salvageable from either, so an
+ * exchange one of those frames was answering is settled by `close` or by a shell replacement and by
+ * nothing else. Neither arises from a host that is behaving: it chunks at the frame cap and refuses
+ * a body over `BRIDGE_MAX_REPLY_BYTES` on its own side, answering with an `error` frame instead.
  */
 export function readRefusedBridgeFrameId(raw: string): string | null {
   const framed = parseBridgeMessage(raw, 'shell-to-page')

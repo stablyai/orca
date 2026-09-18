@@ -557,6 +557,38 @@ describe('bridge client refusals and send failures', () => {
     expect(page.frames()).toHaveLength(posted)
   })
 
+  it('cannot settle a reply whose frame it never parsed, and nothing on the page can', async () => {
+    const page = createPageClient()
+    page.start()
+    const answer = page.client.sendRequest('worktree.ps')
+    let settled = false
+    void answer.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    // The two refusals that come before the id does. `oversized` is decided on the raw string and
+    // `malformed-json` on a parse that failed, so neither frame ever yields an id to settle: what
+    // the page holds for it is released by `close` or by a shell replacement and by nothing else.
+    // Neither arises from a host that is behaving: it chunks at the frame cap, refuses a body over
+    // `BRIDGE_MAX_REPLY_BYTES` on its own side, and answers that with an `error` frame instead.
+    page.deliverRaw(`{"v":1,"type":"reply","id":"${idOf(page, 0)}",`)
+    page.deliverRaw(`"${'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES)}"`)
+    await Promise.resolve()
+    expect(page.diagnostics).toEqual([
+      { kind: 'refused', refusal: 'malformed-json' },
+      { kind: 'refused', refusal: 'oversized' }
+    ])
+    expect(settled).toBe(false)
+    page.client.close()
+    const error = await answer.catch((thrown: unknown) => thrown)
+    expect(readError(error).name).toBe('BridgeClientClosedError')
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+  })
+
   it('leaves a refused frame that names no open exchange to the diagnostic alone', async () => {
     const page = createPageClient()
     page.start()
