@@ -13,7 +13,7 @@ const WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE = '*\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|
 
 export function wrapRuntimeHomeHookCommand(
   scriptBaseName: string,
-  options: { neutralJsonWhenMissing?: boolean } = {}
+  options: { neutralJsonWhenMissing?: boolean; includeWindowsBranch?: boolean } = {}
 ): string {
   if (!MANAGED_SCRIPT_BASE_NAME.test(scriptBaseName)) {
     throw new Error(`Invalid managed script base name: ${scriptBaseName}`)
@@ -37,6 +37,11 @@ export function wrapRuntimeHomeHookCommand(
   // Why platform-selected even when HOME is unset: which stdin rule applies follows the
   // caller, not the reason the script could not be found.
   const missingScriptFallback = `case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsMissingScriptFallback} ;; *) ${posixMissingScriptFallback} ;; esac`
+  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${posixMissingScriptFallback}; fi`
+  // POSIX installs must omit Windows tokens because Grok prechecks the entire command.
+  if (options.includeWindowsBranch === false) {
+    return `if [ -z "\${HOME-}" ]; then ${posixMissingScriptFallback}; else ${posixBranch}; fi`
+  }
   const powershell = '"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"'
   const powershellFallback = options.neutralJsonWhenMissing ? "; Write-Output '{}'" : ''
   // Why the order: answer first, then the shared env guard, then own stdin — see wrapWindowsHookCommand.
@@ -46,7 +51,6 @@ export function wrapRuntimeHomeHookCommand(
   const powershellInvocation = `${powershell} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${windowsMissingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${windowsMissingScriptFallback}; fi`
-  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${posixMissingScriptFallback}; fi`
   // Why: OSTYPE is shell-owned, so platform selection adds no process to every hook invocation.
   return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }
