@@ -40,6 +40,7 @@ export class RuntimeRpcState {
   protected readonly preferPinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
+  protected readonly networkExposureConsent: () => boolean
   protected readonly webClientRoot: string | undefined
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   protected wsBoundHost: string | null = null
@@ -102,6 +103,7 @@ export class RuntimeRpcState {
     preferPinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
+    networkExposureConsent = () => false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -118,6 +120,7 @@ export class RuntimeRpcState {
     this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
+    this.networkExposureConsent = networkExposureConsent
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap

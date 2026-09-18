@@ -35,7 +35,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const createPairingRelay = vi.fn()
     server.setMobileRelayPairingProvider({
@@ -79,7 +80,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     server.setMobileRelayPairingProvider({
       createPairingRelay: async (relayDeviceId) => ({
@@ -128,7 +130,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const onDeviceRevokeQueued = vi.fn()
     server.setMobileRelayPairingProvider({
@@ -184,7 +187,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     server.setMobileRelayPairingProvider({
       createPairingRelay: async (relayDeviceId) => ({
@@ -241,7 +245,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const onDeviceRevokeQueued = vi.fn()
     server.setMobileRelayPairingProvider({
@@ -294,7 +299,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const registryPresence: boolean[] = []
     server.setMobileRelayPairingProvider({
