@@ -36,8 +36,12 @@ const assetSchema = z.looseObject({
  *  wall reads them, this phase does not.
  *
  *  `schemaVersion` stays a literal because the manifest is closed in both directions: a bump is the
- *  only change path, and an unrecognised one is an unusable bundle to re-fetch, never a crash. */
-const manifestSchema = z
+ *  only change path, and an unrecognised one is an unusable bundle to re-fetch, never a crash.
+ *
+ *  Exported because the generation store re-parses the manifest it cached, and reading it back
+ *  strictly after accepting it loosely would make a host's added field a forced redownload on every
+ *  launch. */
+export const MobileWebBundleManifestReadSchema = z
   .looseObject({
     schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
     buildId: z.string().regex(SHA256_PATTERN),
@@ -60,7 +64,7 @@ const manifestSchema = z
 /** `chunkBytes` is read, never assumed: the host may shrink it without a client release. Capped at
  *  the constant because a larger value would overshoot `dataBase64` above. */
 export const MobileWebBundleManifestReplySchema = z.looseObject({
-  manifest: manifestSchema,
+  manifest: MobileWebBundleManifestReadSchema,
   chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
 })
 
