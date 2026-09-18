@@ -10,6 +10,7 @@ import {
   scanWorkspaceSpaceEntryTree,
   type WorkspaceSpaceEntryScan
 } from '../shared/workspace-space-entry-traversal'
+import { WorkspaceSpaceDuTimeoutError } from '../shared/workspace-space-du-stream'
 import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
@@ -112,19 +113,16 @@ async function scanLocalWorktreeWithDu(
       ...compact
     })
   }
-  const [entries, duSizes] = await Promise.all([
-    opendir(worktree.path).then(async (directory) => {
-      const admission = await collectWorkspaceSpaceDirectoryEntries(
-        directory,
-        worktree.path,
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget(),
-        () => throwIfWorkspaceSpaceScanAborted(signal)
-      )
-      return admission.entries
-    }),
-    readDu(worktree.path, signal)
-  ])
+  const directory = await opendir(worktree.path)
+  const admission = await collectWorkspaceSpaceDirectoryEntries(
+    directory,
+    worktree.path,
+    (entry) => entry.name,
+    createWorkspaceSpaceScanBudget(),
+    () => throwIfWorkspaceSpaceScanAborted(signal)
+  )
+  const entries = admission.entries
+  const duSizes = await readDu(worktree.path, signal)
   throwIfWorkspaceSpaceScanAborted(signal)
   const childStats = await mapWithConcurrency(entries, LOCAL_FS_CONCURRENCY, async (entry) => {
     try {
@@ -209,7 +207,10 @@ export async function scanLocalWorkspaceSpaceWorktree(
       if (error instanceof WorkspaceSpaceScanCancelledError) {
         throw error
       }
-      if (error instanceof WorkspaceSpaceScanCapacityError) {
+      if (
+        error instanceof WorkspaceSpaceScanCapacityError ||
+        error instanceof WorkspaceSpaceDuTimeoutError
+      ) {
         const classified = classifyWorkspaceSpaceError(error)
         return createUnavailableWorkspaceSpaceRow(
           repo,

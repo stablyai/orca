@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { WorkspaceSpaceDuTimeoutError } from '../shared/workspace-space-du-stream'
 import { WorkspaceSpaceScanCapacityError } from '../shared/workspace-space-scan-budget'
 import {
   WorkspaceSpaceScanCancelledError,
@@ -19,6 +20,14 @@ describe('workspace space scan boundaries', () => {
 
   it('keeps capacity exhaustion distinct from filesystem errors', () => {
     const error = new WorkspaceSpaceScanCapacityError({ maxEntries: 1, maxRetainedBytes: 1 })
+    expect(classifyWorkspaceSpaceError(error)).toEqual({
+      status: 'unavailable',
+      message: error.message
+    })
+  })
+
+  it('classifies a streamed du deadline as unavailable', () => {
+    const error = new WorkspaceSpaceDuTimeoutError()
     expect(classifyWorkspaceSpaceError(error)).toEqual({
       status: 'unavailable',
       message: error.message
