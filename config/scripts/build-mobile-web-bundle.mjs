@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { realpathSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -197,12 +198,27 @@ export async function buildMobileWebBundle({ outDir = defaultOutDir } = {}) {
 }
 
 /**
- * Whether this module was run as the entry script. `file://${path}` never matches on Windows,
- * where import.meta.url is `file:///C:/...` — the builder would exit 0 having written nothing.
- * toFileUrl is injectable so the win32 form can be exercised from a posix runner.
+ * Whether this module was run as the entry script. Two ways to get this wrong, both of which end
+ * with the builder exiting 0 having written nothing: `file://${path}` never matches on Windows,
+ * where import.meta.url is `file:///C:/...`; and Node resolves symlinks in import.meta.url but not
+ * in argv[1], so `node /tmp/...` against a /private/tmp realpath compares two different strings.
+ * Both seams are injectable so win32 and a missing path can be exercised from a posix runner.
  */
-export function isDirectInvocation(moduleUrl, scriptPath, toFileUrl = pathToFileURL) {
-  return Boolean(scriptPath) && moduleUrl === toFileUrl(scriptPath).href
+export function isDirectInvocation(
+  moduleUrl,
+  scriptPath,
+  { toFileUrl = pathToFileURL, realpath = realpathSync } = {}
+) {
+  if (!scriptPath) {
+    return false
+  }
+  let resolved = scriptPath
+  try {
+    resolved = realpath(scriptPath)
+  } catch {
+    // A path that cannot be resolved cannot be this module; fall through to the literal compare.
+  }
+  return moduleUrl === toFileUrl(resolved).href
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {

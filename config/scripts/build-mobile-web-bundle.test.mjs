@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -182,7 +182,13 @@ describe('isDirectInvocation', () => {
   it('matches a Windows entry path, which the file:// template form never does', () => {
     const scriptPath = 'C:\\orca\\config\\scripts\\build-mobile-web-bundle.mjs'
     const moduleUrl = 'file:///C:/orca/config/scripts/build-mobile-web-bundle.mjs'
-    expect(isDirectInvocation(moduleUrl, scriptPath, toWin32FileUrl)).toBe(true)
+    const keepAsIs = (path) => path
+    expect(
+      isDirectInvocation(moduleUrl, scriptPath, {
+        toFileUrl: toWin32FileUrl,
+        realpath: keepAsIs
+      })
+    ).toBe(true)
     // The regression this guards: `file://${argv[1]}` yields file://C:\orca\... on Windows,
     // so the builder exited 0 having written nothing and packaging failed downstream.
     expect(`file://${scriptPath}`).not.toBe(moduleUrl)
@@ -226,6 +232,30 @@ describe('mobile web source line endings', () => {
       } else {
         expect(attributes).toContain('eol: lf')
       }
+    }
+  })
+})
+
+describe('running the builder through a symlink', () => {
+  // Node resolves symlinks in import.meta.url but not in argv[1]. Before the guard realpath'd the
+  // entry path, `node /tmp/<link>` compared /tmp against /private/tmp and the builder exited 0
+  // having written nothing — a green packaging job with no bundle in it.
+  it('still recognises the entry module', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-link-'))
+    try {
+      const builderUrl = new URL('./build-mobile-web-bundle.mjs', import.meta.url).href
+      const real = join(scratch, 'entry.mjs')
+      await writeFile(
+        real,
+        `import { isDirectInvocation } from ${JSON.stringify(builderUrl)}\n` +
+          'process.stdout.write(String(isDirectInvocation(import.meta.url, process.argv[1])))\n',
+        'utf8'
+      )
+      const link = join(scratch, 'entry-link.mjs')
+      await symlink(real, link)
+      expect(execFileSync(process.execPath, [link], { encoding: 'utf8' })).toBe('true')
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
     }
   })
 })
