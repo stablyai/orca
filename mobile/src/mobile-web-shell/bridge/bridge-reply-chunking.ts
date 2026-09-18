@@ -127,10 +127,12 @@ const BRIDGE_MAX_ASSEMBLING_BYTES = BRIDGE_MAX_REPLY_BYTES * 4
 /**
  * Parts may arrive in any order, so they are held by index rather than appended.
  *
- * A failed id stays failed. Dropping it and starting over on the next part is what lets a sender
- * walk past the ceiling one refusal at a time, so the refusal is remembered and every later part
- * for that id gets the same answer. `discard` is how the page says the id is finished with, which
- * is also how it becomes usable again.
+ * A failed id stays failed while the page still holds it. Dropping the refusal and starting over on
+ * the next part is what would let a sender walk past the ceiling one refusal at a time, so every
+ * later part for that id gets the same answer instead. Nothing is remembered for long: `discard`
+ * reopens the id, and the page's request ledger calls it as it settles the caller, so the tombstone
+ * normally lives no longer than the rest of the reply that raised it. The bound below is for the
+ * ids nothing settles.
  *
  * The number of ids held at once is bounded by the in-flight request cap, since a reply only exists
  * for a request the page made, and their bytes together by `BRIDGE_MAX_ASSEMBLING_BYTES`. Nothing
