@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import {
   createMobileWebShellSession,
-  reduceMobileWebShellSession,
-  type CachedGeneration,
-  type MobileWebShellGates,
-  type MobileWebShellManifestFacts,
-  type MobileWebShellSession,
-  type MobileWebShellSessionEvent,
-  type MobileWebShellStep
+  reduceMobileWebShellSession
 } from './mobile-web-shell-session'
+import type {
+  CachedGeneration,
+  MobileWebShellGates,
+  MobileWebShellManifestFacts,
+  MobileWebShellSession,
+  MobileWebShellSessionEvent,
+  MobileWebShellStep
+} from './mobile-web-shell-session-contract'
 
 function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebShellGates {
   return {

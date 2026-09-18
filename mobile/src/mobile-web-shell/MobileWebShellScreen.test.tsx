@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { MobileWebShellSessionState } from './mobile-web-shell-session'
+import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
 type ScreenDependencies = {
   retry: Mock

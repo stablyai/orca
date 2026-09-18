@@ -17,11 +17,13 @@ import { deriveHostCacheKey } from './host-cache-key'
 import {
   createMobileWebShellSession,
   readMobileWebShellReachability,
-  reduceMobileWebShellSession,
-  type MobileWebShellSessionEffect,
-  type MobileWebShellSessionEvent,
-  type MobileWebShellSessionState
+  reduceMobileWebShellSession
 } from './mobile-web-shell-session'
+import type {
+  MobileWebShellSessionEffect,
+  MobileWebShellSessionEvent,
+  MobileWebShellSessionState
+} from './mobile-web-shell-session-contract'
 
 /** 32 bytes, base64url: the session id scopes the view's private origin, so two mounts must never
  *  share one and a remount must never reuse the one that was just on screen. */

@@ -10,7 +10,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type {
   MobileWebShellFailureCause,
   MobileWebShellSessionState
-} from './mobile-web-shell-session'
+} from './mobile-web-shell-session-contract'
 import {
   useMobileWebShellSession,
   type MobileWebShellRuntime
