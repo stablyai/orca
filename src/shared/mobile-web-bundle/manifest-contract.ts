@@ -15,6 +15,7 @@ export const MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES = 10 * 1024 * 1024
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
+const WINDOWS_RESERVED_SEGMENT = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 // Lowercase only, no `i` flag: content type feeds the build id, so accepting case variants would
 // give the same bytes two different ids.
 const CONTENT_TYPE_PATTERN =
@@ -23,15 +24,25 @@ const MAX_ASSET_PATH_LENGTH = 255
 const MAX_CONTENT_TYPE_LENGTH = 128
 const MAX_DESKTOP_VERSION_LENGTH = 64
 
-/** Relative POSIX path with no traversal, so resolving a manifest member against the bundle root
- *  cannot escape it. The regex already bans absolute paths, backslashes, and empty segments. */
+/** Every segment must be a name the bundle root can hold on all three desktop platforms: no
+ *  traversal, and none of the Windows shapes that cannot be created or that resolve to a device.
+ *  The regex already bans absolute paths, backslashes, spaces, and empty segments. */
+function isPortableAssetSegment(segment: string): boolean {
+  return (
+    segment !== '.' &&
+    segment !== '..' &&
+    !segment.endsWith('.') &&
+    !WINDOWS_RESERVED_SEGMENT.test(segment)
+  )
+}
+
 export const MobileWebBundleAssetPathSchema = z
   .string()
   .max(MAX_ASSET_PATH_LENGTH)
   .regex(ASSET_PATH_PATTERN)
   .refine(
-    (path) => !path.split('/').some((segment) => segment === '.' || segment === '..'),
-    'asset path must not contain a relative segment'
+    (path) => path.split('/').every(isPortableAssetSegment),
+    'asset path segment must be portable across macOS, Linux, and Windows'
   )
 
 export const MobileWebBundleAssetSchema = z
@@ -86,6 +97,7 @@ function validateManifestInvariants(
 ): void {
   let previousPath: string | null = null
   let summedBytes = 0
+  const foldedPaths = new Set<string>()
   for (const asset of manifest.assets) {
     if (previousPath !== null && asset.path <= previousPath) {
       context.addIssue({
@@ -95,6 +107,18 @@ function validateManifestInvariants(
       })
       return
     }
+    // Two paths differing only in case are one file on macOS and Windows, so the host would serve
+    // the same bytes under two entries and one of the two hashes would never match.
+    const folded = asset.path.toLocaleLowerCase('en-US')
+    if (foldedPaths.has(folded)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['assets'],
+        message: 'asset paths must not collide when case is folded'
+      })
+      return
+    }
+    foldedPaths.add(folded)
     previousPath = asset.path
     summedBytes += asset.byteLength
   }

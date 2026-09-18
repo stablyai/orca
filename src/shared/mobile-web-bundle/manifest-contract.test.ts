@@ -160,6 +160,17 @@ describe('manifest invariants', () => {
     ).toBe(false)
   })
 
+  it('rejects paths that collide when case is folded', () => {
+    const parsed = MobileWebBundleManifestSchema.safeParse(
+      manifestOf([ENTRY, asset('assets/A.js', 10), asset('assets/a.js', 10)])
+    )
+    expect(parsed.success).toBe(false)
+    // Both sort strictly ascending, so it must be the fold check that fires, not the order check.
+    expect(parsed.error?.issues.map((issue) => issue.message)).toEqual([
+      'asset paths must not collide when case is folded'
+    ])
+  })
+
   it('rejects a buildId that is not the content hash of the assets', () => {
     expect(
       MobileWebBundleManifestSchema.safeParse(manifestOf(twoAssets, { buildId: 'f'.repeat(64) }))
@@ -188,7 +199,12 @@ describe('asset paths', () => {
     'assets/../../escape.js',
     '/absolute.js',
     'assets\\escape.js',
-    'a/./b.js'
+    'a/./b.js',
+    'assets/nul.js',
+    'assets/CON',
+    'assets/lpt1.js',
+    'assets/foo.',
+    'assets/...'
   ])('rejects %s', (path) => {
     const parsed = MobileWebBundleManifestSchema.safeParse(
       manifestOf([ENTRY, { ...asset('assets/a.js', 10), path }])
