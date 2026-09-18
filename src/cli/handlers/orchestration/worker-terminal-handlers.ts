@@ -6,6 +6,7 @@ import {
   getRequiredStringFlag
 } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
+import { formatDispatchHeartbeatAge } from '../../../shared/orchestration-heartbeat-freshness'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
 import {
@@ -22,6 +23,12 @@ const WORKER_TERMINAL_LIST_STATES = [
   'release_unknown',
   'released'
 ] as const
+
+/** Only a registered heartbeat carries an age: `none` and `unreadable` measure nothing, and a host
+ *  that publishes the state without the age still prints the bare state. */
+function formatHeartbeatAgeSuffix(ageSeconds: number | null | undefined): string {
+  return typeof ageSeconds === 'number' ? ` (${formatDispatchHeartbeatAge(ageSeconds)})` : ''
+}
 
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-stop': async ({ flags, client, json }) => {
@@ -119,6 +126,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
           workspace: { id: string } | null
           stage: { activity: string }
           liveness: { verdict: string }
+          heartbeat?: { state: string; ageSeconds?: number | null }
           nextAction: { argv: string[] }
           attention?: { categories: string[] }
         }
@@ -160,8 +168,13 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const stage = projection?.stage.activity ?? worker.dispatchStatus
                 const liveness = projection?.liveness.verdict
                 const attention = projection?.attention?.categories.join(',') || 'none'
+                // Beside liveness, not instead of it: liveness is the process verdict, heartbeat is
+                // the agent still reporting. A host that does not publish it prints no segment.
+                const heartbeat = projection?.heartbeat
+                  ? ` heartbeat=${projection.heartbeat.state}${formatHeartbeatAgeSuffix(projection.heartbeat.ageSeconds)}`
+                  : ''
                 const details = projection
-                  ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
+                  ? `/${stage}] attention=${attention} liveness=${liveness}${heartbeat} provider=${provider} host=${projection.host.id} workspace=${workspace}`
                   : `]`
                 // Why: the enumerating command owes the literal argv the guides tell callers to run.
                 const next = projection

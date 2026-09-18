@@ -123,7 +123,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
       'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.',
       'Returns at most 100 local rows by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque page.nextCursor value unchanged.',
-      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).'
+      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).',
+      'heartbeat reports whether the Dispatch is still reporting on the orchestration protocol (none, fresh, stale after 10 minutes, or unreadable when a stored arrival stamp cannot be parsed) and is independent of liveness, which is the execution host verdict on the process; heartbeat.lastReceivedAt is when this host recorded the heartbeat, so a remote worker clock cannot skew the age, and the human line prints that age beside the state, as in heartbeat=stale (43m).'
     ]
   }
 ]
