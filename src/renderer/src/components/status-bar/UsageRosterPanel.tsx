@@ -2,7 +2,6 @@ import React, { useEffect } from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../shared/cursor-usage-buckets'
@@ -28,6 +27,7 @@ import {
   getUsageRosterRowState,
   type UsageRosterRowState
 } from './usage-roster-row-state'
+import { useUsageRosterNow } from './use-usage-roster-now'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
 type ProviderId = ProviderRateLimits['provider']
@@ -255,9 +255,13 @@ export function UsageRosterPanel({
   }, [onFetchInactiveCodexAccounts])
 
   const entries = buildUsageRosterEntries(providers, inactiveCodexAccounts, codexAccountLabels)
-  // Why: one boundary-scheduled clock keeps every open row current without per-provider timers.
-  const now = useResetCountdownClock(
-    entries.flatMap((entry) => usedSections(entry.limits).map((section) => section.window.resetsAt))
+  // Why: reset labels use the boundary-scheduled clock; Updated labels also need
+  // a 60s tick because that scheduler is idle when every resetsAt is null.
+  const now = useUsageRosterNow(
+    entries.flatMap((entry) =>
+      usedSections(entry.limits).map((section) => section.window.resetsAt)
+    ),
+    entries.map((entry) => entry.updatedAt)
   )
 
   return (

@@ -551,3 +551,61 @@ describe('UsageRosterPanel inactive Codex accounts', () => {
     expect(onFetchInactiveCodexAccounts).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('UsageRosterPanel live Updated labels', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(mocks.now)
+    mocks.useResetCountdownClock.mockClear()
+    mocks.useResetCountdownClock.mockReturnValue(mocks.now)
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+    mocks.useResetCountdownClock.mockReturnValue(mocks.now)
+    vi.useRealTimers()
+  })
+
+  it('refreshes Updated labels every minute when reset timestamps are null', () => {
+    const updatedAt = mocks.now - 30_000
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <UsageRosterPanel
+            providers={[activeCodex]}
+            display="used"
+            statusBarUsageMode="verbose"
+            isRefreshing={false}
+            inactiveCodexAccounts={[
+              {
+                ...inactiveCodexAccount,
+                updatedAt,
+                rateLimits: { ...inactiveCodexLimits, updatedAt }
+              }
+            ]}
+            codexAccountLabels={{ 'acct-work': 'work@example.com' }}
+            {...panelCallbacks}
+          />
+        </TooltipProvider>
+      )
+    })
+
+    expect(container.textContent).toContain('Updated just now')
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(container.textContent).toContain('Updated 1m ago')
+    expect(container.textContent).not.toContain('Updated just now')
+  })
+})
