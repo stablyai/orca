@@ -14,7 +14,7 @@ const CLEAN_SORT = { field: 'name', direction: 'asc' } as const
 function deferredCandidate(worktreeId: string) {
   return makeFacetCandidate({
     worktreeId,
-    git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
+    git: { clean: null, upstreamAhead: null, upstreamBehind: null, merged: null, checkedAt: null }
   })
 }
 
@@ -101,7 +101,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
     const deferred = deferredCandidate('a')
     const refreshed = makeFacetCandidate({
       worktreeId: 'a',
-      git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 5 }
+      git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, merged: null, checkedAt: 5 }
     })
     const [row] = applyWorkspaceCleanupGitEvidence(
       [deferred],
@@ -119,7 +119,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
       ...makeFacetCandidate({
         worktreeId: 'a',
         blockers: ['dirty-files'],
-        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 5 }
+        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: 5 }
       }),
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1' as const
@@ -147,7 +147,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
       displayName: 'stale name',
       blockers: ['dirty-files'],
       fingerprint: 'focused-fingerprint',
-      git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 5 }
+      git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: 5 }
     })
 
     const [row] = applyWorkspaceCleanupGitEvidence(
@@ -164,11 +164,11 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
   it('keeps newer broad-scan git evidence', () => {
     const current = makeFacetCandidate({
       worktreeId: 'a',
-      git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 10 }
+      git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: 10 }
     })
     const older = makeFacetCandidate({
       worktreeId: 'a',
-      git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 5 }
+      git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, merged: null, checkedAt: 5 }
     })
 
     expect(applyWorkspaceCleanupGitEvidence([current], new Map([['a', older]]))[0]).toBe(current)

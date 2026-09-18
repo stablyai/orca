@@ -37,7 +37,7 @@ export function makeFacetCandidate(
       newestDiffCommentAt: null,
       retainedDoneAgentCount: 0
     },
-    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: FACET_NOW },
+    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: FACET_NOW },
     fingerprint: 'fingerprint',
     ...overrides
   }

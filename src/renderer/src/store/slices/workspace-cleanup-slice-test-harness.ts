@@ -38,6 +38,7 @@ export function makeCandidate(
       clean: true,
       upstreamAhead: 0,
       upstreamBehind: 0,
+      merged: null,
       checkedAt: NOW
     },
     fingerprint: 'fingerprint-1',

@@ -15,6 +15,7 @@ import {
   createEmptyWorkspaceCleanupGitEvidence,
   readWorkspaceCleanupGitEvidence
 } from './workspace-cleanup-git-evidence'
+import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
@@ -26,8 +27,9 @@ export async function buildWorkspaceCleanupCandidate(args: {
   skipGit: boolean
   forceGitCheck: boolean
   signal?: AbortSignal
+  localGitOptions?: LocalProjectWorktreeGitOptions
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal } = args
+  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal, localGitOptions } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
@@ -53,8 +55,13 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal)
+    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal, localGitOptions)
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
+  if (gitEvidence.merged === true) {
+    // Why: a merged branch is finished work regardless of how recently it was
+    // touched, so it earns a recommendation without serving the idle window.
+    reasons.push('merged')
+  }
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,
@@ -76,6 +83,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
       clean: gitEvidence.clean,
       upstreamAhead: gitEvidence.upstreamAhead,
       upstreamBehind: gitEvidence.upstreamBehind,
+      merged: gitEvidence.merged,
       checkedAt: gitEvidence.checkedAt
     },
     fingerprint: ''
@@ -85,6 +93,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
     branch: candidateWithoutFingerprint.branch,
     head: worktree.head,
     gitClean: gitEvidence.clean,
+    gitMerged: gitEvidence.merged,
     lastActivityAt: worktree.lastActivityAt
   })
 
@@ -121,12 +130,14 @@ export function buildWorkspaceCleanupCandidateFromError(
       clean: null,
       upstreamAhead: null,
       upstreamBehind: null,
+      merged: null,
       checkedAt: scannedAt
     },
     fingerprint: createWorkspaceCleanupFingerprint({
       branch: shortWorkspaceCleanupBranchName(worktree.branch),
       head: worktree.head,
       gitClean: null,
+      gitMerged: null,
       lastActivityAt: worktree.lastActivityAt
     })
   })
