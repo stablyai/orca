@@ -4,6 +4,7 @@ import type {
 } from '../../shared/issue-mutation-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions } from './gh-utils'
+import { withGhApiJsonInput } from './gh-api-json-input'
 import {
   resolveGitHubRepoExecution,
   resolveIssueGitHubApiRepositorySource
@@ -13,6 +14,19 @@ import { acquire, extractExecError, ghExecFileAsync, release } from './gh-utils'
 function githubIssueErrorMessage(error: unknown): string {
   const { stderr, stdout } = extractExecError(error)
   return stderr.trim() || stdout.trim()
+}
+
+function isRecoverableOversizedIssueBodyError(error: unknown): boolean {
+  const message = githubIssueErrorMessage(error)
+  if (/body is too long \(maximum is \d+ characters\)/i.test(message)) {
+    return true
+  }
+  // Why: Windows CreateProcess rejects argv over 32767 before gh can return 422.
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined
+  return code === 'ENAMETOOLONG' || /ENAMETOOLONG/i.test(message)
 }
 
 /**
@@ -52,58 +66,59 @@ export async function createIssue(
   }
   await acquire()
   try {
-    const createArgs = (issueBody: string) => {
-      const args = [
-        'api',
-        '-X',
-        'POST',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-        '--raw-field',
-        `title=${trimmedTitle}`,
-        '--raw-field',
-        `body=${issueBody}`
-      ]
-      for (const label of fields?.labels ?? []) {
-        args.push('--raw-field', `labels[]=${label}`)
-      }
-      for (const assignee of fields?.assignees ?? []) {
-        args.push('--raw-field', `assignees[]=${assignee}`)
-      }
-      return args
-    }
+    const postIssue = (issueBody: string) =>
+      withGhApiJsonInput(
+        {
+          title: trimmedTitle,
+          body: issueBody,
+          ...(fields?.labels?.length ? { labels: fields.labels } : {}),
+          ...(fields?.assignees?.length ? { assignees: fields.assignees } : {})
+        },
+        (inputArgs) =>
+          ghExecFileAsync(
+            [
+              'api',
+              '-X',
+              'POST',
+              `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
+              ...inputArgs
+            ],
+            ghOptions
+          )
+      )
 
     const parseIssue = (stdout: string) =>
       JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
 
     let data: { number?: number; html_url?: string; url?: string }
     try {
-      const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
+      const { stdout } = await postIssue(body)
       data = parseIssue(stdout)
     } catch (err) {
-      const message = githubIssueErrorMessage(err)
-      if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
-        return { ok: false, error: message }
+      if (!isRecoverableOversizedIssueBodyError(err)) {
+        return { ok: false, error: githubIssueErrorMessage(err) }
       }
 
       // Why: GitHub rejects oversized bodies on create but accepts the same body
       // on update, so establish the issue before attaching its body.
-      const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
+      const { stdout } = await postIssue('')
       data = parseIssue(stdout)
       if (typeof data.number !== 'number') {
         return { ok: false, error: 'Unexpected response from GitHub' }
       }
 
       try {
-        await ghExecFileAsync(
-          [
-            'api',
-            '-X',
-            'PATCH',
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
-            '--raw-field',
-            `body=${body}`
-          ],
-          ghOptions
+        await withGhApiJsonInput({ body }, (inputArgs) =>
+          ghExecFileAsync(
+            [
+              'api',
+              '-X',
+              'PATCH',
+              `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
+              ...inputArgs
+            ],
+            ghOptions
+          )
         )
       } catch (patchErr) {
         const patchMessage = githubIssueErrorMessage(patchErr)
