@@ -26,6 +26,42 @@ export type BridgeErrorCapture = {
  */
 export const BRIDGE_MAX_CAUSE_DEPTH = 4
 
+/**
+ * Budgets that make an error frame sendable by construction. A frame the receiver refuses as
+ * `oversized` is a rejection the page never hears, and a `message` or a `code` is whatever the host
+ * put there: a megabyte of either is not a protocol error, it is a big string. Five levels at six
+ * bytes a character is the worst an escape can make of these, and this module's test holds that
+ * worst case against the frame cap.
+ */
+export const BRIDGE_MAX_ERROR_MESSAGE_CHARS = 16 * 1024
+export const BRIDGE_MAX_ERROR_CODE_CHARS = 4 * 1024
+
+/** Says the message was cut, so the page shows a short message rather than a wrong one. */
+export const BRIDGE_TRUNCATION_MARK = ' [truncated]'
+
+function boundMessage(message: string): string {
+  return message.length > BRIDGE_MAX_ERROR_MESSAGE_CHARS
+    ? `${message.slice(0, BRIDGE_MAX_ERROR_MESSAGE_CHARS)}${BRIDGE_TRUNCATION_MARK}`
+    : message
+}
+
+/**
+ * A code is dropped rather than truncated: half a code is not a smaller code, it is a different
+ * one, and a cyclic or unserializable code would take `JSON.stringify` down with the whole frame.
+ */
+function boundCode(code: unknown): { code?: unknown } {
+  if (code === undefined) {
+    return {}
+  }
+  let serialized: string | undefined
+  try {
+    serialized = JSON.stringify(code)
+  } catch {
+    return {}
+  }
+  return serialized === undefined || serialized.length > BRIDGE_MAX_ERROR_CODE_CHARS ? {} : { code }
+}
+
 function errorCaptureSchema(remainingCauses: number): z.ZodType<BridgeErrorCapture> {
   const fields = {
     category: z.string(),
@@ -83,15 +119,19 @@ export function captureBridgeError(error: unknown, depth = 0): BridgeErrorCaptur
 
 function capture(error: unknown, depth: number): BridgeErrorCapture {
   if (!(error instanceof Error)) {
-    return { category: typeof error, message: String(error), isRpcDeliveryUnknown: false }
+    return {
+      category: typeof error,
+      message: boundMessage(String(error)),
+      isRpcDeliveryUnknown: false
+    }
   }
   const code = readDetail(error, errorCodeSchema)?.code
   const cause = readDetail(error, errorCauseSchema)?.cause
   return {
     category: error.constructor.name,
-    message: error.message,
+    message: boundMessage(error.message),
     isRpcDeliveryUnknown: isRpcDeliveryUnknown(error),
-    ...(code === undefined ? {} : { code }),
+    ...boundCode(code),
     ...(cause !== undefined && depth < BRIDGE_MAX_CAUSE_DEPTH
       ? { cause: captureBridgeError(cause, depth + 1) }
       : {})

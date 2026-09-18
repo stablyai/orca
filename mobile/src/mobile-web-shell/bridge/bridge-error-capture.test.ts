@@ -3,8 +3,13 @@ import {
   isRpcDeliveryUnknown,
   markRpcDeliveryUnknown
 } from '../../transport/rpc-delivery-ambiguity'
+import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION, readBridgeHostMessage } from './bridge-envelope'
 import {
   BRIDGE_MAX_CAUSE_DEPTH,
+  BRIDGE_MAX_ERROR_CODE_CHARS,
+  BRIDGE_MAX_ERROR_MESSAGE_CHARS,
+  BRIDGE_TRUNCATION_MARK,
   BRIDGE_UNREADABLE_ERROR_MESSAGE,
   BridgeErrorCaptureSchema,
   captureBridgeError,
@@ -263,5 +268,69 @@ describe('reconstructBridgeError', () => {
     })
     expect(rebuilt.constructor.name).toBe(rebuilt.name)
     expect(isRpcDeliveryUnknown(rebuilt)).toBe(true)
+  })
+})
+
+describe('captureBridgeError budgets', () => {
+  /** One character to six bytes escaped, which is the most a JSON string can cost. */
+  const CONTROL = String.fromCharCode(1)
+
+  it('truncates a message past its budget and says so', () => {
+    const captured = captureBridgeError(new Error('x'.repeat(1024 * 1024)))
+    expect(captured.message.length).toBe(
+      BRIDGE_MAX_ERROR_MESSAGE_CHARS + BRIDGE_TRUNCATION_MARK.length
+    )
+    expect(captured.message.endsWith(BRIDGE_TRUNCATION_MARK)).toBe(true)
+  })
+
+  it('leaves a message of exactly the budget alone', () => {
+    const message = 'x'.repeat(BRIDGE_MAX_ERROR_MESSAGE_CHARS)
+    expect(captureBridgeError(new Error(message)).message).toBe(message)
+  })
+
+  it('truncates what a thrown non-error stringifies to', () => {
+    expect(captureBridgeError('x'.repeat(1024 * 1024)).message.length).toBe(
+      BRIDGE_MAX_ERROR_MESSAGE_CHARS + BRIDGE_TRUNCATION_MARK.length
+    )
+  })
+
+  it('drops a code that cannot be serialized rather than throwing on it', () => {
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect('code' in captureBridgeError(Object.assign(new Error('x'), { code: cyclic }))).toBe(
+      false
+    )
+    const unserializable = Object.assign(new Error('x'), { code: () => undefined })
+    expect('code' in captureBridgeError(unserializable)).toBe(false)
+  })
+
+  it('drops a code past its budget and keeps one at it', () => {
+    const atBudget = 'x'.repeat(BRIDGE_MAX_ERROR_CODE_CHARS - 2)
+    expect(captureBridgeError(Object.assign(new Error('x'), { code: atBudget })).code).toBe(
+      atBudget
+    )
+    const overBudget = 'x'.repeat(BRIDGE_MAX_ERROR_CODE_CHARS - 1)
+    expect('code' in captureBridgeError(Object.assign(new Error('x'), { code: overBudget }))).toBe(
+      false
+    )
+  })
+
+  it('keeps the worst error frame the budgets allow inside the frame cap', () => {
+    let error = new Error('root')
+    for (let level = 0; level <= BRIDGE_MAX_CAUSE_DEPTH; level += 1) {
+      error = new Error(CONTROL.repeat(BRIDGE_MAX_ERROR_MESSAGE_CHARS * 2), { cause: error })
+      Object.assign(error, { code: CONTROL.repeat(BRIDGE_MAX_ERROR_CODE_CHARS / 6 - 1) })
+    }
+    const captured = captureBridgeError(error)
+    expect(captured.cause?.cause?.cause?.cause).toBeDefined()
+    expect(captured.cause?.cause?.cause?.cause?.cause).toBeUndefined()
+    const frame = JSON.stringify({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'error',
+      id: 'A'.repeat(22),
+      error: captured
+    })
+    expect(utf8ByteLength(frame)).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
+    expect(readBridgeHostMessage(frame).ok).toBe(true)
   })
 })
