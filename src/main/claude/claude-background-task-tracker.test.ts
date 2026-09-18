@@ -62,7 +62,9 @@ describe('ClaudeBackgroundTaskTracker', () => {
     ).toBe(true)
     expect(tracker.state).toEqual({
       state: 'monitoring',
-      tasks: [{ id: 'task-1', kind: 'agent', state: 'working', startedAt: 100 }]
+      tasks: [
+        { id: 'task-1', kind: 'agent', state: 'working', startedAt: 100, evidenceObservedAt: 100 }
+      ]
     })
 
     // The turn settling changes nothing the strip renders.
@@ -89,7 +91,9 @@ describe('ClaudeBackgroundTaskTracker', () => {
     tracker.observe(system('task_updated', { task_id: 'task-1', patch: { is_backgrounded: true } }))
     expect(tracker.state).toEqual({
       state: 'monitoring',
-      tasks: [{ id: 'task-1', kind: 'command', state: 'working', startedAt: 100 }]
+      tasks: [
+        { id: 'task-1', kind: 'command', state: 'working', startedAt: 100, evidenceObservedAt: 100 }
+      ]
     })
   })
 
@@ -113,7 +117,8 @@ describe('ClaudeBackgroundTaskTracker', () => {
           kind: 'command',
           description: 'run the build',
           state: 'working',
-          startedAt: 100
+          startedAt: 100,
+          evidenceObservedAt: 100
         }
       ]
     })
@@ -177,8 +182,12 @@ describe('ClaudeBackgroundTaskTracker', () => {
     ).toBe(true)
     expect(tracker.state).toEqual({
       state: 'monitoring',
-      tasks: [{ id: 'task-b', kind: 'agent', state: 'working', startedAt: 200 }],
-      settledTasks: [{ id: 'task-a', kind: 'agent', state: 'done', startedAt: 100 }]
+      tasks: [
+        { id: 'task-b', kind: 'agent', state: 'working', startedAt: 200, evidenceObservedAt: 200 }
+      ],
+      settledTasks: [
+        { id: 'task-a', kind: 'agent', state: 'done', startedAt: 100, evidenceObservedAt: 100 }
+      ]
     })
     expect(tracker.stoppableTaskIds).toEqual(['task-b'])
 
@@ -240,7 +249,8 @@ describe('ClaudeBackgroundTaskTracker', () => {
           kind: 'command',
           description: 'Sleep for 25 seconds',
           state: 'working',
-          startedAt: 200
+          startedAt: 200,
+          evidenceObservedAt: 200
         }
       ],
       settledTasks: [
@@ -250,6 +260,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
           description: 'Sleep for 5 seconds',
           state: 'done',
           startedAt: 100,
+          evidenceObservedAt: 200,
           totalTokens: 18130
         }
       ]
@@ -292,7 +303,36 @@ describe('ClaudeBackgroundTaskTracker', () => {
       name: 'general-purpose',
       state: 'working',
       startedAt: 100,
+      evidenceObservedAt: 100,
       totalTokens: 14866
+    })
+  })
+
+  it('times a backgrounded child from a usage-free progress frame', () => {
+    const tracker = trackerAt([100, 4000])
+    tracker.observe(
+      system('task_started', {
+        task_id: 'agent-1',
+        task_type: 'local_agent',
+        subagent_type: 'general-purpose',
+        description: 'Sleep 6 seconds test',
+        is_backgrounded: true
+      })
+    )
+
+    // A progress frame carrying no usage is still proof the child is alive now.
+    expect(
+      tracker.observe(system('task_progress', { task_id: 'agent-1', description: 'Running Bash' }))
+    ).toBe(true)
+    expect(tracker.state?.tasks?.[0]).toEqual({
+      id: 'agent-1',
+      kind: 'agent',
+      // Progress descriptions are transient activity, never the task's name.
+      description: 'Sleep 6 seconds test',
+      name: 'general-purpose',
+      state: 'working',
+      startedAt: 100,
+      evidenceObservedAt: 4000
     })
   })
 
@@ -306,7 +346,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
     )
     tracker.observe(system('task_notification', { task_id: 'failed', status: 'failed' }))
     expect(tracker.state?.settledTasks).toEqual([
-      { id: 'failed', kind: 'agent', state: 'blocked', startedAt: 200 }
+      { id: 'failed', kind: 'agent', state: 'blocked', startedAt: 200, evidenceObservedAt: 200 }
     ])
   })
 
@@ -336,8 +376,22 @@ describe('ClaudeBackgroundTaskTracker', () => {
     expect(tracker.state).toEqual({
       state: 'monitoring',
       tasks: [
-        { id: 'task-agent', kind: 'agent', description: 'agent', state: 'working', startedAt: 100 },
-        { id: 'task-bash', kind: 'command', description: 'bash', state: 'working', startedAt: 100 }
+        {
+          id: 'task-agent',
+          kind: 'agent',
+          description: 'agent',
+          state: 'working',
+          startedAt: 100,
+          evidenceObservedAt: 100
+        },
+        {
+          id: 'task-bash',
+          kind: 'command',
+          description: 'bash',
+          state: 'working',
+          startedAt: 100,
+          evidenceObservedAt: 100
+        }
       ]
     })
 
@@ -364,9 +418,11 @@ describe('ClaudeBackgroundTaskTracker', () => {
         { task_id: 'task-2', task_type: 'local_bash' }
       ])
     )
+    // task-1's spawn stamp holds at 100 while the roster frame re-observes it at
+    // 200: the two clocks are separate, which is the whole point of the second one.
     expect(tracker.state?.tasks).toEqual([
-      { id: 'task-1', kind: 'agent', state: 'working', startedAt: 100 },
-      { id: 'task-2', kind: 'command', state: 'working', startedAt: 200 }
+      { id: 'task-1', kind: 'agent', state: 'working', startedAt: 100, evidenceObservedAt: 200 },
+      { id: 'task-2', kind: 'command', state: 'working', startedAt: 200, evidenceObservedAt: 200 }
     ])
   })
 
@@ -416,7 +472,14 @@ describe('ClaudeBackgroundTaskTracker', () => {
     expect(tracker.state).toEqual({
       state: 'monitoring',
       tasks: [
-        { id: 'task-live', kind: 'agent', description: 'agent', state: 'working', startedAt: 100 }
+        {
+          id: 'task-live',
+          kind: 'agent',
+          description: 'agent',
+          state: 'working',
+          startedAt: 100,
+          evidenceObservedAt: 100
+        }
       ]
     })
   })
@@ -487,7 +550,15 @@ describe('ClaudeBackgroundTaskTracker', () => {
     )
     expect(tracker.state).toEqual({
       state: 'monitoring',
-      tasks: [{ id: 'task-live', kind: 'monitor', state: 'monitoring', startedAt: 100 }]
+      tasks: [
+        {
+          id: 'task-live',
+          kind: 'monitor',
+          state: 'monitoring',
+          startedAt: 100,
+          evidenceObservedAt: 100
+        }
+      ]
     })
     expect(
       tracker.observe(system('task_updated', { task_id: 'task-live', patch: { status: 'killed' } }))
@@ -506,7 +577,8 @@ describe('ClaudeBackgroundTaskTracker', () => {
             id: taskType,
             kind: taskType === 'local_workflow' ? 'workflow' : 'monitor',
             state: taskType === 'local_workflow' ? 'working' : 'monitoring',
-            startedAt: 100
+            startedAt: 100,
+            evidenceObservedAt: 100
           }
         ]
       })
@@ -572,7 +644,8 @@ describe('ClaudeBackgroundTaskTracker', () => {
           kind: 'command',
           description: 'command',
           state: 'working',
-          startedAt: 100
+          startedAt: 100,
+          evidenceObservedAt: 100
         }
       ]
     })

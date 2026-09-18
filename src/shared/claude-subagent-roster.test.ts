@@ -529,3 +529,34 @@ describe('restored-row liveness reap', () => {
     expect(roster.has('aprobe1-6d3cb5b5')).toBe(false)
   })
 })
+
+describe('claude child activity evidence', () => {
+  it('advances a pinged child clock while its spawn stamp and the sibling sort hold', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a2', { agentType: 'reviewer' }, 100)
+    upsertWorkingClaudeSubagent(roster, 'a1', { agentType: 'writer' }, 200)
+    expect(claudeRosterToSnapshots(roster)?.map((snapshot) => snapshot.evidenceObservedAt)).toEqual(
+      [100, 200]
+    )
+
+    // A tool event from ONE child: the quiet sibling must not inherit its recency.
+    upsertWorkingClaudeSubagent(roster, 'a2', {}, 5000)
+
+    const after = claudeRosterToSnapshots(roster)
+    expect(after?.map((snapshot) => snapshot.id)).toEqual(['a2', 'a1'])
+    expect(after?.map((snapshot) => snapshot.startedAt)).toEqual([100, 200])
+    expect(after?.map((snapshot) => snapshot.evidenceObservedAt)).toEqual([5000, 200])
+  })
+
+  it('treats a lead inventory that still lists a lane as an observation of that lane', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a1', { agentType: 'reviewer' }, 100)
+
+    foldClaudeBackgroundTasksIntoRoster(roster, [task({ id: 'a1' })], 7000)
+
+    expect(claudeRosterToSnapshots(roster)?.[0]).toMatchObject({
+      startedAt: 100,
+      evidenceObservedAt: 7000
+    })
+  })
+})

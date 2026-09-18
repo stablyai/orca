@@ -15,7 +15,9 @@ import {
 } from './claude-background-task-frames'
 import {
   ClaudeSettledBackgroundTasks,
+  applyClaudeTaskProgressFrame,
   claudeBackgroundTaskDetail,
+  mergeTrackedClaudeBackgroundTask,
   type TrackedClaudeBackgroundTask
 } from './claude-settled-background-tasks'
 
@@ -132,14 +134,11 @@ export class ClaudeBackgroundTaskTracker {
       return true
     }
     if (message.subtype === 'task_progress') {
-      // Progress `description` is the current activity ("Running <tool>"), not
-      // the task's name — only usage (and a missing identity) may update.
       const existing = this.tasks.get(id)
-      const totalTokens = taskUsageTotalTokens(message)
-      if (!existing?.backgrounded || totalTokens === undefined) {
+      if (!existing?.backgrounded) {
         return false
       }
-      this.tasks.set(id, { ...existing, totalTokens, name: existing.name ?? taskName(message) })
+      this.tasks.set(id, applyClaudeTaskProgressFrame(existing, message, this.now()))
       return true
     }
     if (message.subtype === 'task_updated') {
@@ -161,13 +160,17 @@ export class ClaudeBackgroundTaskTracker {
     if (this.aggregateRosterObserved && backgrounded && !this.tasks.has(id)) {
       return false
     }
+    // One clock read: the spawn stamp and the first observation are the same
+    // moment here, and they diverge from the next frame onwards.
+    const observedAt = this.now()
     this.upsert(id, {
       backgrounded,
       kind,
       description: taskDescription(message.description),
       name: taskName(message),
       state: liveClaudeTaskRunState(message.status) ?? undefined,
-      startedAt: this.now()
+      startedAt: observedAt,
+      evidenceObservedAt: observedAt
     })
     return true
   }
@@ -195,13 +198,15 @@ export class ClaudeBackgroundTaskTracker {
       liveState !== null ||
       (patchKind !== undefined && patchKind !== 'unknown')
     if (hasContent && (!this.aggregateRosterObserved || existing)) {
+      const observedAt = this.now()
       this.upsert(id, {
         backgrounded: patch.is_backgrounded === true || existing?.backgrounded === true,
         kind: patchKind ?? existing?.kind ?? 'unknown',
         description: taskDescription(patch.description),
         name: taskName(patch),
         state: liveState ?? undefined,
-        startedAt: this.now()
+        startedAt: observedAt,
+        evidenceObservedAt: observedAt
       })
       return true
     }
@@ -213,6 +218,8 @@ export class ClaudeBackgroundTaskTracker {
       return
     }
     const prior = new Map(this.tasks)
+    // The roster frame is one observation of every id it lists, so one clock read.
+    const observedAt = this.now()
     this.aggregateRosterObserved = true
     this.tasks.clear()
     const roster = new Map<string, TrackedClaudeBackgroundTask>()
@@ -242,7 +249,8 @@ export class ClaudeBackgroundTaskTracker {
         description: taskDescription(task.description) ?? existing?.description,
         name: taskName(task) ?? existing?.name,
         state: liveClaudeTaskRunState(task.status) ?? existing?.state,
-        startedAt: existing?.startedAt ?? this.now(),
+        startedAt: existing?.startedAt ?? observedAt,
+        evidenceObservedAt: observedAt,
         totalTokens: existing?.totalTokens
       })
     }
@@ -292,17 +300,7 @@ export class ClaudeBackgroundTaskTracker {
     const existing = this.tasks.get(id) ?? this.retention.resume(id)
     this.terminalTaskIds.delete(id)
     if (existing) {
-      this.tasks.set(id, {
-        backgrounded: existing.backgrounded || task.backgrounded,
-        // A settled foreground task is not revived by a late edge frame.
-        liveInTurn: existing.liveInTurn,
-        kind: task.kind !== 'unknown' ? task.kind : existing.kind,
-        description: task.description ?? existing.description,
-        name: task.name ?? existing.name,
-        state: task.state ?? existing.state,
-        startedAt: existing.startedAt,
-        totalTokens: existing.totalTokens
-      })
+      this.tasks.set(id, mergeTrackedClaudeBackgroundTask(existing, task))
       return
     }
     this.tasks.set(id, { ...task, liveInTurn: true })

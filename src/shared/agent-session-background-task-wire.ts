@@ -25,6 +25,11 @@ export type AgentSessionBackgroundTask = {
   state?: AgentSessionBackgroundTaskRunState
   /** Host epoch ms when the task was first observed, so clients render elapsed. */
   startedAt?: number
+  /** Host epoch ms the host last observed THIS task's own activity, so a client
+   *  times its recency from the task rather than from the session that owns it.
+   *  Absent means the host never reported it — never "never active" — and the
+   *  client falls back to the clock it already used. */
+  evidenceObservedAt?: number
   /** Cumulative provider-reported token usage, where the provider supplies it. */
   totalTokens?: number
   /** Whether this row's own stop can act on it. Absent means yes: every host
@@ -61,6 +66,7 @@ function backgroundTaskFieldsEqual(
     left.name === right.name &&
     left.state === right.state &&
     left.startedAt === right.startedAt &&
+    left.evidenceObservedAt === right.evidenceObservedAt &&
     left.totalTokens === right.totalTokens &&
     left.stoppable === right.stoppable
   )

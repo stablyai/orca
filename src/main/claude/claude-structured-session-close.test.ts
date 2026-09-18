@@ -90,7 +90,13 @@ describe('Claude published session close lifecycle', () => {
       {
         state: 'monitoring',
         tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
+          {
+            id: 'background-1',
+            kind: 'agent',
+            state: 'working',
+            startedAt: expect.any(Number),
+            evidenceObservedAt: expect.any(Number)
+          }
         ],
         supportsTaskStop: true
       }
@@ -111,7 +117,13 @@ describe('Claude published session close lifecycle', () => {
       {
         state: 'monitoring',
         tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
+          {
+            id: 'background-1',
+            kind: 'agent',
+            state: 'working',
+            startedAt: expect.any(Number),
+            evidenceObservedAt: expect.any(Number)
+          }
         ],
         supportsTaskStop: true
       },

@@ -83,6 +83,7 @@ export function normalizeCodexSubagentLifecycleEvent(
   }
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
   if (eventName === 'SubagentStart') {
+    const observedAt = Date.now()
     upsertCodexSubagent(
       roster,
       agentId,
@@ -91,7 +92,8 @@ export function normalizeCodexSubagentLifecycleEvent(
         model: readString(hookPayload, 'model'),
         state: 'working'
       },
-      Date.now()
+      observedAt,
+      observedAt
     )
   } else {
     finishCodexSubagent(roster, agentId)
@@ -131,6 +133,7 @@ export function normalizeCodexEvent(
 
   const agentId = readString(hookPayload, 'agent_id')
   if (agentId) {
+    const observedAt = Date.now()
     upsertCodexSubagent(
       getOrCreateCodexSubagentRoster(state, paneKey),
       agentId,
@@ -139,7 +142,8 @@ export function normalizeCodexEvent(
         model: readString(hookPayload, 'model'),
         state: stateName === 'waiting' ? 'waiting' : 'working'
       },
-      Date.now()
+      observedAt,
+      observedAt
     )
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }

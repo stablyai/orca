@@ -145,6 +145,7 @@ describe('shared agent-hook-listener', () => {
           id: 'a1',
           state: 'working',
           startedAt: expect.any(Number),
+          evidenceObservedAt: expect.any(Number),
           agentType: 'general-purpose',
           description: 'Review loop'
         }
@@ -175,6 +176,7 @@ describe('shared agent-hook-listener', () => {
           id: 'r1',
           state: 'working',
           startedAt: expect.any(Number),
+          evidenceObservedAt: expect.any(Number),
           agentType: 'code-reviewer',
           description: undefined
         }
