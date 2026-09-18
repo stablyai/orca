@@ -7,11 +7,36 @@ import { cleanup, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
+import {
+  type TaskPageOverlayFlagSetters,
+  useDismissTaskPageOverlaysWhenHidden
+} from '../components/use-dismiss-task-page-overlays'
+import { useAppStore } from '../store'
 import { renderTasksView } from './app-workspace-shell-tasks-view'
 
 const WORKSPACE_SHELL_PATH = join(process.cwd(), 'src/renderer/src/app-shell/AppWorkspaceShell.tsx')
+const TASKS_VIEW_PATH = join(
+  process.cwd(),
+  'src/renderer/src/app-shell/app-workspace-shell-tasks-view.tsx'
+)
 
 let taskPageMountCount = 0
+
+function noopOverlaySetters(
+  overrides: Partial<TaskPageOverlayFlagSetters> = {}
+): TaskPageOverlayFlagSetters {
+  return {
+    setNewIssueOpen: () => {},
+    setNewLinearIssueOpen: () => {},
+    setNewLinearProjectOpen: () => {},
+    setNewJiraIssueOpen: () => {},
+    setNewJiraIssueProjectComboboxOpen: () => {},
+    setLinearConnectOpen: () => {},
+    setJiraConnectOpen: () => {},
+    ...overrides
+  }
+}
 
 function TasksPageDouble(): React.JSX.Element {
   const [generation] = useState(() => {
@@ -21,8 +46,47 @@ function TasksPageDouble(): React.JSX.Element {
   return <h1 data-testid="tasks-page-heading">Tasks {generation}</h1>
 }
 
-function TasksHost({ activeView }: { activeView: TopLevelView }): React.JSX.Element {
-  return <>{renderTasksView(activeView, <TasksPageDouble />)}</>
+function TasksComposerPage(): React.JSX.Element {
+  const [open, setOpen] = useState(true)
+  const [title] = useState('keep this draft')
+  useDismissTaskPageOverlaysWhenHidden(noopOverlaySetters({ setNewIssueOpen: setOpen }))
+  return (
+    <>
+      <span data-testid="composer-draft">{title}</span>
+      <span data-testid="composer-open">{open ? 'open' : 'closed'}</span>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>New GitHub issue</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function TasksSelectedSheetPage(): React.JSX.Element {
+  const [open] = useState(true)
+  const [selectedRow] = useState('ORC-21')
+  return (
+    <>
+      <span data-testid="selected-row">{selectedRow}</span>
+      <span data-testid="sheet-open">{open ? 'open' : 'closed'}</span>
+      <Dialog open={open}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Issue sheet</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function TasksHost({
+  activeView,
+  page
+}: {
+  activeView: TopLevelView
+  page?: React.ReactNode
+}): React.JSX.Element {
+  return <>{renderTasksView(activeView, page ?? <TasksPageDouble />)}</>
 }
 
 afterEach(() => {
@@ -77,5 +141,63 @@ describe('renderTasksView', () => {
     const source = readFileSync(WORKSPACE_SHELL_PATH, 'utf8')
     expect(source).toContain('renderTasksView(activeView, <TaskPage />)')
     expect(source).not.toContain("activeView === 'tasks' ? <TaskPage />")
+  })
+
+  it('closes Tasks composer overlays when leaving the view and keeps the draft', () => {
+    const previousDraft = useAppStore.getState().newIssueDraft
+    useAppStore.getState().setNewIssueDraft({ title: 'keep this draft' })
+    try {
+      const view = render(<TasksHost activeView="tasks" page={<TasksComposerPage />} />)
+      expect(screen.getByRole('dialog', { name: 'New GitHub issue' })).toBeInTheDocument()
+      expect(screen.getByTestId('composer-open')).toHaveTextContent('open')
+
+      view.rerender(<TasksHost activeView="settings" page={<TasksComposerPage />} />)
+
+      expect(screen.getByTestId('composer-open')).toHaveTextContent('closed')
+      expect(screen.getByTestId('composer-draft')).toHaveTextContent('keep this draft')
+      expect(useAppStore.getState().newIssueDraft?.title).toBe('keep this draft')
+      expect(screen.queryByRole('dialog', { name: 'New GitHub issue' })).toBeNull()
+
+      view.rerender(<TasksHost activeView="tasks" page={<TasksComposerPage />} />)
+
+      expect(screen.getByTestId('composer-open')).toHaveTextContent('closed')
+      expect(screen.getByTestId('composer-draft')).toHaveTextContent('keep this draft')
+      expect(screen.queryByRole('dialog', { name: 'New GitHub issue' })).toBeNull()
+    } finally {
+      if (previousDraft) {
+        useAppStore.getState().setNewIssueDraft(previousDraft)
+      } else {
+        useAppStore.getState().clearNewIssueDraft()
+      }
+    }
+  })
+
+  it('hides selection-driven Tasks sheets while keeping the selected row', () => {
+    const view = render(<TasksHost activeView="tasks" page={<TasksSelectedSheetPage />} />)
+    expect(screen.getByRole('dialog', { name: 'Issue sheet' })).toBeInTheDocument()
+    expect(screen.getByTestId('sheet-open')).toHaveTextContent('open')
+
+    view.rerender(<TasksHost activeView="terminal" page={<TasksSelectedSheetPage />} />)
+
+    expect(screen.getByTestId('sheet-open')).toHaveTextContent('open')
+    expect(screen.getByTestId('selected-row')).toHaveTextContent('ORC-21')
+    expect(screen.queryByRole('dialog', { name: 'Issue sheet' })).toBeNull()
+
+    view.rerender(<TasksHost activeView="tasks" page={<TasksSelectedSheetPage />} />)
+
+    expect(screen.getByTestId('sheet-open')).toHaveTextContent('open')
+    expect(screen.getByTestId('selected-row')).toHaveTextContent('ORC-21')
+    expect(screen.getByRole('dialog', { name: 'Issue sheet' })).toBeInTheDocument()
+  })
+
+  it('gates Tasks portals from the keep-mounted wrapper', () => {
+    const source = readFileSync(TASKS_VIEW_PATH, 'utf8')
+    const effectsSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/use-task-page-global-effects.ts'),
+      'utf8'
+    )
+    expect(source).toContain('OverlayAllowedContext.Provider')
+    expect(source).toContain('value={isVisible}')
+    expect(effectsSource).toContain('useDismissTaskPageOverlaysWhenHidden')
   })
 })

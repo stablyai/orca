@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import { OverlayAllowedContext } from '@/lib/overlay-allowed-context'
 
 export function AppWorkspaceShellTasksView({
   activeView,
@@ -19,15 +20,17 @@ export function AppWorkspaceShellTasksView({
   }
 
   return (
-    <div
-      className={isVisible ? 'flex flex-1 min-w-0 min-h-0' : 'hidden flex-1 min-w-0 min-h-0'}
-      hidden={!isVisible}
-      inert={!isVisible}
-      aria-hidden={!isVisible}
-      data-app-workspace-shell-tasks-view=""
-    >
-      {children}
-    </div>
+    <OverlayAllowedContext.Provider value={isVisible}>
+      <div
+        className={isVisible ? 'flex flex-1 min-w-0 min-h-0' : 'hidden flex-1 min-w-0 min-h-0'}
+        hidden={!isVisible}
+        inert={!isVisible}
+        aria-hidden={!isVisible}
+        data-app-workspace-shell-tasks-view=""
+      >
+        {children}
+      </div>
+    </OverlayAllowedContext.Provider>
   )
 }
 

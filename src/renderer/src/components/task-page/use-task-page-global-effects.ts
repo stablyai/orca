@@ -2,6 +2,7 @@ import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-ji
 import { useEffect } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { useAppStore } from '@/store'
+import { useDismissTaskPageOverlaysWhenHidden } from '../use-dismiss-task-page-overlays'
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
@@ -26,8 +27,24 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     selectedLinearIssue,
     selectedJiraIssue,
     newLinearIssueOpen,
-    newJiraIssueOpen
+    newJiraIssueOpen,
+    setNewIssueOpen,
+    setNewLinearIssueOpen,
+    setNewLinearProjectOpen,
+    setNewJiraIssueOpen,
+    setNewJiraIssueProjectComboboxOpen,
+    setLinearConnectOpen,
+    setJiraConnectOpen
   } = model
+  useDismissTaskPageOverlaysWhenHidden({
+    setNewIssueOpen,
+    setNewLinearIssueOpen,
+    setNewLinearProjectOpen,
+    setNewJiraIssueOpen,
+    setNewJiraIssueProjectComboboxOpen,
+    setLinearConnectOpen,
+    setJiraConnectOpen
+  })
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
