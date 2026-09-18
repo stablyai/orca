@@ -4,10 +4,6 @@ import type {
   BrowserCertificateProceedResult
 } from '../../shared/browser-workspace-types'
 import {
-  isEligibleLocalCertificateHost,
-  toSecureCertificateEndpoint
-} from '../../shared/browser-url'
-import {
   certificateChallengeIdentityMatches,
   CERTIFICATE_CHALLENGE_TTL_MS,
   MAX_PENDING_CERTIFICATE_CHALLENGES,
@@ -16,13 +12,14 @@ import {
   type PendingCertificateChallenge
 } from './browser-certificate-challenge'
 import {
-  getLeafCertificateSha256,
   getSupportedCertificateErrorCode,
-  normalizeCertificateError,
-  SUPPORTED_CERTIFICATE_ERROR,
   SUPPORTED_CERTIFICATE_ERROR_CODE
 } from './browser-certificate-identity'
 import { BrowserCertificateRequestGuard } from './browser-certificate-request-guard'
+import {
+  handleBrowserCertificateError,
+  type BrowserCertificateChallengeInput
+} from './browser-certificate-error-handler'
 
 export type { ManagedBrowserGuestContext } from './browser-certificate-challenge'
 
@@ -62,61 +59,19 @@ export class BrowserCertificateTrustController {
     callback: (isTrusted: boolean) => void
     isMainFrame: boolean
   }): void {
-    let answered = false
-    const answer = (trusted: boolean): void => {
-      if (!answered) {
-        answered = true
-        args.callback(trusted)
-      }
-    }
-    try {
-      const context = this.dependencies.resolveManagedGuestContext(args.webContents.id)
-      const parsed = new URL(args.url)
-      const endpoint = toSecureCertificateEndpoint(args.url)
-      const digest = getLeafCertificateSha256(args.certificate)
-      const error = normalizeCertificateError(args.error)
-      if (!context || !endpoint || !digest) {
-        answer(false)
-        return
-      }
-      const identity = { secureEndpoint: endpoint, leafCertificateSha256: digest, error }
-      if (
-        this.requestGuard.shouldTrustCertificate(
-          args.webContents.session,
-          args.webContents.id,
-          identity
-        )
-      ) {
-        args.event.preventDefault()
-        answer(true)
-        return
-      }
-      if (
-        args.isMainFrame &&
-        parsed.protocol === 'https:' &&
-        error === SUPPORTED_CERTIFICATE_ERROR &&
-        isEligibleLocalCertificateHost(parsed.hostname) &&
-        this.requestGuard.canOfferCertificate(args.webContents.session, identity)
-      ) {
-        this.recordPendingChallenge({
-          webContentsId: args.webContents.id,
-          browserPageId: context.browserPageId,
-          navigationUrl: args.url,
-          origin: parsed.origin,
-          displayHost: parsed.host,
-          secureEndpoint: endpoint,
-          leafCertificateSha256: digest,
-          error
-        })
-      }
-      answer(false)
-    } catch (error) {
-      // Why: fail closed, but log first — a throw in challenge recording would
-      // otherwise present as "the cert prompt never appears" with no trace,
-      // matching the logging catch in browser-manager's guest-state notifier.
-      console.error('[browser-certificate-trust-controller] handleCertificateError failed', error)
-      answer(false)
-    }
+    handleBrowserCertificateError(args, {
+      resolveManagedGuestContext: this.dependencies.resolveManagedGuestContext,
+      shouldTrustCertificate: (session, webContentsId, identity) =>
+        this.requestGuard.shouldTrustCertificate(session, webContentsId, identity),
+      canOfferCertificate: (session, identity) =>
+        this.requestGuard.canOfferCertificate(session, identity),
+      getNavigationSequence: (webContentsId) =>
+        this.navigationSequenceByGuestId.get(webContentsId) ?? 0,
+      recordPendingChallenge: (challenge) => this.recordPendingChallenge(challenge),
+      isEligibleCertificateHost: this.dependencies.isEligibleCertificateHost,
+      onError: (error) =>
+        console.error('[browser-certificate-trust-controller] handleCertificateError failed', error)
+    })
   }
 
   onGuestRegistered(webContentsId: number, browserPageId: string): void {
@@ -198,16 +153,7 @@ export class BrowserCertificateTrustController {
     return { ok: true }
   }
 
-  private recordPendingChallenge(args: {
-    webContentsId: number
-    browserPageId: string | null
-    navigationUrl: string
-    origin: string
-    displayHost: string
-    secureEndpoint: string
-    leafCertificateSha256: string
-    error: string
-  }): void {
+  private recordPendingChallenge(args: BrowserCertificateChallengeInput): void {
     const navigationSequence = this.navigationSequenceByGuestId.get(args.webContentsId) ?? 0
     const existing = this.pendingByGuestId.get(args.webContentsId)
     if (
