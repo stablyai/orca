@@ -1,3 +1,4 @@
+import { LoneTerminalPaneWidthHandles } from './LoneTerminalPaneWidthHandles'
 import { TerminalPaneSurface } from './TerminalPaneSurface'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalPaneController } from './use-terminal-pane-controller'
@@ -5,7 +6,13 @@ import { useHostTerminalScrollbackHold } from './use-host-terminal-scrollback-ho
 import type { TerminalPaneProps } from './terminal-pane-types'
 
 function MountedTerminalPane(props: TerminalPaneProps): React.JSX.Element {
-  return <TerminalPaneSurface controller={useTerminalPaneController(props)} />
+  const controller = useTerminalPaneController(props)
+  return (
+    <>
+      <TerminalPaneSurface controller={controller} />
+      <LoneTerminalPaneWidthHandles controller={controller} />
+    </>
+  )
 }
 
 export default function TerminalPane(props: TerminalPaneProps): React.JSX.Element {

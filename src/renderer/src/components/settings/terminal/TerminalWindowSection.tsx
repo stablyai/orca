@@ -14,6 +14,7 @@ import { clampNumber } from '@/lib/terminal-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { WindowMaterialSetting } from '../appearance/WindowMaterialSetting'
 import { translate } from '@/i18n/i18n'
+import { DEFAULT_SINGLE_PANE_MAX_WIDTH } from '@/components/terminal-pane/TerminalSinglePaneWidthHandles'
 
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 
@@ -145,6 +146,33 @@ export function TerminalWindowSection({
             step={1}
             suffix="px"
             onChange={(value) => updateSettings({ terminalPaddingY: Math.max(0, value) })}
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalWindowSection.7e06e46f18',
+            'Single Terminal Width'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalWindowSection.07bdfea18e',
+            'Maximum width for a tab with no splits, centered between the sidebars. Set 0 for full width.'
+          )}
+          keywords={['width', 'center', 'centered', 'max', 'single', 'unsplit', 'wide']}
+        >
+          <NumberField
+            label={translate(
+              'auto.components.settings.TerminalWindowSection.7e06e46f18',
+              'Single Terminal Width'
+            )}
+            description=""
+            value={settings.terminalSinglePaneMaxWidth ?? DEFAULT_SINGLE_PANE_MAX_WIDTH}
+            defaultValue={DEFAULT_SINGLE_PANE_MAX_WIDTH}
+            min={0}
+            max={4000}
+            step={10}
+            suffix="px"
+            onChange={(value) => updateSettings({ terminalSinglePaneMaxWidth: Math.max(0, value) })}
           />
         </SearchableSetting>
 

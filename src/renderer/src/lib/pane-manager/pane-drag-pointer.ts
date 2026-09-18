@@ -1,3 +1,4 @@
+import { releasePointerCaptureIfHeld } from './drag-pointer-session'
 import type { DropZone, ManagedPaneInternal, PaneExternalDropTarget } from './pane-manager-types'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import {
@@ -45,15 +46,7 @@ export function beginPaneDragFromPointerDown(
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
     }
-    if (pointerId !== null) {
-      try {
-        if (handle.hasPointerCapture(pointerId)) {
-          handle.releasePointerCapture(pointerId)
-        }
-      } catch {
-        // Capture may already be lost; cleanup must still restore terminal pointer input.
-      }
-    }
+    releasePointerCaptureIfHeld(handle, pointerId)
     if (!dragging) {
       return
     }

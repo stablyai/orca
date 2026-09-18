@@ -103,6 +103,7 @@ export type PaneStyleOptions = {
   focusFollowsMouse?: boolean
   paddingX?: number
   paddingY?: number
+  singlePaneMaxWidth?: number
 }
 
 export type ManagedPane = {
