@@ -32,7 +32,10 @@ internal class OrcaMobileWebShellView(
   private var sessionId = ""
   private var appliedDirectory: String? = null
   private var appliedSessionId: String? = null
-  private var failureReported = false
+  private val loadState = MobileWebShellLoadStateMachine()
+  // Written on the main thread, read from onPageStarted/onPageFinished, which Chromium runs after
+  // the failure that hid the view; `shouldInterceptRequest` also runs off the main thread.
+  @Volatile private var documentFailed = false
   private var generation: MobileWebShellGeneration? = null
   private var originHost: String? = null
   private var blocker: ScriptHandler? = null
@@ -58,27 +61,34 @@ internal class OrcaMobileWebShellView(
     if (generationDirectory == appliedDirectory && sessionId == appliedSessionId) return
     appliedDirectory = generationDirectory
     appliedSessionId = sessionId
-    failureReported = false
-    val view = webView ?: return
+    documentFailed = false
+    loadState.reset()
+    val view = webView
+    if (view == null) {
+      // onRenderProcessGone destroyed it. Recovery is a remount, so a new prop pair on the corpse
+      // is still a failure, and one that says so beats one that goes quiet forever.
+      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+      return
+    }
     view.stopLoading()
-    report("loading")
+    emit(loadState.started())
 
     val origin = mobileWebShellOrigin(sessionId)
     val host = mobileWebShellOriginHost(sessionId)
     if (origin == null || host == null) {
       // The private origin is the isolation primitive; a malformed session id leaves us without one.
-      report("failed", "isolation-unavailable")
+      emit(loadState.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
       return
     }
     val loaded = MobileWebShellGeneration.load(generationDirectory)
     if (loaded == null) {
-      report("failed", "generation-unreadable")
+      emit(loadState.failed(MobileWebShellFailureReason.GENERATION_UNREADABLE))
       return
     }
     blocker?.remove()
     blocker = installMobileWebShellNetworkApiBlocker(view, origin)
     if (blocker == null) {
-      report("failed", "isolation-unavailable")
+      emit(loadState.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
       return
     }
     generation = loaded
@@ -87,7 +97,7 @@ internal class OrcaMobileWebShellView(
     view.loadUrl("$origin/")
   }
 
-  /** Expo calls this once React Native is done with the view; the renderer only dies here. */
+  /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
   fun destroyWebView() {
     val view = webView ?: return
     webView = null
@@ -134,13 +144,8 @@ internal class OrcaMobileWebShellView(
     return view
   }
 
-  private fun report(state: String, reason: String? = null) {
-    val payload = if (reason == null) {
-      mapOf("state" to state)
-    } else {
-      mapOf("state" to state, "reason" to reason)
-    }
-    onLoadState(payload)
+  private fun emit(emission: MobileWebShellLoadEmission?) {
+    if (emission != null) onLoadState(emission.toPayload())
   }
 
   /**
@@ -149,11 +154,12 @@ internal class OrcaMobileWebShellView(
    * thing on screen. `shouldInterceptRequest` also runs off the main thread.
    */
   private fun reportDocumentFailure() {
+    // Set before the post, not inside it: onPageFinished runs in between and would otherwise
+    // report `ready` over the failure and make the error page visible again.
+    documentFailed = true
     post {
-      if (failureReported) return@post
-      failureReported = true
       webView?.visibility = View.INVISIBLE
-      report("failed", "document-load-failed")
+      emit(loadState.failed(MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED))
     }
   }
 
@@ -228,15 +234,15 @@ internal class OrcaMobileWebShellView(
       !(request.isForMainFrame && isDocumentUrl(request.url))
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-      if (!isDocumentUrl(Uri.parse(url))) return
-      report("loading")
+      if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
+      emit(loadState.started())
     }
 
     override fun onPageFinished(view: WebView, url: String) {
-      if (!isDocumentUrl(Uri.parse(url))) return
+      if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
       view.visibility = View.VISIBLE
       view.clearHistory()
-      report("ready")
+      emit(loadState.finished())
     }
 
     override fun onReceivedError(
@@ -262,7 +268,7 @@ internal class OrcaMobileWebShellView(
      */
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
       destroyWebView()
-      report("failed", "render-process-gone")
+      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
       return true
     }
   }
