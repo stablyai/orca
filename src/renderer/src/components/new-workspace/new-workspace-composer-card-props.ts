@@ -62,9 +62,6 @@ export type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
-  baseBranch?: string
-  onBaseBranchChange?: (value: string | undefined) => void
-  startFromResetHint?: string | null
   parentWorktreeId?: string | null
   onParentWorktreeIdChange?: (value: string | null) => void
   selectedRepoExecutionHostId?: ExecutionHostId | null

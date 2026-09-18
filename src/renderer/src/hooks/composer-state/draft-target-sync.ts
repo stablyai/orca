@@ -6,7 +6,6 @@ export type DraftTargetSyncInput = Pick<
   | 'agentPrompt'
   | 'attachmentPaths'
   | 'baseBranch'
-  | 'baseBranchNamesWorkspace'
   | 'compareBaseRef'
   | 'eligibleRepos'
   | 'fetchSparsePresets'
@@ -37,7 +36,6 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     agentPrompt,
     attachmentPaths,
     baseBranch,
-    baseBranchNamesWorkspace,
     compareBaseRef,
     eligibleRepos,
     fetchSparsePresets,
@@ -100,7 +98,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
       linkedPR,
       linkedGitLabIssue,
       linkedGitLabMR,
-      ...(baseBranch !== undefined ? { baseBranch, baseBranchNamesWorkspace } : {}),
+      ...(baseBranch !== undefined ? { baseBranch } : {}),
       ...(compareBaseRef !== undefined ? { compareBaseRef } : {})
     })
   }, [
@@ -108,7 +106,6 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     agentPrompt,
     attachmentPaths,
     baseBranch,
-    baseBranchNamesWorkspace,
     compareBaseRef,
     linkedIssue,
     linkedPR,

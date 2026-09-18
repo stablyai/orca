@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: picker base-ref defaults and search results come from debounced runtime IPC, so loading/result state is intentionally synchronized from effects. */
 import React from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -143,9 +144,7 @@ export function CreateFromPicker({
       return
     }
     const trimmedQuery = query.trim()
-    // Why: an empty query lists the repo's branches, as the composer's Branch tab already does;
-    // a minimum length left this picker showing only the default and worktree branches.
-    if (!open || !repoId) {
+    if (!open || !repoId || trimmedQuery.length < 2) {
       setSearchResults([])
       setIsSearching(false)
       return

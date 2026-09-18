@@ -3,7 +3,6 @@ import type { ComposerModel } from './composer-model'
 type GitHubProviderSelectionInput = Pick<
   ComposerModel,
   | 'applyLinkedWorkItem'
-  | 'baseBranchNamesWorkspace'
   | 'branchAutoNameRef'
   | 'eligibleRepos'
   | 'handleBaseBranchPrSelect'
@@ -48,7 +47,6 @@ import type { SmartGitHubPrStartPointSelection } from './source-selection-decisi
 export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) {
   const {
     applyLinkedWorkItem,
-    baseBranchNamesWorkspace,
     branchAutoNameRef,
     eligibleRepos,
     handleBaseBranchPrSelect,
@@ -114,9 +112,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(normalizedItem)
       if (identity.type !== 'pr' || !runRepo) {
-        if (identity.type === 'pr' || baseBranchNamesWorkspace) {
-          setBaseBranch(undefined)
-        }
+        setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
         return
@@ -175,7 +171,6 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
     },
     [
       applyLinkedWorkItem,
-      baseBranchNamesWorkspace,
       eligibleRepos,
       handleBaseBranchPrSelect,
       isProjectGroupTarget,

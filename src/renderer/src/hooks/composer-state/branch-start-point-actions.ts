@@ -4,15 +4,12 @@ type BranchStartPointActionsInput = Pick<
   ComposerModel,
   | 'applyLinkedGitLabWorkItem'
   | 'applyLinkedWorkItem'
-  | 'baseBranch'
-  | 'baseBranchNamesWorkspace'
   | 'branchAutoNameRef'
   | 'handleRepoChange'
   | 'initialProjectGroupAppliedRef'
   | 'lastAutoNoteRef'
   | 'noteRef'
   | 'setBaseBranch'
-  | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
@@ -41,15 +38,12 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
   const {
     applyLinkedGitLabWorkItem,
     applyLinkedWorkItem,
-    baseBranch,
-    baseBranchNamesWorkspace,
     branchAutoNameRef,
     handleRepoChange,
     initialProjectGroupAppliedRef,
     lastAutoNoteRef,
     noteRef,
     setBaseBranch,
-    setBaseBranchNamesWorkspace,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
@@ -97,26 +91,20 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
     (next: string | undefined): void => {
       smartGitHubPrStartPointSelectionRef.current = null
       setBaseBranch(next)
-      setBaseBranchNamesWorkspace(false)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
-      // Only source-owned refs pin a name that changing the base invalidates.
-      if (baseBranch && baseBranchNamesWorkspace) {
-        setBranchNameOverride(undefined)
-        setBranchNameOverridePreservesNameEdits(false)
-        branchAutoNameRef.current = ''
-      }
+      setBranchNameOverride(undefined)
+      // Why (#5181): Start-from means "new branch from this base", so it never reuses — clear reuse state from a prior smart-field branch pick.
+      setBranchNameOverridePreservesNameEdits(false)
       setReuseEligibleBranch(null)
       setReuseSelectedBranch(false)
       setForkPushWarning(null)
+      branchAutoNameRef.current = ''
       setStartFromResetHint(null)
     },
     [
-      baseBranch,
-      baseBranchNamesWorkspace,
       branchAutoNameRef,
       setBaseBranch,
-      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
@@ -138,7 +126,6 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       nextCompareBaseRef?: string
     ): void => {
       setBaseBranch(nextBaseBranch)
-      setBaseBranchNamesWorkspace(true)
       setCompareBaseRef(nextCompareBaseRef)
       setPushTarget(nextPushTarget)
       setBranchNameOverride(nextBranchNameOverride)
@@ -164,7 +151,6 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       lastAutoNoteRef,
       noteRef,
       setBaseBranch,
-      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
@@ -183,7 +169,6 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       nextCompareBaseRef?: string
     ): void => {
       setBaseBranch(nextBaseBranch)
-      setBaseBranchNamesWorkspace(true)
       setCompareBaseRef(nextCompareBaseRef)
       setPushTarget(nextPushTarget)
       setBranchNameOverride(undefined)
@@ -205,7 +190,6 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       lastAutoNoteRef,
       noteRef,
       setBaseBranch,
-      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setCompareBaseRef,
       setNote,

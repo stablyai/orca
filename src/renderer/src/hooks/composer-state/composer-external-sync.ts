@@ -85,7 +85,6 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     selectedRepoGitHubSourceContext: target.sourceContextState.selectedRepoGitHubSourceContext,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     setBaseBranch: target.workspaceIdentityState.setBaseBranch,
-    setBaseBranchNamesWorkspace: target.workspaceIdentityState.setBaseBranchNamesWorkspace,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,

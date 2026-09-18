@@ -156,7 +156,6 @@ export function useComposerTargetState(
     agentPrompt: sourceContextState.agentPrompt,
     attachmentPaths: sourceContextState.attachmentPaths,
     baseBranch: workspaceIdentityState.baseBranch,
-    baseBranchNamesWorkspace: workspaceIdentityState.baseBranchNamesWorkspace,
     compareBaseRef: workspaceIdentityState.compareBaseRef,
     eligibleRepos: composerTargetStore.eligibleRepos,
     fetchSparsePresets: composerTargetStore.fetchSparsePresets,
