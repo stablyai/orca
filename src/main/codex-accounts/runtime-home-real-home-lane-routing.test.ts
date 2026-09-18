@@ -225,7 +225,9 @@ describe('CodexRuntimeHomeService', () => {
   it('seeds shared auth for a pane-local custom home on the real-home lane', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: true, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     const customHome = join(testState.fakeHomeDir, 'pane-custom-codex-home')
@@ -332,7 +334,9 @@ describe('CodexRuntimeHomeService', () => {
       ''
     ].join('\n')
     writeFileSync(getSystemCodexAuthPath(), oldSystemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(oldSystemAuth)

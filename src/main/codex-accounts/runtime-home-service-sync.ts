@@ -92,7 +92,10 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
         this.lastWrittenAuthJson = null
       } else if (this.lastWrittenAuthJson === null) {
         // Why: unmanaged sessions use an Orca-owned CODEX_HOME; seed it once from system-default auth so terminals stay logged in without mutating ~/.codex.
-        this.restoreSystemDefaultSnapshot({ detectExternalLogin: false })
+        // Why gated: this is the first copy of ~/.codex/auth.json into that home, so it needs explicit consent.
+        if (this.hasCredentialMirrorConsent()) {
+          this.restoreSystemDefaultSnapshot({ detectExternalLogin: false })
+        }
       } else {
         this.persistRuntimeLogoutMarker()
       }

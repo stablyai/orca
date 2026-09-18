@@ -37,6 +37,18 @@ describe('CodexRuntimeHomeService', () => {
     teardownRuntimeHomeTest()
   })
 
+  it('does not copy ~/.codex/auth.json into the runtime home without mirror consent', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    writeFileSync(getSystemCodexAuthPath(), '{"account":"system-1"}\n', 'utf-8')
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: false }))
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service).toBeInstanceOf(CodexRuntimeHomeService)
+    expect(existsSync(runtimeAuthPath)).toBe(false)
+  })
+
   it('does not overwrite auth.json when no managed account was ever active', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(runtimeAuthPath, '{"account":"original"}\n', 'utf-8')
@@ -54,7 +66,7 @@ describe('CodexRuntimeHomeService', () => {
   it('refreshes the runtime auth when the system-default auth changes later', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system-1"}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -76,7 +88,7 @@ describe('CodexRuntimeHomeService', () => {
       'system-refreshed'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -113,7 +125,7 @@ describe('CodexRuntimeHomeService', () => {
       '2026-07-31T12:00:00.000Z'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
@@ -144,7 +156,7 @@ describe('CodexRuntimeHomeService', () => {
       '2026-07-30T12:00:00.000Z'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
@@ -175,7 +187,7 @@ describe('CodexRuntimeHomeService', () => {
   it('keeps a local runtime logout after restart when the system-default auth still exists', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const settings = createSettings()
+    const settings = createSettings({ codexCredentialMirrorConsent: true })
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -196,7 +208,7 @@ describe('CodexRuntimeHomeService', () => {
   it('mirrors a fresh external system-default login after a persisted local runtime logout', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system-old"}\n', 'utf-8')
-    const settings = createSettings()
+    const settings = createSettings({ codexCredentialMirrorConsent: true })
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -218,7 +230,7 @@ describe('CodexRuntimeHomeService', () => {
   it('mirrors a fresh external system-default login after a same-process local runtime logout', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system-old"}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -271,7 +283,7 @@ describe('CodexRuntimeHomeService', () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const refreshedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'refreshed')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -305,7 +317,7 @@ describe('CodexRuntimeHomeService', () => {
       '2026-07-31T12:00:00.000Z'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
@@ -329,6 +341,7 @@ describe('CodexRuntimeHomeService', () => {
       '{"account":"managed"}\n'
     )
     const settings = createSettings({
+      codexCredentialMirrorConsent: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -376,6 +389,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     const settings = createSettings({
+      codexCredentialMirrorConsent: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -414,7 +428,7 @@ describe('CodexRuntimeHomeService', () => {
 
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
@@ -430,7 +444,7 @@ describe('CodexRuntimeHomeService', () => {
 
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)

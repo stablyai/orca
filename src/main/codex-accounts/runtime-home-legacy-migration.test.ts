@@ -65,7 +65,7 @@ describe('CodexRuntimeHomeService', () => {
       process.platform === 'win32' ? 'junction' : undefined
     )
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)

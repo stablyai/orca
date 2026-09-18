@@ -37,6 +37,16 @@ export abstract class CodexRuntimeHomeState {
 
   protected constructor(protected readonly store: Store) {}
 
+  // Why: mirroring ~/.codex/auth.json into the runtime home duplicates a credential; read
+  // consent fresh per call (never cached) and fail closed if the store isn't ready.
+  protected hasCredentialMirrorConsent(): boolean {
+    try {
+      return this.store.getSettings().codexCredentialMirrorConsent === true
+    } catch {
+      return false
+    }
+  }
+
   protected abstract initializeLastSyncedState(): void
   abstract prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
