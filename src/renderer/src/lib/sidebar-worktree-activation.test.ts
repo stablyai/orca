@@ -4,10 +4,8 @@ const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   buildSidebarDefaultAgentStartup: vi.fn(),
-  workspaceHasSleepingAgentSessions: vi.fn(() => false),
   storeState: {
     getKnownWorktreeById: vi.fn(),
-    reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     repos: [] as { id: string; path: string; connectionId: string | null }[],
     settings: null as { defaultTuiAgent: string } | null
   }
@@ -37,10 +35,6 @@ vi.mock('@/lib/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({
-  workspaceHasSleepingAgentSessions: mocks.workspaceHasSleepingAgentSessions
-}))
-
 import { activateWorktreeFromSidebar } from './sidebar-worktree-activation'
 
 describe('sidebar worktree activation', () => {
@@ -48,11 +42,7 @@ describe('sidebar worktree activation', () => {
     mocks.activateAndRevealWorktree.mockClear()
     mocks.activateAndRevealFolderWorkspace.mockClear()
     mocks.buildSidebarDefaultAgentStartup.mockReset()
-    mocks.workspaceHasSleepingAgentSessions.mockReset()
-    mocks.workspaceHasSleepingAgentSessions.mockReturnValue(false)
     mocks.storeState.getKnownWorktreeById.mockReset()
-    mocks.storeState.reconcileWorktreeTabModel.mockReset()
-    mocks.storeState.reconcileWorktreeTabModel.mockReturnValue({ renderableTabCount: 0 })
     mocks.storeState.repos = []
     mocks.storeState.settings = null
   })
@@ -85,17 +75,12 @@ describe('sidebar worktree activation', () => {
     await activation
   })
 
-  it('seeds the configured default agent when a sidebar click opens an empty worktree', async () => {
-    const startup = { command: 'codex', launchAgent: 'codex' }
-    stubSidebarDefaultAgentStore(startup)
+  it('requests default-agent seeding via seedStartupIfEmpty rather than startup', async () => {
+    const seedStartupIfEmpty = { command: 'codex', launchAgent: 'codex' }
+    stubSidebarDefaultAgentStore(seedStartupIfEmpty)
 
     await activateWorktreeFromSidebar('wt-empty', undefined, { launchDefaultAgent: true })
 
-    expect(mocks.storeState.reconcileWorktreeTabModel).toHaveBeenCalledWith('wt-empty')
-    expect(mocks.workspaceHasSleepingAgentSessions).toHaveBeenCalledWith(
-      mocks.storeState,
-      'wt-empty'
-    )
     expect(mocks.buildSidebarDefaultAgentStartup).toHaveBeenCalledWith(
       mocks.storeState.settings,
       mocks.storeState.repos[0],
@@ -104,32 +89,24 @@ describe('sidebar worktree activation', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-empty', {
       navigationIntent: 'user-open',
       revealInSidebar: false,
-      startup
+      seedStartupIfEmpty
     })
+    expect(mocks.activateAndRevealWorktree.mock.calls[0]?.[1]).not.toHaveProperty('startup')
   })
 
-  it('does not attach default-agent startup when the worktree already has renderable tabs', async () => {
-    stubSidebarDefaultAgentStore()
-    mocks.storeState.reconcileWorktreeTabModel.mockReturnValue({ renderableTabCount: 1 })
+  it('does not pass startup when a sidebar click includes an execution host', async () => {
+    const seedStartupIfEmpty = { command: 'codex', launchAgent: 'codex' }
+    stubSidebarDefaultAgentStore(seedStartupIfEmpty)
 
-    await activateWorktreeFromSidebar('wt-tabs', undefined, { launchDefaultAgent: true })
+    await activateWorktreeFromSidebar('wt-empty', 'local', { launchDefaultAgent: true })
 
-    expect(mocks.buildSidebarDefaultAgentStartup).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-tabs', {
-      revealInSidebar: false
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-empty', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false,
+      seedStartupIfEmpty,
+      executionHostId: 'local'
     })
-  })
-
-  it('does not attach default-agent startup when the worktree has sleeping agent sessions', async () => {
-    stubSidebarDefaultAgentStore()
-    mocks.workspaceHasSleepingAgentSessions.mockReturnValue(true)
-
-    await activateWorktreeFromSidebar('wt-slept-agent', undefined, { launchDefaultAgent: true })
-
-    expect(mocks.buildSidebarDefaultAgentStartup).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-slept-agent', {
-      revealInSidebar: false
-    })
+    expect(mocks.activateAndRevealWorktree.mock.calls[0]?.[1]).not.toHaveProperty('startup')
   })
 })
 
