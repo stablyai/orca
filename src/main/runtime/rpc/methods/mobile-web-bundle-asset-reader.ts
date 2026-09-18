@@ -53,6 +53,8 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
 
 /**
  * The bytes of one asset in the range starting at `offset`, clamped to the asset's manifest length.
+ * Throws on a short read rather than returning one: the file is shorter than the manifest promised,
+ * which the caller answers as a changed asset instead of paging a client past a truncation.
  *
  * Measured through asar (Electron 43): `open` hands back a descriptor on a per-asset copy the asar
  * layer materialises once under the OS temp dir and then reuses for the life of the process, so a
@@ -74,7 +76,12 @@ export async function readMobileWebBundleAssetChunk(
   const handle = await open(join(root, asset.path), 'r')
   try {
     const { bytesRead } = await handle.read(buffer, 0, wanted, offset)
-    return bytesRead === wanted ? buffer : buffer.subarray(0, bytesRead)
+    if (bytesRead !== wanted) {
+      throw new Error(
+        `short read of ${asset.path}: ${String(bytesRead)} of ${String(wanted)} bytes at ${String(offset)}`
+      )
+    }
+    return buffer
   } finally {
     await handle.close()
   }

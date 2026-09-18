@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -257,6 +257,36 @@ describe('an install that carries a mobile web bundle', () => {
   it('refuses an asset whose bytes on disk no longer hash to the manifest', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
     writeFileSync(join(bundle.root, script.path), mobileWebBundleFiller(script.byteLength, 99))
+
+    const response = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
+
+    expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
+  })
+
+  // A dev rebuild under a live runtime, or a permissions change, reaches the filesystem after the
+  // verdict is already cached. The client must still land inside the six codes, and the host's
+  // absolute install path must not ride out on the reply.
+  it('answers a changed asset, not the filesystem error, when the asset is gone after its verdict', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
+    unlinkSync(join(bundle.root, script.path))
+
+    const response = await chunk({
+      buildId: bundle.buildId,
+      path: script.path,
+      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
+    })
+
+    expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
+    expect(console.warn).toHaveBeenCalled()
+  })
+
+  // The only way a positional read on a regular file comes back short: the file was truncated after
+  // its verdict was cached. Answering the short chunk would page the client past the truncation.
+  it('answers a changed asset when the file is shorter than the manifest promised', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
+    truncateSync(join(bundle.root, script.path), 100)
 
     const response = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
 

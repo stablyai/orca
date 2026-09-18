@@ -44,10 +44,28 @@ function requireBundle(): BundledMobileWebBundle {
   return bundle
 }
 
+/** Named so the read path can rethrow it unchanged; the message is the repo-wide idiom. */
+class ClientDisconnectedError extends Error {
+  constructor() {
+    super('client_disconnected')
+  }
+}
+
 function abortIfDisconnected(ctx: RpcContext): void {
   if (ctx.signal?.aborted) {
-    throw new Error('client_disconnected')
+    throw new ClientDisconnectedError()
   }
+}
+
+/** Every other way a read can fail — the asset unlinked, unreadable, or shorter than the manifest
+ *  promised — is one thing to a client: this bundle no longer matches the manifest it was handed.
+ *  The host path stays on the host; the reply carries only the code. */
+function asContractError(error: unknown, path: string): unknown {
+  if (error instanceof InvalidArgumentError || error instanceof ClientDisconnectedError) {
+    return error
+  }
+  console.warn(`[mobile-web-bundle] read failed for ${path}:`, error)
+  return bundleError('mobile_web_bundle_asset_changed')
 }
 
 /** Exact match against a manifest member. `path` is never joined, normalised, or prefix-matched, so
@@ -120,6 +138,8 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
           dataBase64: data.toString('base64'),
           eof: params.offset + data.byteLength >= asset.byteLength
         }
+      } catch (error) {
+        throw asContractError(error, asset.path)
       } finally {
         release()
       }
