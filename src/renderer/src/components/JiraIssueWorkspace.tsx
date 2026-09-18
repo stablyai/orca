@@ -31,6 +31,11 @@ import { translate } from '@/i18n/i18n'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'
 import { JiraIssueCommentComposer, JiraIssueWorkspaceContent } from './jira-issue-workspace-content'
 import { getJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
+import {
+  editedJiraIssueFields,
+  mergeJiraIssueHydration,
+  type EditableJiraIssueField
+} from './jira-issue-workspace-hydration'
 
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
@@ -66,6 +71,13 @@ export default function JiraIssueWorkspace({
 
   const displayed = fullIssue ?? issue
   const siteId = displayed?.siteId ?? undefined
+  // Why: the task page reads the open issue back out of the Jira store, so every
+  // patch hands in a new object; only a different issue or host reloads detail.
+  const requestKey = issue
+    ? `${sourceContext?.hostId ?? settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.siteId ?? 'selected'}:${issue.key}`
+    : null
+  const loadedRequestKeyRef = useRef<string | null>(null)
+  const editedFieldsRef = useRef(new Set<EditableJiraIssueField>())
 
   const loadComments = useCallback(
     async (targetIssue: JiraIssue, requestId: number): Promise<void> => {
@@ -97,6 +109,7 @@ export default function JiraIssueWorkspace({
 
   useEffect(() => {
     if (!issue) {
+      loadedRequestKeyRef.current = null
       setFullIssue(null)
       setIssueLoading(false)
       setComments([])
@@ -108,10 +121,15 @@ export default function JiraIssueWorkspace({
       optimisticCommentsRef.current = []
       return
     }
+    if (loadedRequestKeyRef.current === requestKey) {
+      return
+    }
+    loadedRequestKeyRef.current = requestKey
 
     requestIdRef.current += 1
     const requestId = requestIdRef.current
     optimisticCommentsRef.current = []
+    editedFieldsRef.current = new Set()
     setFullIssue(issue)
     setTitleDraft(issue.title)
     setLabelsDraft(issue.labels.join(', '))
@@ -125,9 +143,14 @@ export default function JiraIssueWorkspace({
           return
         }
         if (result) {
-          setFullIssue(result)
-          setTitleDraft(result.title)
-          setLabelsDraft(result.labels.join(', '))
+          const edited = new Set(editedFieldsRef.current)
+          setFullIssue((current) => mergeJiraIssueHydration(result, current, edited))
+          if (!edited.has('title')) {
+            setTitleDraft(result.title)
+          }
+          if (!edited.has('labels')) {
+            setLabelsDraft(result.labels.join(', '))
+          }
         }
       })
       .catch(() => {})
@@ -153,22 +176,42 @@ export default function JiraIssueWorkspace({
       .catch(() => {})
 
     void loadComments(issue, requestId)
-  }, [issue, loadComments, providerSettings])
+  }, [issue, loadComments, providerSettings, requestKey])
 
-  const refreshIssue = useCallback(async (): Promise<void> => {
-    if (!displayed) {
-      return
-    }
-    try {
-      const latest = await jiraGetIssue(providerSettings, displayed.key, displayed.siteId)
-      if (latest) {
-        setFullIssue(latest)
-        patchJiraIssue(latest.key, latest, { sourceContext })
+  // Why: the store entry always belongs to `target`, but local state only while
+  // `target` is still the open issue (`requestId` has not moved on).
+  const refreshIssue = useCallback(
+    async (target: JiraIssue, requestId: number): Promise<void> => {
+      try {
+        const latest = await jiraGetIssue(providerSettings, target.key, target.siteId)
+        if (latest) {
+          patchJiraIssue(latest.key, latest, { sourceContext })
+          if (requestId === requestIdRef.current) {
+            setFullIssue(latest)
+          }
+        }
+      } catch {
+        // Keep the visible issue snapshot if refresh fails.
       }
-    } catch {
-      // Keep the visible issue snapshot if refresh fails.
-    }
-  }, [displayed, patchJiraIssue, providerSettings, sourceContext])
+    },
+    [patchJiraIssue, providerSettings, sourceContext]
+  )
+
+  // Why: Jira only offers transitions out of the current status, so a status
+  // change invalidates the list loaded when the issue opened.
+  const refreshTransitions = useCallback(
+    async (target: JiraIssue, requestId: number): Promise<void> => {
+      try {
+        const next = await jiraListTransitions(providerSettings, target.key, target.siteId)
+        if (requestId === requestIdRef.current) {
+          setTransitions(next)
+        }
+      } catch {
+        // Keep the current list if the reload fails.
+      }
+    },
+    [providerSettings]
+  )
 
   const mutateIssue = useCallback(
     async (
@@ -181,6 +224,12 @@ export default function JiraIssueWorkspace({
       }
       setPendingField(field)
       const previous = displayed
+      // Why: the task page keeps this instance across selections, so continuations
+      // must check they still belong to the issue this save started on.
+      const requestId = requestIdRef.current
+      for (const editable of optimistic ? editedJiraIssueFields(optimistic) : []) {
+        editedFieldsRef.current.add(editable)
+      }
       try {
         if (optimistic) {
           setFullIssue({ ...displayed, ...optimistic })
@@ -190,10 +239,17 @@ export default function JiraIssueWorkspace({
         if (!result.ok) {
           throw new Error(result.error)
         }
-        await refreshIssue()
+        await refreshIssue(previous, requestId)
+        if (updates.transitionId) {
+          await refreshTransitions(previous, requestId)
+        }
       } catch (error) {
-        setFullIssue(previous)
         patchJiraIssue(previous.key, previous, { sourceContext })
+        if (requestId === requestIdRef.current) {
+          setFullIssue(previous)
+          setTitleDraft(previous.title)
+          setLabelsDraft(previous.labels.join(', '))
+        }
         toast.error(
           error instanceof Error
             ? error.message
@@ -206,7 +262,16 @@ export default function JiraIssueWorkspace({
         setPendingField(null)
       }
     },
-    [displayed, patchJiraIssue, pendingField, refreshIssue, providerSettings, siteId, sourceContext]
+    [
+      displayed,
+      patchJiraIssue,
+      pendingField,
+      refreshIssue,
+      refreshTransitions,
+      providerSettings,
+      siteId,
+      sourceContext
+    ]
   )
 
   const handleSaveTitle = useCallback(() => {
