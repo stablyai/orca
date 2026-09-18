@@ -291,6 +291,12 @@ async function download(args: {
       signal: controller.signal,
       onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress })
     })
+    // The bytes are in; the session they were for may not be. The fetch throws on an abort it sees,
+    // but an abort landing between its last read and this line would otherwise still write a
+    // generation for a host screen nobody is on any more.
+    if (controller.signal.aborted) {
+      return
+    }
     send({ type: 'download-staged', flow })
     const committed = await store.commitGeneration(await store.stageGeneration(hostKey, fetched))
     send({
