@@ -64,13 +64,14 @@ export class BridgeClientRequests {
   }
 
   /**
-   * Every pending request reaches its caller before `close` returns, and each one that left the page
-   * rejects delivery-unknown: the desktop may already have run it, and a caller told this was a
-   * definite send failure would offer to retry something that already happened.
+   * Every pending request reaches its caller before this returns, and each one rejects
+   * delivery-unknown: the desktop may already have run it, and a caller told this was a definite
+   * send failure would offer to retry something that already happened.
    */
-  closeAll(): void {
+  closeAll(reason: Error = new BridgeClientClosedError()): void {
+    const error = markRpcDeliveryUnknown(reason)
     for (const request of this.pending.values()) {
-      request.reject(markRpcDeliveryUnknown(new BridgeClientClosedError()))
+      request.reject(error)
     }
     this.pending.clear()
     this.assembler.clear()

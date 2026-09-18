@@ -138,9 +138,17 @@ export class BridgeClientSubscriptions {
   }
 
   /** For `close`, which is the shell's authority to tear down both sides: a cancel per stream
-   *  ahead of it would say the same thing twice. */
+   *  ahead of it would say the same thing twice. Silent, because the page asked for this one. */
   closeAll(): void {
     this.streams.clear()
+  }
+
+  /** For a shell replaced under the page: every stream it was serving died with it, and the
+   *  listeners are the only ones in a position to do anything about that. */
+  failAll(message: string): void {
+    for (const id of [...this.streams.keys()]) {
+      this.end(id, message)
+    }
   }
 
   private deliverBinary(stream: OpenStream, binary: BridgeBinaryEvent): void {

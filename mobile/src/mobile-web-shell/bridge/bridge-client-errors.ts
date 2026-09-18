@@ -17,6 +17,15 @@ export class BridgeClientClosedError extends Error {
   }
 }
 
+/** A second `init` naming a different session: whatever the page still held belonged to the shell
+ *  that is now gone, and the one that replaced it has never heard of any of it. */
+export class BridgeShellReplacedError extends Error {
+  constructor() {
+    super('the shell behind this page was replaced')
+    this.name = 'BridgeShellReplacedError'
+  }
+}
+
 /** The page's copy of the shell's in-flight caps, refusing before the round trip rather than after. */
 export class BridgeClientCapExceededError extends Error {
   constructor(message: string) {

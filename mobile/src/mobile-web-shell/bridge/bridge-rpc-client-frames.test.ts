@@ -152,6 +152,42 @@ describe('bridge client handshake', () => {
     expect(page.sent).toHaveLength(1)
   })
 
+  it('keeps what it holds when the same shell answers a second time', async () => {
+    const page = createPageClient()
+    page.start()
+    const onData = vi.fn()
+    const answer = page.client.sendRequest('worktree.ps')
+    page.client.subscribe('terminal.stream', {}, onData)
+    const id = idOf(page, 1)
+    // Every `ready` is answered, so a page that re-asked before the first init landed hears two.
+    page.deliver(INIT)
+    page.deliver(eventFrame(id, 1, 'still live'))
+    expect(onData.mock.calls).toEqual([['still live']])
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id: idOf(page, 0),
+      payload: { id: 'wire-1', ok: true, result: 'ok', _meta: { runtimeId: 'runtime-a' } }
+    })
+    await expect(answer).resolves.toMatchObject({ ok: true })
+  })
+
+  it('settles everything the shell it lost was holding before adopting the new one', async () => {
+    const page = createPageClient()
+    page.start()
+    const onData = vi.fn()
+    const answer = page.client.sendRequest('worktree.ps')
+    page.client.subscribe('terminal.stream', {}, onData)
+    // A rebuilt host under the same page: its tables are empty, so nothing the page still holds
+    // would ever be answered or ended from there.
+    page.deliver({ ...INIT, sessionId: 'session-b' })
+    const error = await answer.catch((thrown: unknown) => thrown)
+    expect(readError(error).name).toBe('BridgeShellReplacedError')
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+    expect(onData.mock.calls).toEqual([[{ type: 'error', message: expect.any(String) }]])
+    expect(page.client.getShellSession()?.sessionId).toBe('session-b')
+  })
+
   it('reads the connection snapshot init primed it with', () => {
     const page = createPageClient()
     page.start()

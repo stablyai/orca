@@ -13,7 +13,8 @@ import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
   BridgeClientNotReadyError,
-  BridgeSendFailedError
+  BridgeSendFailedError,
+  BridgeShellReplacedError
 } from './bridge-client-errors'
 import { BridgeClientRequests } from './bridge-client-requests'
 import {
@@ -35,7 +36,8 @@ export {
   BridgeClientClosedError,
   BridgeClientNotReadyError,
   BridgeReplyRefusedError,
-  BridgeSendFailedError
+  BridgeSendFailedError,
+  BridgeShellReplacedError
 } from './bridge-client-errors'
 
 /** Base64url, and the length the envelope's id pattern requires. Base36 digits are a subset of it. */
@@ -150,8 +152,15 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     return held
   }
 
+  /** A second `init` is ordinary: the shell answers every `ready`, and a page that re-asked hears
+   *  its own session again. A different id is not, and nothing the page held survives it. */
   function acceptInit(message: Extract<BridgeHostMessage, { type: 'init' }>): void {
     handshake.stop()
+    if (session !== null && session.sessionId !== message.sessionId) {
+      const replaced = new BridgeShellReplacedError()
+      requests.closeAll(replaced)
+      subscriptions.failAll(replaced.message)
+    }
     session = { sessionId: message.sessionId, buildId: message.buildId, grants: message.grants }
     cache.prime(message.connection)
     for (const listener of readyListeners) {
