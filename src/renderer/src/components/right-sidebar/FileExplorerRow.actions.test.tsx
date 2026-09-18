@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import {
+  shouldShowAttachAsContextAction,
   shouldShowCollapseFolderAction,
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
@@ -85,6 +86,11 @@ describe('FileExplorerRow collapse folder action', () => {
   it('only shows view file for files', () => {
     expect(shouldShowViewFileAction(fileNode)).toBe(true)
     expect(shouldShowViewFileAction(directoryNode)).toBe(false)
+  })
+
+  it('only shows attach as context for files', () => {
+    expect(shouldShowAttachAsContextAction(fileNode)).toBe(true)
+    expect(shouldShowAttachAsContextAction(directoryNode)).toBe(false)
   })
 
   it('shows remote download only for desktop SSH rows and file-like Remote Host rows', () => {
