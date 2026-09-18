@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 
@@ -117,12 +117,40 @@ function fetchedBundle(): MobileWebBundleFetchResult {
   }
 }
 
+type Deferred<T> = {
+  readonly promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
+function deferred<T>(): Deferred<T> {
+  const box: { resolve: (value: T) => void; reject: (error: unknown) => void } = {
+    resolve: () => {},
+    reject: () => {}
+  }
+  const promise = new Promise<T>((resolve, reject) => {
+    box.resolve = resolve
+    box.reject = reject
+  })
+  return { promise, resolve: box.resolve, reject: box.reject }
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+  })
+}
+
 beforeEach(() => {
   push.attach.mockReset().mockReturnValue(push.detach)
   push.detach.mockReset()
   connectMock.mockReset().mockReturnValue(fakeClient())
   loadHostsMock.mockReset().mockResolvedValue([HOST])
   fetchMock.mockReset()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('useMobileWebBundleProbe', () => {
@@ -179,6 +207,85 @@ describe('useMobileWebBundleProbe', () => {
     expect(connectMock).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
     expect(probe.state).toEqual({ status: 'failed', detail: 'no paired host to fetch from' })
+  })
+
+  it('gives up on a host whose client never arrives instead of waiting forever', async () => {
+    vi.useFakeTimers()
+    // The host is not in the store, so no client is ever acquired for it and `awaitingHost` would
+    // otherwise stay true with the row's button disabled for the life of the screen.
+    loadHostsMock.mockResolvedValue([])
+    const probe = await renderProbe(HOST.id)
+
+    await probe.run()
+    expect(probe.state).toEqual({ status: 'running' })
+    expect(probe.awaitingHost).toBe(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_999)
+    })
+    expect(probe.state).toEqual({ status: 'running' })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(probe.state).toEqual({ status: 'failed', detail: 'no client for the host within 10s' })
+    // The row re-enables its button off `running`, and nothing is left dialling the host.
+    expect(probe.awaitingHost).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not clear the deadline for a host that did arrive', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockReturnValue(new Promise(() => {}))
+    const probe = await renderProbe(HOST.id)
+
+    await probe.run()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+
+    // A slow fetch is not a host that never opened: the deadline covers acquiring the client only.
+    expect(probe.state).toEqual({ status: 'running' })
+  })
+
+  it('ignores a result from a run the screen already moved on from', async () => {
+    const first = deferred<MobileWebBundleFetchResult>()
+    const second = deferred<MobileWebBundleFetchResult>()
+    fetchMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const probe = await renderProbe(HOST.id)
+
+    await probe.run()
+    await probe.run()
+    first.resolve({ ...fetchedBundle(), elapsedMs: 999 })
+    await settle()
+
+    expect(probe.state).toEqual({ status: 'running' })
+
+    second.resolve(fetchedBundle())
+    await settle()
+
+    expect(probe.state).toMatchObject({ status: 'done', elapsedMs: 12 })
+  })
+
+  it('ignores a failure from a run the screen already moved on from', async () => {
+    const first = deferred<MobileWebBundleFetchResult>()
+    const second = deferred<MobileWebBundleFetchResult>()
+    fetchMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const probe = await renderProbe(HOST.id)
+
+    await probe.run()
+    await probe.run()
+    first.reject(new Error('invalid_argument: mobile_web_bundle_unavailable'))
+    await settle()
+
+    expect(probe.state).toEqual({ status: 'running' })
+
+    second.resolve(fetchedBundle())
+    await settle()
+
+    expect(probe.state).toMatchObject({ status: 'done', elapsedMs: 12 })
   })
 
   it('aborts the run it started when the screen goes away', async () => {

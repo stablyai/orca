@@ -37,13 +37,25 @@ const assetSchema = z.looseObject({
  *
  *  `schemaVersion` stays a literal because the manifest is closed in both directions: a bump is the
  *  only change path, and an unrecognised one is an unusable bundle to re-fetch, never a crash. */
-const manifestSchema = z.looseObject({
-  schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
-  buildId: z.string().regex(SHA256_PATTERN),
-  entrypoint: MobileWebBundleAssetPathSchema,
-  totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
-  assets: z.array(assetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-})
+const manifestSchema = z
+  .looseObject({
+    schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
+    buildId: z.string().regex(SHA256_PATTERN),
+    entrypoint: MobileWebBundleAssetPathSchema,
+    totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
+    assets: z.array(assetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS)
+  })
+  // The allocation bound, and the reason it is the sum rather than `totalBytes`: the fetch
+  // allocates one buffer per asset from `byteLength` and holds them all, so a manifest declaring
+  // `totalBytes` 0 alongside 256 assets of 10 MiB each would pass every ceiling above and still
+  // cost 2560 MiB. The host pins sum === totalBytes; this client never trusts `totalBytes` for
+  // anything, so it bounds what it will actually allocate instead.
+  .refine(
+    (manifest) =>
+      manifest.assets.reduce((sum, asset) => sum + asset.byteLength, 0) <=
+      MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
+    'assets sum to more than the contract total'
+  )
 
 /** `chunkBytes` is read, never assumed: the host may shrink it without a client release. Capped at
  *  the constant because a larger value would overshoot `dataBase64` above. */
@@ -66,6 +78,5 @@ export const MobileWebBundleChunkReplySchema = z.looseObject({
 })
 
 export type MobileWebBundleManifestReply = z.output<typeof MobileWebBundleManifestReplySchema>
-export type MobileWebBundleChunkReply = z.output<typeof MobileWebBundleChunkReplySchema>
 export type MobileWebBundleManifestRead = MobileWebBundleManifestReply['manifest']
 export type MobileWebBundleAssetRead = MobileWebBundleManifestRead['assets'][number]

@@ -53,7 +53,6 @@ export async function fetchMobileWebBundle(args: {
   const worker = async (): Promise<void> => {
     try {
       for (let asset = pending.shift(); asset !== undefined; asset = pending.shift()) {
-        throwIfStopped(args.signal, stopped.signal)
         const bytes = await readBundleAsset({
           client: args.client,
           asset,
@@ -92,6 +91,9 @@ async function readBundleAsset(args: {
   signal?: AbortSignal
   stopped: AbortSignal
 }): Promise<Uint8Array> {
+  // Before the buffer, not after: an asset can be a tenth of the total ceiling, and a worker that
+  // picked one up after a sibling failed would otherwise allocate it only to drop it.
+  throwIfStopped(args.signal, args.stopped)
   const whole = new Uint8Array(args.asset.byteLength)
   let offset = 0
   for (;;) {

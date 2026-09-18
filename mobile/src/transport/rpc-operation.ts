@@ -175,7 +175,8 @@ export async function runRpcOperation<
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
   // Shares the deferred sender's tuple so the two cannot disagree about what a params-less
   // method may be called with: the catalog types those `void`, and an explicit `null` is the
-  // frame several shipped senders already put on the wire.
+  // frame three of them go out with today (`notifications.testPush`,
+  // `notifications.unregisterPush`, `speech.models.list`), all through the deferred entry point.
   ...args: RpcSendArguments<Method>
 ): Promise<RpcVerdict<Acceptance, Value>> {
   const outcome = await request(client, operation, args[0], args[1])

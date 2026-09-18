@@ -241,6 +241,51 @@ describe('fetchMobileWebBundle', () => {
     )
   })
 
+  it('refuses a chunk that answers the right path at the wrong offset', async () => {
+    // The path half of the echo check is already covered; this is the offset half on its own, so
+    // a host that re-serves chunk zero cannot have its bytes written at the offset we asked for.
+    const host = bundleHost(
+      { 'index.html': 'abcdef' },
+      {
+        chunkBytes: 3,
+        intercept: (call) =>
+          call.method === 'mobileWeb.bundle.chunk' && paramField(call.params, 'offset') === 3
+            ? {
+                buildId: BUILD_ID,
+                path: 'index.html',
+                offset: 0,
+                assetByteLength: 6,
+                sha256: toHex(sha256(bytesOf('abcdef'))),
+                dataBase64: encodeBase64(bytesOf('abc')),
+                eof: false
+              }
+            : undefined
+      }
+    )
+
+    await expect(fetchMobileWebBundle({ client: host.client })).rejects.toThrow(
+      'bundle chunk answered index.html at 0, not index.html at 3'
+    )
+  })
+
+  it('reads a zero-byte asset in one chunk and returns it empty', async () => {
+    // A real bundle carries these. The asset is whole the moment the host says eof, and nothing
+    // else in the loop can end it: a zero-length reply is otherwise how a host makes no progress.
+    const host = bundleHost({ 'assets/empty.css': '', 'index.html': 'abc' })
+
+    const fetched = await fetchMobileWebBundle({ client: host.client })
+
+    expect(fetched.assets.get('assets/empty.css')).toEqual(new Uint8Array(0))
+    expect(fetched.totalBytes).toBe(3)
+    expect(
+      host.calls.filter(
+        (call) =>
+          call.method === 'mobileWeb.bundle.chunk' &&
+          paramField(call.params, 'path') === 'assets/empty.css'
+      )
+    ).toHaveLength(1)
+  })
+
   it('never puts a fifth chunk request on one connection', async () => {
     const peaks: number[] = []
     const host = bundleHost(

@@ -98,6 +98,57 @@ describe('mobile web bundle manifest reply reader', () => {
     }
   })
 
+  it('bounds what a manifest can make the fetch allocate, however it declares totalBytes', () => {
+    // The ceilings above bound each asset and the asset count, and `totalBytes` separately. None
+    // of them bounds the product, which is what the fetch allocates.
+    const oversized = Array.from({ length: MOBILE_WEB_BUNDLE_MAX_ASSETS }, (_, index) =>
+      asset({ path: `assets/${index}.js`, byteLength: MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES })
+    )
+    expect(readManifest(manifestReply({ totalBytes: 0, assets: oversized })).compatible).toBe(false)
+    expect(readManifest(manifestReply({ totalBytes: 12, assets: oversized })).compatible).toBe(
+      false
+    )
+  })
+
+  it('accepts a bundle that sums to the ceiling and refuses one byte more', () => {
+    // Four assets, because one quarter of the total ceiling is the largest share that still fits
+    // under the per-asset ceiling. `lastByteLength` moves only the final one.
+    const quarter = MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES / 4
+    const spread = (lastByteLength: number) =>
+      Array.from({ length: 4 }, (_, index) =>
+        asset({ path: `assets/${index}.js`, byteLength: index === 3 ? lastByteLength : quarter })
+      )
+    expect(
+      readManifest(
+        manifestReply({ totalBytes: MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES, assets: spread(quarter) })
+      ).compatible
+    ).toBe(true)
+    expect(
+      readManifest(
+        manifestReply({
+          totalBytes: MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
+          assets: spread(quarter + 1)
+        })
+      ).compatible
+    ).toBe(false)
+  })
+
+  it('refuses one asset over the per-asset ceiling and accepts one at it', () => {
+    expect(
+      readManifest(
+        manifestReply({
+          totalBytes: MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
+          assets: [asset({ byteLength: MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES })]
+        })
+      ).compatible
+    ).toBe(true)
+    expect(
+      readManifest(
+        manifestReply({ assets: [asset({ byteLength: MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES + 1 })] })
+      ).compatible
+    ).toBe(false)
+  })
+
   it('refuses a schemaVersion it does not know rather than guessing at the shape', () => {
     expect(readManifest(manifestReply({ schemaVersion: 2 })).compatible).toBe(false)
     expect(readManifest(manifestReply({ schemaVersion: undefined })).compatible).toBe(false)
@@ -220,6 +271,11 @@ describe('mobile web bundle error codes', () => {
     // follows the envelope code.
     expect(
       readMobileWebBundleErrorCode(new Error('RPC mobile_web_bundle_unavailable failed'))
+    ).toBeNull()
+    // The second position is `<envelope code>: `, exactly. Slicing the leading token's length off
+    // any message would make this one read as the code that follows the bracket.
+    expect(
+      readMobileWebBundleErrorCode(new Error('rpc (mobile_web_bundle_unavailable)'))
     ).toBeNull()
   })
 

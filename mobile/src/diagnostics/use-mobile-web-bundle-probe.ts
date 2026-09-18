@@ -2,6 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { useHostClient } from '../transport/client-context'
 import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
 import { readMobileWebBundleErrorCode } from '../transport/mobile-web-bundle-operations'
+import { startDiagnosticFetchTimeout } from './diagnostic-fetch-timeout'
+
+/**
+ * How long a tap waits for the host's client object before it gives up.
+ *
+ * Generous, because acquiring one can queue behind another screen's, but bounded, because none of
+ * that is a network round trip: the connect and request timeouts live below this, inside the fetch,
+ * and only apply once a client exists. Without a bound here a host that never opens leaves the row
+ * reading `Connecting…` with its button disabled for the life of the screen.
+ */
+const HOST_CLIENT_DIAL_DEADLINE_MS = 10_000
 
 export type MobileWebBundleProbeState =
   | { status: 'idle' }
@@ -73,6 +84,27 @@ export function useMobileWebBundleProbe(hostId: string | null): {
     return () => {
       abandoned = true
       controller.abort()
+    }
+  }, [client, request])
+
+  useEffect(() => {
+    if (request === null || client !== null) {
+      return
+    }
+    const deadline = startDiagnosticFetchTimeout(HOST_CLIENT_DIAL_DEADLINE_MS)
+    const giveUp = () => {
+      setState({
+        status: 'failed',
+        detail: `no client for the host within ${HOST_CLIENT_DIAL_DEADLINE_MS / 1000}s`
+      })
+      // Drops the acquisition too, so a host that never opens stops being dialled.
+      setRequest(null)
+    }
+    deadline.signal.addEventListener('abort', giveUp)
+    return () => {
+      // Removed first: `dispose` aborts a signal it has not already aborted.
+      deadline.signal.removeEventListener('abort', giveUp)
+      deadline.dispose()
     }
   }, [client, request])
 
