@@ -172,6 +172,11 @@ export function createGenerationStore(options: {
       await fs.delete(staged.directory)
       return active
     }
+    // Before any delete: an aborted or swept handle must not cost the live generation, and a tree
+    // that is no longer on disk cannot be renamed into one either.
+    if (!(await fs.fileExists(joinUri(staged.directory, MANIFEST_FILE_NAME)))) {
+      throw new Error(`staged generation ${staged.buildId} is no longer on disk`)
+    }
     // Every other generation goes before the rename, never after. A crash between the two leaves
     // zero generations, which the runbook's redownload rule already covers; the other order can
     // leave two directories under `generations/` with nothing to say which one is the activation.

@@ -443,6 +443,18 @@ describe('generation store', () => {
     expect(fs.text('hosts.json')).toBeNull()
   })
 
+  it('refuses a handle whose staged tree is gone without touching the activation', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+
+    const staged = await store.stageGeneration(HOST, buildResult({ buildId: 'b'.repeat(64) }))
+    await store.abortStagedGeneration(staged)
+
+    await expect(store.commitGeneration(staged)).rejects.toThrow('no longer on disk')
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe('a'.repeat(64))
+  })
+
   it('keeps the adapter aligned with the port', () => {
     expect(adapterSatisfiesPort).toBe(true)
   })
