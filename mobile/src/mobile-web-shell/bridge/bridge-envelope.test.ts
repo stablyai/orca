@@ -271,6 +271,7 @@ describe('host messages', () => {
       'a binary event whose metadata is not an object',
       client({ type: 'event', id: ID, seq: 1, binary: { ...BINARY_FRAME, metadata: 7 } })
     ],
+
     [
       'an end for a reason that is not one of the three',
       client({ type: 'end', id: ID, reason: 'done' })
@@ -360,6 +361,27 @@ describe('type pins', () => {
     const asBridge = (value: BrowserScreencastFormat): (typeof BRIDGE_BINARY_FORMATS)[number] =>
       value
     expect(BRIDGE_BINARY_FORMATS.map(asProtocol).map(asBridge)).toEqual([...BRIDGE_BINARY_FORMATS])
+  })
+
+  it('refuses a screencast metadata field that is not a finite number', () => {
+    const keys = [
+      'offsetTop',
+      'pageScaleFactor',
+      'deviceWidth',
+      'deviceHeight',
+      'imageWidth',
+      'imageHeight',
+      'scrollOffsetX',
+      'scrollOffsetY',
+      'timestamp'
+    ]
+    for (const key of keys) {
+      const binary = { ...BINARY_FRAME, metadata: { [key]: '390' } }
+      expect([key, readHost(client({ type: 'event', id: ID, seq: 1, binary })).ok]).toEqual([
+        key,
+        false
+      ])
+    }
   })
 
   it('carries a decoded screencast frame whole, minus its bytes', () => {
