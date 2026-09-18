@@ -7,7 +7,7 @@ import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/pane-term
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
-import { installPreviewTerminalLinks } from './preview-terminal-links'
+import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 
 /**
@@ -29,7 +29,7 @@ export function installPreviewTerminalCompatibility(
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal)
   installWindowsCtrlAltChordRepair(terminal)
-  installPreviewTerminalLinks(terminal)
+  installGuardedLinkProviderRegistration(terminal)
   syncPreviewTerminalLigatures(terminal, deps.getSettings())
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: () =>

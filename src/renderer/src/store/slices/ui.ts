@@ -25,8 +25,29 @@ export type {
   UISlice
 } from './ui/ui-slice-contract'
 
-export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) =>
-  ({
+export const createUISlice: StateCreator<AppState, [], [], UISlice> = (write, get) => {
+  const set: typeof write = (partial, replace?) => {
+    const update = (state: AppState): AppState | Partial<AppState> => {
+      const next = typeof partial === 'function' ? partial(state) : partial
+      // View transitions clear the visit before attention subscribers see it.
+      if (
+        next.activeView !== undefined &&
+        next.activeView !== state.activeView &&
+        (next.activeView === 'sessions' || state.activeView === 'sessions')
+      ) {
+        return { ...next, activeSessionGridTabId: null, activeSessionGridWorktreeId: null }
+      }
+      return next
+    }
+    if (replace) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace=true selects Zustand’s complete AppState overload; update only adds a selection reset.
+      write((state) => update(state) as AppState, true)
+    } else {
+      write(update, replace)
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing UI factories initialize the complete slice but publish Partial<UISlice> contracts.
+  return {
     ...createUiAgentActions(set, get),
     ...createUiTaskActions(set, get),
     ...createUiViewActions(set, get),
@@ -40,4 +61,5 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     ...createUiPersistenceActions(set, get),
     ...createUiHydrationActions(set, get),
     ...createUiUpdateActions(set, get)
-  }) as UISlice
+  } as UISlice
+}

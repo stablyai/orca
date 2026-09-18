@@ -53,7 +53,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     // trackHeadlessTerminalData would lazy-create a fresh state at PTY dims
     // that the later seed-resolve would overwrite, dropping the live byte.
     // See docs/mobile-prefer-renderer-scrollback.md.
-    this.maybeHydrateHeadlessFromRenderer(ptyId)
+    this.maybeHydrateHeadlessFromRenderer(ptyId, outputSequence - sequenceChars)
     // Our structure wins: OSC title/agent-status extraction runs through the
     // shared per-PTY title tracker below (getOrCreatePtyTitleTrackerEntry →
     // applyTrackedPtyTitle) in byte order, superseding main's inline
@@ -63,7 +63,9 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       ptyId,
       data,
       outputSequence,
-      forwardQueryReplies
+      forwardQueryReplies,
+      sequenceChars,
+      transformed
     )
     captureModelReceipt?.(modelCompletion)
 

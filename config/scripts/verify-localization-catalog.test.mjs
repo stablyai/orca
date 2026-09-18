@@ -36,6 +36,25 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 }
 
 describe('verify-localization-catalog', () => {
+  it('enforces configured target completeness instead of treating an English fallback as translated', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText: "export const label = translate('session.load', 'Load session')",
+      enCatalog: { session: { load: 'Load session' } }
+    })
+    mkdirSync(path.join(root, 'config', 'localization-debt'), { recursive: true })
+    writeJson(path.join(root, 'config', 'localization-completeness.json'), {
+      es: { sourcePrefixes: [], keyPrefixes: ['session.'], acceptedIdentical: {} }
+    })
+    const baselinePath = path.join(root, 'config', 'localization-debt', 'es.json')
+    writeJson(baselinePath, { 'session.load': 'missing: Load session' })
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    writeJson(path.join(localesDir, 'es.json'), { session: { load: 'Load session' } })
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    writeJson(path.join(localesDir, 'es.json'), { session: { load: 'Cargar sesión' } })
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    writeJson(baselinePath, {})
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(0)
+  })
   it('bootstraps English entries without fabricating target translations', async () => {
     const { root, localesDir } = makeProject({
       sourceText:

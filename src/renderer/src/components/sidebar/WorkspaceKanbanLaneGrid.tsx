@@ -1,12 +1,4 @@
-import React, {
-  startTransition,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
@@ -15,12 +7,12 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
-import { extractWorkspaceKanbanLaneRange } from './workspace-kanban-lane-range'
+import { useStagedMountPerFrame } from '@/lib/use-staged-mount-per-frame'
+import { extractVirtualRangeWithFocusedIndex } from './virtual-range-with-focused-index'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 
 // Why: a fresh [] per render would defeat the memoized lane on empty lanes.
 const EMPTY_LANE_ITEMS: readonly Worktree[] = []
-const EMPTY_RENDERED_LANE_IDS: ReadonlySet<WorkspaceStatus> = new Set()
 const WORKSPACE_BOARD_LANE_GAP = 12
 const WORKSPACE_BOARD_LANE_OVERSCAN = 1
 
@@ -79,14 +71,6 @@ export default function WorkspaceKanbanLaneGrid({
   onColumnResizeKeyDown
 }: WorkspaceKanbanLaneGridProps): React.JSX.Element {
   const [focusedStatusId, setFocusedStatusId] = useState<WorkspaceStatus | null>(null)
-  const [renderedLaneIds, setRenderedLaneIds] =
-    useState<ReadonlySet<WorkspaceStatus>>(EMPTY_RENDERED_LANE_IDS)
-  const renderedLaneIdsRef = useRef(renderedLaneIds)
-  const renderCardsRef = useRef(renderCards)
-  useLayoutEffect(() => {
-    renderedLaneIdsRef.current = renderedLaneIds
-    renderCardsRef.current = renderCards
-  }, [renderCards, renderedLaneIds])
   const focusedIndex = useMemo(
     () =>
       focusedStatusId === null
@@ -97,7 +81,7 @@ export default function WorkspaceKanbanLaneGrid({
   const estimateLaneSize = useCallback(() => columnWidth, [columnWidth])
   const getLaneKey = useCallback((index: number) => statuses[index]?.id ?? index, [statuses])
   const rangeExtractor = useCallback(
-    (range: Range) => extractWorkspaceKanbanLaneRange(range, focusedIndex),
+    (range: Range) => extractVirtualRangeWithFocusedIndex(range, focusedIndex),
     [focusedIndex]
   )
   const laneVirtualizer = useVirtualizer({
@@ -123,46 +107,8 @@ export default function WorkspaceKanbanLaneGrid({
       }),
     [statuses, virtualLanes]
   )
-  const mountedLaneIds = useMemo(() => new Set(virtualStatusIds), [virtualStatusIds])
-  const mountedLaneIdsRef = useRef<ReadonlySet<WorkspaceStatus>>(mountedLaneIds)
-  useLayoutEffect(() => {
-    mountedLaneIdsRef.current = mountedLaneIds
-  }, [mountedLaneIds])
-  useEffect(() => {
-    if (!renderCards) {
-      setRenderedLaneIds(EMPTY_RENDERED_LANE_IDS)
-      return
-    }
-    const missingIds = virtualStatusIds.filter((id) => !renderedLaneIdsRef.current.has(id))
-    setRenderedLaneIds((current) => {
-      const retained = new Set(Array.from(current).filter((id) => mountedLaneIds.has(id)))
-      return retained.size === current.size ? current : retained
-    })
-    let nextIndex = 0
-    let frameId = 0
-    const renderNextLane = (): void => {
-      const statusId = missingIds[nextIndex]
-      nextIndex += 1
-      if (!statusId) {
-        return
-      }
-      startTransition(() => {
-        setRenderedLaneIds((current) => {
-          if (!renderCardsRef.current || !mountedLaneIdsRef.current.has(statusId)) {
-            return current
-          }
-          return new Set(current).add(statusId)
-        })
-      })
-      if (nextIndex < missingIds.length) {
-        frameId = window.requestAnimationFrame(renderNextLane)
-      }
-    }
-    if (missingIds.length > 0) {
-      frameId = window.requestAnimationFrame(renderNextLane)
-    }
-    return () => window.cancelAnimationFrame(frameId)
-  }, [mountedLaneIds, renderCards, virtualStatusIds])
+  // Lanes hydrate their cards one per frame; the lane shells render at once.
+  const renderedLaneIds = useStagedMountPerFrame(virtualStatusIds, renderCards)
 
   return (
     <div

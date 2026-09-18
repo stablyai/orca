@@ -1,5 +1,13 @@
 import React from 'react'
-import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
+import {
+  BookOpen,
+  CalendarClock,
+  EyeOff,
+  Files,
+  LayoutGrid,
+  Search,
+  Smartphone
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -14,6 +22,7 @@ import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
@@ -59,6 +68,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
+  const openSessionsPage = useAppStore((s) => s.openSessionsPage)
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
@@ -71,6 +81,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
   const skillsActive = activeView === 'skills'
+  const sessionsActive = activeView === 'sessions'
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })
@@ -121,6 +132,31 @@ const SidebarNav = React.memo(function SidebarNav() {
       </button>
       <SetupGuideSidebarEntry />
       <SidebarTaskNavButton />
+      {/* Why hidden on the web client: its preload has no terminalPreview, so every card would stall. */}
+      {!isPairedWebClientWindow() ? (
+        <button
+          type="button"
+          onClick={() => openSessionsPage()}
+          aria-current={sessionsActive ? 'page' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            sessionsActive
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+          )}
+        >
+          <LayoutGrid
+            className={cn(
+              'size-4 shrink-0',
+              !sessionsActive && 'text-worktree-sidebar-foreground/30'
+            )}
+            strokeWidth={sessionsActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">
+            {translate('auto.components.sidebar.SidebarNav.sessions', 'Sessions')}
+          </span>
+        </button>
+      ) : null}
       {showArtifactsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>

@@ -3,13 +3,12 @@ import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'
-import type { PtyTransport } from './pty-transport'
+import type { TerminalDropSurface, TerminalDropTransport } from './terminal-drop-surface'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
 import { captureTerminalDropTarget, getCurrentTerminalDropTransport } from './terminal-drop-target'
@@ -30,8 +29,8 @@ import {
 import { captureRuntimeTerminalDropOwner } from './terminal-drop-runtime-owner'
 
 export type NativeTerminalFileDropArgs = {
-  manager: PaneManager
-  paneTransports: Map<number, PtyTransport>
+  manager: TerminalDropSurface
+  paneTransports: Map<number, TerminalDropTransport>
   worktreeId: string
   tabId: string
   cwd: string | undefined
@@ -158,8 +157,8 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
 type NativeDropFlowArgs = {
   dataPaths: string[]
   dropTarget: ReturnType<typeof captureTerminalDropTarget>
-  manager: PaneManager
-  paneTransports: Map<number, PtyTransport>
+  manager: TerminalDropSurface
+  paneTransports: Map<number, TerminalDropTransport>
   pane: ReturnType<typeof resolveNativeTerminalDropPane> & {}
   tabId: string
   worktreePath: string

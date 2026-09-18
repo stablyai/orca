@@ -15,7 +15,12 @@ export const NATIVE_FILE_DROP_TARGET = {
 
 export type NativeDropResolution =
   | { target: typeof NATIVE_FILE_DROP_TARGET.editor }
-  | { target: typeof NATIVE_FILE_DROP_TARGET.terminal; tabId?: string; paneLeafId?: string }
+  | {
+      target: typeof NATIVE_FILE_DROP_TARGET.terminal
+      tabId?: string
+      paneLeafId?: string
+      previewSurfaceId?: string
+    }
   | { target: typeof NATIVE_FILE_DROP_TARGET.composer; scopeKey?: string }
   | { target: typeof NATIVE_FILE_DROP_TARGET.fileExplorer; destinationDir: string }
   | { target: typeof NATIVE_FILE_DROP_TARGET.projectSidebar }
@@ -28,6 +33,7 @@ export type NativeFileDropPayload =
       target: typeof NATIVE_FILE_DROP_TARGET.terminal
       tabId?: string
       paneLeafId?: string
+      previewSurfaceId?: string
     }
   | { paths: string[]; target: typeof NATIVE_FILE_DROP_TARGET.composer; scopeKey?: string }
   | {
@@ -58,6 +64,7 @@ export type NativeFileDropPathEntry = {
   composerScopeKey?: string
   terminalTabId?: string
   terminalPaneLeafId?: string
+  terminalPreviewSurfaceId?: string
 }
 
 export type NativeFileDropPathValidation =
@@ -119,7 +126,14 @@ export function resolveNativeFileDropPath(
     composerScopeKey ??= entry.composerScopeKey
     const target = entry.nativeFileDropTarget
     if (target === NATIVE_FILE_DROP_TARGET.terminal) {
-      return { target, tabId: entry.terminalTabId, paneLeafId: terminalPaneLeafId }
+      return {
+        target,
+        tabId: entry.terminalTabId,
+        paneLeafId: terminalPaneLeafId,
+        ...(entry.terminalPreviewSurfaceId
+          ? { previewSurfaceId: entry.terminalPreviewSurfaceId }
+          : {})
+      }
     }
     if (target === NATIVE_FILE_DROP_TARGET.composer) {
       // Composer drops fan out window-wide, so carry the receiving composer's
@@ -236,7 +250,8 @@ export function createNativeFileDropPayload(
       paths: [...paths],
       target: resolution.target,
       ...(resolution.tabId ? { tabId: resolution.tabId } : {}),
-      ...(resolution.paneLeafId ? { paneLeafId: resolution.paneLeafId } : {})
+      ...(resolution.paneLeafId ? { paneLeafId: resolution.paneLeafId } : {}),
+      ...(resolution.previewSurfaceId ? { previewSurfaceId: resolution.previewSurfaceId } : {})
     }
   }
 
@@ -271,7 +286,8 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
   if (target === NATIVE_FILE_DROP_TARGET.terminal) {
     return (
       isOptionalNativeFileDropString(payload.tabId) &&
-      isOptionalNativeFileDropString(payload.paneLeafId)
+      isOptionalNativeFileDropString(payload.paneLeafId) &&
+      isOptionalNativeFileDropString(payload.previewSurfaceId)
     )
   }
   if (target === NATIVE_FILE_DROP_TARGET.fileExplorer) {

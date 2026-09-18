@@ -14,138 +14,12 @@ import {
 import { dispatchAppMenuPasteEvent } from '@/lib/app-menu-paste'
 import { dispatchAppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 
-const terminalHarness = vi.hoisted(() => ({
-  instances: [] as {
-    write: ReturnType<typeof vi.fn>
-    writeCallbacks: (() => void)[]
-    onDataListener: ((data: string) => void) | null
-    dispose: ReturnType<typeof vi.fn>
-    resize: ReturnType<typeof vi.fn>
-    reset: ReturnType<typeof vi.fn>
-    paste: ReturnType<typeof vi.fn>
-    input: ReturnType<typeof vi.fn>
-    scrollToTop: ReturnType<typeof vi.fn>
-    scrollToBottom: ReturnType<typeof vi.fn>
-    selectAll: ReturnType<typeof vi.fn>
-    modes: { bracketedPasteMode: boolean }
-    selectionText: string
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null
-  }[],
-  userInputListener: null as (() => void) | null,
-  userInputDispose: vi.fn()
-}))
-
-const platformState = vi.hoisted(() => ({ value: 'linux' }))
-const storeState = vi.hoisted(() => ({
-  settings: null as { terminalRightClickToPaste?: boolean } | null,
-  keybindings: {} as Record<string, string[]>
-}))
-
-const imeHarness = vi.hoisted(() => ({
-  forwarders: [] as {
-    claimKeyEvent: ReturnType<typeof vi.fn>
-    dispose: ReturnType<typeof vi.fn>
-    sendInput: (data: string) => void
-    getKittyKeyboardFlags: () => number
-  }[],
-  trackers: [] as { dispose: ReturnType<typeof vi.fn> }[],
-  claimResult: false
-}))
-
-vi.mock('@xterm/xterm', () => ({
-  Terminal: class {
-    cols = 80
-    rows = 24
-    buffer = { active: { cursorY: 0 } }
-    writeCallbacks: (() => void)[] = []
-    onDataListener: ((data: string) => void) | null = null
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null = null
-    selectionText = ''
-    write = vi.fn((_data: string, callback?: () => void) => {
-      if (callback) {
-        this.writeCallbacks.push(callback)
-      }
-    })
-    open = vi.fn()
-    focus = vi.fn()
-    dispose = vi.fn()
-    resize = vi.fn()
-    reset = vi.fn()
-    modes = { bracketedPasteMode: false }
-    paste = vi.fn((data: string) => {
-      terminalHarness.userInputListener?.()
-      this.onDataListener?.(data)
-    })
-    input = vi.fn((data: string) => {
-      terminalHarness.userInputListener?.()
-      this.onDataListener?.(data)
-    })
-    element = document.createElement('div')
-    unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
-    loadAddon = vi.fn()
-    attachCustomWheelEventHandler = vi.fn()
-    scrollToTop = vi.fn()
-    scrollToBottom = vi.fn()
-    selectAll = vi.fn()
-    getSelection = vi.fn(() => this.selectionText)
-    attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
-      this.customKeyHandler = handler
-    })
-    onData = vi.fn((listener: (data: string) => void) => {
-      this.onDataListener = listener
-      return { dispose: vi.fn() }
-    })
-
-    constructor() {
-      terminalHarness.instances.push(this)
-    }
-  }
-}))
-vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  buildDefaultTerminalOptions: () => ({})
-}))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
-  subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
-    terminalHarness.userInputListener = listener
-    return { dispose: terminalHarness.userInputDispose }
-  }
-}))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
-  useSystemPrefersDark: () => false
-}))
-vi.mock('@/lib/shortcut-platform', () => ({
-  getShortcutPlatform: () => platformState.value
-}))
-vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
-  installTerminalImeNativeTextForwarder: (args: {
-    sendInput: (data: string) => void
-    getKittyKeyboardFlags?: () => number
-  }) => {
-    const forwarder = {
-      claimKeyEvent: vi.fn(() => imeHarness.claimResult),
-      dispose: vi.fn(),
-      sendInput: args.sendInput,
-      // Why captured: the bridge's whole job is handing the live mirror to the
-      // forwarder, so the test reads what a real commit would read.
-      getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
-    }
-    imeHarness.forwarders.push(forwarder)
-    return forwarder
-  }
-}))
-vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
-  installTerminalImeCompositionTracker: () => {
-    const tracker = { isActive: () => false, dispose: vi.fn() }
-    imeHarness.trackers.push(tracker)
-    return tracker
-  }
-}))
-vi.mock('@/store', () => {
-  const useAppStore = (selector: (s: typeof storeState) => unknown): unknown => selector(storeState)
-  useAppStore.getState = (): typeof storeState => storeState
-  return { useAppStore }
-})
+import {
+  terminalHarness,
+  platformState,
+  storeState,
+  imeHarness
+} from './__mocks__/preview-terminal-input'
 
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 
@@ -171,7 +45,6 @@ describe('AgentTerminalPreview clipboard routes', () => {
 
   beforeEach(() => {
     terminalHarness.instances.length = 0
-    terminalHarness.userInputListener = null
     platformState.value = 'linux'
     storeState.keybindings = {}
     imeHarness.forwarders.length = 0

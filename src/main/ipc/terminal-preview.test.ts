@@ -58,6 +58,10 @@ function makeRuntime() {
     }),
     registerRawTerminalViewSubscriber: vi.fn(() => releaseRawView),
     writeTerminalPreviewInput: vi.fn(async () => true),
+    ensureHeadlessTerminalForViewer: vi.fn(),
+    verifyTerminalPreviewLiveness: vi.fn(
+      async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable'
+    ),
     updateRemoteDesktopViewer: vi.fn(async () => true),
     unregisterRemoteDesktopViewer: vi.fn(async () => true),
     getTerminalSize: vi.fn((): { cols: number; rows: number } | null => ({ cols: 80, rows: 20 }))
@@ -299,6 +303,189 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2)
   })
 
+  // The runtime serializer hydrates main's emulator itself whenever the pane's
+  // frame lags the PTY grid, so every viewer path gets it — not just this one.
+  it('leaves emulator hydration to the runtime serializer', async () => {
+    const runtime = makeRuntime()
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+    await handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
+    expect(runtime.ensureHeadlessTerminalForViewer).not.toHaveBeenCalled()
+    expect(runtime.serializeTerminalBuffer).toHaveBeenCalledWith('p1', {
+      scrollbackRows: undefined
+    })
+  })
+
+  describe('several surfaces of one pty in one webContents', () => {
+    it('keeps both streams and routes data and acks to each surface', async () => {
+      vi.useFakeTimers()
+      const runtime = makeRuntime()
+      registerTerminalPreviewHandlers(runtime as never)
+      const sender = makeSender()
+
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'grid-card'
+      })
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'dialog'
+      })
+      expect(runtime.unsubscribe).not.toHaveBeenCalled()
+      expect(runtime.listeners).toHaveLength(2)
+
+      for (const listener of runtime.listeners) {
+        listener('ab')
+      }
+      await vi.advanceTimersByTimeAsync(5)
+      expect(sender.send).toHaveBeenCalledWith('terminalPreview:data', {
+        type: 'data',
+        ptyId: 'p1',
+        data: 'ab',
+        bytes: 2,
+        surfaceId: 'grid-card'
+      })
+      expect(sender.send).toHaveBeenCalledWith('terminalPreview:data', {
+        type: 'data',
+        ptyId: 'p1',
+        data: 'ab',
+        bytes: 2,
+        surfaceId: 'dialog'
+      })
+
+      // A resize resyncs every surface, each under its own name.
+      for (const listener of runtime.resizeListeners) {
+        listener({ cols: 100, rows: 30 })
+      }
+      handlers.get('terminalPreview:ack')!(eventFor(sender), {
+        ptyId: 'p1',
+        bytes: 2,
+        surfaceId: 'dialog'
+      })
+      expect(sender.send).toHaveBeenCalledWith('terminalPreview:data', {
+        type: 'resync',
+        ptyId: 'p1',
+        surfaceId: 'dialog'
+      })
+      expect(sender.send).not.toHaveBeenCalledWith('terminalPreview:data', {
+        type: 'resync',
+        ptyId: 'p1',
+        surfaceId: 'grid-card'
+      })
+    })
+
+    it('unsubscribes one surface without touching the other', async () => {
+      const runtime = makeRuntime()
+      registerTerminalPreviewHandlers(runtime as never)
+      const sender = makeSender()
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'grid-card'
+      })
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'dialog'
+      })
+
+      handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'dialog'
+      })
+      expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+
+      handlers.get('terminalPreview:detach')!(eventFor(sender), {
+        ptyIds: ['p1'],
+        surfaceId: 'grid-card'
+      })
+      expect(runtime.unsubscribe).toHaveBeenCalledTimes(2)
+    })
+
+    it('gives each surface its own viewer so a closed dialog hands the grid to the card', async () => {
+      const runtime = makeRuntime()
+      registerTerminalPreviewHandlers(runtime as never)
+      const sender = makeSender()
+      const fit = handlers.get('terminalPreview:fit')!
+      await fit(eventFor(sender), { ptyId: 'p1', cols: 90, rows: 30, surfaceId: 'grid-card' })
+      await fit(eventFor(sender), { ptyId: 'p1', cols: 132, rows: 40, surfaceId: 'dialog' })
+      expect(runtime.updateRemoteDesktopViewer).toHaveBeenNthCalledWith(
+        1,
+        'p1',
+        'dashboard-popout:1:grid-card',
+        'dashboard-popout:1:grid-card',
+        90,
+        30
+      )
+      expect(runtime.updateRemoteDesktopViewer).toHaveBeenNthCalledWith(
+        2,
+        'p1',
+        'dashboard-popout:1:dialog',
+        'dashboard-popout:1:dialog',
+        132,
+        40
+      )
+
+      handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'dialog'
+      })
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith(
+        'p1',
+        'dashboard-popout:1:dialog'
+      )
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(1)
+
+      handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), {
+        ptyId: 'p1',
+        surfaceId: 'grid-card'
+      })
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith(
+        'p1',
+        'dashboard-popout:1:grid-card'
+      )
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(2)
+    })
+
+    it('releases every surface claim once on sender destruction', async () => {
+      const runtime = makeRuntime()
+      registerTerminalPreviewHandlers(runtime as never)
+      const sender = makeSender()
+      const fit = handlers.get('terminalPreview:fit')!
+      await fit(eventFor(sender), { ptyId: 'p1', cols: 90, rows: 30, surfaceId: 'grid-card' })
+      await fit(eventFor(sender), { ptyId: 'p1', cols: 132, rows: 40, surfaceId: 'dialog' })
+      await fit(eventFor(sender), { ptyId: 'p2', cols: 90, rows: 30 })
+
+      sender.fireDestroyed()
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(3)
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith(
+        'p1',
+        'dashboard-popout:1:grid-card'
+      )
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith(
+        'p1',
+        'dashboard-popout:1:dialog'
+      )
+      expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith(
+        'p2',
+        'dashboard-popout:1:'
+      )
+    })
+
+    it('treats a missing surfaceId as one implicit surface that connect replaces', async () => {
+      const runtime = makeRuntime()
+      registerTerminalPreviewHandlers(runtime as never)
+      const sender = makeSender()
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
+      expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(sender.send).not.toHaveBeenCalled()
+
+      await expect(
+        handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1', surfaceId: 42 })
+      ).resolves.toEqual({ snapshot: null, replay: [] })
+    })
+  })
+
   it('releases output and raw-view presence on unsubscribe and sender destruction', async () => {
     const runtime = makeRuntime()
     registerTerminalPreviewHandlers(runtime as never)
@@ -322,8 +509,29 @@ describe('registerTerminalPreviewHandlers', () => {
 
     await expect(
       handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'missing' })
-    ).resolves.toEqual({ snapshot: null, replay: [] })
+    ).resolves.toEqual({ snapshot: null, replay: [], liveness: 'unverifiable' })
     expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports exit only when the execution host verifies it', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    runtime.verifyTerminalPreviewLiveness.mockResolvedValueOnce('exited')
+    registerTerminalPreviewHandlers(runtime as never)
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(makeSender()), { ptyId: 'gone' })
+    ).resolves.toEqual({ snapshot: null, replay: [], liveness: 'exited' })
+    expect(runtime.verifyTerminalPreviewLiveness).toHaveBeenCalledWith('gone')
+  })
+
+  it('does not turn serializer exceptions into process exits', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockRejectedValueOnce(new Error('transport unavailable'))
+    registerTerminalPreviewHandlers(runtime as never)
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(makeSender()), { ptyId: 'p1' })
+    ).resolves.toEqual({ snapshot: null, replay: [], liveness: 'unverifiable' })
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
   })
 
@@ -422,8 +630,8 @@ describe('registerTerminalPreviewHandlers', () => {
     ).resolves.toEqual({ cols: 132, rows: 40 })
     expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
       'p1',
-      'dashboard-popout:1',
-      'dashboard-popout:1',
+      'dashboard-popout:1:',
+      'dashboard-popout:1:',
       132,
       40
     )
@@ -447,7 +655,7 @@ describe('registerTerminalPreviewHandlers', () => {
     await expect(
       handlers.get('terminalPreview:fit')!(eventFor(sender), { ptyId: 'p1', cols: 132, rows: 40 })
     ).resolves.toBeNull()
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1')
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1:')
 
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(1)
@@ -524,7 +732,7 @@ describe('registerTerminalPreviewHandlers', () => {
       rows: 40
     })
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1')
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1:')
     expect(runtime.unsubscribeResize).toHaveBeenCalledBefore(runtime.unregisterRemoteDesktopViewer)
 
     // A release is one-shot per claim.
@@ -537,8 +745,29 @@ describe('registerTerminalPreviewHandlers', () => {
       rows: 30
     })
     sender.fireDestroyed()
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p2', 'dashboard-popout:1')
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p2', 'dashboard-popout:1:')
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(2)
+  })
+
+  it('detaches several previews in one pass and never releases a claim twice', async () => {
+    const runtime = makeRuntime()
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+    for (const ptyId of ['p1', 'p2', 'p3']) {
+      await handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId })
+      await handlers.get('terminalPreview:fit')!(eventFor(sender), { ptyId, cols: 90, rows: 30 })
+    }
+
+    handlers.get('terminalPreview:detach')!(eventFor(sender), { ptyIds: ['p1', 'p2', 'p3', 42] })
+
+    // Every hand-back lands in the same synchronous pass, so the runtime's
+    // global resize-suppression window is armed once for all three.
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(3)
+    expect(runtime.unsubscribe).toHaveBeenCalledTimes(3)
+
+    handlers.get('terminalPreview:detach')!(eventFor(sender), { ptyIds: ['p1', 'p2'] })
+    handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p3' })
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(3)
   })
 
   it('rejects fit calls from non-dashboard senders', async () => {

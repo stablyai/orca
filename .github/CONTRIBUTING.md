@@ -53,6 +53,14 @@ Add high-quality tests for behavior changes and bug fixes. Prefer tests that wou
 
 If your change affects UI or interaction behavior, verify it on the platforms it could impact.
 
+### Spanish translation completeness
+
+Every new English catalog key must ship its Spanish value in the same PR, anywhere in the app. This is a repository-wide gate, not just a sessions-grid requirement. Reviewed identical Spanish terms and product/code tokens follow the exceptions in [the completeness policy](../config/localization-debt/README.md).
+
+Existing Spanish debt is frozen in `config/localization-debt/es.json`; do not expand it to pass validation. Translate changed English copy when its old debt entry no longer matches. Remove baseline entries resolved by a translation, deleted English key, or renamed key; renamed keys must meet the new-key requirement. Required surfaces permit no debt even if an entry was previously baselined.
+
+Run `pnpm run verify:localization-catalog` before publishing. It also runs under `pnpm lint` and in PR CI. Other locales retain English fallback where no completeness policy is configured.
+
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
 
 Project-owned type declarations belong in `.ts` files. `.d.ts` is reserved for ambient shims (e.g., `env.d.ts`, `vite/client.d.ts`). TypeScript's `skipLibCheck: true` setting applies globally, including to our own `.d.ts` files, which means any unresolved type reference in a `.d.ts` silently becomes `any` at its call sites. Write your types in `.ts` files so the compiler actually checks them.

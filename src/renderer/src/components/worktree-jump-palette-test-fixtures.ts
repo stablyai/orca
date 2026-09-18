@@ -1,3 +1,4 @@
+import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -8,13 +9,14 @@ import type { AppState } from '@/store/types'
 
 // Store fixtures shared by the Cmd+J palette suites (worktree list + recent chats & terminals).
 
-export function makeRepo(): Repo {
+export function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
     path: '/repos/repo-1',
     displayName: 'Repo 1',
     badgeColor: '#000000',
-    addedAt: 0
+    addedAt: 0,
+    ...overrides
   }
 }
 
@@ -195,5 +197,21 @@ export function makeManyTabState(count: number): Partial<AppState> {
       ]
     },
     activeGroupIdByWorktree: { 'wt-many': 'group-wt-many' }
+  }
+}
+
+export function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
+  return {
+    id: 'group-1',
+    name: 'Folders',
+    parentPath: null,
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides
   }
 }

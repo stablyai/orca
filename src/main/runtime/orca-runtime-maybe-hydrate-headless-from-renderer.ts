@@ -2,6 +2,9 @@
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './orca-runtime-serialize-main-terminal-buffer'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
+import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
+import { TrailingTerminalOutputCapture } from './terminal-output-trailing-capture'
+import { getOutputAfterSnapshotSeq } from './rpc/methods/terminal/terminal-stream-replay'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
 
 export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -11,12 +14,22 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
   // is populated synchronously so concurrent live writes from
   // trackHeadlessTerminalData chain after the seed via the same writeChain.
   // See docs/mobile-prefer-renderer-scrollback.md.
-  protected maybeHydrateHeadlessFromRenderer(ptyId: string): void {
-    if (this.headlessHydrationState.has(ptyId)) {
+  protected maybeHydrateHeadlessFromRenderer(
+    ptyId: string,
+    beforeChunkSequence = this.getPtyOutputSequence(ptyId)
+  ): void {
+    const hydration = this.headlessHydrationState.get(ptyId)
+    if (hydration === 'pending' || hydration === 'done') {
       return
     }
     const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
-    if (this.headlessTerminals.has(ptyId) && !providerSnapshotPreferred) {
+    // Why the awaiting check: a viewer's frame-only emulator is not a seed —
+    // counting it as one would skip the renderer's history forever.
+    if (
+      this.headlessTerminals.has(ptyId) &&
+      !providerSnapshotPreferred &&
+      hydration !== 'awaiting-serializer'
+    ) {
       // Daemon-snapshot seed already populated the emulator — skip hydration.
       this.headlessHydrationState.set(ptyId, 'done')
       return
@@ -31,78 +44,78 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       return
     }
 
-    if (providerSnapshotPreferred) {
-      // Why: a stream byte can create a partial model before restored history
-      // arrives. A mounted renderer snapshot can safely replace that model.
-      this.disposeHeadlessTerminal(ptyId)
-    }
-
+    const state = this.getOrCreateHeadlessTerminal(ptyId)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const isCurrent = () =>
+      this.headlessTerminals.get(ptyId) === state &&
+      this.getPtyLifecycleGeneration(ptyId) === generation
+    const trailing = new TrailingTerminalOutputCapture(beforeChunkSequence)
+    const unsubscribe = this.subscribeToTerminalData(ptyId, (data, meta) =>
+      trailing.push(data, meta)
+    )
     this.headlessHydrationState.set(ptyId, 'pending')
-    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    // Why: hydration writes below never set forwardQueryReplies (main-side
-    // replay guard) — renderer-buffer snapshots can embed stale queries.
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    state.outputSequence = this.getPtyOutputSequence(ptyId)
-    this.headlessTerminals.set(ptyId, state)
-
-    // Why: append the seed work to writeChain so live writes queued by
-    // trackHeadlessTerminalData (after this method returns synchronously)
-    // execute AFTER the seed-write resolves. If we awaited inline before
-    // setting headlessTerminals, the live byte would lazy-create a separate
-    // state and the seed-resolve would overwrite it, dropping live bytes.
+    // Keep one chain owner so live writes queued during capture use the committed emulator.
     state.writeChain = state.writeChain.then(async () => {
-      if (this.headlessTerminals.get(ptyId) !== state) {
-        return
-      }
+      let candidate: RuntimeHeadlessTerminal | undefined
+      let committed = false
       try {
-        // Why the scrollback is not suppressed mid-TUI: the seed IS the model's
-        // normal buffer, so zeroing it while an alt-screen agent was up left the
-        // model with no pre-TUI history to restore from (#6106).
+        if (!isCurrent()) {
+          return
+        }
         const rendered = await controller.serializeBuffer!(ptyId, {
           scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
         })
+        if (!isCurrent() || !rendered || rendered.data.length === 0) {
+          return
+        }
         if (
-          this.headlessTerminals.get(ptyId) !== state ||
-          !rendered ||
-          rendered.data.length === 0
+          typeof rendered.seq === 'number' &&
+          (rendered.seq < state.outputSequence ||
+            rendered.seq > this.getPtyOutputSequence(ptyId) ||
+            trailing.after(rendered.seq) === null)
         ) {
           return
         }
-        this.recordOsc7MetadataForPty(ptyId, rendered.data)
-        this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
-        // Resize to renderer's dims so the seed reflows correctly into the
-        // emulator's grid, then resize back to PTY dims (if known) so live
-        // writes use the correct cell layout.
-        if (rendered.cols !== dims.cols || rendered.rows !== dims.rows) {
-          state.emulator.resize(rendered.cols, rendered.rows)
-        }
-        await state.emulator.write(rendered.data)
-        if (this.headlessTerminals.get(ptyId) !== state) {
+        candidate = this.createPtyHeadlessTerminalState(ptyId, rendered)
+        await candidate.emulator.write(rendered.data)
+        if (!isCurrent()) {
           return
         }
         const ptyDims = this.getTerminalSize(ptyId)
         if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
-          state.emulator.resize(ptyDims.cols, ptyDims.rows)
+          candidate.emulator.resize(ptyDims.cols, ptyDims.rows)
         }
-        // Why: the renderer xterm no longer sees synthetic hook title frames
-        // (they feed main's tracker only), so its serializer lastTitle can be
-        // stale here. Prefer main's tracked title; the renderer's is only the
-        // seed when main has observed none (fresh relaunch, cold tracker).
-        state.ownership.seedOwner(undefined, {
-          alternateScreen: state.emulator.isAlternateScreen
+        candidate.ownership.seedOwner(undefined, {
+          alternateScreen: candidate.emulator.isAlternateScreen
         })
         const seedTitle = this.getTrackedRawTitleForPty(ptyId) ?? rendered.lastTitle
         if (seedTitle) {
-          state.emulator.setLastTitle(seedTitle)
+          candidate.emulator.setLastTitle(seedTitle)
+        }
+        state.emulator.disableQueryReplyForwarding()
+        state.emulator.dispose()
+        state.ownership.dispose()
+        state.emulator = candidate.emulator
+        state.ownership = candidate.ownership
+        state.rendererHydrationSequence = rendered.seq
+        state.outputSequence = rendered.seq ?? state.outputSequence
+        committed = true
+        this.recordOsc7MetadataForPty(ptyId, rendered.data)
+        this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
+        if (seedTitle) {
           this.applySeededAgentStatus(ptyId, seedTitle)
         }
         this.providerSnapshotPreferredPtys.delete(ptyId)
       } catch {
-        // Hydration is best-effort. Live writes continue via the same
-        // writeChain that this catch-arm leaves intact.
+        // Keep the incumbent model and retry on the next live chunk.
       } finally {
-        if (this.headlessTerminals.get(ptyId) === state) {
-          this.headlessHydrationState.set(ptyId, 'done')
+        unsubscribe()
+        if (candidate && !committed) {
+          candidate.ownership.dispose()
+          candidate.emulator.dispose()
+        }
+        if (isCurrent()) {
+          this.headlessHydrationState.set(ptyId, committed ? 'done' : 'awaiting-serializer')
         }
       }
     })
@@ -162,7 +175,9 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies = false
+    forwardQueryReplies = false,
+    rawLength = data.length,
+    transformed = false
   ): Promise<void> {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const completion = state.writeChain.then(async () => {
@@ -170,8 +185,15 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       // chain link; async scheduling cannot retroactively change it.
       // Why inside the chain: the ownership mirror must observe live bytes in
       // the same total order as seeds (seedOwner also runs on this chain).
-      state.ownership.scan(data)
-      await state.emulator.write(data, { forwardQueryReplies })
+      const uncovered = getOutputAfterSnapshotSeq(
+        { data, bytes: 0, meta: { seq: outputSequence, rawLength, transformed } },
+        state.rendererHydrationSequence
+      )
+      if (!uncovered) {
+        return
+      }
+      state.ownership.scan(uncovered.data)
+      await state.emulator.write(uncovered.data, { forwardQueryReplies })
       state.outputSequence = outputSequence
     })
     // Legacy callers remain best-effort; bounded SSH admission observes the raw receipt.

@@ -1072,6 +1072,14 @@
           "label": "Workspaces"
         }
       },
+      "session": {
+        "grid": {
+          "SessionGridToolbar": {
+            "c525d4f2b3": "Mouse Wheel",
+            "e84bece7ac": "Terminal until its end, then the grid"
+          }
+        }
+      },
       "settings": {
         "AccountsPane": {
           "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
