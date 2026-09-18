@@ -28,10 +28,15 @@ internal class MobileWebShellLoadStateMachine {
   private var terminal = false
   private var last: MobileWebShellLoadEmission? = null
 
+  /** Which load this machine is reporting on. Read before deferring work, checked on delivery. */
+  var epoch: Int = 0
+    private set
+
   /** A new prop pair. Nothing else reopens a terminal state: a retry is a remount. */
   fun reset() {
     terminal = false
     last = null
+    epoch += 1
   }
 
   fun started(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("loading", null))
@@ -43,6 +48,14 @@ internal class MobileWebShellLoadStateMachine {
     terminal = true
     return emission
   }
+
+  /**
+   * A failure decided during one load and reported after the next one started belongs to neither:
+   * Android has to defer its report past Chromium's error document, and a prop update can land in
+   * between, which would fail the generation that just replaced the one that actually failed.
+   */
+  fun failedDuring(epoch: Int, reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? =
+    if (epoch != this.epoch) null else failed(reason)
 
   private fun emit(emission: MobileWebShellLoadEmission): MobileWebShellLoadEmission? {
     if (terminal || emission == last) return null

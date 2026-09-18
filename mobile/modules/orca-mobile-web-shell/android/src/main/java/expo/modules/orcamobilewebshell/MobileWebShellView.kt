@@ -123,6 +123,7 @@ internal class OrcaMobileWebShellView(
     blocker?.remove()
     blocker = null
     served = null
+    documentFailed = false
     view.stopLoading()
     removeView(view)
     view.destroy()
@@ -185,9 +186,15 @@ internal class OrcaMobileWebShellView(
     // Set before the post, not inside it: onPageFinished runs in between and would otherwise
     // report `ready` over the failure and make the error page visible again.
     documentFailed = true
+    val epoch = loadState.epoch
     post {
+      if (!documentFailed) return@post
+      val emission = loadState.failedDuring(
+        epoch,
+        MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED
+      ) ?: return@post
       webView?.visibility = View.INVISIBLE
-      emit(loadState.failed(MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED))
+      emit(emission)
     }
   }
 

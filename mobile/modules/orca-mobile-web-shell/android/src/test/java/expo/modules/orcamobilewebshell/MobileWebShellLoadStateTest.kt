@@ -63,6 +63,28 @@ class MobileWebShellLoadStateTest {
     assertNull(machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
   }
 
+  // Android defers a document failure past Chromium's error document, so a prop update can land
+  // between the decision and the report; the failure belongs to the load that is already gone.
+  @Test
+  fun `a failure decided before a new prop pair reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    val epoch = machine.epoch
+    machine.reset()
+    assertNull(machine.failedDuring(epoch, MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED))
+    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
+  }
+
+  @Test
+  fun `a failure decided during the current load still reports`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    assertEquals(
+      failure("document-load-failed"),
+      machine.failedDuring(machine.epoch, MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED)
+    )
+  }
+
   @Test
   fun `a new prop pair may report again, including the same failure`() {
     val machine = MobileWebShellLoadStateMachine()
