@@ -61,6 +61,7 @@ function statusReply(capabilities: readonly string[]): RpcResponse {
 
 /** Answers every method with the one status reply, which is all any reader under test asks for. */
 function clientAnswering(reply: RpcResponse): RpcClient {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every reader below reaches this client only through an rpc operation's `request`, which uses sendRequest alone; the rest of RpcClient is streaming and lifecycle none of them touch.
   return { sendRequest: vi.fn().mockResolvedValue(reply) } as unknown as RpcClient
 }
 
