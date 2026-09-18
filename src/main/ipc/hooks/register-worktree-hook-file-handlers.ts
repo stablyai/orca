@@ -14,6 +14,7 @@ import {
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
+/** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
   const { store } = context
 

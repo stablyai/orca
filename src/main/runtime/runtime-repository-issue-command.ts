@@ -60,6 +60,7 @@ export class RuntimeRepositoryIssueCommand {
     }
   }
 
+  /** Save a private override on its execution host; blank content restores the shared command. */
   async write(repoSelector: string, content: string): Promise<{ ok: true }> {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
