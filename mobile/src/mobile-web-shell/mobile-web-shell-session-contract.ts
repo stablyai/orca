@@ -50,7 +50,10 @@ export type MobileWebShellBlockedVerdict = Extract<
 
 /** The shell's own failures plus the one the view cannot report: a download or a cache write that
  *  never produced a generation to hand it. */
-export type MobileWebShellFailureCause = MobileWebShellFailureReason | 'download-failed'
+export type MobileWebShellFailureCause =
+  | MobileWebShellFailureReason
+  | 'download-failed'
+  | 'status-unreadable'
 
 export type MobileWebShellSessionState =
   /** Gates unsettled, cache being read, or a manifest in flight. Nothing is on screen yet. */

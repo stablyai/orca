@@ -128,10 +128,21 @@ describe('the gates decide whether a step is taken at all', () => {
     expect(step.effects).toEqual([])
   })
 
-  it('never walls a host whose status could not be read', () => {
+  it('says a status could not be read rather than walling or waiting on it forever', () => {
     const step = started({ statusReadable: false, hostCapabilities: [] })
-    expect(step.session.state).toEqual({ kind: 'checking' })
+    expect(step.session.state).toEqual({
+      kind: 'failed',
+      reason: 'status-unreadable',
+      retriedOnce: false
+    })
     expect(step.effects).toEqual([])
+  })
+
+  it('picks the flow back up if that status ever becomes readable', () => {
+    const unreadable = started({ statusReadable: false, hostCapabilities: [] })
+    const step = run(unreadable.session, { type: 'gates-changed', gates: gates() })
+    expect(step.session.state).toEqual({ kind: 'checking' })
+    expect(step.effects).toEqual([{ kind: 'open-cache' }])
   })
 
   it('walls a readable host that serves no bundle', () => {

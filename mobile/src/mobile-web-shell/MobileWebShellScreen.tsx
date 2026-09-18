@@ -29,6 +29,8 @@ function failureMessage(reason: MobileWebShellFailureCause): string {
       return "This device's WebView is too old to open the workspace safely."
     case 'download-failed':
       return 'The workspace could not be downloaded from this host.'
+    case 'status-unreadable':
+      return "Could not read this host's status. Go back and reopen it."
     case 'render-process-gone':
       return 'The workspace stopped responding.'
     case 'generation-unreadable':
@@ -69,8 +71,9 @@ function Failed({
   state: Extract<MobileWebShellSessionState, { kind: 'failed' }>
   onRetry: () => void
 }) {
-  // No retry for the fence: a device whose WebView cannot be isolated will not grow one on a tap.
-  const retryable = state.reason !== 'isolation-unavailable'
+  // No retry for the fence, and none for an unread status: a device whose WebView cannot be
+  // isolated will not grow one on a tap, and a retry re-reads the same settled gate it already has.
+  const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
   return (
     <Centered>
       <Text style={styles.failedMessage} testID="mobile-web-shell-failed">

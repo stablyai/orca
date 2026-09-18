@@ -165,6 +165,16 @@ describe('the hybrid shell screen', () => {
     expect(tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-retry')).toEqual([])
   })
 
+  it('offers no retry for a status that could not be read, since the gate is settled', async () => {
+    const tree = await render({
+      kind: 'failed',
+      reason: 'status-unreadable',
+      retriedOnce: false
+    })
+    expect(textOf(tree)).toContain("Could not read this host's status")
+    expect(tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-retry')).toEqual([])
+  })
+
   it('names what is missing when the host is unreachable and nothing is cached', async () => {
     expect(textOf(await render({ kind: 'offline' }))).toContain(
       'Connect to this host to download the workspace'

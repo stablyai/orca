@@ -64,6 +64,11 @@ function step(
  * failure are both left by acting, so neither reacts either.
  */
 function awaitsGates(state: MobileWebShellSessionState): boolean {
+  if (state.kind === 'failed') {
+    // The one failure the gates can answer: a status that becomes readable is a different host
+    // screen, and it costs nothing to take it rather than make someone walk back out.
+    return state.reason === 'status-unreadable'
+  }
   return state.kind === 'checking' || state.kind === 'offline'
 }
 
@@ -84,10 +89,18 @@ function startFlow(
     // generation opens with no compat check at all.
     return step(session, { ...base, state: CHECKING }, [{ kind: 'open-cache' }])
   }
-  // Never on an unreadable status: the empty capability list it leaves behind is indistinguishable
-  // from a desktop that ships no bundle, and that wall has no way out but updating the desktop.
-  if (gates.statusPending || !gates.statusReadable) {
+  if (gates.statusPending) {
     return step(session, { ...base, state: CHECKING })
+  }
+  // Never a wall on an unreadable status: the empty capability list it leaves behind is
+  // indistinguishable from a desktop that ships no bundle, and that wall tells the wrong story. It
+  // is not a wait either — the gate settles once per host screen and does not probe again — so the
+  // one honest answer is to say the status could not be read and let a fresh gate reopen it.
+  if (!gates.statusReadable) {
+    return step(session, {
+      ...base,
+      state: { kind: 'failed', reason: 'status-unreadable', retriedOnce: session.retriedOnce }
+    })
   }
   const verdict = evaluateMobileWebBundleCompat({
     hostCapabilities: gates.hostCapabilities,
