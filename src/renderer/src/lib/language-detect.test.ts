@@ -77,6 +77,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\theme\\snippets\\CART.LIQUID')).toBe('liquid')
   })
 
+  it('maps .sol files to the Monaco built-in sol language id, not the solidity alias', () => {
+    expect(detectLanguage('contracts/Vault.sol')).toBe('sol')
+    expect(detectLanguage('C:\\repo\\contracts\\TOKEN.SOL')).toBe('sol')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
