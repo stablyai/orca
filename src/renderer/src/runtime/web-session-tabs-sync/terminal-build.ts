@@ -170,6 +170,10 @@ export function buildMirroredTerminalTabs(
         // Why: the host transport carries no generated title, so rebuilding the tab
         // without this dropped the client's agent-prompt label on every snapshot.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
+        // Why: the source pane key embeds the tab id, so a record found under another id would hide the title.
+        ...(existing?.generatedTitle && existing.id === localTabId && existing.generatedTitlePaneKey
+          ? { generatedTitlePaneKey: existing.generatedTitlePaneKey }
+          : {}),
         ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
         // Why: the recovery ledger is client-local and the host carries none, so
         // rebuilding without it would restore this tab's remount allowance on

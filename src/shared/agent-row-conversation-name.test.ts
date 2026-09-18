@@ -108,6 +108,31 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(generated, 'claude', true, null)).toBe('Fix intake flow')
   })
 
+  it('gives a generated title only to the pane whose prompt produced it', () => {
+    const tab = makeTab({
+      generatedTitle: 'Fix intake flow',
+      generatedTitlePaneKey: 'tab-1:pane-a'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true, null, undefined, 'tab-1:pane-a')).toBe(
+      'Fix intake flow'
+    )
+    expect(
+      getAgentRowConversationName(
+        tab,
+        'claude',
+        true,
+        '✳ Redis cache strategy',
+        undefined,
+        'tab-1:pane-b'
+      )
+    ).toBe('Redis cache strategy')
+    expect(
+      getAgentRowConversationName(tab, 'claude', true, null, undefined, 'tab-1:pane-b')
+    ).toBeNull()
+    // A caller that names no pane keeps today's tab-wide behavior, like an omitted pane title.
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
+  })
+
   it('strips leading status decoration from agent-set titles', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '✳ Fix patient intake flow' }), 'claude', false)

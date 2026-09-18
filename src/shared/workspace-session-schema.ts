@@ -86,6 +86,7 @@ const terminalTabSchema = z.object({
   title: z.string(),
   defaultTitle: z.string().optional(),
   generatedTitle: z.string().nullable().optional(),
+  generatedTitlePaneKey: z.string().nullable().optional().catch(undefined),
   aiVaultTitle: z
     .object({
       agent: z.enum(['claude', 'codex']),

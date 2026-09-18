@@ -237,7 +237,11 @@ export function applyGeneratedTabTitleUpdates(
     if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
       continue
     }
-    updateStageTabs(stage, tabIndexes, (tab) => ({ ...tab, generatedTitle }))
+    updateStageTabs(stage, tabIndexes, (tab) => ({
+      ...tab,
+      generatedTitle,
+      generatedTitlePaneKey: paneKey
+    }))
     updateStageUnifiedLabel(stage, tabId, 'generatedLabel', generatedTitle)
   }
   return finishTitleStages(state, stages)
