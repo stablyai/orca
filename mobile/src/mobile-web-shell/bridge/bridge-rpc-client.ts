@@ -169,12 +169,19 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     handshake.restart()
   }
 
+  /** The shell's own words where it had any, the way the native client passes an RPC error message
+   *  through to the listener it ends. */
+  function describeStreamFailure(error: unknown): string {
+    return error instanceof Error ? error.message : 'the shell could not keep this stream open'
+  }
+
   /** The shell answers a refused `subscribe` with `error` on the stream's id. Nothing is pending to
    *  reject there, so routing it to the requests would drop it and hold the page's slot forever. */
   function failExchange(id: string, error: unknown): void {
     if (subscriptions.has(id)) {
-      subscriptions.end(id)
+      // Reported before the listener runs, so a listener that throws cannot swallow the diagnostic.
       report({ kind: 'stream-failed', error })
+      subscriptions.end(id, describeStreamFailure(error), error)
       return
     }
     if (!requests.has(id)) {
@@ -205,8 +212,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         subscriptions.deliver(message, utf8ByteLength(json))
         return
       case 'end':
-        subscriptions.end(message.id)
         report({ kind: 'stream-ended', reason: message.reason })
+        subscriptions.end(message.id, `the shell ended this stream (${message.reason})`)
         return
     }
   }

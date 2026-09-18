@@ -599,7 +599,7 @@ describe('bridge client acks', () => {
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
   })
 
-  it('retires a stream the shell ended and reports why', () => {
+  it('retires a stream the shell ended, tells the listener, and reports why', () => {
     const page = createPageClient()
     page.start()
     const onData = vi.fn()
@@ -607,9 +607,23 @@ describe('bridge client acks', () => {
     const id = idOf(page, 0)
     page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'overflow' })
     page.deliver(eventFrame(id, 1, 'after the end'))
-    expect(onData).not.toHaveBeenCalled()
+    // The terminal result is the only thing a consumer hears. `host-worktree-refresh.ts` reads it
+    // to clear the flag that says the event stream is live; without it the list never refreshes
+    // again, because frames that stop arriving look exactly like a stream with nothing to say.
+    expect(onData.mock.calls).toEqual([[{ type: 'error', message: expect.any(String) }]])
     expect(page.diagnostics).toEqual([{ kind: 'stream-ended', reason: 'overflow' }])
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
+  })
+
+  it('tells the listener nothing when the page itself let the stream go', () => {
+    const page = createPageClient()
+    page.start()
+    const onData = vi.fn()
+    const dispose = page.client.subscribe('terminal.stream', {}, onData)
+    dispose()
+    // The caller that disposed is the one that would hear it, and it has already moved on.
+    expect(onData).not.toHaveBeenCalled()
+    expect(page.frames().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
   })
 })
 

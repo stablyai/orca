@@ -112,9 +112,16 @@ export class BridgeClientSubscriptions {
     stream.onData(message.payload)
   }
 
-  /** The shell already retired this stream, so nothing is posted back for it. */
-  end(id: string): void {
+  /** The shell already retired this stream, so nothing is posted back for it. The listener is told
+   *  before the record goes: frames that merely stop arriving are indistinguishable from a quiet
+   *  stream, and a consumer waiting on a replay would wait for the life of the document. */
+  end(id: string, message: string, error?: unknown): void {
+    const stream = this.streams.get(id)
+    if (stream === undefined) {
+      return
+    }
     this.streams.delete(id)
+    stream.onData(bridgeStreamError(message, error))
   }
 
   /** The page is done with the stream. Idempotent: a second dispose posts nothing. */

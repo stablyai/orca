@@ -148,7 +148,10 @@ describe('bridge round trip: subscriptions', () => {
     expect(pair.diagnostics).toEqual([
       { kind: 'stream-failed', error: expect.objectContaining({ message: 'the terminal is gone' }) }
     ])
-    expect(onData).not.toHaveBeenCalled()
+    // The shell's own message reaches the listener, the way the native client passes one through.
+    expect(onData.mock.calls).toEqual([
+      [{ type: 'error', message: 'the terminal is gone', error: expect.any(Error) }]
+    ])
     // A leaked slot is invisible until the page reaches its own cap, so that is where it is read.
     for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
       pair.client.subscribe('terminal.stream', {}, vi.fn())
