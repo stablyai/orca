@@ -217,6 +217,9 @@ describe('orchestration kernel', () => {
       '`worker-list --run <run_id> --terminal-state reclaimable --json`'
     )
     expect(squash(kernel)).toContain('do not follow it with `task-update --status completed`')
+    expect(squash(kernel)).toContain(
+      'If `worker-start` recorded `created_child`, capture `<worktreePath>` from that start receipt **before** `worker-release`'
+    )
   })
 
   it('treats long waits and release uncertainty as safe checkpoints', () => {
@@ -403,6 +406,13 @@ describe('owned orchestration references', () => {
     expect(reference).toContain('worker-release --dispatch')
     expect(squash(reference)).toContain('`release_pending` or `release_unknown`')
     expect(squash(reference)).toContain('Never substitute `terminal close`')
+    expect(reference).toContain('ORCA worktree rm --force --worktree path:<worktreePath> --json')
+    expect(squash(reference)).toContain('Capture `<worktreePath>` **before** `worker-release`')
+    expect(squash(reference)).toContain('`worker-show` returns `terminal: null`')
+    expect(squash(reference)).toContain('`terminal.worktreePath` is not a path source')
+    expect(squash(reference)).toContain(
+      'Unpushed local commits exist for **any** outcome (succeeded, failed, or STOP)'
+    )
   })
 
   it('owns the lost-response question and the request-show verdicts', () => {

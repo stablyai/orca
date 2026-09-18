@@ -1,7 +1,8 @@
 # Recovery and cleanup
 
 Load this reference only after a failed/stopped/unknown attempt, explicit retry
-decision, stop/abandon request, retention request, or uncertain release.
+decision, stop/abandon request, retention request, uncertain release, or a
+confirmed `worker-release` of a leftover `created_child` worktree.
 
 | Proven state            | Safe action                                                        |
 | ----------------------- | ------------------------------------------------------------------ |
@@ -154,6 +155,48 @@ Never release because of timeout, TUI idle, heartbeat, status, question,
 escalation, or stale/rejected completion. If the receipt says `release_pending`
 or `release_unknown`, follow its exact recovery action. Never substitute
 `terminal close`.
+
+## Worktree cleanup after release
+
+`worker-release` closes the agent terminal only. A `--worktree new-child`
+checkout stays on disk. Remove it only after `worker-release` returns a
+confirmed released state, and only when that Dispatch's own `effects`
+recorded `{ "kind": "worktree", "action": "created_child" }`.
+
+Capture `<worktreePath>` **before** `worker-release` from the `worker-start`
+receipt: the path after `::` in `effects[].id`, or `residualResources` of kind
+`worktree`. After release, `worker-show` returns `terminal: null` because
+`observation.exact` fails once the process incarnation no longer matches, so
+`terminal.worktreePath` is not a path source.
+
+```text
+ORCA worktree rm --force --worktree path:<worktreePath> --json
+```
+
+`--force` maps to `git worktree remove --force` and waives PTY-stop proof; it
+is not permission to delete while terminal-stop state is unverified. It does
+not force-delete the GitHub branch.
+
+Leave the worktree in place and report it instead when any of the following
+hold:
+
+- `worker-release` did not complete successfully (`release_pending`,
+  `release_unknown`, retained, or error).
+- The worker was reused for a follow-up Dispatch.
+- The user asked to keep the workspace, or the Dispatch recorded
+  `worker-retain`.
+- The terminal was user-taken-over.
+- The recorded start effect was `reused`, or the worker started with
+  `--worktree current` or an exact pre-existing workspace — never delete a
+  checkout this Dispatch did not create.
+- Unpushed local commits exist for **any** outcome (succeeded, failed, or
+  STOP): dirty `git status --porcelain`, a nonzero
+  `git rev-list --count @{upstream}..HEAD`, or no upstream / unknown
+  comparison.
+- `worktree rm` itself errors — a locked worktree or unverifiable Git state.
+
+Run this before the next wait or the end of the turn. It is coordinator
+hygiene on top of release, not a substitute for it.
 
 `orchestration reset` is destructive recovery. Do not run it during active
 coordination unless the user explicitly abandons that state.
