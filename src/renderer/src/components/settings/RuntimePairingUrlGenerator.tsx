@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { RuntimeAccessGrant } from '../../../../shared/runtime-access-grants'
 import { Label } from '../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
-import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
+import {
+  RuntimePairingGeneratorForm,
+  type RuntimePairingCopyTarget
+} from './RuntimePairingGeneratorForm'
+import { useRuntimeAccessGrants } from './useRuntimeAccessGrants'
+import { parseCloudflareTunnelAddress } from '../../../../shared/network/cloudflare-tunnel-address'
+import { webSocketEndpointPort } from '../../../../shared/network/pairing-url'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
+  rememberIntentAddress,
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
   selectRuntimePairingIntent,
@@ -39,16 +45,26 @@ export function RuntimePairingUrlGenerator({
   const [runtimePairingDeviceId, setRuntimePairingDeviceId] = useState<string | null>(
     runtimePairingLinkCache.runtimePairingDeviceId
   )
-  const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
-  const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
-  const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null)
-  const [copiedTarget, setCopiedTarget] = useState<'web' | 'pairing' | null>(null)
+  const [localWebSocketPort, setLocalWebSocketPort] = useState<number | null>(null)
+  const [copiedTarget, setCopiedTarget] = useState<RuntimePairingCopyTarget | null>(null)
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
-  const accessGrantLoadIdRef = useRef(0)
   const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
+
+  const clearGeneratedUrlsIfGrantMatches = useCallback((deviceId: string): void => {
+    if (runtimePairingLinkCache.runtimePairingDeviceId !== deviceId) {
+      return
+    }
+    clearGeneratedRuntimePairingLink()
+    setRuntimePairingUrl(null)
+    setWebClientUrl(null)
+    setRuntimePairingDeviceId(null)
+    setGeneratedAddress(null)
+  }, [])
+
+  const accessGrants = useRuntimeAccessGrants({ onGrantRevoked: clearGeneratedUrlsIfGrantMatches })
 
   const clearCopiedTargetResetTimer = useCallback((): void => {
     if (copiedTargetResetTimerRef.current === null) {
@@ -67,42 +83,6 @@ export function RuntimePairingUrlGenerator({
       }
     },
     [clearCopiedTargetResetTimer]
-  )
-
-  const loadRuntimeAccessGrants = useCallback(
-    async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
-      const loadId = accessGrantLoadIdRef.current + 1
-      accessGrantLoadIdRef.current = loadId
-      if (mountedRef.current) {
-        setIsLoadingAccessGrants(true)
-      }
-      try {
-        const result = await window.api.mobile.listRuntimeAccessGrants()
-        if (mountedRef.current && loadId === accessGrantLoadIdRef.current) {
-          setRuntimeAccessGrants(result.grants)
-        }
-      } catch (error) {
-        if (
-          mountedRef.current &&
-          loadId === accessGrantLoadIdRef.current &&
-          options.showToastOnError
-        ) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : translate(
-                  'auto.components.settings.RuntimePairingUrlGenerator.1b4e0bbcc5',
-                  'Failed to load shared access grants.'
-                )
-          )
-        }
-      } finally {
-        if (mountedRef.current && loadId === accessGrantLoadIdRef.current) {
-          setIsLoadingAccessGrants(false)
-        }
-      }
-    },
-    [mountedRef]
   )
 
   const loadNetworkInterfaces = useCallback(
@@ -160,12 +140,24 @@ export function RuntimePairingUrlGenerator({
     }
   }, [intent, networkInterfaces, selectedAddress])
 
+  // Re-read on intent change so selecting Cloudflare Tunnel picks up a listener that bound (or
+  // rebound on a new port) after this pane mounted.
   useEffect(() => {
-    void loadRuntimeAccessGrants()
+    let cancelled = false
+    void (async () => {
+      try {
+        const status = await window.api.mobile.isWebSocketReady()
+        if (!cancelled && mountedRef.current) {
+          setLocalWebSocketPort(webSocketEndpointPort(status.endpoint))
+        }
+      } catch {
+        /* leave the port unknown; the panel withholds the command */
+      }
+    })()
     return () => {
-      accessGrantLoadIdRef.current += 1
+      cancelled = true
     }
-  }, [loadRuntimeAccessGrants])
+  }, [mountedRef, intent])
 
   const clearGeneratedUrls = (): void => {
     clearGeneratedRuntimePairingLink()
@@ -181,13 +173,14 @@ export function RuntimePairingUrlGenerator({
     const address = selectedAddress.trim()
     runtimePairingLinkCache.selectedAddress = address
     setSelectedAddress(address)
-    if (intent === 'custom') {
-      runtimePairingLinkCache.customAddress = address
-    }
+    rememberIntentAddress(intent, address)
+    // Send wss:// so main does not graft the local port onto the tunnel host.
+    const tunnelAddress = intent === 'cloudflare' ? parseCloudflareTunnelAddress(address) : null
+    const advertisedAddress = tunnelAddress?.ok ? tunnelAddress.value : address
     setIsGeneratingPairing(true)
     try {
       const result = await window.api.mobile.getRuntimePairingUrl({
-        address,
+        address: advertisedAddress,
         rotate: true,
         // Why: main gates the one-way network widen on this, so the declared choice must travel with the
         // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
@@ -220,7 +213,7 @@ export function RuntimePairingUrlGenerator({
         setRuntimePairingDeviceId(result.deviceId)
         setGeneratedAddress(address)
       }
-      await loadRuntimeAccessGrants()
+      await accessGrants.reload()
       if (mountedRef.current) {
         toast.success(
           result.webClientUrl
@@ -252,57 +245,10 @@ export function RuntimePairingUrlGenerator({
     }
   }
 
-  const revokeRuntimeAccess = async (grant: RuntimeAccessGrant): Promise<void> => {
-    setRevokingGrantId(grant.deviceId)
-    try {
-      const result = await window.api.mobile.revokeRuntimeAccess({ deviceId: grant.deviceId })
-      if (!result.revoked) {
-        if (mountedRef.current) {
-          toast.error(
-            translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.d797f516b1',
-              'Shared access was already revoked.'
-            )
-          )
-        }
-        await loadRuntimeAccessGrants()
-        return
-      }
-      if (mountedRef.current) {
-        setRuntimeAccessGrants((current) =>
-          current.filter((entry) => entry.deviceId !== grant.deviceId)
-        )
-      }
-      if (runtimePairingDeviceId === grant.deviceId) {
-        clearGeneratedUrls()
-      }
-      if (mountedRef.current) {
-        toast.success(
-          translate(
-            'auto.components.settings.RuntimePairingUrlGenerator.9f8e037c4a',
-            'Shared access revoked.'
-          )
-        )
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.e8d83f2b0f',
-                'Failed to revoke shared access.'
-              )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setRevokingGrantId(null)
-      }
-    }
-  }
-
-  const copyGeneratedUrl = async (target: 'web' | 'pairing', value: string): Promise<void> => {
+  const copyGeneratedUrl = async (
+    target: RuntimePairingCopyTarget,
+    value: string
+  ): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(value)
       if (mountedRef.current) {
@@ -314,17 +260,7 @@ export function RuntimePairingUrlGenerator({
             setCopiedTarget((current) => (current === target ? null : current))
           }
         }, 1400)
-        toast.success(
-          target === 'web'
-            ? translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.13704d635e',
-                'Copied web client URL.'
-              )
-            : translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86',
-                'Copied pairing URL.'
-              )
-        )
+        toast.success(copiedToastMessage(target))
       }
     } catch (error) {
       if (mountedRef.current) {
@@ -355,19 +291,18 @@ export function RuntimePairingUrlGenerator({
       runtimePairingLinkCache.customAddress = address
       runtimePairingLinkCache.intent = 'custom'
       setIntent('custom')
-    } else if (intent === 'custom') {
-      runtimePairingLinkCache.customAddress = address
+      return
     }
+    rememberIntentAddress(intent, address)
   }
 
   const updateIntent = (nextIntent: RuntimePairingIntent): void => {
     setIntent(nextIntent)
     setSelectedAddress(
-      selectRuntimePairingIntent(
-        nextIntent,
-        networkInterfaces,
-        runtimePairingLinkCache.customAddress
-      )
+      selectRuntimePairingIntent(nextIntent, networkInterfaces, {
+        customAddress: runtimePairingLinkCache.customAddress,
+        cloudflareAddress: runtimePairingLinkCache.cloudflareAddress
+      })
     )
   }
 
@@ -401,6 +336,7 @@ export function RuntimePairingUrlGenerator({
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}
           generatedAddress={generatedAddress}
+          localWebSocketPort={localWebSocketPort}
           onIntentChange={updateIntent}
           onSelectedAddressChange={updateSelectedAddress}
           onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}
@@ -411,13 +347,32 @@ export function RuntimePairingUrlGenerator({
 
       <RuntimeAccessGrantList
         className={sharedAccessClassName}
-        grants={runtimeAccessGrants}
+        grants={accessGrants.grants}
         currentGrantId={runtimePairingDeviceId}
-        isLoading={isLoadingAccessGrants}
-        revokingGrantId={revokingGrantId}
-        onRefresh={() => void loadRuntimeAccessGrants({ showToastOnError: true })}
-        onRevoke={(grant) => void revokeRuntimeAccess(grant)}
+        isLoading={accessGrants.isLoading}
+        revokingGrantId={accessGrants.revokingGrantId}
+        onRefresh={() => void accessGrants.reload({ showToastOnError: true })}
+        onRevoke={(grant) => void accessGrants.revoke(grant)}
       />
     </div>
+  )
+}
+
+function copiedToastMessage(target: RuntimePairingCopyTarget): string {
+  if (target === 'web') {
+    return translate(
+      'auto.components.settings.RuntimePairingUrlGenerator.13704d635e',
+      'Copied web client URL.'
+    )
+  }
+  if (target === 'command') {
+    return translate(
+      'auto.components.settings.RuntimePairingUrlGenerator.copiedTunnelCommand',
+      'Copied tunnel command.'
+    )
+  }
+  return translate(
+    'auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86',
+    'Copied pairing URL.'
   )
 }

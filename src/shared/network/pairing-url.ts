@@ -29,6 +29,18 @@ export function normalizePairingUrl(value: string): string | null {
   }
 }
 
+export function webSocketEndpointPort(endpoint: string | null | undefined): number | null {
+  if (!endpoint) {
+    return null
+  }
+  try {
+    const port = Number(new URL(endpoint).port)
+    return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : null
+  } catch {
+    return null
+  }
+}
+
 function containsAsciiControlCharacter(value: string): boolean {
   for (const character of value) {
     const code = character.charCodeAt(0)
