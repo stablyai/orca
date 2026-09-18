@@ -81,7 +81,11 @@ export type BridgeRpcClient = RpcClient & {
  * screens and the host catalog, so the page settles what it owns and says goodbye.
  *
  * Nothing may be called before `init`. The alternative is a stub answering `connecting` to a screen
- * that then records the wrong first render, so a call arriving early throws instead.
+ * that then records the wrong first render, so a call arriving early throws instead. After `close`
+ * the opposite rule holds: every member goes inert and the getters keep answering the snapshot the
+ * page last held, marked `disconnected`, because an unmounting screen calls into a path with no
+ * catch on it. A stream the shell refuses or ends is not thrown anywhere either; it arrives as a
+ * diagnostic, which is the only channel `subscribe` leaves open once it has handed back a dispose.
  */
 export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRpcClient {
   const requests = new BridgeClientRequests()
