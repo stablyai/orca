@@ -105,6 +105,8 @@ function fetchedBundle(): MobileWebBundleFetchResult {
     manifest: {
       schemaVersion: 1,
       buildId: 'a'.repeat(64),
+      minCompatibleRuntimeProtocolVersion: 2,
+      runtimeProtocolVersion: 2,
       entrypoint: 'index.html',
       totalBytes: 3,
       assets: [

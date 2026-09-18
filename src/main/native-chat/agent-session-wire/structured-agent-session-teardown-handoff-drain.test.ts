@@ -66,6 +66,7 @@ function gatedTransport(): StructuredAgentSessionHandoffTransport {
     recoverTuiOwner: async (record) =>
       tuiOwner(record.lease.runtimeFence, record.lease.reservedSpawnToken ?? 'recovered'),
     stopRecoveredOwner: async () => undefined,
+    stopFailedTuiLaunch: async () => undefined,
     closeTuiOwner: async (owner) => ({ transcriptPath: owner.transcriptPath }),
     waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
     waitForTuiIdleOrExit: async () => 'idle',
@@ -139,11 +140,11 @@ describe('structured agent-session host teardown', () => {
     launchGate.resolve()
     await teardown
 
-    // The new owner was proven while the session was still indexed, not after it vanished.
+    // Teardown stops the late TUI owner and fences the reservation before dropping the session.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      runtimeKind: 'tui',
-      claimStatus: 'live',
-      handoffStage: null
+      runtimeKind: 'native',
+      claimStatus: 'released',
+      handoffStage: 'old-owner-stopped'
     })
     expect(host.hasSession(SESSION)).toBe(false)
   })

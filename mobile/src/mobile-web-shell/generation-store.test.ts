@@ -151,6 +151,8 @@ function buildResult(options: {
     manifest: {
       schemaVersion: 1,
       buildId: options.buildId ?? 'a'.repeat(64),
+      minCompatibleRuntimeProtocolVersion: 2,
+      runtimeProtocolVersion: 2,
       entrypoint: 'index.html',
       totalBytes,
       assets

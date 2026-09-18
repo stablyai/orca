@@ -871,8 +871,17 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      # Why: this install runs lifecycle scripts, so node-gyp rebuilds
+      # native/windows-registry and fetches that Node version's headers from
+      # nodejs.org. One `read ECONNRESET` there failed this blocking gate and the
+      # whole cut. Retry like the release build's install below.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Build Electron app for platform golden
         run: npx electron-vite build --mode e2e
@@ -1088,8 +1097,14 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      # Same node-gyp header fetch as the blocking golden gate above.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Build Electron app for terminal rendering evidence
         run: npx electron-vite build --mode e2e
