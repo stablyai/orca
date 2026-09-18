@@ -160,7 +160,8 @@ export async function createWorkerWorktree(args: {
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
     id: created.worktree.id,
-    name: created.worktree.displayName
+    name: created.worktree.displayName,
+    ...(baseBranch ? { baseBranch } : {})
   })
   db.recordWorkerStage({
     dispatchId,
