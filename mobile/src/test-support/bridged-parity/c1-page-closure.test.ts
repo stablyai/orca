@@ -72,15 +72,17 @@ describe('reading a run against the pin', () => {
 
   it('names a closure golden that changed verdict', () => {
     const run = asPinned()
-    const [id, observation] = [...run][0] ?? []
-    if (id === undefined || observation === undefined) {
+    // Whichever golden it is, the verdict it moves to has to be one it is not already pinned to.
+    const found = [...run].find(([, seen]) => seen.verdict !== 'params-undefined')
+    if (found === undefined) {
       throw new Error('the pin is empty')
     }
+    const [id, observation] = found
     run.set(id, { ...observation, verdict: 'params-undefined' })
     const drift = c1PageClosureDrift(run)
     expect(drift.length).toBe(1)
     expect(drift[0]).toContain(id)
-    expect(drift[0]).toContain('params-undefined')
+    expect(drift[0]).toContain(`pinned ${observation.verdict}, ran params-undefined`)
   })
 
   it('names a golden newly derived into a closure family, which no id list would', () => {
