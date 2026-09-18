@@ -18,6 +18,21 @@ export type BridgedParityClass =
   | 'write-ordinal'
   | 'unclassified'
 
+/**
+ * The throw, when it was the scripted transport refusing a request's params, read into key paths.
+ *
+ * `step` is the name the transport printed, `method#occurrence`. The two lists are the ones the
+ * rule needs: the message alone says nothing, because it is the same message whatever moved the
+ * params, and ten scenarios script an `undefined` key for a bridge to drop.
+ */
+export type ParamsMismatchEvidence = {
+  step: string
+  /** Paths into the params the scenario scripts whose own value is `undefined`. */
+  undefinedValuedKeys: readonly string[]
+  /** Every path where the params that arrived differ from the ones the scenario scripts. */
+  differingKeys: readonly string[]
+}
+
 export type BridgedParityEvidence = {
   /**
    * The same replay, with `_meta` supplied on every reply the shell posted, came out byte-identical
@@ -37,8 +52,24 @@ export type BridgedParityEvidence = {
   divergingFields: readonly string[]
   /** The scenario scripts a reply that is `ok` and carries no `result` key. */
   scriptsAbsentResultReply: boolean
-  /** The scenario sends an own param key whose value is `undefined`. */
-  sendsUndefinedValuedParam: boolean
+  /** Null unless the throw was the scripted transport refusing one request's params. */
+  paramsMismatch: ParamsMismatchEvidence | null
+}
+
+/**
+ * Every param that moved is one the scenario valued `undefined`, and at least one moved.
+ *
+ * Both halves are load-bearing. Without the first, any failure inside the ten scenarios that script
+ * such a key is called this class: a seeded wire bug that put one extra own key on every request's
+ * params threw this same message, stayed inside those ten, and was counted and never reported.
+ * Without the second, a throw that named the step but moved nothing would be excluded on the
+ * strength of a key the run never touched.
+ */
+function movedOnlyKeysScriptedUndefined(mismatch: ParamsMismatchEvidence | null): boolean {
+  if (mismatch === null || mismatch.differingKeys.length === 0) {
+    return false
+  }
+  return mismatch.differingKeys.every((key) => mismatch.undefinedValuedKeys.includes(key))
 }
 
 function settlementField(path: string): boolean {
@@ -55,15 +86,19 @@ function ordinalField(path: string): boolean {
  * The first arm is the only one that needs a second run, and it has to come first because it is the
  * only one that is a cause rather than a symptom: nearly every golden here is refused some reply
  * for the missing field, and only the run that supplies it says which of them the field explains.
- * Everything below is a property of the scenario or of the fields that moved, never the text of an
- * error, so the counts move when the bridge does and not when a message is reworded.
+ * Everything below is a property of the scenario, of the fields that moved, or of the frames the
+ * page posted. The one arm that has no recording to read — the run that threw before there was
+ * one — is the one arm that reads the throw, and it reads it only far enough to find the step the
+ * transport named, then compares the params on their own.
  */
 export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedParityClass {
   if (evidence.fixedByReplyMeta) {
     return 'reply-meta-required'
   }
   if (evidence.threwWhileRecording) {
-    return evidence.sendsUndefinedValuedParam ? 'params-undefined' : 'unclassified'
+    return movedOnlyKeysScriptedUndefined(evidence.paramsMismatch)
+      ? 'params-undefined'
+      : 'unclassified'
   }
   const [first] = evidence.divergingFields
   if (first === undefined) {

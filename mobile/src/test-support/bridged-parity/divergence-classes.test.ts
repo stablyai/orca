@@ -13,7 +13,18 @@ const base: BridgedParityEvidence = {
   threwWhileRecording: false,
   divergingFields: [],
   scriptsAbsentResultReply: false,
-  sendsUndefinedValuedParam: false
+  paramsMismatch: null
+}
+
+/** What the ten scenarios that script an `undefined`-valued param look like when the bridge drops it. */
+const droppedUndefinedKey: BridgedParityEvidence = {
+  ...base,
+  threwWhileRecording: true,
+  paramsMismatch: {
+    step: 'linear.listIssues#1',
+    undefinedValuedKeys: ['.workspaceId'],
+    differingKeys: ['.workspaceId']
+  }
 }
 
 describe('the bridged-parity flag', () => {
@@ -46,11 +57,38 @@ describe('classifying one diverging golden', () => {
     )
   })
 
-  it('names a throw only when the scenario sends a key valued `undefined`', () => {
-    expect(
-      classifyBridgedParity({ ...base, threwWhileRecording: true, sendsUndefinedValuedParam: true })
-    ).toBe('params-undefined')
+  it('names a throw only when every param that moved is one the scenario valued `undefined`', () => {
+    expect(classifyBridgedParity(droppedUndefinedKey)).toBe('params-undefined')
     expect(classifyBridgedParity({ ...base, threwWhileRecording: true })).toBe('unclassified')
+  })
+
+  it('refuses the class to a run where something else moved in the same params', () => {
+    // A seeded wire bug — one extra own key on every request's params — throws the same message
+    // inside the same ten scenarios. A rule that asked only whether the scenario scripts an
+    // `undefined` key called all 33 of them this class and reported none of them.
+    expect(
+      classifyBridgedParity({
+        ...droppedUndefinedKey,
+        paramsMismatch: {
+          step: 'linear.listIssues#1',
+          undefinedValuedKeys: ['.workspaceId'],
+          differingKeys: ['.seeded', '.workspaceId']
+        }
+      })
+    ).toBe('unclassified')
+  })
+
+  it('refuses the class to a throw that moved no param at all', () => {
+    expect(
+      classifyBridgedParity({
+        ...droppedUndefinedKey,
+        paramsMismatch: {
+          step: 'linear.listIssues#1',
+          undefinedValuedKeys: ['.workspaceId'],
+          differingKeys: []
+        }
+      })
+    ).toBe('unclassified')
   })
 
   it('names the ordinal class ahead of the partition a matrix golden also carries', () => {

@@ -3,9 +3,9 @@ import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-enve
 import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import {
   divergingFields,
+  paramsMismatchEvidence,
   refusedFrames,
   scriptsAbsentResultReply,
-  sendsUndefinedValuedParam,
   withoutRpcMeta,
   withReplyMeta
 } from './divergence-evidence'
@@ -123,16 +123,85 @@ describe('reading the scenario', () => {
       )
     ).toBe(false)
   })
+})
 
-  it('sees an own param key whose value is `undefined`, however deep', () => {
+describe('reading the throw the scripted transport raised', () => {
+  const scripted = scenario([
+    { complete: 'linear.listIssues#1', params: { filter: 'assigned', workspaceId: undefined } }
+  ])
+  const mismatch = new Error('Request params mismatch: linear.listIssues#1')
+  const posted = (params: unknown): string[] => [
+    JSON.stringify({ v: 1, type: 'ready' }),
+    JSON.stringify({
+      v: 1,
+      type: 'request',
+      id: 'aaaaaaaaaaaaaaaaaaaaaa',
+      method: 'linear.listIssues',
+      params
+    })
+  ]
+
+  it('names the key the bridge dropped and the one the scenario valued `undefined`', () => {
+    expect(paramsMismatchEvidence(mismatch, scripted, posted({ filter: 'assigned' }))).toEqual({
+      step: 'linear.listIssues#1',
+      undefinedValuedKeys: ['.workspaceId'],
+      differingKeys: ['.workspaceId']
+    })
+  })
+
+  it('names a key that arrived and was never scripted, which is what a wire bug looks like', () => {
     expect(
-      sendsUndefinedValuedParam(scenario([{ complete: 'a#1', params: { q: undefined } }]))
-    ).toBe(true)
+      paramsMismatchEvidence(mismatch, scripted, posted({ filter: 'assigned', seeded: 1 }))
+    ).toEqual({
+      step: 'linear.listIssues#1',
+      undefinedValuedKeys: ['.workspaceId'],
+      differingKeys: ['.seeded', '.workspaceId']
+    })
+  })
+
+  it('reads a key nested under one the scenario scripts', () => {
+    const nested = scenario([
+      { complete: 'gitlab.updateMR#1', params: { iid: 7, updates: { body: undefined } } }
+    ])
     expect(
-      sendsUndefinedValuedParam(scenario([{ complete: 'a#1', params: { q: [{ r: undefined }] } }]))
-    ).toBe(true)
-    expect(sendsUndefinedValuedParam(scenario([{ complete: 'a#1', params: { q: null } }]))).toBe(
-      false
-    )
+      paramsMismatchEvidence(new Error('Request params mismatch: gitlab.updateMR#1'), nested, [
+        JSON.stringify({
+          v: 1,
+          type: 'request',
+          id: 'aaaaaaaaaaaaaaaaaaaaaa',
+          method: 'gitlab.updateMR',
+          params: { iid: 7, updates: {} }
+        })
+      ])
+    ).toEqual({
+      step: 'gitlab.updateMR#1',
+      undefinedValuedKeys: ['.updates.body'],
+      differingKeys: ['.updates.body']
+    })
+  })
+
+  it("is nothing for a throw that is not the transport refusing a request's params", () => {
+    expect(
+      paramsMismatchEvidence(
+        new Error('Missing subscription payload: a#1'),
+        scripted,
+        posted({ filter: 'assigned' })
+      )
+    ).toBeNull()
+    expect(paramsMismatchEvidence('not an error at all', scripted, posted({}))).toBeNull()
+  })
+
+  it('is nothing when the scenario scripts no step by the name the throw printed', () => {
+    expect(
+      paramsMismatchEvidence(
+        new Error('Request params mismatch: linear.listIssues#2'),
+        scripted,
+        posted({ filter: 'assigned' })
+      )
+    ).toBeNull()
+  })
+
+  it('is nothing when no frame for that step ever left the page', () => {
+    expect(paramsMismatchEvidence(mismatch, scripted, [])).toBeNull()
   })
 })

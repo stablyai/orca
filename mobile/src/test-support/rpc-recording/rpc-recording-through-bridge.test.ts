@@ -16,10 +16,10 @@ import {
 } from '../bridged-parity/divergence-classes'
 import {
   divergingFields,
+  paramsMismatchEvidence,
   recordingWithoutRpcMeta,
   refusedFrames,
   scriptsAbsentResultReply,
-  sendsUndefinedValuedParam,
   withReplyMeta
 } from '../bridged-parity/divergence-evidence'
 import { familyGoldens, pilotGoldens } from './derived-goldens'
@@ -198,6 +198,20 @@ function explain(fields: readonly string[], run: Replay): string {
   ].join('\n')
 }
 
+/** The params a refused step moved, named beside the fields, so a wire bug arrives readable. */
+function describeParamsMismatch(evidence: BridgedParityEvidence): string {
+  const mismatch = evidence.paramsMismatch
+  if (mismatch === null) {
+    return ''
+  }
+  return [
+    `  refused   ${mismatch.step}`,
+    `  moved     ${mismatch.differingKeys.join(', ') || '(nothing)'}`,
+    `  scripted  \`undefined\` at ${mismatch.undefinedValuedKeys.join(', ') || '(nothing)'}`,
+    ''
+  ].join('\n')
+}
+
 /**
  * The verdict on one golden, and where it diverged, the counterfactual that says why.
  *
@@ -225,18 +239,20 @@ async function verdict(
     asIf.recording === null
       ? []
       : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording))
+  // A scenario is handed a pair as it starts, so the last pair belongs to the one that threw.
+  const failing = scenarios[asIf.pairs.length - 1]
   const evidence: BridgedParityEvidence = {
     fixedByReplyMeta: asIf.recording !== null && asIfFields.length === 0,
     threwWhileRecording: asIf.recording === null,
     divergingFields: asIfFields,
     scriptsAbsentResultReply: scenarios.some(scriptsAbsentResultReply),
-    sendsUndefinedValuedParam: scenarios.some(sendsUndefinedValuedParam)
+    paramsMismatch: paramsMismatchEvidence(asIf.thrown, failing, asIf.pairs.at(-1)?.toShell ?? [])
   }
   const name = classifyBridgedParity(evidence)
   counts[name] += 1
   if (name === 'unclassified') {
     throw new Error(
-      `Unclassified bridged divergence: ${id}\n${explain(fields, run)}\nwith \`_meta\` supplied:\n${explain(asIfFields, asIf)}`
+      `Unclassified bridged divergence: ${id}\n${explain(fields, run)}\n${describeParamsMismatch(evidence)}with \`_meta\` supplied:\n${explain(asIfFields, asIf)}`
     )
   }
   members.set(name, [...(members.get(name) ?? []), id])
