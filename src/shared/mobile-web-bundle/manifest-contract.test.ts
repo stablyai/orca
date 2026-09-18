@@ -196,6 +196,16 @@ describe('asset paths', () => {
     expect(parsed.success).toBe(false)
   })
 
+  it('rejects an uppercase content type, which would give the same bytes two ids', () => {
+    for (const contentType of ['Text/HTML; charset=utf-8', 'text/JavaScript', 'TEXT/PLAIN']) {
+      expect(
+        MobileWebBundleManifestSchema.safeParse(
+          manifestOf([ENTRY, { ...asset('assets/a.js', 10), contentType }])
+        ).success
+      ).toBe(false)
+    }
+  })
+
   it('rejects a malformed sha256 or content type', () => {
     expect(
       MobileWebBundleManifestSchema.safeParse(

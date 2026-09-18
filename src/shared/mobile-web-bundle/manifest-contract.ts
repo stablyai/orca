@@ -15,8 +15,10 @@ export const MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES = 10 * 1024 * 1024
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
+// Lowercase only, no `i` flag: content type feeds the build id, so accepting case variants would
+// give the same bytes two different ids.
 const CONTENT_TYPE_PATTERN =
-  /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*(?:; ?charset=[a-z0-9-]+)?$/i
+  /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*(?:; ?charset=[a-z0-9-]+)?$/
 const MAX_ASSET_PATH_LENGTH = 255
 const MAX_CONTENT_TYPE_LENGTH = 128
 const MAX_DESKTOP_VERSION_LENGTH = 64
