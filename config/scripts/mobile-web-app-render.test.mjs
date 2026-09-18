@@ -27,7 +27,7 @@ let cspHeader = null
 export function parseCspDirectives(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker)
   const end = source.indexOf(endMarker)
-  if (start < 0 || end < start) {
+  if (start === -1 || end < start) {
     throw new Error(`could not find ${startMarker} .. ${endMarker}`)
   }
   const body = source
