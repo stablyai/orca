@@ -16,6 +16,14 @@ Many terminal UIs (Zellij, tmux, Neovim, fzf, Grok) copy via **OSC 52** instead 
 
 Toggle: [Settings → Terminal → Allow TUI Clipboard Writes (OSC 52)](/docs/settings).
 
+## Inline images
+
+Terminal panes render inline images sent with **SIXEL**, the **iTerm2 inline image protocol** (`OSC 1337 File=`), or the **Kitty graphics protocol**. Coding agents that show screenshots or generated assets in the transcript (pi, oh-my-pi, Kimi Code) display them in place; `img2sixel`, `imgcat`, and similar tools work too.
+
+Orca identifies itself as a plain `xterm-256color` terminal, so tools that pick an image protocol from the terminal name may need a hint — for pi and oh-my-pi set `PI_FORCE_IMAGE_PROTOCOL=iterm2` (or `sixel`) in the agent's environment.
+
+Images live in the terminal grid: they scroll with the text they were printed next to and share the pane's scrollback. They are not part of the persisted scrollback, so a reattached or restored pane shows the surrounding text without the image.
+
 ## Search
 
 `Cmd-F` opens find-in-scrollback. Match highlighting, case, regex, and match navigation are all supported.

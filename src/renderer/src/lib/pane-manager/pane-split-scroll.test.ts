@@ -73,6 +73,7 @@ function createPane(bufferType: 'normal' | 'alternate'): {
       serialize: vi.fn(() => '')
     } as never,
     unicode11Addon: {} as never,
+    imageAddon: {} as never,
     webLinksAddon: {} as never,
     compositionHandler: null,
     pendingSplitScrollState: scrollState,

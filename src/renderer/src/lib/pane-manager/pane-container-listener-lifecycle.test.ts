@@ -23,6 +23,7 @@ function makePane(): ManagedPaneInternal {
     searchAddon: { dispose: vi.fn() } as never,
     serializeAddon: { dispose: vi.fn() } as never,
     unicode11Addon: { dispose: vi.fn() } as never,
+    imageAddon: { dispose: vi.fn() } as never,
     webLinksAddon: { dispose: vi.fn() } as never,
     webglAddon: null,
     ligaturesAddon: null,

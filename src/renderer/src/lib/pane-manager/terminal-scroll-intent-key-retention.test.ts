@@ -81,6 +81,7 @@ function createPane(id: number, leafId: TerminalLeafId): ManagedPaneInternal {
     searchAddon: {} as never,
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
+    imageAddon: {} as never,
     webLinksAddon: {} as never,
     compositionHandler: null,
     pendingSplitScrollState: null,

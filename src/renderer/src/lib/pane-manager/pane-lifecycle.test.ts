@@ -68,6 +68,7 @@ function createPane(): ManagedPaneInternal {
     searchAddon: {} as never,
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
+    imageAddon: {} as never,
     ligaturesAddon: null,
     webLinksAddon: {} as never,
     webglAddon: null,
@@ -473,6 +474,7 @@ describe('openTerminal — addon and provider wiring', () => {
     const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
     const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
     const webLinksAddon = {} as unknown as ManagedPaneInternal['webLinksAddon']
+    const imageAddon = {} as unknown as ManagedPaneInternal['imageAddon']
 
     const unicodeProxy = {
       _version: '6' as '6' | '11',
@@ -577,6 +579,7 @@ describe('openTerminal — addon and provider wiring', () => {
       unicode11Addon,
       ligaturesAddon: null,
       webLinksAddon,
+      imageAddon,
       webglAddon: null,
       compositionHandler: null,
       pendingSplitScrollState: null,

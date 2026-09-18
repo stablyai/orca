@@ -12,6 +12,7 @@ import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-typ
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
+import { createTerminalImageAddon } from './terminal-image-addon'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 
@@ -54,6 +55,7 @@ export function createPaneDOM(
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
+  const imageAddon = createTerminalImageAddon()
   // Why: async tooltip formatting can resolve after hover changes, so stale
   // results must not overwrite the tooltip for the currently hovered link.
   let linkTooltipHoverToken = 0
@@ -132,6 +134,7 @@ export function createPaneDOM(
     serializeAddon: new SerializeAddon(),
     unicode11Addon,
     webLinksAddon,
+    imageAddon,
     webglAddon: null,
     ligaturesAddon: null,
     panePointerDownHandler,

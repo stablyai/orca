@@ -70,6 +70,7 @@ function createPane(
     searchAddon: {} as never,
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
+    imageAddon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
     ligaturesAddon: null,

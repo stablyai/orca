@@ -39,7 +39,8 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
     searchAddon,
     serializeAddon,
     unicode11Addon,
-    webLinksAddon
+    webLinksAddon,
+    imageAddon
   } = pane
 
   // Open terminal into DOM
@@ -54,6 +55,7 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
+  terminal.loadAddon(imageAddon)
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
   })
@@ -247,6 +249,11 @@ export function disposePane(
   }
   try {
     pane.webLinksAddon.dispose()
+  } catch {
+    /* ignore */
+  }
+  try {
+    pane.imageAddon.dispose()
   } catch {
     /* ignore */
   }

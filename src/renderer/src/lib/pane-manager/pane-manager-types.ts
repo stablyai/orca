@@ -1,5 +1,6 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -181,6 +182,7 @@ export type ManagedPaneInternal = {
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
   webLinksAddon: WebLinksAddon
+  imageAddon: ImageAddon
   // Stored so disposePane() can remove pane-local DOM listeners explicitly.
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null

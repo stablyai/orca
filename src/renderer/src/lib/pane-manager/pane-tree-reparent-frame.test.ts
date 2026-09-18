@@ -66,6 +66,7 @@ function createPane(id: number, container = createMockElement('pane')): ManagedP
     searchAddon: {} as never,
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
+    imageAddon: {} as never,
     webLinksAddon: {} as never,
     terminalGpuAcceleration: 'on',
     gpuRenderingEnabled: true,
