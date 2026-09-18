@@ -102,6 +102,9 @@ locals {
     cell_inventory_holds               = { field = "cellInventoryHolds", description = "Cell-inventory locks acquired in the interval; the percentiles above summarise these." }
     cell_inventory_lock_unavailable    = { field = "cellInventoryLockUnavailable", description = "Fail-fast cell-inventory acquisitions that found the lock held. Includes background sweeps, which step aside by design, so this is contention pressure rather than user-visible failure." }
     cell_inventory_lock_timeouts       = { field = "cellInventoryLockTimeouts", description = "Bounded cell-inventory waits that expired, counted per attempt rather than per request. This is the user-visible lane." }
+    cell_row_lock_scopes_checked       = { field = "cellRowLockScopesChecked", description = "Transactions in which the cell-row lock guard evaluated at least one relay_cells write. The denominator: zero violations says nothing unless this is non-zero." }
+    cell_row_lock_scopes_stood_down    = { field = "cellRowLockScopesStoodDown", description = "Transactions in which the guard stood down because it could not read a locked row's cell_id. Non-zero is a bug report, not a clean run." }
+    cell_row_lock_scope_violations     = { field = "cellRowLockScopeViolations", description = "Cell-row lock order violations, plus relay_cells writes naming no cell. Warn-only in production, throws in tests; the per-cell locking conversion is gated on this staying zero against live traffic." }
   }
 
   # Regions the director can hint or select. Pinned to relay-contract's RELAY_REGIONS by

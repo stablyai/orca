@@ -3284,7 +3284,7 @@ export class RelayAssignmentStore {
           // Why: a client-chosen activity id can move between cells, so lock the
           // one or two rows this path touches in cell_id order, the same order
           // placement takes the inventory in, and no cycle can form.
-          await this.lockCellRows(transaction, [text(existing, 'cell_id'), input.cellId])
+          await this.lockCellRows(transaction, [text(existing, 'cell_id'), input.cellId], 'request')
           await this.removeActivityLease(transaction, identity, existing, now)
           await this.adjustCellReservationAtomically(transaction, input.cellId, units)
         }
@@ -6909,7 +6909,9 @@ export class RelayAssignmentStore {
   private async lockCellRows(
     database: RelayDatabase,
     cellIds: string[],
-    mode: CellInventoryLockMode = 'request'
+    // Required, not defaulted: the default was the bounded wait, and an omitted
+    // argument on a sweep path reads as harmless while creating a wait edge.
+    mode: CellInventoryLockMode
   ): Promise<SqlRow[]> {
     const distinct = [...new Set(cellIds)]
     const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
@@ -7576,7 +7578,7 @@ export class RelayAssignmentStore {
     // Why: this recomputes one cell's reservation from its leases, so only that
     // row needs to be held; the 23-row inventory lock here serialised every
     // desktop control rebind in the fleet behind every other one.
-    const cellRow = (await this.lockCellRows(database, [cellId]))[0]
+    const cellRow = (await this.lockCellRows(database, [cellId], 'request'))[0]
     await database.query(
       `DELETE FROM relay_assignment_activity_leases
        WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'control'

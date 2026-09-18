@@ -10,6 +10,16 @@ import {
   PostgresPoolPressure,
   type PostgresPoolPressureCounts
 } from './postgres-pool-pressure.js'
+import {
+  CellRowLockScope,
+  CellRowLockScopeSamples,
+  emptyCellRowLockScopeCounts,
+  emptyCellRowLockScopeOutcome,
+  mergeCellRowLockScopeOutcomes,
+  type CellRowLockKind,
+  type CellRowLockScopeCounts,
+  type CellRowLockScopeOutcome
+} from './cell-row-lock-scope.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
 import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.js'
 import { reportPostgresQueryFailure } from './postgres-query-failure.js'
@@ -708,6 +718,15 @@ function postgresSql(sql: string): string {
   return sql.replace(/\?/g, () => `$${++index}`)
 }
 
+function lockKind(options: RelayLockOptions): CellRowLockKind {
+  return options.failIfUnavailable === true ? 'nowait' : 'wait'
+}
+
+function statementLockKind(sql: string): CellRowLockKind {
+  if (!/\bFOR\s+UPDATE\b/i.test(sql)) return 'none'
+  return /\bFOR\s+UPDATE\s+NOWAIT\b/i.test(sql) ? 'nowait' : 'wait'
+}
+
 function returnsRows(sql: string): boolean {
   return /^\s*(select|with)/i.test(sql) || /returning/i.test(sql)
 }
@@ -766,7 +785,12 @@ class SqliteTransaction implements RelayDatabase {
   readonly dialect = 'sqlite' as const
   private heldFromMs: number | undefined
 
-  constructor(protected readonly database: DatabaseSync) {}
+  // SqliteDatabase extends this class for autocommit statements, where each
+  // statement is its own transaction and there is no scope to police.
+  constructor(
+    protected readonly database: DatabaseSync,
+    private readonly cellLocks?: CellRowLockScope
+  ) {}
 
   consumeHoldMs(): number | undefined {
     if (this.heldFromMs === undefined) return undefined
@@ -784,9 +808,11 @@ class SqliteTransaction implements RelayDatabase {
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const statement = this.database.prepare(sql)
     const bound = params.map((value) => (value === undefined ? null : value)) as never[]
-    if (returnsRows(sql)) return statement.all(...bound) as SqlRow[]
-    const result = statement.run(...bound)
-    return [{ changes: Number(result.changes) }]
+    const rows = returnsRows(sql)
+      ? (statement.all(...bound) as SqlRow[])
+      : [{ changes: Number(statement.run(...bound).changes) }]
+    this.cellLocks?.observe(sql, params, 'none', rows)
+    return rows
   }
 
   async queryLocked(
@@ -795,6 +821,10 @@ class SqliteTransaction implements RelayDatabase {
     options: RelayLockOptions = {}
   ): Promise<SqlRow[]> {
     const rows = await this.query(sql, params)
+    // SQLite has no FOR UPDATE to read back, so the lock is named by the call
+    // rather than by the statement text; Postgres appends the clause before the
+    // statement reaches query(), so both dialects report the same acquisition.
+    this.cellLocks?.observe(sql, params, lockKind(options), rows)
     this.noteHeld(options)
     return rows
   }
@@ -812,9 +842,14 @@ class SqliteTransaction implements RelayDatabase {
 class SqliteDatabase extends SqliteTransaction {
   private tail: Promise<void> = Promise.resolve()
   private readonly holds = new CellInventoryHoldSamples()
+  private readonly cellLockScopes = new CellRowLockScopeSamples()
 
   consumeHoldCounts(): CellInventoryHoldCounts {
     return this.holds.consumeCounts()
+  }
+
+  consumeCellRowLockScopeCounts(): CellRowLockScopeCounts {
+    return this.cellLockScopes.consumeCounts()
   }
 
   override async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
@@ -828,7 +863,8 @@ class SqliteDatabase extends SqliteTransaction {
     this.tail = new Promise((resolve) => (release = resolve))
     await previous
     this.database.exec('BEGIN IMMEDIATE')
-    const transaction = new SqliteTransaction(this.database)
+    const cellLocks = new CellRowLockScope()
+    const transaction = new SqliteTransaction(this.database, cellLocks)
     try {
       const result = await operation(transaction)
       this.database.exec('COMMIT')
@@ -838,6 +874,9 @@ class SqliteDatabase extends SqliteTransaction {
       this.database.exec('ROLLBACK')
       throw error
     } finally {
+      // Drained on the rollback path too: a violation throws in tests, and that
+      // transaction is exactly the one whose count must not disappear.
+      this.cellLockScopes.record(cellLocks.outcome())
       release()
     }
   }
@@ -854,7 +893,10 @@ class PostgresTransaction implements RelayDatabase {
   private lockUnavailable = 0
   private lockTimeouts = 0
 
-  constructor(protected readonly client: pg.PoolClient) {}
+  constructor(
+    protected readonly client: pg.PoolClient,
+    private readonly cellLocks?: CellRowLockScope
+  ) {}
 
   consumeHoldMs(): number | undefined {
     if (this.heldFromMs === undefined) return undefined
@@ -880,7 +922,11 @@ class PostgresTransaction implements RelayDatabase {
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     try {
       const result = await this.client.query(postgresSql(sql), params)
-      return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
+      const rows = returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
+      // queryLocked appends FOR UPDATE before it gets here, so every locked read
+      // is visible on this one path.
+      this.cellLocks?.observe(sql, params, statementLockKind(sql), rows)
+      return rows
     } catch (error) {
       rememberPostgresTransactionPhase(error, sql)
       throw error
@@ -992,9 +1038,14 @@ class PostgresDatabase implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private readonly pressure: PostgresPoolPressure
   private readonly holds = new CellInventoryHoldSamples()
+  private readonly cellLockScopes = new CellRowLockScopeSamples()
 
   consumeHoldCounts(): CellInventoryHoldCounts {
     return this.holds.consumeCounts()
+  }
+
+  consumeCellRowLockScopeCounts(): CellRowLockScopeCounts {
+    return this.cellLockScopes.consumeCounts()
   }
 
   constructor(private readonly pool: pg.Pool) {
@@ -1055,9 +1106,29 @@ class PostgresDatabase implements RelayDatabase {
     operation: (transaction: RelayDatabase) => Promise<T>,
     options: RelayTransactionOptions = {}
   ): Promise<T> {
+    // Merged across attempts and recorded once below: a retry replays the same
+    // work, so counting per attempt reports one logical transaction up to
+    // POSTGRES_TRANSACTION_ATTEMPTS times -- and 55P03 is retryable, so the
+    // inflation is worst under exactly the contention these counters measure.
+    let merged = emptyCellRowLockScopeOutcome()
+    try {
+      return await this.attemptTransaction(operation, options, (outcome) => {
+        merged = mergeCellRowLockScopeOutcomes(merged, outcome)
+      })
+    } finally {
+      this.cellLockScopes.record(merged)
+    }
+  }
+
+  private async attemptTransaction<T>(
+    operation: (transaction: RelayDatabase) => Promise<T>,
+    options: RelayTransactionOptions,
+    onAttempt: (outcome: CellRowLockScopeOutcome) => void
+  ): Promise<T> {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
       const client = await this.pressure.connect()
-      const transaction = new PostgresTransaction(client)
+      const cellLocks = new CellRowLockScope()
+      const transaction = new PostgresTransaction(client, cellLocks)
       try {
         await client.query('BEGIN')
         const result = await operation(transaction)
@@ -1094,6 +1165,7 @@ class PostgresDatabase implements RelayDatabase {
           )
         }
       } finally {
+        onAttempt(cellLocks.outcome())
         client.release()
       }
       // A PostgreSQL transaction is unusable after an abort, so retry all work
@@ -1129,6 +1201,13 @@ export function consumeRelayCellInventoryHold(
 ): CellInventoryHoldCounts {
   const holder = database as { consumeHoldCounts?: () => CellInventoryHoldCounts }
   return holder.consumeHoldCounts?.() ?? emptyCellInventoryHoldCounts()
+}
+
+export function consumeRelayCellRowLockScope(
+  database: RelayDatabase
+): CellRowLockScopeCounts {
+  const holder = database as { consumeCellRowLockScopeCounts?: () => CellRowLockScopeCounts }
+  return holder.consumeCellRowLockScopeCounts?.() ?? emptyCellRowLockScopeCounts()
 }
 
 export function readRelayDatabasePoolPressure(

@@ -12,6 +12,7 @@ import {
 } from './cell-admission-startup.js'
 import {
   consumeRelayCellInventoryHold,
+  consumeRelayCellRowLockScope,
   consumeRelayDatabasePoolPressure,
   openRelayDatabase,
   readRelayDatabasePoolPressure
@@ -94,7 +95,8 @@ migrationInventoryTimer?.unref()
 observability.start(() => ({
   ...runtimeCounts(),
   ...consumeRelayDatabasePoolPressure(database),
-  ...consumeRelayCellInventoryHold(database)
+  ...consumeRelayCellInventoryHold(database),
+  ...consumeRelayCellRowLockScope(database)
 }))
 const regionalRehomeWorker = startRegionalRehomeWorker(config, assignments, {
   safetySnapshot: () => ({
