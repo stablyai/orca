@@ -1,11 +1,4 @@
-import {
-  createElement,
-  Fragment,
-  useImperativeHandle,
-  useLayoutEffect,
-  type ReactElement,
-  type ReactNode
-} from 'react'
+import { createElement, useImperativeHandle, useLayoutEffect, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
@@ -74,8 +67,8 @@ function FakeShellView(props: {
  */
 function DeliverDuringCommit(props: {
   deliver: string | null
+  posted: PostedFrame[]
   probe: Probe
-  children: ReactNode
 }): ReactElement {
   const { deliver, probe } = props
   useLayoutEffect(() => {
@@ -83,7 +76,11 @@ function DeliverDuringCommit(props: {
       probe.view?.onBridgeMessage({ nativeEvent: { json: deliver } })
     }
   }, [deliver, probe])
-  return createElement(Fragment, null, props.children)
+  return createElement(Harness, {
+    session: readyState('session-one'),
+    posted: props.posted,
+    probe
+  })
 }
 
 function Harness(props: {
@@ -296,11 +293,7 @@ describe('client changes', () => {
     const posted: PostedFrame[] = []
     const probe: Probe = { view: null }
     const render = (deliver: string | null): ReactElement =>
-      createElement(DeliverDuringCommit, {
-        deliver,
-        probe,
-        children: createElement(Harness, { session: readyState('session-one'), posted, probe })
-      })
+      createElement(DeliverDuringCommit, { deliver, posted, probe })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
       rendered.tree = create(render(null))
