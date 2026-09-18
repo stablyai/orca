@@ -194,8 +194,10 @@ describe('teardown', () => {
     await mounted.deliver(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
     await mounted.update({ kind: 'failed', reason: 'render-process-gone', retriedOnce: false })
     expect(fakeClient().streams[0]?.unsubscribes).toBe(1)
+    await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     await mounted.deliver(clientFrame({ type: 'ready' }))
     expect(mounted.frames('session-one')).toEqual([])
+    expect(fakeClient().requests).toEqual([])
   })
 
   it('disposes on unmount and settles what was in flight as delivery-unknown', async () => {

@@ -486,9 +486,16 @@ describe('teardown', () => {
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
     bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     bridge.client.streams[0]?.emit({ chunk: 'a' })
+    // Nothing reaches the client either: a page that outlived its host is a page the fence is for.
+    bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(9), method: 'status.get' }))
+    bridge.host.receive(subscribeFrame(bridgeId(10)))
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
     bridge.host.receive(clientFrame({ type: 'ready' }))
     await flushBridge()
     expect(bridge.frames()).toHaveLength(2)
+    expect(bridge.client.requests).toHaveLength(1)
+    expect(bridge.client.streams).toHaveLength(1)
+    expect(bridge.client.foregroundCalls).toEqual([])
   })
 
   it('is idempotent', () => {
@@ -508,9 +515,11 @@ describe('teardown', () => {
     expect(bridge.posted).toHaveLength(0)
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
     expect(bridge.client.stateListeners()).toBe(0)
+    bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(9), method: 'status.get' }))
     bridge.host.receive(clientFrame({ type: 'ready' }))
     await flushBridge()
     expect(bridge.posted).toHaveLength(0)
+    expect(bridge.client.requests).toHaveLength(1)
   })
 })
 
