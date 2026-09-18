@@ -3,6 +3,8 @@
 import * as React from 'react'
 import { Popover as PopoverPrimitive } from 'radix-ui'
 
+import { useResolvedPortalContainer } from '@/components/ui/portal-container-context'
+import { getDomRealm } from '@/lib/dom-realm'
 import { cn } from '@/lib/utils'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
@@ -28,10 +30,17 @@ function resolvePopoverScroller(
   target: EventTarget | null,
   content: HTMLElement
 ): HTMLElement | null {
-  let node = target instanceof Node ? target : null
+  // Why: popout-portaled content lives in another document — main-realm
+  // constructors miss its nodes and the wheel shim never engages there.
+  const {
+    Node: RealmNode,
+    HTMLElement: RealmHTMLElement,
+    getComputedStyle: getStyle
+  } = getDomRealm(content.ownerDocument?.defaultView)
+  let node = target instanceof RealmNode ? target : null
   while (node && node !== content.parentNode) {
-    if (node instanceof HTMLElement && node.scrollHeight > node.clientHeight) {
-      const overflowY = getComputedStyle(node).overflowY
+    if (node instanceof RealmHTMLElement && node.scrollHeight > node.clientHeight) {
+      const overflowY = getStyle(node).overflowY
       if (overflowY === 'auto' || overflowY === 'scroll') {
         return node
       }
@@ -42,10 +51,11 @@ function resolvePopoverScroller(
 }
 
 function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
+  const { Node: RealmNode } = getDomRealm(content.ownerDocument?.defaultView)
   if (
     event.defaultPrevented ||
     consumerPreventedWheelEvents.has(event) ||
-    !(event.target instanceof Node) ||
+    !(event.target instanceof RealmNode) ||
     !content.contains(event.target)
   ) {
     return
@@ -85,11 +95,11 @@ type PopoverContentRef = React.ComponentProps<typeof PopoverPrimitive.Content>['
 
 function attachPopoverContent(
   content: HTMLDivElement,
-  portalContainer: HTMLElement | null | undefined,
+  portalContainer: Element | DocumentFragment | null | undefined,
   forwardedRef: PopoverContentRef | undefined
 ): () => void {
   // React delegates portal events here first, preserving onWheel-before-shim ordering.
-  const wheelTarget = portalContainer ?? content.ownerDocument.body
+  const wheelTarget = (portalContainer as HTMLElement | null) ?? content.ownerDocument.body
   const handleWheel = (event: WheelEvent): void => handlePopoverWheel(event, content)
   wheelTarget.addEventListener('wheel', handleWheel, { passive: false })
 
@@ -123,6 +133,8 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const resolvedContainer = useResolvedPortalContainer(portalContainer)
+
   const handleConsumerWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>): void => {
       onWheel?.(event)
@@ -145,7 +157,7 @@ function PopoverContent({
   const setContentRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       if (node) {
-        return attachPopoverContent(node, portalContainer, forwardedRef)
+        return attachPopoverContent(node, resolvedContainer, forwardedRef)
       }
       if (typeof forwardedRef === 'function') {
         forwardedRef(null)
@@ -154,11 +166,11 @@ function PopoverContent({
       }
       return undefined
     },
-    [forwardedRef, portalContainer]
+    [forwardedRef, resolvedContainer]
   )
 
   return (
-    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
+    <PopoverPrimitive.Portal container={resolvedContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

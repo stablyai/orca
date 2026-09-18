@@ -5,6 +5,7 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
+import { useResolvedPortalContainer } from '@/components/ui/portal-container-context'
 import { cn } from '@/lib/utils'
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
@@ -43,11 +44,12 @@ function CommandDialog({
 }) {
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
 
+  const resolvedContainer = useResolvedPortalContainer(null)
   return (
     <DialogPrimitive.Root {...props}>
-      <DialogPrimitive.Portal>
+      <DialogPrimitive.Portal container={resolvedContainer}>
         <DialogPrimitive.Overlay
-          // Why: matches the DialogOverlay recipe — deeper scrim + 2px backdrop
+          data-slot="dialog-overlay"
           // blur so the dark canvas lifts off the command palette. A flat
           // bg-black/50 disappears in dark mode.
           className={cn(
@@ -56,6 +58,7 @@ function CommandDialog({
           )}
         />
         <DialogPrimitive.Content
+          data-slot="dialog-content"
           // Why: matches the DialogContent recipe — translucent surface, solid
           // 14% border, dual shadow, and 2xl backdrop blur. bg-popover equals
           // the canvas in dark mode (#171717 vs #0a0a0a) and the previous

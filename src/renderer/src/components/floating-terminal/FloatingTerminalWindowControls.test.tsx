@@ -96,7 +96,43 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
+    return props.children
+  },
+  DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
+    return props.children
+  },
+  DropdownMenuContent: function DropdownMenuContent(props: { children?: unknown }) {
+    return props.children
+  },
+  DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown; onClick?: unknown }) {
+    return {
+      type: 'DropdownMenuItem',
+      props
+    }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return props.children
+  },
+  DropdownMenuSeparator: function DropdownMenuSeparator() {
+    return null
+  }
+}))
+
 vi.mock('lucide-react', () => ({
+  Check: function Check() {
+    return null
+  },
+  Sparkles: function Sparkles() {
+    return null
+  },
+  ExternalLink: function ExternalLink() {
+    return null
+  },
+  Monitor: function Monitor() {
+    return null
+  },
   Maximize2: function Maximize2() {
     return null
   },
@@ -125,6 +161,21 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
     return
   }
   cb(element)
+  if (
+    typeof element.type === 'function' &&
+    element.type.name !== 'DropdownMenuItem' &&
+    element.type.name !== 'Button' &&
+    element.type.name !== 'Tooltip' &&
+    element.type.name !== 'TooltipContent' &&
+    element.type.name !== 'TooltipTrigger'
+  ) {
+    try {
+      const rendered = (element.type as (props: Record<string, unknown>) => unknown)(element.props)
+      visit(rendered, cb)
+    } catch {
+      // ignore
+    }
+  }
   visit(element.props.children, cb)
 }
 
@@ -238,5 +289,130 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
       EXISTING_TAB_ID,
       NEW_AGENT_TAB_ID
     ])
+  })
+
+  it('renders multi-monitor button and moves to next display when 2 monitors exist', () => {
+    const onMoveToNextDisplay = vi.fn()
+    const onToggleDetached = vi.fn()
+    const displays = [
+      {
+        id: 1,
+        label: 'Display 1',
+        bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+        workArea: { x: 0, y: 0, width: 1920, height: 1040 },
+        isPrimary: true,
+        scaleFactor: 1
+      },
+      {
+        id: 2,
+        label: 'Display 2',
+        bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
+        workArea: { x: 1920, y: 0, width: 1920, height: 1040 },
+        isPrimary: false,
+        scaleFactor: 1
+      }
+    ]
+
+    const element = FloatingTerminalWindowControls({
+      maximized: false,
+      onToggleMaximized: vi.fn(),
+      onMinimize: vi.fn(),
+      isDetached: false,
+      onToggleDetached,
+      displays,
+      onMoveToNextDisplay
+    })
+
+    const items: { onClick: () => void }[] = []
+    visit(element, (entry) => {
+      if (
+        typeof entry.type === 'function' &&
+        entry.type.name === 'DropdownMenuItem' &&
+        typeof entry.props.onClick === 'function'
+      ) {
+        items.push({ onClick: entry.props.onClick as () => void })
+      }
+    })
+    expect(items.length).toBeGreaterThanOrEqual(2)
+    items[0].onClick()
+    expect(onMoveToNextDisplay).toHaveBeenCalledOnce()
+
+    const detachButton = findOnClickByAriaLabel(
+      element,
+      'Detach floating workspace to separate window'
+    )
+    detachButton()
+    expect(onToggleDetached).toHaveBeenCalledOnce()
+  })
+
+  it('renders dock button when detached', () => {
+    const onToggleDetached = vi.fn()
+
+    const element = FloatingTerminalWindowControls({
+      maximized: false,
+      onToggleMaximized: vi.fn(),
+      onMinimize: vi.fn(),
+      isDetached: true,
+      onToggleDetached
+    })
+
+    const dockButton = findOnClickByAriaLabel(element, 'Dock floating workspace into main window')
+    dockButton()
+    expect(onToggleDetached).toHaveBeenCalledOnce()
+  })
+
+  it('renders displays dropdown menu and triggers target display selection and identify displays', () => {
+    const onMoveToDisplay = vi.fn()
+    const onIdentifyDisplays = vi.fn()
+    const displays = [
+      {
+        id: 10,
+        label: 'Monitor 1 (Primary)',
+        bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+        workArea: { x: 0, y: 0, width: 1920, height: 1040 },
+        isPrimary: true,
+        scaleFactor: 1
+      },
+      {
+        id: 20,
+        label: 'Monitor 2',
+        bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
+        workArea: { x: 1920, y: 0, width: 2560, height: 1400 },
+        isPrimary: false,
+        scaleFactor: 1
+      }
+    ]
+
+    const element = FloatingTerminalWindowControls({
+      maximized: false,
+      onToggleMaximized: vi.fn(),
+      onMinimize: vi.fn(),
+      isDetached: false,
+      displays,
+      onMoveToDisplay,
+      onIdentifyDisplays
+    })
+
+    const items: { onClick: () => void; text?: string }[] = []
+    visit(element, (entry) => {
+      if (
+        typeof entry.type === 'function' &&
+        entry.type.name === 'DropdownMenuItem' &&
+        typeof entry.props.onClick === 'function'
+      ) {
+        items.push({ onClick: entry.props.onClick as () => void })
+      }
+    })
+
+    // Expect items: display 1, display 2, identify displays
+    expect(items.length).toBeGreaterThanOrEqual(3)
+
+    // Click display 2
+    items[1].onClick()
+    expect(onMoveToDisplay).toHaveBeenCalledWith(20)
+
+    // Click identify displays
+    items[2].onClick()
+    expect(onIdentifyDisplays).toHaveBeenCalledOnce()
   })
 })

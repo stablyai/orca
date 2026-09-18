@@ -20,6 +20,7 @@ export function useTabDragGestureLifecycle({
 } {
   const releaseWebviewDragPassthroughRef = useRef<(() => void) | null>(null)
   const releaseMissedEndFallbackRef = useRef<(() => void) | null>(null)
+  const dragRootNodeRef = useRef<HTMLDivElement | null>(null)
 
   const releaseWebviewDragPassthrough = useCallback(() => {
     releaseWebviewDragPassthroughRef.current?.()
@@ -33,11 +34,12 @@ export function useTabDragGestureLifecycle({
 
   const installMissedEndFallback = useCallback(() => {
     releaseMissedEndFallback()
+    const targetWindow = dragRootNodeRef.current?.ownerDocument?.defaultView ?? null
     releaseMissedEndFallbackRef.current = installTabDragMissedEndListeners(() => {
       if (tabDragActiveRef.current) {
         clearDragStateRef.current()
       }
-    })
+    }, targetWindow)
   }, [clearDragStateRef, releaseMissedEndFallback, tabDragActiveRef])
 
   const acquireWebviewDragPassthrough = useCallback(() => {
@@ -49,6 +51,7 @@ export function useTabDragGestureLifecycle({
 
   const setDragRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
+      dragRootNodeRef.current = node
       if (node) {
         return
       }
@@ -57,8 +60,11 @@ export function useTabDragGestureLifecycle({
       // so root teardown must release both.
       releaseWebviewDragPassthrough()
       releaseMissedEndFallback()
+      if (tabDragActiveRef.current) {
+        clearDragStateRef.current()
+      }
     },
-    [releaseMissedEndFallback, releaseWebviewDragPassthrough]
+    [clearDragStateRef, releaseMissedEndFallback, releaseWebviewDragPassthrough, tabDragActiveRef]
   )
 
   return {

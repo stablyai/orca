@@ -1,5 +1,11 @@
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import {
+  consumePendingBrowserPageProgressRestoration,
+  formatRestoredBrowserUrl,
+  restoreBrowserPageProgress,
+  stageBrowserPageProgressRestoration
+} from './browser-page-progress-retention'
 import { parkBrowserPageViewport } from './browser-page-viewport'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
 import {
@@ -143,8 +149,16 @@ export function bindBrowserPageWebviewListeners({
   validateVisibleGuestRegistrationRef.current = guestRecovery.validateAfterResume
   retryGuestRecoveryRef.current = guestRecovery.retryRecovery
 
+  const handleDomReadyWithRestoration = (): void => {
+    const pending = consumePendingBrowserPageProgressRestoration(browserTabId)
+    if (pending) {
+      restoreBrowserPageProgress(webview, pending)
+    }
+    handleDomReady()
+  }
+
   webview.addEventListener('did-attach', handleDidAttach)
-  webview.addEventListener('dom-ready', handleDomReady)
+  webview.addEventListener('dom-ready', handleDomReadyWithRestoration)
   webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
   webview.addEventListener('destroyed', handleGuestDestroyed)
   webview.addEventListener('focus', dismissAddressBarSuggestions)
@@ -166,9 +180,14 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('console-message', handleAnnotationViewportMessage)
 
   if (needsInitialNavigation) {
+    const saved = stageBrowserPageProgressRestoration(browserTabId)
+    const targetUrl =
+      saved?.url && saved.url !== ORCA_BROWSER_BLANK_URL && saved.url !== 'about:blank'
+        ? saved.url
+        : initialBrowserUrlRef.current
+    const restoredUrl = formatRestoredBrowserUrl(targetUrl, saved?.media)
     // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
-    const initialUrl =
-      normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+    const initialUrl = normalizeBrowserNavigationUrl(restoredUrl) ?? ORCA_BROWSER_BLANK_URL
     trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.src = initialUrl
@@ -182,7 +201,7 @@ export function bindBrowserPageWebviewListeners({
 
   return () => {
     webview.removeEventListener('did-attach', handleDidAttach)
-    webview.removeEventListener('dom-ready', handleDomReady)
+    webview.removeEventListener('dom-ready', handleDomReadyWithRestoration)
     webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
     webview.removeEventListener('destroyed', handleGuestDestroyed)
     webview.removeEventListener('focus', dismissAddressBarSuggestions)

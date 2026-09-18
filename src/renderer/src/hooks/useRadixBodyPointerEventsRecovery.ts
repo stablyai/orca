@@ -7,37 +7,59 @@ const ACTIVE_RADIX_MODAL_SELECTOR = [
   '[data-slot="sheet-overlay"][data-state="open"]'
 ].join(',')
 
-function hasActiveRadixModal(): boolean {
-  return document.querySelector(ACTIVE_RADIX_MODAL_SELECTOR) !== null
+function hasActiveRadixModal(doc: Document = document): boolean {
+  return doc.querySelector(ACTIVE_RADIX_MODAL_SELECTOR) !== null
 }
 
-function clearStaleBodyPointerEvents(): void {
-  if (document.body.style.pointerEvents !== 'none' || hasActiveRadixModal()) {
+function clearStaleBodyPointerEvents(doc: Document = document): void {
+  if (doc.body?.style?.pointerEvents !== 'none' || hasActiveRadixModal(doc)) {
     return
   }
-  document.body.style.pointerEvents = ''
+  doc.body.style.pointerEvents = ''
 }
 
-export function useRadixBodyPointerEventsRecovery(): void {
+export function useRadixBodyPointerEventsRecovery(targetDocument?: Document | null): void {
   useEffect(() => {
+    const doc =
+      targetDocument !== undefined
+        ? targetDocument
+        : typeof document !== 'undefined'
+          ? document
+          : null
+    if (!doc?.body) {
+      return
+    }
+    const win = doc.defaultView ?? (typeof window !== 'undefined' ? window : null)
     let frameId: number | null = null
 
     const scheduleRecovery = (): void => {
       if (frameId !== null) {
         return
       }
-      frameId = requestAnimationFrame(() => {
-        frameId = null
-        clearStaleBodyPointerEvents()
-      })
+      if (win && typeof win.requestAnimationFrame === 'function') {
+        frameId = win.requestAnimationFrame(() => {
+          frameId = null
+          clearStaleBodyPointerEvents(doc)
+        })
+      } else {
+        clearStaleBodyPointerEvents(doc)
+      }
     }
 
     scheduleRecovery()
 
+    if (typeof MutationObserver === 'undefined') {
+      return () => {
+        if (frameId !== null && win && typeof win.cancelAnimationFrame === 'function') {
+          win.cancelAnimationFrame(frameId)
+        }
+      }
+    }
+
     const observer = new MutationObserver(scheduleRecovery)
     // Why: Radix can leave body pointer-events locked after a modal unmounts.
     // Watch both body style and portal removal so the app recovers immediately.
-    observer.observe(document.body, {
+    observer.observe(doc.body, {
       attributes: true,
       attributeFilter: ['style'],
       childList: true,
@@ -46,9 +68,9 @@ export function useRadixBodyPointerEventsRecovery(): void {
 
     return () => {
       observer.disconnect()
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId)
+      if (frameId !== null && win && typeof win.cancelAnimationFrame === 'function') {
+        win.cancelAnimationFrame(frameId)
       }
     }
-  }, [])
+  }, [targetDocument])
 }

@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
+import RunningTerminalCloseDialog from '@/components/terminal-pane/RunningTerminalCloseDialog'
 import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/terminal-parked-tab-watchers'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
@@ -92,8 +93,20 @@ export function renderFloatingTerminalPanelSurface({
   saveDialogFile,
   handleFloatingSaveDialogCancel,
   handleFloatingSaveDialogDiscard,
-  handleFloatingSaveDialogSave
+  handleFloatingSaveDialogSave,
+  isDetached,
+  displays,
+  currentDisplayId,
+  dock,
+  detach,
+  moveToNextDisplay,
+  moveToDisplay,
+  identifyDisplays,
+  refreshCurrentDisplayId,
+  minimize
 }: ReturnType<typeof useFloatingTerminalPanelController>): React.JSX.Element {
+  const isSurfaceActive = isDetached || open
+
   return (
     // Why: sit above the z-40 notification cards so the floating workspace is
     // never buried behind them, but stay under the z-50 modal layer so its own
@@ -104,18 +117,30 @@ export function renderFloatingTerminalPanelSurface({
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
-      aria-hidden={!open}
+      aria-hidden={!isSurfaceActive}
       tabIndex={-1}
-      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
-      style={{
-        visibility: open ? 'visible' : 'hidden',
-        left: bounds.left,
-        top: bounds.top,
-        width: bounds.width,
-        height: bounds.height
-      }}
+      className={
+        isDetached
+          ? 'relative flex h-full w-full min-h-0 min-w-0 bg-background text-card-foreground outline-none'
+          : `fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`
+      }
+      style={
+        isDetached
+          ? {
+              visibility: 'visible',
+              width: '100vw',
+              height: '100vh'
+            }
+          : {
+              visibility: open ? 'visible' : 'hidden',
+              left: bounds.left,
+              top: bounds.top,
+              width: bounds.width,
+              height: bounds.height
+            }
+      }
       onMouseUp={(event) => {
-        if (maximized || !stagedBoundsRef.current) {
+        if (isDetached || maximized || !stagedBoundsRef.current) {
           return
         }
         const rect = event.currentTarget.getBoundingClientRect()
@@ -135,17 +160,23 @@ export function renderFloatingTerminalPanelSurface({
       }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
-      <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
+      <div
+        className={`relative flex h-full w-full min-h-0 flex-col overflow-hidden ${
+          isDetached ? 'bg-card' : 'rounded-lg border border-black/14 bg-card dark:border-white/14'
+        }`}
+      >
         <div
-          className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
+          className={`flex h-9 shrink-0 ${
+            isDetached ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+          } items-center border-b border-border bg-[var(--bg-titlebar,var(--card))]`}
           data-floating-terminal-shortcut-surface
-          onPointerDown={handleDragStart}
-          onPointerMove={handleDragMove}
-          onPointerUp={handleDragEnd}
-          onPointerCancel={handleDragEnd}
-          onDoubleClick={handleTitlebarDoubleClick}
+          onPointerDown={isDetached ? undefined : handleDragStart}
+          onPointerMove={isDetached ? undefined : handleDragMove}
+          onPointerUp={isDetached ? undefined : handleDragEnd}
+          onPointerCancel={isDetached ? undefined : handleDragEnd}
+          onDoubleClick={isDetached ? undefined : handleTitlebarDoubleClick}
         >
-          <FloatingWorkspaceTabDragContext enabled={open}>
+          <FloatingWorkspaceTabDragContext enabled={isSurfaceActive}>
             <TabBar
               tabs={terminalItems}
               activeTabId={activeTerminalId}
@@ -198,7 +229,21 @@ export function renderFloatingTerminalPanelSurface({
           <FloatingTerminalWindowControls
             maximized={maximized}
             onToggleMaximized={toggleMaximized}
-            onMinimize={() => onOpenChange(false)}
+            onMinimize={() => {
+              if (isDetached) {
+                minimize()
+              } else {
+                onOpenChange(false)
+              }
+            }}
+            isDetached={isDetached}
+            onToggleDetached={isDetached ? dock : detach}
+            displays={displays}
+            currentDisplayId={currentDisplayId}
+            onMoveToNextDisplay={moveToNextDisplay}
+            onMoveToDisplay={moveToDisplay}
+            onIdentifyDisplays={identifyDisplays}
+            onRefreshDisplays={refreshCurrentDisplayId}
           />
         </div>
 
@@ -230,12 +275,12 @@ export function renderFloatingTerminalPanelSurface({
                         cwd={cwd}
                         isActive={isActive}
                         // Why: the closed panel is only CSS-hidden, so gate
-                        // visibility on `open` too. This routes the floating
+                        // visibility on `isSurfaceActive` too. This routes the floating
                         // terminal through the standard hidden-terminal
                         // suspend/resume path: no live WebGL context (or glyph
                         // atlas to corrupt) while hidden, and the resume on
                         // reopen rebuilds the renderer from scratch.
-                        isVisible={isActive && open}
+                        isVisible={isActive && isSurfaceActive}
                         onPtyExit={(ptyId, exitCode) => {
                           if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
                             useAppStore.getState().markUnverifiedPtyLoss(tab.id)
@@ -263,7 +308,7 @@ export function renderFloatingTerminalPanelSurface({
                 className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
                 aria-hidden={!isActive}
               >
-                <FloatingBrowserSlot browserTab={tab} isActive={open && isActive} />
+                <FloatingBrowserSlot browserTab={tab} isActive={isSurfaceActive && isActive} />
               </div>
             )
           })}
@@ -275,7 +320,11 @@ export function renderFloatingTerminalPanelSurface({
                 className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
                 aria-hidden={!isActive}
               >
-                <EmulatorPane tab={tab} worktreeId={tab.worktreeId} isActive={open && isActive} />
+                <EmulatorPane
+                  tab={tab}
+                  worktreeId={tab.worktreeId}
+                  isActive={isSurfaceActive && isActive}
+                />
               </div>
             )
           })}
@@ -296,7 +345,7 @@ export function renderFloatingTerminalPanelSurface({
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
-                  isVisible={open}
+                  isVisible={isSurfaceActive}
                   markdownAnnotationsEnabled={false}
                 />
               </Suspense>
@@ -309,7 +358,7 @@ export function renderFloatingTerminalPanelSurface({
               onOpenMarkdown={openFloatingMarkdownTab}
               onNewBrowser={createFloatingBrowserTab}
               showNewBrowser={managedBrowserCreationEnabled}
-              onClose={() => onOpenChange(false)}
+              onClose={() => (isDetached ? minimize() : onOpenChange(false))}
               onFocusPanel={focusPanelForShortcuts}
               newTerminalShortcut={newTerminalShortcut}
               newBrowserShortcut={newBrowserShortcut}
@@ -325,7 +374,7 @@ export function renderFloatingTerminalPanelSurface({
         onDismiss: dismissOrchestrationSetup,
         onEnable: () => setOrchestrationDialogOpen(true)
       })}
-      {!maximized && (
+      {!isDetached && !maximized && (
         <FloatingTerminalResizeHandles
           bounds={bounds}
           onPreviewBounds={previewUserBounds}
@@ -344,6 +393,8 @@ export function renderFloatingTerminalPanelSurface({
         handleFloatingSaveDialogDiscard,
         handleFloatingSaveDialogSave
       })}
+      {/* Why: store-driven host in App.tsx lives in the main document — this one mounts the same request in popup.document.body while detached. */}
+      {isDetached ? <RunningTerminalCloseDialog scope="popout" /> : null}
     </div>
   )
 }

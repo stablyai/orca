@@ -18,8 +18,9 @@ import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
  * click after a reorder always activates.
  */
 /** Whether an in-page guest (a `<webview>`) currently owns the keyboard, which blurs the embedder. */
-function isGuestHoldingKeyboard(): boolean {
-  return typeof document !== 'undefined' && document.activeElement?.tagName === 'WEBVIEW'
+function isGuestHoldingKeyboard(doc?: Document | null): boolean {
+  const currentDoc = doc ?? (typeof document !== 'undefined' ? document : null)
+  return currentDoc?.activeElement?.tagName === 'WEBVIEW'
 }
 
 export function useTabStripPointerActivation({
@@ -55,17 +56,28 @@ export function useTabStripPointerActivation({
       cleanupRef.current?.()
       const startX = event.clientX
       const startY = event.clientY
+      const targetNode = event.target as Node | null
+      const targetWindow = targetNode?.ownerDocument?.defaultView ?? window
       const releaseTabStripPointerGesture = beginTabStripPointerGesture()
       // Why a press that starts under a guest forgives one window focus: an in-page <webview>
       // holding the keyboard leaves the embedder blurred, so this very press is what pulls focus
       // back and #7316's flush would eat the click that takes the reader out of a browser pane.
-      let pendingGuestFocusHandoff = isGuestHoldingKeyboard()
+      // Why one more when the press lands in an unfocused auxiliary window: that press also
+      // pulls focus (popout gain), and dual-window bookkeeping would flush the legit click.
+      const targetWindowSettled =
+        targetWindow === window ? true : (targetWindow.document.hasFocus?.() ?? true)
+      let pendingFocusForgiveness =
+        (targetWindowSettled ? 0 : 1) + (isGuestHoldingKeyboard(targetNode?.ownerDocument) ? 1 : 0)
 
       const cleanup = (): void => {
-        window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('pointercancel', onPointerCancel)
-        window.removeEventListener('blur', onPointerCancel)
-        window.removeEventListener('focus', onWindowFocus)
+        targetWindow.removeEventListener('pointerup', onPointerUp)
+        targetWindow.removeEventListener('pointercancel', onPointerCancel)
+        targetWindow.removeEventListener('blur', onPointerCancel)
+        targetWindow.removeEventListener('focus', onWindowFocus)
+        if (targetWindow !== window) {
+          window.removeEventListener('pointerup', onPointerUp)
+          window.removeEventListener('pointercancel', onPointerCancel)
+        }
         releaseTabStripPointerGesture()
         cleanupRef.current = null
       }
@@ -84,17 +96,22 @@ export function useTabStripPointerActivation({
         cleanup()
       }
       const onWindowFocus = (): void => {
-        if (pendingGuestFocusHandoff) {
-          pendingGuestFocusHandoff = false
+        if (pendingFocusForgiveness > 0) {
+          pendingFocusForgiveness -= 1
           return
         }
         cleanup()
       }
-
-      window.addEventListener('pointerup', onPointerUp)
-      window.addEventListener('pointercancel', onPointerCancel)
-      window.addEventListener('blur', onPointerCancel)
-      window.addEventListener('focus', onWindowFocus)
+      targetWindow.addEventListener('pointerup', onPointerUp)
+      targetWindow.addEventListener('pointercancel', onPointerCancel)
+      targetWindow.addEventListener('blur', onPointerCancel)
+      targetWindow.addEventListener('focus', onWindowFocus)
+      if (targetWindow !== window) {
+        // Why: release can land in either window, but focus/blur stay on the
+        // press window so the other window's bookkeeping never flushes the click.
+        window.addEventListener('pointerup', onPointerUp)
+        window.addEventListener('pointercancel', onPointerCancel)
+      }
       cleanupRef.current = cleanup
     },
     [disabled]

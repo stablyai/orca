@@ -4,12 +4,18 @@ import { join } from 'node:path'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { getBrowserClientHostId } from '../browser/browser-client-host-id'
+import { restoreDocPreviewFailureSink } from '../browser/doc-preview-failure-notice'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import type { Store } from '../persistence'
 import { closeDashboardPopout } from './dashboard-popout-window'
+import {
+  closeFloatingWorkspacePopout,
+  closeIdentifyWindows,
+  setFloatingWorkspacePopoutWindow
+} from './floating-workspace-display-manager'
 import {
   installMainWindowCloseLifecycle,
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
@@ -28,7 +34,10 @@ import {
   TRAFFIC_LIGHT_RADIUS,
   TRAFFIC_LIGHT_X
 } from './main-window-visual-lifecycle'
-import { installMainWindowWebviewSecurity } from './main-window-webview-security'
+import {
+  installFloatingWorkspaceWebviewSecurity,
+  installMainWindowWebviewSecurity
+} from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -202,8 +211,28 @@ export function createMainWindow(
     store
   })
 
+  mainWindow.webContents.on('did-create-window', (childWindow, details) => {
+    if (
+      details.frameName === 'orca-floating-workspace' &&
+      details.url === 'about:blank#floating-workspace'
+    ) {
+      setFloatingWorkspacePopoutWindow(childWindow)
+      installFloatingWorkspaceWebviewSecurity(childWindow)
+      childWindow.on('closed', () => {
+        setFloatingWorkspacePopoutWindow(null)
+        // Why: a floating doc preview overwrites the shared failure sink; hand it back so main-window failures are not dropped.
+        restoreDocPreviewFailureSink(
+          childWindow.webContents,
+          mainWindow.isDestroyed() ? null : mainWindow.webContents
+        )
+      })
+    }
+  })
+
   mainWindow.on('closed', () => {
     closeDashboardPopout()
+    closeFloatingWorkspacePopout()
+    closeIdentifyWindows()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
     focus.dispose()

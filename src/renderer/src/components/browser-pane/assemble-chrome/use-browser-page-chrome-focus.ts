@@ -69,7 +69,8 @@ export function useBrowserPageChromeFocus({
       } else {
         input.select()
       }
-      return document.activeElement === input
+      const targetDoc = input.ownerDocument ?? document
+      return targetDoc.activeElement === input
     },
     [addressBarInputRef, guestFocus]
   )
@@ -106,7 +107,9 @@ export function useBrowserPageChromeFocus({
         }
         addressBarFocusGrabRef.current = null
         cancelled = true
-        window.cancelAnimationFrame(frameId)
+        ;(addressBarInputRef.current?.ownerDocument?.defaultView ?? window).cancelAnimationFrame(
+          frameId
+        )
         keepAddressBarFocusRef.current = false
       }
       const focusAddressBar = (): void => {
@@ -116,12 +119,15 @@ export function useBrowserPageChromeFocus({
         // Why later frames skip a bar that is already ours: the retries exist to fight the guest
         // taking focus back, and re-running the whole take on a bar nobody stole drags the caret
         // off whatever the user has typed since — for the ~100ms the frames span.
-        if (attempts === 0 || document.activeElement !== addressBarInputRef.current) {
+        const currentDoc = addressBarInputRef.current?.ownerDocument ?? document
+        if (attempts === 0 || currentDoc.activeElement !== addressBarInputRef.current) {
           focusAddressBarNow(selection)
         }
         attempts += 1
         if (attempts < ADDRESS_BAR_FOCUS_FRAMES) {
-          frameId = window.requestAnimationFrame(focusAddressBar)
+          frameId = (
+            addressBarInputRef.current?.ownerDocument?.defaultView ?? window
+          ).requestAnimationFrame(focusAddressBar)
         } else {
           addressBarFocusGrabRef.current = null
           keepAddressBarFocusRef.current = false
@@ -183,9 +189,12 @@ export function useBrowserPageChromeFocus({
       event.stopImmediatePropagation()
       focusAddressBarNow()
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
+    // Why: a detached floating workspace portals the pane into the popout window,
+    // whose keydown events never reach the main window's listener.
+    const targetWindow = addressBarInputRef.current?.ownerDocument?.defaultView ?? window
+    targetWindow.addEventListener('keydown', handleKeyDown, true)
+    return () => targetWindow.removeEventListener('keydown', handleKeyDown, true)
+  }, [addressBarInputRef, chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
 
   useEffect(() => {
     if (!isActive) {

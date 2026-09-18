@@ -34,6 +34,8 @@ type FloatingTerminalPanelShortcutsInput = Pick<
   FloatingTerminalPanelMaximize & {
     open: boolean
     onOpenChange: (open: boolean) => void
+    isDetached?: boolean
+    minimize?: () => void
   }
 
 export function useFloatingTerminalPanelShortcuts({
@@ -51,7 +53,9 @@ export function useFloatingTerminalPanelShortcuts({
   openFloatingMarkdownTab,
   toggleMaximized,
   open,
-  onOpenChange
+  onOpenChange,
+  isDetached,
+  minimize
 }: FloatingTerminalPanelShortcutsInput) {
   const closeActiveFloatingTerminalPane = useCallback(() => {
     const handle = activeTerminalId ? terminalPaneRegistry.getHandle(activeTerminalId) : null
@@ -151,6 +155,8 @@ export function useFloatingTerminalPanelShortcuts({
         consume()
         if (activeClosableTab) {
           closeFloatingItemConfirmed(activeClosableTab.id)
+        } else if (isDetached && minimize) {
+          minimize()
         } else {
           onOpenChange(false)
         }
@@ -174,7 +180,12 @@ export function useFloatingTerminalPanelShortcuts({
       }
       consume()
       if (resolution.action === 'floatingWorkspace.maximize') {
-        toggleMaximized()
+        // Why: maximize button hidden when detached — avoid stale state.
+        if (!isDetached) {
+          toggleMaximized()
+        }
+      } else if (isDetached && minimize) {
+        minimize()
       } else {
         onOpenChange(false)
       }
@@ -189,6 +200,8 @@ export function useFloatingTerminalPanelShortcuts({
       createFloatingBrowserTab,
       createFloatingMarkdownTab,
       createFloatingTerminalTab,
+      isDetached,
+      minimize,
       onOpenChange,
       openFloatingMarkdownTab,
       toggleMaximized,
@@ -225,10 +238,9 @@ export function useFloatingTerminalPanelShortcuts({
     handleFloatingPanelShortcutAction,
     visibleFloatingTabOrder
   ])
-
   const handleShortcutSurfaceKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (!open || event.defaultPrevented || event.repeat) {
+      if (!(open || isDetached) || event.defaultPrevented || event.repeat) {
         return
       }
       const target = event.target
@@ -246,7 +258,7 @@ export function useFloatingTerminalPanelShortcuts({
       }
       applyFloatingPanelShortcut(resolution, nativeEvent, () => event.preventDefault())
     },
-    [applyFloatingPanelShortcut, open, panelRef, resolveFloatingPanelShortcut]
+    [applyFloatingPanelShortcut, isDetached, open, panelRef, resolveFloatingPanelShortcut]
   )
 
   return { floatingShortcutListenersRef, handleShortcutSurfaceKeyDown }

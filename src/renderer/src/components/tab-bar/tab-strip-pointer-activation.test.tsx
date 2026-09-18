@@ -157,4 +157,32 @@ describe('useTabStripPointerActivation', () => {
     expect(onActivate).not.toHaveBeenCalled()
     guest.remove()
   })
+
+  it('activates when pointerdown and pointerup happen inside an auxiliary popout window', () => {
+    const onActivate = vi.fn()
+    const iframe = document.createElement('iframe')
+    document.body.append(iframe)
+    const childWin = iframe.contentWindow!
+    const targetEl = childWin.document.createElement('div')
+    childWin.document.body.append(targetEl)
+
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+    act(() =>
+      result.current.onPointerDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        target: targetEl
+      } as unknown as React.PointerEvent)
+    )
+
+    act(() => {
+      childWin.dispatchEvent(
+        new PointerEvent('pointerup', { clientX: 12, clientY: 11, bubbles: true })
+      )
+    })
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    iframe.remove()
+  })
 })

@@ -10,15 +10,29 @@ import { installPrivilegedWindowNavigationPolicy } from './privileged-window-nav
 describe('privileged window navigation policy', () => {
   function createFixture(currentUrl: string) {
     const handlers = new Map<string, (...args: unknown[]) => void>()
+    let openHandler:
+      | ((details: { url: string; frameName?: string }) => {
+          action: string
+          overrideBrowserWindowOptions?: Record<string, unknown>
+        })
+      | null = null
     const contents = {
       getURL: () => currentUrl,
-      setWindowOpenHandler: vi.fn(),
+      setWindowOpenHandler: vi.fn((handler) => {
+        openHandler = handler
+      }),
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         handlers.set(event, handler)
       })
     }
     installPrivilegedWindowNavigationPolicy(contents as never)
     return {
+      openWindow(details: { url: string; frameName?: string }) {
+        if (!openHandler) {
+          throw new Error('no window open handler was registered')
+        }
+        return openHandler(details)
+      },
       willNavigate(url: string) {
         const event = { preventDefault: vi.fn() }
         const handler = handlers.get('will-navigate')
@@ -92,5 +106,64 @@ describe('privileged window navigation policy', () => {
 
     expect(event.preventDefault).toHaveBeenCalled()
     expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('allows orca-floating-workspace popout window with configured options', () => {
+    const appUrl =
+      'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+    const fixture = createFixture(appUrl)
+    const result = fixture.openWindow({
+      url: 'about:blank#floating-workspace',
+      frameName: 'orca-floating-workspace'
+    })
+
+    expect(result.action).toBe('allow')
+    expect(result.overrideBrowserWindowOptions).toMatchObject({
+      title: 'Orca Floating Workspace',
+      parent: null,
+      width: 960,
+      height: 640,
+      show: false,
+      webPreferences: {
+        webviewTag: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('denies the magic frame name on any other URL', () => {
+    const appUrl =
+      'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+    const fixture = createFixture(appUrl)
+    const result = fixture.openWindow({
+      url: 'about:blank',
+      frameName: 'orca-floating-workspace'
+    })
+
+    expect(result.action).toBe('deny')
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('denies the popout URL without the magic frame name', () => {
+    const appUrl =
+      'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+    const fixture = createFixture(appUrl)
+    const result = fixture.openWindow({ url: 'about:blank#floating-workspace' })
+
+    expect(result.action).toBe('deny')
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('denies external URL in setWindowOpenHandler and calls shell.openExternal', () => {
+    const appUrl =
+      'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+    const fixture = createFixture(appUrl)
+    const result = fixture.openWindow({ url: 'https://github.com' })
+
+    expect(result.action).toBe('deny')
+    expect(openExternal).toHaveBeenCalledWith('https://github.com/')
   })
 })

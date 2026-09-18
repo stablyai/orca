@@ -1,7 +1,8 @@
 import * as React from 'react'
-import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
+import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 
+import { useResolvedPortalContainer } from '@/components/ui/portal-container-context'
 import { cn } from '@/lib/utils'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -9,9 +10,18 @@ function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrim
 }
 
 function DropdownMenuPortal({
+  container,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
-  return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
+  const resolvedContainer = useResolvedPortalContainer(container)
+
+  return (
+    <DropdownMenuPrimitive.Portal
+      data-slot="dropdown-menu-portal"
+      container={resolvedContainer}
+      {...props}
+    />
+  )
 }
 
 function DropdownMenuTrigger({
@@ -24,10 +34,15 @@ function DropdownMenuContent({
   className,
   sideOffset = 4,
   style,
+  portalContainer,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  portalContainer?: HTMLElement | null
+}) {
+  const resolvedContainer = useResolvedPortalContainer(portalContainer)
+
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal container={resolvedContainer}>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
@@ -204,10 +219,15 @@ function DropdownMenuSubTrigger({
 function DropdownMenuSubContent({
   className,
   style,
+  portalContainer,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & {
+  portalContainer?: HTMLElement | null
+}) {
+  const resolvedContainer = useResolvedPortalContainer(portalContainer)
+
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal container={resolvedContainer}>
       <DropdownMenuPrimitive.SubContent
         data-slot="dropdown-menu-sub-content"
         className={cn(

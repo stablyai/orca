@@ -32,7 +32,8 @@ export function useWebviewGuestFocus(
           // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
           return false
         }
-        return document.activeElement === webview
+        const targetDoc = webview.ownerDocument ?? document
+        return targetDoc.activeElement === webview
       }
     }),
     [webviewRef]
@@ -58,7 +59,8 @@ export function useElementGuestFocus(
           return false
         }
         element.focus()
-        return document.activeElement === element
+        const targetDoc = element.ownerDocument ?? document
+        return targetDoc.activeElement === element
       }
     }),
     [fallbackRef, primaryRef]

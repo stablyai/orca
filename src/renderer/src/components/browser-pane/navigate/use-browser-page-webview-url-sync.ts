@@ -4,6 +4,10 @@ import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
+import {
+  isEquivalentBrowserPageUrl,
+  isTimestampParameterHost
+} from '../../../../../shared/browser-url-equivalence'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import {
   applyBrowserPageViewportLayout,
@@ -13,6 +17,35 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
+
+// Why: the equivalence check strips playback timestamps on both sides, so an
+// explicit timestamped target (user seek, timestamped link) would read as a
+// match and never navigate. Only strip when the target carries no timestamp.
+function hasExplicitTimestampMismatch(target: string, candidates: (string | null)[]): boolean {
+  let targetTime: string | null = null
+  try {
+    const parsed = new URL(target)
+    if (!isTimestampParameterHost(parsed.hostname)) {
+      return false
+    }
+    targetTime = parsed.searchParams.get('t')
+  } catch {
+    return false
+  }
+  if (!targetTime) {
+    return false
+  }
+  return !candidates.some((candidate) => {
+    if (!candidate) {
+      return false
+    }
+    try {
+      return new URL(candidate).searchParams.get('t') === targetTime
+    } catch {
+      return false
+    }
+  })
+}
 
 export function useBrowserPageWebviewUrlSync({
   browserTabId,
@@ -93,11 +126,20 @@ export function useBrowserPageWebviewUrlSync({
     }
     const normalizedLiveUrl = liveUrl ? (normalizeBrowserNavigationUrl(liveUrl) ?? liveUrl) : null
     const declaredSrc = webview.getAttribute('src')
-    if (
-      normalizedLiveUrl !== normalizedUrl &&
-      webview.src !== normalizedUrl &&
-      declaredSrc !== normalizedUrl
-    ) {
+    const matchesLive =
+      normalizedLiveUrl === normalizedUrl ||
+      isEquivalentBrowserPageUrl(normalizedLiveUrl, normalizedUrl)
+    const matchesSrc =
+      webview.src === normalizedUrl || isEquivalentBrowserPageUrl(webview.src, normalizedUrl)
+    const matchesDeclared =
+      declaredSrc === normalizedUrl || isEquivalentBrowserPageUrl(declaredSrc, normalizedUrl)
+    const timestampedTargetMismatch = hasExplicitTimestampMismatch(normalizedUrl, [
+      normalizedLiveUrl,
+      webview.src,
+      declaredSrc
+    ])
+
+    if ((!matchesLive && !matchesSrc && !matchesDeclared) || timestampedTargetMismatch) {
       // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
       trackNextLoadingEventRef.current = normalizedUrl !== ORCA_BROWSER_BLANK_URL
       lastKnownWebviewUrlRef.current = normalizedUrl
