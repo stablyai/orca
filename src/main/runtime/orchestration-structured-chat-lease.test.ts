@@ -322,6 +322,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
 
   it('stops a prompt when Structured Chat takes the lease between paste chunks', async () => {
     await establishOwner('tui', 'spawn-tui', 1)
+    runtime.onPtyData(WORKER.ptyId, '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
     let writesStarted = 0
 
     await expect(
