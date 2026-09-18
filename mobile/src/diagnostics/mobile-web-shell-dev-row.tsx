@@ -18,6 +18,7 @@ import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles
 export function MobileWebShellDevRow() {
   const router = useRouter()
   const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [saving, setSaving] = useState(false)
   const [hostId, setHostId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -33,7 +34,9 @@ export function MobileWebShellDevRow() {
     }
   }, [])
 
-  const openable = enabled === true && hostId !== null
+  // Not while a write is in flight: the route reads the key back from storage, so a button that
+  // opened on the switch's position would mount a shell the persisted flag does not permit yet.
+  const openable = enabled === true && hostId !== null && !saving
   return (
     <View>
       <View style={styles.checkRow}>
@@ -41,10 +44,19 @@ export function MobileWebShellDevRow() {
         <Switch
           testID="mobile-web-shell-flag"
           value={enabled === true}
-          disabled={enabled === null}
+          disabled={enabled === null || saving}
           onValueChange={(next) => {
-            setEnabled(next)
+            setSaving(true)
             void saveMobileWebShellEnabled(next)
+              .then(() => {
+                setEnabled(next)
+              })
+              // A write that never landed leaves the previous position showing, because that is
+              // still what the route will read.
+              .catch(() => undefined)
+              .finally(() => {
+                setSaving(false)
+              })
           }}
         />
       </View>
