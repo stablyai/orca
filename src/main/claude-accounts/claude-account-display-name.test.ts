@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { getClaudeManagedAccountLabel } from '../../shared/claude-managed-account-label'
 import { ClaudeAccountService } from './service'
@@ -35,9 +35,11 @@ function createService(accounts: ClaudeManagedAccount[]) {
     activeClaudeManagedAccountId: null,
     activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
   }
+  let updateCount = 0
   const store = {
     getSettings: () => settings,
     updateSettings: (updates: Partial<ClaudeAccountSettingsSlice>) => {
+      updateCount += 1
       settings = { ...settings, ...updates }
       return settings
     }
@@ -59,10 +61,14 @@ function createService(accounts: ClaudeManagedAccount[]) {
       }
     } as never
   )
-  return { service, getSettings: () => settings }
+  return { service, getSettings: () => settings, getUpdateCount: () => updateCount }
 }
 
 describe('Claude managed account displayName persistence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('round-trips a custom name through the existing account store', async () => {
     const { service, getSettings } = createService([
       makeAccount(),
@@ -92,6 +98,56 @@ describe('Claude managed account displayName persistence', () => {
     await service.updateDisplayName('account-1', '   ')
     expect(getSettings().claudeManagedAccounts[0]?.displayName).toBe(null)
     expect(getSettings().claudeManagedAccounts[0]?.email).toBe('me@example.com')
+  })
+
+  it('does not persist or reorder when the normalized name is unchanged', async () => {
+    const { service, getSettings, getUpdateCount } = createService([
+      makeAccount({ displayName: 'Work org', updatedAt: 10 }),
+      makeAccount({
+        id: 'account-2',
+        managedAuthPath: '/tmp/auth-2',
+        organizationUuid: 'org-personal',
+        organizationName: 'Personal',
+        updatedAt: 20
+      })
+    ])
+
+    const listed = await service.updateDisplayName('account-1', '  Work org  ')
+    const stored = getSettings().claudeManagedAccounts.find((account) => account.id === 'account-1')
+
+    expect(getUpdateCount()).toBe(0)
+    expect(stored?.displayName).toBe('Work org')
+    expect(stored?.updatedAt).toBe(10)
+    expect(listed.accounts.map((account) => account.id)).toEqual(['account-2', 'account-1'])
+  })
+
+  it('does not persist when a blank name is already unset', async () => {
+    const { service, getSettings, getUpdateCount } = createService([makeAccount({ updatedAt: 10 })])
+
+    await service.updateDisplayName('account-1', '   ')
+    expect(getUpdateCount()).toBe(0)
+    expect(getSettings().claudeManagedAccounts[0]?.displayName).toBeUndefined()
+    expect(getSettings().claudeManagedAccounts[0]?.updatedAt).toBe(10)
+  })
+
+  it('reorders by updatedAt only when the display name actually changes', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(50)
+    const { service, getUpdateCount } = createService([
+      makeAccount({ displayName: 'Work org', updatedAt: 10 }),
+      makeAccount({
+        id: 'account-2',
+        managedAuthPath: '/tmp/auth-2',
+        organizationUuid: 'org-personal',
+        organizationName: 'Personal',
+        updatedAt: 20
+      })
+    ])
+
+    const listed = await service.updateDisplayName('account-1', 'Desk')
+    expect(getUpdateCount()).toBe(1)
+    expect(listed.accounts.map((account) => account.id)).toEqual(['account-1', 'account-2'])
+    expect(listed.accounts[0]?.displayName).toBe('Desk')
+    expect(listed.accounts[0]?.updatedAt).toBe(50)
   })
 
   it('keeps same-email accounts distinguishable after persistence', async () => {

@@ -47,6 +47,7 @@ import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
+  ClaudeAccountAction,
   ProviderAccountAction,
   RemoveAccountTarget
 } from './accounts-pane-types'
@@ -146,7 +147,7 @@ export function AccountsPane({
   const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
-  const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
+  const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)

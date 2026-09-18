@@ -38,6 +38,10 @@ export type ProviderAccountAction =
   | `remove:${string}`
   | `select:${string}`
 
+export type CodexAccountAction = ProviderAccountAction
+
+export type ClaudeAccountAction = CodexAccountAction | `rename:${string}`
+
 export type RemoveAccountTarget = {
   id: string
   runtime: ProviderAccountRuntimeView
@@ -55,7 +59,7 @@ export type CodexAccountActionRunner = (
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (
-  action: ProviderAccountAction,
+  action: ClaudeAccountAction,
   operation: () => Promise<ClaudeRateLimitAccountsState>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
@@ -83,7 +87,7 @@ export type AccountsPaneSectionModel = {
   accountRuntimeUnavailable: boolean
   accountVisibilityOptions: ProviderAccountVisibilityOptions
   claudeAccounts: ClaudeRateLimitAccountsState
-  claudeAction: ProviderAccountAction
+  claudeAction: ClaudeAccountAction
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
