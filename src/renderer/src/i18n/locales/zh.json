@@ -754,7 +754,8 @@
         "ef223fbb6b": "有设备尝试连接但未配对",
         "11992d0337": "如果这是您的手机或其他 Orca 客户端，请从设置 → 移动端重新配对。",
         "6573cfe955": "打开移动端设置",
-        "unresolvedTerminalWorktreeOwner": "由于无法解析工作树所有者，终端创建不可用"
+        "unresolvedTerminalWorktreeOwner": "由于无法解析工作树所有者，终端创建不可用",
+        "unrenderableTerminalWorktreeSurface": "由于此窗口没有该工作树的界面，终端创建不可用"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "仍在完善中的新功能。尝试一下。",
