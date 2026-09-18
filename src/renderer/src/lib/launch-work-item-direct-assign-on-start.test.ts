@@ -181,7 +181,7 @@ const runtimeSourceContext = {
   kind: 'task-source' as const,
   provider: 'github' as const,
   projectId: 'repo-1',
-  hostId: 'runtime:env-1',
+  hostId: 'runtime:env-1' as const,
   repoId: 'repo-1'
 }
 
