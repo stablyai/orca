@@ -13,6 +13,7 @@ import {
   isJetBrainsConsoleShim,
   resolveColocatedJetBrainsGuiExecutable
 } from './jetbrains-windows-gui-launchers'
+import { resolveKnownVsCodeCliPath } from './vscode-cli-install-paths'
 import { getCmdExePath, getSpawnArgsForWindows } from './win32-utils'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
@@ -134,11 +135,14 @@ function resolveSimpleEditorCommand(
   platform: NodeJS.Platform,
   fileExists: (path: string) => boolean
 ): string {
-  return preferJetBrainsGuiExecutable(
-    resolveCliCommand(command, { platform }),
-    platform,
-    fileExists
-  )
+  const fromPath = resolveCliCommand(command, { platform })
+  // Why: GUI-launched Electron often lacks shell PATH; VS Code CLI still lives
+  // under the standard app install even when `code` is not on PATH.
+  // Use the post-resolution bare name so mocks/custom renames are not remapped.
+  const resolved = /[\\/]/.test(fromPath)
+    ? fromPath
+    : (resolveKnownVsCodeCliPath(fromPath, fileExists, { platform }) ?? fromPath)
+  return preferJetBrainsGuiExecutable(resolved, platform, fileExists)
 }
 
 function buildExecutableLaunchSpec(
@@ -232,7 +236,12 @@ export function resolveVsCodeRemoteSshLaunchSpec(
     if (isCompoundShellCommand(trimmed)) {
       return null
     }
-    editorCommand = resolveCliCommand(trimmed, { platform })
+    const fromPath = resolveCliCommand(trimmed, { platform })
+    // Why: same GUI PATH gap as local Open in VS Code — Remote-SSH needs the
+    // absolute CLI path or spawn fails with ENOENT before --remote runs.
+    editorCommand = /[\\/]/.test(fromPath)
+      ? fromPath
+      : (resolveKnownVsCodeCliPath(fromPath, fileExists, { platform }) ?? fromPath)
   }
 
   if (!isVsCodeLauncherExecutable(editorCommand)) {

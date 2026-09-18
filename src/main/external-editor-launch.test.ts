@@ -32,6 +32,23 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
   })
 
+  it('falls back to the macOS Application CLI when PATH misses code', () => {
+    const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+    resolveCliCommandMock.mockReturnValueOnce('code')
+
+    expect(
+      resolveExternalEditorLaunchSpec('code', '/tmp/workspace', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === macCli
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: macCli,
+      spawnArgs: ['/tmp/workspace']
+    })
+  })
+
   it('prefers the JetBrains *64.exe colocated with the resolved idea.cmd on Windows', () => {
     const installBin = 'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin'
     resolveCliCommandMock.mockImplementation((command: string) =>
@@ -443,13 +460,32 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
   it.each(['code', 'code-insiders'])('builds exact Remote-SSH arguments for %s', (command) => {
     expect(
       resolveVsCodeRemoteSshLaunchSpec(command, '/home/Ada Lovelace/project', 'builder', {
-        platform: 'linux'
+        platform: 'linux',
+        // Why: keep bare names when no known install is present (Linux CI PATH).
+        fileExists: () => false
       })
     ).toEqual({
       kind: 'executable',
       hideWindowsConsole: true,
       spawnCmd: command,
       spawnArgs: ['--remote', 'ssh-remote+builder', '/home/Ada Lovelace/project']
+    })
+  })
+
+  it('falls back to the macOS Application CLI when PATH misses code', () => {
+    const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+    resolveCliCommandMock.mockReturnValueOnce('code')
+
+    expect(
+      resolveVsCodeRemoteSshLaunchSpec('code', '/home/ada/project', 'user@host', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === macCli
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: macCli,
+      spawnArgs: ['--remote', 'ssh-remote+user@host', '/home/ada/project']
     })
   })
 
