@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import { getRenderedWorktreesInSidebarOrder } from '../../worktree-sidebar-row-preference'
@@ -19,8 +23,11 @@ import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
 }) {
-  const { sectionRows, pinnedDisplayPolicy } = args
+  const { sectionRows, pinnedDisplayPolicy, activeWorktreeId, activeWorkspaceExecutionHostId } =
+    args
   // Why: derive order from the built rows, not the flat worktrees array, so Cmd+1–9 match visual positions when grouping reorders cards.
   const renderedWorktrees = useMemo(
     () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
@@ -75,6 +82,88 @@ export function useSidebarWorktreeSelection(args: {
       return Array.from(selected.values())
     }, [renderedWorktrees, selectedWorktreeIds])
   )
+
+  // Resolved in the vocabulary the rows themselves carry, which is not always the one the
+  // store names: activation resolves a host even for a local row, while withRepoHostOwnership
+  // leaves that row unqualified. Composing the resolved host would publish an identity no row
+  // has, and the render-phase prune would then drop the selection outright.
+  const activeIdentity = useMemo(() => {
+    if (!activeWorktreeId) {
+      return null
+    }
+    if (activeWorkspaceExecutionHostId) {
+      // Only when a row actually carries it — that is what disambiguates one id across hosts.
+      const composed = composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
+      if (renderedWorktreeIdentities.includes(composed)) {
+        return composed
+      }
+    }
+    const activeWorktree = renderedWorktrees.find((worktree) => worktree.id === activeWorktreeId)
+    return activeWorktree ? getWorktreeHostIdentity(activeWorktree) : null
+  }, [
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId,
+    renderedWorktreeIdentities,
+    renderedWorktrees
+  ])
+
+  // Keyed on what the store activated rather than on the resolved identity: the identity also
+  // goes null when a filter or a collapsed group hides the active row, and a null there must
+  // not read as "nothing has been activated yet".
+  const activationKey = activeWorktreeId
+    ? composeWorktreeHostIdentity(activeWorkspaceExecutionHostId ?? undefined, activeWorktreeId)
+    : null
+  // What the store last activated, and which identity was last written into the selection.
+  // The flag is only meaningful once an identity has been adopted: it carries a move that
+  // could not be written yet, which comparing those two values cannot express.
+  const observedActivation = useRef<string | null | undefined>(undefined)
+  const publishedIdentity = useRef<string | null>(null)
+  const moveAwaitingPublish = useRef(false)
+  // Why this exists: only mouse gestures ever wrote the selection, so activating a workspace
+  // any other way (keyboard cycling, Cmd+digit, the palette, history) left the ring on the
+  // card the user last clicked. A plain click activates *and* replaces the selection; every
+  // other activation now agrees with it.
+  //
+  // Why a layout effect: an effect after paint would show the previous card's ring for a frame.
+  useLayoutEffect(() => {
+    // The store starts with no active workspace and hydration restores one after this hook
+    // mounts, so nothing before the first adopted identity counts as a move. No flag check
+    // here: the flag is only ever set below, under `!inStartup`, so it cannot be true while
+    // no identity has been adopted.
+    const inStartup = publishedIdentity.current === null
+    const previousActivation = observedActivation.current
+    observedActivation.current = activationKey
+    if (!inStartup && previousActivation !== undefined && previousActivation !== activationKey) {
+      // Remembered even when it cannot be published yet: a round trip through a workspace whose
+      // row is hidden ends on the identity it started from, and only this flag still knows the
+      // user moved twice.
+      moveAwaitingPublish.current = true
+    }
+    if (!activeIdentity) {
+      // A filter or a collapsed group is hiding the active row. The move keeps waiting.
+      return
+    }
+    if (inStartup) {
+      // Adopt what hydration restored without selecting it, so Cmd+click is not armed from a
+      // card nobody picked.
+      publishedIdentity.current = activeIdentity
+      return
+    }
+    // The identity is compared too: discovery backfill can re-qualify a rendered row under an
+    // unchanged activation, and the published identity would otherwise be pruned and lost.
+    if (!moveAwaitingPublish.current && publishedIdentity.current === activeIdentity) {
+      return
+    }
+    moveAwaitingPublish.current = false
+    publishedIdentity.current = activeIdentity
+    // Identity-preserving when it already matches, so a plain click does not re-render twice.
+    setSelectedWorktreeIds((previousSelection) =>
+      previousSelection.size === 1 && previousSelection.has(activeIdentity)
+        ? previousSelection
+        : new Set([activeIdentity])
+    )
+    setSelectionAnchorId(activeIdentity)
+  }, [activationKey, activeIdentity])
 
   useEffect(() => {
     if (selectedWorktreeIds.size === 0) {
