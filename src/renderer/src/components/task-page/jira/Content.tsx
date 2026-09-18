@@ -1,5 +1,14 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { LoaderCircle } from 'lucide-react'
+import { Columns3, LoaderCircle } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { JIRA_LIST_COLUMNS, getJiraListColumnLabel } from '@/components/jira-list-columns'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -35,12 +44,17 @@ export function TaskPageJiraContent({
     jiraOrderBy,
     jiraOrderDirection,
     handleJiraSort,
+    jiraColumnIds,
+    jiraColumns,
+    jiraGridTemplate,
+    toggleJiraColumn,
     displayedJiraIssues,
     displayedJiraStatusOrder,
     sortedJiraIssues,
     setJiraConnectOpen,
     handleUseJiraItem
   } = model
+  const columnsLabel = translate('auto.components.TaskPage.jiraColumnsPicker', 'Columns')
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (
       <div className="mt-4 flex items-center justify-center py-14">
@@ -73,12 +87,43 @@ export function TaskPageJiraContent({
           <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
             {translate('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
           </div>
-          <div className="shrink-0 text-[11px] text-muted-foreground">
-            {displayedJiraIssues.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+          <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+            <span>
+              {displayedJiraIssues.length}{' '}
+              {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+            </span>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-xs" aria-label={columnsLabel}>
+                      <Columns3 className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {columnsLabel}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuLabel>{columnsLabel}</DropdownMenuLabel>
+                {JIRA_LIST_COLUMNS.filter((column) => !column.locked).map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    checked={jiraColumnIds.has(column.id)}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={() => toggleJiraColumn(column.id)}
+                  >
+                    {getJiraListColumnLabel(column.id)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
         <TaskPageJiraSortControls
+          columns={jiraColumns}
           direction={jiraOrderDirection}
           onSort={handleJiraSort}
           orderBy={jiraOrderBy}
@@ -133,6 +178,8 @@ export function TaskPageJiraContent({
           ) : null}
 
           <TaskPageJiraIssueList
+            columns={jiraColumns}
+            gridTemplate={jiraGridTemplate}
             formatUpdatedAt={formatRelativeTime}
             getStatusTone={getJiraStatusTone}
             issues={sortedJiraIssues}

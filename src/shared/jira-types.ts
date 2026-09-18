@@ -112,6 +112,12 @@ export type JiraIssue = {
   assignee?: JiraUser
   reporter?: JiraUser
   priority?: JiraPriority
+  /** Parent issue (epic for stories, parent story for subtasks). */
+  parent?: { key: string; title: string; issueTypeName?: string }
+  sprint?: string
+  storyPoints?: number
+  originalEstimateSeconds?: number
+  remainingEstimateSeconds?: number
   updatedAt: string
   createdAt: string
 }

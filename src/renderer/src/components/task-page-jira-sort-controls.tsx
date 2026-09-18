@@ -10,42 +10,30 @@ import {
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
 import type { JiraIssueSortColumn, JiraIssueSortDirection } from './jira-issue-sorter'
-
-type JiraSortColumn = {
-  id: JiraIssueSortColumn
-  label: string
-  className?: string
-}
+import {
+  getJiraListColumnLabel,
+  jiraListGridTemplate,
+  type JiraListColumn
+} from './jira-list-columns'
 
 type TaskPageJiraSortControlsProps = {
+  columns: readonly JiraListColumn[]
   direction: JiraIssueSortDirection
   onSort: (column: JiraIssueSortColumn) => void
   orderBy: JiraIssueSortColumn
 }
 
-function getJiraSortColumns(): JiraSortColumn[] {
-  return [
-    { id: 'key', label: translate('auto.components.TaskPage.37e7ee311e', 'Key') },
-    { id: 'title', label: translate('auto.components.TaskPage.b1eaa18ace', 'Issue') },
-    { id: 'status', label: translate('auto.components.TaskPage.154b0fa623', 'Status') },
-    { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-    {
-      id: 'assignee',
-      label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee'),
-      className: 'max-lg:!hidden'
-    },
-    { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') }
-  ]
-}
-
 export function TaskPageJiraSortControls({
+  columns: visibleColumns,
   direction,
   onSort,
   orderBy
 }: TaskPageJiraSortControlsProps): React.JSX.Element {
-  const columns = getJiraSortColumns()
+  const columns = visibleColumns.map((column) => ({
+    id: column.id,
+    label: getJiraListColumnLabel(column.id)
+  }))
   const directionLabel =
     direction === 'asc'
       ? translate('auto.components.TaskPage.jiraSortAscending', 'ascending')
@@ -63,7 +51,10 @@ export function TaskPageJiraSortControls({
 
   return (
     <>
-      <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px_64px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
+      <div
+        className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden"
+        style={{ gridTemplateColumns: jiraListGridTemplate(visibleColumns) }}
+      >
         {columns.map((column) => (
           <button
             key={column.id}
@@ -71,12 +62,9 @@ export function TaskPageJiraSortControls({
             onClick={() => onSort(column.id)}
             aria-label={orderBy === column.id ? `${column.label}, ${directionLabel}` : column.label}
             aria-pressed={orderBy === column.id}
-            className={cn(
-              'flex items-center gap-1 rounded-sm text-left text-[11px] font-semibold tracking-[0.08em] uppercase select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
-              column.className
-            )}
+            className="flex min-w-0 items-center gap-1 rounded-sm text-left text-[11px] font-semibold tracking-[0.08em] uppercase select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
-            {column.label}
+            <span className="truncate">{column.label}</span>
             {orderBy === column.id &&
               (direction === 'asc' ? (
                 <ArrowUp aria-hidden="true" className="size-3" />

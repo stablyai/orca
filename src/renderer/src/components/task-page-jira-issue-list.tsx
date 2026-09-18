@@ -7,6 +7,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraListColumn } from './jira-list-columns'
+
+type JiraRowStyle = React.CSSProperties & { '--jira-cols': string }
+import { JiraIssueCell, JiraPriorityText, unassignedLabel } from './task-page-jira-issue-cells'
 
 export type TaskPageJiraIssueSection = {
   key: string
@@ -15,6 +19,8 @@ export type TaskPageJiraIssueSection = {
 }
 
 type TaskPageJiraIssueListProps = {
+  columns: readonly JiraListColumn[]
+  gridTemplate: string
   formatUpdatedAt: (updatedAt: string) => string
   getStatusTone: (categoryKey: string) => string
   issues: JiraIssue[]
@@ -85,6 +91,8 @@ function isSelectedIssue(issue: JiraIssue, selectedIssue: JiraIssue | null): boo
 }
 
 function JiraIssueRow({
+  columns,
+  gridTemplate,
   formatUpdatedAt,
   getStatusTone,
   issue,
@@ -93,6 +101,8 @@ function JiraIssueRow({
   selected,
   showSiteContext
 }: {
+  columns: readonly JiraListColumn[]
+  gridTemplate: string
   formatUpdatedAt: (updatedAt: string) => string
   getStatusTone: (categoryKey: string) => string
   issue: JiraIssue
@@ -101,6 +111,8 @@ function JiraIssueRow({
   selected: boolean
   showSiteContext: boolean
 }): React.JSX.Element {
+  // Why: visible columns are user-chosen, so the desktop template is data, not a Tailwind class.
+  const rowStyle: JiraRowStyle = { '--jira-cols': gridTemplate }
   const labels = issue.labels.slice(0, 3)
   const contextLabel =
     showSiteContext && issue.siteName
@@ -125,8 +137,9 @@ function JiraIssueRow({
           onOpenIssue(issue)
         }
       }}
+      style={rowStyle}
       className={cn(
-        'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px_64px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
+        'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-(--jira-cols)',
         selected && 'bg-accent'
       )}
     >
@@ -152,13 +165,9 @@ function JiraIssueRow({
           >
             <span className="truncate">{issue.status.name}</span>
           </span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
-            {issue.priority?.name ??
-              translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-          </span>
+          <JiraPriorityText issue={issue} className="shrink-0 text-[11px]" />
           <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-            {issue.assignee?.displayName ??
-              translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+            {issue.assignee?.displayName ?? unassignedLabel()}
           </span>
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
@@ -181,49 +190,18 @@ function JiraIssueRow({
         </div>
       </div>
 
-      <div className="flex min-w-0 max-md:!hidden">
-        <span
-          className={cn(
-            'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-            getStatusTone(issue.status.categoryKey)
-          )}
-        >
-          <span className="truncate">{issue.status.name}</span>
-        </span>
-      </div>
-
-      <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
-        {issue.priority?.name ?? translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-      </span>
-
-      <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-        {issue.assignee?.avatarUrl ? (
-          <img
-            src={issue.assignee.avatarUrl}
-            alt={issue.assignee.displayName}
-            className="size-5 shrink-0 rounded-full"
-          />
-        ) : (
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-            {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
-          </span>
-        )}
-        <span className="truncate">
-          {issue.assignee?.displayName ??
-            translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-        </span>
-      </div>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
-            {formatUpdatedAt(issue.updatedAt)}
+      {columns.map((column) =>
+        column.locked ? null : (
+          <div key={column.id} className="min-w-0 max-md:!hidden">
+            <JiraIssueCell
+              column={column.id}
+              issue={issue}
+              formatUpdatedAt={formatUpdatedAt}
+              getStatusTone={getStatusTone}
+            />
           </div>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {new Date(issue.updatedAt).toLocaleString()}
-        </TooltipContent>
-      </Tooltip>
+        )
+      )}
 
       <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
         <Tooltip>
@@ -276,6 +254,8 @@ function JiraIssueRow({
 }
 
 export function TaskPageJiraIssueList({
+  columns,
+  gridTemplate,
   formatUpdatedAt,
   getStatusTone,
   issues,
@@ -335,6 +315,8 @@ export function TaskPageJiraIssueList({
               {section.issues.map((issue) => (
                 <JiraIssueRow
                   key={`${issue.siteId ?? 'site'}:${issue.id || issue.key}`}
+                  columns={columns}
+                  gridTemplate={gridTemplate}
                   formatUpdatedAt={formatUpdatedAt}
                   getStatusTone={getStatusTone}
                   issue={issue}
