@@ -98,7 +98,7 @@ function readHookSettingsFromDisk(): Pick<
 > {
   const state = readPersistedState(getDataPath())
   return {
-    agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
+    agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled === true,
     disabledTuiAgents: normalizeDisabledTuiAgents(state.settings?.disabledTuiAgents)
   }
 }

@@ -261,7 +261,10 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       registerPty: vi.fn(),
       ...runtimeOverrides
     }
-    registerPtyHandlers(mainWindow as never, runtime as never)
+    // Why: this fixture pins runtime-controller spawn admission, not the consent gate.
+    registerPtyHandlers(mainWindow as never, runtime as never, undefined, (() => ({
+      agentStatusHooksEnabled: true
+    })) as never)
     if (!controller) {
       throw new Error('PTY controller was not registered')
     }

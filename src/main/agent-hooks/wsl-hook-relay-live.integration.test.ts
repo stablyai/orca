@@ -110,6 +110,7 @@ describe.skipIf(process.platform === 'win32')(
             deferTrustUntilConfigToml: true
           }),
         managedHookSettings: () => ({
+          agentStatusHooksEnabled: true,
           agentCmdOverrides: {
             claude: process.execPath,
             codex: process.execPath

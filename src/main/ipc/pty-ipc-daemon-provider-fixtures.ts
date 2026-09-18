@@ -132,7 +132,9 @@ export function createDaemonActiveProviderFixtures(ctx: {
         mainWindow as never,
         undefined,
         getSelectedCodexHomePath,
-        getSettings as never
+        // Why: this fixture pins daemon spawn plumbing, not the consent gate; default to
+        // consented so omitting a settings resolver keeps testing that plumbing.
+        (getSettings ?? (() => ({ agentStatusHooksEnabled: true }))) as never
       )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,

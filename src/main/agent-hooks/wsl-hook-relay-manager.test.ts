@@ -243,7 +243,9 @@ describe('WslHookRelayManager', () => {
         managedHooksPresent: true,
         detail: null
       })),
-      managedHookSettings: () => null,
+      // Why: this suite exercises the relay lifecycle with hooks already consented-to; the
+      // off-path is covered explicitly below by overriding this with agentStatusHooksEnabled: false.
+      managedHookSettings: () => ({ agentStatusHooksEnabled: true }),
       pluginSources: () => ({ opencodePluginSource: '// opencode plugin source' }),
       warn: vi.fn(),
       transientRetryDelayMs: 1,

@@ -95,7 +95,10 @@ describe('registerPtyHandlers', () => {
       it('passes the minted sessionId through to provider.spawn and host env setup', async () => {
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
-        registerPtyHandlers(mainWindow as never)
+        // Why: this test pins session identity plumbing, not the consent gate.
+        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+          agentStatusHooksEnabled: true
+        })) as never)
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
@@ -113,7 +116,10 @@ describe('registerPtyHandlers', () => {
       it('respects a caller-provided sessionId instead of minting a new one', async () => {
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
-        registerPtyHandlers(mainWindow as never)
+        // Why: this test pins session identity plumbing, not the consent gate.
+        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+          agentStatusHooksEnabled: true
+        })) as never)
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
@@ -130,7 +136,10 @@ describe('registerPtyHandlers', () => {
         // Why: daemon reconnect keys live-shell survival on the sessionId; prefixing with worktreeId scopes sessions by worktree with a unique tail.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
-        registerPtyHandlers(mainWindow as never)
+        // Why: this test pins session identity plumbing, not the consent gate.
+        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+          agentStatusHooksEnabled: true
+        })) as never)
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
@@ -229,7 +238,10 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = setupDaemonAdapter()
         const argsEnv: Record<string, string> = { FOO: 'bar' }
         handlers.clear()
-        registerPtyHandlers(mainWindow as never)
+        // Why: this test pins env-cloning behavior, not the consent gate.
+        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+          agentStatusHooksEnabled: true
+        })) as never)
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
