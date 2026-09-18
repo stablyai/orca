@@ -22,6 +22,7 @@ export type WorkerEffect = {
   terminalId?: string
   surface?: 'visible' | 'background'
   warning?: string
+  branch?: string
 }
 
 export type WorkerSetupReceipt = {

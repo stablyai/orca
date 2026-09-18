@@ -15,6 +15,7 @@ vi.mock('./runner', async () => {
 
 import {
   isBranchSafeHostedLogin,
+  resolveGitUsernameForBranchPrefix,
   resolveLocalGitUsername,
   resolveLocalGitUsernameDetailed,
   resetGhLoginCacheForTests
@@ -295,6 +296,15 @@ describe('resolveLocalGitUsername', () => {
       authoritative: true
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses git-username prefix resolution while the gh probe is timed out', async () => {
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    ghExecFileAsyncMock.mockRejectedValueOnce(makeExecError('gh timeout', { code: 'ETIMEDOUT' }))
+
+    await expect(resolveGitUsernameForBranchPrefix('/repo')).rejects.toThrow(
+      'could not resolve the git-username branch prefix: gh login probe timed out'
+    )
   })
 
   it('reports authoritative empty for non-GitHub repos', async () => {

@@ -335,6 +335,17 @@ export async function resolveLocalGitUsername(repoPath: string): Promise<string>
   return (await resolveLocalGitUsernameDetailed(repoPath)).username
 }
 
+const GIT_USERNAME_TIMEOUT_MESSAGE =
+  'could not resolve the git-username branch prefix: gh login probe timed out'
+
+export async function resolveGitUsernameForBranchPrefix(repoPath: string): Promise<string> {
+  const detailed = await resolveLocalGitUsernameDetailed(repoPath)
+  if (!detailed.authoritative) {
+    throw new Error(GIT_USERNAME_TIMEOUT_MESSAGE)
+  }
+  return detailed.username
+}
+
 export function resetGhLoginCacheForTests(): void {
   cachedGhLogin = null
   ghLoginTimedOutAt = null
