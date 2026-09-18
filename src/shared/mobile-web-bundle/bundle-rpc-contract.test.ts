@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { sha256 } from '../sha256'
 import {
   computeMobileWebBundleId,
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
@@ -22,9 +22,15 @@ import {
 const BUILD_ID = 'a'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
 
+function hexDigest(input: string): string {
+  return Array.from(sha256(new TextEncoder().encode(input)), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+}
+
 const ENTRY_ASSET: MobileWebBundleAsset = {
   path: MOBILE_WEB_BUNDLE_ENTRYPOINT,
-  sha256: createHash('sha256').update(MOBILE_WEB_BUNDLE_ENTRYPOINT).digest('hex'),
+  sha256: hexDigest(MOBILE_WEB_BUNDLE_ENTRYPOINT),
   byteLength: 64,
   contentType: 'text/html; charset=utf-8'
 }

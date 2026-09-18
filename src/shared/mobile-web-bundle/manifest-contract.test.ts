@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { sha256 } from '../sha256'
 import {
   computeMobileWebBundleId,
   serializeMobileWebBundleAssets,
@@ -12,10 +12,16 @@ import {
   type MobileWebBundleAsset
 } from './manifest-contract'
 
+function hexDigest(input: string): string {
+  return Array.from(sha256(new TextEncoder().encode(input)), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+}
+
 function asset(path: string, byteLength: number): MobileWebBundleAsset {
   return {
     path,
-    sha256: createHash('sha256').update(path).digest('hex'),
+    sha256: hexDigest(path),
     byteLength,
     contentType: path.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript'
   }

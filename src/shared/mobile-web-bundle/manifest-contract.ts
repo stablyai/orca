@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { sha256 } from '../sha256'
 
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
@@ -64,8 +64,11 @@ export function serializeMobileWebBundleAssets(assets: readonly MobileWebBundleA
   )
 }
 
+/** Pure-JS sha256 rather than `node:crypto`: Metro ships no Node core shims, so the phone must be
+ *  able to recompute the id from a manifest it cached. */
 export function computeMobileWebBundleId(assets: readonly MobileWebBundleAsset[]): string {
-  return createHash('sha256').update(serializeMobileWebBundleAssets(assets), 'utf8').digest('hex')
+  const digest = sha256(new TextEncoder().encode(serializeMobileWebBundleAssets(assets)))
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 function validateManifestInvariants(
