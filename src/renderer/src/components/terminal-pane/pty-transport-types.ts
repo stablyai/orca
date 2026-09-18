@@ -164,6 +164,7 @@ export type PtyTransport = {
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    quickCommandSubmission?: boolean
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean
     /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
@@ -257,6 +258,7 @@ export type IpcPtyTransportOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
+  quickCommandSubmission?: boolean
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
   worktreeId?: string
