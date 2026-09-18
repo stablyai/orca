@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { basename, extname, join, relative } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { basename, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import {
@@ -270,12 +271,15 @@ export function routeChunkNames(metafile, routes, renamed) {
   const owner = new Map()
   for (const [output, { inputs }] of Object.entries(metafile.outputs)) {
     for (const input of Object.keys(inputs ?? {})) {
-      owner.set(input, basename(output))
+      // Absolute, and through realpath on the lookup side below: esbuild writes its input keys
+      // relative to absWorkingDir after resolving symlinks, so a route reached through one (every
+      // scratch tree under /var on macOS) is keyed by a path the caller never spelled.
+      owner.set(resolve(mobileDir, input), basename(output))
     }
   }
   return Object.fromEntries(
     routes.map(({ key, module }) => {
-      const emittedName = owner.get(relative(mobileDir, module))
+      const emittedName = owner.get(realpathSync(module))
       if (!emittedName) {
         throw new Error(`[build-mobile-web-app-bundle] ${key} reached no output`)
       }
