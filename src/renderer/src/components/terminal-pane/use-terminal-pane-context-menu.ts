@@ -26,6 +26,7 @@ import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigg
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { reclaimTerminalPaneFocus } from './terminal-pane-menu-focus'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -55,6 +56,7 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  onMenuClosed: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
@@ -275,6 +277,10 @@ export function useTerminalPaneContextMenu({
   const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
   const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
 
+  const onMenuClosed = useCallback((): void => {
+    reclaimTerminalPaneFocus(resolveMenuPane())
+  }, [resolveMenuPane])
+
   return {
     open,
     setOpen,
@@ -282,6 +288,7 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    onMenuClosed,
     onContextMenuCapture,
     onPaneTitleContextMenu,
     onCopy,
