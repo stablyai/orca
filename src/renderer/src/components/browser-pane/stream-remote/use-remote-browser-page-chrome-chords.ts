@@ -24,11 +24,13 @@ export function useRemoteBrowserPageChromeChords({
   chromeShortcutScope,
   workspaceId,
   runRemoteNavigation,
+  pasteRemoteClipboard,
   setPaneNotice
 }: {
   chromeShortcutScope: BrowserChromeShortcutScope
   workspaceId: string
   runRemoteNavigation: (method: 'browser.reload') => Promise<void> | void
+  pasteRemoteClipboard: (activeElementAtDispatch: Element | null) => boolean
   setPaneNotice: Dispatch<SetStateAction<RemoteBrowserPaneNotice | null>>
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
@@ -46,6 +48,19 @@ export function useRemoteBrowserPageChromeChords({
         chromeShortcutScope === 'owned-target' &&
         !browserOverlayOwnsShortcutTarget(event.target, workspaceId)
       ) {
+        return
+      }
+      const isPaste =
+        event.key.toLowerCase() === 'v' &&
+        !event.altKey &&
+        (shortcutPlatform === 'darwin'
+          ? event.metaKey && !event.ctrlKey
+          : event.ctrlKey && !event.metaKey)
+      if (isPaste && !isEditableKeyboardTarget(event.target)) {
+        if (pasteRemoteClipboard(event.target instanceof Element ? event.target : null)) {
+          event.preventDefault()
+          event.stopImmediatePropagation()
+        }
         return
       }
       // Why: Cmd+F should open find even from the address bar (Chrome/Safari do), but reload must
@@ -113,5 +128,12 @@ export function useRemoteBrowserPageChromeChords({
         findNoticeTimerRef.current = null
       }
     }
-  }, [chromeShortcutScope, keybindings, runRemoteNavigation, setPaneNotice, workspaceId])
+  }, [
+    chromeShortcutScope,
+    keybindings,
+    pasteRemoteClipboard,
+    runRemoteNavigation,
+    setPaneNotice,
+    workspaceId
+  ])
 }
