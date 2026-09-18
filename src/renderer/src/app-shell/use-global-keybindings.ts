@@ -22,6 +22,7 @@ import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import {
   keybindingMatchesAction,
+  TAB_MOVE_TO_SPLIT_COMMANDS,
   type KeybindingActionId,
   type KeybindingMatchOptions
 } from '../../../shared/keybindings'
@@ -240,6 +241,13 @@ export function useGlobalKeybindings(args: {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
+        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
+          return
+        }
+      }
+
+      // Why: these unbound built-ins are not plugin aliases and must fall through when unavailable.
+      for (const { id: actionId } of TAB_MOVE_TO_SPLIT_COMMANDS) {
         if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
         }

@@ -11,6 +11,8 @@ import { KEYBINDING_DEFINITION_CORE_2 } from './definitions-core-2'
 import { KEYBINDING_DEFINITION_CORE_3 } from './definitions-core-3'
 import { KEYBINDING_DEFINITION_CORE_4 } from './definitions-core-4'
 
+export { TAB_MOVE_TO_SPLIT_COMMANDS } from './definitions-core-2'
+
 export function agentTabActionId(agent: TuiAgent): AgentTabActionId {
   return `tab.newAgent.${agent}`
 }

@@ -343,4 +343,27 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(findElementsByType(closeAllItem, 'DropdownMenuShortcut')).toHaveLength(0)
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(0)
   })
+
+  it('keeps chat-specific split hints and falls back to assigned tab-move shortcuts', async () => {
+    shortcutLabelMock.mockImplementation((actionId: string) =>
+      actionId === 'tab.moveToSplitRight' ? 'Ctrl+Alt+M' : 'Ctrl+Alt+L'
+    )
+    const { TabWorkspaceLayoutMenuSection } = await import('./TabWorkspaceLayoutMenuSection')
+    const tree = expandNode(
+      TabWorkspaceLayoutMenuSection({
+        unifiedTabId: 'tab-1',
+        groupId: 'group-1',
+        leadingSeparator: true,
+        shortcutLabels: { right: 'Ctrl+D' }
+      })
+    )
+    const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(labels).toContain('RightCtrl+D')
+    expect(labels).toContain('LeftCtrl+Alt+L')
+    expect(labels).not.toContain('RightCtrl+Alt+M')
+    expect(findElementsByType(tree, 'DropdownMenuSeparator')).toHaveLength(1)
+  })
 })
