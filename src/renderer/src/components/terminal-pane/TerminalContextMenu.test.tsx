@@ -9,7 +9,14 @@ type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const shortcuts = vi.hoisted(() => ({ list: [] as string[] }))
-const menuContentProps = vi.hoisted(() => ({ last: null as { onCloseAutoFocus?: (e: { preventDefault: () => void }) => void } | null }))
+type DropdownMenuContentMockProps = {
+  children?: React.ReactNode
+  onCloseAutoFocus?: (e: { preventDefault: () => void }) => void
+}
+
+const menuContentProps: { last: DropdownMenuContentMockProps | null } = vi.hoisted(() => ({
+  last: null
+}))
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
