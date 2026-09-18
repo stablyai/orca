@@ -3340,6 +3340,17 @@ export class RelayAssignmentStore {
       "SELECT enabled, not_before FROM relay_region_rehome_control WHERE control_id = 'global'"
     ))[0]
     if (!control || Number(control.enabled) !== 1 || Number(control.not_before) > now) return []
+    // The dispatch budget is durable and global, but until now only
+    // `commitIdleRegionalRehome` consulted it -- after the join had already run and
+    // the worker had already POSTed every candidate to its source cell. An absent
+    // row means the budget has never been spent, so it opens the gate.
+    const worker = (await this.database.query(
+      `SELECT paused_until, next_dispatch_at FROM relay_region_rehome_worker_state
+       WHERE worker_id = 'global'`
+    ))[0]
+    if (worker && (Number(worker.paused_until) > now || Number(worker.next_dispatch_at) > now)) {
+      return []
+    }
     const fleetSafety = await this.readRegionalRehomeFleetSafety(this.database, now)
     if (regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)) return []
     const candidates = await selectIdleRegionalRehomes({
