@@ -41,4 +41,9 @@ describe('docs/audits git visibility', () => {
     const config = JSON.parse(readFileSync(resolve(repoRoot, '.oxlintrc.json'), 'utf8'))
     expect(config.ignorePatterns).toContain('docs/audits/**')
   })
+
+  it('keeps default oxfmt from rewriting audit evidence', () => {
+    const config = JSON.parse(readFileSync(resolve(repoRoot, '.oxfmtrc.json'), 'utf8'))
+    expect(config.ignorePatterns).toContain('docs/audits/**')
+  })
 })
