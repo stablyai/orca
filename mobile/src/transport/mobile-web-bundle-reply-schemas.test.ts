@@ -149,9 +149,14 @@ describe('mobile web bundle manifest reply reader', () => {
     ).toBe(false)
   })
 
-  it('refuses a schemaVersion it does not know rather than guessing at the shape', () => {
-    expect(readManifest(manifestReply({ schemaVersion: 2 })).compatible).toBe(false)
+  it('reads an unknown schemaVersion through so the update wall can name it', () => {
+    // Refusing it here would fail the parse before `evaluateMobileWebBundleCompat` could say
+    // `bundle-shell-too-old`, leaving a transport error where the wall belongs.
+    expect(readManifest(manifestReply({ schemaVersion: 2 })).compatible).toBe(true)
     expect(readManifest(manifestReply({ schemaVersion: undefined })).compatible).toBe(false)
+    for (const schemaVersion of [1.5, 'one', null]) {
+      expect(readManifest(manifestReply({ schemaVersion })).compatible).toBe(false)
+    }
   })
 
   it('bounds every manifest field the fetch reads', () => {

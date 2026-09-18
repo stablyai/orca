@@ -4,8 +4,7 @@ import {
   MobileWebBundleAssetPathSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
-  MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
-  MOBILE_WEB_BUNDLE_SCHEMA_VERSION
+  MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 
 // Hoisted, never built inside a reader: a schema constructed per parse cost 2275 ns against 156 ns
@@ -35,11 +34,13 @@ const assetSchema = z.looseObject({
  *  later load. `desktopVersion` and the protocol window pass through untyped — Phase B's update
  *  wall reads them, this phase does not.
  *
- *  `schemaVersion` stays a literal because the manifest is closed in both directions: a bump is the
- *  only change path, and an unrecognised one is an unusable bundle to re-fetch, never a crash. */
+ *  `schemaVersion` is read as a number, not pinned to the one this shell knows: refusing it here
+ *  would fail the parse before `evaluateMobileWebBundleCompat` could name the shell as too old, and
+ *  an unreadable schema is a wall to show, not a shape to guess at. The manifest stays closed in
+ *  both directions on the host's side, where it is written. */
 const manifestSchema = z
   .looseObject({
-    schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
+    schemaVersion: z.number().int(),
     buildId: z.string().regex(SHA256_PATTERN),
     entrypoint: MobileWebBundleAssetPathSchema,
     totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
