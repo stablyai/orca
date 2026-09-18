@@ -457,6 +457,77 @@ describe('shared tab navigation routing', () => {
       tabOrder: ['tab-b', 'tab-a', 'tab-c']
     })
   })
+
+  it('does not fall through from a tab switch shortcut into tab reordering', () => {
+    const worktreeId = controller.activeWorktreeId!
+    const groupId = 'group-1'
+    const reorderUnifiedTabs = vi.fn()
+    mocks.state = {
+      activeWorktreeId: worktreeId,
+      activeGroupIdByWorktree: { [worktreeId]: groupId },
+      browserTabsByWorktree: {},
+      groupsByWorktree: {
+        [worktreeId]: [
+          { id: groupId, worktreeId, activeTabId: 'tab-b', tabOrder: ['tab-a', 'tab-b'] }
+        ]
+      },
+      openFiles: [],
+      reorderUnifiedTabs,
+      tabBarOrderByWorktree: {},
+      tabsByWorktree: {
+        [worktreeId]: [{ id: 'terminal-a' }, { id: 'terminal-b' }]
+      },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'tab-a',
+            entityId: 'terminal-a',
+            groupId,
+            worktreeId,
+            contentType: 'terminal',
+            label: 'A',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'tab-b',
+            entityId: 'terminal-b',
+            groupId,
+            worktreeId,
+            contentType: 'terminal',
+            label: 'B',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 0
+          }
+        ]
+      }
+    }
+    const previousKeybindings = controller.keybindings
+    controller.keybindings = {
+      'tab.nextAllTypes': ['Mod+KeyR'],
+      'tab.moveLeft': ['Mod+KeyR']
+    }
+    try {
+      handleTerminalWorkspaceKeyDown(
+        new KeyboardEvent('keydown', {
+          code: 'KeyR',
+          key: 'r',
+          metaKey: true,
+          cancelable: true
+        }),
+        controller,
+        'darwin'
+      )
+    } finally {
+      controller.keybindings = previousKeybindings
+    }
+
+    expect(reorderUnifiedTabs).not.toHaveBeenCalled()
+  })
 })
 
 describe('tab.closeAll confirmation', () => {
