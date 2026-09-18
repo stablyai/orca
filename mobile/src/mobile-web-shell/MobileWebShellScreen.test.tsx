@@ -1,9 +1,17 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session'
 
-const dependencies = vi.hoisted(() => {
+type ScreenDependencies = {
+  retry: Mock
+  reportShellFailure: Mock
+  openUrl: Mock
+  lifecycle: string[]
+  state: MobileWebShellSessionState
+}
+
+const dependencies = vi.hoisted((): ScreenDependencies => {
   // Before the module under test is imported, so its `__DEV__` guard is on and the developer facts
   // are reachable at all — they are the one thing here that must never grow a secret.
   Object.assign(globalThis, { __DEV__: true })
@@ -11,8 +19,8 @@ const dependencies = vi.hoisted(() => {
     retry: vi.fn(),
     reportShellFailure: vi.fn(),
     openUrl: vi.fn(),
-    lifecycle: [] as string[],
-    state: { kind: 'checking' } as MobileWebShellSessionState
+    lifecycle: [],
+    state: { kind: 'checking' }
   }
 })
 

@@ -2,10 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const dependencies = vi.hoisted(() => ({
-  storage: new Map<string, string>(),
-  mounted: [] as string[]
-}))
+type RouteDependencies = { storage: Map<string, string>; mounted: string[] }
+
+const dependencies = vi.hoisted((): RouteDependencies => ({ storage: new Map(), mounted: [] }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
