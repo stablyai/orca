@@ -517,6 +517,10 @@ describe('teardown', () => {
     expect(bridge.client.requests).toHaveLength(1)
     expect(bridge.client.streams).toHaveLength(1)
     expect(bridge.client.foregroundCalls).toEqual([])
+    // A view still posting into a disposed host is a leak, and the diagnostic is how it is found.
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 4 }, () => ({ kind: 'frame-after-dispose' }))
+    )
   })
 
   it('is idempotent', () => {
@@ -528,19 +532,30 @@ describe('teardown', () => {
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
   })
 
-  it('tears down silently on the page close, which has already settled what it owned', async () => {
+  it('settles what the page owned on close without answering a page that said goodbye', async () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     bridge.host.receive(subscribeFrame(OTHER))
     bridge.host.receive(clientFrame({ type: 'close' }))
     expect(bridge.posted).toHaveLength(0)
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
-    expect(bridge.client.stateListeners()).toBe(0)
-    bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(9), method: 'status.get' }))
-    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
+    bridge.client.streams[0]?.emit({ chunk: 'a' })
     await flushBridge()
     expect(bridge.posted).toHaveLength(0)
+  })
+
+  it('answers the document that loads in after a close, rather than latching shut', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    // The next page shares this host, and a host that had shut itself would leave its `ready`
+    // retrying forever with nothing posted and nothing logged.
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
+    expect(bridge.client.stateListeners()).toBe(1)
+    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(1)
+    expect(bridge.diagnostics).toEqual([])
   })
 })
 

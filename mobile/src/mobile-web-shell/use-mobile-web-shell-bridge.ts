@@ -32,7 +32,11 @@ function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnostic) =>
       console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
       return
     }
-    console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
+    if (diagnostic.kind === 'post-failed') {
+      console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
+      return
+    }
+    console.warn('[web-shell-bridge] a view outlived its host and is still posting')
   }
 }
 
