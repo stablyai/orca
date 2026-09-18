@@ -72,6 +72,14 @@ beforeAll(async () => {
   const { outDir } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
+    // A browser asks for this on its own and the shell's WebView never does. The bundle carries
+    // no icon, so a 404 would put a console error in every check that runs against a full Chrome
+    // -- which is what CI resolves -- and none against the bundled headless shell.
+    if (path === '/favicon.ico') {
+      response.writeHead(204)
+      response.end()
+      return
+    }
     // A route path serves the entrypoint and the page routes client-side. A path naming a file
     // has to come out of the bundle or 404, the same as the shell's manifest map: answering it
     // with the document instead would hide a publicPath the script cannot fetch from.
@@ -215,6 +223,10 @@ describeRender('the page server this check runs against', () => {
     // from still renders, because the script is fetched from the one prefix that is served.
     expect((await fetch(`${origin}/wrong-prefix/entry.js`)).status).toBe(404)
     expect((await fetch(`${origin}/assets/not-a-real-hash.js`)).status).toBe(404)
+  })
+
+  it('answers the icon a browser asks for without an error', async () => {
+    expect((await fetch(`${origin}/favicon.ico`)).status).toBe(204)
   })
 
   it('still serves the document at every route depth', async () => {
