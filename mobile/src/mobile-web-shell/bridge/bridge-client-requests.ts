@@ -28,10 +28,10 @@ export class BridgeClientRequests {
     this.pending.set(id, request)
   }
 
-  /** For a frame that never left the page: the caller settles it, so nothing is settled here. */
+  /** For a frame that never left the page: the caller settles it, and no part can have arrived for
+   *  an id the shell was never told about, so there is no assembler slot to give back. */
   abandon(id: string): void {
     this.pending.delete(id)
-    this.assembler.discard(id)
   }
 
   acceptReply(message: BridgeReplyMessage): void {

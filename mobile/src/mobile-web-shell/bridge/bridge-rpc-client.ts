@@ -236,8 +236,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         type: 'request',
         id,
         method,
-        // Absent stays absent: `sendRequest(m)` and `sendRequest(m, undefined)` are different calls
-        // to the recorder, and the shell replays whichever arity crossed.
+        // Absent stays absent, because the shell replays whichever arity crossed. JSON drops an
+        // `undefined` value on its own, so an explicit `sendRequest(m, undefined)` reaches the shell
+        // as `sendRequest(m)`; no call site passes one, and no wire that carries `undefined` exists
+        // to carry it. The spread is what states the intent for a carrier that would.
         ...(args.length > 1 ? { params } : {}),
         ...(requestOptions === undefined ? {} : { options: requestOptions })
       })
