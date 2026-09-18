@@ -71,10 +71,6 @@ export function formatResetCreditExpiry(
       })
 }
 
-// ---------------------------------------------------------------------------
-// Shared icon component
-// ---------------------------------------------------------------------------
-
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
@@ -96,6 +92,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
+  }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -134,10 +133,6 @@ function ErrorMessage({
     </div>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Window section derivation
-// ---------------------------------------------------------------------------
 
 export function getWindowSections(
   p: ProviderRateLimits

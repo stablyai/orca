@@ -11,6 +11,7 @@ import { getTightestUsageSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
 
 function MiniBar({
   usedPct,
@@ -82,6 +83,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'cursor':
+      return 'U'
     case 'codex':
       return 'X'
   }
@@ -102,7 +105,11 @@ function VerboseProviderUsage({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    const visibleBuckets = p.buckets.filter((bucket) =>
+      p.provider === 'cursor'
+        ? isCursorUsageBucket(bucket.name)
+        : STATUS_BAR_BUCKET_NAMES.has(bucket.name)
+    )
     return (
       <>
         {visibleBuckets.map((bucket, index) => (
@@ -195,7 +202,6 @@ export function ProviderSegment({
   }
 
   const tightest = getTightestUsageSection(p)
-
   // Fetching with no prior data
   if (p.status === 'fetching' && !tightest) {
     return (
