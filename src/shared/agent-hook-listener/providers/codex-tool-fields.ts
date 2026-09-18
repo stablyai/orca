@@ -6,6 +6,7 @@ import {
   toolUpdate
 } from '../tool-input-preview'
 import { deriveInteractivePrompt } from '../interactive-tool'
+import { isCodexNonInteractivePermissionRequest } from './codex-permission-request'
 
 export function extractCodexToolFields(
   eventName: unknown,
@@ -26,7 +27,9 @@ export function extractCodexToolFields(
       {
         toolName,
         toolInput,
-        interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
+        interactivePrompt: isCodexNonInteractivePermissionRequest(eventName, hookPayload)
+          ? undefined
+          : deriveInteractivePrompt(toolName, rawInput, eventName)
       },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
     )

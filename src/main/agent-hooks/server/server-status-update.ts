@@ -96,7 +96,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
               terminalOwnedPayload.hookEventName,
               terminalOwnedPayload.toolAgentId,
               terminalOwnedPayload.payload,
-              previous?.payload
+              previous?.payload,
+              terminalOwnedPayload.codexNonInteractivePermission
             )
           }
         : terminalOwnedPayload

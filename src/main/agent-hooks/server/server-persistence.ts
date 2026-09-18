@@ -35,6 +35,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
       const {
         claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
+        codexNonInteractivePermission: _codexNonInteractivePermission,
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
