@@ -14,6 +14,7 @@ export type RateLimitSlice = {
   fetchInactiveClaudeAccountUsage: () => Promise<void>
   fetchInactiveCodexAccountUsage: () => Promise<void>
   setRateLimitsFromPush: (state: RateLimitState) => void
+  applyRemoteAccountRateLimits: (remote: RateLimitState) => void
 }
 
 export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set, get) => ({
@@ -134,5 +135,24 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
 
   setRateLimitsFromPush: (state) => {
     set({ rateLimits: state })
+  },
+
+  // Why: a paired remote server only owns Claude/Codex accounts (see #7973);
+  // every other provider is fetched from this desktop's own local credentials,
+  // so merging the remote's full state wholesale would clobber it with the
+  // remote host's unrelated (and usually irrelevant) local usage.
+  applyRemoteAccountRateLimits: (remote) => {
+    const current = get().rateLimits
+    set({
+      rateLimits: {
+        ...current,
+        claude: remote.claude,
+        codex: remote.codex,
+        claudeTarget: remote.claudeTarget,
+        codexTarget: remote.codexTarget,
+        inactiveClaudeAccounts: remote.inactiveClaudeAccounts,
+        inactiveCodexAccounts: remote.inactiveCodexAccounts
+      }
+    })
   }
 })
