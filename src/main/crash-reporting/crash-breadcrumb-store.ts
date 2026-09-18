@@ -72,7 +72,9 @@ export function recordCrashBreadcrumb(
   }
   const retainedKey = retainedBreadcrumbKey(breadcrumb)
   if (retainedKey) {
-    retainedBreadcrumbs.delete(retainedKey)
+    // Why no delete-then-set: re-inserting moves the key to the back, so a slot that refreshes
+    // outranks one that froze at its peak — and the frozen peak census is exactly the evidence
+    // worth keeping. Plain set preserves insertion order, keeping eviction FIFO by first crossing.
     retainedBreadcrumbs.set(retainedKey, breadcrumb)
     while (retainedBreadcrumbs.size > MAX_RETAINED_BREADCRUMBS) {
       const oldestKey = retainedBreadcrumbs.keys().next()
