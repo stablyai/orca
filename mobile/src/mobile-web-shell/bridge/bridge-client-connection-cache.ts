@@ -60,8 +60,18 @@ export class BridgeConnectionCache {
     }
   }
 
-  clear(): void {
-    this.held = null
+  /**
+   * The page said goodbye. Every native client publishes `disconnected` when it closes and keeps
+   * answering its last snapshot afterwards, and the screens above this one are written to that: a
+   * getter that threw here, or a listener that never heard the transition, would leave a closing
+   * page rendering a dot that is still connected.
+   */
+  close(): void {
+    const held = this.held
+    if (held !== null && held.state !== 'disconnected') {
+      this.held = { ...held, state: 'disconnected' }
+      this.fanOut('disconnected')
+    }
     this.listeners.clear()
   }
 

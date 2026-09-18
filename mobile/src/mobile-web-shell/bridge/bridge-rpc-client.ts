@@ -152,11 +152,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   }
 
+  // Answers after `close` as well: what it holds is then the last snapshot, marked `disconnected`.
   function snapshot(): BridgeConnectionSnapshot {
     const held = cache.read()
-    if (closed) {
-      throw new BridgeClientClosedError()
-    }
     if (held === null) {
       throw new BridgeClientNotReadyError()
     }
@@ -304,7 +302,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     subscriptions.closeAll()
     sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
     requests.closeAll()
-    cache.clear()
+    cache.close()
     session = null
     readyListeners.clear()
     unsubscribeFromMessages()

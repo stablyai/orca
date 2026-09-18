@@ -234,7 +234,6 @@ describe('bridge client after close', () => {
     page.start()
     page.client.close()
     expect(page.frames().at(-1)).toEqual({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
-    expect(() => page.client.getState()).toThrow(BridgeClientClosedError)
     expect(() => page.client.sendRequest('worktree.ps')).toThrow(BridgeClientClosedError)
     expect(() => page.client.subscribe('terminal.stream', {}, vi.fn())).toThrow(
       BridgeClientClosedError
@@ -243,7 +242,29 @@ describe('bridge client after close', () => {
     page.client.close()
     page.deliver(INIT)
     expect(page.sent).toHaveLength(2)
-    expect(() => page.client.getState()).toThrow(BridgeClientClosedError)
+  })
+
+  it('publishes disconnected and keeps answering the snapshot it last held', () => {
+    const page = createPageClient()
+    page.start()
+    const listener = vi.fn()
+    page.client.onStateChange(listener)
+    page.client.close()
+    expect(listener).toHaveBeenCalledWith('disconnected')
+    expect(page.client.getState()).toBe('disconnected')
+    expect(page.client.getReconnectAttempt()).toBe(CONNECTION.reconnectAttempt)
+    expect(page.client.getLastConnectedAt()).toBe(CONNECTION.lastConnectedAt)
+    expect(page.client.getLastInboundAt?.()).toBe(CONNECTION.lastInboundAt)
+    expect(page.client.getGeneration?.()).toBe(CONNECTION.generation)
+  })
+
+  it('answers nothing it never heard: a close before init leaves the getters unready', () => {
+    const page = createPageClient()
+    const listener = vi.fn()
+    page.client.onStateChange(listener)
+    page.client.close()
+    expect(listener).not.toHaveBeenCalled()
+    expect(() => page.client.getState()).toThrow(BridgeClientNotReadyError)
   })
 
   it('reads nothing more, even from a port that kept delivering', () => {
@@ -256,7 +277,7 @@ describe('bridge client after close', () => {
     page.deliver(eventFrame(id, 1, 'late'))
     page.deliverRaw('{ not json')
     expect(page.diagnostics).toEqual([])
-    expect(() => page.client.getState()).toThrow(BridgeClientClosedError)
+    expect(page.client.getState()).toBe('disconnected')
   })
 
   it('says goodbye once, without a cancel for each stream it owned', () => {
