@@ -336,11 +336,19 @@ describe('type pins', () => {
   })
 
   it('accepts every option the raw sender declares', () => {
+    // Both directions: the literal has to satisfy the type, and the type has to have no key the
+    // literal is missing, so a new option fails to compile until the schema learns it.
+    const optionKeys: Record<keyof SendRequestOptions, true> = {
+      timeoutMs: true,
+      budgetSpansConnect: true,
+      failWhenDisconnected: true
+    }
     const options: SendRequestOptions = {
       timeoutMs: 1000,
       budgetSpansConnect: true,
       failWhenDisconnected: true
     }
+    expect(Object.keys(optionKeys).toSorted()).toEqual(Object.keys(options).toSorted())
     expect(readClient(client({ type: 'request', id: ID, method: 'm', options })).ok).toBe(true)
   })
 
