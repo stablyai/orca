@@ -41,7 +41,7 @@ A brand-new worktree is a clean checkout. Dependencies, caches, and local secret
 
 Orca fills that gap in three complementary ways:
 
-1. **Worktree Shared Paths** (per repo, in Settings → Repository) — paths materialize from the primary checkout into each new worktree (APFS clone-copy on macOS when possible, otherwise a symlink).
+1. **Worktree Shared Paths** (per repo, in Settings → Repository) — paths materialize from the primary checkout into each new worktree (a copy-on-write clone when the filesystem supports one — APFS clone-copy on macOS, reflink on Linux for btrfs, XFS and OpenZFS 2.2+ — otherwise a symlink).
 1. **`worktree.sharedDirectories` in `orca.yaml`** — repo-checked-in list of **gitignored directories** to share the same way (symlink/share, not copy). Use this for large rebuildable trees like `node_modules` or `.cache`. Entries must exist as directories in the primary checkout **and** be gitignored; tracked or missing paths are skipped.
 1. **`.worktreeinclude` at the repo root** — list of **gitignored files or directories to copy** (not symlink) into each new worktree, so each worktree owns its copy. Typical entries: `.env`, local config under `.vscode/`. Blank lines and `#` comments are allowed. Only **literal** paths are supported today — globs and negation are skipped with a warning. Paths that are tracked, missing, or not gitignored are not copied.
 

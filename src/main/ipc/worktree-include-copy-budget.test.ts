@@ -16,6 +16,20 @@ import {
 } from './worktree-include-copy-budget'
 import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree-symlinks'
 
+function notSupported(): never {
+  throw Object.assign(new Error('ENOTSUP: operation not supported'), { code: 'ENOTSUP' })
+}
+
+// Why: Linux cases here assert the byte-for-byte path, so pin a filesystem
+// that cannot reflink rather than let the host's /tmp decide whether bytes
+// are charged.
+const NO_REFLINK = {
+  reflinkFileOrFail: async (): Promise<void> => notSupported(),
+  reflinkFile: async (): Promise<void> => notSupported(),
+  reflinkTree: async (): Promise<void> => notSupported(),
+  randomUUID: () => 'test'
+}
+
 const posixIt = process.platform === 'win32' ? it.skip : it
 
 // A byte budget small enough to trip on a fixture that stays trivial on disk —
@@ -290,6 +304,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
     const skipped = await createWorktreeCopiedPaths(primary, worktree, ['node_modules'], {
       platform: 'linux',
+      reflinkCloneDeps: NO_REFLINK,
       copyBudget: TINY_BYTE_BUDGET
     })
 
@@ -305,6 +320,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
     const skipped = await createWorktreeCopiedPaths(primary, worktree, ['.cache'], {
       platform: 'linux',
+      reflinkCloneDeps: NO_REFLINK,
       copyBudget: TINY_ENTRY_BUDGET
     })
 
@@ -319,6 +335,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
     const skipped = await createWorktreeCopiedPaths(primary, worktree, ['node_modules', '.env'], {
       platform: 'linux',
+      reflinkCloneDeps: NO_REFLINK,
       copyBudget: TINY_BYTE_BUDGET
     })
 
@@ -332,7 +349,8 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     writeFileSync(join(primary, '.vscode', 'settings.json'), '{}')
 
     const skipped = await createWorktreeCopiedPaths(primary, worktree, ['.env', '.vscode'], {
-      platform: 'linux'
+      platform: 'linux',
+      reflinkCloneDeps: NO_REFLINK
     })
 
     expect(skipped).toEqual([])
@@ -353,6 +371,22 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
     // An APFS clone is copy-on-write: bytes cost nothing, so refusing on bytes
     // would deny a copy that is already free.
+    expect(skipped).toEqual([])
+    expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
+  })
+
+  it('still clones on Linux when only the byte budget would be exceeded', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'pkg.js'), 'x'.repeat(200))
+    const cloneWorktreePath = vi.fn(async () => undefined)
+
+    const skipped = await createWorktreeCopiedPaths(primary, worktree, ['node_modules'], {
+      platform: 'linux',
+      cloneWorktreePath,
+      copyBudget: TINY_BYTE_BUDGET
+    })
+
+    // A reflink shares blocks the way an APFS clone does: bytes cost nothing.
     expect(skipped).toEqual([])
     expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
   })
@@ -446,6 +480,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
     await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
       platform: 'linux',
+      reflinkCloneDeps: NO_REFLINK,
       copyBudget: TINY_BYTE_BUDGET
     })
 
