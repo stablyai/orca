@@ -4,6 +4,11 @@ import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
+import {
+  comparableScriptPath,
+  isNodePackageScriptPath,
+  NODE_PACKAGE_SCRIPT_ENTRYPOINTS
+} from './node-package-script-entrypoints'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -49,10 +54,6 @@ const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
   '--experimental-loader'
 ])
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
-const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
-  codex: ['node_modules/@openai/codex/'],
-  gemini: ['node_modules/@google/gemini-cli/']
-}
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
@@ -194,16 +195,8 @@ function findInterpreterEntrypointToken(tokens: string[], firstNormalized: strin
   return null
 }
 
-function comparablePath(token: string): string {
-  return token
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/\\/g, '/')
-    .toLowerCase()
-}
-
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
-  const path = comparablePath(token)
+  const path = comparableScriptPath(token)
   for (const identity of EXACT_NODE_ENTRYPOINT_IDENTITIES) {
     if (identity.pattern.test(path)) {
       return { agent: identity.agent, processName: identity.processName }
@@ -214,7 +207,7 @@ function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | 
   if (!markers) {
     return null
   }
-  if (!markers.some((marker) => path.includes(marker))) {
+  if (!isNodePackageScriptPath(path, markers)) {
     return null
   }
   return recognizedAgentForProcess(normalized)
@@ -231,7 +224,7 @@ function recognizePythonModule(
 }
 
 function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess | null {
-  const path = comparablePath(token)
+  const path = comparableScriptPath(token)
   if (!PYTHON_SCRIPT_EXTENSION_RE.test(path)) {
     return null
   }

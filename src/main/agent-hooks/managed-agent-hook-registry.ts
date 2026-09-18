@@ -2,6 +2,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
+import { bobHookService } from '../bob/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
@@ -50,7 +51,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
+  ['kimi', () => kimiHookService.install()],
+  ['bob', () => bobHookService.install()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
@@ -71,7 +73,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['grok', () => grokHookService.refreshManagedScripts()],
   ['copilot', () => copilotHookService.refreshManagedScripts()],
   ['devin', () => devinHookService.refreshManagedScripts()],
-  ['kimi', () => kimiHookService.refreshManagedScripts()]
+  ['kimi', () => kimiHookService.refreshManagedScripts()],
+  ['bob', () => bobHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -88,7 +91,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
+  ['kimi', () => kimiHookService.remove()],
+  ['bob', () => bobHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -109,5 +113,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()],
   ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
+  ['kimi', () => kimiHookService.getStatus()],
+  ['bob', () => bobHookService.getStatus()]
 ]

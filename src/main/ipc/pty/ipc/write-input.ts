@@ -207,6 +207,7 @@ export function createPtyWriteInput(deps: {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+      runtime?.notePtyInput(args.id)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
@@ -236,6 +237,7 @@ export function createPtyWriteInput(deps: {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+      runtime?.notePtyInput(args.id)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }

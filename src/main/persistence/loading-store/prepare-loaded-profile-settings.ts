@@ -132,6 +132,10 @@ export function prepareLoadedProfileSettings(
   if (!claudeAgentTeamsDefaultDisabledMigrated) {
     markNeedsSave()
   }
+  const bobDefaultDisabledMigrated = parsed.settings?.bobDefaultDisabledMigrated === true
+  if (!bobDefaultDisabledMigrated) {
+    markNeedsSave()
+  }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
   if (
@@ -146,6 +150,11 @@ export function prepareLoadedProfileSettings(
     !migratedDisabledTuiAgents.includes('claude-agent-teams')
   ) {
     migratedDisabledTuiAgents.push('claude-agent-teams')
+  }
+  // Why: existing profiles predate IBM Bob, so seed the opt-in default once
+  // instead of exposing it to everyone who holds the unrelated `bob` binary.
+  if (!bobDefaultDisabledMigrated && !migratedDisabledTuiAgents.includes('bob')) {
+    migratedDisabledTuiAgents.push('bob')
   }
   const migratedWindowsRuntimeDefault =
     parsed.settings?.localWindowsRuntimeDefault === undefined
