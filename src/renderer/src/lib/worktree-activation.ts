@@ -301,11 +301,12 @@ export function activateAndRevealWorktree(
     !opts?.backendStartupTerminalSpawned &&
     opts?.providesInitialSurface !== true
   ) {
+    // Why: runtime hosts skip local seed-if-empty; the wake helper is the remaining surface path.
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       ...(opts && 'runtimeEnvironmentId' in opts
         ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
         : {}),
-      startup: opts?.startup,
+      startup: opts?.startup ?? opts?.seedStartupIfEmpty,
       agent: opts?.agent
     })
   }

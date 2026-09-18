@@ -1,15 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  activateAndRevealFolderWorkspace: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  buildSidebarDefaultAgentStartup: vi.fn(),
-  storeState: {
-    getKnownWorktreeById: vi.fn(),
-    repos: [] as { id: string; path: string; connectionId: string | null }[],
-    settings: null as { defaultTuiAgent: string } | null
+type SidebarActivationRepo = {
+  id: string
+  path: string
+  connectionId: string | null
+  executionHostId?: string
+}
+
+const mocks = vi.hoisted(() => {
+  const repos: SidebarActivationRepo[] = []
+  const settings: { defaultTuiAgent: string } | null = null
+  return {
+    activateAndRevealFolderWorkspace: vi.fn(),
+    activateAndRevealWorktree: vi.fn(),
+    buildSidebarDefaultAgentStartup: vi.fn(),
+    storeState: {
+      getKnownWorktreeById: vi.fn(),
+      repos,
+      settings
+    }
   }
-}))
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
@@ -26,8 +37,8 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/store/slices/repo-host-identity', () => ({
   findRepoForHost: vi.fn(
-    (repos: unknown[], repoId: string) =>
-      (repos as { id: string }[]).find((repo) => repo.id === repoId) ?? null
+    (repos: SidebarActivationRepo[], repoId: string) =>
+      repos.find((repo) => repo.id === repoId) ?? null
   )
 }))
 
@@ -35,6 +46,7 @@ vi.mock('@/lib/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: vi.fn()
 }))
 
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { activateWorktreeFromSidebar } from './sidebar-worktree-activation'
 
 describe('sidebar worktree activation', () => {
@@ -45,6 +57,7 @@ describe('sidebar worktree activation', () => {
     mocks.storeState.getKnownWorktreeById.mockReset()
     mocks.storeState.repos = []
     mocks.storeState.settings = null
+    vi.mocked(getLocalProjectExecutionRuntimeContext).mockClear()
   })
 
   afterEach(() => {
@@ -107,6 +120,37 @@ describe('sidebar worktree activation', () => {
       executionHostId: 'local'
     })
     expect(mocks.activateAndRevealWorktree.mock.calls[0]?.[1]).not.toHaveProperty('startup')
+    expect(getLocalProjectExecutionRuntimeContext).toHaveBeenCalledWith(
+      mocks.storeState,
+      'wt-empty'
+    )
+  })
+
+  it('does not apply local project runtime when the selected host is SSH', async () => {
+    const seedStartupIfEmpty = { command: 'codex', launchAgent: 'codex' }
+    stubSidebarDefaultAgentStore(seedStartupIfEmpty)
+    mocks.storeState.getKnownWorktreeById.mockReturnValue({
+      id: 'wt-empty',
+      repoId: 'repo-1',
+      hostId: 'ssh:ssh-1'
+    })
+    mocks.storeState.repos = [
+      { id: 'repo-1', path: '/srv/repo', connectionId: null, executionHostId: 'ssh:ssh-1' }
+    ]
+
+    await activateWorktreeFromSidebar('wt-empty', 'ssh:ssh-1', { launchDefaultAgent: true })
+
+    expect(getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
+    expect(mocks.buildSidebarDefaultAgentStartup).toHaveBeenCalledWith(
+      mocks.storeState.settings,
+      mocks.storeState.repos[0],
+      undefined
+    )
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-empty', {
+      revealInSidebar: false,
+      seedStartupIfEmpty,
+      executionHostId: 'ssh:ssh-1'
+    })
   })
 })
 

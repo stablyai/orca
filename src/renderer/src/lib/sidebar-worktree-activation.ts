@@ -5,7 +5,8 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { useAppStore } from '@/store'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -83,6 +84,11 @@ function resolveSidebarDefaultAgentStartup(worktreeId: string, executionHostId?:
   if (!repo) {
     return undefined
   }
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
+  const selectedHostId = worktree.hostId ?? executionHostId ?? LOCAL_EXECUTION_HOST_ID
+  // Why: the bare-id local runtime lookup can hit a Windows/WSL twin of an SSH/runtime row.
+  const projectRuntime =
+    selectedHostId === LOCAL_EXECUTION_HOST_ID && !repoIsRemote(repo)
+      ? getLocalProjectExecutionRuntimeContext(state, worktreeId)
+      : undefined
   return buildSidebarDefaultAgentStartup(state.settings, repo, projectRuntime)
 }

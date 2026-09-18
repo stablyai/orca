@@ -8,6 +8,9 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
@@ -15,7 +18,7 @@ import type { WorktreeStartupPayload } from './worktree-startup-payload'
 
 export function buildSidebarDefaultAgentStartup(
   settings: GlobalSettings | null,
-  repo: Pick<Repo, 'connectionId' | 'path'>,
+  repo: Pick<Repo, 'connectionId' | 'path' | 'executionHostId'>,
   projectRuntime?: ProjectExecutionRuntimeResolution
 ): WorktreeStartupPayload | undefined {
   const agent = settings?.defaultTuiAgent
@@ -28,6 +31,8 @@ export function buildSidebarDefaultAgentStartup(
     return undefined
   }
 
+  const isRemote = repoIsRemote(repo)
+  const sshConnectionId = getRepoSshConnectionId(repo)
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',
@@ -36,10 +41,14 @@ export function buildSidebarDefaultAgentStartup(
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
     sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
       agent,
-      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(repo.connectionId)
+      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(sshConnectionId)
     }),
-    platform: getAgentLaunchPlatformForRepo(repo, projectRuntime),
-    isRemote: Boolean(repo.connectionId),
+    platform: isRemote
+      ? isWindowsAbsolutePathLike(repo.path)
+        ? 'win32'
+        : 'linux'
+      : getAgentLaunchPlatformForRepo(repo, projectRuntime),
+    isRemote,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
