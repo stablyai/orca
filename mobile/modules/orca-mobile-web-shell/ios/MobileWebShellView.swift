@@ -146,7 +146,7 @@ private final class MobileWebShellBridgeReceiver: NSObject, WKScriptMessageHandl
   }
 }
 
-internal final class MobileWebShellBridgeUnavailableException: Exception {
+internal final class MobileWebShellBridgeUnavailableException: Exception, @unchecked Sendable {
   override var reason: String {
     "The mobile web shell bridge is not installed on this view"
   }
@@ -154,7 +154,8 @@ internal final class MobileWebShellBridgeUnavailableException: Exception {
 
 /// Thrown rather than dropped: the only caller is the React Native host, and a silent drop would
 /// turn a chunking bug there into a request that never settles.
-internal final class MobileWebShellBridgeMessageTooLargeException: GenericException<Int> {
+internal final class MobileWebShellBridgeMessageTooLargeException: GenericException<Int>,
+  @unchecked Sendable {
   override var reason: String {
     "A bridge message of \(param) bytes exceeds the \(MobileWebShellBridge.maxMessageByteCount) byte cap"
   }
@@ -330,12 +331,15 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     guard MobileWebShellBridge.acceptsByteCount(byteCount) else {
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
+    // Two `in:` labels is the real signature: `in frame:` and `in contentWorld:`. Naming the
+    // completion handler is what picks it over the `async` overload.
     webView.callAsyncJavaScript(
       bridgeDeliver,
       arguments: ["m": json],
       in: nil,
-      contentWorld: .page
-    ) { _ in }
+      in: .page,
+      completionHandler: nil
+    )
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
