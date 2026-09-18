@@ -33,7 +33,10 @@ const INIT = {
 }
 
 /** What the page mounted, and what it holds — the two things the provider decides. */
-const screen = { mounts: 0, context: null as RpcClientContextValue | null }
+const screen: { mounts: number; context: RpcClientContextValue | null } = {
+  mounts: 0,
+  context: null
+}
 
 function Screen(): null {
   screen.context = useRpcClientContext()
