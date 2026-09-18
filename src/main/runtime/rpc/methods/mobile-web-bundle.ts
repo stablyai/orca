@@ -5,6 +5,9 @@
  * No SSH or relay proxying, ever. The bundle is an artifact of the desktop the phone paired with,
  * not something a remote execution host owns, so a runtime answers only out of its own install and
  * never forwards these methods to another host.
+ *
+ * `asContractError` is a total catch over the verify-and-read block: every host-side failure in
+ * there, whatever its cause, reaches the client as `mobile_web_bundle_asset_changed`.
  */
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
@@ -20,6 +23,7 @@ import {
   loadBundledMobileWebBundle,
   type BundledMobileWebBundle
 } from '../../bundled-mobile-web-bundle'
+import { isClientDisconnectedError } from '../../orca-runtime-core'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import {
   readMobileWebBundleAssetChunk,
@@ -44,16 +48,9 @@ function requireBundle(): BundledMobileWebBundle {
   return bundle
 }
 
-/** Named so the read path can rethrow it unchanged; the message is the repo-wide idiom. */
-class ClientDisconnectedError extends Error {
-  constructor() {
-    super('client_disconnected')
-  }
-}
-
 function abortIfDisconnected(ctx: RpcContext): void {
   if (ctx.signal?.aborted) {
-    throw new ClientDisconnectedError()
+    throw new Error('client_disconnected')
   }
 }
 
@@ -61,7 +58,7 @@ function abortIfDisconnected(ctx: RpcContext): void {
  *  promised — is one thing to a client: this bundle no longer matches the manifest it was handed.
  *  The host path stays on the host; the reply carries only the code. */
 function asContractError(error: unknown, path: string): unknown {
-  if (error instanceof InvalidArgumentError || error instanceof ClientDisconnectedError) {
+  if (error instanceof InvalidArgumentError || isClientDisconnectedError(error)) {
     return error
   }
   console.warn(`[mobile-web-bundle] read failed for ${path}:`, error)
