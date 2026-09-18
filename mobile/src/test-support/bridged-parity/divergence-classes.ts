@@ -83,18 +83,49 @@ export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedP
 }
 
 /**
+ * Why a class the run still counts is a bound on the claim rather than a defect left open.
+ *
+ * A class with an entry here is one the suite is allowed to see; a class without one has to be
+ * zero, which is what `reply-meta-required` became. Each reason is a property of the recorder or of
+ * the wire, measured rather than argued, so it can be checked without rerunning anything.
+ */
+export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityClass, string>>> = {
+  'result-absent-settlement':
+    'the recorder injects `{ ok: true }` with no `result` at the scripted sender port, below the ' +
+    'frame validation both sides do; `isRpcResponse` drops that shape too, so no real frame ' +
+    'boundary carries it and byte-identical replay is unavailable at any bridge',
+  'result-absent-observation':
+    'the same injection, seen first as a different checkpoint set or a lost effect rather than as ' +
+    'the settlement that never arrives',
+  'params-undefined':
+    'an own property valued `undefined` is already absent from the bytes the native run puts on ' +
+    'the wire, so the bridged run sends the identical frame; what differs is the pre-serialization ' +
+    'object a scenario step is matched against, which is above the altitude any transport has',
+  'write-ordinal':
+    'not a reorder on the wire: the page posts its frames in call order and the payloads publish ' +
+    'in that order, but the logical `sendRequest` stamp and each device effect happen at the call ' +
+    'while a same-turn `subscribe` payload publishes one delivery later'
+}
+
+/**
  * What this tree measures, per class, over all 787 goldens.
  *
  * A ratchet, not a description: the flagged run fails when a class grows, when anything lands in
  * `unclassified`, or when fewer goldens replay byte-identically than this says. Since the total is
- * fixed at the size of the corpus, those three together pin every number here exactly.
+ * fixed at the size of the corpus, those three together pin every number here exactly. It moves
+ * down as a class closes and never up.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 24,
-  'reply-meta-required': 372,
-  'result-absent-settlement': 338,
+  identical: 396,
+  // Closed by the `_meta` widening: the page's reader is `isRpcResponse` itself.
+  'reply-meta-required': 0,
+  // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that
+  // now arrives differs before the ordinal that also moved does. Nothing stopped replaying
+  // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
+  // hide one.
+  'result-absent-settlement': 341,
   'result-absent-observation': 7,
   'params-undefined': 33,
-  'write-ordinal': 13,
+  'write-ordinal': 10,
   unclassified: 0
 }

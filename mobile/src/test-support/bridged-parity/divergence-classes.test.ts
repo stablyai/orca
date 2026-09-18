@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyBridgedParity,
+  BRIDGED_PARITY_BASELINE,
+  BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_FLAG,
+  type BridgedParityClass,
   type BridgedParityEvidence
 } from './divergence-classes'
 
@@ -65,5 +68,22 @@ describe('classifying one diverging golden', () => {
 
   it('refuses to name a golden that diverged in no field at all', () => {
     expect(classifyBridgedParity(base)).toBe('unclassified')
+  })
+})
+
+describe('what the pin still admits', () => {
+  const classes = Object.keys(BRIDGED_PARITY_BASELINE).filter(
+    (name): name is BridgedParityClass => name !== 'identical'
+  )
+
+  it('gives every class it still counts a reason, and every closed one none', () => {
+    const reasoned = classes.filter((name) => BRIDGED_PARITY_EXCLUSIONS[name] !== undefined)
+    const counted = classes.filter((name) => BRIDGED_PARITY_BASELINE[name] > 0)
+    expect([...reasoned].sort()).toEqual([...counted].sort())
+  })
+
+  it('leaves nothing for the reader to close: the `_meta` class is zero', () => {
+    expect(BRIDGED_PARITY_BASELINE['reply-meta-required']).toBe(0)
+    expect(BRIDGED_PARITY_EXCLUSIONS['reply-meta-required']).toBeUndefined()
   })
 })

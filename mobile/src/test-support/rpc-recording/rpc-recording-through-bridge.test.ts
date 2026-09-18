@@ -8,6 +8,7 @@ import {
 import type { RpcClient } from '../../transport/rpc-client'
 import {
   BRIDGED_PARITY_BASELINE,
+  BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_FLAG,
   classifyBridgedParity,
   type BridgedParityClass,
@@ -44,51 +45,48 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  *
  * Byte-identical replay where it holds, and the named shape of every divergence where it does not.
  * A golden that matches is compared in full; one that does not is classified by
- * `classifyBridgedParity`, which reads the frames and the scenario rather than the failure's text,
- * and the run fails if any class grows past `BRIDGED_PARITY_BASELINE` or if a single golden lands
- * in `unclassified`. The corpus is a fixed size, so those two together pin every count exactly.
+ * `classifyBridgedParity`, which reads the frames and the scenario rather than the failure's text.
+ * The run fails if any class grows past `BRIDGED_PARITY_BASELINE`, if a single golden lands in
+ * `unclassified`, or if one diverges in a class `BRIDGED_PARITY_EXCLUSIONS` does not name. The
+ * corpus is a fixed size, so those together pin every count exactly.
  *
- * Five classes over the 787, none of them a reason to re-record anything, and 24 goldens that
- * replay byte for byte: 372 / 338 / 7 / 33 / 13.
+ * 396 of the 787 replay byte for byte. The rest are 341 / 7 / 33 /
+ * 10, and none of them is a reason to re-record anything.
  *
- * 1. **reply-meta-required, 372.** `BridgeReplyPayloadSchema` requires `_meta` on both arms. The native
- *    client's own acceptance predicate for a reply off the wire, `transport/rpc-response-shape.ts`,
- *    requires none, and `src/shared/runtime-rpc-envelope.ts` — the envelope clients and runtimes
- *    share — makes `_meta` optional on a failure and its `runtimeId` nullable. The page's reader is
- *    strictly narrower than the transport it stands in for, so replies the phone accepts today are
- *    refused, dropped with a diagnostic, and settle nothing. This is the class the second replay
- *    names, the one `withReplyMeta` supplies the field on: a golden that comes out byte-identical
- *    once the page is given `_meta` had no other reason to diverge.
- * 2. **result-absent-settlement, 338** and **3. result-absent-observation, 7.** `{ ok: true }` with no
- *    `result` key is refused by the page's reader and by `isRpcResponse` alike, so this one is not
- *    a bridge defect: the recorder injects that partition at the scripted sender port, below the
- *    frame validation both sides do, which is what the README means by not claiming malformed-frame
- *    coverage. A reply shape the wire itself drops cannot cross a real frame boundary, so
- *    byte-identical replay is not available for it at any bridge. The two classes are the same
- *    cause seen twice. In 338 the first thing that differs is a settlement that never arrives. In
- *    the other seven the listener got far enough to act, so what differs first is downstream of the
- *    reply rather than the reply itself: three relay and pairing matrix goldens reach a different
- *    set of checkpoints, and four notification and chat ones lose an effect, either the
- *    stream-listener crash a `TypeError` on the absent result used to raise or a dismissal write
- *    that no longer happens. The suite names all seven in its output for as long as the class is
- *    small enough to name.
- * 4. **params-undefined, 33.** An own property whose value is `undefined` does not survive JSON. The
- *    wire frame is serialized either way, so the desktop sees the same bytes; what changes is that
- *    `projectMobileRpcRequestParams` runs shell-side on params that have already lost the key.
- * 5. **write-ordinal, 13.** Not a reorder on the wire: the page posts its frames in the order the
- *    operation made them and the payloads publish below the bridge in that same order. What moves
- *    is every write the operation makes *above* the bridge, the logical `sendRequest` stamp and
- *    each device effect, because those happen at the call while a same-turn `subscribe` payload is
- *    published a delivery later. `write-ordinal.ts` counts both into one sequence.
+ * 1. **result-absent-settlement, 341** and **2. result-absent-observation, 7.**
+ *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
+ *    alike, so this one is not a bridge defect: the recorder injects that partition at the scripted
+ *    sender port, below the frame validation both sides do, which is what the README means by not
+ *    claiming malformed-frame coverage. A reply shape the wire itself drops cannot cross a real
+ *    frame boundary, so byte-identical replay is not available for it at any bridge. The two
+ *    classes are the same cause seen twice. In the first, what differs first is the settlement,
+ *    which now arrives as a refusal the caller can read rather than never arriving at all. In the
+ *    others the listener got far enough to act, so what differs first is downstream of the reply:
+ *    a different set of checkpoints, or an effect that no longer happens. The suite names all of
+ *    the second class in its output for as long as the class is small enough to name.
+ * 3. **params-undefined, 33.** An own property whose value is `undefined` does not survive
+ *    JSON — and it does not survive the native path either. `tw-smart-search-all-providers` records
+ *    `{"filter":"assigned","limit":50}` as the bytes its `linear.listIssues` request put on the
+ *    wire, with the scenario's `workspaceId` already gone, so the bridged run sends the identical
+ *    frame. What differs is the object `ScriptedRpcTransport.complete` matches the scenario step
+ *    against, which is the params as the shell's client received them, one level above any
+ *    serialization. No transport can carry that difference, and the projection the brief named is
+ *    not where it lives: `projectMobileRpcRequestParams` rewrites `worktree.ps` alone, none of the
+ *    ten scenarios in this class calls it, and the bridge host forwards into the same
+ *    `StableLogicalRpcClient` the native screens hold, so there is no shell-side copy to move.
+ * 4. **write-ordinal, 10.** Not a reorder on the wire: the page posts its frames in the order
+ *    the operation made them and the payloads publish below the bridge in that same order. What
+ *    moves is every write the operation makes *above* the bridge, the logical `sendRequest` stamp
+ *    and each device effect, because those happen at the call while a same-turn `subscribe` payload
+ *    is published a delivery later. `write-ordinal.ts` counts both into one sequence.
  *
- * ## What C1.6 owns and what it does not
+ * ## What C0.8 closed
  *
- * C1.6 closes the first class and nothing else. The ordinal class is excluded from it by the
- * predicate above: it is an artefact of where the recorder stamps, not of the bridge, and the only
- * recorder change that would close it — a logical `subscribe` stamp taken above the wrapper — moves
- * golden bodies, so no recorder engine change lands here beyond the seam itself. The two
- * `result-absent` classes are a bound on the claim rather than a bug, and `params-undefined` is a
- * shell-side projection question for whoever moves that screen.
+ * The class this suite was landed to name — a page reader narrower than the transport it stands in
+ * for — is gone: `BridgeReplyPayloadSchema` is `isRpcResponse` itself, so every reply the phone
+ * accepts today crosses. A frame the reader still refuses now settles the exchange it named instead
+ * of leaving it pending for the life of the document. The counterfactual replay stays, and its
+ * class stays pinned at zero: it is what tells a future narrowing apart from a payload that moved.
  */
 
 const root = resolve(import.meta.dirname, '../../../..')
@@ -265,7 +263,7 @@ describe.runIf(process.env[BRIDGED_PARITY_FLAG] === '1')(
         golden.timeoutMs
       )
     }
-    it('partitions every divergence into the classes the pin names', () => {
+    it('replays every golden byte for byte or in a class a predicate excludes by name', () => {
       const table = [
         `identical ${identical}`,
         ...Object.entries(counts).map(([name, count]) => {
@@ -275,11 +273,24 @@ describe.runIf(process.env[BRIDGED_PARITY_FLAG] === '1')(
             : `${name} ${count}`
         })
       ].join('\n')
-      process.stdout.write(`\nbridged parity over ${identical + total(counts)} goldens\n${table}\n`)
+      const corpus = identical + total(counts)
+      const excluded = Object.entries(counts).filter(
+        ([name]) => BRIDGED_PARITY_EXCLUSIONS[asClass(name)] !== undefined
+      )
+      const excludedCount = total(Object.fromEntries(excluded))
+      process.stdout.write(`\nbridged parity over ${corpus} goldens\n${table}\n`)
+      process.stdout.write(`\nexcluded ${excludedCount} of ${corpus}, each with the reason it is\n`)
+      for (const [name, count] of excluded) {
+        process.stdout.write(`  ${name} ${count}: ${BRIDGED_PARITY_EXCLUSIONS[asClass(name)]}\n`)
+      }
       for (const [name, sample] of samples) {
         process.stdout.write(`\n${name} sample\n${sample}\n`)
       }
       expect(counts.unclassified).toBe(0)
+      // The whole claim in one line: nothing diverges that no predicate has named and counted.
+      expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
+        divergedOutsideAnExcludedClass: 0
+      })
       for (const [name, count] of Object.entries(counts)) {
         expect({ [name]: count }).toEqual({
           [name]: Math.min(count, BRIDGED_PARITY_BASELINE[asClass(name)])
