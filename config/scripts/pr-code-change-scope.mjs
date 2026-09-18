@@ -120,7 +120,9 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/src/',
   'mobile/package.json',
   'mobile/pnpm-lock.yaml',
-  'mobile/modules/orca-mobile-web-shell/'
+  'mobile/modules/orca-mobile-web-shell/',
+  // build:mobile-web:app lives here, so a script-only edit still has to prove the bundle builds.
+  'package.json'
 ]
 
 const CROSS_VERSION_WIRE_PREFIXES = [

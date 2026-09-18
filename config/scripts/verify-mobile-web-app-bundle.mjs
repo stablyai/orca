@@ -10,13 +10,15 @@ import { assertMobileWebBundleBuilt } from './verify-packaged-mobile-web-bundle.
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const bundleDir = join(projectDir, 'out', 'mobile-web-app')
 
+/** One script, one document, and the images the route tree imports. */
+export const MOBILE_WEB_APP_BUNDLE_MAX_ASSETS = 64
+
 /**
- * Phase C budget for the app bundle, not the contract ceiling (10 MiB per asset,
+ * Phase C byte budget for the app bundle, not the contract ceiling (10 MiB per asset,
  * MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES). Deliberately below it so growth trips a build rather than a
  * refused asset on a phone. esbuild `splitting` does not help a single entry with only static
  * imports — it emits one chunk — so shrinking this means cutting code, not re-chunking.
  */
-export const MOBILE_WEB_APP_BUNDLE_MAX_ASSETS = 64
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
 /** Every tree whose bytes reach the buildId, so a CRLF checkout cannot fork it. */

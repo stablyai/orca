@@ -49,10 +49,16 @@ async function listSourceFiles(directory) {
  * the buildId. .gitattributes pins eol=lf; this is what notices when that pin stops working.
  */
 /** Pinned `-text` in .gitattributes: they may legitimately contain 0x0d. */
-const BINARY_SOURCE_EXTENSIONS = [
+// The binary asset types a page source tree carries, skipped because a 0x0d in them means nothing.
+// .svg is absent on purpose: it is text, so the eol=lf pin applies and a CRLF .svg forks the
+// buildId. Kept in step with the -text exemptions in .gitattributes by a test.
+
+export const BINARY_SOURCE_EXTENSIONS = [
   '.png',
   '.jpg',
   '.jpeg',
+  '.gif',
+  '.ico',
   '.webp',
   '.ttf',
   '.otf',

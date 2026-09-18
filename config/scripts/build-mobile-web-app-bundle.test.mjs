@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
@@ -21,7 +21,10 @@ import {
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_APP_SOURCE_DIRS
 } from './verify-mobile-web-app-bundle.mjs'
-import { assertNoCarriageReturnsInSource } from './verify-mobile-web-bundle.mjs'
+import {
+  BINARY_SOURCE_EXTENSIONS,
+  assertNoCarriageReturnsInSource
+} from './verify-mobile-web-bundle.mjs'
 import { MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
@@ -117,6 +120,22 @@ describe('the synthesized RequireContext', () => {
   it('does not answer inherited Object keys', () => {
     const context = build({ './h/index.tsx': {} })
     expect(() => context('constructor')).toThrow('no route module')
+  })
+})
+
+describe('the CRLF pin', () => {
+  it('exempts the same extensions in .gitattributes as the CRLF scan skips', async () => {
+    const attributes = await readFile(join(projectDir, '.gitattributes'), 'utf8')
+    for (const tree of MOBILE_WEB_APP_SOURCE_DIRS) {
+      const pattern = `/${relative(projectDir, tree).split('\\').join('/')}/**`
+      for (const extension of BINARY_SOURCE_EXTENSIONS) {
+        // Without the exemption the blanket `text eol=lf` pin above it rewrites the binary and
+        // every asset hash with it.
+        expect(attributes, `${pattern}/*${extension} is not exempt`).toContain(
+          `${pattern}/*${extension} -text`
+        )
+      }
+    }
   })
 })
 

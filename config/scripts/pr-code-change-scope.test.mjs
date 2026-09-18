@@ -262,7 +262,9 @@ describe('per-job path classification', () => {
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',
       'mobile/src/transport/client-context.web.tsx',
-      'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'
+      'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      // build:mobile-web:app is defined here; an edit to it changes what the job runs.
+      'package.json'
     ]) {
       expect(classifyPrJobs([file]).mobile_web_app, file).toBe(true)
     }
