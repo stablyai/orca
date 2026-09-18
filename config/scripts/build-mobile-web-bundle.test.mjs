@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileWebBundle,
@@ -161,7 +160,7 @@ describe('computeMobileWebBundleBuildId', () => {
 })
 
 describe('isDirectInvocation', () => {
-  const thisFile = fileURLToPath(import.meta.url)
+  const thisFile = import.meta.filename
 
   it('matches the path this module was loaded from', () => {
     expect(isDirectInvocation(import.meta.url, thisFile)).toBe(true)
