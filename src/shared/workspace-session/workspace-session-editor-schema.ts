@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const persistedOpenFileSchema = z.object({
-  // Why: additive; `.catch` keeps a corrupt id from salvaging the whole file.
+  // Why: additive; a corrupt id falls back to undefined rather than dropping the file.
   id: z.string().min(1).optional().catch(undefined),
   filePath: z.string(),
   relativePath: z.string(),
