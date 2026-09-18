@@ -52,10 +52,13 @@ async function renderRoute(): Promise<ReactTestRenderer> {
   return rendered.tree
 }
 
+const dev = globalThis as { __DEV__?: boolean }
+
 describe('the hybrid shell route', () => {
   beforeEach(() => {
     dependencies.storage.clear()
     dependencies.mounted.length = 0
+    dev.__DEV__ = true
   })
 
   it('redirects to the host screen with the flag unset, and mounts nothing', async () => {
@@ -76,6 +79,14 @@ describe('the hybrid shell route', () => {
     const tree = await renderRoute()
     expect(byName(tree, 'Redirect')).toEqual([])
     expect(dependencies.mounted).toEqual(['host-1'])
+  })
+
+  it('redirects a store build whose container kept a flag a development build set', async () => {
+    delete dev.__DEV__
+    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+    const tree = await renderRoute()
+    expect(byName(tree, 'Redirect')).toHaveLength(1)
+    expect(dependencies.mounted).toEqual([])
   })
 
   it('neither redirects nor mounts until the flag has been read', async () => {
