@@ -822,4 +822,23 @@ describe('launchOrcaApp', () => {
       }
     }
   })
+
+  it('passes --disable-gpu through direct open launches', () => {
+    process.env.ORCA_APP_EXECUTABLE = '/opt/orca/Orca'
+    process.env.ELECTRON_RUN_AS_NODE = '1'
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    launchOrcaApp({ disableGpu: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/opt/orca/Orca',
+      ['--disable-gpu', PIN_PROFILE],
+      expect.objectContaining({
+        detached: true,
+        stdio: 'ignore',
+        env: expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: '1' })
+      })
+    )
+  })
 })

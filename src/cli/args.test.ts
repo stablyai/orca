@@ -47,6 +47,13 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('url')).toBe('https://example.com')
   })
 
+  it('parses the open graphics fallback as a boolean flag', () => {
+    const parsed = parseArgs(['open', '--disable-gpu'])
+
+    expect(parsed.commandPath).toEqual(['open'])
+    expect(parsed.flags.get('disable-gpu')).toBe(true)
+  })
+
   it('does not consume a command token after an unknown flag', () => {
     const parsed = parseArgs(['--jso', 'worktree', 'list'], [['worktree', 'list']])
 

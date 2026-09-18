@@ -8,6 +8,7 @@ import {
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { LaunchOrcaAppOptions } from './launch'
 import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import {
@@ -313,7 +314,12 @@ export class RuntimeClient {
     }
   }
 
-  async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
+  async openOrca(
+    timeoutMs = 15_000,
+    options?: LaunchOrcaAppOptions
+  ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
+    return this.remote
+      ? this.getCliStatus()
+      : openLocalOrca(() => this.getCliStatus(), timeoutMs, options)
   }
 }
