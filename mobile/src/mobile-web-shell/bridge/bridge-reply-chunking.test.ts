@@ -38,6 +38,17 @@ function framesOf(split: BridgeReplySplit): BridgeReplyMessage[] {
   return split.frames
 }
 
+const ASTRAL = String.fromCodePoint(0x1f600)
+const LONE_HIGH_SURROGATE = String.fromCharCode(0xd800)
+
+/** A payload whose serialized form is exactly the ceiling, `ASTRAL` all the way to the last bytes. */
+function ceilingPayload(): BridgeReplyPayload {
+  const overhead = JSON.stringify(payloadOf('')).length
+  const pairs = Math.floor((BRIDGE_MAX_REPLY_BYTES - overhead) / 4)
+  const padding = BRIDGE_MAX_REPLY_BYTES - overhead - pairs * 4
+  return payloadOf(ASTRAL.repeat(pairs) + 'x'.repeat(padding))
+}
+
 /** Feeds frames in the given order and returns the assembler's answer to the last one. */
 function assemble(frames: BridgeReplyMessage[]): ReturnType<BridgeReplyAssembler['accept']> {
   const assembler = new BridgeReplyAssembler()
@@ -86,6 +97,46 @@ describe('splitBridgeReply', () => {
       expect(utf8ByteLength(JSON.stringify(frame))).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
       expect(readBridgeHostMessage(JSON.stringify(frame)).ok).toBe(true)
     }
+  })
+
+  it('never cuts a frame inside a surrogate pair, at any cut parity', () => {
+    for (let padding = 0; padding < 4; padding += 1) {
+      const payload = payloadOf(`${'x'.repeat(padding)}${ASTRAL.repeat(1_000_000)}`)
+      const frames = framesOf(splitBridgeReply(ID, payload))
+      expect(frames.length).toBeGreaterThan(2)
+      for (const frame of frames) {
+        const chunk = 'part' in frame ? frame.chunk : ''
+        const first = chunk.charCodeAt(0)
+        const last = chunk.charCodeAt(chunk.length - 1)
+        expect([
+          padding,
+          first >= 0xdc00 && first <= 0xdfff,
+          last >= 0xd800 && last <= 0xdbff
+        ]).toEqual([padding, false, false])
+      }
+    }
+  })
+
+  it('round-trips a reply of exactly the ceiling, cuts and all', () => {
+    const payload = ceilingPayload()
+    expect(assemble(framesOf(splitBridgeReply(ID, payload)))).toEqual({
+      status: 'complete',
+      payload
+    })
+  })
+
+  it('refuses a lone-surrogate reply over the ceiling rather than splitting it', () => {
+    // A lone surrogate is escaped to six characters, so this is past the ceiling six times over.
+    const payload = payloadOf(LONE_HIGH_SURROGATE.repeat(BRIDGE_MAX_REPLY_BYTES / 6))
+    expect(splitBridgeReply(ID, payload)).toEqual({ ok: false, refusal: 'reply-too-large' })
+  })
+
+  it('round-trips lone surrogates that fit', () => {
+    const payload = payloadOf(LONE_HIGH_SURROGATE.repeat(200_000))
+    expect(assemble(framesOf(splitBridgeReply(ID, payload)))).toEqual({
+      status: 'complete',
+      payload
+    })
   })
 
   it('stays under the frame cap when every byte escapes to six', () => {
@@ -237,6 +288,30 @@ describe('BridgeReplyAssembler refusals', () => {
     expect(assembler.accept(part(0, 2, 'a', idOf(BRIDGE_MAX_PENDING_REQUESTS)))).toEqual({
       status: 'pending'
     })
+  })
+
+  it('measures the joined reply, so a pair split across two parts is not counted twice', () => {
+    const payload = ceilingPayload()
+    const serialized = JSON.stringify(payload)
+    // One code unit into the first pair: each half would encode as three bytes instead of the four
+    // the pair costs whole, which is two bytes of headroom this reply does not have.
+    const cut = serialized.indexOf(ASTRAL) + 1
+    expect(
+      assemble([part(0, 2, serialized.slice(0, cut)), part(1, 2, serialized.slice(cut))])
+    ).toEqual({ status: 'complete', payload })
+  })
+
+  it('refuses a joined reply past the ceiling whose code units still fit', () => {
+    // Astral text is two code units to four bytes, so counting units alone would let this through.
+    const overhead = JSON.stringify(payloadOf('')).length
+    const pairs = Math.floor((BRIDGE_MAX_REPLY_BYTES - overhead) / 4) + 1
+    const serialized = JSON.stringify(payloadOf(ASTRAL.repeat(pairs)))
+    expect(utf8ByteLength(serialized)).toBeGreaterThan(BRIDGE_MAX_REPLY_BYTES)
+    expect(serialized.length).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_BYTES)
+    const cut = serialized.indexOf(ASTRAL) + 1
+    expect(
+      assemble([part(0, 2, serialized.slice(0, cut)), part(1, 2, serialized.slice(cut))])
+    ).toEqual({ status: 'failed', refusal: 'reply-too-large' })
   })
 
   it('accepts parts summing to exactly the ceiling', () => {

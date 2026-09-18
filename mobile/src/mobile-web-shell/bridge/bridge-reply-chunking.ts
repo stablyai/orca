@@ -60,7 +60,22 @@ function chunkEnd(id: string, serialized: string, start: number): number {
     const scaled = Math.floor((end - start) * (BRIDGE_MAX_MESSAGE_BYTES / bytes))
     end = start + Math.max(1, Math.min(scaled, end - start - 1))
   }
-  return end
+  return end - start > 1 && splitsASurrogatePair(serialized, end) ? end - 1 : end
+}
+
+/**
+ * A pair cut in half encodes as two replacements, three bytes each, where the pair is four: the
+ * halves would disagree with the whole about the reply's size, and neither frame would be
+ * well-formed UTF-8 for the native bridge to carry. Backing the cut up one unit costs one code unit
+ * of a frame, and shrinking a frame that already fits keeps it fitting.
+ */
+function splitsASurrogatePair(serialized: string, end: number): boolean {
+  if (end >= serialized.length) {
+    return false
+  }
+  const last = serialized.charCodeAt(end - 1)
+  const next = serialized.charCodeAt(end)
+  return last >= 0xd800 && last <= 0xdbff && next >= 0xdc00 && next <= 0xdfff
 }
 
 /**
@@ -100,7 +115,7 @@ export function splitBridgeReply(id: string, payload: BridgeReplyPayload): Bridg
   }
 }
 
-type PendingReply = { of: number; chunks: Map<number, string>; bytes: number }
+type PendingReply = { of: number; chunks: Map<number, string>; units: number }
 
 /**
  * Parts may arrive in any order, so they are held by index rather than appended. Every failure drops
@@ -126,16 +141,20 @@ export class BridgeReplyAssembler {
     if (held === undefined && this.pending.size >= BRIDGE_MAX_PENDING_REQUESTS) {
       return this.fail(id, 'too-many-pending')
     }
-    const entry = held ?? { of: part.of, chunks: new Map<number, string>(), bytes: 0 }
+    const entry = held ?? { of: part.of, chunks: new Map<number, string>(), units: 0 }
     if (entry.chunks.has(part.i)) {
       return this.fail(id, 'duplicate-part')
     }
-    const bytes = entry.bytes + utf8ByteLength(chunk)
-    if (bytes > BRIDGE_MAX_REPLY_BYTES) {
+    // Code units, not bytes: a reply is never fewer bytes than code units, so this bounds what is
+    // held without refusing a reply the joined measurement would accept. The ceiling itself is
+    // checked once, on the joined text, because a pair split across two parts is four bytes whole
+    // and six counted half by half.
+    const units = entry.units + chunk.length
+    if (units > BRIDGE_MAX_REPLY_BYTES) {
       return this.fail(id, 'reply-too-large')
     }
     entry.chunks.set(part.i, chunk)
-    entry.bytes = bytes
+    entry.units = units
     this.pending.set(id, entry)
     if (entry.chunks.size < entry.of) {
       return { status: 'pending' }
@@ -169,6 +188,9 @@ function readAssembledPayload(entry: PendingReply): BridgeReplyAssembly {
     .sort(([left], [right]) => left - right)
     .map(([, chunk]) => chunk)
     .join('')
+  if (utf8ByteLength(joined) > BRIDGE_MAX_REPLY_BYTES) {
+    return { status: 'failed', refusal: 'reply-too-large' }
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(joined)
