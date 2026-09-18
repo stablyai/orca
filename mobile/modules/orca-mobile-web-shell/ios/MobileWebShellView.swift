@@ -146,6 +146,22 @@ private final class MobileWebShellBridgeReceiver: NSObject, WKScriptMessageHandl
   }
 }
 
+/// The RN host sees this, never the page: it is the difference between a request that failed and
+/// one that never settles.
+internal final class MobileWebShellBridgeDeliveryFailedException: GenericException<String>,
+  @unchecked Sendable {
+  override var reason: String {
+    "The mobile web shell bridge could not deliver a message: \(param)"
+  }
+}
+
+/// The frame a native post may go to, and the host it reported when it last spoke. One value, so
+/// the frame and the host it is checked against can never be from different documents.
+private struct MobileWebShellBridgeTarget {
+  let frame: WKFrameInfo
+  let originHost: String
+}
+
 internal final class MobileWebShellBridgeUnavailableException: Exception, @unchecked Sendable {
   override var reason: String {
     "The mobile web shell bridge is not installed on this view"
@@ -170,6 +186,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private let bridgeGate = MobileWebShellBridgeGate()
   private var bridgeEnabled = false
   private var bridgeInstalled = false
+  private var bridgeTarget: MobileWebShellBridgeTarget?
   private var webView: WKWebView!
   private var generationDirectory = ""
   private var sessionId = ""
@@ -231,6 +248,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     )
     guard applied?.matches(next) != true else { return }
     applied = next
+    clearBridgeTarget()
     loadState.reset()
     pendingDocumentUrl = nil
     webView.stopLoading()
@@ -264,6 +282,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// The generation that failed to apply replaces whatever was on screen; leaving the previous one
   /// served and visible would show a page the caller has just been told is not loaded.
   private func failPropUpdate(_ reason: MobileWebShellFailureReason) {
+    clearBridgeTarget()
     schemeHandler.sessionId = nil
     schemeHandler.generation = nil
     pendingDocumentUrl = nil
@@ -285,6 +304,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// Nothing here runs while the prop stays false, which is what keeps Phase B byte-identical.
   private func applyBridgeInstallation() {
     guard bridgeEnabled != bridgeInstalled else { return }
+    clearBridgeTarget()
     let controller = webView.configuration.userContentController
     if bridgeEnabled {
       controller.add(bridgeReceiver, name: MobileWebShellBridge.handlerName)
@@ -292,8 +312,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
         WKUserScript(
           source: bridgeInstaller,
           injectionTime: .atDocumentStart,
-          // The handler refuses a subframe anyway; not injecting into one means there is nothing
-          // there to refuse.
+          // A convenience, not the fence: a subframe can reach a handler this never ran in, and
+          // `accepts` is what refuses it.
           forMainFrameOnly: true
         )
       )
@@ -320,11 +340,28 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       MobileWebShellBridge.accepts(source, sessionId: appliedSessionId ?? ""),
       bridgeGate.accepts(byteCount: json.utf8.count)
     else { return }
+    bridgeTarget = MobileWebShellBridgeTarget(frame: message.frameInfo, originHost: origin.host)
     onBridgeMessage(["json": json])
   }
 
-  func postBridgeMessage(_ json: String) throws {
-    guard bridgeInstalled else {
+  /// Anything that ends the document the page spoke from ends the only target native has.
+  private func clearBridgeTarget() {
+    bridgeTarget = nil
+  }
+
+  /// Settles on what WebKit did, not on what we handed it: a post into a dead renderer, a document
+  /// that failed to load or a page that has never spoken rejects here, and the delivery itself
+  /// resolves only once the page has run it. Resolving either of those optimistically turns a
+  /// request the RN host is waiting on into one that never settles.
+  func postBridgeMessage(_ json: String, promise: Promise) throws {
+    let target = bridgeTarget
+    guard
+      MobileWebShellBridge.canPost(
+        toFrameOriginHost: target?.originHost,
+        sessionId: appliedSessionId ?? ""
+      ),
+      let frame = target?.frame
+    else {
       throw MobileWebShellBridgeUnavailableException()
     }
     let byteCount = json.utf8.count
@@ -332,14 +369,21 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
     // Two `in:` labels is the real signature: `in frame:` and `in contentWorld:`. Naming the
-    // completion handler is what picks it over the `async` overload.
+    // completion handler is what picks it over the `async` overload. The frame is the one that
+    // spoke, so the reply goes where the request came from rather than to the current main frame.
     webView.callAsyncJavaScript(
       bridgeDeliver,
       arguments: ["m": json],
-      in: nil,
-      in: .page,
-      completionHandler: nil
-    )
+      in: frame,
+      in: .page
+    ) { result in
+      switch result {
+      case .success:
+        promise.resolve()
+      case .failure(let error):
+        promise.reject(MobileWebShellBridgeDeliveryFailedException(error.localizedDescription))
+      }
+    }
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
@@ -389,6 +433,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   private func reportDocumentFailure() {
+    clearBridgeTarget()
     emit(loadState.failed(.documentLoadFailed))
   }
 
@@ -435,6 +480,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    // The document that spoke is being replaced, so its frame stops being somewhere to post: the
+    // next one has to say `ready` first, which is what the envelope has it do.
+    clearBridgeTarget()
     guard appliedSessionId != nil else { return }
     emit(loadState.started())
   }
@@ -459,6 +507,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// Reported, never recovered from here. Renderer memory pressure and a WebView provider update
   /// look identical at this point, so the retry policy is the caller's and lives in one place.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    clearBridgeTarget()
     emit(loadState.failed(.renderProcessGone))
   }
 

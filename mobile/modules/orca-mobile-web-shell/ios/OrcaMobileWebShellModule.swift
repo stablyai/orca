@@ -19,8 +19,9 @@ public class OrcaMobileWebShellModule: Module {
         view.setBridgeEnabled(value)
       }
 
-      AsyncFunction("postBridgeMessage") { (view: OrcaMobileWebShellView, json: String) in
-        try view.postBridgeMessage(json)
+      AsyncFunction("postBridgeMessage") {
+        (view: OrcaMobileWebShellView, json: String, promise: Promise) in
+        try view.postBridgeMessage(json, promise: promise)
       }
 
       OnViewDidUpdateProps { (view: OrcaMobileWebShellView) in

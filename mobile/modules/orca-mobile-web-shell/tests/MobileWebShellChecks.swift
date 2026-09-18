@@ -358,6 +358,26 @@ import Foundation
     precondition(!MobileWebShellBridge.accepts(bridgeSource(originHost: "a b"), sessionId: "a b"))
   }
 
+  static func checkBridgePostTarget() {
+    func canPost(_ host: String?, _ sessionId: String = session) -> Bool {
+      MobileWebShellBridge.canPost(toFrameOriginHost: host, sessionId: sessionId)
+    }
+
+    precondition(canPost(session))
+    // The same ASCII fold as acceptance: WebKit reports the host lowercased.
+    precondition(canPost("sess-01jn_az9"))
+
+    // Nowhere to post, all four for the same reason: no frame has been accepted. A page that has
+    // never spoken, a document whose load failed, a renderer that died, a bridge not installed.
+    precondition(!canPost(nil))
+
+    // A frame from another document, and a frame under no session at all.
+    precondition(!canPost("sess-01JN_aZ8"))
+    precondition(!canPost("\u{212A}ey", "key"))
+    precondition(!canPost(session, ""))
+    precondition(!canPost("", ""))
+  }
+
   static func checkBridgeByteCap() {
     let cap = MobileWebShellBridge.maxMessageByteCount
     precondition(cap == 640 * 1024)
@@ -391,6 +411,7 @@ import Foundation
     checkNavigationErrors()
     checkAppliedProps()
     checkBridgeAcceptance()
+    checkBridgePostTarget()
     checkBridgeByteCap()
     print("mobile web shell checks OK")
   }

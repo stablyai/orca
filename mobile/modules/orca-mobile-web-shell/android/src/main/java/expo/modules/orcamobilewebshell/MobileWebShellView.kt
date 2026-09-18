@@ -130,6 +130,7 @@ internal class OrcaMobileWebShellView(
    * served and visible would show a page the caller has just been told is not loaded.
    */
   private fun failPropUpdate(reason: MobileWebShellFailureReason) {
+    replyProxy = null
     served = null
     webView?.visibility = View.INVISIBLE
     emit(loadState.failed(reason))
@@ -263,6 +264,7 @@ internal class OrcaMobileWebShellView(
    * thing on screen. `shouldInterceptRequest` also runs off the main thread.
    */
   private fun reportDocumentFailure() {
+    replyProxy = null
     // Set before the post, not inside it: onPageFinished runs in between and would otherwise
     // report `ready` over the failure and make the error page visible again.
     documentFailed = true
@@ -344,6 +346,9 @@ internal class OrcaMobileWebShellView(
       )
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+      // The document that spoke is being replaced, so its proxy stops being somewhere to post: the
+      // next one has to say `ready` first, which is what the envelope has it do.
+      replyProxy = null
       if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
       emit(loadState.started())
     }

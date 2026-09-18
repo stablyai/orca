@@ -34,9 +34,10 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
 /** What a ref on the view carries. Expo puts the view's functions on the component prototype. */
 export type OrcaMobileWebShellViewHandle = {
   /**
-   * Delivers one raw JSON envelope to the page. Rejects when no bridge is installed and when the
-   * message is over the cap, rather than dropping it, because the caller is the host and a silent
-   * drop is a request that never settles.
+   * Delivers one raw JSON envelope to the page, and resolves only once the page has run it.
+   * Rejects when the message is over the cap, when delivery fails, and when there is nowhere to
+   * post: no page has spoken since the last load, the load failed, or the renderer is gone. The
+   * caller is the host, so a drop or an optimistic resolve is a request that never settles.
    */
   postBridgeMessage: (json: string) => Promise<void>
 }

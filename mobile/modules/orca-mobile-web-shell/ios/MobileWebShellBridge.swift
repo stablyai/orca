@@ -32,6 +32,20 @@ enum MobileWebShellBridge {
     return true
   }
 
+  /// WebKit hands the handler no reply proxy, so a native → page post has to name a frame itself.
+  /// The frame is the one the last accepted message came from, and nil is the whole answer for a
+  /// page that has never spoken, a load that failed and a renderer that died: a post with nowhere
+  /// proven to go is refused, never delivered to whatever frame happens to be current.
+  static func canPost(toFrameOriginHost host: String?, sessionId: String) -> Bool {
+    guard
+      let host,
+      MobileWebShellOrigin.isValidSessionId(sessionId),
+      MobileWebShellOrigin.asciiLowercased(host)
+        == MobileWebShellOrigin.asciiLowercased(sessionId)
+    else { return false }
+    return true
+  }
+
   static func acceptsByteCount(_ byteCount: Int) -> Bool {
     byteCount <= maxMessageByteCount
   }
