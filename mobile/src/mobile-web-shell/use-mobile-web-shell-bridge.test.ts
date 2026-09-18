@@ -296,11 +296,11 @@ describe('client changes', () => {
     const posted: PostedFrame[] = []
     const probe: Probe = { view: null }
     const render = (deliver: string | null): ReactElement =>
-      createElement(
-        DeliverDuringCommit,
-        { deliver, probe },
-        createElement(Harness, { session: readyState('session-one'), posted, probe })
-      )
+      createElement(DeliverDuringCommit, {
+        deliver,
+        probe,
+        children: createElement(Harness, { session: readyState('session-one'), posted, probe })
+      })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
       rendered.tree = create(render(null))
