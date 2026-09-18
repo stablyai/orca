@@ -22,6 +22,7 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
+import { findMissingWorkContextError } from '../../shared/source-control-ai-template-work-context'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
 import { runLocalPlanForAgent } from './source-control-local-generation'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
@@ -80,6 +81,10 @@ export async function generateCommitMessage(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GenerateCommitMessageResult> {
   const { context, params, target } = input
+  const workContextError = findMissingWorkContextError('commitMessage', params.commandInputTemplate)
+  if (workContextError) {
+    return { success: false, error: workContextError }
+  }
   const basePrompt = buildCommitMessagePrompt(context, '')
   const prompt =
     params.commandInputTemplate !== undefined
@@ -125,6 +130,10 @@ export async function generatePullRequestFields(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GeneratePullRequestFieldsResult<GeneratedPullRequestFields>> {
   const { context, params, target } = input
+  const workContextError = findMissingWorkContextError('pullRequest', params.commandInputTemplate)
+  if (workContextError) {
+    return { success: false, error: workContextError }
+  }
   const basePrompt = buildPullRequestFieldsPrompt(context, '')
   const prompt =
     params.commandInputTemplate !== undefined
@@ -188,6 +197,10 @@ export async function generateBranchName(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GenerateBranchNameResult> {
   const { context, params, target } = input
+  const workContextError = findMissingWorkContextError('branchName', params.commandInputTemplate)
+  if (workContextError) {
+    return { success: false, error: workContextError }
+  }
   const basePrompt = buildBranchNamePrompt(context)
   const prompt =
     params.commandInputTemplate !== undefined

@@ -21,6 +21,7 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control-ai'
 import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-control-ai-action-variables'
 import type { SourceControlTextActionId } from '../../../../../../shared/source-control-ai-actions'
+import { findMissingWorkContextError } from '../../../../../../shared/source-control-ai-template-work-context'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -133,6 +134,7 @@ export function SourceControlTextGenerationDialogForm({
     return Object.keys(previews).length > 0 ? previews : undefined
   }, [basePromptPreview, linkedIssue])
   const paramsPlanResult = params ? planSourceControlTextGeneration(actionId, params) : null
+  const workContextWarning = findMissingWorkContextError(actionId, commandTemplate)
   const canRunGeneration = Boolean(params && paramsPlanResult?.ok)
   const saving = savingTargetKey !== null
   const defaultsAlreadySaved = Boolean(
@@ -313,6 +315,12 @@ export function SourceControlTextGenerationDialogForm({
               setGenerationError(null)
             }}
           />
+          {workContextWarning ? (
+            <p className="flex items-start gap-1 text-[11px] text-destructive">
+              <TriangleAlert className="mt-px size-3 shrink-0" aria-hidden="true" />
+              <span>{workContextWarning}</span>
+            </p>
+          ) : null}
         </div>
 
         {showSaveRecipeControl ? (
