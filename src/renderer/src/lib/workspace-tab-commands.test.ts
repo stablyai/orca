@@ -25,6 +25,8 @@ vi.mock('@/components/tab-bar/web-runtime-tab-move-mirror', () => ({
 }))
 
 import { dispatchWorkspaceTabCommand } from './workspace-tab-commands'
+import { isFloatingWorkspacePanelFocused } from './floating-workspace-terminal-actions'
+import { moveFloatingWorkspaceTab } from './floating-workspace-tab-reorder'
 
 const WORKTREE_ID = 'worktree-1'
 const SOURCE_PAGE_ID = 'browser-page-1'
@@ -111,5 +113,24 @@ describe('browser-source tab commands', () => {
       targetGroupId: 'group-right',
       tabOrder: ['tab-browser-neighbor', 'tab-browser-target']
     })
+  })
+
+  it('honors an explicit browser target while the floating panel owns focus', () => {
+    vi.mocked(isFloatingWorkspacePanelFocused).mockReturnValue(true)
+    const state = mocks.getState()
+
+    expect(
+      dispatchWorkspaceTabCommand({
+        type: 'move-active',
+        direction: 1,
+        target: { kind: 'browser-source', sourceId: SOURCE_PAGE_ID }
+      })
+    ).toBe(true)
+
+    expect(state.reorderUnifiedTabs).toHaveBeenCalledWith('group-right', [
+      'tab-browser-neighbor',
+      'tab-browser-target'
+    ])
+    expect(moveFloatingWorkspaceTab).not.toHaveBeenCalled()
   })
 })

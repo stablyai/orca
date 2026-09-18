@@ -252,7 +252,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     return handleSwitchRecentTab()
   }
   if (command.type === 'move-active') {
-    if (isFloatingWorkspacePanelFocused()) {
+    if (isFloatingWorkspacePanelFocused() && !command.target) {
       return moveFloatingWorkspaceTab(state, command.direction)
     }
     return moveActiveWorkspaceTab(state, command.direction, command.target)
