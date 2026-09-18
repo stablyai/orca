@@ -3,6 +3,8 @@ import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import {
   BRIDGE_MAX_METHOD_CHARS,
   BRIDGE_MAX_REPLY_PARTS,
+  BRIDGE_MAX_VIEWPORT_COLS,
+  BRIDGE_MAX_VIEWPORT_ROWS,
   parseBridgeMessage,
   type BridgeDirection,
   type BridgeRead
@@ -183,8 +185,8 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       type: z.literal('notify'),
       name: z.literal('terminalViewport'),
       terminal: z.string().min(1),
-      cols: z.number().int().positive(),
-      rows: z.number().int().positive()
+      cols: z.number().int().min(1).max(BRIDGE_MAX_VIEWPORT_COLS),
+      rows: z.number().int().min(1).max(BRIDGE_MAX_VIEWPORT_ROWS)
     })
   ]),
   z.object({ v: versionSchema, type: z.literal('close') })

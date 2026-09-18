@@ -36,6 +36,17 @@ export const BRIDGE_MAX_PENDING_REQUESTS = 64
 export const BRIDGE_MAX_SUBSCRIPTIONS = 32
 
 /**
+ * Viewport bounds, held to the desktop's `TerminalViewport` by the envelope's test.
+ *
+ * A viewport the page sends is written into the cached subscribe params of every stream naming that
+ * terminal, the native terminal screens' included, and the desktop refuses an out-of-range one when
+ * those streams resubscribe. Refusing it at the frame is what keeps a bad page's reach inside its
+ * own document.
+ */
+export const BRIDGE_MAX_VIEWPORT_COLS = 1000
+export const BRIDGE_MAX_VIEWPORT_ROWS = 500
+
+/**
  * A reply above this aborts its request rather than being chunked further. The frame cap is a
  * transport bound; this is the policy. The native screens have no reply byte cap at all, so a
  * smaller number here would invent a refusal that source control's diffs would be the first to hit.

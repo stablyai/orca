@@ -6,10 +6,13 @@ import {
 } from '../../transport/browser-screencast-protocol'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
 import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
+import { TerminalViewport } from '../../../../src/shared/rpc-contract/terminal-unary-params'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_METHOD_CHARS,
-  BRIDGE_MAX_REPLY_PARTS
+  BRIDGE_MAX_REPLY_PARTS,
+  BRIDGE_MAX_VIEWPORT_COLS,
+  BRIDGE_MAX_VIEWPORT_ROWS
 } from './bridge-caps'
 import {
   BRIDGE_BINARY_FORMATS,
@@ -99,6 +102,16 @@ describe('client messages', () => {
       'terminal viewport notify',
       { type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 80, rows: 24 }
     ],
+    [
+      'a terminal viewport notify of exactly the bounds',
+      {
+        type: 'notify',
+        name: 'terminalViewport',
+        terminal: 't1',
+        cols: BRIDGE_MAX_VIEWPORT_COLS,
+        rows: BRIDGE_MAX_VIEWPORT_ROWS
+      }
+    ],
     ['close', { type: 'close' }]
   ] as const
 
@@ -126,6 +139,26 @@ describe('client messages', () => {
     [
       'a viewport of zero columns',
       client({ type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 0, rows: 24 })
+    ],
+    [
+      'a viewport one column over the bound',
+      client({
+        type: 'notify',
+        name: 'terminalViewport',
+        terminal: 't1',
+        cols: BRIDGE_MAX_VIEWPORT_COLS + 1,
+        rows: 24
+      })
+    ],
+    [
+      'a viewport one row over the bound',
+      client({
+        type: 'notify',
+        name: 'terminalViewport',
+        terminal: 't1',
+        cols: 80,
+        rows: BRIDGE_MAX_VIEWPORT_ROWS + 1
+      })
     ],
     ['a bare array', []],
     ['a bare string', 'ready']
@@ -353,6 +386,16 @@ describe('type pins', () => {
     }
     expect(Object.keys(optionKeys).toSorted()).toEqual(Object.keys(options).toSorted())
     expect(readClient(client({ type: 'request', id: ID, method: 'm', options })).ok).toBe(true)
+  })
+
+  it('bounds the viewport exactly where the desktop terminal contract does', () => {
+    // A viewport the page sends is replayed on resubscribe by every stream naming that terminal,
+    // the native screens' included. One the desktop refuses there would kill a stream the page
+    // never opened, so the two bounds have to be the same number.
+    const bound = { cols: BRIDGE_MAX_VIEWPORT_COLS, rows: BRIDGE_MAX_VIEWPORT_ROWS }
+    expect(TerminalViewport.safeParse(bound).success).toBe(true)
+    expect(TerminalViewport.safeParse({ ...bound, cols: bound.cols + 1 }).success).toBe(false)
+    expect(TerminalViewport.safeParse({ ...bound, rows: bound.rows + 1 }).success).toBe(false)
   })
 
   it('closes the binary formats over the screencast protocol', () => {
