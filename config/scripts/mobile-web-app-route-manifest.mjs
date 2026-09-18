@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { extname, join, relative } from 'node:path'
+import * as esbuild from 'esbuild'
 
 /** The route subtree the page mounts. The rest of mobile/app is native-only (pairing, settings). */
 export const MOBILE_WEB_APP_ROUTE_ROOT = 'h'
@@ -87,7 +88,7 @@ routeContext.id = 'orca-mobile-web-app-routes'`
  *
  * `default` is the whole module: a lazy module cannot answer `unstable_settings` or
  * `ErrorBoundary`, which expo-router reads synchronously off the namespace. No route in the
- * mounted subtree exports either, and `routeModuleNamedExports` below is what holds that.
+ * mounted subtree exports either, and `routeModuleSynchronousExports` below is what holds that.
  */
 export function renderMobileWebAppRouteManifest(routes) {
   const entryLines = routes.map(
@@ -109,9 +110,38 @@ export default routeContext
  */
 export const ROUTE_MODULE_SYNCHRONOUS_EXPORTS = ['unstable_settings', 'ErrorBoundary']
 
-/** Which of those a route source declares, so the lazy manifest cannot swallow one. */
-export function routeModuleNamedExports(source) {
-  return ROUTE_MODULE_SYNCHRONOUS_EXPORTS.filter((name) =>
-    new RegExp(`export\\s+(const|let|var|function|async function)\\s+${name}\\b`).test(source)
-  )
+/** esbuild's own normalized output for a re-export whose names it did not resolve. */
+const STAR_REEXPORT = /^export \* from "(.*)";$/gm
+
+/**
+ * Which of those a route module puts on its namespace, and which specifiers it re-exports whole.
+ *
+ * Read from esbuild's parse rather than the source text, because the name reaching the namespace
+ * is not the name any declaration carries: `export { settings as unstable_settings }`,
+ * `export class ErrorBoundary` and `export { ErrorBoundary } from './boundary'` are all invisible
+ * to a pattern over declarations, and all three break the lazy manifest the same way.
+ *
+ * `bundle` is off: this asks what one module exports, and following its imports would pull the
+ * whole app in to answer. The cost is `export * from x`, whose names esbuild cannot enumerate
+ * without reading x; those are returned separately so the caller fails closed instead of reading
+ * an unresolved star as clean.
+ */
+export async function routeModuleSynchronousExports(modulePath) {
+  const result = await esbuild.build({
+    entryPoints: [modulePath],
+    bundle: false,
+    write: false,
+    format: 'esm',
+    metafile: true,
+    // Never written; it only names the single output the metafile is keyed by.
+    outdir: 'route-exports',
+    logLevel: 'silent'
+  })
+  const [output] = Object.values(result.metafile.outputs)
+  return {
+    named: (output?.exports ?? []).filter((name) =>
+      ROUTE_MODULE_SYNCHRONOUS_EXPORTS.includes(name)
+    ),
+    starExports: [...result.outputFiles[0].text.matchAll(STAR_REEXPORT)].map((match) => match[1])
+  }
 }

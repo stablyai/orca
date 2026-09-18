@@ -17,7 +17,7 @@ import {
   collectMobileWebAppRouteKeys,
   collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest,
-  routeModuleNamedExports
+  routeModuleSynchronousExports
 } from './mobile-web-app-route-manifest.mjs'
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ASSETS,
@@ -135,23 +135,59 @@ describe('route manifest', () => {
     const routes = await collectMobileWebAppRoutes(appDir)
     expect(routes.length).toBeGreaterThan(0)
     for (const { module } of routes) {
-      const named = routeModuleNamedExports(await readFile(module, 'utf8'))
+      const { named, starExports } = await routeModuleSynchronousExports(module)
       // expo-router reads these off the namespace while it builds the tree, which a module behind
       // import() cannot answer. Adding one to a page route needs a static import for that route.
       expect(named, `${module} exports ${named.join(', ')}`).toEqual([])
+      expect(starExports, `${module} re-exports all of ${starExports.join(', ')}`).toEqual([])
     }
   })
 
-  it('recognises the exports it is guarding against', () => {
-    expect(ROUTE_MODULE_SYNCHRONOUS_EXPORTS).toContain('unstable_settings')
-    expect(routeModuleNamedExports('export const unstable_settings = { anchor: "x" }\n')).toEqual([
-      'unstable_settings'
-    ])
-    expect(routeModuleNamedExports('export function ErrorBoundary() {}\n')).toEqual([
-      'ErrorBoundary'
-    ])
-    expect(routeModuleNamedExports('export default function Route() {}\n')).toEqual([])
-  })
+  // Each of these puts the name on the namespace without declaring it, which is why the guard
+  // reads esbuild's parse instead of the source text.
+  it('reads the names off the namespace, not off a declaration', async () => {
+    expect(ROUTE_MODULE_SYNCHRONOUS_EXPORTS).toEqual(['unstable_settings', 'ErrorBoundary'])
+    await withScratch(async (scratch) => {
+      const exportsOf = async (name, source) => {
+        const file = join(scratch, name)
+        await writeFile(file, source, 'utf8')
+        return routeModuleSynchronousExports(file)
+      }
+      expect(
+        (await exportsOf('declared.tsx', 'export const unstable_settings = { anchor: "x" }\n'))
+          .named
+      ).toEqual(['unstable_settings'])
+      expect(
+        (
+          await exportsOf(
+            'aliased.tsx',
+            'const settings = { anchor: "x" }\nexport { settings as unstable_settings }\n'
+          )
+        ).named
+      ).toEqual(['unstable_settings'])
+      expect((await exportsOf('classy.tsx', 'export class ErrorBoundary {}\n')).named).toEqual([
+        'ErrorBoundary'
+      ])
+      expect(
+        (await exportsOf('forwarded.tsx', 'export { ErrorBoundary } from "./boundary"\n')).named
+      ).toEqual(['ErrorBoundary'])
+      expect(
+        (await exportsOf('plain.tsx', 'export default function Route() { return null }\n')).named
+      ).toEqual([])
+    })
+  }, 60_000)
+
+  it('refuses a star re-export rather than reading it as clean', async () => {
+    await withScratch(async (scratch) => {
+      const file = join(scratch, 'star.tsx')
+      // Nothing here says whether ./boundary exports ErrorBoundary, and answering would mean
+      // bundling the route. Reported as a violation so the guard fails closed.
+      await writeFile(file, 'export * from "./boundary"\nexport default null\n', 'utf8')
+      const { named, starExports } = await routeModuleSynchronousExports(file)
+      expect(named).toEqual([])
+      expect(starExports).toEqual(['./boundary'])
+    })
+  }, 60_000)
 
   it('imports a .web.tsx sibling under the native route key', async () => {
     await withScratch(async (scratch) => {
