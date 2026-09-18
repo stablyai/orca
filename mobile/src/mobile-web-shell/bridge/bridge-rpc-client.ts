@@ -143,11 +143,14 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   }
 
+  /**
+   * A call before `init` is a mount-order bug and throws. A call after `close` is not: an unmounting
+   * screen posts one more nudge on its way out, and the native clients answer those inertly rather
+   * than throwing into a teardown path nobody wrote a catch for. Each member below says what inert
+   * means for its own return type.
+   */
   function requireSession(): void {
-    if (closed) {
-      throw new BridgeClientClosedError()
-    }
-    if (session === null) {
+    if (session === null && !closed) {
       throw new BridgeClientNotReadyError()
     }
   }
@@ -240,6 +243,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // A call with no session is a page bug and throws; a call over the in-flight cap is the answer
     // the shell would have posted back, so it arrives the way the shell's does, as a rejection.
     requireSession()
+    if (closed) {
+      // Rejected, not thrown: `bindDeferredRpcOperation` hands this promise straight back, so a
+      // synchronous throw would escape past the caller's `catch` on the promise.
+      return Promise.reject(new BridgeClientClosedError())
+    }
     if (requests.size >= BRIDGE_MAX_PENDING_REQUESTS) {
       return Promise.reject(
         new BridgeClientCapExceededError(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests in flight`)
@@ -275,6 +283,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     subscribeOptions?: { onBinaryFrame?: (frame: BrowserScreencastFrame) => void }
   ): () => void {
     requireSession()
+    if (closed) {
+      return () => undefined
+    }
     // Thrown rather than reported: `subscribe` hands back an unsubscribe and nothing else, so a
     // refusal the caller could read does not exist on this member. A refusal the shell posts back
     // arrives too late to throw at all, and reaches the page as a `stream-failed` diagnostic.
@@ -316,6 +327,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     subscribe,
     updateTerminalSubscriptionViewport: (terminal, viewport) => {
       requireSession()
+      if (closed) {
+        return
+      }
       sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'notify',
@@ -338,6 +352,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onStateChange: (listener) => cache.onStateChange(listener),
     notifyForeground: (reason?: ForegroundNudgeReason) => {
       requireSession()
+      if (closed) {
+        return
+      }
       sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'notify',

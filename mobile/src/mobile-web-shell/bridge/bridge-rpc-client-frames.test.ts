@@ -229,16 +229,18 @@ describe('bridge client before a session', () => {
 })
 
 describe('bridge client after close', () => {
-  it('refuses every member and ignores what the shell says next', () => {
+  it('goes inert instead of throwing into a teardown, and posts nothing more', async () => {
     const page = createPageClient()
     page.start()
     page.client.close()
     expect(page.frames().at(-1)).toEqual({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
-    expect(() => page.client.sendRequest('worktree.ps')).toThrow(BridgeClientClosedError)
-    expect(() => page.client.subscribe('terminal.stream', {}, vi.fn())).toThrow(
-      BridgeClientClosedError
-    )
-    expect(() => page.client.notifyForeground()).toThrow(BridgeClientClosedError)
+    const refused = page.client.sendRequest('worktree.ps')
+    await expect(refused).rejects.toThrow(BridgeClientClosedError)
+    expect(() => page.client.subscribe('terminal.stream', {}, vi.fn())()).not.toThrow()
+    expect(() => page.client.notifyForeground()).not.toThrow()
+    expect(() => {
+      page.client.updateTerminalSubscriptionViewport('t', { cols: 80, rows: 24 })
+    }).not.toThrow()
     page.client.close()
     page.deliver(INIT)
     expect(page.sent).toHaveLength(2)
