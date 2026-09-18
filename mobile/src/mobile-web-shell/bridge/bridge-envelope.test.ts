@@ -4,6 +4,7 @@ import {
   type BrowserScreencastFormat,
   type BrowserScreencastFrame
 } from '../../transport/browser-screencast-protocol'
+import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
 import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
 import { readFileSync } from 'node:fs'
@@ -330,6 +331,48 @@ describe('host messages', () => {
       _meta: { runtimeId: 'runtime-a', hostVersion: '9.9.9' },
       hint: 'from a newer host'
     }
+    const read = readHost(client({ type: 'reply', id: ID, payload }))
+    expect(
+      read.ok && read.message.type === 'reply' && 'payload' in read.message && read.message.payload
+    ).toEqual(payload)
+  })
+})
+
+describe('the reply reader is the native acceptance predicate', () => {
+  /**
+   * Agreement, not a second table of accepted shapes. The page stands in for the wire the native
+   * client reads, so anything `isRpcResponse` takes off that wire has to cross the bridge, and
+   * anything it drops has to be refused here too — including `{ ok: true }` with no `result` key,
+   * which no real frame boundary carries.
+   */
+  const payloads: [string, unknown][] = [
+    ['a success the runtime stamped', { id: 'r1', ok: true, result: 1, _meta: { runtimeId: 'a' } }],
+    ['a success with no `_meta` at all', { id: 'r1', ok: true, result: 1 }],
+    ['a success whose result is null', { id: 'r1', ok: true, result: null }],
+    ['a streaming success with no `_meta`', { id: 'r1', ok: true, result: 1, streaming: true }],
+    ['a failure with no `_meta`', { id: 'r1', ok: false, error: { code: 'x', message: 'y' } }],
+    [
+      'a failure whose runtime id is null, which the shared envelope allows',
+      { id: 'r1', ok: false, error: { code: 'x', message: 'y' }, _meta: { runtimeId: null } }
+    ],
+    ['`ok` with no result key', { id: 'r1', ok: true }],
+    ['a failure carrying no error', { id: 'r1', ok: false }],
+    [
+      'a failure whose error code is a number',
+      { id: 'r1', ok: false, error: { code: 1, message: 'y' } }
+    ],
+    ['a reply with no id', { ok: true, result: 1 }],
+    ['a reply whose id is a number', { id: 1, ok: true, result: 1 }]
+  ]
+
+  for (const [name, payload] of payloads) {
+    it(`agrees with the native predicate on ${name}`, () => {
+      expect(readHost(client({ type: 'reply', id: ID, payload })).ok).toBe(isRpcResponse(payload))
+    })
+  }
+
+  it('hands a reply with no `_meta` back verbatim', () => {
+    const payload = { id: 'r1', ok: true, result: { rows: 2 }, hint: 'from a newer host' }
     const read = readHost(client({ type: 'reply', id: ID, payload }))
     expect(
       read.ok && read.message.type === 'reply' && 'payload' in read.message && read.message.payload

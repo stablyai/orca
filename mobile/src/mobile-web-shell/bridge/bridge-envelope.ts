@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { isRpcResponse } from '../../transport/rpc-response-shape'
+import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import {
   BRIDGE_MAX_METHOD_CHARS,
@@ -89,32 +91,18 @@ export const BridgeSendRequestOptionsSchema = z.object({
   failWhenDisconnected: z.boolean().optional()
 })
 
-const rpcMetaSchema = z.looseObject({ runtimeId: z.string() })
-
 /**
  * A host `RpcFailure` is data, not a rejection: it rides in `reply` exactly as it arrived, `_meta`
- * and `error.data` included, because the page reads it and the goldens record it. Loose objects all
- * the way down for the same reason — a field a newer host adds must reach the page unaltered.
+ * and `error.data` included, because the page reads it and the goldens record it. Nothing is
+ * stripped for the same reason — a field a newer host adds must reach the page unaltered.
+ *
+ * The predicate is the native client's own, imported rather than restated. A page reader narrower
+ * than the transport it stands in for refuses replies the phone accepts today: `_meta` is required
+ * on neither arm off the wire, and `src/shared/runtime-rpc-envelope.ts` makes it optional on a
+ * failure with a nullable `runtimeId`. Widening a reader is safe in both directions; keeping a
+ * second copy of one is what drifts.
  */
-export const BridgeReplyPayloadSchema = z.union([
-  z.looseObject({
-    id: z.string(),
-    ok: z.literal(true),
-    result: z.unknown(),
-    streaming: z.literal(true).optional(),
-    _meta: rpcMetaSchema
-  }),
-  z.looseObject({
-    id: z.string(),
-    ok: z.literal(false),
-    error: z.looseObject({
-      code: z.string(),
-      message: z.string(),
-      data: z.unknown().optional()
-    }),
-    _meta: rpcMetaSchema
-  })
-])
+export const BridgeReplyPayloadSchema = z.custom<RpcResponse>(isRpcResponse)
 
 /**
  * `BrowserScreencastFrameMetadata` field for field, loose so a field a newer host adds still reaches
