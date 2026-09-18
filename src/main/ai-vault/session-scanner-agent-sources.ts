@@ -11,6 +11,7 @@ import {
 } from './session-scanner-cline-parser'
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
+import { resolveDevinTranscriptsDir } from '../devin/devin-cli-data-dir'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
@@ -49,19 +50,7 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 // Why: Devin ATIF transcripts live under <DEVIN_HOME>/transcripts; the cli
 // data dir is %APPDATA%\devin\cli on Windows, $XDG_DATA_HOME/devin/cli elsewhere.
-const DEVIN_TRANSCRIPTS_DIR = join(
-  resolveAbsoluteDirOverride(
-    process.env.DEVIN_HOME,
-    process.platform === 'win32'
-      ? join(process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming'), 'devin', 'cli')
-      : join(
-          process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share'),
-          'devin',
-          'cli'
-        )
-  ),
-  'transcripts'
-)
+const DEVIN_TRANSCRIPTS_DIR = resolveDevinTranscriptsDir()
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =

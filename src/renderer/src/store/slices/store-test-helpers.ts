@@ -24,6 +24,7 @@ import { createWorkspaceSpaceSlice } from './workspace-space'
 import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
+  createDevinUsageSlice,
   createOpenCodeUsageSlice
 } from './usage-provider-slices'
 import { createBrowserSlice } from './browser'
@@ -81,6 +82,7 @@ export function createTestStore() {
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createOpenCodeUsageSlice(...a),
+    ...createDevinUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),

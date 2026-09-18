@@ -10,6 +10,11 @@ import type {
   CodexUsageSummary
 } from '../../../../shared/codex-usage-types'
 import type {
+  DevinUsageDailyPoint,
+  DevinUsageScanState,
+  DevinUsageSummary
+} from '../../../../shared/devin-usage-types'
+import type {
   OpenCodeUsageDailyPoint,
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
@@ -47,6 +52,17 @@ function enabledOpenCodeScanState(): OpenCodeUsageScanState {
     lastScanCompletedAt: 600,
     lastScanError: null,
     hasAnyOpenCodeData: true
+  }
+}
+
+function enabledDevinScanState(): DevinUsageScanState {
+  return {
+    enabled: true,
+    isScanning: false,
+    lastScanStartedAt: 700,
+    lastScanCompletedAt: 800,
+    lastScanError: null,
+    hasAnyDevinData: true
   }
 }
 
@@ -98,6 +114,21 @@ describe('usage overview model', () => {
       topProject: 'orca-third',
       hasAnyOpenCodeData: true
     }
+    const devinSummary: DevinUsageSummary = {
+      scope: 'orca',
+      range: '30d',
+      sessions: 1,
+      events: 2,
+      inputTokens: 500,
+      cachedInputTokens: 100,
+      outputTokens: 300,
+      reasoningOutputTokens: 50,
+      totalTokens: 800,
+      estimatedCostUsd: null,
+      topModel: 'devin-default',
+      topProject: 'orca-devin',
+      hasAnyDevinData: true
+    }
     const claudeDaily: ClaudeUsageDailyPoint[] = [
       {
         day: '2026-05-13',
@@ -142,6 +173,16 @@ describe('usage overview model', () => {
         totalTokens: 1_600
       }
     ]
+    const devinDaily: DevinUsageDailyPoint[] = [
+      {
+        day: '2026-05-14',
+        inputTokens: 300,
+        cachedInputTokens: 80,
+        outputTokens: 100,
+        reasoningOutputTokens: 20,
+        totalTokens: 400
+      }
+    ]
 
     const overview = buildUsageOverview({
       claude: {
@@ -158,25 +199,31 @@ describe('usage overview model', () => {
         scanState: enabledOpenCodeScanState(),
         summary: openCodeSummary,
         daily: openCodeDaily
+      },
+      devin: {
+        scanState: enabledDevinScanState(),
+        summary: devinSummary,
+        daily: devinDaily
       }
     })
 
-    expect(overview.totalTokens).toBe(10_800)
-    expect(overview.newInputTokens).toBe(2_950)
-    expect(overview.cacheTokens).toBe(5_550)
-    expect(overview.outputTokens).toBe(2_200)
-    expect(overview.reasoningTokens).toBe(400)
-    expect(overview.sessions).toBe(4)
-    expect(overview.activityCount).toBe(9)
+    expect(overview.totalTokens).toBe(11_600)
+    expect(overview.newInputTokens).toBe(3_350)
+    expect(overview.cacheTokens).toBe(5_650)
+    expect(overview.outputTokens).toBe(2_500)
+    expect(overview.reasoningTokens).toBe(450)
+    expect(overview.sessions).toBe(5)
+    expect(overview.activityCount).toBe(11)
     expect(overview.activeDays).toBe(3)
     expect(overview.estimatedCostUsd).toBeCloseTo(0.09)
-    expect(overview.cacheShare).toBeCloseTo(5_550 / 8_500)
+    expect(overview.cacheShare).toBeCloseTo(5_650 / 9_000)
     expect(overview.bestDay).toMatchObject({
       day: '2026-05-14',
-      totalTokens: 4_500,
+      totalTokens: 4_900,
       claudeTokens: 2_500,
       codexTokens: 2_000,
       openCodeTokens: 0,
+      devinTokens: 400,
       intensity: 4
     })
     expect(overview.providers.find((provider) => provider.id === 'codex')).toMatchObject({
@@ -189,6 +236,11 @@ describe('usage overview model', () => {
       cacheTokens: 250,
       totalTokens: 1_600
     })
+    expect(overview.providers.find((provider) => provider.id === 'devin')).toMatchObject({
+      newInputTokens: 400,
+      cacheTokens: 100,
+      totalTokens: 800
+    })
   })
 
   it('pads recent usage days with zero-token cells', () => {
@@ -200,6 +252,7 @@ describe('usage overview model', () => {
           claudeTokens: 2_500,
           codexTokens: 2_000,
           openCodeTokens: 0,
+          devinTokens: 0,
           intensity: 4
         }
       ],
@@ -214,6 +267,7 @@ describe('usage overview model', () => {
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        devinTokens: 0,
         intensity: 0
       },
       {
@@ -222,6 +276,7 @@ describe('usage overview model', () => {
         claudeTokens: 2_500,
         codexTokens: 2_000,
         openCodeTokens: 0,
+        devinTokens: 0,
         intensity: 4
       },
       {
@@ -230,6 +285,7 @@ describe('usage overview model', () => {
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        devinTokens: 0,
         intensity: 0
       }
     ])
@@ -239,7 +295,8 @@ describe('usage overview model', () => {
     const overview = buildUsageOverview({
       claude: { scanState: null, summary: null, daily: [] },
       codex: { scanState: null, summary: null, daily: [] },
-      opencode: { scanState: null, summary: null, daily: [] }
+      opencode: { scanState: null, summary: null, daily: [] },
+      devin: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.hasAnyEnabledProvider).toBe(false)
@@ -269,7 +326,8 @@ describe('usage overview model', () => {
         summary: null,
         daily: codexDaily
       },
-      opencode: { scanState: null, summary: null, daily: [] }
+      opencode: { scanState: null, summary: null, daily: [] },
+      devin: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.daily).toHaveLength(130_000)

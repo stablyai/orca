@@ -21,13 +21,12 @@ describe('usage provider IPC handlers', () => {
     const claudeUsage = createUsage()
     const codexUsage = createUsage()
     const openCodeUsage = createUsage()
-    registerUsageProviderHandlers({
-      claudeUsage: claudeUsage as never,
-      codexUsage: codexUsage as never,
-      openCodeUsage: openCodeUsage as never
-    })
+    const devinUsage = createUsage()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createUsage supplies every method the registered routes forward to; the real stores carry unrelated lifecycle surface this fixture does not need.
+    const usage = { claudeUsage, codexUsage, openCodeUsage, devinUsage } as never
+    registerUsageProviderHandlers(usage)
 
-    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage']
+    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage', 'devinUsage']
     const suffixes = Object.keys(claudeUsage)
     expect(handle.mock.calls.map(([channel]) => channel)).toEqual(
       prefixes.flatMap((prefix) => suffixes.map((suffix) => `${prefix}:${suffix}`))
@@ -42,6 +41,7 @@ describe('usage provider IPC handlers', () => {
     call('claudeUsage', 'getScanState')
     call('codexUsage', 'getScanState')
     call('openCodeUsage', 'getScanState')
+    call('devinUsage', 'getScanState')
     call('claudeUsage', 'setEnabled', { enabled: true })
     call('claudeUsage', 'refresh')
     call('claudeUsage', 'refresh', { force: true })
@@ -54,6 +54,7 @@ describe('usage provider IPC handlers', () => {
     expect(claudeUsage.getScanState).toHaveBeenCalledWith()
     expect(codexUsage.getScanState).toHaveBeenCalledWith()
     expect(openCodeUsage.getScanState).toHaveBeenCalledWith()
+    expect(devinUsage.getScanState).toHaveBeenCalledWith()
     expect(claudeUsage.setEnabled).toHaveBeenCalledWith(true)
     expect(claudeUsage.refresh.mock.calls).toEqual([[false], [true]])
     expect(claudeUsage.getSnapshot).toHaveBeenCalledWith('orca', '30d', 7)

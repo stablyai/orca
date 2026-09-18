@@ -30,6 +30,7 @@ test.describe('usage overview', () => {
     await expect(orcaPage.getByRole('button', { name: 'Enable Claude' })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Enable Codex' })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Enable OpenCode' })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: 'Enable Devin' })).toBeVisible()
 
     await providerDropdown.click()
     await orcaPage.getByRole('menuitem', { name: 'Codex', exact: true }).click()
@@ -43,5 +44,32 @@ test.describe('usage overview', () => {
       'aria-label',
       'Usage analytics provider: OpenCode'
     )
+
+    await providerDropdown.click()
+    await orcaPage.getByRole('menuitem', { name: 'Devin', exact: true }).click()
+    await expect(orcaPage.getByRole('heading', { name: 'Devin Usage Tracking' })).toBeVisible()
+    await expect(providerDropdown).toHaveAttribute('aria-label', 'Usage analytics provider: Devin')
+  })
+
+  test('enabling Devin scans local transcripts and shows stats', async ({ orcaPage }) => {
+    await orcaPage.evaluate(() => {
+      const state = window.__store!.getState()
+      state.openSettingsPage()
+    })
+
+    await orcaPage.getByRole('button', { name: 'Stats & Usage' }).click()
+    await expect(orcaPage.getByTestId('usage-overview-pane')).toBeVisible()
+
+    await orcaPage.getByRole('button', { name: 'Enable Devin' }).click()
+
+    const providerDropdown = orcaPage.getByTestId('usage-provider-select')
+    await providerDropdown.click()
+    await orcaPage.getByRole('menuitem', { name: 'Devin', exact: true }).click()
+    await expect(orcaPage.getByRole('heading', { name: 'Devin Usage Tracking' })).toBeVisible()
+
+    // After enable, the pane leaves the disabled gate: the on-switch renders
+    // checked and stats (or the empty state) appear once the scan settles.
+    const devinSwitch = orcaPage.getByRole('switch', { name: 'Enable Devin usage analytics' })
+    await expect(devinSwitch).toBeChecked({ timeout: 15_000 })
   })
 })
