@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/host-guest/webview-registry'
+import { removeBrowserClientPageWebview } from '@/components/browser-pane/browser-client-page-guest-metadata'
 import { translate } from '@/i18n/i18n'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
@@ -56,7 +57,7 @@ function attachArtifactWebview({
     webview.removeEventListener('did-stop-loading', onLoadStopped)
     webview.removeEventListener('did-fail-load', onLoadFailed)
     moveFocusToRendererBeforeWebviewDetach(webview)
-    webview.remove()
+    removeBrowserClientPageWebview(webview)
   }
 }
 

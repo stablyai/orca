@@ -96,6 +96,7 @@ export abstract class DaemonPtyRuntimeState {
   protected staleBundleReplacementPromise: Promise<void> | null = null
   protected writeRecoveryPromise: Promise<void> | null = null
   protected writeRecoveryAttempted = false
+  protected pendingWriteRecoveryRetryTimer: NodeJS.Timeout | null = null
   protected dataListeners: ((payload: DaemonPtyRouterDataEvent) => void)[] = []
   protected exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
   protected backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
@@ -231,6 +232,13 @@ export abstract class DaemonPtyRuntimeState {
       this.pausedProducerSessionIds.clear()
       this.observeAuditFailure('transport_closed')
     })
+  }
+
+  protected clearPendingWriteRecoveryRetryTimer(): void {
+    if (this.pendingWriteRecoveryRetryTimer) {
+      clearTimeout(this.pendingWriteRecoveryRetryTimer)
+      this.pendingWriteRecoveryRetryTimer = null
+    }
   }
 
   supportsGitCredentialGuardHost(): boolean {

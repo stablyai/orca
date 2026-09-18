@@ -21,6 +21,7 @@ import {
   snapshotBrowserClientPageRendererMemoryProfile,
   type BrowserClientPageRendererMemoryProfile
 } from './browser-client-page-retained-memory-profile'
+import { removeBrowserClientPageWebview } from './browser-client-page-guest-metadata'
 
 export type { BrowserClientPageVisibleAttachment } from './browser-client-page-visible-attachment'
 export type { BrowserClientPageRendererMemoryProfile } from './browser-client-page-retained-memory-profile'
@@ -153,7 +154,6 @@ export class BrowserClientPageRetainedRegistry {
       if (page.status === 'attaching') {
         page.rejectMount(new Error('browser_client_page_renderer_registry_disposed'))
       }
-      page.host.remove()
       this.releasePage(page)
     }
     this.root?.remove()
@@ -290,7 +290,7 @@ export class BrowserClientPageRetainedRegistry {
     page.webview.removeEventListener('destroyed', page.onDestroyed)
     page.webview.removeEventListener('render-process-gone', page.onRendererGone)
     page.visibleAttachment = null
-    page.webview.remove()
+    removeBrowserClientPageWebview(page.webview)
     page.host.remove()
     this.pages.delete(page.key)
     const nextCount = (this.partitionCounts.get(page.identity.partition) ?? 1) - 1
@@ -315,7 +315,7 @@ export class BrowserClientPageRetainedRegistry {
     // would otherwise keep re-reading a container for a host that is no longer in the document.
     page.visibleAttachment?.stopTrackingViewport()
     page.visibleAttachment = null
-    page.webview.remove()
+    removeBrowserClientPageWebview(page.webview)
     page.host.remove()
   }
 }
