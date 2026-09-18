@@ -391,6 +391,25 @@ class AssignmentInventoryScopeChanged extends Error {
   }
 }
 
+// Why a reason of its own: a host whose home cell is fenced-but-unattested is
+// refused regardless of fleet headroom, so reporting it as capacity sends
+// operators after capacity that was never short. Every cell boot and every
+// readiness dip produces these.
+export type RelayHomeCellUnavailableCause =
+  | 'draining'
+  | 'booting'
+  | 'unheard'
+  | 'not_ready'
+
+export class RelayHomeCellUnavailableError extends Error {
+  constructor(
+    readonly cellId: string,
+    readonly unavailableCause: RelayHomeCellUnavailableCause
+  ) {
+    super('relay_home_cell_unavailable')
+  }
+}
+
 // Debt holds connection headroom for a control that may still arrive shortly
 // after its director-side timeout. Nothing legitimately arrives minutes late
 // (attach deadline 10s, orphan grace 30s); unretired debt from hosts that
@@ -921,7 +940,10 @@ export class RelayAssignmentStore {
             )) &&
             !(await this.cellHasCommittedFence(transaction, current.cellId, now))
           ) {
-            throw new Error('relay_capacity_exhausted')
+            throw new RelayHomeCellUnavailableError(
+              current.cellId,
+              await this.homeCellUnavailableCause(transaction, current.cellId, now)
+            )
           }
           forcedDeadReassignment = true
         }
@@ -2673,7 +2695,13 @@ export class RelayAssignmentStore {
         )
         if (assignment.cellId !== text(row, 'cell_id')) moved++
       } catch (error) {
-        if (!(error instanceof Error && error.message === 'relay_capacity_exhausted')) throw error
+        // One unplaceable host must not end the sweep for the rest.
+        if (
+          !(error instanceof RelayHomeCellUnavailableError) &&
+          !(error instanceof Error && error.message === 'relay_capacity_exhausted')
+        ) {
+          throw error
+        }
       }
     }
     return moved
@@ -7122,6 +7150,31 @@ export class RelayAssignmentStore {
       [cellId, 1, now - this.heartbeatTtlMs]
     )
     return rows.length === 1
+  }
+
+  // Reports which of `cellIsLive`'s conditions failed, so the rejection log
+  // separates an expected drain or boot from a cell whose readiness went out
+  // from under its hosts.
+  private async homeCellUnavailableCause(
+    database: RelayDatabase,
+    cellId: string,
+    now: number
+  ): Promise<RelayHomeCellUnavailableCause> {
+    const row = (
+      await database.query(
+        `SELECT cell.enabled, runtime.last_heartbeat_at
+         FROM relay_cells cell
+         LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+         WHERE cell.cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    if (!row) return 'booting'
+    if (integer(row, 'enabled') === 0) return 'draining'
+    const heartbeatAt = optionalInteger(row, 'last_heartbeat_at')
+    if (heartbeatAt === undefined) return 'booting'
+    // Readiness is all that is left: `cellIsLive` already refused this cell.
+    return heartbeatAt <= now - this.heartbeatTtlMs ? 'unheard' : 'not_ready'
   }
 
   private async cellHasActiveFence(cellId: string): Promise<boolean> {

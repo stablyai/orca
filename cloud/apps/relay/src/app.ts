@@ -27,10 +27,11 @@ import {
   createRegionalRehomeTokenVerifier,
   createRuntimeTokenVerifier
 } from './admin-token-verifier.js'
-import type {
-  CellFenceAttemptEvidence,
-  RelayAssignment,
-  RelayAssignmentStore
+import {
+  RelayHomeCellUnavailableError,
+  type CellFenceAttemptEvidence,
+  type RelayAssignment,
+  type RelayAssignmentStore
 } from './assignment-store.js'
 import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
@@ -361,16 +362,17 @@ export function createRelayApp(
         }
       }
     } catch (error) {
-      if (isRelayAssignmentCapacityError(error) || isRelayDatabaseTransientError(error)) {
+      if (isRelayAssignmentUnavailableError(error) || isRelayDatabaseTransientError(error)) {
         logAssignmentRejection({
           route: 'assign',
           lane,
           hinted: Boolean(body.data.reconnect),
           relayHostId: claims.relayHostId,
-          reason: operationError(error)
+          reason: operationError(error),
+          ...homeCellRejectionDetail(error)
         })
       }
-      if (isRelayAssignmentCapacityError(error)) {
+      if (isRelayAssignmentUnavailableError(error)) {
         if (lane === 'placement') {
           operations.recordRegionSelection?.({ targetRegion, fallback: false })
         }
@@ -389,11 +391,13 @@ export function createRelayApp(
       fallback: lane === 'placement' && assignment.region !== targetRegion
     })
     // Grant-side counterpart of the rejection log: reconnect grants are rare
-    // enough to log and make "which cell is this host on" answerable.
-    if (lane === 'sticky') {
+    // enough to log and make "which cell is this host on" answerable. The
+    // placement-lane ones matter most — they are the only record that a host
+    // whose sticky lane failed verification landed anywhere at all.
+    if (body.data.reconnect) {
       console.warn(
-        `[orca-relay] assignment granted lane=sticky host=${relayHostLogDigest(claims.relayHostId)}` +
-          ` cell=${assignment.cellId}`
+        `[orca-relay] assignment granted lane=${lane} hinted=true` +
+          ` host=${relayHostLogDigest(claims.relayHostId)} cell=${assignment.cellId}`
       )
     }
     const lease = await new SignJWT({
@@ -466,16 +470,17 @@ export function createRelayApp(
         leaseExpiresAt: assignment.leaseExpiresAt
       })
     } catch (error) {
-      if (isRelayAssignmentCapacityError(error) || isRelayDatabaseTransientError(error)) {
+      if (isRelayAssignmentUnavailableError(error) || isRelayDatabaseTransientError(error)) {
         logAssignmentRejection({
           route: 'resolve',
           lane: 'none',
           hinted: false,
           relayHostId: body.data.relayHostId,
-          reason: operationError(error)
+          reason: operationError(error),
+          ...homeCellRejectionDetail(error)
         })
       }
-      if (isRelayAssignmentCapacityError(error)) {
+      if (isRelayAssignmentUnavailableError(error)) {
         return context.json({ error: operationError(error) }, 503)
       }
       if (isRelayDatabaseTransientError(error)) return rejectPublicAssignment(context)
@@ -1948,23 +1953,39 @@ function logAssignmentRejection(input: {
   hinted: boolean
   relayHostId: string
   reason: string
+  cause?: string
+  cell?: string
   suppressed?: number
 }): void {
   console.warn(
     `[orca-relay] assignment rejected route=${input.route} lane=${input.lane}` +
       ` hinted=${input.hinted} reason=${input.reason}` +
       ` host=${relayHostLogDigest(input.relayHostId)}` +
+      (input.cause === undefined ? '' : ` cause=${input.cause}`) +
+      (input.cell === undefined ? '' : ` cell=${input.cell}`) +
       (input.suppressed === undefined ? '' : ` suppressed=${input.suppressed}`)
   )
 }
 
-function isRelayAssignmentCapacityError(error: unknown): boolean {
+// The home-cell reason is not capacity, but it is the same answer to the client:
+// retry, the director cannot place you right now.
+function isRelayAssignmentUnavailableError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    ['relay_capacity_exhausted', 'relay_connection_headroom_exhausted'].includes(
-      error.message
-    )
+    [
+      'relay_capacity_exhausted',
+      'relay_connection_headroom_exhausted',
+      'relay_home_cell_unavailable'
+    ].includes(error.message)
   )
+}
+
+function homeCellRejectionDetail(
+  error: unknown
+): { cause: string; cell: string } | Record<string, never> {
+  return error instanceof RelayHomeCellUnavailableError
+    ? { cause: error.unavailableCause, cell: error.cellId }
+    : {}
 }
 
 function isCanonicalRelayOrigin(value: string): boolean {
