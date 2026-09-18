@@ -4,6 +4,11 @@ import {
   type ComputerAwakeMode,
   type ComputerAwakeStatus
 } from '../shared/computer-awake-mode'
+import { isAgentAwakeOnBatteryPower } from './agent-awake-battery-power'
+import {
+  subscribeAgentAwakePowerMonitor,
+  type AgentAwakePowerMonitor
+} from './agent-awake-power-monitor'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 import { AgentAwakeStatusLease, type AgentAwakeStatus } from './agent-awake-status-lease'
@@ -25,11 +30,6 @@ type PlatformAwakeAssertion = {
   dispose: () => void
 }
 
-type PowerMonitorEventSource = {
-  on: (event: 'resume', listener: () => void) => void
-  off: (event: 'resume', listener: () => void) => void
-}
-
 type Logger = Pick<Console, 'debug' | 'warn'>
 
 type AgentAwakeServiceOptions = {
@@ -39,7 +39,7 @@ type AgentAwakeServiceOptions = {
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
   platform?: NodeJS.Platform
-  powerMonitor?: PowerMonitorEventSource | null
+  powerMonitor?: AgentAwakePowerMonitor | null
 }
 
 export class AgentAwakeService {
@@ -54,7 +54,7 @@ export class AgentAwakeService {
   private readonly platform: NodeJS.Platform
   private readonly now: () => number
   private readonly statusLease: AgentAwakeStatusLease
-  private readonly unsubscribeResume: (() => void) | null
+  private readonly unsubscribePowerMonitor: (() => void) | null
 
   constructor(options: AgentAwakeServiceOptions = {}) {
     this.blocker = options.blocker ?? powerSaveBlocker
@@ -78,14 +78,15 @@ export class AgentAwakeService {
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
     this.platform = options.platform ?? process.platform
-    const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
-    if (resumeSource) {
-      const onResume = () => this.refresh('power-resume')
-      resumeSource.on('resume', onResume)
-      this.unsubscribeResume = () => resumeSource.off('resume', onResume)
-    } else {
-      this.unsubscribeResume = null
-    }
+    const powerMonitorSource =
+      options.powerMonitor === undefined
+        ? (powerMonitor as AgentAwakePowerMonitor)
+        : options.powerMonitor
+    this.unsubscribePowerMonitor = powerMonitorSource
+      ? subscribeAgentAwakePowerMonitor(powerMonitorSource, this.platform, (reason) =>
+          this.refresh(reason)
+        )
+      : null
   }
 
   setEnabled(enabled: boolean): void {
@@ -136,7 +137,7 @@ export class AgentAwakeService {
 
   dispose(): void {
     this.statusLease.dispose()
-    this.unsubscribeResume?.()
+    this.unsubscribePowerMonitor?.()
     this.stopBlocker('dispose')
     this.macosAssertion.dispose()
     this.linuxAssertion.dispose()
@@ -151,7 +152,8 @@ export class AgentAwakeService {
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
       const macosAssertionActive = this.startMacosAssertion(reason)
-      if (this.platform !== 'darwin' || !macosAssertionActive) {
+      // caffeinate -i/-s does not pin the display; on battery that is Clamshell Sleep
+      if (this.platform !== 'darwin' || !macosAssertionActive || isAgentAwakeOnBatteryPower()) {
         this.startBlocker(reason, runningStatusCount)
       } else {
         this.stopBlocker('macos-assertion-active', runningStatusCount)
@@ -184,10 +186,8 @@ export class AgentAwakeService {
   }
 
   private startBlocker(reason: string, runningStatusCount: number): void {
-    if (this.blockerId !== null) {
-      if (this.reconcileBlocker('start-reconcile')) {
-        return
-      }
+    if (this.blockerId !== null && this.reconcileBlocker('start-reconcile')) {
+      return
     }
     try {
       const id = this.blocker.start('prevent-display-sleep')
