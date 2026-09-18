@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
@@ -67,7 +67,9 @@ export function useMobileWebShellBridge(args: {
   const viewRef = useRef<MountedView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
 
-  useEffect(() => {
+  // Commit-phase, not passive: a native frame that arrives between the two carries the session id
+  // the handler is fenced on, so only handing the host over here keeps it off the retired client.
+  useLayoutEffect(() => {
     if (client === null || sessionId === null || buildId === null) {
       return
     }
