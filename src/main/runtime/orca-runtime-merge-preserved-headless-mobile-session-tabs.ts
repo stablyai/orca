@@ -173,9 +173,16 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     const terminalTabs = tabs.filter(
       (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
     )
+    // Why: renderer-detach prune must rebase remaining runtime rows onto a
+    // headless-built epoch or they stay classified as renderer-owned.
+    const publicationBase = this.isHeadlessBuiltMobileSessionPublicationBase(
+      existing.publicationEpoch
+    )
+      ? existing
+      : { ...existing, publicationEpoch: `headless-hydrated:${Date.now().toString(36)}` }
     return {
       ...existing,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),
