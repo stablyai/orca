@@ -199,5 +199,11 @@ describe('renderTasksView', () => {
     expect(source).toContain('OverlayAllowedContext.Provider')
     expect(source).toContain('value={isVisible}')
     expect(effectsSource).toContain('useDismissTaskPageOverlaysWhenHidden')
+    expect(
+      readFileSync(join(process.cwd(), 'src/renderer/src/components/ui/dropdown-menu.tsx'), 'utf8')
+    ).toContain('useGatedOverlayOpen')
+    expect(
+      readFileSync(join(process.cwd(), 'src/renderer/src/components/ui/select.tsx'), 'utf8')
+    ).toContain('useGatedOverlayOpen')
   })
 })
