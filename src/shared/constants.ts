@@ -5,8 +5,8 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
+import { getDefaultWorkspaceSession } from './default-workspace-session'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
@@ -18,6 +18,7 @@ import { buildDefaultSettings } from './default-global-settings'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 
+export { getDefaultWorkspaceSession } from './default-workspace-session'
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
   COMPACT_WORKTREE_CARD_PROPERTIES,
@@ -268,6 +269,7 @@ export function getDefaultUIState(): PersistedUIState {
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
+    filterAgentIds: null,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     agentsVisibleHostIds: null,
@@ -321,24 +323,5 @@ export function getDefaultUIState(): PersistedUIState {
     featureInteractions: {},
     contextualToursSeenIds: [],
     browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
-  }
-}
-
-export function getDefaultWorkspaceSession(): WorkspaceSessionState {
-  return {
-    activeRepoId: null,
-    activeWorktreeId: null,
-    activeTabId: null,
-    tabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    openFilesByWorktree: {},
-    markdownFrontmatterVisible: {},
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    activeBrowserTabIdByWorktree: {},
-    activeFileIdByWorktree: {},
-    activeTabTypeByWorktree: {},
-    browserUrlHistory: [],
-    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }

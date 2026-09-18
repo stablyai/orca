@@ -1,4 +1,5 @@
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
@@ -59,6 +60,7 @@ export type SidebarFilterState = {
   hideWorkspacesFromOtherDevices: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
   alwaysShowDefaultBranchWorkspace?: boolean
+  filterAgentIds?: TuiAgent[] | null
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }

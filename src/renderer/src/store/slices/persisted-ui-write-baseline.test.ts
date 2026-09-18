@@ -28,6 +28,7 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
+    filterAgentIds: null,
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
     manuallyUnreadTurnsByPaneKey: {},
@@ -134,6 +135,19 @@ describe('persistedUIWriteFieldsToWireUpdate', () => {
     const update = persistedUIWriteFieldsToWireUpdate({ filterRepoIds })
     expect(update.filterRepoIds).toEqual(['r1'])
     expect(update.filterRepoIds).not.toBe(filterRepoIds)
+  })
+
+  it('copies filterAgentIds so main never receives the store array identity', () => {
+    const filterAgentIds = ['claude'] as const
+    const update = persistedUIWriteFieldsToWireUpdate({ filterAgentIds: [...filterAgentIds] })
+    expect(update.filterAgentIds).toEqual(['claude'])
+    expect(update.filterAgentIds).not.toBe(filterAgentIds)
+  })
+
+  it('persists explicit All-agents as null', () => {
+    expect(persistedUIWriteFieldsToWireUpdate({ filterAgentIds: null })).toEqual({
+      filterAgentIds: null
+    })
   })
 
   it('passes same-name fields through and never invents keys', () => {

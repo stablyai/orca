@@ -239,6 +239,34 @@ export function migrateStatusBarItems(items: readonly string[] | undefined): Sta
   return out as StatusBarItem[]
 }
 
+const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
+const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
+const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
+const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
+const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
+
+export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
+  let items = migrateStatusBarItems(ui.statusBarItems)
+  const defaults = [
+    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
+    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
+    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
+    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
+    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+  ] as const
+  for (const [flag, item] of defaults) {
+    if (!ui[flag] && !items.includes(item)) {
+      items = [...items, item]
+    }
+  }
+  if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
+    window.api.ui
+      .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
+      .catch(console.error)
+  }
+  return items
+}
+
 export function hydrateUnexpectedSignoutDismissal(
   state: Pick<UISlice, 'unexpectedSignoutDismissedVersions'>,
   version: string | null | undefined
