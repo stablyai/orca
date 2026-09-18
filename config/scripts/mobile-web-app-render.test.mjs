@@ -127,16 +127,17 @@ const UNMATCHED = 'Unmatched Route'
 async function render(route) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
-  let abortMount = () => {}
+  let reportUncaught = () => {}
   // An uncaught error from the entry means nothing will ever mount. Racing it against the wait
   // reports that error in a second instead of a 30s timeout that names nothing -- which is what a
   // native-only route module, throwing at import before React runs, looks like from here.
-  const mountAborted = new Promise((_resolve, reject) => {
-    abortMount = reject
+  // Resolved rather than rejected: this one settles during goto, before anything awaits it.
+  const uncaught = new Promise((resolve) => {
+    reportUncaught = resolve
   })
   page.on('pageerror', (error) => {
     errors.push(`${error.name}: ${error.message}`)
-    abortMount(error)
+    reportUncaught(error)
   })
   page.on('console', (message) => {
     if (message.type() === 'error') {
@@ -155,9 +156,14 @@ async function render(route) {
       polling: 250
     }
   )
-  try {
-    await Promise.race([mounted, mountAborted])
-  } catch (cause) {
+  const cause = await Promise.race([
+    mounted.then(
+      () => null,
+      (error) => error
+    ),
+    uncaught
+  ])
+  if (cause) {
     const state = await page.evaluate(
       () => document.documentElement.dataset.orcaWebEntry ?? 'absent'
     )
