@@ -8,11 +8,14 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+import { evaluateMobileWebBundleCompat } from './mobile-web-bundle-compat'
 import {
   mobileWebBundleChunkRead,
   mobileWebBundleManifestRead,
   readMobileWebBundleErrorCode
 } from './mobile-web-bundle-operations'
+import { MobileWebBundleManifestReplySchema } from './mobile-web-bundle-reply-schemas'
 import type { RpcReadResult } from './rpc-operation-contract'
 
 const BUILD_ID = 'a'.repeat(64)
@@ -157,6 +160,28 @@ describe('mobile web bundle manifest reply reader', () => {
     for (const schemaVersion of [1.5, 'one', null]) {
       expect(readManifest(manifestReply({ schemaVersion })).compatible).toBe(false)
     }
+  })
+
+  it('types the protocol window the update wall compares, without a cast at the call site', () => {
+    const parsed = MobileWebBundleManifestReplySchema.parse(manifestReply())
+    // The pin is this call: `manifest` only assigns if the reader still types both window fields.
+    const verdict = evaluateMobileWebBundleCompat({
+      hostCapabilities: [MOBILE_WEB_BUNDLE_CAPABILITY],
+      hostStatus: { protocolVersion: 2, minCompatibleMobileVersion: 2 },
+      manifest: parsed.manifest
+    })
+
+    expect(verdict).toEqual({ kind: 'ok' })
+  })
+
+  it('refuses a manifest with no protocol window, which only a host without the capability sends', () => {
+    expect(readManifest(manifestReply({ runtimeProtocolVersion: undefined })).compatible).toBe(
+      false
+    )
+    expect(
+      readManifest(manifestReply({ minCompatibleRuntimeProtocolVersion: undefined })).compatible
+    ).toBe(false)
+    expect(readManifest(manifestReply({ runtimeProtocolVersion: -1 })).compatible).toBe(false)
   })
 
   it('bounds every manifest field the fetch reads', () => {
