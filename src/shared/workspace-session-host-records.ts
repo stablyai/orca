@@ -24,6 +24,36 @@ export function buildWorktreeIdByTabId(state: WorkspaceSessionState): Map<string
   return byTab
 }
 
+/** The renderer's live tab catalogs, for routing a payload that carries no tab rows of its own. */
+export type WorkspaceTabOwnerCatalog = {
+  tabsByWorktree?: Readonly<Record<string, readonly { id: string }[]>>
+  unifiedTabsByWorktree?: Readonly<Record<string, readonly { id: string; worktreeId: string }[]>>
+}
+
+/** Fill tabs the payload never mentioned from the live catalogs. Payload rows win: main merges the
+ *  payload's own `tabsByWorktree` into whichever partition it lands in, so a tab-keyed row has to
+ *  follow the tab row in THIS write, not a newer store state the debounce has not emitted yet. */
+export function extendWorktreeIdByTabId(
+  byTab: Map<string, string>,
+  catalog: WorkspaceTabOwnerCatalog | undefined
+): Map<string, string> {
+  for (const [worktreeId, tabs] of Object.entries(catalog?.tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (!byTab.has(tab.id)) {
+        byTab.set(tab.id, worktreeId)
+      }
+    }
+  }
+  for (const tabs of Object.values(catalog?.unifiedTabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (!byTab.has(tab.id)) {
+        byTab.set(tab.id, tab.worktreeId)
+      }
+    }
+  }
+  return byTab
+}
+
 /** The workspace a pane key belongs to. A pane key is `<tabId>:<leafId>`; both the split and the
  *  stranded-partition adoption resolve it here so neither can parse it its own way. */
 export function worktreeIdForPaneKey(
