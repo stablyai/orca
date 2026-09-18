@@ -1,3 +1,4 @@
+import { getDshConsoleTitleStatus } from './dsh-console-title'
 import {
   AGY_AGENT_NAME_RE,
   BRAILLE_SPINNER_RE,
@@ -180,6 +181,10 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
 }
 
 function computeAgentStatusFromTitle(title: string): AgentStatus | null {
+  const dshStatus = getDshConsoleTitleStatus(title)
+  if (dshStatus) {
+    return dshStatus
+  }
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }

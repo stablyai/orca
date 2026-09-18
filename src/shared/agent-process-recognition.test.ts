@@ -8,6 +8,17 @@ import {
 } from './agent-process-recognition'
 
 describe('agent process recognition', () => {
+  it('recognizes the published DSH Console launcher without claiming generic DSH', () => {
+    for (const command of [
+      'dsh-console --prompt "hello"',
+      'node /usr/local/lib/node_modules/@cofy-x/dsh-console/bin/dsh-console.js --continue'
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('dsh-console')
+    }
+    expect(recognizeAgentProcessFromCommandLine('dsh --profile another-agent')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /tmp/my-app/bin/dsh-console.js')).toBeNull()
+  })
+
   it('recognizes packaged Codex foreground process names', () => {
     expect(recognizeAgentProcess('codex-aarch64-ap')).toEqual({
       agent: 'codex',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_DSH_CONSOLE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
 } from '../../../shared/protocol-version'
@@ -38,6 +39,7 @@ describe('agentResumeHostAuthorityCapability', () => {
         RESUMABLE_TUI_AGENTS.map((agent) => [agent, agentResumeHostAuthorityCapability(agent)])
       )
     ).toEqual({
+      'dsh-console': AGENT_SESSION_DSH_CONSOLE_RESUME_RUNTIME_CAPABILITY,
       claude: undefined,
       codex: undefined,
       gemini: undefined,
