@@ -88,7 +88,6 @@ function dispatchExternalFileChange(file: OpenFile, worktreePath: string): void 
 type ProbeProps = {
   activeFile: OpenFile | null
   openFiles: OpenFile[]
-  isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }
 
@@ -104,15 +103,14 @@ const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 function HookProbe({
   activeFile,
   openFiles,
-  isChangesMode = false,
   gitStatusByWorktree = EMPTY_GIT_STATUS_BY_WORKTREE
 }: ProbeProps): null {
   const state = useEditorPanelContentState({
     activeFile,
-    isChangesMode,
+    isChangesMode: false,
     openFiles,
     gitStatusEntries: activeFile ? gitStatusByWorktree[activeFile.worktreeId] : undefined,
-    editorViewMode: isChangesMode && activeFile ? { [activeFile.id]: 'changes' } : {}
+    editorViewMode: {}
   })
   latestFileContents = state.fileContents
   latestDiffContents = state.diffContents
@@ -168,58 +166,6 @@ describe('useEditorPanelContentState', () => {
     container?.remove()
     container = null
     root = null
-  })
-
-  it('uses the index for Source Control Changes and HEAD for an ordinary editable Changes tab', async () => {
-    const sourceControlFile = createOpenFile({
-      id: '/repo/test.md',
-      filePath: '/repo/test.md',
-      relativePath: 'test.md',
-      language: 'markdown',
-      changesAgainstIndex: true
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'staged\nunstaged\n',
-      isBinary: false
-    })
-    mocks.getRuntimeGitDiff.mockResolvedValue({
-      kind: 'text',
-      originalContent: 'staged\n',
-      modifiedContent: 'staged\nunstaged\n',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(
-        <HookProbe activeFile={sourceControlFile} openFiles={[sourceControlFile]} isChangesMode />
-      )
-    })
-    await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(1))
-    expect(mocks.getRuntimeGitDiff).toHaveBeenLastCalledWith(expect.anything(), {
-      filePath: 'test.md',
-      staged: false,
-      compareAgainstHead: false
-    })
-    expect(latestDiffContents[sourceControlFile.id]?.originalContent).toBe('staged\n')
-
-    const ordinaryFile = {
-      ...sourceControlFile,
-      changesAgainstIndex: undefined,
-      diffContentReloadNonce: 1
-    }
-    await act(async () => {
-      root?.render(<HookProbe activeFile={ordinaryFile} openFiles={[ordinaryFile]} isChangesMode />)
-    })
-    await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2))
-    expect(mocks.getRuntimeGitDiff).toHaveBeenLastCalledWith(expect.anything(), {
-      filePath: 'test.md',
-      staged: false,
-      compareAgainstHead: true
-    })
   })
 
   it('loads folder workspace files through the path-specific SSH connection', async () => {
