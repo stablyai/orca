@@ -187,9 +187,10 @@ describe('constrained idle regional assignment transaction', () => {
     async (column) => {
       const { store, database, safety } = await setup()
       const query = vi.spyOn(database, 'query')
+      // One assignment only: setup leaves both fields at 0, and naming the other
+      // one too would assign this column twice, which Postgres rejects.
       await database.query(
-        `UPDATE relay_region_rehome_worker_state
-         SET next_dispatch_at = 0, paused_until = 0, ${column} = ? WHERE worker_id = 'global'`,
+        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
         [safety.observedAt + 1]
       )
       for (let tick = 0; tick < 3; tick++) {
