@@ -34,11 +34,13 @@ export function CopyButton({
   text,
   title: titleOverride,
   ariaLabel,
+  copiedLabel,
   disabled = false
 }: {
   text: string
   title?: string
   ariaLabel?: string
+  copiedLabel?: string
   disabled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -85,12 +87,15 @@ export function CopyButton({
     [clearCopiedResetTimer, text]
   )
 
+  const idleLabel = ariaLabel ?? title
+  const announcedLabel = copied && copiedLabel ? copiedLabel : idleLabel
+
   return (
     <button
       type="button"
       ref={setCopyButtonRef}
       className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
-      aria-label={ariaLabel ?? title}
+      aria-label={announcedLabel}
       title={title}
       disabled={disabled}
       onClick={handleCopy}
@@ -107,7 +112,23 @@ export function CopyAllButton({
   text: string
   disabled: boolean
 }): React.JSX.Element {
-  return <CopyButton text={text} title="Copy all" ariaLabel="Copy all" disabled={disabled} />
+  const copyAllLabel = translate(
+    'auto.components.right.sidebar.checks.panel.content.097012c048',
+    'Copy all'
+  )
+  const copiedLabel = translate(
+    'auto.components.right.sidebar.checks.panel.content.1e53e45072',
+    'Copied'
+  )
+  return (
+    <CopyButton
+      text={text}
+      title={copyAllLabel}
+      ariaLabel={copyAllLabel}
+      copiedLabel={copiedLabel}
+      disabled={disabled}
+    />
+  )
 }
 
 export function ResolveButton({
