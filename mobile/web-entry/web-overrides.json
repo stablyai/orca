@@ -6,6 +6,10 @@
       "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: a placeholder RpcClient until C0.4 lands BridgeRpcClient over the shell bridge."
     },
     {
+      "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
+      "reason": "Vendored with the module, not added for Route A. The dictation hook imports @orca/expo-two-way-audio, whose native module is a Swift/Kotlin JSI binding with no browser counterpart; the web file answers the same surface with denied microphone permission and no playback."
+    },
+    {
       "file": "src/transport/host-device-token-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     }
