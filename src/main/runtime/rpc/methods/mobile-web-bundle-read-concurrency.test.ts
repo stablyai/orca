@@ -1,0 +1,215 @@
+/**
+ * The two behaviours that only exist while reads are genuinely in flight: the per-connection cap and
+ * an abort that arrives mid-read. Both are held open by gating `open`, so neither depends on a race
+ * between an event loop and a stopwatch.
+ */
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type * as FsPromises from 'node:fs/promises'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RpcResponse } from '../core'
+import type { RpcDispatcher } from '../dispatcher'
+
+/** A latch on `open`, so a read can be held mid-flight without racing a stopwatch. */
+type OpenGate = {
+  blocker: Promise<void> | null
+  unlatch: (() => void) | null
+  opens: number
+  hold(): void
+  release(): void
+  reset(): void
+}
+
+const { getAppPath, gate } = vi.hoisted(() => {
+  const gate: OpenGate = {
+    blocker: null,
+    unlatch: null,
+    opens: 0,
+    hold() {
+      gate.blocker = new Promise<void>((resolve) => {
+        gate.unlatch = resolve
+      })
+    },
+    release() {
+      gate.unlatch?.()
+      gate.blocker = null
+      gate.unlatch = null
+    },
+    reset() {
+      gate.release()
+      gate.opens = 0
+    }
+  }
+  return { getAppPath: vi.fn<() => string>(), gate }
+})
+
+vi.mock('electron', () => ({ app: { getAppPath } }))
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+  return {
+    ...actual,
+    default: actual,
+    open: async (...args: Parameters<typeof actual.open>) => {
+      gate.opens++
+      if (gate.blocker) {
+        await gate.blocker
+      }
+      return actual.open(...args)
+    }
+  }
+})
+
+import { resetBundledMobileWebBundleCacheForTests } from '../../../startup/bundled-mobile-web-bundle'
+import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
+import {
+  MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS,
+  resetMobileWebBundleReadAdmissionForTests
+} from './mobile-web-bundle-read-admission'
+import {
+  mobileWebBundleDispatcher,
+  writeSyntheticMobileWebBundle,
+  type SyntheticMobileWebBundle
+} from './mobile-web-bundle.test-fixture'
+
+let scratch: string
+let bundle: SyntheticMobileWebBundle
+let dispatcher: RpcDispatcher
+
+type DispatchOptions = { connectionId?: string; signal?: AbortSignal }
+
+function chunk(offset: number, options?: DispatchOptions): Promise<RpcResponse> {
+  return dispatcher.dispatch(
+    {
+      id: `chunk-${String(offset)}`,
+      authToken: 'tok',
+      method: 'mobileWeb.bundle.chunk',
+      params: { buildId: bundle.buildId, path: 'index.html', offset }
+    },
+    options
+  )
+}
+
+function errorMessage(response: RpcResponse): string | undefined {
+  return response.ok ? undefined : response.error.message
+}
+
+/** Lets every already-scheduled continuation run, without advancing any clock. */
+async function settleMicrotasks(): Promise<void> {
+  for (let turn = 0; turn < 20; turn++) {
+    await Promise.resolve()
+  }
+}
+
+beforeEach(() => {
+  scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-reads-'))
+  getAppPath.mockReturnValue(scratch)
+  bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 7)
+  gate.reset()
+  resetBundledMobileWebBundleCacheForTests()
+  resetMobileWebBundleAssetVerdictsForTests()
+  resetMobileWebBundleReadAdmissionForTests()
+  dispatcher = mobileWebBundleDispatcher()
+})
+
+afterEach(() => {
+  gate.reset()
+  rmSync(scratch, { recursive: true, force: true })
+  vi.restoreAllMocks()
+})
+
+describe('chunk reads in flight on one connection', () => {
+  // Pinned as a literal because every other case here is written in terms of the constant, so the
+  // budget itself would otherwise move silently with it.
+  it('budgets four', () => {
+    expect(MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS).toBe(4)
+  })
+
+  it('admits four and refuses the fifth, then admits it once one finishes', async () => {
+    gate.hold()
+    const inFlight = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
+      chunk(0, { connectionId: 'conn-1' })
+    )
+    await settleMicrotasks()
+
+    const overflow = await chunk(0, { connectionId: 'conn-1' })
+    expect(errorMessage(overflow)).toBe('mobile_web_bundle_read_limited')
+
+    gate.release()
+    const admitted = await Promise.all(inFlight)
+    expect(admitted.every((response) => response.ok)).toBe(true)
+
+    const afterwards = await chunk(0, { connectionId: 'conn-1' })
+    expect(afterwards.ok).toBe(true)
+  })
+
+  it('does not let one connection at its cap cost another connection a read', async () => {
+    gate.hold()
+    const saturating = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
+      chunk(0, { connectionId: 'conn-1' })
+    )
+    await settleMicrotasks()
+
+    const neighbour = chunk(0, { connectionId: 'conn-2' })
+    await settleMicrotasks()
+    gate.release()
+
+    expect((await neighbour).ok).toBe(true)
+    expect((await Promise.all(saturating)).every((response) => response.ok)).toBe(true)
+  })
+
+  it('hashes an asset once even when four first readers arrive together', async () => {
+    gate.hold()
+    const together = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
+      chunk(0, { connectionId: 'conn-1' })
+    )
+    await settleMicrotasks()
+
+    // One verification open for the four of them; the rest are the four chunk reads.
+    const opensBeforeRelease = gate.opens
+    gate.release()
+    await Promise.all(together)
+
+    expect(opensBeforeRelease).toBe(1)
+    expect(gate.opens).toBe(1 + MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS)
+  })
+})
+
+describe('a client that disconnects while its chunk is being read', () => {
+  it('stops before the chunk read, and answers nothing it had already produced', async () => {
+    const controller = new AbortController()
+    gate.hold()
+    const pending = chunk(0, { connectionId: 'conn-3', signal: controller.signal })
+    await settleMicrotasks()
+    expect(gate.opens).toBe(1)
+
+    controller.abort()
+    gate.release()
+    const response = await pending
+
+    expect(response.ok).toBe(false)
+    expect(errorMessage(response)).toBe('client_disconnected')
+    // The verification open happened before the abort; the chunk read never did.
+    expect(gate.opens).toBe(1)
+  })
+
+  it('releases the slot it was holding, so the connection is not permanently capped', async () => {
+    const aborted = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () => {
+      const controller = new AbortController()
+      return {
+        controller,
+        response: chunk(0, { connectionId: 'conn-4', signal: controller.signal })
+      }
+    })
+    gate.hold()
+    await settleMicrotasks()
+    for (const { controller } of aborted) {
+      controller.abort()
+    }
+    gate.release()
+    await Promise.all(aborted.map(({ response }) => response))
+
+    expect((await chunk(0, { connectionId: 'conn-4' })).ok).toBe(true)
+  })
+})

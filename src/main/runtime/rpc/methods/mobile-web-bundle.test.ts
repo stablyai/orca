@@ -1,0 +1,411 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+  MobileWebBundleChunkResultSchema,
+  MobileWebBundleManifestResultSchema
+} from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
+import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcDispatcher } from '../dispatcher'
+
+const { getAppPath } = vi.hoisted(() => ({ getAppPath: vi.fn<() => string>() }))
+vi.mock('electron', () => ({ app: { getAppPath } }))
+
+import { resetBundledMobileWebBundleCacheForTests } from '../../../startup/bundled-mobile-web-bundle'
+import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
+import {
+  acquireMobileWebBundleReadSlot,
+  MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS,
+  resetMobileWebBundleReadAdmissionForTests
+} from './mobile-web-bundle-read-admission'
+import {
+  mobileWebBundleDispatcher,
+  mobileWebBundleFiller,
+  sha256Hex,
+  writeSyntheticMobileWebBundle,
+  type SyntheticMobileWebBundle
+} from './mobile-web-bundle.test-fixture'
+
+let scratch: string
+let dispatcher: RpcDispatcher
+
+function request(method: string, params?: unknown): RpcRequest {
+  return { id: `req-${method}`, authToken: 'tok', method, params }
+}
+
+type DispatchOptions = { connectionId?: string; clientId?: string; signal?: AbortSignal }
+
+async function call(method: string, params?: unknown, options?: DispatchOptions) {
+  return dispatcher.dispatch(request(method, params), options)
+}
+
+function errorMessage(response: RpcResponse): string | undefined {
+  return response.ok ? undefined : response.error.message
+}
+
+async function chunk(params: unknown, options?: DispatchOptions) {
+  return call('mobileWeb.bundle.chunk', params, options)
+}
+
+/** Pages one asset to the end the way a client must: never assuming a size it did not read. */
+async function download(buildId: string, path: string): Promise<{ bytes: Buffer; calls: number }> {
+  const pieces: Buffer[] = []
+  let offset = 0
+  let calls = 0
+  for (;;) {
+    const response = await chunk({ buildId, path, offset })
+    calls++
+    if (!response.ok) {
+      throw new Error(`chunk at ${String(offset)} failed: ${response.error.message}`)
+    }
+    const body = MobileWebBundleChunkResultSchema.parse(response.result)
+    expect(body.buildId).toBe(buildId)
+    expect(body.path).toBe(path)
+    expect(body.offset).toBe(offset)
+    pieces.push(Buffer.from(body.dataBase64, 'base64'))
+    if (body.eof) {
+      expect(offset + pieces.at(-1)!.byteLength).toBe(body.assetByteLength)
+      break
+    }
+    offset += MOBILE_WEB_BUNDLE_CHUNK_BYTES
+  }
+  return { bytes: Buffer.concat(pieces), calls }
+}
+
+beforeEach(() => {
+  scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-'))
+  getAppPath.mockReturnValue(scratch)
+  resetBundledMobileWebBundleCacheForTests()
+  resetMobileWebBundleAssetVerdictsForTests()
+  resetMobileWebBundleReadAdmissionForTests()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  dispatcher = mobileWebBundleDispatcher()
+})
+
+afterEach(() => {
+  rmSync(scratch, { recursive: true, force: true })
+  vi.restoreAllMocks()
+})
+
+describe('an install that carries a mobile web bundle', () => {
+  let bundle: SyntheticMobileWebBundle
+
+  beforeEach(() => {
+    bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 1)
+  })
+
+  it('answers the manifest with the chunk size it will actually serve', async () => {
+    const response = await call('mobileWeb.bundle.manifest')
+
+    expect(response.ok).toBe(true)
+    const body = MobileWebBundleManifestResultSchema.parse(
+      response.ok ? response.result : undefined
+    )
+    expect(body.chunkBytes).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+    expect(body.manifest.buildId).toBe(bundle.buildId)
+    expect(body.manifest.assets).toEqual(bundle.assets)
+  })
+
+  it('pages every asset back byte for byte, and each reassembly matches its manifest hash', async () => {
+    for (const asset of bundle.assets) {
+      const { bytes, calls } = await download(bundle.buildId, asset.path)
+
+      expect(bytes.byteLength).toBe(asset.byteLength)
+      expect(sha256Hex(bytes)).toBe(asset.sha256)
+      expect(calls).toBe(Math.max(1, Math.ceil(asset.byteLength / MOBILE_WEB_BUNDLE_CHUNK_BYTES)))
+    }
+  })
+
+  it('reports eof only on the last chunk of a multi-chunk asset', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect(script.byteLength).toBeGreaterThan(MOBILE_WEB_BUNDLE_CHUNK_BYTES * 2)
+
+    const eofs: boolean[] = []
+    for (let offset = 0; offset < script.byteLength; offset += MOBILE_WEB_BUNDLE_CHUNK_BYTES) {
+      const response = await chunk({ buildId: bundle.buildId, path: script.path, offset })
+      expect(response.ok).toBe(true)
+      eofs.push(MobileWebBundleChunkResultSchema.parse(response.ok && response.result).eof)
+    }
+
+    expect(eofs).toEqual([false, false, true])
+  })
+
+  // An asset whose length is an exact multiple of the chunk size must still end somewhere, and the
+  // only offset a client could try next is one the host rejects.
+  it('ends an exactly-one-chunk asset on its first chunk', async () => {
+    const stylesheet = bundle.assets.find((asset) => asset.path.endsWith('.css'))!
+    expect(stylesheet.byteLength).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+
+    const first = await chunk({ buildId: bundle.buildId, path: stylesheet.path, offset: 0 })
+    const past = await chunk({
+      buildId: bundle.buildId,
+      path: stylesheet.path,
+      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
+    })
+
+    expect(MobileWebBundleChunkResultSchema.parse(first.ok && first.result).eof).toBe(true)
+    expect(errorMessage(past)).toBe('mobile_web_bundle_offset_invalid')
+  })
+
+  // Offset 0 is in range for every asset, including an empty one, so a client never has to special
+  // case a zero-byte member it cannot ask about.
+  it('serves a zero-byte asset as one empty chunk at eof', async () => {
+    const mark = bundle.assets.find((asset) => asset.byteLength === 0)!
+
+    const response = await chunk({ buildId: bundle.buildId, path: mark.path, offset: 0 })
+
+    const body = MobileWebBundleChunkResultSchema.parse(response.ok && response.result)
+    expect(body).toMatchObject({ dataBase64: '', eof: true, assetByteLength: 0 })
+  })
+
+  it('describes the whole asset on every chunk, not the chunk', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+
+    const middle = await chunk({
+      buildId: bundle.buildId,
+      path: script.path,
+      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
+    })
+
+    const body = MobileWebBundleChunkResultSchema.parse(middle.ok && middle.result)
+    expect(body.assetByteLength).toBe(script.byteLength)
+    expect(body.sha256).toBe(script.sha256)
+    expect(Buffer.from(body.dataBase64, 'base64').byteLength).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+  })
+
+  it('refuses a path that is not a manifest member', async () => {
+    const attempts = [
+      'assets/does-not-exist.js',
+      'manifest.json',
+      'index.htm',
+      'assets',
+      'INDEX.HTML'
+    ]
+
+    for (const path of attempts) {
+      const response = await chunk({ buildId: bundle.buildId, path, offset: 0 })
+      expect(errorMessage(response)).toBe('mobile_web_bundle_asset_unknown')
+    }
+  })
+
+  it('rejects a traversal path at the params schema, before any lookup', async () => {
+    const response = await chunk({ buildId: bundle.buildId, path: '../../etc/passwd', offset: 0 })
+
+    expect(response.ok).toBe(false)
+    expect(errorMessage(response)).not.toBe('mobile_web_bundle_asset_unknown')
+  })
+
+  it('refuses an offset that does not address a chunk boundary', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+
+    for (const offset of [1, 1024, MOBILE_WEB_BUNDLE_CHUNK_BYTES - 1, 49_153]) {
+      const response = await chunk({ buildId: bundle.buildId, path: script.path, offset })
+      expect(errorMessage(response)).toBe('mobile_web_bundle_offset_invalid')
+    }
+  })
+
+  it('refuses an aligned offset that starts past the end of the asset', async () => {
+    const index = bundle.assets.find((asset) => asset.path === 'index.html')!
+    expect(index.byteLength).toBeLessThan(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+
+    const response = await chunk({
+      buildId: bundle.buildId,
+      path: index.path,
+      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
+    })
+
+    expect(errorMessage(response)).toBe('mobile_web_bundle_offset_invalid')
+  })
+
+  it('refuses a buildId that is not the one it is serving', async () => {
+    const response = await chunk({
+      buildId: '0'.repeat(64),
+      path: 'index.html',
+      offset: 0
+    })
+
+    expect(errorMessage(response)).toBe('mobile_web_bundle_build_changed')
+  })
+
+  // The auto-update case: the desktop replaced the bundle between the client's manifest call and
+  // its next chunk. The client must be told to restart from the manifest, not that its path is
+  // gone, so this is checked before the asset lookup.
+  it('refuses the old buildId after the install swaps bundles mid-download', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
+
+    rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
+    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 2)
+    resetBundledMobileWebBundleCacheForTests()
+    expect(replacement.buildId).not.toBe(bundle.buildId)
+
+    const stale = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
+
+    expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
+  })
+
+  it('refuses an asset whose bytes on disk no longer hash to the manifest', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    writeFileSync(join(bundle.root, script.path), mobileWebBundleFiller(script.byteLength, 99))
+
+    const response = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
+
+    expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
+  })
+
+  // Deliberate: a packaged bundle is immutable for the life of the install, so the verdict is worth
+  // one hash per asset rather than one per 48 KiB. Restoring the bytes without restarting is a dev
+  // scenario, and it stays refused until the process does.
+  it('remembers the verdict, so one hash per asset covers every later chunk', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    const corrupted = mobileWebBundleFiller(script.byteLength, 99)
+    writeFileSync(join(bundle.root, script.path), corrupted)
+    expect(
+      errorMessage(await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 }))
+    ).toBe('mobile_web_bundle_asset_changed')
+
+    writeFileSync(join(bundle.root, script.path), mobileWebBundleFiller(script.byteLength, 1))
+
+    expect(
+      errorMessage(await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 }))
+    ).toBe('mobile_web_bundle_asset_changed')
+    resetMobileWebBundleAssetVerdictsForTests()
+    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
+  })
+
+  it('charges reads to the connection, and refuses one past the cap', async () => {
+    const held = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
+      acquireMobileWebBundleReadSlot('conn-a')
+    )
+    expect(held.every((release) => release !== null)).toBe(true)
+
+    const refused = await chunk(
+      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+      {
+        connectionId: 'conn-a'
+      }
+    )
+    const other = await chunk(
+      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+      {
+        connectionId: 'conn-b'
+      }
+    )
+
+    expect(errorMessage(refused)).toBe('mobile_web_bundle_read_limited')
+    // One phone at its cap must not cost another phone a thing.
+    expect(other.ok).toBe(true)
+
+    held[0]!()
+    expect(
+      (
+        await chunk(
+          { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+          {
+            connectionId: 'conn-a'
+          }
+        )
+      ).ok
+    ).toBe(true)
+  })
+
+  // connectionId is set only for E2EE mobile sockets, so the device token is what keeps a
+  // plain-WebSocket phone from sharing one unbounded bucket with every other caller.
+  it('falls back to the device token when the connection has no id', async () => {
+    const held = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
+      acquireMobileWebBundleReadSlot('device-token-1')
+    )
+    expect(held.every((release) => release !== null)).toBe(true)
+
+    const refused = await chunk(
+      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+      {
+        clientId: 'device-token-1'
+      }
+    )
+
+    expect(errorMessage(refused)).toBe('mobile_web_bundle_read_limited')
+  })
+
+  it('stops before reading anything for a client that already disconnected', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const response = await chunk(
+      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+      {
+        signal: controller.signal
+      }
+    )
+
+    expect(response.ok).toBe(false)
+    expect(errorMessage(response)).toBe('client_disconnected')
+  })
+
+  it('gives the slot back after an abort, so the cap does not leak', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await chunk(
+      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+      {
+        connectionId: 'conn-c',
+        signal: controller.signal
+      }
+    )
+
+    const held = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
+      acquireMobileWebBundleReadSlot('conn-c')
+    )
+
+    expect(held.every((release) => release !== null)).toBe(true)
+  })
+})
+
+describe('the unpacked layout, where appPath is out/main', () => {
+  it('finds the bundle beside it', async () => {
+    const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    getAppPath.mockReturnValue(join(scratch, 'out', 'main'))
+    resetBundledMobileWebBundleCacheForTests()
+
+    const response = await call('mobileWeb.bundle.manifest')
+
+    expect(
+      MobileWebBundleManifestResultSchema.parse(response.ok && response.result).manifest.buildId
+    ).toBe(bundle.buildId)
+  })
+})
+
+describe('an install with no mobile web bundle', () => {
+  it('reports both methods unavailable rather than failing some other way', async () => {
+    const manifest = await call('mobileWeb.bundle.manifest')
+    const body = await chunk({ buildId: '0'.repeat(64), path: 'index.html', offset: 0 })
+
+    expect(errorMessage(manifest)).toBe('mobile_web_bundle_unavailable')
+    expect(errorMessage(body)).toBe('mobile_web_bundle_unavailable')
+  })
+
+  it('reads a manifest that does not match the contract as no bundle at all', async () => {
+    const root = join(scratch, 'out', 'mobile-web')
+    writeSyntheticMobileWebBundle(root, 4)
+    writeFileSync(join(root, 'manifest.json'), '{"schemaVersion":2}', 'utf8')
+    resetBundledMobileWebBundleCacheForTests()
+
+    const response = await call('mobileWeb.bundle.manifest')
+
+    expect(errorMessage(response)).toBe('mobile_web_bundle_unavailable')
+    expect(console.warn).toHaveBeenCalled()
+  })
+
+  it('reads an unparseable manifest as no bundle at all', async () => {
+    const root = join(scratch, 'out', 'mobile-web')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'manifest.json'), 'not json', 'utf8')
+    resetBundledMobileWebBundleCacheForTests()
+
+    expect(errorMessage(await call('mobileWeb.bundle.manifest'))).toBe(
+      'mobile_web_bundle_unavailable'
+    )
+  })
+})
