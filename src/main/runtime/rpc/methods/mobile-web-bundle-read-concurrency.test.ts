@@ -1,7 +1,7 @@
 /**
- * The two behaviours that only exist while reads are genuinely in flight: the per-connection cap and
- * an abort that arrives mid-read. Both are held open by gating `open`, so neither depends on a race
- * between an event loop and a stopwatch.
+ * The behaviours that only exist while a read is genuinely in flight or genuinely failing: the
+ * per-connection cap, an abort that arrives mid-read, and a verify whose open throws. All three go
+ * through a gate on `open`, so none of them depends on a race between an event loop and a stopwatch.
  */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,8 +16,10 @@ type OpenGate = {
   blocker: Promise<void> | null
   unlatch: (() => void) | null
   opens: number
+  failures: number
   hold(): void
   release(): void
+  failNextOpen(): void
   reset(): void
 }
 
@@ -26,6 +28,7 @@ const { gate } = vi.hoisted(() => {
     blocker: null,
     unlatch: null,
     opens: 0,
+    failures: 0,
     hold() {
       gate.blocker = new Promise<void>((resolve) => {
         gate.unlatch = resolve
@@ -36,9 +39,13 @@ const { gate } = vi.hoisted(() => {
       gate.blocker = null
       gate.unlatch = null
     },
+    failNextOpen() {
+      gate.failures++
+    },
     reset() {
       gate.release()
       gate.opens = 0
+      gate.failures = 0
     }
   }
   return { gate }
@@ -53,6 +60,10 @@ vi.mock('node:fs/promises', async () => {
       gate.opens++
       if (gate.blocker) {
         await gate.blocker
+      }
+      if (gate.failures > 0) {
+        gate.failures--
+        throw new Error('EIO: i/o error, open')
       }
       return actual.open(...args)
     }
@@ -112,6 +123,7 @@ beforeEach(() => {
   resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
   resetMobileWebBundleReadAdmissionForTests()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   dispatcher = mobileWebBundleDispatcher()
 })
 
@@ -214,5 +226,19 @@ describe('a client that disconnects while its chunk is being read', () => {
     await Promise.all(aborted.map(({ response }) => response))
 
     expect((await chunk(0, { connectionId: 'conn-4' })).ok).toBe(true)
+  })
+})
+
+describe('a verify whose read of the asset fails', () => {
+  // The verdict cache is never invalidated, so remembering a transient EIO as "these bytes are
+  // wrong" would poison the asset until the desktop restarts.
+  it('is not remembered as a verdict, so the next read still verifies', async () => {
+    gate.failNextOpen()
+
+    const failed = await chunk(0, { connectionId: 'conn-5' })
+    const retried = await chunk(0, { connectionId: 'conn-5' })
+
+    expect(errorMessage(failed)).toBe('mobile_web_bundle_asset_changed')
+    expect(retried.ok).toBe(true)
   })
 })
