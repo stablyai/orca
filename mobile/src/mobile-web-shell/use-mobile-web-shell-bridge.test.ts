@@ -2,6 +2,7 @@ import { createElement, useImperativeHandle, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
+import { readBridgeHostMessage, type BridgeHostMessage } from './bridge/bridge-envelope'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 
@@ -93,7 +94,7 @@ type Mounted = {
   probe: Probe
   update: (session: MobileWebShellSessionState) => Promise<void>
   deliver: (json: string) => Promise<void>
-  frames: (sessionId: string) => unknown[]
+  frames: (sessionId: string) => BridgeHostMessage[]
 }
 
 let warned: MockInstance<typeof console.warn>
@@ -125,10 +126,17 @@ async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
         probe.view?.onBridgeMessage({ nativeEvent: { json } })
       })
     },
+    // Read back through the page's own reader: a frame the page would refuse never arrives.
     frames: (sessionId) =>
       posted
         .filter((frame) => frame.sessionId === sessionId)
-        .map((frame) => JSON.parse(frame.json) as unknown)
+        .map((frame) => {
+          const read = readBridgeHostMessage(frame.json)
+          if (!read.ok) {
+            throw new Error(`the page would refuse this frame: ${read.refusal}`)
+          }
+          return read.message
+        })
   }
 }
 
