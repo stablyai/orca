@@ -7,7 +7,7 @@ import Foundation
 //   swiftc -O -o /tmp/mobile-web-shell-checks \
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
-//     ios/MobileWebShellBridge.swift \
+//     ios/MobileWebShellBridge.swift ios/MobileWebShellAppliedProps.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -302,6 +302,29 @@ import Foundation
     MobileWebShellBridge.accepts(source, sessionId: session)
   }
 
+  static func checkAppliedProps() {
+    func props(
+      directory: String = "/gen/aa",
+      session: String = session,
+      bridge: Bool = true
+    ) -> MobileWebShellAppliedProps {
+      MobileWebShellAppliedProps(
+        generationDirectory: directory,
+        sessionId: session,
+        bridgeEnabled: bridge
+      )
+    }
+
+    precondition(props().matches(props()))
+    precondition(!props().matches(props(directory: "/gen/ab")))
+    precondition(!props().matches(props(session: "sess-01JN_aZ8")))
+    precondition(!props().matches(props(bridge: false)))
+    // A triple that could not be honoured is still applied: re-entry reads the props, never whether
+    // the install succeeded, so a corrupt generation reports its failure once rather than on every
+    // commit for the life of the mount.
+    precondition(props(directory: "/gen/corrupt").matches(props(directory: "/gen/corrupt")))
+  }
+
   static func checkBridgeAcceptance() {
     precondition(acceptsBridge(bridgeSource()))
     // Simulator-measured: WebKit reports the custom scheme's host ASCII-lowercased, so the session
@@ -366,6 +389,7 @@ import Foundation
     checkLoadStateMachine()
     checkResponseHeaders()
     checkNavigationErrors()
+    checkAppliedProps()
     checkBridgeAcceptance()
     checkBridgeByteCap()
     print("mobile web shell checks OK")

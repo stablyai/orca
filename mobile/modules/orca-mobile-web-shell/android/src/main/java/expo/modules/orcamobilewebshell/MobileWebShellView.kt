@@ -53,8 +53,7 @@ internal class OrcaMobileWebShellView(
   // Chromium hands a reply proxy to the listener, so native cannot speak first. The envelope has
   // the page send `ready` before anything is delivered, so there is nothing to speak first about.
   private var replyProxy: JavaScriptReplyProxy? = null
-  private var appliedDirectory: String? = null
-  private var appliedSessionId: String? = null
+  private var applied: MobileWebShellAppliedProps? = null
   private val loadState = MobileWebShellLoadStateMachine()
   // Written on the main thread, read from onPageStarted/onPageFinished, which Chromium runs after
   // the failure that hid the view; `shouldInterceptRequest` also runs off the main thread.
@@ -81,18 +80,12 @@ internal class OrcaMobileWebShellView(
 
   /**
    * Props arrive in no defined order, so neither setter starts anything; this does, once both are
-   * in. A repeat of the same pair is not a retry: a retry is a remount under a new React key.
+   * in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
    */
   fun propsDidUpdate() {
-    if (
-      generationDirectory == appliedDirectory &&
-      sessionId == appliedSessionId &&
-      bridgeEnabled == bridgeInstalled
-    ) {
-      return
-    }
-    appliedDirectory = generationDirectory
-    appliedSessionId = sessionId
+    val next = MobileWebShellAppliedProps(generationDirectory, sessionId, bridgeEnabled)
+    if (applied?.matches(next) == true) return
+    applied = next
     documentFailed = false
     loadState.reset()
     val view = webView

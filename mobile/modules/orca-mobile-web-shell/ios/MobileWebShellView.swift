@@ -173,8 +173,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var webView: WKWebView!
   private var generationDirectory = ""
   private var sessionId = ""
-  private var appliedDirectory: String?
-  private var appliedSessionId: String?
+  private var applied: MobileWebShellAppliedProps?
+  private var appliedSessionId: String? { applied?.sessionId }
   private var pendingDocumentUrl: URL?
   private var isolationReady = false
   private var isolationFailed = false
@@ -220,17 +220,17 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   /// Props arrive in no defined order, so neither setter starts anything; this does, once both are
-  /// in. A repeat of the same pair is not a retry: a retry is a remount under a new React key.
-  /// `bridgeEnabled` is in the guard because a document-start script only takes effect at the next
+  /// in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
+  /// `bridgeEnabled` is in the record because a document-start script only takes effect at the next
   /// document start: toggling it has to reload, or the prop would silently do nothing.
   func propsDidUpdate() {
-    guard
-      generationDirectory != appliedDirectory
-        || sessionId != appliedSessionId
-        || bridgeEnabled != bridgeInstalled
-    else { return }
-    appliedDirectory = generationDirectory
-    appliedSessionId = sessionId
+    let next = MobileWebShellAppliedProps(
+      generationDirectory: generationDirectory,
+      sessionId: sessionId,
+      bridgeEnabled: bridgeEnabled
+    )
+    guard applied?.matches(next) != true else { return }
+    applied = next
     loadState.reset()
     pendingDocumentUrl = nil
     webView.stopLoading()
