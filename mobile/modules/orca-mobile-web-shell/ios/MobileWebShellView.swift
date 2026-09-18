@@ -146,6 +146,11 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
     installNetworkBlock(into: configuration.userContentController)
+    // The classifier is framework-free and cannot import these; this is where they are pinned.
+    assert(MobileWebShellNavigationError.isIgnorable(
+      domain: WKErrorDomain,
+      code: WKError.frameLoadInterruptedByPolicyChange.rawValue
+    ))
   }
 
   func setGenerationDirectory(_ value: String) {
@@ -245,6 +250,15 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     emit(loadState.failed(.documentLoadFailed))
   }
 
+  /// A cancelled navigation is our own doing, not the document's; see MobileWebShellNavigationError.
+  private func reportNavigationFailure(_ error: Error) {
+    let error = error as NSError
+    guard !MobileWebShellNavigationError.isIgnorable(domain: error.domain, code: error.code) else {
+      return
+    }
+    reportDocumentFailure()
+  }
+
   private func isDocumentUrl(_ url: URL?) -> Bool {
     guard let url, let parts = MobileWebShellRequestParts(url: url) else { return false }
     return MobileWebShellOrigin.resolveRequestPath(parts, sessionId: sessionId) == "/"
@@ -293,11 +307,11 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     didFailProvisionalNavigation navigation: WKNavigation!,
     withError error: Error
   ) {
-    reportDocumentFailure()
+    reportNavigationFailure(error)
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-    reportDocumentFailure()
+    reportNavigationFailure(error)
   }
 
   /// Reported, never recovered from here. Renderer memory pressure and a WebView provider update

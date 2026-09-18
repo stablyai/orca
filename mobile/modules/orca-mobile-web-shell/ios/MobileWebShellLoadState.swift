@@ -1,3 +1,5 @@
+import Foundation
+
 /// The wire names the TypeScript parser accepts; a swap here is a silent change of meaning.
 enum MobileWebShellFailureReason: String {
   case generationUnreadable = "generation-unreadable"
@@ -45,5 +47,26 @@ final class MobileWebShellLoadStateMachine {
     guard !isTerminal, emission != last else { return nil }
     last = emission
     return emission
+  }
+}
+
+/// A navigation WebKit reports as failed but which is not a failure of the document.
+///
+/// `stopLoading` on a prop update, and every navigation the policy delegate refuses, arrive at the
+/// failure delegates as errors. Reporting those would fail a healthy page, swallow its `ready`, and
+/// send the caller off to delete a cached generation that is fine.
+///
+/// Framework-free so `swiftc` can check it, so the WebKit constant is written out: `WKErrorDomain`
+/// with `WKError.frameLoadInterruptedByPolicyChange`, pinned against the real symbols by an assert
+/// in the view.
+enum MobileWebShellNavigationError {
+  static let webKitDomain = "WKErrorDomain"
+  static let frameLoadInterruptedByPolicyChange = 102
+
+  static func isIgnorable(domain: String, code: Int) -> Bool {
+    if domain == NSURLErrorDomain, code == NSURLErrorCancelled {
+      return true
+    }
+    return domain == webKitDomain && code == frameLoadInterruptedByPolicyChange
   }
 }

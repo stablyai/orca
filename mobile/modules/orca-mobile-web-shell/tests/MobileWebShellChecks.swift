@@ -254,6 +254,19 @@ import Foundation
     }
   }
 
+  static func checkNavigationErrors() {
+    let ignorable = MobileWebShellNavigationError.isIgnorable
+    // Our own stopLoading on a prop update, and every navigation the policy delegate refuses.
+    precondition(ignorable(NSURLErrorDomain, NSURLErrorCancelled))
+    precondition(ignorable("WKErrorDomain", 102))
+    // Anything else is the document failing to load, which is the caller's cue to redownload.
+    precondition(!ignorable(NSURLErrorDomain, NSURLErrorNetworkConnectionLost))
+    precondition(!ignorable(NSURLErrorDomain, NSURLErrorResourceUnavailable))
+    precondition(!ignorable("WKErrorDomain", 101))
+    precondition(!ignorable("WKErrorDomain", NSURLErrorCancelled))
+    precondition(!ignorable("SomeOtherDomain", 102))
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -263,6 +276,7 @@ import Foundation
     checkCsp()
     checkLoadStateMachine()
     checkResponseHeaders()
+    checkNavigationErrors()
     print("mobile web shell checks OK")
   }
 }
