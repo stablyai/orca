@@ -1,13 +1,16 @@
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import { useNativeChatSendShortcut } from './use-native-chat-send-shortcut'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -27,6 +30,7 @@ export type NativeChatComposerActionsProps = {
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
 }
 
+/** Renders attachment, dictation, send, and stop controls for the composer. */
 export function NativeChatComposerActions({
   attachDisabled,
   dictationDisabled,
@@ -44,6 +48,7 @@ export function NativeChatComposerActions({
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest
 }: NativeChatComposerActionsProps): React.JSX.Element {
+  const nativeChatSendShortcut = useNativeChatSendShortcut()
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
     // changed to Stop; ignore the second click instead of cancelling the new turn.
@@ -59,6 +64,13 @@ export function NativeChatComposerActions({
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
+  const criticalActionLabel = isWorking
+    ? translate('components.native-chat.stop', 'Stop the agent')
+    : translate('components.native-chat.composer.send', 'Send')
+  const sendShortcutKeys =
+    nativeChatSendShortcut === 'cmd-or-ctrl-enter'
+      ? [getScreenSubmitModifierLabel(), 'Enter']
+      : ['Enter']
   return (
     <div className="flex w-full items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-0.5">
@@ -134,26 +146,32 @@ export function NativeChatComposerActions({
             {dictationLabel}
           </TooltipContent>
         </Tooltip>
-        <Button
-          type="button"
-          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
-          aria-label={
-            isWorking
-              ? translate('components.native-chat.stop', 'Stop the agent')
-              : translate('components.native-chat.composer.send', 'Send')
-          }
-          disabled={sendDisabled}
-          onClick={handleCriticalAction}
-          variant={isWorking ? 'secondary' : 'default'}
-          size="icon"
-          className="size-8 rounded-full pointer-coarse:size-10"
-        >
-          {isWorking ? (
-            <Square className="size-3.5 fill-current" />
-          ) : (
-            <ArrowUp className="size-4" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              data-native-chat-critical-action={isWorking ? 'stop' : undefined}
+              aria-label={criticalActionLabel}
+              disabled={sendDisabled}
+              onClick={handleCriticalAction}
+              variant={isWorking ? 'secondary' : 'default'}
+              size="icon"
+              className="size-8 rounded-full pointer-coarse:size-10"
+            >
+              {isWorking ? (
+                <Square className="size-3.5 fill-current" />
+              ) : (
+                <ArrowUp className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            <span className="flex items-center gap-1.5">
+              {criticalActionLabel}
+              {!isWorking ? <ShortcutKeyCombo keys={sendShortcutKeys} /> : null}
+            </span>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )
