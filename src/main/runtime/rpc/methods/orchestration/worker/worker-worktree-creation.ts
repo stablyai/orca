@@ -16,6 +16,7 @@ export type WorkerWorktreeCreationTarget = {
   parentWorktreeId?: string
   /** A multi-repo folder workspace parent (`folder:<id>`); its destination repo is explicit. */
   parentWorkspace?: string
+  parentBranch?: string
 }
 
 export async function resolveWorkerWorktreeCreationTarget(args: {
@@ -55,7 +56,9 @@ export async function resolveWorkerWorktreeCreationTarget(args: {
     })
   return {
     repoSelector: repo ?? callerWorktree.repoId,
-    ...(requestedWorktree === 'new-child' ? { parentWorktreeId: callerWorktree.id } : {})
+    ...(requestedWorktree === 'new-child'
+      ? { parentWorktreeId: callerWorktree.id, parentBranch: callerWorktree.branch }
+      : {})
   }
 }
 
@@ -93,6 +96,13 @@ export async function resolveWorkerWorktreeName(
   return { name: generated, nameWasGenerated: true }
 }
 
+export function resolveWorkerWorktreeBaseBranch(
+  requestedBaseBranch: string | undefined,
+  parentBranch: string
+): string | undefined {
+  return requestedBaseBranch ?? (parentBranch || undefined)
+}
+
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -123,6 +133,10 @@ export async function createWorkerWorktree(args: {
   const { runtime, db, dispatchId, requestedWorktree, target, params, effects } = args
   const setupDecision = params.setup ?? 'run'
   let terminalCreation: RuntimeTerminalCreate | undefined
+  const baseBranch =
+    requestedWorktree === 'new-child'
+      ? resolveWorkerWorktreeBaseBranch(params.baseBranch, target.parentBranch ?? '')
+      : params.baseBranch
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
     onStartupTerminalCreated: (terminal) => {
@@ -130,7 +144,7 @@ export async function createWorkerWorktree(args: {
     },
     repoSelector: target.repoSelector,
     ...(await resolveWorkerWorktreeName(runtime, target.repoSelector, params.name)),
-    baseBranch: params.baseBranch,
+    baseBranch,
     displayName: params.displayName,
     ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
     comment: params.comment,
