@@ -3739,7 +3739,7 @@
           "444585cb41": "con datos",
           "ecb0cd8a4c": "habilitado -",
           "33f7b043d2": "Proveedores",
-          "60002bb22f": "Aún no se encontró uso local de Claude, Codex u OpenCode. El resumen se completará después de que la siguiente sesión de agente escriba logs de tokens.",
+          "60002bb22f": "Aún no se encontró uso local de Claude, Codex, OpenCode o Devin. El resumen se completará después de que la siguiente sesión de agente escriba logs de tokens.",
           "70f36452d4": "Porcentaje de caché",
           "327603fe8b": "Días activos",
           "0eaf937335": "Est. costo",
