@@ -381,6 +381,27 @@ describe('subscriptions', () => {
     bridge.host.receive(subscribeFrame(ID))
     expect(bridge.frames()).toHaveLength(2)
   })
+
+  it('unsubscribes a stream that overflowed inside subscribe, exactly once', () => {
+    const client = createFakeRpcClient()
+    let unsubscribes = 0
+    const bridge = harness({
+      client: {
+        ...client,
+        subscribe: (_method, _params, onData) => {
+          onData('z'.repeat(BRIDGE_MAX_MESSAGE_BYTES))
+          return () => {
+            unsubscribes += 1
+          }
+        }
+      }
+    })
+    bridge.host.receive(subscribeFrame(ID))
+    expect(bridge.frames()).toEqual([{ v: 1, type: 'end', id: ID, reason: 'overflow' }])
+    // The stream was already retired when its unsubscribe arrived, so storing it on the record
+    // would leak the client's stream with nothing left to read it.
+    expect(unsubscribes).toBe(1)
+  })
 })
 
 describe('backpressure', () => {
@@ -445,6 +466,29 @@ describe('backpressure', () => {
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
+  it('reopens the byte window on ack, not just the frame window', () => {
+    const bridge = harness()
+    bridge.host.receive(subscribeFrame(ID))
+    const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
+    // What fits under the byte window, which leaves the next frame of this size to overflow it.
+    const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / (chunk.length + 128))
+    const events = (): BridgeHostMessage[] => bridge.frames().filter((f) => f.type === 'event')
+    const emit = (times: number): void => {
+      for (let index = 0; index < times; index += 1) {
+        bridge.client.streams[0]?.emit(chunk)
+      }
+    }
+    emit(fits)
+    expect(events()).toHaveLength(fits)
+    bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: fits }))
+    emit(fits)
+    // The frame window is nowhere near full, so releasing the acked bytes is the only thing that
+    // can let the second batch through.
+    expect(fits * 2).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
+    expect(events()).toHaveLength(fits * 2)
+    expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
+  })
+
   it('ends rather than posting an event the page would refuse as oversized', () => {
     const bridge = harness()
     bridge.host.receive(subscribeFrame(ID))
@@ -496,6 +540,10 @@ describe('teardown', () => {
     expect(bridge.client.requests).toHaveLength(1)
     expect(bridge.client.streams).toHaveLength(1)
     expect(bridge.client.foregroundCalls).toEqual([])
+    // A view still posting into a disposed host is a leak, and the diagnostic is how it is found.
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 4 }, () => ({ kind: 'frame-after-dispose' }))
+    )
   })
 
   it('is idempotent', () => {
@@ -507,19 +555,30 @@ describe('teardown', () => {
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
   })
 
-  it('tears down silently on the page close, which has already settled what it owned', async () => {
+  it('settles what the page owned on close without answering a page that said goodbye', async () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     bridge.host.receive(subscribeFrame(OTHER))
     bridge.host.receive(clientFrame({ type: 'close' }))
     expect(bridge.posted).toHaveLength(0)
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
-    expect(bridge.client.stateListeners()).toBe(0)
-    bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(9), method: 'status.get' }))
-    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
+    bridge.client.streams[0]?.emit({ chunk: 'a' })
     await flushBridge()
     expect(bridge.posted).toHaveLength(0)
+  })
+
+  it('answers the document that loads in after a close, rather than latching shut', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    // The next page shares this host, and a host that had shut itself would leave its `ready`
+    // retrying forever with nothing posted and nothing logged.
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
+    expect(bridge.client.stateListeners()).toBe(1)
+    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(1)
+    expect(bridge.diagnostics).toEqual([])
   })
 })
 
@@ -544,6 +603,46 @@ describe('notifications, refusals and the fence', () => {
       { kind: 'refused', refusal: 'unrecognised-message' }
     ])
     expect(bridge.client.requests).toHaveLength(0)
+  })
+
+  it('reports a client that throws on a notify once per session, and keeps reading', () => {
+    const client = createFakeRpcClient()
+    const failure = new Error('no client')
+    const bridge = harness({
+      client: {
+        ...client,
+        notifyForeground: () => {
+          throw failure
+        },
+        updateTerminalSubscriptionViewport: () => {
+          throw failure
+        }
+      }
+    })
+    // The page's frame arrives on a native event handler, and a throw that escapes this arm takes
+    // that handler down with it.
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 80, rows: 24 })
+    )
+    expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
+  })
+
+  it('reports a post that throws instead of rejecting, and does not take the sender down', () => {
+    const failure = new Error('the bridge module is gone')
+    const client = createFakeRpcClient()
+    const bridge = harness({
+      client,
+      post: () => {
+        throw failure
+      }
+    })
+    // The `state` frame is sent from inside the client's own fan-out, so a throw here would reach
+    // every other listener that client has.
+    expect(() => client.pushState('reconnecting')).not.toThrow()
+    expect(bridge.diagnostics).toEqual([{ kind: 'post-failed', error: failure }])
   })
 
   it('reports a failing post once per session', async () => {

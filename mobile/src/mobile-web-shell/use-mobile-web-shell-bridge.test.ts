@@ -1,4 +1,4 @@
-import { createElement, useImperativeHandle, type ReactElement } from 'react'
+import { createElement, useImperativeHandle, useLayoutEffect, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
@@ -58,6 +58,29 @@ function FakeShellView(props: {
     [props.posted, props.sessionId]
   )
   return null
+}
+
+/**
+ * Delivers a frame from a layout effect of the hook's *parent*, which React runs after the hook's
+ * own commit work and before any passive effect. That is where a native message lands while React
+ * still has passive work queued, and it is the only window this suite can address.
+ */
+function DeliverDuringCommit(props: {
+  deliver: string | null
+  posted: PostedFrame[]
+  probe: Probe
+}): ReactElement {
+  const { deliver, probe } = props
+  useLayoutEffect(() => {
+    if (deliver !== null) {
+      probe.view?.onBridgeMessage({ nativeEvent: { json: deliver } })
+    }
+  }, [deliver, probe])
+  return createElement(Harness, {
+    session: readyState('session-one'),
+    posted: props.posted,
+    probe
+  })
 }
 
 function Harness(props: {
@@ -214,10 +237,15 @@ describe('teardown', () => {
     await act(async () => {
       mounted.tree.unmount()
     })
-    expect(warned).toHaveBeenCalledTimes(1)
+    // The commit tears the host down while its own view is still attached, so the page hears why
+    // its request will never answer instead of being left holding it.
+    expect(mounted.frames('session-one')).toEqual([
+      expect.objectContaining({ type: 'error', id: ID })
+    ])
+    expect(warned).not.toHaveBeenCalled()
     fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     await flushBridge()
-    expect(mounted.posted).toEqual([])
+    expect(mounted.posted).toHaveLength(1)
   })
 
   it('ignores a frame that arrives for a session the hook has moved past', async () => {
@@ -231,6 +259,23 @@ describe('teardown', () => {
   })
 })
 
+describe('diagnostics', () => {
+  it('warns once for the frames one page has refused, not once each', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver('{"v":1,"type":')
+    await mounted.deliver(clientFrame({ type: 'request', id: 'short', method: 'x' }))
+    expect(warned).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts the count over for the next page', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver('{"v":1,"type":')
+    await mounted.update(readyState('session-two'))
+    await mounted.deliver('{"v":1,"type":')
+    expect(warned).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('client changes', () => {
   it('rebuilds the host on a new client, so nothing crosses to the one that was replaced', async () => {
     const first = fakeClient()
@@ -241,5 +286,26 @@ describe('client changes', () => {
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(next.requests).toHaveLength(1)
     expect(first.requests).toHaveLength(0)
+  })
+
+  it('hands the host over in the commit, so no frame reaches the replaced client', async () => {
+    const first = fakeClient()
+    const posted: PostedFrame[] = []
+    const probe: Probe = { view: null }
+    const render = (deliver: string | null): ReactElement =>
+      createElement(DeliverDuringCommit, { deliver, posted, probe })
+    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+    await act(async () => {
+      rendered.tree = create(render(null))
+    })
+    const next = createFakeRpcClient()
+    doubles.client = next
+    // The session id does not change, so the handler's own fence does not apply: only handing the
+    // host over in the commit keeps this frame off the client that was replaced.
+    await act(async () => {
+      rendered.tree?.update(render(clientFrame({ type: 'request', id: ID, method: 'status.get' })))
+    })
+    expect(first.requests).toHaveLength(0)
+    expect(next.requests).toHaveLength(1)
   })
 })

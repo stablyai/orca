@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
@@ -14,12 +14,34 @@ class BridgeViewGoneError extends Error {
   }
 }
 
-function reportBridgeDiagnostic(diagnostic: BridgeHostDiagnostic): void {
-  if (diagnostic.kind === 'refused') {
-    console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
-    return
+/**
+ * One line per kind, for the life of one host.
+ *
+ * A page that is failing frames fails all of them, and a line each buries the first — the one that
+ * says why. The host already holds `post-failed` to one; this is the same bound for the kinds it
+ * does not, and a new host starts the count over because a new page is new evidence.
+ */
+function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnostic) => void {
+  const reported = new Set<BridgeHostDiagnostic['kind']>()
+  return (diagnostic) => {
+    if (reported.has(diagnostic.kind)) {
+      return
+    }
+    reported.add(diagnostic.kind)
+    if (diagnostic.kind === 'refused') {
+      console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
+      return
+    }
+    if (diagnostic.kind === 'post-failed') {
+      console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
+      return
+    }
+    if (diagnostic.kind === 'notify-failed') {
+      console.warn('[web-shell-bridge] the client threw on a page notification', diagnostic.error)
+      return
+    }
+    console.warn('[web-shell-bridge] a view outlived its host and is still posting')
   }
-  console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
 }
 
 /**
@@ -67,7 +89,9 @@ export function useMobileWebShellBridge(args: {
   const viewRef = useRef<MountedView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
 
-  useEffect(() => {
+  // Commit-phase, not passive: a native frame that arrives between the two carries the session id
+  // the handler is fenced on, so only handing the host over here keeps it off the retired client.
+  useLayoutEffect(() => {
     if (client === null || sessionId === null || buildId === null) {
       return
     }
@@ -81,7 +105,7 @@ export function useMobileWebShellBridge(args: {
           ? Promise.reject(new BridgeViewGoneError())
           : mounted.handle.postBridgeMessage(json)
       },
-      onDiagnostic: reportBridgeDiagnostic
+      onDiagnostic: createBridgeDiagnosticReporter()
     })
     hostRef.current = { sessionId, host }
     return () => {
