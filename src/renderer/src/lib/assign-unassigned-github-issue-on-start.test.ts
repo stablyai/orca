@@ -54,6 +54,17 @@ describe('shouldAssignUnassignedGitHubIssueOnStart', () => {
         item: { ...unassignedIssue, assignees: undefined }
       })
     ).toBe(false)
+    expect(
+      shouldAssignUnassignedGitHubIssueOnStart({
+        enabled: true,
+        item: {
+          provider: 'github',
+          type: 'issue',
+          number: 21047,
+          url: 'https://github.com/stablyai/orca/issues/21047'
+        }
+      })
+    ).toBe(false)
   })
 
   it('does not assign pull requests, GitLab, Linear, or Jira items', () => {
@@ -165,6 +176,32 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
 
     expect(result).toBe('failed')
     expect(onFailure).toHaveBeenCalledWith(assignUnassignedGitHubIssueOnStartFailureMessage())
+  })
+
+  it('forwards sourceContext to the assignee mutation', async () => {
+    const addAssignees = vi.fn().mockResolvedValue(undefined)
+    const sourceContext = {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'repo-1',
+      hostId: 'runtime:env-1',
+      repoId: 'repo-1'
+    }
+
+    await assignUnassignedGitHubIssueOnStart(
+      { enabled: true, item: unassignedIssue, repoId: 'repo-1', sourceContext },
+      {
+        resolveCurrentUserLogin: async () => 'octocat',
+        addAssignees
+      }
+    )
+
+    expect(addAssignees).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      number: 21047,
+      logins: ['octocat'],
+      sourceContext
+    })
   })
 
   it('falls back to @me when the viewer login is unavailable', async () => {

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     ensureDetectedAgents,
     ensureRemoteDetectedAgents,
     setSidebarOpen,
+    callRuntimeRpc: vi.fn(),
     activateAndRevealWorktree: vi.fn(),
     openModalFallback: vi.fn(),
     store: {
@@ -71,7 +72,11 @@ vi.mock('@/runtime/runtime-hooks-client', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   getActiveRuntimeTarget: vi.fn().mockReturnValue({ kind: 'local' }),
-  callRuntimeRpc: vi.fn()
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+
+vi.mock('@/components/github/github-work-item-comment-mutations', () => ({
+  notifyWorkItemDetailsMutation: vi.fn()
 }))
 
 vi.mock('@/lib/new-workspace', async () => {
@@ -171,6 +176,14 @@ const githubIssueItem = {
   url: 'https://github.com/stablyai/orca/issues/21047'
 }
 
+const runtimeSourceContext = {
+  kind: 'task-source' as const,
+  provider: 'github' as const,
+  projectId: 'repo-1',
+  hostId: 'runtime:env-1',
+  repoId: 'repo-1'
+}
+
 describe('launchWorkItemDirect GitHub start assignment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -182,20 +195,25 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
     })
     mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
     mocks.store.settings.assignUnassignedGitHubIssuesOnStart = false
+    mocks.callRuntimeRpc.mockResolvedValue({ ok: true })
     vi.stubGlobal('window', { api: mockApi })
     mockApi.gh.viewer.mockResolvedValue({ login: 'octocat' })
     mockApi.gh.updateIssue.mockResolvedValue({ ok: true })
   })
 
-  async function startGitHubIssue(item: {
-    assignees?: readonly { login: string }[]
-  }): Promise<boolean> {
+  async function startGitHubIssue(
+    item: {
+      assignees?: readonly { login: string }[]
+    },
+    sourceContext?: typeof runtimeSourceContext | null
+  ): Promise<boolean> {
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
     return launchWorkItemDirect({
       repoId: 'repo-1',
       launchSource: 'task_page',
       openModalFallback: mocks.openModalFallback,
-      item: { ...githubIssueItem, ...item }
+      item: { ...githubIssueItem, ...item },
+      ...(sourceContext !== undefined ? { sourceContext } : {})
     })
   }
 
@@ -208,13 +226,61 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
     await expect(startGitHubIssue({ assignees: [] })).resolves.toBe(true)
 
     expect(mocks.createWorktree).toHaveBeenCalled()
-    expect(mockApi.gh.updateIssue).toHaveBeenCalledWith({
-      repoPath: '/repo',
-      repoId: 'repo-1',
-      sourceContext: undefined,
-      number: 21047,
-      updates: { addAssignees: ['octocat'] }
+    await vi.waitFor(() => {
+      expect(mockApi.gh.updateIssue).toHaveBeenCalledWith({
+        repoPath: '/repo',
+        repoId: 'repo-1',
+        sourceContext: undefined,
+        number: 21047,
+        updates: { addAssignees: ['octocat'] }
+      })
     })
+  })
+
+  it('threads a runtime sourceContext so assignment runs on the owning host', async () => {
+    mocks.store.settings = {
+      ...mocks.store.settings,
+      assignUnassignedGitHubIssuesOnStart: true
+    }
+
+    await expect(startGitHubIssue({ assignees: [] }, runtimeSourceContext)).resolves.toBe(true)
+
+    await vi.waitFor(() => {
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'environment', environmentId: 'env-1' },
+        'github.updateIssue',
+        {
+          repo: 'repo-1',
+          number: 21047,
+          updates: { addAssignees: ['octocat'] }
+        },
+        { timeoutMs: 30_000 }
+      )
+    })
+    expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
+  })
+
+  it('does not wait for GitHub assignment before revealing the workspace', async () => {
+    mocks.store.settings = {
+      ...mocks.store.settings,
+      assignUnassignedGitHubIssuesOnStart: true
+    }
+    let resolveUpdate: ((value: { ok: true }) => void) | undefined
+    mockApi.gh.updateIssue.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve
+        })
+    )
+
+    await expect(startGitHubIssue({ assignees: [] })).resolves.toBe(true)
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(mockApi.gh.updateIssue).toHaveBeenCalled()
+    })
+    expect(resolveUpdate).toBeTypeOf('function')
+    resolveUpdate?.({ ok: true })
   })
 
   it('does not assign an already-assigned GitHub issue when starting work', async () => {
@@ -226,6 +292,20 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
     await expect(startGitHubIssue({ assignees: [{ login: 'teammate' }] })).resolves.toBe(true)
 
     expect(mocks.createWorktree).toHaveBeenCalled()
+    await Promise.resolve()
+    expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
+  })
+
+  it('does not treat missing assignee data as unassigned when starting work', async () => {
+    mocks.store.settings = {
+      ...mocks.store.settings,
+      assignUnassignedGitHubIssuesOnStart: true
+    }
+
+    await expect(startGitHubIssue({})).resolves.toBe(true)
+
+    expect(mocks.createWorktree).toHaveBeenCalled()
+    await Promise.resolve()
     expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
   })
 
@@ -247,8 +327,10 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
 
     expect(mocks.createWorktree).toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      "Couldn't assign the GitHub issue to you. The workspace was still created."
-    )
+    await vi.waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Couldn't assign the GitHub issue to you. The workspace was still created."
+      )
+    })
   })
 })

@@ -1,9 +1,10 @@
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
+import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TaskProvider } from '../../../shared/task-providers'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
-import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 
 export type LaunchableWorkItem = {
@@ -48,4 +49,5 @@ export type LaunchWorkItemDirectArgs = {
   launchChoice?: Pick<AgentLaunchChoice, 'requestedSurface' | 'executionHostId'>
   promptDelivery?: 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
+  sourceContext?: TaskSourceContext | null
 }
