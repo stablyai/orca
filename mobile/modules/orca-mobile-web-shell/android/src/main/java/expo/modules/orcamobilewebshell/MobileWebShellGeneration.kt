@@ -55,7 +55,9 @@ internal class MobileWebShellGeneration private constructor(
         if (contentType !is String || !isServableContentType(contentType)) return null
         entries["/$path"] = MobileWebShellAsset(File(directory, path), contentType)
       }
-      val document = entries["/$MOBILE_WEB_SHELL_ENTRYPOINT"] ?: return null
+      // Removed, not copied: the document answers at "/" and nowhere else, so the one response that
+      // carries the policy header is the only way to reach those bytes.
+      val document = entries.remove("/$MOBILE_WEB_SHELL_ENTRYPOINT") ?: return null
       entries["/"] = document
       // The manifest is written last and is not part of the content hash, so it is not in `assets`;
       // the bootstrap page still reads it from its own origin.

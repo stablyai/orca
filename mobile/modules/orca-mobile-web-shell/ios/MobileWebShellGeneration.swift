@@ -62,7 +62,9 @@ struct MobileWebShellGeneration {
         contentType: contentType
       )
     }
-    guard let document = entries["/\(entrypoint)"] else {
+    // Removed, not copied: the document answers at "/" and nowhere else, so the one response that
+    // carries the policy header is the only way to reach those bytes.
+    guard let document = entries.removeValue(forKey: "/\(entrypoint)") else {
       throw MobileWebShellGenerationError.unreadable
     }
     entries["/"] = document

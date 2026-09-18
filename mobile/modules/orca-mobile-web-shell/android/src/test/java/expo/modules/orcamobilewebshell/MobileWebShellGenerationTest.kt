@@ -37,10 +37,12 @@ class MobileWebShellGenerationTest {
     val generation = make(manifest())
     assertNotNull(generation)
     val entries = generation!!.entries
-    assertEquals(5, entries.size)
+    assertEquals(4, entries.size)
     assertEquals(File(DIRECTORY, "index.html"), entries["/"]!!.file)
     assertEquals("text/html; charset=utf-8", entries["/"]!!.contentType)
-    assertEquals(File(DIRECTORY, "index.html"), entries["/index.html"]!!.file)
+    // Only "/" reaches the document: a second URL for the same bytes would answer without the CSP
+    // header, which rides the document response alone.
+    assertNull(entries["/index.html"])
     assertEquals(File(DIRECTORY, "assets/bb.png"), entries["/assets/bb.png"]!!.file)
     assertEquals("image/png", entries["/assets/bb.png"]!!.contentType)
     // The manifest is written last and is not part of the content hash, so it is not in assets[].

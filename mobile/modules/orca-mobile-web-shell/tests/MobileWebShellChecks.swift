@@ -142,10 +142,12 @@ import Foundation
 
   static func checkGenerationMap() {
     guard let built = generation(manifest()) else { preconditionFailure("manifest rejected") }
-    precondition(built.entries.count == 5)
+    precondition(built.entries.count == 4)
     precondition(built.entries["/"]?.file.path == "/tmp/generation/index.html")
     precondition(built.entries["/"]?.contentType == "text/html; charset=utf-8")
-    precondition(built.entries["/index.html"]?.file.path == "/tmp/generation/index.html")
+    // Only "/" reaches the document: a second URL for the same bytes would answer without the CSP
+    // header, which rides the document response alone.
+    precondition(built.entries["/index.html"] == nil)
     precondition(built.entries["/assets/aa.js"]?.contentType == "text/javascript; charset=utf-8")
     precondition(built.entries["/assets/bb.png"]?.file.path == "/tmp/generation/assets/bb.png")
     precondition(built.entries["/manifest.json"]?.contentType == "application/json")
