@@ -35,6 +35,7 @@ native/windows-registry/bin/
 # pnpm
 .pnpm-store/
 package-lock.json
+!examples/environments/vercel-sandbox/package-lock.json
 
 # Environment
 .env

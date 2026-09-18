@@ -317,6 +317,7 @@ export function EphemeralVmRuntimesSection({
                   (cleaningId !== null && cleaningId !== runtime.id) ||
                   (stoppingId !== null && stoppingId !== runtime.id)
                 }
+                onResumed={() => void refresh(false)}
                 onCleanup={() => void cleanupRuntime(runtime)}
                 onStopCleanup={() => setPendingStop(runtime)}
                 onCopyCleanupCommand={() => void copyCleanupCommand(runtime)}

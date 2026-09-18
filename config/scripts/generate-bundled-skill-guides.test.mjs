@@ -98,27 +98,9 @@ describe('bundled skill guide generator', () => {
   })
 
   it('uses the exported recipe id variable in per-workspace environment examples', async () => {
-    // The guide is a kernel plus conditional references, so the env-var contract is asserted over
-    // the whole corpus while the name-building recipe is pinned in the file that now carries it.
     const corpus = await readPerWorkspaceEnvCorpus()
-    const vercelReference = await readFile(
-      path.join(
-        projectDir,
-        'skill-guides',
-        'orca-per-workspace-env',
-        'references',
-        'provider-vercel.md'
-      ),
-      'utf8'
-    )
-
     expect(corpus).toContain('ORCA_RECIPE_ID')
     expect(corpus).not.toContain('ORCA_VM_RECIPE_ID')
-    expect(vercelReference).toContain('recipe_id="${recipe_id//./-}"')
-    expect(vercelReference).toContain('max_recipe_id_length=$((128 - ${#instance_id} - 6))')
-    expect(vercelReference).toContain(
-      'name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"'
-    )
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -153,49 +135,6 @@ describe('bundled skill guide generator', () => {
           ORCA_USER_DATA_PATH: '/var/lib/orca-custom'
         })
       ).resolves.toBe('/var/lib/orca-custom')
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'keeps Vercel sandbox names valid while preserving the instance suffix',
-    async () => {
-      const source = await readFile(
-        path.join(
-          projectDir,
-          'skill-guides',
-          'orca-per-workspace-env',
-          'references',
-          'provider-vercel.md'
-        ),
-        'utf8'
-      )
-      const startMarker = 'recipe_id="${ORCA_RECIPE_ID:-vercel-sandbox}"'
-      const endMarker = 'name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"'
-      const start = source.indexOf(startMarker)
-      const endStart = source.indexOf(endMarker, start)
-      expect(start).toBeGreaterThanOrEqual(0)
-      expect(endStart).toBeGreaterThan(start)
-      const script = `${source.slice(start, endStart + endMarker.length)}\nprintf '%s' "$name"`
-      const renderName = async (recipeId, instanceId) =>
-        (
-          await execFileAsync('bash', ['-u', '-c', script], {
-            env: { ...process.env, ORCA_RECIPE_ID: recipeId, ORCA_VM_INSTANCE_ID: instanceId }
-          })
-        ).stdout
-
-      const instanceId = 'orca-123e4567-e89b-12d3-a456-426614174000'
-      const dotted = await renderName('provider.cloud_sandbox', instanceId)
-      const maximum = await renderName(`a${'.'.repeat(63)}`, instanceId)
-      const longInstanceId = 'i'.repeat(100)
-      const capped = await renderName(
-        'provider.cloud_sandbox.with.a.long.recipe.identifier',
-        longInstanceId
-      )
-
-      expect(dotted).toBe(`orca-provider-cloud_sandbox-${instanceId}`)
-      expect(maximum).toMatch(/^[a-zA-Z0-9_-]{1,128}$/u)
-      expect(capped).toHaveLength(128)
-      expect(capped.endsWith(`-${longInstanceId}`)).toBe(true)
     }
   )
 

@@ -1,4 +1,11 @@
 import type { AppState } from '../types'
+export class RuntimeRepoCatalogSupersededError extends Error {
+  constructor() {
+    super('A newer runtime project refresh superseded this request.')
+    this.name = 'RuntimeRepoCatalogSupersededError'
+  }
+}
+
 export type LocalRepoCatalogFetchOutcome =
   | { status: 'fulfilled' }
   | { status: 'rejected'; reason: unknown }

@@ -1,0 +1,16 @@
+{
+  "name": "orca-vercel-sandbox-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@vercel/oidc": "3.2.0",
+    "@vercel/sandbox": "3.3.0",
+    "sandbox": "4.4.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

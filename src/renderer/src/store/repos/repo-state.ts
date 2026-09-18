@@ -153,7 +153,10 @@ export type RepoSlice = {
   fetchRepos: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   awaitLocalRepoCatalogSettlement: () => Promise<void>
-  fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
+  fetchRuntimeEnvironmentRepos: (
+    environmentId: string,
+    options?: { rejectSuperseded?: boolean }
+  ) => Promise<Repo[]>
   fetchProjectGroups: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspaces: (options?: RuntimeCatalogFetchOptions) => Promise<void>
