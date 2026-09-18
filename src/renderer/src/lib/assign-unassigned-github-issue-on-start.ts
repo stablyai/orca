@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 export const GITHUB_START_ASSIGNEE_ME = '@me'
@@ -32,6 +33,12 @@ export type AssignUnassignedGitHubIssueOnStartDeps = {
     logins: string[]
     sourceContext?: TaskSourceContext | null
   }) => Promise<void>
+  patchWorkItem?: (
+    itemId: string,
+    patch: Partial<GitHubWorkItem>,
+    repoId?: string | null,
+    options?: { sourceContext?: TaskSourceContext | null }
+  ) => void
   onFailure?: (message: string) => void
 }
 
@@ -135,19 +142,32 @@ export async function assignUnassignedGitHubIssueOnStart(
 
   const resolveCurrentUserLogin = deps.resolveCurrentUserLogin ?? resolveGitHubStartAssigneeLogin
   const addAssignees = deps.addAssignees ?? defaultAddAssignees
+  const patchWorkItem =
+    deps.patchWorkItem ??
+    ((itemId, patch, repoId, options) => {
+      useAppStore.getState().patchWorkItem(itemId, patch, repoId, options)
+    })
   const onFailure = deps.onFailure ?? ((message) => toast.error(message))
 
+  let login: string
   try {
-    const login = (await resolveCurrentUserLogin())?.trim() || GITHUB_START_ASSIGNEE_ME
+    login = (await resolveCurrentUserLogin())?.trim() || GITHUB_START_ASSIGNEE_ME
     await addAssignees({
       repoId: args.repoId,
       number: args.item.number,
       logins: [login],
       sourceContext: args.sourceContext
     })
-    return 'assigned'
   } catch {
     onFailure(assignUnassignedGitHubIssueOnStartFailureMessage())
     return 'failed'
   }
+
+  patchWorkItem(
+    `issue:${args.item.number}`,
+    { assignees: [{ login, name: null, avatarUrl: '' }] },
+    args.repoId,
+    { sourceContext: args.sourceContext }
+  )
+  return 'assigned'
 }

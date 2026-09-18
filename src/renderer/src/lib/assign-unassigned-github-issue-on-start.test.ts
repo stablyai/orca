@@ -118,11 +118,13 @@ describe('shouldAssignUnassignedGitHubIssueOnStart', () => {
 describe('assignUnassignedGitHubIssueOnStart', () => {
   it('adds the current user when starting an unassigned GitHub issue with the setting on', async () => {
     const addAssignees = vi.fn().mockResolvedValue(undefined)
+    const patchWorkItem = vi.fn()
     const result = await assignUnassignedGitHubIssueOnStart(
       { enabled: true, item: unassignedIssue, repoId: 'repo-1' },
       {
         resolveCurrentUserLogin: async () => 'octocat',
-        addAssignees
+        addAssignees,
+        patchWorkItem
       }
     )
 
@@ -133,36 +135,47 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
       logins: ['octocat'],
       sourceContext: undefined
     })
+    expect(patchWorkItem).toHaveBeenCalledWith(
+      'issue:21047',
+      { assignees: [{ login: 'octocat', name: null, avatarUrl: '' }] },
+      'repo-1',
+      { sourceContext: undefined }
+    )
   })
 
   it('does not assign an already-assigned GitHub issue', async () => {
     const addAssignees = vi.fn()
+    const patchWorkItem = vi.fn()
     const result = await assignUnassignedGitHubIssueOnStart(
       {
         enabled: true,
         item: { ...unassignedIssue, assignees: [{ login: 'teammate' }] },
         repoId: 'repo-1'
       },
-      { addAssignees }
+      { addAssignees, patchWorkItem }
     )
 
     expect(result).toBe('skipped')
     expect(addAssignees).not.toHaveBeenCalled()
+    expect(patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('does not assign when the setting is off', async () => {
     const addAssignees = vi.fn()
+    const patchWorkItem = vi.fn()
     const result = await assignUnassignedGitHubIssueOnStart(
       { enabled: false, item: unassignedIssue, repoId: 'repo-1' },
-      { addAssignees }
+      { addAssignees, patchWorkItem }
     )
 
     expect(result).toBe('skipped')
     expect(addAssignees).not.toHaveBeenCalled()
+    expect(patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('reports failure without throwing when the assign RPC throws', async () => {
     const onFailure = vi.fn()
+    const patchWorkItem = vi.fn()
     const result = await assignUnassignedGitHubIssueOnStart(
       { enabled: true, item: unassignedIssue, repoId: 'repo-1' },
       {
@@ -170,16 +183,19 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
         addAssignees: async () => {
           throw new Error('Resource not accessible by integration')
         },
+        patchWorkItem,
         onFailure
       }
     )
 
     expect(result).toBe('failed')
     expect(onFailure).toHaveBeenCalledWith(assignUnassignedGitHubIssueOnStartFailureMessage())
+    expect(patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('forwards sourceContext to the assignee mutation', async () => {
     const addAssignees = vi.fn().mockResolvedValue(undefined)
+    const patchWorkItem = vi.fn()
     const sourceContext = {
       kind: 'task-source' as const,
       provider: 'github' as const,
@@ -192,7 +208,8 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
       { enabled: true, item: unassignedIssue, repoId: 'repo-1', sourceContext },
       {
         resolveCurrentUserLogin: async () => 'octocat',
-        addAssignees
+        addAssignees,
+        patchWorkItem
       }
     )
 
@@ -202,18 +219,32 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
       logins: ['octocat'],
       sourceContext
     })
+    expect(patchWorkItem).toHaveBeenCalledWith(
+      'issue:21047',
+      { assignees: [{ login: 'octocat', name: null, avatarUrl: '' }] },
+      'repo-1',
+      { sourceContext }
+    )
   })
 
   it('falls back to @me when the viewer login is unavailable', async () => {
     const addAssignees = vi.fn().mockResolvedValue(undefined)
+    const patchWorkItem = vi.fn()
     await assignUnassignedGitHubIssueOnStart(
       { enabled: true, item: unassignedIssue, repoId: 'repo-1' },
       {
         resolveCurrentUserLogin: async () => null,
-        addAssignees
+        addAssignees,
+        patchWorkItem
       }
     )
 
     expect(addAssignees).toHaveBeenCalledWith(expect.objectContaining({ logins: ['@me'] }))
+    expect(patchWorkItem).toHaveBeenCalledWith(
+      'issue:21047',
+      { assignees: [{ login: '@me', name: null, avatarUrl: '' }] },
+      'repo-1',
+      { sourceContext: undefined }
+    )
   })
 })
