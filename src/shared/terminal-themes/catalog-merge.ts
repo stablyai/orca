@@ -3,7 +3,8 @@ import type { TerminalThemeMap } from './types'
 export function mergeTerminalThemeCatalogs(
   ...catalogs: readonly TerminalThemeMap[]
 ): TerminalThemeMap {
-  const merged: TerminalThemeMap = {}
+  // Null prototype so keys like `__proto__` / `constructor` stay data, never inherited methods.
+  const merged: TerminalThemeMap = Object.create(null) as TerminalThemeMap
 
   for (const catalog of catalogs) {
     for (const [name, theme] of Object.entries(catalog)) {
