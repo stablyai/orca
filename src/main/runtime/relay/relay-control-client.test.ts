@@ -460,12 +460,32 @@ class FakeControlSocket extends EventEmitter {
     this.close(1006)
   }
 
+  pings = 0
+
+  ping(): void {
+    if (this.readyState !== 1) {
+      throw new Error('socket_not_open')
+    }
+    this.pings += 1
+  }
+
+  /** The RFC 6455 reply a live peer owes any ping, delivered out of band. */
+  pong(): void {
+    this.emit('pong')
+  }
+
   deliver(message: ControlFrame): void {
     this.emit('message', JSON.stringify(message), false)
   }
 }
 
-function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: number } = {}): {
+function scriptedControl(
+  options: {
+    closeWithAck?: boolean
+    issuedAtOffsetMs?: number
+    livenessRandom?: () => number
+  } = {}
+): {
   client: RelayControlClient
   socket: FakeControlSocket
   onConnectionOpen: ReturnType<typeof vi.fn>
@@ -539,6 +559,8 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
   const onConnectionOpen = vi.fn()
   const client = new RelayControlClient({
     cellUrl: origin,
+    // Midpoint random => no jitter, so probe boundaries are exact in tests.
+    livenessRandom: options.livenessRandom ?? (() => 0.5),
     relayJwt: 'scoped-token',
     relayHostId,
     assignmentEpoch: 3,
@@ -676,5 +698,143 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     expect(client.isLive()).toBe(false)
     expect(socket.readyState).toBe(3)
     expect(onClose).toHaveBeenCalledWith(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+  })
+})
+
+// STA-7672: a Windows desktop behind NAT/VPN (or resuming from sleep) can hold a
+// half-open control socket that send() writes into happily while nothing comes
+// back. Every pairing request then failed at its 10s deadline against a socket
+// the 75s silence watchdog would not reap for another minute-plus.
+describe('RelayControlClient half-open recovery', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('tears down only after a run of unanswered probes, not the first one', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    // The request deadline alone must not close the control — a close would have
+    // rejected as relay_control_closed_<code> instead.
+    expect(await invite).toBe('relay_control_request_timeout')
+    expect(socket.pings).toBe(1)
+    expect(socket.readyState).toBe(1)
+
+    // One unanswered probe is UNKNOWN, not death (STA-3320): a lone swallowed
+    // pong is routine on exactly the VPN/cellular paths this detection targets.
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.pings).toBe(2)
+    expect(socket.readyState).toBe(1)
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.pings).toBe(3)
+    expect(socket.readyState).toBe(1)
+
+    // Third consecutive miss is evidence.
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.readyState).toBe(3)
+    expect(onClose).toHaveBeenCalledWith(1006)
+    expect(client.isLive()).toBe(false)
+    // Named in the log so a fleet-wide false positive would be visible.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('reason=probe-unanswered'))
+    warn.mockRestore()
+  })
+
+  it('retires the whole probe run on a single pong', async () => {
+    vi.useFakeTimers()
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await invite
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.pings).toBe(2)
+    socket.pong()
+
+    // A later probe run must start from zero, not inherit the earlier miss.
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(client.isLive()).toBe(true)
+  })
+
+  it("clears an armed probe on the relay's next ping, with no pong involved", async () => {
+    vi.useFakeTimers()
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(socket.pings).toBe(1)
+    await invite
+
+    // The probe run (3 x 8s) outlasts the relay's 15s ping cadence on purpose:
+    // relay liveness runs at the application layer, so a middlebox that swallows
+    // RFC 6455 control frames must not be able to make this a reconnect loop.
+    await vi.advanceTimersByTimeAsync(15_000)
+    socket.deliver({ type: 'ping', t: Date.now() })
+    await vi.advanceTimersByTimeAsync(40_000)
+
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('does not probe a control that kept talking while a request went unanswered', async () => {
+    vi.useFakeTimers()
+    const { client, socket } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    socket.deliver({ type: 'ping', t: Date.now() })
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    // A reply running past its deadline under relay DB load is not a dead
+    // socket; tearing this control down would strand every phone on the cell.
+    expect(await invite).toBe('relay_control_request_timeout')
+    expect(socket.pings).toBe(0)
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('spreads probe deadlines so one slow cell cannot synchronize a cohort', async () => {
+    vi.useFakeTimers()
+    // Earliest jitter (-10%) fires at 7.2s; the unjittered boundary is 8s.
+    const { client, socket } = scriptedControl({ livenessRandom: () => 0 })
+    await client.connect()
+    void client.createInvite('device-1').catch(() => undefined)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(socket.pings).toBe(1)
+    await vi.advanceTimersByTimeAsync(7_300)
+    expect(socket.pings).toBe(2)
+  })
+
+  it('logs the cell and the silence without altering the rejection', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    // The message is a classification key: mobile-relay-mint-failure.ts matches
+    // it against an anchored /^relay_[a-z0-9_]{1,74}$/, so a diagnostic suffix
+    // silently downgrades this to the generic relay_mint_failed fallback.
+    expect(await invite).toBe('relay_control_request_timeout')
+
+    const logged = warn.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(logged).toContain('reqKind=invite')
+    expect(logged).toContain('cell=http://relay.test')
+    expect(logged).toContain('socketAgeMs=10000')
+    expect(logged).toContain('sinceInboundMs=10000')
+    expect(logged).toContain('probe=armed')
+    warn.mockRestore()
   })
 })

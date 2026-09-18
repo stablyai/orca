@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Re-anchoring after a cold restore: aliveness probing, sticky restore cache, persistence. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'

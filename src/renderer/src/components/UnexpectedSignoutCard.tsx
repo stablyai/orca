@@ -59,6 +59,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   useEffect(() => {
     let cancelled = false
     let attempts = 0
+    let retryTimer: number | null = null
     const refresh = (): void => {
       attempts += 1
       void useAppStore
@@ -71,13 +72,19 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           if (status != null) {
             setAuthRefreshReady(true)
           } else if (attempts < 3) {
-            window.setTimeout(refresh, 500)
+            retryTimer = window.setTimeout(() => {
+              retryTimer = null
+              refresh()
+            }, 500)
           }
         })
     }
     refresh()
     return () => {
       cancelled = true
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer)
+      }
     }
   }, [])
 

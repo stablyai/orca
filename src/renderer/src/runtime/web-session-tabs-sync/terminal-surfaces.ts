@@ -201,14 +201,14 @@ export function chooseRemoteTerminalLayout(
         ? parentLayout.expandedLeafId
         : null
   return {
-    // Why: host parentLayout is authoritative for split direction; else keep the prior client tree, then degenerate — never re-guess a direction.
+    // Why: host parentLayout is authoritative for split direction; else keep the prior client tree — a leaf-set mismatch prunes/grafts it, never re-guesses the directions it already carries.
     root: resolveTerminalLayoutRoot({
       authoritativeRoot: parentLayout?.root,
       existingRoot: existingLayout?.root,
       leafIds,
       onSynthesize: (leafCount) =>
         console.warn(
-          `[web-session-tabs-sync] synthesized layout for ${leafCount} leaves; no authoritative or prior tree covered them`
+          `[web-session-tabs-sync] synthesized a split direction for ${leafCount} leaves no authoritative or prior tree placed`
         )
     }),
     activeLeafId,

@@ -22,10 +22,7 @@ import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
-import {
-  MobileWebBundleChunkParamsSchema,
-  MobileWebBundleManifestParamsSchema
-} from '../mobile-web-bundle/bundle-rpc-contract'
+import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
 import {
   AccountsUnsubscribeParams,
@@ -962,7 +959,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
-  'mobileWeb.bundle.manifest': MobileWebBundleManifestParamsSchema,
+  'mobileWeb.bundle.manifest': null,
   'nativeChat.readSession': NativeChatSession,
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,

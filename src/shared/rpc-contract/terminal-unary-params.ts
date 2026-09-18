@@ -234,5 +234,6 @@ export const AgentTeamsTmuxCompat = z.object({
 
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  prepareAuth: z.boolean().optional()
 })

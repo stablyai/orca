@@ -1,7 +1,5 @@
-import {
-  isRuntimeHostContactRevoked,
-  type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+import { runtimeHostContactFromSnapshot } from '../../../shared/runtime-host-contact'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspace-window-availability'
 
@@ -123,17 +121,23 @@ export function runtimeHostConnectionStateForEntry(
 ): RuntimeHostConnectionState {
   const snapshot = entry?.snapshot
   if (snapshot) {
-    if (isRuntimeHostContactRevoked(entry)) {
+    // Why the contact and not the snapshot fields: these four branches were the only place that
+    // knew a non-verified probe has kinds, and every other reader had to re-derive them or guess.
+    // Naming them once means the next reader picks an arm instead of re-reading a null.
+    const contact = runtimeHostContactFromSnapshot(snapshot, entry?.status ?? null)
+    if (contact.verdict === 'retired' || contact.verdict === 'refused') {
       return 'disconnected'
     }
-    if (snapshot.transport === 'disconnected') {
-      return 'reconnecting'
-    }
-    if (snapshot.verification === 'checking' && !entry?.status) {
-      return 'checking'
-    }
-    if (snapshot.transport === 'ready' && snapshot.verification !== 'verified') {
-      return 'runtime-unavailable'
+    if (contact.verdict === 'unverifiable') {
+      if (contact.reason === 'transport-down') {
+        return 'reconnecting'
+      }
+      if (contact.reason === 'checking') {
+        return 'checking'
+      }
+      if (contact.reason === 'probe-failed') {
+        return 'runtime-unavailable'
+      }
     }
   }
   return runtimeHostConnectionState({

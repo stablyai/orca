@@ -188,4 +188,6 @@ function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   return manifest
 }
 
-module.exports = { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt }
+// serializeAssets is exported for the parity test that pins it against the builder's and the
+// contract's serializers; nothing in packaging calls it from outside this module.
+module.exports = { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt, serializeAssets }

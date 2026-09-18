@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* DaemonPtyAdapter behaviour that varies with the negotiated daemon protocol version. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'

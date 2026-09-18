@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
+import { killWithDescendantSweep } from '../main/pty-descendant-termination'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -236,6 +237,7 @@ type ManagedPty = {
    *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
   shellReadyArmed?: boolean
   physicalExit?: PhysicalExitTracker
+  immediateClose?: Promise<void>
   forceKillSent?: boolean
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
@@ -1675,6 +1677,7 @@ export class PtyHandler {
     const existing = this.agentSessionCreateOperations.get(operationId)
     if (existing) {
       const result = await existing
+      this.assertPtyNotClosing(this.ptys.get(result.id))
       this.sourcePublication?.activate(result.id, result.incarnationId, context)
       const sourceActivation =
         context && this.sourcePublication?.receivingActivation?.(result.id, context.clientId)
@@ -1789,6 +1792,7 @@ export class PtyHandler {
         this.agentSessionOwners.release(result.owner.ptyId, result.owner.generation)
         throw new Error('agent_session_exited_during_start')
       }
+      this.assertPtyNotClosing(managed)
       managed.agentSessionOwners = this.agentSessionOwners.listForPty(managed.id)
       const adoptedReplay = result.disposition === 'adopted' ? managed.buffered.read() : ''
       this.sourcePublication?.activate(managed.id, managed.incarnationId, context)
@@ -2060,6 +2064,8 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
+    this.assertPtyNotClosing(managed)
+
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (this.reapPtyProvenExited(managed)) {
       // Why the marker: this is the ONLY not-found answer backed by a liveness check. The unmarked
@@ -2098,6 +2104,10 @@ export class PtyHandler {
     ) {
       sourceRecovery = Object.freeze({ status: 'checkpointUnavailable' })
     }
+    if (this.ptys.get(id) !== managed || managed.disposed) {
+      throw new Error(`PTY "${id}" not found`)
+    }
+    this.assertPtyNotClosing(managed)
     const activation = this.sourcePublication?.activate(
       id,
       managed.incarnationId,
@@ -2272,12 +2282,48 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
-      this.requestForceKill(managed)
-      // Why: preserve timed-out entries so onExit/retry owns native handles.
-      await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+      await this.closeImmediately(managed)
     } else {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'force-kill')
+    }
+  }
+
+  private assertPtyNotClosing(managed: ManagedPty | undefined): void {
+    if (managed?.immediateClose) {
+      throw new Error(`PTY "${managed.id}" is terminating`)
+    }
+  }
+
+  private async closeImmediately(managed: ManagedPty): Promise<void> {
+    if (managed.immediateClose) {
+      return managed.immediateClose
+    }
+    const ownsRoot = (): boolean => this.ptys.get(managed.id) === managed && !managed.disposed
+    const close = async (): Promise<void> => {
+      if (process.platform === 'win32') {
+        this.requestForceKill(managed)
+      } else {
+        await killWithDescendantSweep(
+          managed.pty.pid,
+          () => {
+            if (ownsRoot()) {
+              this.requestForceKill(managed)
+            }
+          },
+          { ownsRoot, terminateOwnedTree: () => terminatePtyJob(managed.pty) }
+        )
+      }
+      await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+    }
+    const pending = close()
+    managed.immediateClose = pending
+    try {
+      await pending
+    } finally {
+      if (managed.immediateClose === pending) {
+        managed.immediateClose = undefined
+      }
     }
   }
 

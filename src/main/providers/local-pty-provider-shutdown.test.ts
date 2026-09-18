@@ -513,13 +513,16 @@ describe('LocalPtyProvider', () => {
       expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     })
 
-    it('non-win32 immediate shutdown of a plain shell skips the tree kill', async () => {
-      // beforeEach pins platform to linux; POSIX force-kill already reaches the child pgroup.
+    it('POSIX immediate shutdown sweeps detached OMP tools without startup recognition', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
       await provider.shutdown(id, { immediate: true })
 
-      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
     })
   })
 

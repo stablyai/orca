@@ -1,0 +1,126 @@
+diff --git a/src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery.ts b/src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery.ts
+index 45f3b354b5..b6e30917d1 100644
+--- a/src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery.ts
++++ b/src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery.ts
+@@ -21,6 +21,7 @@ type BrowserPageGuestRecoveryOptions = {
+ export type BrowserPageGuestRecovery = {
+   confirmRegistration: () => void
+   dispose: () => void
++  isDisposed: () => boolean
+   finish: () => boolean
+   recoverRenderer: () => void
+   retryRecovery: () => void
+@@ -263,6 +264,7 @@ export function createBrowserPageGuestRecovery(
+       clearValidationRetry()
+       clearValidationTimeout()
+     },
++    isDisposed: () => disposed,
+     finish,
+     recoverRenderer,
+     retryRecovery: () => {
+diff --git a/src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts b/src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts
+index 4623b817b2..dd5e243ba2 100644
+--- a/src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts
++++ b/src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts
+@@ -15,7 +15,11 @@ import {
+   type BrowserPageGuestRecovery
+ } from './browser-page-guest-recovery'
+ import { browserPageZoomLevelToPercent, setBrowserPageZoomLevel } from './browser-page-zoom'
+-import { registeredWebContentsIds, replacePersistentWebview } from './webview-registry'
++import {
++  registeredWebContentsIds,
++  replacePersistentWebview,
++  webviewRegistry
++} from './webview-registry'
+ import { browserPageExists } from '../describe-page/browser-page-load-error'
+ import type {
+   BrowserPageRecoveryNavigationValidation,
+@@ -80,11 +84,21 @@ export function createBrowserPageWebviewGuestSession({
+     webContentsId: number
+     promise: Promise<boolean | null>
+   } | null = null
+-  const registerGuest = (): Promise<boolean | null> => {
+-    let webContentsId: number
++  const readWebContentsId = (): number | null => {
+     try {
+-      webContentsId = webview.getWebContentsId()
++      return webview.getWebContentsId()
+     } catch {
++      return null
++    }
++  }
++  const ownsGuest = (webContentsId: number | null): boolean =>
++    webContentsId !== null &&
++    !guestRecovery.isDisposed() &&
++    webviewRef.current === webview &&
++    webviewRegistry.get(browserTabId) === webview &&
++    readWebContentsId() === webContentsId
++  const registerGuest = (webContentsId: number | null): Promise<boolean | null> => {
++    if (webContentsId === null || !ownsGuest(webContentsId)) {
+       return Promise.resolve(null)
+     }
+     if (registrationInFlight?.webContentsId === webContentsId) {
+@@ -99,6 +113,9 @@ export function createBrowserPageWebviewGuestSession({
+         webContentsId
+       })
+       .then((registered) => {
++        if (!ownsGuest(webContentsId)) {
++          return null
++        }
+         if (registered) {
+           registeredWebContentsIds.set(browserTabId, webContentsId)
+           return true
+@@ -146,22 +163,26 @@ export function createBrowserPageWebviewGuestSession({
+         return null
+       }
+       if (registeredWebContentsIds.get(browserTabId) !== webContentsId) {
+-        return registerGuest()
++        return registerGuest(webContentsId)
+       }
+       const registered = await window.api.browser.isGuestRegistered({
+         browserPageId: browserTabId,
+         webContentsId
+       })
++      if (!ownsGuest(webContentsId)) {
++        return null
++      }
+       if (registered) {
+         return true
+       }
+-      return window.api.browser.repairGuestRegistration({
++      const repaired = await window.api.browser.repairGuestRegistration({
+         browserPageId: browserTabId,
+         workspaceId,
+         worktreeId,
+         sessionProfileId,
+         webContentsId
+       })
++      return ownsGuest(webContentsId) ? repaired : null
+     },
+     replaceGuest: () => replacePersistentWebview(browserTabId),
+     onReplacementReady: () => setGuestRecoveryGeneration((generation) => generation + 1),
+@@ -184,7 +205,11 @@ export function createBrowserPageWebviewGuestSession({
+ 
+   const handleDidAttach = (): void => {
+     // Why: register at attach since cert failures can precede dom-ready; the dom-ready path stays an idempotent fallback.
+-    void registerGuest().then((registered) => {
++    const webContentsId = readWebContentsId()
++    void registerGuest(webContentsId).then((registered) => {
++      if (!ownsGuest(webContentsId)) {
++        return
++      }
+       if (registered === true) {
+         guestRecovery.confirmRegistration()
+       }
+@@ -207,7 +232,10 @@ export function createBrowserPageWebviewGuestSession({
+     const queuedAnnotationViewportBridgeSync =
+       liveWebContentsId === null || registeredWebContentsIds.get(browserTabId) !== liveWebContentsId
+     if (queuedAnnotationViewportBridgeSync) {
+-      void registerGuest().then((registered) => {
++      void registerGuest(liveWebContentsId).then((registered) => {
++        if (!ownsGuest(liveWebContentsId)) {
++          return
++        }
+         const completedRecovery = guestRecovery.finish()
+         if (registered === true) {
+           guestRecovery.confirmRegistration()

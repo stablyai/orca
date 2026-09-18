@@ -7,6 +7,7 @@ import {
 } from './editor-panel-content-types'
 
 const FILE_LOAD_RETRY_DELAYS_MS = [250, 1000, 2500]
+const noopCloseFile = (): void => {}
 // Why: a remote host can take a while to finish connecting. The owner-not-ready
 // check is a pure local store read (it throws before any network call until the
 // SSH repo hydrates), so poll it at a steady cadence — but cap the wait so a
@@ -30,7 +31,12 @@ type UseEditorPanelFileLoadRetryParams = {
     relativePath?: string
   ) => Promise<void>
   openFilesRef: MutableRefObject<OpenFile[]>
+  closeFile?: (fileId: string) => void
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
+}
+
+function isSelectorNotFoundError(message: string): boolean {
+  return message.trim().toLowerCase() === 'selector_not_found'
 }
 
 export function shouldRetryFileLoadError(message: string): boolean {
@@ -54,6 +60,7 @@ export function useEditorPanelFileLoadRetry({
   fileLoadRetryAttemptsRef,
   loadFileContent,
   openFilesRef,
+  closeFile = noopCloseFile,
   setFileContents
 }: UseEditorPanelFileLoadRetryParams): void {
   const activeFileLoadRetryId = activeFile?.id ?? null
@@ -75,6 +82,16 @@ export function useEditorPanelFileLoadRetry({
       ? OWNER_NOT_READY_RETRY_LIMIT
       : FILE_LOAD_RETRY_DELAYS_MS.length
     if (retryCount >= retryLimit) {
+      if (
+        !ownerNotReady &&
+        isSelectorNotFoundError(activeFileLoadError) &&
+        activeFile?.mirroredFromRuntimeSession === true
+      ) {
+        // A host-mirrored file whose worktree stays unresolvable after the normal
+        // read retries is stale; evict it before snapshots can select it again.
+        closeFile(activeFileLoadRetryId)
+        return
+      }
       // Why: the remote host never finished connecting. Replace the transient
       // "still connecting" text with a truthful terminal message so it does not
       // look like it is still retrying; Retry starts a fresh budget (#6648).
@@ -126,6 +143,8 @@ export function useEditorPanelFileLoadRetry({
   }, [
     activeFileLoadRetryId,
     activeFileLoadError,
+    activeFile?.mirroredFromRuntimeSession,
+    closeFile,
     fileLoadRetryAttemptsRef,
     loadFileContent,
     openFilesRef,

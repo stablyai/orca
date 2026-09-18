@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import {
   useEditorPanelExternalContentEvents,
@@ -194,6 +194,7 @@ export function useEditorPanelContentState({
     fileLoadRetryAttemptsRef,
     loadFileContent,
     openFilesRef,
+    closeFile: useAppStore.getState().closeFile,
     setFileContents
   })
 

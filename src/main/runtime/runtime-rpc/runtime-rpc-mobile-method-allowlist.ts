@@ -175,6 +175,8 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.updateIssue',
   'markdown.readTab',
   'markdown.saveTab',
+  'mobileWeb.bundle.chunk',
+  'mobileWeb.bundle.manifest',
   'notifications.getMissedSince',
   'notifications.registerPush',
   'notifications.subscribe',
