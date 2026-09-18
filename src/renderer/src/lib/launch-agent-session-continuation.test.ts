@@ -72,7 +72,8 @@ describe('launchAgentSessionContinuation', () => {
         worktreeId: 'wt-1',
         groupId: 'group-1',
         initialCwd: '/repo/worktree/packages/app',
-        promptDelivery: 'submit-after-ready'
+        promptDelivery: 'submit-after-ready',
+        suppressStartupUpdatePrompt: true
       })
     )
   })

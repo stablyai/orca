@@ -115,6 +115,25 @@ describe('tui agent startup session options', () => {
     )
   })
 
+  it('places transient arguments before the terminator without persisting them', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox -- literal',
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' '-c' 'check_for_update_on_startup=false' '--' 'literal'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' '--' 'literal'"
+    )
+  })
+
   it('quotes option values for a remote POSIX launch', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
