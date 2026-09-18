@@ -96,8 +96,15 @@ export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): 
   }
   event.preventDefault()
 
-  const slice = view.state.doc.slice($from.before(cutDepth), $from.after(cutDepth))
-  if (!writeRichMarkdownSliceToClipboard(event.clipboardData, view, slice, text)) {
+  const cutFrom = $from.before(cutDepth)
+  const cutTo = $from.after(cutDepth)
+  const slice = view.state.doc.slice(cutFrom, cutTo)
+  if (
+    !writeRichMarkdownSliceToClipboard(event.clipboardData, view, slice, text, {
+      from: cutFrom,
+      to: cutTo
+    })
+  ) {
     return true
   }
 
