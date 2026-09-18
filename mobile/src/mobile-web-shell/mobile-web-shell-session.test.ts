@@ -403,6 +403,54 @@ describe('recovery follows the shell view contract', () => {
     }
   )
 
+  it('takes a recovery through the gate rather than back to a manifest check', () => {
+    const ready = readySession()
+    // A reconnect whose status probe failed. Stored, not acted on: a workspace on screen is not
+    // restarted by a gates change, which is how a ready session ends up holding one like this.
+    const stale = run(ready.session, {
+      type: 'gates-changed',
+      gates: gates({ statusReadable: false, hostCapabilities: [] })
+    })
+    expect(stale.session.state).toMatchObject({ kind: 'ready' })
+    const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    // Not the wall the empty capability list would have produced, which nothing leaves.
+    expect(step.session.state).toEqual({
+      kind: 'failed',
+      reason: 'status-unreadable',
+      retriedOnce: true
+    })
+    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    const rearmed = run(step.session, { type: 'gates-changed', gates: gates() })
+    expect(rearmed.session.state).toEqual({ kind: 'checking' })
+    expect(rearmed.effects).toEqual([{ kind: 'open-cache' }])
+  })
+
+  it('still walls a recovery whose host readably serves no bundle', () => {
+    const stale = run(readySession().session, {
+      type: 'gates-changed',
+      gates: gates({ hostCapabilities: [] })
+    })
+    const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    expect(step.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'bundle-unavailable' }
+    })
+    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+  })
+
+  it('deletes the suspect cache and waits when the recovery lands mid-reconnect', () => {
+    const dialling = run(readySession().session, {
+      type: 'gates-changed',
+      gates: gates({ reachability: 'connecting' })
+    })
+    const step = run(dialling.session, { type: 'shell-failed', reason: 'generation-unreadable' })
+    expect(step.session.state).toEqual({ kind: 'checking' })
+    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    expect(run(step.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([
+      { kind: 'open-cache' }
+    ])
+  })
+
   it.each(['generation-unreadable', 'document-load-failed'] as const)(
     'is terminal the second time %s is reported',
     (reason) => {

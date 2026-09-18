@@ -4,6 +4,7 @@ import type { ConnectionState } from '../transport/types'
 import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
+  MobileWebShellBlockedVerdict,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
   MobileWebShellReachability,
@@ -74,22 +75,41 @@ function awaitsGates(state: MobileWebShellSessionState): boolean {
 }
 
 /**
- * What the gates decide, as one comparable value.
+ * What the gates permit, before any manifest is read.
  *
- * A restart is worth taking only when this changes. The gates object is rebuilt on every status
- * refetch and every connection event, and most of those say exactly what the last one said: a
- * reconnect cycle that re-derives the same verdict used to re-sweep the staging tree and flip an
- * offline screen to a spinner and back for as long as the cycle ran.
+ * One answer for both ways into the flow. A recovery used to keep whatever gates the `ready`
+ * session was holding and go straight back to the manifest check, and gates that arrive while a
+ * generation is on screen are stored without restarting: a reconnect whose status probe failed
+ * therefore left a ready session carrying an unreadable status and an empty capability list, and
+ * the next view failure walled the host as `bundle-unavailable` — terminal, no retry, about a host
+ * that had simply not answered.
  */
-function gatesVerdict(gates: MobileWebShellGates): string {
-  if (gates.reachability !== 'connected') {
-    return gates.reachability
+type MobileWebShellGateVerdict =
+  /** Nothing is decidable yet. Two kinds rather than one so a dial that settles into a pending
+   *  status still counts as a change worth restarting on. */
+  | { readonly kind: 'dialling' }
+  | { readonly kind: 'pending' }
+  | { readonly kind: 'offline' }
+  | { readonly kind: 'status-unreadable' }
+  | { readonly kind: 'wall'; readonly verdict: MobileWebShellBlockedVerdict }
+  | { readonly kind: 'open' }
+
+function gateVerdict(gates: MobileWebShellGates): MobileWebShellGateVerdict {
+  if (gates.reachability === 'connecting') {
+    return { kind: 'dialling' }
+  }
+  if (gates.reachability === 'unreachable') {
+    return { kind: 'offline' }
   }
   if (gates.statusPending) {
-    return 'pending'
+    return { kind: 'pending' }
   }
+  // Never a wall on an unreadable status: the empty capability list it leaves behind is
+  // indistinguishable from a desktop that ships no bundle, and that wall tells the wrong story. It
+  // is not a wait either — the gate settles once per host screen and does not probe again — so the
+  // one honest answer is to say the status could not be read and let a fresh gate reopen it.
   if (!gates.statusReadable) {
-    return 'unreadable'
+    return { kind: 'status-unreadable' }
   }
   const verdict = evaluateMobileWebBundleCompat({
     hostCapabilities: gates.hostCapabilities,
@@ -97,48 +117,60 @@ function gatesVerdict(gates: MobileWebShellGates): string {
     manifest: null
   })
   // Which block, not why: any blocked verdict walls, and the wall reads its own reason.
-  return verdict.kind
+  return verdict.kind === 'blocked' ? { kind: 'wall', verdict } : { kind: 'open' }
 }
 
-/** The first step of the flow, and the one "Try again" returns to. */
+/**
+ * The gate verdict as one comparable value.
+ *
+ * A restart is worth taking only when this changes. The gates object is rebuilt on every status
+ * refetch and every connection event, and most of those say exactly what the last one said: a
+ * reconnect cycle that re-derives the same verdict used to re-sweep the staging tree and flip an
+ * offline screen to a spinner and back for as long as the cycle ran.
+ */
+function gateKey(gates: MobileWebShellGates): string {
+  return gateVerdict(gates).kind
+}
+
+/**
+ * The step the gate takes, and every entry into the flow goes through it.
+ *
+ * The first run, the one "Try again" returns to, and the recovery a failed view triggers, which
+ * passes the delete it owes as `before` so the cache goes whatever the gate then decides.
+ */
 function startFlow(
   session: MobileWebShellSession,
   gates: MobileWebShellGates,
-  patch: Partial<MobileWebShellSession> = {}
+  patch: Partial<MobileWebShellSession> = {},
+  before: readonly MobileWebShellSessionEffect[] = []
 ): MobileWebShellStep {
   // A new flow, so nothing the replaced one has in flight can land on this one. That is also what
   // keeps a status refetch arriving mid-check from running the cache read and the download twice.
   const base = { ...patch, gates, flow: session.flow + 1 }
-  if (gates.reachability === 'connecting') {
-    return step(session, { ...base, state: CHECKING })
+  const verdict = gateVerdict(gates)
+  if (verdict.kind === 'wall') {
+    return step(session, { ...base, state: { kind: 'wall', verdict: verdict.verdict } }, before)
   }
-  if (gates.reachability === 'unreachable') {
-    // Offline still sweeps and still reads the cache: an unreachable host is the one case where a
-    // generation opens with no compat check at all.
-    return step(session, { ...base, state: CHECKING }, [{ kind: 'open-cache' }])
+  if (verdict.kind === 'status-unreadable') {
+    return step(
+      session,
+      {
+        ...base,
+        state: {
+          kind: 'failed',
+          reason: 'status-unreadable',
+          retriedOnce: patch.retriedOnce ?? session.retriedOnce
+        }
+      },
+      before
+    )
   }
-  if (gates.statusPending) {
-    return step(session, { ...base, state: CHECKING })
+  if (verdict.kind === 'dialling' || verdict.kind === 'pending') {
+    return step(session, { ...base, state: CHECKING }, before)
   }
-  // Never a wall on an unreadable status: the empty capability list it leaves behind is
-  // indistinguishable from a desktop that ships no bundle, and that wall tells the wrong story. It
-  // is not a wait either — the gate settles once per host screen and does not probe again — so the
-  // one honest answer is to say the status could not be read and let a fresh gate reopen it.
-  if (!gates.statusReadable) {
-    return step(session, {
-      ...base,
-      state: { kind: 'failed', reason: 'status-unreadable', retriedOnce: session.retriedOnce }
-    })
-  }
-  const verdict = evaluateMobileWebBundleCompat({
-    hostCapabilities: gates.hostCapabilities,
-    hostStatus: gates.hostStatus,
-    manifest: null
-  })
-  if (verdict.kind === 'blocked') {
-    return step(session, { ...base, state: { kind: 'wall', verdict } })
-  }
-  return step(session, { ...base, state: CHECKING }, [{ kind: 'open-cache' }])
+  // Offline sweeps and reads the cache exactly as a connected host does. What it skips is the
+  // compat check, and `onCacheRead` is where that shows.
+  return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
 /** Puts a generation that is already on disk on screen. The only producer of `open-generation`. */
@@ -250,11 +282,12 @@ function onShellFailed(
   if (session.retriedOnce || session.gates === null) {
     return step(session, { state: failed })
   }
-  return step(
-    session,
-    { retriedOnce: true, cached: null, state: CHECKING, flow: session.flow + 1 },
-    [{ kind: 'delete-cache' }, { kind: 'open-cache' }]
-  )
+  // Through the gate, not straight back to the manifest check: the gates a ready session holds are
+  // whatever the last reconnect stored, so a recovery that trusted them walled hosts whose status
+  // had gone unreadable underneath a workspace that was, until this failure, working.
+  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, [
+    { kind: 'delete-cache' }
+  ])
 }
 
 function onDownloadFailed(
@@ -290,7 +323,7 @@ export function reduceMobileWebShellSession(
   switch (event.type) {
     case 'gates-changed':
       return awaitsGates(session.state) &&
-        (session.gates === null || gatesVerdict(session.gates) !== gatesVerdict(event.gates))
+        (session.gates === null || gateKey(session.gates) !== gateKey(event.gates))
         ? startFlow(session, event.gates)
         : step(session, { gates: event.gates })
     case 'cache-read':
