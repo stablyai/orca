@@ -206,10 +206,12 @@ describe('SourceControlAgentActionDialog', () => {
     await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(mocks.onOpenChange).toHaveBeenCalledWith(false))
     expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1)
+    // Why: the saved recipe stores the blank field verbatim, so the launch omits it and resolves the
+    // agent's own arguments (#19379). The recipe is unchanged, which the assertion below pins.
     expect(mocks.onStart).toHaveBeenCalledWith({
       agent: 'codex',
       commandInput: 'Resolve conflicts.',
-      agentArgs: ''
+      agentArgs: undefined
     })
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
