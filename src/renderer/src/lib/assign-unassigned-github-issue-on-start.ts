@@ -163,11 +163,14 @@ export async function assignUnassignedGitHubIssueOnStart(
     return 'failed'
   }
 
-  patchWorkItem(
-    `issue:${args.item.number}`,
-    { assignees: [{ login, name: null, avatarUrl: '' }] },
-    args.repoId,
-    { sourceContext: args.sourceContext }
-  )
+  // Why: `@me` is not a real login; AssigneesCell would show a fake chip until refetch.
+  if (login !== GITHUB_START_ASSIGNEE_ME) {
+    patchWorkItem(
+      `issue:${args.item.number}`,
+      { assignees: [{ login, name: null, avatarUrl: '' }] },
+      args.repoId,
+      { sourceContext: args.sourceContext }
+    )
+  }
   return 'assigned'
 }
