@@ -167,17 +167,16 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 /**
  * What this tree measures, per class, over all 787 goldens.
  *
- * A ratchet, not a description: the run fails when a class grows past its number here, when
- * anything lands in `unclassified`, or when the goldens that replay byte-identically are not
- * exactly this many. Each class is an upper bound, and this module's test pins the sum of every
- * number below to the size of the corpus — which is what stops one class being loosened on its
- * own, since a class that grows has to be paid for out of another.
+ * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
+ * in both directions, and this module's test pins their sum to the size of the corpus. A class that
+ * grew, a class that shrank, and a golden that moved out of a class into `identical` are each a red
+ * run whose answer is an edit here.
  *
- * `identical` only moves up and a class only moves down, and either move is an edit here rather
- * than a run that quietly passes. Two excluded classes can also trade members when a fix changes
- * which difference a run meets first, and then both numbers move at once, in opposite directions,
- * leaving the sum alone. That trade cannot hide a golden that stopped replaying byte-identically,
- * because such a golden takes `identical` off its number and the run refuses that outright.
+ * Exact rather than an upper bound because a bound cannot see the up direction at all: a golden
+ * reported `identical` instead of the excluded class it belongs to leaves every per-class bound,
+ * the sum and the size of the corpus holding. Two excluded classes trading members when a fix
+ * changes which difference a run meets first is the same story — both numbers move, and both moves
+ * are edits here rather than a run that quietly passes.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
   identical: 396,
@@ -198,6 +197,32 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   unclassified: 0
 }
 
+/** What one run of the suite counted: the byte-identical goldens, and the diverging ones by class. */
+export type BridgedParityTally = {
+  identical: number
+  counts: Readonly<Record<BridgedParityClass, number>>
+}
+
+/**
+ * Every number a run reported that `BRIDGED_PARITY_BASELINE` does not, said in one line each.
+ *
+ * Both directions, and `identical` on the same footing as a class, because that is the one the rest
+ * of the suite is blind to. Its other checks are a per-class upper bound, a sum over the classes and
+ * the size of the corpus, and a golden reported `identical` instead of the excluded class it belongs
+ * to satisfies all three at once.
+ */
+export function bridgedParityTallyDrift(tally: BridgedParityTally): readonly string[] {
+  const ran: Readonly<Record<string, number>> = { ...tally.counts, identical: tally.identical }
+  const drift: string[] = []
+  for (const [name, pinned] of Object.entries(BRIDGED_PARITY_BASELINE)) {
+    const count = ran[name] ?? 0
+    if (count !== pinned) {
+      drift.push(`${name}: pinned ${pinned}, ran ${count}`)
+    }
+  }
+  return drift
+}
+
 /** A class this small is named golden by golden in the run's output rather than counted. */
 export const BRIDGED_PARITY_NAMEABLE = 8
 
@@ -208,7 +233,7 @@ export const BRIDGED_PARITY_NAMEABLE = 8
  * refused frame — `scriptsAbsentResultReply` asks whether the scenario scripts the injected shape
  * anywhere, not whether the frame the page refused was one — so a real refusal inside a stream
  * golden is named an excluded class. One golden leaving that class as the real refusal puts another
- * in moves no number here, and the sum and the `identical` floor both still hold. The ids are what
+ * in moves no number here, and the sum and the `identical` pin both still hold. The ids are what
  * notices. Where a class is too large to list, its predicate stands on its own and the count is all
  * the pin has; that is why the classes here are the small ones and why the test above requires
  * every class of `BRIDGED_PARITY_NAMEABLE` or fewer to appear.

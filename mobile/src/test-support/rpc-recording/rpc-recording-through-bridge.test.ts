@@ -8,7 +8,7 @@ import {
 import type { RpcClient } from '../../transport/rpc-client'
 import {
   bridgedParityMembershipDrift,
-  BRIDGED_PARITY_BASELINE,
+  bridgedParityTallyDrift,
   BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_FLAG,
   BRIDGED_PARITY_NAMEABLE,
@@ -61,11 +61,12 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * Byte-identical replay where it holds, and the named shape of every divergence where it does not.
  * A golden that matches is compared in full; one that does not is classified by
  * `classifyBridgedParity`, which reads the frames and the scenario rather than the failure's text.
- * The run fails if any class grows past `BRIDGED_PARITY_BASELINE`, if a single golden lands in
- * `unclassified`, or if one diverges in a class `BRIDGED_PARITY_EXCLUSIONS` does not name. The
- * corpus is a fixed size, so those together pin every count exactly, and for a class small enough
- * to name `BRIDGED_PARITY_MEMBERS` pins which goldens are in it — a count alone cannot see one
- * golden leaving a class as another arrives.
+ * The run fails if any count is not exactly its number in `BRIDGED_PARITY_BASELINE` — `identical`
+ * among them, which is the only check that sees a golden that stopped diverging as well as one that
+ * started — if a single golden lands in `unclassified`, or if one diverges in a class
+ * `BRIDGED_PARITY_EXCLUSIONS` does not name. For a class small enough to name,
+ * `BRIDGED_PARITY_MEMBERS` pins which goldens are in it — a count alone cannot see one golden
+ * leaving a class as another arrives.
  *
  * 396 of the 787 replay byte for byte. The other 391 fall in five classes, 341 / 3 / 6 / 33 / 8,
  * and none of them is a reason to re-record anything. `c1-page-closure.ts` then pins, golden by
@@ -351,16 +352,10 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
         divergedOutsideAnExcludedClass: 0
       })
-      for (const [name, count] of Object.entries(counts)) {
-        expect({ [name]: count }).toEqual({
-          [name]: Math.min(count, BRIDGED_PARITY_BASELINE[asClass(name)])
-        })
-      }
-      // Exact, not a floor, and the size of the run is pinned with it: every class above is an
-      // upper bound, so without this a corpus that lost goldens outside the identical set would
-      // satisfy all of them.
-      const pinned = total(BRIDGED_PARITY_BASELINE)
-      expect({ corpus, identical }).toEqual({ corpus: pinned, identical: pinned - excludedCount })
+      // Every count exactly, `identical` included, which is what the checks above cannot do: they
+      // are an upper bound and a sum, and a golden reported `identical` rather than the excluded
+      // class it belongs to satisfies both. The size of the corpus follows, being their total.
+      expect({ tally: bridgedParityTallyDrift({ identical, counts }) }).toEqual({ tally: [] })
     })
 
     it('gives every golden the C1 page closure records the verdict it is pinned to', () => {
