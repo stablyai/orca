@@ -23,6 +23,13 @@ export function classifyWorkerTerminalProcessIncarnation(
   ) {
     return 'live'
   }
+  // An empty listing is not proof of death — it is equally the shape of a host that never
+  // enumerated this scope (in-process-only local inventory, a relay that restarted and forgot
+  // every prior id, a partial enumeration). Only a listing that names this pty id under a
+  // *different* incarnation is positive remint evidence that the old process is gone.
+  if (possibleMatches.length === 0) {
+    return 'unverifiable'
+  }
   return possibleMatches.some(
     (session) => !session.incarnationId || session.incarnationId !== session.incarnationId.trim()
   )
