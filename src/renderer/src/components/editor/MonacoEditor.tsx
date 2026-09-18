@@ -163,9 +163,12 @@ export default function MonacoEditor({
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
-      ...buildFileEditorWordWrapOptions(editorWordWrap)
+      ...buildFileEditorWordWrapOptions(editorWordWrap),
+      // Keep a retained Monaco instance aligned when a tab changes between
+      // a read-only surface and a normal editable file.
+      readOnly
     })
-  }, [editorFontFamily, editorFontSize, editorWordWrap])
+  }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,

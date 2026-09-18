@@ -108,6 +108,11 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
+    // View Log is the only read-only open path. A normal open of the same path
+    // is an explicit request to edit it, so drop the log-only restrictions while
+    // keeping View Log from downgrading an already writable tab.
+    const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
+    const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
     const needsExistingUpdate =
       existing.mode !== file.mode ||
       existing.diffSource !== file.diffSource ||
@@ -124,11 +129,12 @@ export function applyOpenFileToState(
       existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
       existing.externalSshTargetId !== nextExternalSshTargetId ||
       refreshExternalSshProvenance ||
-      existing.fileContentReloadNonce !== fileContentReloadNonce
+      existing.fileContentReloadNonce !== fileContentReloadNonce ||
+      existing.readOnly !== nextReadOnly ||
+      existing.liveTail !== nextLiveTail
     if (!needsExistingUpdate) {
       return activeResult
     }
-    // Why: `readOnly` is intentionally NOT in this override map — it's sticky, so `...f` preserves the tab's own read-only state.
     return {
       openFiles: s.openFiles.map((f) =>
         f.id === id
@@ -154,7 +160,9 @@ export function applyOpenFileToState(
               skippedConflicts: file.skippedConflicts,
               conflictReview: file.conflictReview,
               isPreview: updatedPreview,
-              fileContentReloadNonce
+              fileContentReloadNonce,
+              readOnly: nextReadOnly,
+              liveTail: nextLiveTail
             }
           : f
       ),
