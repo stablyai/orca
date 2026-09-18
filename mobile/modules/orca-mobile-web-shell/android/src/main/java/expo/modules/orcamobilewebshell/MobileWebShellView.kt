@@ -236,12 +236,12 @@ internal class OrcaMobileWebShellView(
   }
 
   private fun refusedResponse(): WebResourceResponse = WebResourceResponse(
-    "text/plain",
-    "utf-8",
-    403,
-    "Forbidden",
-    mapOf("Cache-Control" to "no-store"),
-    ByteArrayInputStream(ByteArray(0))
+    MOBILE_WEB_SHELL_REFUSAL_MIME_TYPE,
+    MOBILE_WEB_SHELL_REFUSAL_CHARSET,
+    MOBILE_WEB_SHELL_REFUSAL_STATUS,
+    MOBILE_WEB_SHELL_REFUSAL_REASON,
+    MOBILE_WEB_SHELL_REFUSAL_HEADERS,
+    ByteArrayInputStream(mobileWebShellRefusalBody())
   )
 
   private inner class ShellWebViewClient : WebViewClient() {
@@ -256,9 +256,12 @@ internal class OrcaMobileWebShellView(
       return refusedResponse()
     }
 
-    /** True means the navigation is dropped; only the document URL is ever allowed to load. */
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-      !(request.isForMainFrame && isDocumentUrl(request.url))
+      mobileWebShellDropsNavigation(
+        requestParts(request.url),
+        served?.originHost,
+        request.isForMainFrame
+      )
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
       if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
