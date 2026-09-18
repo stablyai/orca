@@ -16,6 +16,10 @@ import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 import {
+  DEFAULT_SINGLE_PANE_MAX_WIDTH,
+  TerminalSinglePaneWidthHandles
+} from './TerminalSinglePaneWidthHandles'
+import {
   TerminalPaneCodexRestartPortals,
   TerminalPaneMobileDriverPortals,
   TerminalPaneProcessExitPortals,
@@ -39,6 +43,7 @@ export function TerminalPaneSurface({
     agentSessionFork,
     beginPaneDragFromHeader,
     closeTerminalLinkActions,
+    containerRef,
     contextMenu,
     contextMenuCanContinueInNewSession,
     contextMenuCanToggleChat,
@@ -99,18 +104,22 @@ export function TerminalPaneSurface({
     setRenameValue,
     setSearchOpen,
     setSessionStateSaveFailureOpen,
+    settings,
     showSplitButton,
     showSshReconnectOverlay,
     splitTerminalPaneFromHeader,
     tabId,
     terminalContainerStyle,
+    terminalDividerStyle,
     terminalContentVisible,
     terminalLinkActionRequest,
     titleUsesLightSurface,
+    updateSettings,
     visibleQuickCommandHosts,
     visibleTerminalError,
     worktreeId
   } = controller
+  const singlePaneMaxWidth = settings?.terminalSinglePaneMaxWidth ?? DEFAULT_SINGLE_PANE_MAX_WIDTH
 
   return (
     <>
@@ -294,6 +303,17 @@ export function TerminalPaneSurface({
               setAgentSessionContinuation(null)
             }
           }}
+        />
+      ) : null}
+      {singlePaneMaxWidth > 0 &&
+      paneCount === 1 &&
+      terminalContentVisible &&
+      !(effectiveChatViewMode && activePaneIsChatLeaf) ? (
+        <TerminalSinglePaneWidthHandles
+          containerRef={containerRef}
+          maxWidth={singlePaneMaxWidth}
+          dividerStyle={terminalDividerStyle}
+          onCommit={(value) => updateSettings({ terminalSinglePaneMaxWidth: value })}
         />
       ) : null}
       <TerminalPaneHeaderOverlay

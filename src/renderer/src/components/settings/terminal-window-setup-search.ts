@@ -88,6 +88,23 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.terminal.search.964714e664',
+      'Single Terminal Width'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.de90748edb',
+      'Maximum width for a tab with no splits, centered between the sidebars.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.296e5e5b6f', 'width'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.52818ec5aa', 'max width'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.ff8cbec8bc', 'centered'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.cdbc212ac9', 'single'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b3d2c84b6a', 'wide')
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.692c4ad032', 'Vertical Padding'),
     description: translate(
       'auto.components.settings.terminal.search.4655567c37',

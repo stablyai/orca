@@ -97,4 +97,14 @@ export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOp
   if (styleOptions.paddingY !== undefined) {
     root.style.setProperty('--pane-padding-y', `${styleOptions.paddingY}px`)
   }
+  if (styleOptions.singlePaneMaxWidth !== undefined) {
+    const capped = styleOptions.singlePaneMaxWidth > 0
+    // 0 means "no cap"; a 0px max-width would collapse the pane instead.
+    root.style.setProperty(
+      '--pane-single-max-width',
+      capped ? `${styleOptions.singlePaneMaxWidth}px` : 'none'
+    )
+    // Uncapped fills the tab, so edge lines would just trace the window.
+    root.style.setProperty('--pane-single-edge-width', capped ? '1px' : '0px')
+  }
 }

@@ -502,6 +502,60 @@
   border-color: var(--ring);
 }
 
+/* One unsplit terminal is capped and centered instead of stretching a wide window.
+   The lone pane is the root's only child, so splitting lifts the cap by itself.
+   Scoped to the tab-group host so other pane hosts are not letterboxed. */
+[data-retained-pane-host] [data-terminal-tab-id]:not([data-terminal-chat-view]) > .pane:only-child {
+  box-sizing: border-box;
+  max-width: var(--pane-single-max-width, 1100px);
+  margin-inline: auto;
+  /* The gutter is painted in the terminal's own background, so without edges the
+     terminal looks like it runs on. Same line as a split divider. */
+  border-inline: var(--pane-single-edge-width, 1px) solid
+    var(--orca-terminal-divider-color, transparent);
+}
+
+/* Drag handles sitting on the capped pane's edges. Same visual language as a
+   split divider, and a sibling of the pane root so :only-child still holds. */
+.pane-single-width-handle-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.pane-single-width-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  margin-left: -4px;
+  cursor: col-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.pane-single-width-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--divider-thickness, 4px);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: transparent;
+  transition: background 100ms ease;
+}
+
+.pane-single-width-handle:hover::after,
+.pane-single-width-handle.is-dragging::after {
+  background: var(
+    --orca-terminal-divider-color-strong,
+    var(--orca-terminal-divider-color, transparent)
+  );
+}
+
 /* Baseline xterm-container layout — padding is driven by CSS custom properties
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
    The fallback 4px preserves the legacy default. */
