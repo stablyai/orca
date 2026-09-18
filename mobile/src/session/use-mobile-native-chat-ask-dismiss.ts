@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { nativeChatAskDismissKey, type AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask'
+import { mobileNativeChatAskKey } from './mobile-native-chat-async-ask'
 
 type AskDismissal = { sessionKey: string | null; askKey: string }
 type DetectedAsk = { sessionKey: string | null; askKey: string | null }
@@ -31,8 +32,8 @@ export function useMobileNativeChatAskDismiss(args: {
   dismissAsk: () => void
 } {
   const { ask, detectedAsk, scopeKey, sessionKey, observing } = args
-  const askKey = useMemo(() => nativeChatAskDismissKey(ask), [ask])
-  const detectedAskKey = useMemo(() => nativeChatAskDismissKey(detectedAsk), [detectedAsk])
+  const askKey = useMemo(() => mobileNativeChatAskKey(ask), [ask])
+  const detectedAskKey = useMemo(() => mobileNativeChatAskKey(detectedAsk), [detectedAsk])
   const detectedByScopeRef = useRef(new Map<string | null, DetectedAsk>())
   const [dismissedByScope, setDismissedByScope] = useState<Map<string | null, AskDismissal>>(
     () => new Map()
