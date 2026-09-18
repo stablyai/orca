@@ -20,8 +20,10 @@ import {
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_APP_SOURCE_DIRS,
+  assertAssetCeilingFitsShell,
   mobileWebAppBundleMaxAssets,
   mobileWebAppBundleMaxChunks,
+  readMobileWebBundleMaxAssets,
   verifyMobileWebAppBundle
 } from './verify-mobile-web-app-bundle.mjs'
 import {
@@ -457,9 +459,23 @@ describe('the Phase C budget', () => {
       expect(manifest.assets.length).toBeLessThanOrEqual(ceiling)
       // The native side refuses a manifest past this, so the derived ceiling has to stay inside it.
       expect(ceiling).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ASSETS)
+      // And the build is what has to say so: the guard runs on the counts this bundle measured.
+      const shellCeiling = await readMobileWebBundleMaxAssets()
+      expect(assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling)).toBe(ceiling)
     },
     120_000
   )
+
+  it('fails the build when the derived ceiling passes what the phone will accept', async () => {
+    // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
+    // that ships a green build no device can open. At the 42 images the tree carries, 4r + 16 +
+    // 42 + 1 crosses 256 at 50 routes, which Phase C reaches.
+    expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
+    expect(assertAssetCeilingFitsShell(49, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(255)
+    expect(() => assertAssetCeilingFitsShell(50, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /259 .*256/
+    )
+  })
 })
 
 describe('the verifier', () => {

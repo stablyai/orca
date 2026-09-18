@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from './build-mobile-web-bundle.mjs'
 import { assertNoCarriageReturnsInSource } from './verify-mobile-web-bundle.mjs'
@@ -9,6 +10,13 @@ import { assertMobileWebBundleBuilt } from './verify-packaged-mobile-web-bundle.
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const defaultBundleDir = join(projectDir, 'out', 'mobile-web-app')
+const manifestContract = join(
+  projectDir,
+  'src',
+  'shared',
+  'mobile-web-bundle',
+  'manifest-contract.ts'
+)
 
 /**
  * The document, the route chunks and the images the route tree imports. Derived rather than
@@ -72,6 +80,49 @@ function fail(message) {
   throw new VerificationError(message)
 }
 
+/**
+ * How many assets the phone will accept, read from the contract rather than copied: the native
+ * shells hold their own 256 and refuse a larger manifest outright. Bundled through esbuild
+ * because node cannot resolve that module's extensionless TypeScript imports, so the number is
+ * evaluated from the contract and not parsed out of it.
+ */
+export async function readMobileWebBundleMaxAssets() {
+  const { outputFiles } = await esbuild.build({
+    entryPoints: [manifestContract],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'node',
+    logLevel: 'silent'
+  })
+  const source = Buffer.from(outputFiles[0].contents).toString('base64')
+  const { MOBILE_WEB_BUNDLE_MAX_ASSETS: ceiling } = await import(
+    `data:text/javascript;base64,${source}`
+  )
+  if (typeof ceiling !== 'number') {
+    fail(`${manifestContract} exports no MOBILE_WEB_BUNDLE_MAX_ASSETS to bound the build with`)
+  }
+  return ceiling
+}
+
+/**
+ * The derived ceiling is only a budget while it stays inside the map the phone can hold: the
+ * shells return null for a manifest over MOBILE_WEB_BUNDLE_MAX_ASSETS rather than dropping the
+ * extra assets, so a route count that pushes 4r + 16 + images + 1 past it would pass this build
+ * and fail on the device with nothing to read. At today's 42 images that is 50 routes, inside
+ * what Phase C adds, which is why this is a build failure and not a comment.
+ */
+export function assertAssetCeilingFitsShell(routeCount, imageCount, shellMaxAssets) {
+  const ceiling = mobileWebAppBundleMaxAssets(routeCount, imageCount)
+  if (ceiling > shellMaxAssets) {
+    fail(
+      `the ceiling derived for ${String(routeCount)} route(s) and ${String(imageCount)} image(s) ` +
+        `is ${String(ceiling)} assets, over the ${String(shellMaxAssets)} the shell will load`
+    )
+  }
+  return ceiling
+}
+
 async function buildIntoScratch() {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-verify-'))
   try {
@@ -109,7 +160,11 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   // Read off the fresh build rather than the manifest: neither bound is a manifest field, and the
   // buildId just proved this build is the one on disk.
   // After the fresh build, which is what knows how many of the assets are images.
-  const maxAssets = mobileWebAppBundleMaxAssets(first.routeKeys.length, first.imageCount)
+  const maxAssets = assertAssetCeilingFitsShell(
+    first.routeKeys.length,
+    first.imageCount,
+    await readMobileWebBundleMaxAssets()
+  )
   if (manifest.assets.length > maxAssets) {
     fail(
       `bundle has ${String(manifest.assets.length)} assets, over the Phase C budget of ` +
