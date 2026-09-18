@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
+  coerceProjectExecutionHostId,
   parseExecutionHostId
 } from '../execution-host'
 
@@ -22,9 +22,14 @@ export const ProjectProviderIdentity = z.object({
 // Rows written before this normalization keep their client-minted stamp; readers still project
 // `local` back to `runtime:<their-id>`, so the client-visible model is unchanged.
 export const RequestedHostId = requiredString('Missing host ID').transform((value, ctx) => {
-  const hostId = normalizeExecutionHostId(value)
+  const hostId = coerceProjectExecutionHostId(value)
   if (!hostId) {
-    ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'Invalid host ID. Use local, ssh:<targetId>, or runtime:<environmentId> ' +
+        '(bare ids from `orca environment list` are accepted as runtime:<id>).'
+    })
     return z.NEVER
   }
   return parseExecutionHostId(hostId)?.kind === 'runtime' ? LOCAL_EXECUTION_HOST_ID : hostId

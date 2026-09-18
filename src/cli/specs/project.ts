@@ -36,11 +36,13 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
       '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      'A bare environment id from `orca environment list` is accepted as runtime:<id>; display names are not host ids.',
       'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
       'orca project setup-existing-folder --project github:stablyai/orca --host local --path ~/orca',
-      'orca project setup-existing-folder --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --path /home/me/orca --kind git --json'
+      'orca project setup-existing-folder --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --path /home/me/orca --kind git --json',
+      'orca project setup-existing-folder --project github:stablyai/orca --host <environment-id> --path /home/me/orca --json'
     ]
   },
   {
@@ -52,6 +54,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
       '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      'A bare environment id is accepted as runtime:<id>.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -80,6 +83,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Creates setup metadata without registering a repo compatibility record.',
       '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      'A bare environment id is accepted as runtime:<id>.',
       'Use setup-existing-folder when Orca should import and manage an actual checkout path now.'
     ],
     examples: [
