@@ -66,7 +66,7 @@ export class RuntimeRepositoryIssueCommand {
       return { ok: true }
     }
     if (!repo.connectionId) {
-      await writeIssueCommand(repo.path, content, ...this.deps.getLocalGitArgs(repo))
+      await writeIssueCommand(repo.path, content, () => this.deps.getLocalGitArgs(repo)[0] ?? {})
       return { ok: true }
     }
     const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')

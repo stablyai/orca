@@ -129,9 +129,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return
       }
-      await writeIssueCommand(
-        repo.path,
-        args.content,
+      await writeIssueCommand(repo.path, args.content, () =>
         getLocalProjectWorktreeGitOptions(store, repo)
       )
     }
