@@ -48,3 +48,9 @@
 /src/mobile-web/src/*.ts text eol=lf
 /src/mobile-web/src/*.css text eol=lf
 /src/mobile-web/src/*.png -text
+# Mobile web page source. Same buildId hazard as src/mobile-web above: these bytes are
+# hashed into the Phase C bundle, so a CRLF Windows checkout would ship a different
+# buildId for identical source. web-entry/ does not exist yet; the pin lands ahead of it.
+/mobile/src/** text eol=lf
+/mobile/app/** text eol=lf
+/mobile/web-entry/** text eol=lf
