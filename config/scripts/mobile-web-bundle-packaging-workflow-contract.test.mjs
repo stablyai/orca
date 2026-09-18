@@ -7,9 +7,47 @@ import { parseDocument } from 'yaml'
 const workflowsDir = fileURLToPath(new URL('../../.github/workflows', import.meta.url))
 
 // Every script whose chain reaches build:mobile-web. build:unpack -> build -> build:desktop, and
-// build:mac/linux/win each call build:desktop, so all of them produce out/mobile-web.
-const BUNDLE_PRODUCER =
-  /pnpm (?:run )?(?:build|build:desktop|build:release|build:release:parallel|build:unpack|build:mobile-web|build:mac|build:mac:release|build:linux|build:win)(?=$|[\s'"&|;])/m
+// build:mac/linux/win each call build:desktop, so all of them produce out/mobile-web. The chain
+// itself is not an assumption here: 'the build scripts' below resolves each one for real.
+const BUNDLE_PRODUCING_SCRIPTS = [
+  'build',
+  'build:desktop',
+  'build:release',
+  'build:release:parallel',
+  'build:unpack',
+  'build:mobile-web',
+  'build:mac',
+  'build:mac:release',
+  'build:linux',
+  'build:win'
+]
+
+const BUNDLE_PRODUCER = new RegExp(
+  `pnpm (?:run )?(?:${BUNDLE_PRODUCING_SCRIPTS.join('|')})(?=$|[\\s'"&|;])`,
+  'm'
+)
+
+const packageScripts = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')
+).scripts
+
+/** Whether `pnpm run <name>` eventually runs build:mobile-web. */
+function reachesBundleBuild(name, seen = new Set()) {
+  if (name === 'build:mobile-web') {
+    return true
+  }
+  if (seen.has(name)) {
+    return false
+  }
+  seen.add(name)
+  const body = packageScripts[name]
+  if (typeof body !== 'string') {
+    return false
+  }
+  return [...body.matchAll(/pnpm run ([\w:-]+)/g)].some((match) =>
+    reachesBundleBuild(match[1], seen)
+  )
+}
 
 // Every job that packs an app and therefore runs beforePack. Listed so that a new packaging
 // workflow has to be added here deliberately, with its bundle step, rather than slipping in.
@@ -73,4 +111,18 @@ describe('mobile web bundle packaging coverage', () => {
       expect(job.text).toMatch(BUNDLE_PRODUCER)
     }
   )
+})
+
+describe('the build scripts the census trusts', () => {
+  // The census only checks that a packaging job invokes one of these. If a chain stopped calling
+  // build:mobile-web, every job would still look covered while packaging failed at beforePack.
+  it.each(BUNDLE_PRODUCING_SCRIPTS)('%s runs build:mobile-web', (name) => {
+    expect(packageScripts[name]).toBeTypeOf('string')
+    expect(reachesBundleBuild(name)).toBe(true)
+  })
+
+  it('pr.yml package builds the bundle by hand, because it never calls build:release', () => {
+    const source = readFileSync(join(workflowsDir, 'pr.yml'), 'utf8')
+    expect(source).toMatch(/- name: Build mobile web bundle\n\s+run: pnpm run build:mobile-web\n/)
+  })
 })
