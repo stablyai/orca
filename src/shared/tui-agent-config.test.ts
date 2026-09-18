@@ -23,6 +23,7 @@ describe('TUI_AGENT_CONFIG', () => {
       'claude-agent-teams': { launchCmd: 'orca claude-teams', expectedProcess: 'claude' },
       kiro: { launchCmd: 'kiro-cli chat --tui', expectedProcess: 'kiro-cli' },
       'command-code': { launchCmd: 'command-code --trust' },
+      deepseek: { launchCmd: 'deepseek --skip-onboarding', expectedProcess: 'deepseek-tui' },
       hermes: { launchCmd: 'hermes --tui' }
     }
     for (const [agent, expected] of Object.entries(overrides)) {

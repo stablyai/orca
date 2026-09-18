@@ -24,6 +24,7 @@ export type TuiAgent =
   | 'command-code' // Command Code
   | 'continue' // Continue
   | 'cursor' // Cursor
+  | 'deepseek' // DeepSeek CLI
   | 'droid' // Factory Droid
   | 'kimi' // Kimi
   | 'mistral-vibe' // Mistral Vibe
