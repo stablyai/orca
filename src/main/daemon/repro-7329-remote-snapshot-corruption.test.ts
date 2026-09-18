@@ -58,8 +58,10 @@ describe('#7329 remote-server snapshot corruption', () => {
       await emulatorWrite(emu, 'user@host:~$ ')
 
       const snapshot = emu.getSnapshot({ scrollbackRows: 0 })
-      // The daemon snapshot re-arms the modes it observed.
+      // Bracketed paste is restored; mouse tracking is recorded but not replayed.
       expect(snapshot.rehydrateSequences).toContain('\x1b[?2004h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1000h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
       expect(snapshot.modes.bracketedPaste).toBe(true)
       expect(snapshot.modes.mouseTracking).toBe(true)
 
@@ -88,8 +90,9 @@ describe('#7329 remote-server snapshot corruption', () => {
       await emulatorWrite(emu, 'user@host:~$ ')
 
       const snapshot = emu.getSnapshot({ scrollbackRows: 0 })
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1003h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1016h')
+      expect(snapshot.modes.mouseTracking).toBe(true)
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1003h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1016h')
 
       await replayRemoteSnapshot(term, snapshot)
 
