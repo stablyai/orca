@@ -20,7 +20,7 @@ async function makeTranscriptsDir(): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), 'orca-devin-usage-'))
   tempDirs.push(home)
   process.env.DEVIN_HOME = home
-  const dir = join(home, 'transcripts')
+  const dir = join(home, 'cli', 'transcripts')
   await mkdir(dir, { recursive: true })
   return dir
 }
