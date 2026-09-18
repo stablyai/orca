@@ -19,6 +19,7 @@ export type LaunchableWorkItem = {
   url: string
   type: 'issue' | 'pr' | 'mr'
   number: number | null
+  assignees?: readonly { login: string }[]
   repoId?: string
   branchName?: string
   baseRefName?: string
