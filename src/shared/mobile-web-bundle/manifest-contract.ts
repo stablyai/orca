@@ -94,6 +94,11 @@ function validateManifestInvariants(
   },
   context: z.RefinementCtx
 ): void {
+  // Cheapest first, and each check returns: the build id below is the only one that hashes, and
+  // zod runs this refinement even when the array ceiling has already failed.
+  if (manifest.assets.length > MOBILE_WEB_BUNDLE_MAX_ASSETS) {
+    return
+  }
   let previousPath: string | null = null
   let summedBytes = 0
   const foldedPaths = new Set<string>()
@@ -129,6 +134,7 @@ function validateManifestInvariants(
       path: ['totalBytes'],
       message: 'totalBytes must equal the sum of asset byte lengths'
     })
+    return
   }
   if (!manifest.assets.some((asset) => asset.path === manifest.entrypoint)) {
     context.addIssue({
@@ -136,6 +142,7 @@ function validateManifestInvariants(
       path: ['entrypoint'],
       message: 'entrypoint must be one of the listed assets'
     })
+    return
   }
   if (manifest.minCompatibleRuntimeProtocolVersion > manifest.runtimeProtocolVersion) {
     context.addIssue({
@@ -143,9 +150,10 @@ function validateManifestInvariants(
       path: ['minCompatibleRuntimeProtocolVersion'],
       message: 'protocol window must not be inverted'
     })
+    return
   }
-  // Last because it is the only check that hashes. A stale id would survive every other check and
-  // then serve the wrong bytes under a cache key the client already trusts.
+  // A stale id survives every other check and would then serve the wrong bytes under a cache key
+  // the client already trusts.
   if (manifest.buildId !== computeMobileWebBundleId(manifest.assets)) {
     context.addIssue({
       code: 'custom',

@@ -193,6 +193,46 @@ describe('manifest invariants', () => {
   })
 })
 
+describe('refinement short-circuit', () => {
+  const WRONG_BUILD_ID = 'f'.repeat(64)
+
+  function issuePaths(manifest: Record<string, unknown>): string[] {
+    const parsed = MobileWebBundleManifestSchema.safeParse(manifest)
+    expect(parsed.success).toBe(false)
+    return (parsed.error?.issues ?? []).map((issue) => issue.path.join('.'))
+  }
+
+  it('reports buildId when every cheaper invariant holds', () => {
+    const withinCeiling = assetsTotalling(MOBILE_WEB_BUNDLE_MAX_ASSETS, 64)
+    expect(issuePaths(manifestOf(withinCeiling, { buildId: WRONG_BUILD_ID }))).toEqual(['buildId'])
+  })
+
+  it('does not hash an oversized asset list', () => {
+    const overCeiling = [
+      ...assetsTotalling(MOBILE_WEB_BUNDLE_MAX_ASSETS, 64),
+      asset('assets/overflow.js', 0)
+    ]
+    const paths = issuePaths(manifestOf(overCeiling, { buildId: WRONG_BUILD_ID }))
+    expect(paths).toEqual(['assets'])
+    expect(paths).not.toContain('buildId')
+  })
+
+  it('does not hash once a cheaper invariant has failed', () => {
+    const twoAssets = [ENTRY, asset('assets/a.js', 10)]
+    expect(issuePaths(manifestOf(twoAssets, { totalBytes: 0, buildId: WRONG_BUILD_ID }))).toEqual([
+      'totalBytes'
+    ])
+    expect(
+      issuePaths(
+        manifestOf(twoAssets, {
+          minCompatibleRuntimeProtocolVersion: 4,
+          buildId: WRONG_BUILD_ID
+        })
+      )
+    ).toEqual(['minCompatibleRuntimeProtocolVersion'])
+  })
+})
+
 describe('asset paths', () => {
   it.each([
     '../escape.js',
