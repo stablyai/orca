@@ -122,8 +122,15 @@ describe('usage provider IPC handlers', () => {
     expect(devinUsage.setEnabled).not.toHaveBeenCalled()
 
     // limit must be a positive finite number; anything else falls back to
-    // the store default rather than propagating junk.
+    // the store default rather than propagating junk — including a fraction
+    // that floors to 0 (slice(0, 0) would return no sessions).
     call('getRecentSessions', { scope: 'all', range: '7d', limit: 'many' }, true)
-    expect(devinUsage.getRecentSessions).toHaveBeenCalledWith('all', '7d', undefined)
+    call('getRecentSessions', { scope: 'all', range: '7d', limit: 0.5 }, true)
+    call('getRecentSessions', { scope: 'all', range: '7d', limit: 2.9 }, true)
+    expect(devinUsage.getRecentSessions.mock.calls).toEqual([
+      ['all', '7d', undefined],
+      ['all', '7d', undefined],
+      ['all', '7d', 2]
+    ])
   })
 })

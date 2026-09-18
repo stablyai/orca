@@ -61,9 +61,11 @@ function asBreakdownKind<BreakdownKind>(value: unknown): BreakdownKind | null {
 }
 
 function asLimit(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? Math.floor(value)
-    : undefined
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  const limit = Math.floor(value)
+  return limit > 0 ? limit : undefined
 }
 
 function registerProviderHandlers<Scope, Range, BreakdownKind>(

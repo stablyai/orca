@@ -10,7 +10,11 @@ let tempDirs: string[] = []
 const originalDevinHome = process.env.DEVIN_HOME
 
 afterEach(async () => {
-  process.env.DEVIN_HOME = originalDevinHome
+  if (originalDevinHome === undefined) {
+    delete process.env.DEVIN_HOME
+  } else {
+    process.env.DEVIN_HOME = originalDevinHome
+  }
   resetDevinSessionsIndexCacheForTests()
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
   tempDirs = []

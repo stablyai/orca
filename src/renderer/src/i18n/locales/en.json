@@ -4372,10 +4372,10 @@
           "247c93ca92": "• inferred pricing",
           "32176e1d44": "turns",
           "79a69522a5": "events",
-          "02a046792e": "sessions •",
-          "input": "in",
-          "cached": "cached",
-          "out": "out"
+          "sessionsEvents": "{{value0}} sessions • {{value1}} {{value2}}",
+          "inputTokens": " • in {{value0}}",
+          "cachedTokens": " • cached {{value0}}",
+          "outputTokens": " • out {{value0}}"
         },
         "UsageSessionsTable": {
           "1afc25eb06": "Turns",

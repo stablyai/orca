@@ -56,6 +56,7 @@ export function DevinUsageDetails({
             tokens: row.totalTokens,
             sessions: row.sessions,
             eventsOrTurns: row.events,
+            estimatedCostUsd: row.estimatedCostUsd,
             inputTokens: row.inputTokens,
             cachedInputTokens: row.cachedInputTokens,
             outputTokens: row.outputTokens

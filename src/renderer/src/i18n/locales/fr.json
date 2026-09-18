@@ -4049,7 +4049,7 @@
           "247c93ca92": "• tarification déduite",
           "32176e1d44": "tours",
           "79a69522a5": "événements",
-          "02a046792e": "sessions •"
+          "sessionsEvents": "{{value0}} sessions • {{value1}} {{value2}}"
         },
         "UsageSessionsTable": {
           "1afc25eb06": "Tours",
