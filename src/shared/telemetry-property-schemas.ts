@@ -11,6 +11,7 @@ export const AGENT_KIND_VALUES = [
   'claude-code',
   'claude-agent-teams',
   'openclaude',
+  'openzoo',
   'codex',
   'autohand',
   'opencode',

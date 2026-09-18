@@ -32,6 +32,7 @@ import type {
 } from './agent-status-bridge-types'
 import { normalizeAgentStatusEvent } from './normalize-agent-status-event'
 
+/** Apply one agent-status IPC payload (or enqueue it until the pane/store is ready). */
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
   transientClearWatermarkByConnectionId: Map<string, number>
@@ -70,7 +71,8 @@ export function createAgentStatusEventApplicator(args: {
       repoConnectionResolved,
       owningWorktreeId,
       titleUsesTabTitle,
-      tabTitle
+      tabTitle,
+      launchAgent
     } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
@@ -173,7 +175,11 @@ export function createAgentStatusEventApplicator(args: {
       )
       return 'applied'
     }
-    const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
+    const resolvedPayload = resolveHookPayloadAgentType(
+      payload,
+      identityTitle ?? title,
+      launchAgent
+    )
     const statusPayload = data.orchestration
       ? { ...resolvedPayload, orchestration: data.orchestration }
       : resolvedPayload

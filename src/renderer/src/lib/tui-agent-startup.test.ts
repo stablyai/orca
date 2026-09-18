@@ -401,6 +401,22 @@ describe('buildAgentDraftLaunchPlan', () => {
       launchConfig: emptyLaunchConfig('openclaude')
     })
   })
+
+  it('uses Claude native prefill support for openzoo draft launches', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'openzoo',
+        draft: 'review this',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'openzoo',
+      launchCommand: "openzoo claude --prefill 'review this'",
+      expectedProcess: 'claude',
+      launchConfig: emptyLaunchConfig('openzoo claude')
+    })
+  })
 })
 
 describe('isShellProcess', () => {
