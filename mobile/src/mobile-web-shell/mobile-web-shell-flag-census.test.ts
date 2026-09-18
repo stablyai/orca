@@ -13,6 +13,10 @@ const FLAG_KEY = 'orca:mobileWebShellEnabled'
 const DEFINITION = 'src/storage/preferences.ts'
 const ROUTE = 'app/h/[hostId]/web.tsx'
 const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
+/** Every tree that ships in the app bundle, with the floor each must clear. `modules` is two files,
+ *  but it is where the native view lives and so the easiest place for a second reader to hide. */
+const TREES = { src: 200, app: 10, modules: 1 }
+const SHELL_VIEW = 'modules/orca-mobile-web-shell/src/index.ts'
 
 function sourceFiles(directory: string): string[] {
   const found: string[] = []
@@ -27,10 +31,12 @@ function sourceFiles(directory: string): string[] {
   return found
 }
 
-const SOURCES = [...sourceFiles('src'), ...sourceFiles('app')].map((path) => ({
-  path: path.split('\\').join('/'),
-  text: readFileSync(join(MOBILE_ROOT, path), 'utf8')
-}))
+const SOURCES = Object.keys(TREES)
+  .flatMap((tree) => sourceFiles(tree))
+  .map((path) => ({
+    path: path.split('\\').join('/'),
+    text: readFileSync(join(MOBILE_ROOT, path), 'utf8')
+  }))
 
 function filesContaining(needle: string): string[] {
   return SOURCES.filter((file) => file.text.includes(needle))
@@ -39,16 +45,17 @@ function filesContaining(needle: string): string[] {
 }
 
 describe('who touches the hybrid shell flag', () => {
-  it('reaches both trees, so the absence assertions below cannot pass vacuously', () => {
+  it('reaches every shipped tree, so the absence assertions below cannot pass vacuously', () => {
     const paths = SOURCES.map((file) => file.path)
     expect(paths).toContain(DEFINITION)
     expect(paths).toContain(ROUTE)
     expect(paths).toContain(DEVELOPER_ROW)
-    expect(paths.filter((path) => path.startsWith('src/'))).toHaveLength(
-      paths.length - paths.filter((path) => path.startsWith('app/')).length
-    )
-    expect(paths.filter((path) => path.startsWith('src/')).length).toBeGreaterThan(200)
-    expect(paths.filter((path) => path.startsWith('app/')).length).toBeGreaterThan(10)
+    expect(paths).toContain(SHELL_VIEW)
+    const trees = Object.keys(TREES)
+    for (const [tree, floor] of Object.entries(TREES)) {
+      expect(paths.filter((path) => path.startsWith(`${tree}/`)).length).toBeGreaterThan(floor)
+    }
+    expect(paths.filter((path) => !trees.some((tree) => path.startsWith(`${tree}/`)))).toEqual([])
   })
 
   it('keeps the storage key itself in one module', () => {
