@@ -151,6 +151,12 @@ export type GithubPullRequestApi = {
       prRepo?: GitHubOwnerRepo | null
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>
+  updatePRBranch: (
+    args: GitHubRepoSelectorArgs & {
+      prNumber: number
+      prRepo?: GitHubOwnerRepo | null
+    }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   updatePRState: (
     args: GitHubRepoSelectorArgs & {
       prNumber: number

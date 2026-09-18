@@ -32,6 +32,7 @@ import {
   mergePR,
   resolveReviewThread,
   setPRAutoMerge,
+  updatePRBranch,
   updatePRTitle,
   _getMergeQueueCacheSizeForTests
 } from './client'
@@ -248,6 +249,67 @@ describe('GitHub GraphQL rate-limit guard', () => {
       error: 'GitHub does not support auto-merge for stacked pull requests.'
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('updates a behind branch via the head-guarded updatePullRequestBranch mutation', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid', baseRefName: 'main' })
+      })
+      .mockResolvedValue({ stdout: '', stderr: '' })
+
+    await expect(
+      updatePRBranch('/repo-root', 7, undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['pr', 'view', '7', '--json', 'id,headRefOid,baseRefName', '--repo', 'stablyai/orca'],
+      { cwd: '/repo-root', host: 'github.com' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([
+        'api',
+        'graphql',
+        '-f',
+        'pullRequestId=PR_kwDO123',
+        '-f',
+        'expectedHeadOid=head-oid'
+      ]),
+      expect.objectContaining({
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' }),
+        host: 'github.com'
+      })
+    )
+    expect(ghExecFileAsyncMock.mock.calls[1]?.[0]?.[3]).toContain('updatePullRequestBranch')
+  })
+
+  it('refuses to update the branch when GitHub does not return a head commit', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ id: 'PR_kwDO123', baseRefName: 'main' })
+    })
+
+    await expect(
+      updatePRBranch('/repo-root', 7, undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Could not resolve the pull request head commit; refresh and try again.'
+    })
+
+    // Only the identity lookup ran; no unguarded graphql mutation was sent.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(
+      ghExecFileAsyncMock.mock.calls.some((call) => (call[0] as string[]).includes('graphql'))
+    ).toBe(false)
   })
 
   it('translates the GitHub clean-status rejection into an actionable message', async () => {

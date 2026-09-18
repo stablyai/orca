@@ -190,6 +190,30 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
+  it('offers Update branch whenever the head is behind base, even when also review-blocked', () => {
+    expect(
+      presentGitHubPRMergeState(pr({ mergeStateStatus: 'BEHIND' })).updateBranchAvailable
+    ).toBe(true)
+    // Behind AND review-required: label stays "Approval required" but Update branch is still offered.
+    const behindAndBlocked = presentGitHubPRMergeState(
+      pr({ mergeStateStatus: 'BEHIND', reviewDecision: 'REVIEW_REQUIRED' })
+    )
+    expect(behindAndBlocked.label).toBe('Approval required')
+    expect(behindAndBlocked.updateBranchAvailable).toBe(true)
+    expect(presentGitHubPRMergeState(pr({ mergeStateStatus: 'CLEAN' })).updateBranchAvailable).toBe(
+      false
+    )
+    // A closed or merged PR that is still marked behind must not offer the action.
+    expect(
+      presentGitHubPRMergeState(pr({ state: 'closed', mergeStateStatus: 'BEHIND' }))
+        .updateBranchAvailable
+    ).toBe(false)
+    expect(
+      presentGitHubPRMergeState(pr({ state: 'merged', mergeStateStatus: 'BEHIND' }))
+        .updateBranchAvailable
+    ).toBe(false)
+  })
+
   it('labels unresolved GitHub mergeability as checking', () => {
     expect(
       presentGitHubPRMergeState(
