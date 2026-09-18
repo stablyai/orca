@@ -173,10 +173,12 @@ export async function runRpcOperation<
 >(
   client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
-  params: RpcSendParams<Method>,
-  options?: SendRequestOptions
+  // Shares the deferred sender's tuple so the two cannot disagree about what a params-less
+  // method may be called with: the catalog types those `void`, and an explicit `null` is the
+  // frame several shipped senders already put on the wire.
+  ...args: RpcSendArguments<Method>
 ): Promise<RpcVerdict<Acceptance, Value>> {
-  const outcome = await request(client, operation, params, options)
+  const outcome = await request(client, operation, args[0], args[1])
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return interpretRpcOutcome(operation, outcome) as RpcVerdict<Acceptance, Value>
 }
