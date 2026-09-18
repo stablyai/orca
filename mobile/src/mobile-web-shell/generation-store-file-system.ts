@@ -34,6 +34,23 @@ export type GenerationFileSystem = {
   moveDirectory(fromUri: string, toUri: string): Promise<void>
 }
 
+const FILE_URI_PREFIX = 'file://'
+
+/**
+ * The `file://` uri the store works in, as the absolute path the native shell view requires.
+ *
+ * The two sides speak different dialects of the same location: `expo-file-system` hands out uris,
+ * and both native loaders refuse anything that does not start with `/`. Percent-decoded because a
+ * uri escapes what a path spells literally, and left alone when it is already a path so a caller
+ * cannot double-decode one.
+ */
+export function generationDirectoryPath(uri: string): string {
+  if (!uri.startsWith(FILE_URI_PREFIX)) {
+    return uri
+  }
+  return decodeURIComponent(uri.slice(FILE_URI_PREFIX.length))
+}
+
 export function createExpoGenerationFileSystem(): GenerationFileSystem {
   return {
     rootUri: new Directory(Paths.cache, MOBILE_WEB_CACHE_DIRECTORY_NAME).uri,
