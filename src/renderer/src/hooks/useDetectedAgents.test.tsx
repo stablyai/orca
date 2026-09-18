@@ -237,6 +237,41 @@ describe('useDetectedAgents (ssh call site)', () => {
     expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
     expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
   })
+
+  it('re-probes a cached non-empty SSH list when the launch surface is reopened', async () => {
+    detectRemoteAgents.mockResolvedValue(['claude'])
+    const firstRoot = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude'])
+
+    await act(async () => {
+      firstRoot.unmount()
+    })
+    roots.splice(roots.indexOf(firstRoot), 1)
+
+    // A CLI installed after the first probe must show up on the next surface.
+    detectRemoteAgents.mockResolvedValue(['claude', 'devin'])
+
+    await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
+    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude', 'devin'])
+  })
+
+  it('keeps a non-empty SSH target to one probe per mounted surface', async () => {
+    detectRemoteAgents.mockResolvedValue(['claude'])
+    const root = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.render(createElement(HookProbe, { target: { kind: 'ssh', connectionId: 'ssh-1' } }))
+    })
+    await flushEffects()
+
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('useDetectedAgents (unresolved target)', () => {
@@ -325,15 +360,19 @@ describe('useDetectedAgents (runtime call site)', () => {
     })
 
     await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
     await act(async () => {
       await latestHookResult?.refresh()
     })
     await flushEffects()
 
     expect(refreshCalls).toBe(1)
-    expect(detectCalls).toBe(0)
     expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual([])
+
+    // Why: a refresh that clears the list must settle — the mounted surface
+    // must not bounce into another probe loop from the new detectedIds value.
+    const detectCallsAfterRefresh = detectCalls
+    await flushEffects()
+    expect(detectCalls).toBe(detectCallsAfterRefresh)
   })
 
   it('retries a cached empty runtime result when the launch surface is reopened', async () => {
@@ -377,5 +416,48 @@ describe('useDetectedAgents (runtime call site)', () => {
 
     expect(detectCalls).toBe(2)
     expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+  })
+
+  it('re-probes a cached non-empty runtime list when the launch surface is reopened', async () => {
+    let detectCalls = 0
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      let result: unknown
+      if (method === 'status.get') {
+        result = {
+          runtimeId: 'remote-runtime',
+          rendererGraphEpoch: 1,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 0,
+          liveLeafCount: 0,
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+        }
+      } else {
+        detectCalls += 1
+        result = detectCalls === 1 ? ['claude'] : ['claude', 'devin']
+      }
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    const firstRoot = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
+
+    expect(detectCalls).toBe(1)
+    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['claude'])
+
+    await act(async () => {
+      firstRoot.unmount()
+    })
+    roots.splice(roots.indexOf(firstRoot), 1)
+
+    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
+
+    expect(detectCalls).toBe(2)
+    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['claude', 'devin'])
   })
 })

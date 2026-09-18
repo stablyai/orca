@@ -147,7 +147,8 @@ export function useDetectedAgents(
     const isNewRemoteTarget =
       remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
     // Why: switching A → B → A is still one mounted surface; remember every
-    // target so empty hosts don't respawn all detection subprocesses on each switch.
+    // target so each one keeps its once-per-surface probe without respawning
+    // detection on every switch back.
     if (remoteTargetKey !== null) {
       observedRemoteTargetKeysRef.current.add(remoteTargetKey)
     }
@@ -155,18 +156,21 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
         void state.ensureRemoteDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: a newly opened remote launch surface should get one fresh probe
-        // after a prior empty result, but must not spin while the host has no agents.
-        void state.ensureRemoteDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Why: a newly opened remote launch surface must re-probe even when it
+        // already has a cached list — otherwise a CLI installed after the last
+        // probe stays invisible until the renderer restarts. Once per surface,
+        // per target, so this cannot spin.
+        void state.ensureRemoteDetectedAgents(targetId, { force: true })
       }
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
         void state.ensureRuntimeDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: remote `orca serve` users can install/fix PATH without reconnecting;
-        // retry once per mounted surface so the menu can pick that up.
-        void state.ensureRuntimeDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Why: remote `orca serve` users can install/fix PATH without
+        // reconnecting; retry once per mounted surface so the menu can pick
+        // that up regardless of what the previous probe found.
+        void state.ensureRuntimeDetectedAgents(targetId, { force: true })
       }
     } else {
       if (detectedIds === null) {
