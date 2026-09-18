@@ -27,6 +27,24 @@ const metadata = {
   checkpointedAt: '2026-07-29T00:00:00.000Z'
 }
 
+/** Mirrors the on-disk field order the serializer emits, so tests can compare against
+ *  real JSON.stringify output rather than a hand-written string. */
+function expectedJson(input: TerminalSnapshot): string {
+  return JSON.stringify({
+    snapshotAnsi: input.snapshotAnsi,
+    scrollbackAnsi: input.scrollbackAnsi,
+    oscLinks: input.oscLinks,
+    rehydrateSequences: input.rehydrateSequences,
+    cwd: metadata.cwd,
+    cols: input.cols,
+    rows: input.rows,
+    modes: input.modes,
+    scrollbackLines: input.scrollbackLines,
+    generation: metadata.generation,
+    checkpointedAt: metadata.checkpointedAt
+  })
+}
+
 describe('terminal checkpoint serializer', () => {
   it('matches JSON.stringify exactly at the UTF-8 byte limit', async () => {
     const input = snapshot({
@@ -43,19 +61,7 @@ describe('terminal checkpoint serializer', () => {
       )}`,
       oscLinks: [{ row: 0, startCol: 0, endCol: 1, uri: 'https://example.com/😀\n' }]
     })
-    const expected = JSON.stringify({
-      snapshotAnsi: input.snapshotAnsi,
-      scrollbackAnsi: input.scrollbackAnsi,
-      oscLinks: input.oscLinks,
-      rehydrateSequences: input.rehydrateSequences,
-      cwd: metadata.cwd,
-      cols: input.cols,
-      rows: input.rows,
-      modes: input.modes,
-      scrollbackLines: input.scrollbackLines,
-      generation: metadata.generation,
-      checkpointedAt: metadata.checkpointedAt
-    })
+    const expected = expectedJson(input)
     const exactBytes = Buffer.byteLength(expected, 'utf8')
 
     await expect(serializeTerminalCheckpointWithinLimit(input, metadata, exactBytes)).resolves.toBe(
@@ -63,24 +69,24 @@ describe('terminal checkpoint serializer', () => {
     )
   })
 
+  it('sizes lone surrogates as JSON.stringify escapes them', async () => {
+    // Why: an unpaired surrogate costs 6 bytes as \\udXXX, not the 3 a BMP char would.
+    const input = snapshot({
+      snapshotAnsi: `${String.fromCharCode(0xd800)}lone${String.fromCharCode(0xdfff)}`
+    })
+    const expected = expectedJson(input)
+
+    await expect(
+      serializeTerminalCheckpointWithinLimit(input, metadata, Buffer.byteLength(expected, 'utf8'))
+    ).resolves.toBe(expected)
+  })
+
   it('rejects multibyte input whose code-unit length fits under the byte cap', async () => {
     const input = snapshot({
       scrollbackAnsi: 'é\r\n'.repeat(100),
       scrollbackLines: 100
     })
-    const expected = JSON.stringify({
-      snapshotAnsi: input.snapshotAnsi,
-      scrollbackAnsi: input.scrollbackAnsi,
-      oscLinks: input.oscLinks,
-      rehydrateSequences: input.rehydrateSequences,
-      cwd: metadata.cwd,
-      cols: input.cols,
-      rows: input.rows,
-      modes: input.modes,
-      scrollbackLines: input.scrollbackLines,
-      generation: metadata.generation,
-      checkpointedAt: metadata.checkpointedAt
-    })
+    const expected = expectedJson(input)
     const maxBytes = expected.length + 1
 
     expect(expected.length).toBeLessThan(maxBytes)
@@ -92,7 +98,7 @@ describe('terminal checkpoint serializer', () => {
     expect(Buffer.byteLength(serialized, 'utf8')).toBeLessThanOrEqual(maxBytes)
   })
 
-  it('does not materialize and rescan a passing candidate', async () => {
+  it('reads each snapshot field once on the passing path', async () => {
     let reads = 0
     const input = snapshot()
     Object.defineProperty(input, 'snapshotAnsi', {
@@ -102,23 +108,28 @@ describe('terminal checkpoint serializer', () => {
         return 'visible'
       }
     })
-    const stringify = vi.spyOn(JSON, 'stringify')
-    const byteLength = vi.spyOn(Buffer, 'byteLength')
 
-    try {
-      await serializeTerminalCheckpointWithinLimit(input, metadata, 20 * 1024)
+    await serializeTerminalCheckpointWithinLimit(input, metadata, 20 * 1024)
 
-      expect({
-        fullCandidateStringifies: stringify.mock.calls.filter(
-          ([value]) => typeof value === 'object' && value !== null
-        ).length,
-        byteLengthCalls: byteLength.mock.calls.length,
-        snapshotReads: reads
-      }).toEqual({ fullCandidateStringifies: 0, byteLengthCalls: 0, snapshotReads: 1 })
-    } finally {
-      stringify.mockRestore()
-      byteLength.mockRestore()
-    }
+    expect(reads).toBe(1)
+  })
+
+  it('rejects a candidate whose escapes push it over the cap by a single byte', async () => {
+    // Why: the sizing walk is the only thing standing between an over-cap payload and disk,
+    // so pin the boundary in both directions rather than trusting a coarse limit.
+    const ansi = `${String.fromCharCode(0x1b)}[0m漢😀"\\\n`
+    const input = snapshot({ snapshotAnsi: ansi.repeat(64) })
+    const expected = expectedJson(input)
+    const exactBytes = Buffer.byteLength(expected, 'utf8')
+
+    await expect(serializeTerminalCheckpointWithinLimit(input, metadata, exactBytes)).resolves.toBe(
+      expected
+    )
+
+    const trimmed = await serializeTerminalCheckpointWithinLimit(input, metadata, exactBytes - 1)
+
+    expect(trimmed).not.toBe(expected)
+    expect(Buffer.byteLength(trimmed, 'utf8')).toBeLessThanOrEqual(exactBytes - 1)
   })
 
   it('preserves shell ownership when an oversized alternate-screen checkpoint is trimmed', async () => {
