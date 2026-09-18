@@ -79,12 +79,12 @@ export const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
 export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 
-export const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
+export const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
-export const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
+export const AGENT_PROMPT_RENDER_QUIET_MS = 1500
 
-// Why: Claude emits show-cursor while rendering its composer; output must settle afterward.
-export const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
+// Why: supported TUIs emit show-cursor while rendering their composer; output must settle afterward.
+export const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 
 export const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 

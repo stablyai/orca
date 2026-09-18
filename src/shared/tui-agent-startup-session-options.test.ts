@@ -7,6 +7,25 @@ import {
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 
 describe('tui agent startup session options', () => {
+  it('pins an opaque Qwen Code model for a supervised worker launch', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'qwen-code',
+      prompt: 'inspect the repo',
+      cmdOverrides: {},
+      platform: 'win32',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'qwen3.5:9b' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--approval-mode yolo --model ornith-orca-test:9b'
+    })
+
+    expect(plan?.launchCommand).toBe("qwen '--approval-mode' 'yolo' '--model' 'qwen3.5:9b'")
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "qwen '--approval-mode' 'yolo' '--model' 'ornith-orca-test:9b'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'qwen3.5:9b' })
+  })
+
   it('emits catalog options before user arguments without recording an overridden model', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

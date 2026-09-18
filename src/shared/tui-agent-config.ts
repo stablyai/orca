@@ -248,7 +248,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   'qwen-code': {
     // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: captured Qwen PTY output shows cursor after bracketed paste only once its composer is mounted.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    draftPasteReadyTimeoutMs: 30_000
   },
   rovo: {
     detectCmd: 'rovo',
@@ -300,6 +303,22 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEnt
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
+}
+
+/** Resolve a stable agent id or one of its configured executable names. */
+export function resolveTuiAgent(value: unknown): TuiAgent | undefined {
+  if (isTuiAgent(value)) {
+    return value
+  }
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  for (const agent of Object.keys(TUI_AGENT_CONFIG)) {
+    if (isTuiAgent(agent) && getTuiAgentDetectCommands(TUI_AGENT_CONFIG[agent]).includes(value)) {
+      return agent
+    }
+  }
+  return undefined
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {

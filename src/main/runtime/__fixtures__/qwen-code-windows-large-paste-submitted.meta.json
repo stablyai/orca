@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-09-12T22:53:02.166Z",
+  "platform": "win32",
+  "command": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Users\\LOCAL_USER\\AppData\\Roaming\\npm\\node_modules\\@qwen-code\\qwen-code\\cli-entry.js",
+    "--approval-mode",
+    "yolo"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "Qwen Code v0.23.3; Windows; local Ollama Qwen 3.5 9B; paste after ready and Enter 2000 ms later",
+  "exitCode": 1
+}

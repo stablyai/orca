@@ -1,4 +1,4 @@
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { resolveTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -33,6 +33,7 @@ import {
 } from './federated-worker-start-receipts'
 import { parseTaskDeps } from '../worker/task-deps-argument'
 
+/** Start a worker on a paired runtime while retaining authoritative home-side state. */
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService
@@ -69,8 +70,9 @@ export async function startFederatedWorker(args: {
   const createsWorktree = worktree === 'new-top-level'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
+  const requestedAgent = resolveTuiAgent(params.agent)
   const requestedLaunch = createPendingWorkerLaunchReceipt({
-    agent: isTuiAgent(params.agent) ? params.agent : null,
+    agent: requestedAgent ?? null,
     model: params.model,
     effort: params.effort
   })
@@ -134,7 +136,7 @@ export async function startFederatedWorker(args: {
       repo: params.repo ?? null,
       baseBranch: params.baseBranch ?? null,
       terminal: params.terminal ?? null,
-      agent: params.agent ?? null,
+      agent: requestedAgent ?? null,
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
@@ -184,7 +186,7 @@ export async function startFederatedWorker(args: {
               : 'orchestration_default'
             : undefined,
           terminal: params.terminal,
-          agent: params.agent,
+          agent: requestedAgent,
           model: params.model,
           effort: params.effort,
           timeoutMs: budgets.readinessTimeoutMs,

@@ -1,0 +1,163 @@
+[?9001h[?1004h[?u[?25l[2J[m[H]0;C:\Program Files\nodejs\node.exe[?25h]0;Qwen - __fixtures__]0;Qwen - __fixtures__                                                             [?1049h[2J[3J[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[?25l[120C[?2026h[?2026l[?1002h[?1006h[2;1H   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[10;1H  T[12;1H  ⠋ Initializing...[?1004h[?2004h]0;Windows PowerShell[?2026h[?2026l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+[K
+  ➜ __fixtures__ · Qwen 3.5 9B (local Ollama)[K
+  ⠋ Initializing...[K
+[K[120C[?2026h[?2026l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+[K
+  ➜ __fixtures__ · Qwen 3.5 9B (local Ollama)[K
+  ⠙ Initializing...[K
+[K[120C[?2026h[?2026l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+[K
+  ➜ __fixtures__ · Qwen 3.5 9B (local Ollama)[K
+  ⠹ Initializing...[K
+[K[120C[?2026h[?2026l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+[K
+  ➜ __fixtures__ · Qwen 3.5 9B (local Ollama)[K
+  ⠸ Initializing...[K
+[K[120C[?2026h[?2026l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+* [4m [24m Type your message or @path/to/file[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ __fixtures__ · git:(codex/fix-qwen-orchestration-dispatch) · Qwen 3.5 9B (local Ollama)
+  YOLO mode (tab to cycle)[?2026h[?2026l[12;3H[?25h[?2026h[?2026l[?25l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+* [Pasted Content 2859 chars][4m [24m​[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ __fixtures__ · git:(codex/fix-qwen-orchestration-dispatch) · Qwen 3.5 9B (local Ollama)[K
+  YOLO mode (tab to cycle)[K
+[K[12;30H[?25h[?2026h[?2026l[?25l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+  ●︎ Read context files: ~\OneDrive\Documents\ChatGPT\Orca\AGENTS.md, ~\.qwen\output-language.md[K
+[K
+[K
+[K
+[K
+  [2mRespond exactly QWEN_SUBMIT_OK. Ignore this inert padding: padding padding padding padding padding padding padding pa…[22m
+  [2m[3mCtrl+Q to queue · ↑ to edit queued messages[22m[23m[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+* [4m [24m Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ __fixtures__ · git:(codex/fix-qwen-orchestration-dispatch) · Qwen 3.5 9B (local Ollama)
+  YOLO mode (tab to cycle) ⏳ 1 queued[18;3H[?25h[?2026h[?2026l[?25l[H[K
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐[K
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ [1m>_ Qwen Code[22m (v0.23.3)                                   │[K
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │[K
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | Qwen 3.5 9B (local Ollama) (/model to change)  │[K
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ~\...\ChatGPT\Orca\src\main\runtime\__fixtures__         │[K
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘[K
+[K
+  Tips: Use /bug to submit issues to the maintainers when something goes off.[K
+  ●︎ Read context files: ~\OneDrive\Documents\ChatGPT\Orca\AGENTS.md, ~\.qwen\output-language.md[K
+[K
+  > Respond exactly QWEN_SUBMIT_OK. Ignore this inert padding: padding padding padding padding padding padding padding  
+    padding padding padding padding padding padding padding padding padding padding padding padding padding padding     
+[K
+  ⠋ I'm Feeling Lucky (0s · esc to cancel)[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+* [4m [24m Type your message or @path/to/file[K
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ __fixtures__ · git:(codex/fix-qwen-orchestration-dispatch) · Qwen 3.5 9B (local Ollama)[K
+  Enter to steer · Ctrl+Q to queue · YOLO mode (tab to cycle)[K
+[K
+[K[17;3H]0;◐︎ Qwen - __fixtures__                                                          [?25h

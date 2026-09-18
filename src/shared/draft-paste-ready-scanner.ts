@@ -79,6 +79,71 @@ export type DraftPasteReadyScanResult = {
   armQuietTimer: boolean
 }
 
+export type DraftPasteReadyWaitInput = {
+  readySignal: DraftPasteReadySignal
+  subscribe: (listener: (data: string) => void) => () => void
+  readRecentOutput: () => string | undefined
+  timeoutMs: number
+  quietMs: number
+  /** A non-revocable marker anchor already verified for this PTY process generation. */
+  markerAnchorWasObserved?: boolean
+  signal?: AbortSignal
+}
+
+/** Wait for an agent's configured composer-ready signal, including buffered PTY output. */
+export function waitForDraftPasteReadySignal(input: DraftPasteReadyWaitInput): Promise<boolean> {
+  return new Promise((resolve) => {
+    const scanner = createDraftPasteReadyScanner(input.readySignal, {
+      markerAnchorWasObserved: input.markerAnchorWasObserved
+    })
+    let settled = false
+    let quietTimer: ReturnType<typeof setTimeout> | null = null
+    let hardTimer: ReturnType<typeof setTimeout> | null = null
+    let unsubscribe: (() => void) | null = null
+    const finish = (ready: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (quietTimer) {
+        clearTimeout(quietTimer)
+      }
+      if (hardTimer) {
+        clearTimeout(hardTimer)
+      }
+      input.signal?.removeEventListener('abort', onAbort)
+      unsubscribe?.()
+      resolve(ready)
+    }
+    const onAbort = (): void => finish(false)
+    const observe = (data: string): void => {
+      const result = scanner.observe(data)
+      if (result.ready) {
+        finish(true)
+        return
+      }
+      if (result.armQuietTimer) {
+        if (quietTimer) {
+          clearTimeout(quietTimer)
+        }
+        quietTimer = setTimeout(() => finish(true), input.quietMs)
+      }
+    }
+
+    input.signal?.addEventListener('abort', onAbort, { once: true })
+    if (input.signal?.aborted) {
+      finish(false)
+      return
+    }
+    unsubscribe = input.subscribe(observe)
+    hardTimer = setTimeout(() => finish(false), input.timeoutMs)
+    const replay = input.readRecentOutput()
+    if (replay) {
+      observe(replay)
+    }
+  })
+}
+
 /**
  * Pure, incremental scanner shared by the renderer and main-process draft-paste
  * readiness waiters so the two delivery paths (desktop-local vs runtime/SSH/
@@ -117,7 +182,10 @@ export type DraftPasteReadyScanResult = {
  * A 512-byte ring (`recent` / `postAnchorRecent`) covers escape sequences
  * split across chunk boundaries without retaining terminal scrollback.
  */
-export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal): {
+export function createDraftPasteReadyScanner(
+  readySignal: DraftPasteReadySignal,
+  options: { markerAnchorWasObserved?: boolean } = {}
+): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
   let recent = ''
@@ -135,6 +203,9 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     marker: signalMarker,
     quietAnchor
   } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+  if (options.markerAnchorWasObserved === true && markerAnchorEnd === null) {
+    sawMarkerAnchor = true
+  }
 
   /**
    * Why: an anchor the agent can leave (the alternate screen) has to be tracked in

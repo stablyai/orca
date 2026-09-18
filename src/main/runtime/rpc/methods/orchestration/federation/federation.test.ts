@@ -159,6 +159,39 @@ describe('orchestration federation', () => {
     )
   })
 
+  it('canonicalizes a Qwen executable alias before crossing the federation boundary', async () => {
+    const task = createHomeTask()
+
+    const response = await homeDispatcher.dispatch(
+      startRequest(task.id, { agent: 'qwen', model: 'ornith-orca-test:9b' })
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'ready',
+        launch: {
+          requested: {
+            agent: 'qwen-code',
+            model: 'ornith-orca-test:9b',
+            effort: null
+          },
+          effective: {
+            agent: 'qwen-code',
+            model: 'ornith-orca-test:9b',
+            effort: null
+          }
+        }
+      }
+    })
+    expect(workerRuntime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupAgent: 'qwen-code',
+        startupLaunchPreferences: { model: 'ornith-orca-test:9b' }
+      })
+    )
+  })
+
   it('carries an explicit worker label as user display-name provenance', async () => {
     const task = createHomeTask()
 
