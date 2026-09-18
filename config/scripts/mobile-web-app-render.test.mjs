@@ -80,16 +80,17 @@ afterAll(async () => {
   await rm(scratch, { recursive: true, force: true })
 })
 
+// expo-router's Unmatched screen mounts cleanly and paints text, so "no errors, some html" stays
+// green with every host route unreachable. Each route below names content only it can produce.
+const UNMATCHED = 'Unmatched Route'
+
 async function render(route) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
-  const warnings = []
   page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
   page.on('console', (message) => {
     if (message.type() === 'error') {
       errors.push(`console.error: ${message.text()}`)
-    } else if (message.type() === 'warning') {
-      warnings.push(message.text())
     }
   })
   await page.goto(`${origin}${route}`, { waitUntil: 'load' })
@@ -97,9 +98,14 @@ async function render(route) {
     timeout: 30_000
   })
   const text = await page.evaluate(() => document.body.innerText)
-  const html = await page.evaluate(() => document.getElementById('root').innerHTML)
   await page.close()
-  return { errors, warnings, text, html }
+  // A CSP refusal reaches the page as a console error, so the caller's empty-errors assertion is
+  // also the policy assertion; name it here so a failure says which one broke.
+  return {
+    errors,
+    cspErrors: errors.filter((entry) => entry.includes('Content Security Policy')),
+    text
+  }
 }
 
 describe('the shell policy this page is tested under', () => {
@@ -120,24 +126,31 @@ describe('the shell policy this page is tested under', () => {
 })
 
 describe('the Route A page in a real browser', () => {
-  it('mounts the worktree list route with no page or console errors', async () => {
-    const { errors, html, text } = await render(HOST_ROUTE)
+  it('mounts the worktree list route, not the unmatched screen', async () => {
+    const { errors, cspErrors, text } = await render(HOST_ROUTE)
+    expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
-    expect(html.length).toBeGreaterThan(100)
-    // The placeholder client knows no host, so the list renders its not-found state rather than
-    // rows. That it rendered at all is the claim: ExpoRoot matched /h/:hostId and mounted.
-    expect(text.length).toBeGreaterThan(0)
+    // app/h/[hostId]/index.tsx: the placeholder client knows no host, so the list paints its
+    // not-found state. Only that route's own component produces this string.
+    expect(text).toContain('Host not found')
+    expect(text).not.toContain(UNMATCHED)
   }, 60_000)
 
   it('routes a nested dynamic segment through the same context', async () => {
-    const { errors, html } = await render(`${HOST_ROUTE}/tasks`)
+    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/tasks`)
+    expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
-    expect(html.length).toBeGreaterThan(100)
+    // app/h/[hostId]/tasks.tsx paints its header and its GitHub filter row.
+    expect(text).toContain('Tasks')
+    expect(text).toContain('Issues')
+    expect(text).not.toContain(UNMATCHED)
   }, 60_000)
 
   it('renders the unmatched route rather than crashing on a path with no module', async () => {
-    const { errors, html } = await render('/h/render-check-host/not-a-route')
+    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`)
+    expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
-    expect(html.length).toBeGreaterThan(0)
+    // Asserted positively so the two negatives above are known to discriminate.
+    expect(text).toContain(UNMATCHED)
   }, 60_000)
 })
