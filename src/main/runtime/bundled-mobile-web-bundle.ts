@@ -6,7 +6,7 @@ import {
   type MobileWebBundleManifest
 } from '../../shared/mobile-web-bundle/manifest-contract'
 
-export const MOBILE_WEB_BUNDLE_MANIFEST_FILENAME = 'manifest.json'
+const MANIFEST_FILENAME = 'manifest.json'
 
 export type BundledMobileWebBundle = {
   root: string
@@ -31,7 +31,7 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
     // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the bundle.
     join(appPath, '..', 'mobile-web')
   ]
-  return roots.find((root) => existsSync(join(root, MOBILE_WEB_BUNDLE_MANIFEST_FILENAME)))
+  return roots.find((root) => existsSync(join(root, MANIFEST_FILENAME)))
 }
 
 // Why no invalidation: the bundle is immutable for the life of the install, and an auto-update
@@ -56,7 +56,7 @@ function readBundledMobileWebBundle(): BundledMobileWebBundle | null {
   if (!root) {
     return null
   }
-  const manifestPath = join(root, MOBILE_WEB_BUNDLE_MANIFEST_FILENAME)
+  const manifestPath = join(root, MANIFEST_FILENAME)
   let raw: string
   try {
     raw = readFileSync(manifestPath, 'utf8')

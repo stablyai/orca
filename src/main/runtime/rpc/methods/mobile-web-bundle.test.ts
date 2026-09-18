@@ -10,7 +10,10 @@ import {
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcDispatcher } from '../dispatcher'
 
-import { resetBundledMobileWebBundleCacheForTests } from '../../bundled-mobile-web-bundle'
+import {
+  getBundledMobileWebBundleRoot,
+  resetBundledMobileWebBundleCacheForTests
+} from '../../bundled-mobile-web-bundle'
 import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
 import {
   acquireMobileWebBundleReadSlot,
@@ -365,8 +368,19 @@ describe('an install that carries a mobile web bundle', () => {
   })
 })
 
-describe('the unpacked layout, where appPath is out/main', () => {
-  it('finds the bundle beside it', async () => {
+describe('where the resolver probes', () => {
+  it('finds out/mobile-web under the install root', () => {
+    const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
+
+    expect(getBundledMobileWebBundleRoot()).toBe(bundle.root)
+  })
+
+  it('answers undefined when neither layout holds a manifest', () => {
+    expect(getBundledMobileWebBundleRoot()).toBeUndefined()
+  })
+
+  // Unpacked electron-vite entrypoints set appPath to out/main, next to the bundle.
+  it('finds the bundle beside an out/main app path', async () => {
     const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
     installMobileWebBundleAppPath(join(scratch, 'out', 'main'))
     resetBundledMobileWebBundleCacheForTests()
