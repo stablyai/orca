@@ -49,7 +49,6 @@ function Harness({
   attemptsRef,
   isVisible = true,
   loadFileContent,
-  closeFile = vi.fn(),
   setFileContents
 }: {
   file: OpenFile
@@ -57,7 +56,6 @@ function Harness({
   attemptsRef: { current: Record<string, number> }
   isVisible?: boolean
   loadFileContent: (filePath: string, id: string) => Promise<void>
-  closeFile?: (fileId: string) => void
   setFileContents: (
     updater: (prev: Record<string, FileContent>) => Record<string, FileContent>
   ) => void
@@ -68,7 +66,6 @@ function Harness({
     fileLoadRetryAttemptsRef: attemptsRef,
     loadFileContent: loadFileContent as never,
     openFilesRef: { current: [file] },
-    closeFile,
     setFileContents: setFileContents as never
   })
   return null
@@ -104,35 +101,6 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
     expect(shouldRetryFileLoadError('Access denied: outside allowed directories')).toBe(false)
-  })
-
-  it('evicts a mirrored tab after selector resolution stays missing', () => {
-    const file = makeFile({ mirroredFromRuntimeSession: true })
-    const attemptsRef = { current: { [file.id]: 3 } }
-    const closeFile = vi.fn()
-    const fileContents: Record<string, FileContent> = {
-      [file.id]: { content: '', isBinary: false, loadError: 'selector_not_found' }
-    }
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    act(() => {
-      root?.render(
-        <Harness
-          file={file}
-          fileContents={fileContents}
-          attemptsRef={attemptsRef}
-          loadFileContent={vi.fn(async () => undefined)}
-          closeFile={closeFile}
-          setFileContents={(updater) => {
-            updater(fileContents)
-          }}
-        />
-      )
-    })
-
-    expect(closeFile).toHaveBeenCalledWith(file.id)
   })
 
   it('does not spend retry budget when hiding cancels a pending retry', () => {

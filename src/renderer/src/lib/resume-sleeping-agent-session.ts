@@ -21,6 +21,7 @@ import {
   type UnhydratedHostMirror
 } from './host-mirrored-pane-liveness'
 import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
+import { sleepingRecordNamesAnotherExecutionHost } from './sleeping-record-execution-host-scope'
 import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
 
@@ -260,6 +261,14 @@ export function resumeSleepingAgentSessionsForWorktree(
     }
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    // Why this is a `continue` and not a clear: the id is a valid locator on the machine that
+    // captured it, so the record is evidence, not garbage — deleting it on the strength of a host
+    // disagreement would destroy the user's only handle on that transcript. Declining costs an
+    // automatic wake the user can re-issue by hand; issuing `--resume` on the wrong machine is
+    // `No conversation found` at best and a forked transcript at worst.
+    if (sleepingRecordNamesAnotherExecutionHost(record, currentState)) {
       continue
     }
     const unhydratedMirror = findUnhydratedHostMirrorForPane(record, currentState)

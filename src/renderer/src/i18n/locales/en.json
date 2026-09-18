@@ -2,8 +2,8 @@
   "sidebar": {
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
-      "description": "The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters.",
-      "confirm": "Clear filters and reveal",
+      "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
+      "confirm": "Adjust filters and reveal",
       "cancel": "Keep filters"
     }
   },
@@ -6550,6 +6550,11 @@
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "codexLoginLinkPending": "Codex opened this sign-in link in your browser. Copy it to finish signing in somewhere else — a private window, or another profile.",
+          "codexLoginLinkCopied": "Copied",
+          "codexLoginLinkCopy": "Copy link",
+          "codexLoginLinkOpen": "Open",
+          "codexLoginLinkCopyFailed": "Could not copy the link.",
           "d6f1b9b6a2": "MiniMax API key is required.",
           "7c5d8a4e1b": "MiniMax API key was not saved.",
           "4d2c7b9e83": "MiniMax API key saved.",
