@@ -21,7 +21,8 @@ import {
 type ConnectionOwnerState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>
 
 export function createConnectionIdForFileSelector(
   worktreeId: string | null,
@@ -38,7 +39,9 @@ export function createConnectionIdForFileSelector(
       previousSlices?.folderWorkspaces === state.folderWorkspaces &&
       previousSlices.projectGroups === state.projectGroups &&
       previousSlices.repos === state.repos &&
-      previousSlices.worktreesByRepo === state.worktreesByRepo
+      previousSlices.worktreesByRepo === state.worktreesByRepo &&
+      previousSlices.activeWorktreeId === state.activeWorktreeId &&
+      previousSlices.activeWorkspaceExecutionHostId === state.activeWorkspaceExecutionHostId
     ) {
       return previousResult
     }
@@ -46,7 +49,9 @@ export function createConnectionIdForFileSelector(
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo
+      worktreesByRepo: state.worktreesByRepo,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId
     }
     previousResult = getConnectionIdForFileFromState(state, worktreeId, filePath)
     return previousResult
@@ -62,7 +67,15 @@ export function getConnectionIdFromState(
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
-    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
+    const selectedHostId =
+      state.activeWorktreeId === worktreeId
+        ? (state.activeWorkspaceExecutionHostId ?? undefined)
+        : undefined
+    return getFolderWorkspaceConnectionId(
+      state,
+      parsedWorkspaceKey.folderWorkspaceId,
+      selectedHostId
+    )
   }
   // Why: owner resolution runs from retained Zustand selectors, so unrelated
   // store writes must not flatten every worktree or scan every repository.
