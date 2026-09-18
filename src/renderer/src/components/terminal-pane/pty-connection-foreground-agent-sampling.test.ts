@@ -549,6 +549,49 @@ describe('connectPanePty', () => {
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
     })
 
+    it('drops the resume anchor once the agent exits to its shell', async () => {
+      vi.useFakeTimers()
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
+      const ptyId = 'pty-exit-clears-resume-anchor'
+      const tabId = `tab-${ptyId}`
+      mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
+      const paneKey = makePaneKey(tabId, LEAF_1)
+      // A checkpoint captured this pane while its agent was still running; the
+      // operator has since closed the agent, so the record is stale history.
+      mockStoreState.sleepingAgentSessionsByPaneKey = {
+        [paneKey]: {
+          paneKey,
+          tabId,
+          worktreeId: 'wt-1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'ses-exit-anchor' },
+          prompt: '',
+          state: 'done',
+          origin: 'live',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+
+      const { cacheKey } = await connectRestoredPaneForForegroundSampling({
+        ptyId,
+        tabId,
+        launchAgent: 'claude'
+      })
+      await vi.advanceTimersByTimeAsync(
+        VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
+      )
+      await flushAsyncTicks()
+
+      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        agent: null,
+        shellForeground: true
+      })
+      // Why: the anchor is what a cold restore reads; leaving it behind re-enters
+      // an agent the operator exited every time the workspace is reopened.
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    })
+
     it('fails closed when a warm reattach has no persisted launch identity', async () => {
       vi.useFakeTimers()
       const ptyId = 'pty-reattach-missing-launch-identity'

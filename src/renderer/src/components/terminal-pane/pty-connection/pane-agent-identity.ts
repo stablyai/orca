@@ -171,6 +171,20 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
       session.clearStaleAgentTabTitleOnConfirmedShell()
+      // Why: the agent this pane ran has exited to its own shell, so its resume
+      // anchor describes history rather than work left in progress. The anchor
+      // exists for a pane whose agent was still running when Orca died (#9454);
+      // left behind here it outlives the agent, and the next cold restore types
+      // `--resume` into a pane the operator closed on purpose. The launch config
+      // below is already dropped on this same evidence.
+      const stateOnShellReturn = useAppStore.getState()
+      const sleepingRecordOnShellReturn = session.getSleepingRecordForPane(stateOnShellReturn)
+      if (sleepingRecordOnShellReturn) {
+        session.clearSleepingRecordProviderDuplicates(
+          stateOnShellReturn,
+          sleepingRecordOnShellReturn
+        )
+      }
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
