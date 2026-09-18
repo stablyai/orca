@@ -13,9 +13,6 @@ export const MOBILE_WEB_BUNDLE_CHUNK_BYTES = 48 * 1024
 export const MOBILE_WEB_BUNDLE_MANIFEST_METHOD = 'mobileWeb.bundle.manifest'
 export const MOBILE_WEB_BUNDLE_CHUNK_METHOD = 'mobileWeb.bundle.chunk'
 
-/** Negotiated, never inferred from the desktop version: a build can ship without a bundle. */
-export const MOBILE_WEB_BUNDLE_CAPABILITY = 'mobileWeb.bundle.v1'
-
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
 

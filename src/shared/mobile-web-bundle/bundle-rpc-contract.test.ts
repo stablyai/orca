@@ -12,12 +12,12 @@ import {
   MobileWebBundleErrorCodeSchema,
   MobileWebBundleManifestParamsSchema,
   MobileWebBundleManifestResultSchema,
-  MOBILE_WEB_BUNDLE_CAPABILITY,
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_ERROR_CODES,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD
 } from './bundle-rpc-contract'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from './mobile-web-bundle-capability'
 
 const BUILD_ID = 'a'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
