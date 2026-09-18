@@ -110,7 +110,7 @@ const ORCAD_BROWSER_PREFIXES = [
 // The Route A page bundle: the builder and verifier, the entry, the route tree it mounts, the
 // mobile source those routes import, and the shell policy the render check runs the page under.
 const MOBILE_WEB_APP_PREFIXES = [
-  'config/scripts/build-mobile-web-app-bundle',
+  'config/scripts/build-mobile-web-app',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/build-mobile-web-bundle',
@@ -118,12 +118,15 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/web-entry/',
   'mobile/app/',
   'mobile/src/',
+  'mobile/packages/',
   'mobile/package.json',
   'mobile/pnpm-lock.yaml',
-  'mobile/modules/orca-mobile-web-shell/',
-  // build:mobile-web:app lives here, so a script-only edit still has to prove the bundle builds.
-  'package.json'
+  'mobile/modules/orca-mobile-web-shell/'
 ]
+
+function changesMobileWebApp(changedFiles) {
+  return changedFiles.some((file) => matchesPrefix(file, MOBILE_WEB_APP_PREFIXES))
+}
 
 const CROSS_VERSION_WIRE_PREFIXES = [
   'tests/e2e/cross-version-wire/',
@@ -380,8 +383,7 @@ export function classifyPrJobs(changedFiles) {
   // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
   // that is exactly the diff that changes the page this job builds. Gated on should_run it would
   // skip on every PR that can break it and run on none.
-  jobs.mobile_web_app =
-    jobs.mobile_web_app || changedFiles.some((file) => matchesPrefix(file, MOBILE_WEB_APP_PREFIXES))
+  jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
@@ -404,8 +406,10 @@ function jobDetector(job) {
       return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
     case 'orcad_browser':
       return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
+    // Not redundant with the lift below the jobs map: without a case here the default detector
+    // returns true, which would run this job on every desktop-relevant PR.
     case 'mobile_web_app':
-      return (files) => files.some((file) => matchesPrefix(file, MOBILE_WEB_APP_PREFIXES))
+      return changesMobileWebApp
     case 'cross-version-wire':
       return (files) => files.some((file) => matchesPrefix(file, CROSS_VERSION_WIRE_PREFIXES))
     case 'managed_hook_node18':

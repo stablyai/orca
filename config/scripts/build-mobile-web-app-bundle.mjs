@@ -24,12 +24,6 @@ const entryPoint = join(mobileDir, 'web-entry', 'index.tsx')
 const defaultOutDir = join(projectDir, 'out', 'mobile-web-app')
 
 /**
- * The module whose body the builder replaces. A real typed file rather than a virtual specifier,
- * so the entry typechecks and Metro can still resolve it.
- */
-export const ROUTE_MANIFEST_MODULE = 'mobile/web-entry/route-manifest.ts'
-
-/**
  * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. `appliesTo` reads the
  * esbuild option that implements the shim, so the list cannot claim a shim the build does not
  * apply and a dropped option fails the named shim rather than the whole build.
@@ -74,6 +68,8 @@ export const MOBILE_WEB_APP_SHIMS = [
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
 
+// mobile/web-entry/route-manifest.ts is a real typed file rather than a virtual specifier, so the
+// entry typechecks and Metro can still resolve it; only its body is replaced here.
 function routeManifestPlugin(manifestSource) {
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,

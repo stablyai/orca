@@ -651,8 +651,8 @@ jobs:
 
   # Why its own job: it needs mobile/node_modules and a real browser, and the sharded `test`
   # matrix would pay for both on every shard to run two files. Dark through Phase C: this proves
-  # `build:mobile-web:app` on every PR, and ships nothing -- packaging still builds the Phase A
-  # bootstrap via build:mobile-web.
+  # `build:mobile-web:app` on every PR that touches the page, and ships nothing -- packaging still
+  # builds the Phase A bootstrap via build:mobile-web.
   mobile_web_app:
     name: mobile web app bundle
     needs: [code_paths]

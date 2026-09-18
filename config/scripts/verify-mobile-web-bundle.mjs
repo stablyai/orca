@@ -45,14 +45,10 @@ async function listSourceFiles(directory) {
 }
 
 /**
- * A CRLF checkout changes the bytes of every text source, which changes every asset hash and so
- * the buildId. .gitattributes pins eol=lf; this is what notices when that pin stops working.
+ * Pinned `-text` in .gitattributes and skipped below, because a 0x0d in them means nothing. .svg
+ * is absent on purpose: it is text, so the eol=lf pin applies and a CRLF .svg forks the buildId.
+ * A test keeps this list and the .gitattributes exemptions in step.
  */
-/** Pinned `-text` in .gitattributes: they may legitimately contain 0x0d. */
-// The binary asset types a page source tree carries, skipped because a 0x0d in them means nothing.
-// .svg is absent on purpose: it is text, so the eol=lf pin applies and a CRLF .svg forks the
-// buildId. Kept in step with the -text exemptions in .gitattributes by a test.
-
 export const BINARY_SOURCE_EXTENSIONS = [
   '.png',
   '.jpg',
@@ -66,6 +62,10 @@ export const BINARY_SOURCE_EXTENSIONS = [
   '.woff2'
 ]
 
+/**
+ * A CRLF checkout changes the bytes of every text source, which changes every asset hash and so
+ * the buildId. .gitattributes pins eol=lf; this is what notices when that pin stops working.
+ */
 export async function assertNoCarriageReturnsInSource(directory = sourceDir) {
   const offenders = []
   for (const file of await listSourceFiles(directory)) {
