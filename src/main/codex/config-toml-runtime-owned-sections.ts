@@ -9,6 +9,7 @@ import {
   normalizeCodexProjectPathForRevocationLookup,
   parseCodexProjectHeaderPath
 } from './config-toml-trust'
+import { parseTomlTableHeaderPath } from './config-toml-key-path'
 
 export type TomlSection = {
   header: string
@@ -88,6 +89,19 @@ export function isRuntimeHookTrustTomlSection(header: string): boolean {
 
 export function isRuntimeProjectTomlSection(header: string): boolean {
   return parseCodexProjectHeaderPath(header) !== null
+}
+
+const CODEX_MCP_SERVER_TABLE_ROOT = 'mcp_servers'
+
+// Why: Codex provisions MCP servers into the managed home itself (bundled plugin
+// runtimes, `codex mcp add`), so these tables are not ordinary settings the
+// mirror can rebuild from ~/.codex.
+export function getMcpServerTomlSectionName(header: string): string | null {
+  const table = parseTomlTableHeaderPath(header)
+  if (!table || table.isArray || table.segments[0] !== CODEX_MCP_SERVER_TABLE_ROOT) {
+    return null
+  }
+  return table.segments[1] ?? null
 }
 
 export function getTomlSectionHeaderKey(header: string): string {
