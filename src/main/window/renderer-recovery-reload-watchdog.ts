@@ -27,13 +27,16 @@ const MILESTONE_RANK: Record<RecoveryReloadMilestone, number> = {
 export type RecoveryExhaustionCause = 'crash-loop' | 'reload-stalled'
 
 export type RendererRecoveryReloadWatchdog = {
-  /** Issues a recovery reload and arms the stall watchdog. */
+  /** Issues a recovery reload and arms the stall watchdog. No-op while a prompt owns the next reload. */
   issue: (
     details: Electron.RenderProcessGoneDetails,
     recentRecoveryCount: number,
     trigger?: RecoveryReloadTrigger
   ) => void
-  /** Raises the recovery prompt at most once: a native message box cannot be dismissed, so a second one stacks. */
+  /**
+   * Raises the recovery prompt at most once: a native message box cannot be dismissed, so a second one stacks.
+   * A later 'crash-loop' verdict still supersedes a standing 'reload-stalled' one so the record names the real cause.
+   */
   escalate: (subject: RecoveryPromptSubject, cause: RecoveryExhaustionCause) => void
   /**
    * A main-frame document finished loading. Only an attempt whose load was superseded takes this as its outcome;
@@ -65,6 +68,8 @@ export type RecoveryPromptSubject = Pick<RecoveryReload, 'details' | 'recentReco
 
 /** Bounds stalled recovery reloads while still observing success after escalation. */
 export function createRendererRecoveryReloadWatchdog(args: {
+  /** Live recovery count from the circuit breaker, read at exhaustion; the issue-time snapshot is up to a stall old. */
+  getRecentRecoveryCount?: () => number
   /** True when a renderer death has already queued its own recovery, which then owns the next load. */
   isRecoveryPending: () => boolean
   isWindowClosing: () => boolean
@@ -74,6 +79,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
   rendererWebContentsId: number
 }): RendererRecoveryReloadWatchdog {
   const {
+    getRecentRecoveryCount,
     isRecoveryPending,
     isWindowClosing,
     mainWindow,
@@ -88,6 +94,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
   let latest: RecoveryReload | null = null
   // Keep one prompt until answered; native message boxes cannot be dismissed programmatically.
   let prompt: RecoveryPromptSubject | null = null
+  let promptCause: RecoveryExhaustionCause | null = null
   let documentLanded = false
   let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -187,6 +194,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
 
   const retryFrom = (subject: RecoveryPromptSubject): void => {
     prompt = null
+    promptCause = null
     // A late recovery makes the prompt's Reload unnecessary.
     if (documentLanded) {
       return
@@ -200,17 +208,23 @@ export function createRendererRecoveryReloadWatchdog(args: {
   const escalate = (subject: RecoveryPromptSubject, cause: RecoveryExhaustionCause): void => {
     // A new crash invalidates any document that landed while the prompt was open.
     documentLanded = false
-    if (prompt) {
+    // A stall prompt raised first used to swallow the crash-loop verdict that followed, so bundles named the
+    // wrong cause. The later verdict supersedes it; the box itself cannot be replaced, only the record.
+    const supersedes = prompt !== null
+    if (supersedes && !(cause === 'crash-loop' && promptCause !== 'crash-loop')) {
       return
     }
     prompt = subject
+    promptCause = cause
     opts?.onRendererRecoveryExhausted?.({
       details: subject.details,
       webContentsId: rendererWebContentsId,
-      recentRecoveryCount: subject.recentRecoveryCount,
+      // The snapshot is taken when the reload is issued; more renderer deaths register during a stall.
+      recentRecoveryCount: Math.max(subject.recentRecoveryCount, getRecentRecoveryCount?.() ?? 0),
       cause,
+      ...(supersedes ? { supersedesStandingPrompt: true } : {}),
       // Watch manual retries too, so another stall can offer recovery again.
-      retry: () => retryFrom(subject)
+      retry: () => retryFrom(prompt ?? subject)
     })
   }
 
@@ -280,8 +294,15 @@ export function createRendererRecoveryReloadWatchdog(args: {
   rendererWebContents.on('did-fail-load', onDidFailLoad)
 
   return {
-    issue: (details, recentRecoveryCount, trigger = 'automatic') =>
-      start({ attempt: 1, details, recentRecoveryCount }, trigger),
+    issue: (details, recentRecoveryCount, trigger = 'automatic') => {
+      // Same invariant fail() enforces: a pending prompt owns the next reload. A reload started behind an
+      // unanswered native box is invisible, cannot recover a renderer the prompt is already about, and
+      // silently spends the circuit breaker's budget.
+      if (prompt) {
+        return
+      }
+      start({ attempt: 1, details, recentRecoveryCount }, trigger)
+    },
     escalate,
     notifyDocumentLoaded: () => {
       // Timed-out replacements can still recover beneath the prompt.
@@ -301,6 +322,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       inFlight = null
       latest = null
       prompt = null
+      promptCause = null
       clearTimer()
       rendererWebContents.off?.('did-navigate', onDidNavigate)
       rendererWebContents.off?.('dom-ready', onDomReady)

@@ -246,23 +246,56 @@ describe('renderer recovery reload watchdog', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
 
-    // The renderer dies again while the box is up; the breaker never counted stalls, so it lets the reload go.
+    // The renderer dies again while the box is up. The prompt owns the next reload, so this one never starts:
+    // behind an unanswered box it can neither be seen nor recover the renderer the box is already about.
     crashRenderer()
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
 
     // Nothing dismisses a native message box: a retry the user never asked for, or a second box, stacks on it.
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
     // The stall is still on the record, so the bundle does not read as a recovery that quietly worked.
     expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
-      expect.objectContaining({ status: 'timeout', attempt: 1 })
+      expect.objectContaining({ status: 'timeout', attempt: 2 })
     )
 
     // Answering the box with Reload hands the next verdict back to the user.
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
+
+    consoleError.mockRestore()
+  })
+
+  it('reports the recovery count the breaker holds at exhaustion, not the one frozen at issue time', async () => {
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+    const failLoad = async (index: number): Promise<void> => {
+      settleLoad[index]?.reject(new Error('ERR_FAILED (-2)'))
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
+    crashRenderer()
+    await failLoad(1)
+    await failLoad(2)
+    expect(onRendererRecoveryExhausted).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recentRecoveryCount: 1 })
+    )
+
+    // Two more renderer deaths spend breaker budget under the box without starting a reload.
+    crashRenderer()
+    crashRenderer()
+
+    // The prompt's Reload fails too: its verdict must count those deaths, not repeat the first snapshot.
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    await failLoad(3)
+    await failLoad(4)
+    expect(onRendererRecoveryExhausted).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recentRecoveryCount: 3 })
+    )
 
     consoleError.mockRestore()
   })
