@@ -38,7 +38,6 @@ export type GenerationStore = {
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
-  evictHostsBeyond(limit?: number): Promise<void>
 }
 
 /** Recency only, so anything unreadable degrades to "evict this host first". */
@@ -64,7 +63,6 @@ export function createGenerationStore(options: {
   }
 
   async function writeHostIndex(index: ReadonlyMap<string, number>): Promise<void> {
-    await fs.createDirectory(fs.rootUri)
     await fs.writeText(
       joinUri(fs.rootUri, HOST_INDEX_FILE_NAME),
       JSON.stringify(Object.fromEntries(index))
@@ -140,7 +138,6 @@ export function createGenerationStore(options: {
     // plus a fresh write is not a generation either side verified.
     await fs.delete(directory)
     try {
-      await fs.createDirectory(directory)
       for (const asset of assets) {
         await fs.writeBytes(asset.uri, asset.bytes)
       }
@@ -178,15 +175,15 @@ export function createGenerationStore(options: {
     await fs.createDirectory(generations)
     await fs.moveDirectory(staged.directory, target)
     // Android below API 26 implements a directory move as a non-recursive copy plus a delete
-    // (expo-file-system android FileSystemPath.kt:158-173), which can land an empty directory.
+    // (expo-file-system android FileSystemPath.kt:158-173), which can land an empty directory. Its
+    // `delete()` then fails on the non-empty source, so the tmp tree survives for the next sweep.
     if (!(await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))) {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
     const index = await readHostIndex()
     index.set(staged.hostKey, now())
-    // Enforced here rather than left to the caller: the four-host ceiling is this module's
-    // invariant, and `evictHostsBeyond` exists for the launch path, not as its only enforcement.
+    // Enforced here rather than left to a caller: the four-host ceiling is this module's invariant.
     await enforceHostLimit(MAX_CACHED_HOSTS, index)
     return active
   }
@@ -208,7 +205,7 @@ export function createGenerationStore(options: {
   }
 
   // One queue for the whole store rather than one per host: every operation is a short burst of
-  // cache I/O, and a single order answers the stage/commit/sweep/evict interleavings at once. A
+  // cache I/O, and a single order answers the stage/commit/sweep/delete interleavings at once. A
   // second `stageGeneration` for the same host and build waits for the first rather than writing
   // into the tree it is still filling.
   let tail: Promise<unknown> = Promise.resolve()
@@ -224,11 +221,7 @@ export function createGenerationStore(options: {
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) => serialize(() => fs.delete(staged.directory)),
     sweepStagedGenerations: () => serialize(sweep),
-    deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
-    evictHostsBeyond: (limit = MAX_CACHED_HOSTS) =>
-      serialize(async () => {
-        await enforceHostLimit(limit, await readHostIndex())
-      })
+    deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey))
   }
 }
 
