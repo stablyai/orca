@@ -8,6 +8,8 @@ import {
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type { JiraSite, JiraSiteSelection } from '../../shared/jira-types'
+import { normalizeJiraAuthType } from '../../shared/jira-auth-type'
+import { isJiraGatewayBaseUrl } from './gateway-base-url'
 
 export type JiraSiteFile = {
   version: 1
@@ -80,14 +82,25 @@ function normalizeSite(input: unknown): JiraSite | null {
   ) {
     return null
   }
+  // Sites saved before self-hosted support have no authType; they are Cloud.
+  const authType = normalizeJiraAuthType(record.authType)
+  // A scoped site without its gateway URL cannot authenticate anywhere; drop it
+  // rather than send the scoped token to the site host and clear it on the 401.
+  // The URL decides where the token goes, so a value edited on disk into any
+  // other shape (foreign host, port, extra path) is dropped for the same reason.
+  if (authType === 'cloud-scoped' && !isJiraGatewayBaseUrl(record.apiBaseUrl)) {
+    return null
+  }
   return {
     id: record.id,
     siteUrl: record.siteUrl,
     email: record.email,
     displayName: record.displayName,
     accountId: record.accountId,
-    // Sites saved before self-hosted support have no authType; they are Cloud.
-    authType: record.authType === 'server' ? 'server' : 'cloud'
+    authType,
+    ...(authType === 'cloud-scoped' && isJiraGatewayBaseUrl(record.apiBaseUrl)
+      ? { apiBaseUrl: record.apiBaseUrl }
+      : {})
   }
 }
 

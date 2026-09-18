@@ -1,33 +1,28 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import type * as Os from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import {
+  createJiraTempHome,
+  jiraTokenPath,
+  loadJiraClientModule,
+  resetJiraClientMocks,
+  type SafeStorageMockOptions
+} from './client-test-harness'
 
 const OLD_FETCH = globalThis.fetch
-const { closeAllConnectionsMock, netFetchMock, resolveProxyMock, setProxyMock } = vi.hoisted(
-  () => ({
-    closeAllConnectionsMock: vi.fn(),
-    netFetchMock: vi.fn(),
-    resolveProxyMock: vi.fn(),
-    setProxyMock: vi.fn()
-  })
-)
-
-type SafeStorageMockOptions = {
-  encryptionAvailable?: boolean
-  decryptString?: (value: Buffer) => string
-}
+const mocks = vi.hoisted(() => ({
+  closeAllConnectionsMock: vi.fn(),
+  netFetchMock: vi.fn(),
+  resolveProxyMock: vi.fn(),
+  setProxyMock: vi.fn()
+}))
+const { netFetchMock, resolveProxyMock } = mocks
 
 let tempHome = ''
-let fetchMock: ReturnType<typeof vi.fn>
-
-function mkdtempLike(prefix: string): string {
-  return mkdtempSync(join(tmpdir(), prefix))
-}
+let fetchMock: Mock
 
 function tokenPathForSite(siteId: string): string {
-  return join(tempHome, '.orca', 'jira-tokens', `${Buffer.from(siteId).toString('base64url')}.enc`)
+  return jiraTokenPath(tempHome, siteId)
 }
 
 function writeJiraFiles(siteId: string, token: string | Buffer): void {
@@ -89,60 +84,13 @@ function writeMultiSiteFiles(
   }
 }
 
-async function loadClientModule(options: SafeStorageMockOptions = {}) {
-  vi.resetModules()
-  vi.doMock('electron', () => ({
-    net: { fetch: netFetchMock },
-    session: {
-      defaultSession: {
-        closeAllConnections: closeAllConnectionsMock,
-        resolveProxy: resolveProxyMock,
-        setProxy: setProxyMock
-      }
-    }
-  }))
-  // Why here and not in beforeEach: vi.resetModules() above gives the http-client module
-  // a fresh singleton, so the port must be installed on that instance. The electron net
-  // mock alone is inert now that Jira fetches through the port.
-  const { setMainHttpClient } = await import('../network/http-client')
-  setMainHttpClient({
-    fetch: (url, init) => netFetchMock(url, init),
-    proxySession: () => ({ resolveProxy: resolveProxyMock, setProxy: setProxyMock }) as never
-  })
-  const { setSecretStore } = await import('../../shared/secret-store')
-  setSecretStore({
-    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-    encryptString: (value) => Buffer.from(value),
-    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
-    describeProtectionGap: () => null
-  })
-  vi.doMock('os', async () => {
-    const actual = await vi.importActual<typeof Os>('os')
-    return { ...actual, homedir: () => tempHome }
-  })
-
-  // One import call per reset so the split modules share a single graph (and
-  // thus one copy of the request queue / credential caches) per test.
-  const [client, queue, api] = await Promise.all([
-    import('./client'),
-    import('./request-queue'),
-    import('./authenticated-request')
-  ])
-  return { ...client, ...queue, ...api }
+function loadClientModule(options: SafeStorageMockOptions = {}) {
+  return loadJiraClientModule(mocks, tempHome, options)
 }
 
 beforeEach(() => {
-  tempHome = mkdtempLike('orca-jira-client-')
-  fetchMock = vi.fn(async () => {
-    throw new Error('fetch should not be called')
-  })
-  netFetchMock.mockReset()
-  resolveProxyMock.mockReset()
-  setProxyMock.mockReset()
-  closeAllConnectionsMock.mockReset()
-  resolveProxyMock.mockResolvedValue('DIRECT')
-  globalThis.fetch = fetchMock as typeof fetch
-  vi.restoreAllMocks()
+  tempHome = createJiraTempHome()
+  fetchMock = resetJiraClientMocks(mocks)
 })
 
 afterEach(() => {

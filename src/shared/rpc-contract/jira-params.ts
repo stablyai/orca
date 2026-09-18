@@ -19,7 +19,7 @@ export const Connect = z.object({
   // Self-hosted PAT auth needs no email; connect() enforces it for Cloud.
   email: OptionalPlainString,
   apiToken: requiredString('API token is required'),
-  authType: z.enum(['cloud', 'server']).optional()
+  authType: z.enum(['cloud', 'cloud-scoped', 'server']).optional()
 })
 
 export const SelectSite = z.object({

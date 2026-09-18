@@ -27,6 +27,8 @@ import {
   type JiraClientForSite
 } from './authenticated-request'
 import { getSiteId, normalizeJiraSiteUrl, siteToViewer, toViewer } from './site-identity'
+import { resolveJiraGatewayBaseUrl } from './cloud-gateway'
+import { normalizeJiraAuthType } from '../../shared/jira-auth-type'
 
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
@@ -72,6 +74,60 @@ export function getStatus(): JiraConnectionStatus {
   }
 }
 
+type VerifiedCredentials = {
+  viewer: Record<string, unknown>
+  authType: JiraAuthType
+  apiBaseUrl?: string
+}
+
+async function verifyCredentials(
+  siteUrl: string,
+  email: string,
+  apiToken: string,
+  authType: JiraAuthType
+): Promise<VerifiedCredentials> {
+  if (authType === 'cloud-scoped') {
+    // Why: scoped tokens are rejected on the site host with a bare 401, so the
+    // gateway URL is resolved up front and stored alongside the site.
+    const apiBaseUrl = await resolveJiraGatewayBaseUrl(siteUrl)
+    const viewer = await requestWithCredentials(
+      apiBaseUrl,
+      email,
+      apiToken,
+      '/rest/api/3/myself',
+      undefined,
+      authType
+    )
+    return { viewer: viewer as Record<string, unknown>, authType, apiBaseUrl }
+  }
+  const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
+  try {
+    const viewer = await requestWithCredentials(
+      siteUrl,
+      email,
+      apiToken,
+      myselfPath,
+      undefined,
+      authType
+    )
+    return { viewer: viewer as Record<string, unknown>, authType }
+  } catch (siteError) {
+    if (authType !== 'cloud' || !(siteError instanceof JiraApiError) || siteError.status !== 401) {
+      throw siteError
+    }
+    // Why: a scoped token looks like any other Cloud API token to the user, so
+    // instead of asking which kind it is, a site-host 401 retries on the gateway.
+    try {
+      return await verifyCredentials(siteUrl, email, apiToken, 'cloud-scoped')
+    } catch (gatewayError) {
+      // A scope gap proves the token is scoped; otherwise the site verdict is clearer.
+      throw gatewayError instanceof JiraApiError && gatewayError.scopeMismatch
+        ? gatewayError
+        : siteError
+    }
+  }
+}
+
 export async function connect(
   args: JiraConnectArgs
 ): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> {
@@ -82,7 +138,7 @@ export async function connect(
     return { ok: false, error: 'Enter a valid Jira site URL.' }
   }
 
-  const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
+  const authType: JiraAuthType = normalizeJiraAuthType(args.authType)
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
   if (authType === 'server') {
@@ -94,24 +150,20 @@ export async function connect(
         error: email ? 'Password is required.' : 'Personal access token is required.'
       }
     }
+  } else if (authType === 'cloud-scoped') {
+    // The email is optional here: it only switches Bearer to Basic.
+    if (!apiToken) {
+      return { ok: false, error: 'Scoped API token is required.' }
+    }
   } else if (!email || !apiToken) {
     return { ok: false, error: 'Email and API token are required.' }
   }
 
   await acquire()
   try {
-    const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
-    const viewer = toViewer(
-      (await requestWithCredentials(
-        siteUrl,
-        email,
-        apiToken,
-        myselfPath,
-        undefined,
-        authType
-      )) as Record<string, unknown>,
-      email || siteUrl
-    )
+    const verified = await verifyCredentials(siteUrl, email, apiToken, authType)
+    const { apiBaseUrl } = verified
+    const viewer = toViewer(verified.viewer, email || siteUrl)
     // PAT sites have no email, so keying on it alone would collide every PAT
     // connection to the same host into one id (silently overwriting a prior
     // account + token). Fall back to the verified viewer identity so distinct
@@ -123,7 +175,8 @@ export async function connect(
       email,
       displayName: viewer.displayName,
       accountId: viewer.accountId,
-      authType
+      authType: verified.authType,
+      ...(apiBaseUrl ? { apiBaseUrl } : {})
     }
     saveToken(id, apiToken)
     const file = getSiteFile()
@@ -207,6 +260,8 @@ export function clearToken(siteId: string): void {
 
 export function isAuthError(error: unknown): boolean {
   // Why: Jira returns 403 for project/API permission gaps even when /myself
-  // succeeds, so only 401 means the saved credential itself is invalid.
-  return error instanceof JiraApiError && error.status === 401
+  // succeeds, so only 401 means the saved credential itself is invalid. The
+  // api.atlassian.com gateway also answers 401 when a scoped token lacks one
+  // endpoint's scope; that token still works elsewhere, so it is not revoked.
+  return error instanceof JiraApiError && error.status === 401 && !error.scopeMismatch
 }

@@ -44,12 +44,23 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
   }
   const lower = message.toLowerCase()
   const status = error instanceof HostedReviewApiRequestError ? error.status : null
-  if (status === 401 || status === 403 || lower.includes('unauthorized')) {
+  if (status === 401 || lower.includes('unauthorized')) {
     return {
       ok: false,
       code: 'auth_required',
       error:
         'Create PR failed: Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
+    }
+  }
+  // Why: a 403 is a credential that reads fine but may not write — the shape a
+  // scoped API token takes when it lacks the pull request write scope. Sending
+  // the user to reconnect the same token would loop them.
+  if (status === 403) {
+    return {
+      ok: false,
+      code: 'auth_required',
+      error:
+        'Create PR failed: Bitbucket denied this credential write access. A scoped API token needs write:pullrequest:bitbucket (with read:repository:bitbucket and read:pullrequest:bitbucket); other tokens need write permission on the repository.'
     }
   }
   // Bitbucket answers a duplicate source branch with 400 plus this phrasing

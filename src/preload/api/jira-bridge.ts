@@ -1,14 +1,10 @@
 import { ipcRenderer } from 'electron'
-import type { JiraProjectStatusOrder } from '../../shared/jira-types'
+import type { JiraAuthType, JiraProjectStatusOrder } from '../../shared/jira-types'
 import type { PreloadApi } from '../api-types'
 
 export const jiraApi = {
-  connect: (args: {
-    siteUrl: string
-    email: string
-    apiToken: string
-    authType?: 'cloud' | 'server'
-  }) => ipcRenderer.invoke('jira:connect', args),
+  connect: (args: { siteUrl: string; email: string; apiToken: string; authType?: JiraAuthType }) =>
+    ipcRenderer.invoke('jira:connect', args),
 
   disconnect: (args?: { siteId?: string }): Promise<void> =>
     ipcRenderer.invoke('jira:disconnect', args),

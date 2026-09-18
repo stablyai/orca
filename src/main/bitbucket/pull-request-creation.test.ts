@@ -165,6 +165,19 @@ describe('Bitbucket pull request creation', () => {
     expect(!result.ok && result.error).toContain('Settings')
   })
 
+  it('maps a 403 to the missing write scope instead of a reconnect prompt', async () => {
+    // Why: a scoped API token that reads pull requests but lacks the write scope
+    // is rejected with 403; telling the user to reconnect the same token loops.
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({ error: { message: 'Forbidden' } }, { status: 403 })
+    ) as unknown as typeof fetch
+
+    const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
+
+    expect(result).toMatchObject({ ok: false, code: 'auth_required' })
+    expect(!result.ok && result.error).toContain('write:pullrequest:bitbucket')
+  })
+
   it('refuses a non-Bitbucket remote', async () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://github.com/team/repo.git\n',
