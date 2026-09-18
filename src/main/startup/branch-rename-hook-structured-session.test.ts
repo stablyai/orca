@@ -63,6 +63,7 @@ describe('maybeAutoRenameWorkspaceOnFirstStructuredTurn', () => {
       tabId: undefined,
       worktreeId: WORKSPACE_ID,
       state: 'working',
+      agentType: 'claude',
       prompt: 'Fix the auth bug',
       assistantMessage: undefined,
       isReplay: false
