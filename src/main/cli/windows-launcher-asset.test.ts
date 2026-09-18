@@ -28,4 +28,18 @@ describe('packaged Windows CLI launcher asset', () => {
     expect(source).toContain('child.WaitForExit();')
     expect(source).toContain('return child.ExitCode;')
   })
+
+  it('clears inherited CHROME_CRASHPAD_PIPE_NAME before launching Electron-as-Node', () => {
+    const sourcePath = join(process.cwd(), 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs')
+    const source = readFileSync(sourcePath, 'utf8')
+
+    const cleanupIndex = source.indexOf(
+      'Environment.SetEnvironmentVariable("CHROME_CRASHPAD_PIPE_NAME", null);'
+    )
+    const processStartIndex = source.indexOf('using (Process child = Process.Start(startInfo))')
+
+    // Why: cleanup must run on the launcher process before the child inherits its env block.
+    expect(cleanupIndex).toBeGreaterThanOrEqual(0)
+    expect(processStartIndex).toBeGreaterThan(cleanupIndex)
+  })
 })
