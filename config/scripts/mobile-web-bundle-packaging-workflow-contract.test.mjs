@@ -142,6 +142,15 @@ describe('mobile web bundle packaging coverage', () => {
       expect(job.text).toMatch(BUNDLE_PRODUCER)
     }
   )
+
+  it.each(packagingJobs().map((job) => [job.label, job]))(
+    'installs mobile/node_modules before electron-builder packs: %s',
+    (_label, job) => {
+      // mobile is a separate pnpm project, so the root install leaves it empty and the bundle
+      // build cannot resolve React Native or Expo. One definition, so no job hand-rolls it.
+      expect(job.text).toContain('uses: ./.github/actions/install-mobile-dependencies')
+    }
+  )
 })
 
 describe('the build scripts the census trusts', () => {

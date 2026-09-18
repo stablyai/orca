@@ -65,6 +65,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
+
       # Why: cache the built installer keyed on the inputs that affect it, so a
       # harness-only edit skips the ~20 min electron-builder build. The daemon
       # relocation code lives under src/, so changing it correctly rebuilds.

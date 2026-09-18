@@ -142,24 +142,11 @@ jobs:
       - name: Enforce type-aware code-quality baseline
         run: pnpm run audit:code-quality:type-aware
 
-      # Why: the changed-code gate lints mobile files too, and its type-aware pass
-      # resolves types from mobile/node_modules. Mobile is a separate pnpm project,
-      # so the root install above leaves it empty and every mobile type degrades to
-      # an `error` type — reported as phantom findings against the changed lines.
-      # Why no --ignore-scripts, unlike the root install: mobile's postinstall generates
-      # the gitignored terminal/mermaid webview engine modules that tracked source imports,
-      # and skipping it degrades those very types the step exists to resolve. The drift
-      # guard mirrors the root install so a stale mobile lockfile fails by name — mobile's
-      # lockfile carries patchedDependencies that a silent rewrite would drop.
-      - name: Install mobile dependencies
+      # Why here: the changed-code gate lints mobile files too, and its type-aware pass
+      # resolves types from mobile/node_modules. Without the install every mobile type
+      # degrades to an `error` type — reported as phantom findings against the changed lines.
+      - uses: ./.github/actions/install-mobile-dependencies
         if: needs.code_paths.outputs.mobile_dependencies == 'true'
-        working-directory: mobile
-        run: |
-          pnpm install --frozen-lockfile
-          if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
-            git -C "$GITHUB_WORKSPACE" diff --exit-code -- \
-              mobile/package.json mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml
-          fi
 
       - name: Enforce changed-code quality
         run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
@@ -748,6 +735,13 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why --no-file-parallelism: every file here launches a full Electron stack twice, and each
       # probe carries its own in-process deadline. Four at once on a 4-vCPU runner starve each other
@@ -861,6 +855,13 @@ jobs:
         with:
           native-runtime: node
           persist-native-cache: 'false'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       - name: Save compiled Node native modules
         if: steps.deps.outputs.native-cache-hit != 'true'

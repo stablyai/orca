@@ -50,6 +50,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
+
       # Why: cache the unpacked build keyed on the inputs that affect it, so
       # spike-script-only edits skip the ~15 min electron-builder build.
       - name: Cache unpacked build
