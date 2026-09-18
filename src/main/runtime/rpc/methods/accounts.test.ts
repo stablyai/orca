@@ -153,7 +153,7 @@ describe('account RPC methods', () => {
   it('updates a Claude display name on the owning host', async () => {
     const updateClaudeAccountDisplayName = vi.fn().mockResolvedValue({ accounts: [] })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this RPC handler only calls updateClaudeAccountDisplayName.
-    const runtime = { updateClaudeAccountDisplayName } as OrcaRuntimeService
+    const runtime = { updateClaudeAccountDisplayName } as unknown as OrcaRuntimeService
     const update = method('accounts.updateClaudeDisplayName')
     if (isStreamingMethod(update)) {
       throw new Error('accounts.updateClaudeDisplayName must be a request method')
