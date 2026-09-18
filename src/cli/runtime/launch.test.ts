@@ -17,7 +17,7 @@ vi.mock('child_process', () => ({
   spawn: spawnMock,
   spawnSync: spawnSyncMock
 }))
-import { serveOrcaApp } from './launch'
+import { launchOrcaApp, serveOrcaApp } from './launch'
 
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()
@@ -137,5 +137,78 @@ describe('serveOrcaApp', () => {
 
     expect(stdoutSpy).toHaveBeenCalledWith(`${unicodeRecipeJson}\n`)
     expect(child.unref).toHaveBeenCalledOnce()
+  })
+})
+
+describe('launchOrcaApp disable-gpu', () => {
+  const profilePin = `--user-data-dir=${PROFILE}`
+
+  beforeEach(() => {
+    spawnMock.mockReset()
+    spawnSyncMock.mockReset()
+    process.env.ORCA_USER_DATA_PATH = PROFILE
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    delete process.env.ORCA_APP_EXECUTABLE
+    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ELECTRON_RUN_AS_NODE
+  })
+
+  it('passes --disable-gpu through direct open launches', () => {
+    process.env.ORCA_APP_EXECUTABLE = '/opt/orca/Orca'
+    process.env.ELECTRON_RUN_AS_NODE = '1'
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    launchOrcaApp({ disableGpu: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/opt/orca/Orca',
+      ['--disable-gpu', profilePin],
+      expect.objectContaining({
+        detached: true,
+        stdio: 'ignore',
+        env: expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: '1' })
+      })
+    )
+  })
+
+  it('passes --disable-gpu through macOS app-bundle open launches', () => {
+    delete process.env.ORCA_APP_EXECUTABLE
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    const execPathDescriptor = Object.getOwnPropertyDescriptor(process, 'execPath')
+    process.env.ELECTRON_RUN_AS_NODE = '1'
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      Object.defineProperty(process, 'execPath', {
+        configurable: true,
+        value: '/Applications/Orca.app/Contents/MacOS/Orca'
+      })
+
+      launchOrcaApp({ disableGpu: true })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'open',
+        ['-n', '/Applications/Orca.app', '--args', profilePin, '--disable-gpu'],
+        expect.objectContaining({
+          detached: true,
+          stdio: 'ignore',
+          env: expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: '1' })
+        })
+      )
+    } finally {
+      delete process.env.ELECTRON_RUN_AS_NODE
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+      if (execPathDescriptor) {
+        Object.defineProperty(process, 'execPath', execPathDescriptor)
+      }
+    }
   })
 })

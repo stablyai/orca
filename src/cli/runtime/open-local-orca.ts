@@ -1,12 +1,13 @@
 import type { CliStatusResult } from '../../shared/runtime-types'
-import { launchOrcaApp } from './launch'
+import { launchOrcaApp, type LaunchOrcaAppOptions } from './launch'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 
 type ReadStatus = () => Promise<RuntimeRpcSuccess<CliStatusResult>>
 
 export async function openLocalOrca(
   readStatus: ReadStatus,
-  timeoutMs: number
+  timeoutMs: number,
+  options?: LaunchOrcaAppOptions
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const initial = await getStatusForOpen(readStatus)
 
@@ -14,7 +15,7 @@ export async function openLocalOrca(
   if (initial?.result.app.desktopWindowStatus === 'blocked') {
     throwDesktopActivationBlocked()
   }
-  launchOrcaApp()
+  launchOrcaApp(options)
   if (initial?.result.app.desktopWindowStatus === 'available') {
     return initial
   }
