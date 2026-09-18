@@ -7,6 +7,7 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { useWorktreeWorkingEmoji } from './use-worktree-working-emoji'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 
@@ -101,6 +102,7 @@ export function WorktreeCardStatusSlot({
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
+  const workingEmoji = useWorktreeWorkingEmoji(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
   const canShowReviewStatus =
     newCardStyle &&
@@ -141,7 +143,12 @@ export function WorktreeCardStatusSlot({
     ) : newCardStyle && showStatus ? (
       <>
         <span className={cn('inline-flex size-5 items-center justify-center', className)}>
-          <StatusIndicator status={status} aria-hidden="true" tooltipSide="right" />
+          <StatusIndicator
+            status={status}
+            workingEmoji={workingEmoji}
+            aria-hidden="true"
+            tooltipSide="right"
+          />
         </span>
         <span className="sr-only">{passiveStatusAnnouncement}</span>
       </>
@@ -149,6 +156,7 @@ export function WorktreeCardStatusSlot({
       <>
         <StatusIndicator
           status={status}
+          workingEmoji={workingEmoji}
           aria-hidden="true"
           className={className}
           tooltipSide="right"
@@ -203,7 +211,12 @@ export function WorktreeCardStatusSlot({
                   {branchStatusIcon}
                 </span>
               ) : showStatus ? (
-                <StatusIndicator status={status} aria-hidden="true" showTooltip={false} />
+                <StatusIndicator
+                  status={status}
+                  workingEmoji={workingEmoji}
+                  aria-hidden="true"
+                  showTooltip={false}
+                />
               ) : (
                 <span className="sr-only">{actionLabel}</span>
               )
@@ -213,6 +226,7 @@ export function WorktreeCardStatusSlot({
               <>
                 <StatusIndicator
                   status={status}
+                  workingEmoji={workingEmoji}
                   aria-hidden="true"
                   showTooltip={false}
                   className="transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0"
