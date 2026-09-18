@@ -57,7 +57,9 @@ export function createGenerationStore(options: {
     joinUri(hostRoot(hostKey), STAGING_DIRECTORY_NAME)
 
   async function readHostIndex(): Promise<Map<string, number>> {
-    const text = await fs.readText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME))
+    // Unreadable is treated as absent here, unlike a manifest: an index nobody can read costs
+    // eviction order, and the next activation rewrites it whole.
+    const text = await fs.readText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME)).catch(() => null)
     const parsed = text === null ? null : HostIndexSchema.safeParse(parseJson(text))
     return new Map(Object.entries(parsed?.success === true ? parsed.data : {}))
   }
@@ -115,19 +117,23 @@ export function createGenerationStore(options: {
     // names another build is a tree from some other bundle, so the host's cache goes and the next
     // open redownloads it.
     const only = directories.length === 1 ? directories[0] : null
-    const manifest =
-      only === null
-        ? null
-        : parseManifest(await fs.readText(joinUri(generations, only.name, MANIFEST_FILE_NAME)))
-    if (only === null || manifest === null || manifest.buildId !== only.name) {
-      await dropHostTree(hostKey)
-      return null
+    if (only !== null) {
+      const directory = joinUri(generations, only.name)
+      let text: string | null
+      try {
+        text = await fs.readText(joinUri(directory, MANIFEST_FILE_NAME))
+      } catch {
+        // A failed read is not evidence of a bad generation, so nothing is deleted: the caller
+        // redownloads, and a transient I/O blip must not cost a cache that verified.
+        return null
+      }
+      const manifest = parseManifest(text)
+      if (manifest !== null && manifest.buildId === only.name) {
+        return { buildId: manifest.buildId, directory, manifest }
+      }
     }
-    return {
-      buildId: manifest.buildId,
-      directory: joinUri(generations, only.name),
-      manifest
-    }
+    await dropHostTree(hostKey)
+    return null
   }
 
   async function stage(

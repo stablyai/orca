@@ -23,6 +23,7 @@ type FakeFileSystem = GenerationFileSystem & {
   paths(): readonly string[]
   seed(path: string, node: FakeNode): void
   failWritesAt(path: string | null): void
+  failReadsAt(path: string | null): void
   loseContentsOnMove(): void
   text(path: string): string | null
 }
@@ -31,6 +32,7 @@ function createFakeFileSystem(): FakeFileSystem {
   const nodes = new Map<string, FakeNode>()
   const writes: string[] = []
   let failAt: string | null = null
+  let failReadAt: string | null = null
   let moveKeepsContents = true
   const uri = (path: string): string => `${ROOT}/${path}`
   const parentOf = (target: string): string => target.slice(0, target.lastIndexOf('/'))
@@ -64,6 +66,9 @@ function createFakeFileSystem(): FakeFileSystem {
     failWritesAt: (path) => {
       failAt = path
     },
+    failReadsAt: (path) => {
+      failReadAt = path
+    },
     loseContentsOnMove: () => {
       moveKeepsContents = false
     },
@@ -94,6 +99,9 @@ function createFakeFileSystem(): FakeFileSystem {
       write(target, new TextEncoder().encode(value))
     },
     async readText(target) {
+      if (failReadAt !== null && target === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
+      }
       const node = nodes.get(target)
       return node?.kind === 'file' ? new TextDecoder().decode(node.bytes) : null
     },
@@ -421,6 +429,34 @@ describe('generation store', () => {
 
     expect(await store.readActiveGeneration(HOST)).toBeNull()
     expect(fs.paths().some((path) => path.includes('generations/'))).toBe(false)
+  })
+
+  it('keeps the host tree when the manifest read fails, and drops it when it is missing', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    const manifest = `${HOST}/generations/${'a'.repeat(64)}/manifest.json`
+    await activate(store, HOST)
+    const before = fs.paths()
+
+    fs.failReadsAt(manifest)
+    expect(await store.readActiveGeneration(HOST)).toBeNull()
+    expect(fs.paths()).toEqual(before)
+
+    fs.failReadsAt(null)
+    await fs.delete(`${ROOT}/${manifest}`)
+    expect(await store.readActiveGeneration(HOST)).toBeNull()
+    expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(false)
+  })
+
+  it('activates normally when the recency index cannot be read', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs, now: () => 10 })
+    fs.seed('hosts.json', { kind: 'file', bytes: new TextEncoder().encode('{}') })
+    fs.failReadsAt('hosts.json')
+
+    await activate(store, HOST)
+
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe('a'.repeat(64))
   })
 
   it('replaces an entry named for the build id that is not a readable generation', async () => {
