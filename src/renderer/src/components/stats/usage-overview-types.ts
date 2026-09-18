@@ -9,12 +9,17 @@ import type {
   CodexUsageSummary
 } from '../../../../shared/codex-usage-types'
 import type {
+  DevinUsageDailyPoint,
+  DevinUsageScanState,
+  DevinUsageSummary
+} from '../../../../shared/devin-usage-types'
+import type {
   OpenCodeUsageDailyPoint,
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode'
+export type UsageProviderId = 'claude' | 'codex' | 'devin' | 'opencode'
 
 export type UsageProviderOverview = {
   id: UsageProviderId
@@ -43,6 +48,7 @@ export type UsageOverviewDailyPoint = {
   totalTokens: number
   claudeTokens: number
   codexTokens: number
+  devinTokens: number
   openCodeTokens: number
   intensity: 0 | 1 | 2 | 3 | 4
 }
@@ -79,6 +85,11 @@ export type UsageOverviewInput = {
     scanState: CodexUsageScanState | null
     summary: CodexUsageSummary | null
     daily: CodexUsageDailyPoint[]
+  }
+  devin: {
+    scanState: DevinUsageScanState | null
+    summary: DevinUsageSummary | null
+    daily: DevinUsageDailyPoint[]
   }
   opencode: {
     scanState: OpenCodeUsageScanState | null

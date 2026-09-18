@@ -1,11 +1,13 @@
 import { ipcMain } from 'electron'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
+import type { DevinUsageStore } from '../devin-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 
 type UsageProviderStores = {
   claudeUsage: ClaudeUsageStore
   codexUsage: CodexUsageStore
+  devinUsage: DevinUsageStore
   openCodeUsage: OpenCodeUsageStore
 }
 
@@ -64,5 +66,6 @@ function registerProviderHandlers<Scope, Range, BreakdownKind>(
 export function registerUsageProviderHandlers(stores: UsageProviderStores): void {
   registerProviderHandlers('claudeUsage', stores.claudeUsage)
   registerProviderHandlers('codexUsage', stores.codexUsage)
+  registerProviderHandlers('devinUsage', stores.devinUsage)
   registerProviderHandlers('openCodeUsage', stores.openCodeUsage)
 }

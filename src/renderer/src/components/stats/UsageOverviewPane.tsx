@@ -33,25 +33,32 @@ export function UsageOverviewPane(): React.JSX.Element {
   const codexScanState = useAppStore((state) => state.codexUsageScanState)
   const codexSummary = useAppStore((state) => state.codexUsageSummary)
   const codexDaily = useAppStore((state) => state.codexUsageDaily)
+  const devinScanState = useAppStore((state) => state.devinUsageScanState)
+  const devinSummary = useAppStore((state) => state.devinUsageSummary)
+  const devinDaily = useAppStore((state) => state.devinUsageDaily)
   const openCodeScanState = useAppStore((state) => state.openCodeUsageScanState)
   const openCodeSummary = useAppStore((state) => state.openCodeUsageSummary)
   const openCodeDaily = useAppStore((state) => state.openCodeUsageDaily)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
+  const fetchDevinUsage = useAppStore((state) => state.fetchDevinUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
+  const refreshDevinUsage = useAppStore((state) => state.refreshDevinUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
+  const enableDevinUsage = useAppStore((state) => state.enableDevinUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchClaudeUsage()
     void fetchCodexUsage()
+    void fetchDevinUsage()
     void fetchOpenCodeUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage])
+  }, [fetchClaudeUsage, fetchCodexUsage, fetchDevinUsage, fetchOpenCodeUsage])
 
   const overview = useMemo(
     () =>
@@ -66,6 +73,11 @@ export function UsageOverviewPane(): React.JSX.Element {
           summary: codexSummary,
           daily: codexDaily
         },
+        devin: {
+          scanState: devinScanState,
+          summary: devinSummary,
+          daily: devinDaily
+        },
         opencode: {
           scanState: openCodeScanState,
           summary: openCodeSummary,
@@ -79,6 +91,9 @@ export function UsageOverviewPane(): React.JSX.Element {
       codexDaily,
       codexScanState,
       codexSummary,
+      devinDaily,
+      devinScanState,
+      devinSummary,
       openCodeDaily,
       openCodeScanState,
       openCodeSummary
@@ -94,6 +109,7 @@ export function UsageOverviewPane(): React.JSX.Element {
     void Promise.all([
       claudeScanState?.enabled ? refreshClaudeUsage() : Promise.resolve(),
       codexScanState?.enabled ? refreshCodexUsage() : Promise.resolve(),
+      devinScanState?.enabled ? refreshDevinUsage() : Promise.resolve(),
       openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve()
     ])
   }
@@ -175,6 +191,16 @@ export function UsageOverviewPane(): React.JSX.Element {
                   {translate('auto.components.stats.UsageOverviewPane.2f1ee2878b', 'Enable Codex')}
                 </Button>
                 <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableDevinUsage()
+                  }}
+                >
+                  {translate('auto.components.stats.UsageOverviewPane.enableDevin', 'Enable Devin')}
+                </Button>
+                <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
@@ -228,7 +254,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {translate(
                   'auto.components.stats.UsageOverviewPane.60002bb22f',
-                  'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.'
+                  'No local Claude, Codex, Devin, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
               </div>
             ) : (
@@ -268,13 +294,13 @@ export function UsageOverviewPane(): React.JSX.Element {
               totalTokens={overview.totalTokens}
               onEnable={() => {
                 recordFeatureInteraction('usage-tracking')
-                if (provider.id === 'claude') {
-                  void enableClaudeUsage()
-                } else if (provider.id === 'codex') {
-                  void enableCodexUsage()
-                } else {
-                  void enableOpenCodeUsage()
+                const enableProvider: Record<typeof provider.id, () => Promise<void>> = {
+                  claude: enableClaudeUsage,
+                  codex: enableCodexUsage,
+                  devin: enableDevinUsage,
+                  opencode: enableOpenCodeUsage
                 }
+                void enableProvider[provider.id]()
               }}
             />
           ))}

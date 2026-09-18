@@ -54,7 +54,8 @@ const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'opencode-go',
   'kimi',
   'minimax',
-  'grok'
+  'grok',
+  'devin'
 ]
 
 afterEach(() => {
@@ -166,6 +167,22 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(kimi)).toBe('Run Kimi to refresh')
     expect(getProviderUsageErrorMessage(kimi)).toBe(
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  })
+
+  it('shows the exact Devin CLI recovery flow for an expired read-only session', () => {
+    const devin = provider({
+      provider: 'devin',
+      error: 'Devin session expired - run devin on the computer running Orca, then retry usage.',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        source: 'oauth'
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(devin)).toBe('Run Devin to refresh')
+    expect(getProviderUsageErrorMessage(devin)).toBe(
+      'Run devin in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   })
 
@@ -552,6 +569,22 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).toContain('75% left')
     expect(markup).toContain('width:75%')
     expect(markup).not.toContain('width:25%')
+  })
+
+  it('explains why an unavailable provider has no quota instead of metering 0%', () => {
+    // Why: a signed-in Devin plan that reports no dated quota windows comes back
+    // `unavailable`; the panel must carry that reason, not an empty 0% meter.
+    const p = provider({
+      provider: 'devin',
+      status: 'unavailable',
+      error: 'Devin did not report quota windows for this account'
+    })
+
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
+
+    expect(markup).toContain('Devin did not report quota windows for this account')
+    expect(markup).not.toContain('0%')
+    expect(markup).not.toContain('width:0%')
   })
 })
 

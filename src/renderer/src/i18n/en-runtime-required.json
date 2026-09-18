@@ -2193,6 +2193,9 @@
           "ae255c3dba": "n/a",
           "bf1bf2f674": "sessions •"
         },
+        "DevinUsagePane": {
+          "events": "events"
+        },
         "OpenCodeUsagePane": {
           "1e5d410df0": "events",
           "8095a63426": "n/a",
@@ -2214,6 +2217,11 @@
           "e0b988599d": "Total",
           "f6a2c8d019": "Model",
           "faf3444859": "Input"
+        },
+        "stats": {
+          "search": {
+            "26bb901fcd": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage."
+          }
         },
         "usage": {
           "overview": {

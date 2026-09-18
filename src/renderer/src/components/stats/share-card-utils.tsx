@@ -16,6 +16,12 @@ export type CodexShareData = {
   summary: CodexUsageSummary
   daily: CodexUsageDailyPoint[]
 }
+export type UsageShareProvider = ClaudeShareData['provider'] | CodexShareData['provider']
+
+export const USAGE_SHARE_PROVIDER_LABELS: Record<UsageShareProvider, string> = {
+  claude: 'Claude',
+  codex: 'Codex'
+}
 
 export function formatTokens(value: number): string {
   if (value >= 1_000_000) {

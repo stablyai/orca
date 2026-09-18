@@ -178,6 +178,36 @@ describe('web MiniMax preload API', () => {
   })
 })
 
+describe('web Devin preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('answers Devin quota and account reads with concrete desktop-only state', async () => {
+    const { api } = await installApi('Linux')
+
+    // The namespace fallback proxy resolves undefined for an unknown method, which crashes
+    // every reader of state.devin; the concrete no-op has to return a whole rate-limit state.
+    await expect(api.rateLimits.refreshDevin()).resolves.toMatchObject({
+      devin: null,
+      devinAuthConfigured: false
+    })
+    // The generic `get*Status` fallback resolves [], so `signedIn` only reads false when the
+    // real Devin namespace is composed in.
+    await expect(api.devinAccounts.getStatus()).resolves.toEqual({
+      signedIn: false,
+      email: null,
+      tokenFresh: false,
+      plan: null,
+      error: null
+    })
+  })
+})
+
 describe('web AI Vault preload API', () => {
   beforeEach(() => {
     vi.resetModules()

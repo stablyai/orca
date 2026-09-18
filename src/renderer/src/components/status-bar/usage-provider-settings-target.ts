@@ -18,8 +18,13 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-minimax'
     case 'grok':
       return 'accounts-grok'
+    case 'devin':
+      // Why: the Devin section is read-only status plus a refresh, like Grok's —
+      // the deep link is where the "run devin login" instructions live.
+      return 'accounts-devin'
     case 'kimi':
-      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
+      // Why: Orca must not mutate CLI-owned credential lifecycles; Kimi
+      // refreshes its own session file, so there is no accounts section.
       return null
   }
 }

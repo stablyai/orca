@@ -1,5 +1,6 @@
 import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../../shared/claude-usage-types'
 import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../shared/codex-usage-types'
+import type { DevinUsageBreakdownKind, DevinUsageSnapshot } from '../../shared/devin-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageSnapshot
@@ -41,6 +42,7 @@ export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKi
 export type ClaudeUsageApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBreakdownKind>
 
 export type CodexUsageApi = UsageProviderApi<CodexUsageSnapshot, CodexUsageBreakdownKind>
+export type DevinUsageApi = UsageProviderApi<DevinUsageSnapshot, DevinUsageBreakdownKind>
 
 export type OpenCodeUsageApi = UsageProviderApi<OpenCodeUsageSnapshot, OpenCodeUsageBreakdownKind>
 
@@ -53,6 +55,7 @@ export type RateLimitsApi = {
   setPollingInterval: (ms: number) => Promise<void>
   fetchInactiveClaudeAccounts: () => Promise<void>
   fetchInactiveCodexAccounts: () => Promise<void>
+  refreshDevin: () => Promise<RateLimitState>
   refreshMiniMax: () => Promise<RateLimitState>
   refreshGrok: () => Promise<RateLimitState>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void

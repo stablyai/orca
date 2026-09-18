@@ -21,13 +21,15 @@ describe('usage provider IPC handlers', () => {
     const claudeUsage = createUsage()
     const codexUsage = createUsage()
     const openCodeUsage = createUsage()
+    const devinUsage = createUsage()
     registerUsageProviderHandlers({
       claudeUsage: claudeUsage as never,
       codexUsage: codexUsage as never,
+      devinUsage: devinUsage as never,
       openCodeUsage: openCodeUsage as never
     })
 
-    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage']
+    const prefixes = ['claudeUsage', 'codexUsage', 'devinUsage', 'openCodeUsage']
     const suffixes = Object.keys(claudeUsage)
     expect(handle.mock.calls.map(([channel]) => channel)).toEqual(
       prefixes.flatMap((prefix) => suffixes.map((suffix) => `${prefix}:${suffix}`))
@@ -41,6 +43,7 @@ describe('usage provider IPC handlers', () => {
     }
     call('claudeUsage', 'getScanState')
     call('codexUsage', 'getScanState')
+    call('devinUsage', 'getScanState')
     call('openCodeUsage', 'getScanState')
     call('claudeUsage', 'setEnabled', { enabled: true })
     call('claudeUsage', 'refresh')

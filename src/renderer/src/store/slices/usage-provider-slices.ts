@@ -10,6 +10,11 @@ import type {
   CodexUsageSnapshot
 } from '../../../../shared/codex-usage-types'
 import type {
+  DevinUsageRange,
+  DevinUsageScope,
+  DevinUsageSnapshot
+} from '../../../../shared/devin-usage-types'
+import type {
   OpenCodeUsageRange,
   OpenCodeUsageScope,
   OpenCodeUsageSnapshot
@@ -261,6 +266,7 @@ function createUsageProviderSlice<
 
 type ClaudeUsageTypes = UsageProviderTypes<ClaudeUsageScope, ClaudeUsageRange, ClaudeUsageSnapshot>
 type CodexUsageTypes = UsageProviderTypes<CodexUsageScope, CodexUsageRange, CodexUsageSnapshot>
+type DevinUsageTypes = UsageProviderTypes<DevinUsageScope, DevinUsageRange, DevinUsageSnapshot>
 type OpenCodeUsageTypes = UsageProviderTypes<
   OpenCodeUsageScope,
   OpenCodeUsageRange,
@@ -269,6 +275,7 @@ type OpenCodeUsageTypes = UsageProviderTypes<
 
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageTypes>
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
+export type DevinUsageSlice = ProviderUsageSlice<'devin', 'Devin', DevinUsageTypes>
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
@@ -291,6 +298,14 @@ export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', 
   initialRange: '30d',
   getApi: () => window.api.codexUsage,
   hasCachedData: (state) => state.hasAnyCodexData
+})
+export const createDevinUsageSlice = createUsageProviderSlice<'devin', 'Devin', DevinUsageTypes>({
+  prefix: 'devin',
+  name: 'Devin',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: () => window.api.devinUsage,
+  hasCachedData: (state) => state.hasAnyDevinData
 })
 
 export const createOpenCodeUsageSlice = createUsageProviderSlice<

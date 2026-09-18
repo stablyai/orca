@@ -7,6 +7,7 @@ import type {
 import {
   createClaudeProvider,
   createCodexProvider,
+  createDevinProvider,
   createOpenCodeProvider
 } from './usage-provider-normalization'
 
@@ -14,6 +15,7 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   const providers = [
     createClaudeProvider(input.claude),
     createCodexProvider(input.codex),
+    createDevinProvider(input.devin),
     createOpenCodeProvider(input.opencode)
   ]
   const daily = buildDailyOverview(input)

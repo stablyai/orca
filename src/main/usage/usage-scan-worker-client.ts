@@ -11,6 +11,11 @@ import type {
   CodexUsageSession
 } from '../codex-usage/types'
 import type {
+  DevinUsageDailyAggregate,
+  DevinUsagePersistedFile,
+  DevinUsageSession
+} from '../devin-usage/types'
+import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
@@ -147,6 +152,19 @@ export async function scanCodexUsageOnWorker(
   const value = await scan({ providerId: 'codex', worktrees, previous })
   if (value.providerId !== 'codex') {
     throw wrongProvider('codex', value.providerId)
+  }
+  return value
+}
+export async function scanDevinUsageOnWorker(
+  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  previous: DevinUsagePersistedFile[]
+): Promise<
+  ProviderScanResult<DevinUsagePersistedFile, DevinUsageSession, DevinUsageDailyAggregate>
+> {
+  const value = await scan({ providerId: 'devin', worktrees, previous })
+  if (value.providerId !== 'devin') {
+    throw wrongProvider('devin', value.providerId)
   }
   return value
 }

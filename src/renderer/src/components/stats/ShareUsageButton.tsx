@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ShareUsageCard, type ShareUsageCardProps } from './ShareUsageCard'
 import { translate } from '@/i18n/i18n'
+import { USAGE_SHARE_PROVIDER_LABELS } from './share-card-utils'
 
 type ShareUsageButtonProps = ShareUsageCardProps
 
@@ -76,7 +77,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
 
   const handleShareToX = useCallback(async () => {
     const { provider, summary, range } = props
-    const providerName = provider === 'claude' ? 'Claude' : 'Codex'
+    const providerName = USAGE_SHARE_PROVIDER_LABELS[provider]
     const rangeLabel =
       range === '7d'
         ? 'last 7 days'

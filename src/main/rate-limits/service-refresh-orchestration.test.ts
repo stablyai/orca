@@ -8,6 +8,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchDevinRateLimits } from './devin-fetcher'
+import { readDevinCredentials } from './devin-credentials'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   deferred,
@@ -15,7 +17,8 @@ import {
   flushMicrotasks,
   mockFreshBackgroundProviderFetches,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
@@ -50,6 +53,14 @@ vi.mock('./grok-fetcher', () => ({
 
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
+vi.mock('./devin-fetcher', () => ({
+  fetchDevinRateLimits: vi.fn()
+}))
+
+vi.mock('./devin-credentials', () => ({
+  readDevinCredentials: vi.fn(() => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -117,6 +128,48 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('keeps devinAuthConfigured true when a signed-in plan reports no quota windows', async () => {
+    vi.mocked(readDevinCredentials).mockReturnValue({
+      status: 'ok',
+      credentials: { sessionToken: 'tok', apiServerUrl: 'https://server.codeium.com' }
+    })
+    vi.mocked(fetchDevinRateLimits).mockResolvedValue(
+      unavailableProvider('devin', 'Devin did not report quota windows for this account')
+    )
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0))
+    const service = new RateLimitService()
+
+    await serviceInternals(service).fetchAll()
+
+    // Why: the flag answers "is the CLI signed in", which Settings shows; the
+    // status bar hides on the 'unavailable' status itself, not on this flag.
+    expect(service.getState().devinAuthConfigured).toBe(true)
+    expect(service.getState().devin?.status).toBe('unavailable')
+  })
+
+  it('runs a forced Devin refresh queued behind an in-flight Devin cycle and settles both callers', async () => {
+    vi.mocked(readDevinCredentials).mockReturnValue({
+      status: 'ok',
+      credentials: { sessionToken: 'tok', apiServerUrl: 'https://server.codeium.com' }
+    })
+    const firstDevin = deferred<ProviderRateLimits>()
+    vi.mocked(fetchDevinRateLimits)
+      .mockImplementationOnce(() => firstDevin.promise)
+      .mockResolvedValueOnce(okProvider('devin', 30))
+    const service = new RateLimitService()
+
+    const first = service.refreshDevin()
+    await Promise.resolve()
+    const second = service.refreshDevin()
+    firstDevin.resolve(okProvider('devin', 12))
+
+    await Promise.all([first, second])
+
+    expect(fetchDevinRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().devin?.session?.usedPercent).toBe(30)
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {

@@ -26,6 +26,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'devin') {
+    return 'Devin'
+  }
   return provider
 }
 
@@ -66,13 +69,15 @@ function isUsageAuthError(message: string | null): boolean {
 
 function getDelegatedCliRefreshProvider(
   p: ProviderRateLimits
-): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi'> | null {
+): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi' | 'devin'> | null {
   if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
     return null
   }
   // Why: only these providers require a user-run CLI to rotate the read-only
   // session Orca consumes; Claude handles the same failure kind in-app.
-  return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
+  return p.provider === 'grok' || p.provider === 'kimi' || p.provider === 'devin'
+    ? p.provider
+    : null
 }
 
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
@@ -82,6 +87,12 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (delegatedCliProvider === 'kimi') {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (delegatedCliProvider === 'devin') {
+    return translate(
+      'auto.components.status.bar.tooltip.devin.runToRefresh',
+      'Run Devin to refresh'
+    )
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -141,6 +152,12 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     return translate(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (delegatedCliProvider === 'devin') {
+    return translate(
+      'auto.components.status.bar.tooltip.devin.runToRefreshDetail',
+      'Run devin in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   }
   if (p.provider === 'claude') {

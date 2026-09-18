@@ -4,6 +4,7 @@ import { useAppStore } from '../../store'
 import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
+import { DevinUsagePane } from './DevinUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
@@ -52,7 +53,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'devin' | 'opencode' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -71,6 +72,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'codex',
     get label() {
       return translate('auto.components.stats.StatsPane.7d26110cea', 'Codex')
+    }
+  },
+  {
+    id: 'devin',
+    get label() {
+      return translate('auto.components.stats.StatsPane.devinUsageTab', 'Devin')
     }
   },
   {
@@ -206,6 +213,8 @@ export function StatsPane(): React.JSX.Element {
             <ClaudeUsagePane />
           ) : activeUsageTab === 'codex' ? (
             <CodexUsagePane />
+          ) : activeUsageTab === 'devin' ? (
+            <DevinUsagePane />
           ) : activeUsageTab === 'opencode' ? (
             <OpenCodeUsagePane />
           ) : (

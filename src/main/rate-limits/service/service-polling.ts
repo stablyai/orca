@@ -78,7 +78,8 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity
+      antigravity: this.state.antigravity,
+      devin: this.state.devin
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
@@ -170,6 +171,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
     if (plan.providers.includes('grok')) {
       await this.fetchGrokOnly()
+    }
+    if (plan.providers.includes('devin')) {
+      await this.fetchDevinOnly()
     }
   }
 

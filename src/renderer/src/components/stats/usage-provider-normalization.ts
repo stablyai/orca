@@ -78,6 +78,32 @@ export function createCodexProvider(input: UsageOverviewInput['codex']): UsagePr
     activeDays: countActiveDays(dailyActiveDays)
   }
 }
+export function createDevinProvider(input: UsageOverviewInput['devin']): UsageProviderOverview {
+  const summary = input.summary
+  return {
+    id: 'devin',
+    label: translate('auto.components.stats.usage.overview.model.devin', 'Devin'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyDevinData ?? input.scanState?.hasAnyDevinData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'events',
+    activityCount: summary?.events ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    newInputTokens: summary?.inputTokens ?? 0,
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: summary?.cachedInputTokens ?? 0,
+    reasoningTokens: 0,
+    estimatedCostUsd: null,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(
+      input.daily.filter((entry) => entry.totalTokens > 0).map((entry) => entry.day)
+    )
+  }
+}
 
 export function createOpenCodeProvider(
   input: UsageOverviewInput['opencode']

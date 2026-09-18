@@ -27,6 +27,19 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
   }
 }
 
+export function createDevinAccountsApi(): NonNullable<Partial<PreloadApi>['devinAccounts']> {
+  return {
+    getStatus: () =>
+      Promise.resolve({
+        signedIn: false,
+        email: null,
+        tokenFresh: false,
+        plan: null,
+        error: null
+      })
+  }
+}
+
 function createEmptyManagedAccountsState(): {
   accounts: never[]
   activeAccountId: null

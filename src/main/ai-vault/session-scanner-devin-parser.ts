@@ -85,22 +85,27 @@ function extractDevinStepText(step: Record<string, unknown>): string | null {
   return extractString(step.text)
 }
 
+export const DEVIN_INPUT_TOKEN_KEYS = ['total_input_tokens', 'input_tokens'] as const
+export const DEVIN_OUTPUT_TOKEN_KEYS = ['output_tokens'] as const
+export const DEVIN_CACHE_READ_TOKEN_KEYS = ['cache_read_tokens', 'cache_read_input_tokens'] as const
+export const DEVIN_CACHE_CREATION_TOKEN_KEYS = [
+  'cache_creation_tokens',
+  'cache_creation_input_tokens'
+] as const
+
 function devinStepTokenTotal(
   metadata: Record<string, unknown> | null,
   metrics: Record<string, unknown> | null
 ): number {
   return (
-    numberFromDevinMetadata(metadata, metrics, ['total_input_tokens', 'input_tokens']) +
-    numberFromDevinMetadata(metadata, metrics, ['output_tokens']) +
-    numberFromDevinMetadata(metadata, metrics, ['cache_read_tokens', 'cache_read_input_tokens']) +
-    numberFromDevinMetadata(metadata, metrics, [
-      'cache_creation_tokens',
-      'cache_creation_input_tokens'
-    ])
+    numberFromDevinMetadata(metadata, metrics, DEVIN_INPUT_TOKEN_KEYS) +
+    numberFromDevinMetadata(metadata, metrics, DEVIN_OUTPUT_TOKEN_KEYS) +
+    numberFromDevinMetadata(metadata, metrics, DEVIN_CACHE_READ_TOKEN_KEYS) +
+    numberFromDevinMetadata(metadata, metrics, DEVIN_CACHE_CREATION_TOKEN_KEYS)
   )
 }
 
-function numberFromDevinMetadata(
+export function numberFromDevinMetadata(
   metadata: Record<string, unknown> | null,
   metrics: Record<string, unknown> | null,
   keys: readonly string[]

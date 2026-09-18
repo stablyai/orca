@@ -28,6 +28,10 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     await this.fetchGrokOnly({ force: true })
     return this.getState()
   }
+  async refreshDevin(): Promise<RateLimitState> {
+    await this.fetchDevinOnly({ force: true })
+    return this.getState()
+  }
 
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1

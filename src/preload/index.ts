@@ -69,6 +69,7 @@ import { statsApi } from './api/stats-bridge'
 import { memoryApi } from './api/memory-bridge'
 import { claudeUsageApi } from './api/claude-usage-bridge'
 import { codexUsageApi } from './api/codex-usage-bridge'
+import { devinUsageApi } from './api/devin-usage-bridge'
 import { openCodeUsageApi } from './api/open-code-usage-bridge'
 import { aiVaultApi } from './api/ai-vault-bridge'
 import { nativeChatApi } from './api/native-chat-bridge'
@@ -77,6 +78,7 @@ import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
 import { minimaxCredentialsApi } from './api/minimax-credentials-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
+import { devinAccountsApi } from './api/devin-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { automationsApi } from './api/automations-bridge'
 import { e2eApi } from './api/e2e-bridge'
@@ -167,6 +169,7 @@ const api = {
   memory: memoryApi,
   claudeUsage: claudeUsageApi,
   codexUsage: codexUsageApi,
+  devinUsage: devinUsageApi,
   openCodeUsage: openCodeUsageApi,
   aiVault: aiVaultApi,
   nativeChat: nativeChatApi,
@@ -175,6 +178,7 @@ const api = {
   rateLimits: rateLimitsApi,
   minimaxCredentials: minimaxCredentialsApi,
   grokAccounts: grokAccountsApi,
+  devinAccounts: devinAccountsApi,
   ssh: sshApi,
   automations: automationsApi,
   e2e: e2eApi,

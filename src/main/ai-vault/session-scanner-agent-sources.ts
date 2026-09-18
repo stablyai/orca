@@ -16,6 +16,7 @@ import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './ses
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
+import { resolveDevinTranscriptsDir } from '../devin/devin-cli-data-dir'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
 const CODEX_SESSIONS_DIR = join(
@@ -43,13 +44,7 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
 // as well as in variable name.
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
-const DEVIN_TRANSCRIPTS_DIR = join(
-  resolveAbsoluteDirOverride(
-    process.env.DEVIN_HOME,
-    join(homedir(), '.local', 'share', 'devin', 'cli')
-  ),
-  'transcripts'
-)
+export const DEVIN_TRANSCRIPTS_DIR = resolveDevinTranscriptsDir()
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =

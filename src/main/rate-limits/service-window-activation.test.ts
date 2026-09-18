@@ -8,6 +8,7 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchDevinRateLimits } from './devin-fetcher'
 import {
   asRateLimitWindow,
   deferred,
@@ -51,6 +52,14 @@ vi.mock('./grok-fetcher', () => ({
 
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
+vi.mock('./devin-fetcher', () => ({
+  fetchDevinRateLimits: vi.fn()
+}))
+
+vi.mock('./devin-credentials', () => ({
+  readDevinCredentials: vi.fn(() => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -533,6 +542,36 @@ describe('RateLimitService', () => {
       window.emit('restore')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(3)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries a failing Devin fetch on its own cycle without re-reading Claude', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      vi.mocked(fetchDevinRateLimits).mockResolvedValue(errorProvider('devin', 'HTTP 502'))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchDevinRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().devin?.status).toBe('error')
+
+      // Why: Devin has a dedicated fetch cycle, so recovering it must not pull
+      // Claude's tight-budget endpoint along the way the Kimi full-fetch does.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchDevinRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
       service.stop()
     } finally {

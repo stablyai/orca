@@ -154,6 +154,7 @@ describe('usage overview model', () => {
         summary: codexSummary,
         daily: codexDaily
       },
+      devin: { scanState: null, summary: null, daily: [] },
       opencode: {
         scanState: enabledOpenCodeScanState(),
         summary: openCodeSummary,
@@ -176,6 +177,7 @@ describe('usage overview model', () => {
       totalTokens: 4_500,
       claudeTokens: 2_500,
       codexTokens: 2_000,
+      devinTokens: 0,
       openCodeTokens: 0,
       intensity: 4
     })
@@ -199,6 +201,7 @@ describe('usage overview model', () => {
           totalTokens: 4_500,
           claudeTokens: 2_500,
           codexTokens: 2_000,
+          devinTokens: 0,
           openCodeTokens: 0,
           intensity: 4
         }
@@ -213,6 +216,7 @@ describe('usage overview model', () => {
         totalTokens: 0,
         claudeTokens: 0,
         codexTokens: 0,
+        devinTokens: 0,
         openCodeTokens: 0,
         intensity: 0
       },
@@ -221,6 +225,7 @@ describe('usage overview model', () => {
         totalTokens: 4_500,
         claudeTokens: 2_500,
         codexTokens: 2_000,
+        devinTokens: 0,
         openCodeTokens: 0,
         intensity: 4
       },
@@ -229,6 +234,7 @@ describe('usage overview model', () => {
         totalTokens: 0,
         claudeTokens: 0,
         codexTokens: 0,
+        devinTokens: 0,
         openCodeTokens: 0,
         intensity: 0
       }
@@ -239,6 +245,7 @@ describe('usage overview model', () => {
     const overview = buildUsageOverview({
       claude: { scanState: null, summary: null, daily: [] },
       codex: { scanState: null, summary: null, daily: [] },
+      devin: { scanState: null, summary: null, daily: [] },
       opencode: { scanState: null, summary: null, daily: [] }
     })
 
@@ -269,6 +276,7 @@ describe('usage overview model', () => {
         summary: null,
         daily: codexDaily
       },
+      devin: { scanState: null, summary: null, daily: [] },
       opencode: { scanState: null, summary: null, daily: [] }
     })
 

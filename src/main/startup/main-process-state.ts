@@ -4,6 +4,7 @@ import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
+import type { DevinUsageStore } from '../devin-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
@@ -54,6 +55,7 @@ export const mainProcessState = {
   stats: null as StatsCollector | null,
   claudeUsage: null as ClaudeUsageStore | null,
   codexUsage: null as CodexUsageStore | null,
+  devinUsage: null as DevinUsageStore | null,
   openCodeUsage: null as OpenCodeUsageStore | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,

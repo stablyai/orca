@@ -247,6 +247,44 @@ describe('UsageRow', () => {
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
   })
+
+  it("labels Devin's daily window by its duration alongside the weekly window", () => {
+    // Why: Devin is the only provider whose session window is a full day, so a
+    // duration-label regression would show up here first.
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'devin',
+          session: {
+            usedPercent: 42,
+            windowMinutes: 1440,
+            resetsAt: null,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 13,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          },
+          planType: 'Team',
+          updatedAt: 0,
+          status: 'ok',
+          error: null
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup.match(/data-usage-window=/g)).toHaveLength(2)
+    expect(markup).toContain('>1d<')
+    expect(markup).toContain('>wk<')
+    expect(markup).toContain('42%')
+    expect(markup).toContain('13%')
+  })
 })
 
 describe('UsageRosterPanel density picker', () => {

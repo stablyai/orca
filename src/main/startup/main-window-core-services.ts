@@ -29,6 +29,7 @@ export function attachMainWindowCoreServices(
   const stats = state.stats
   const claudeUsage = state.claudeUsage
   const codexUsage = state.codexUsage
+  const devinUsage = state.devinUsage
   const openCodeUsage = state.openCodeUsage
   const codexAccounts = state.codexAccounts
   const claudeAccounts = state.claudeAccounts
@@ -43,6 +44,7 @@ export function attachMainWindowCoreServices(
     !stats ||
     !claudeUsage ||
     !codexUsage ||
+    !devinUsage ||
     !openCodeUsage ||
     !codexAccounts ||
     !claudeAccounts ||
@@ -60,6 +62,7 @@ export function attachMainWindowCoreServices(
     stats,
     claudeUsage,
     codexUsage,
+    devinUsage,
     openCodeUsage,
     codexAccounts,
     claudeAccounts,

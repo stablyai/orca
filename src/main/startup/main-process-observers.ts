@@ -16,6 +16,7 @@ import { StatsCollector } from '../stats/collector'
 import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
+import { DevinUsageStore } from '../devin-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
@@ -123,5 +124,6 @@ export function initializeMainProcessObservers(): void {
   agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
+  state.devinUsage = new DevinUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)
 }

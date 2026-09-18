@@ -12,6 +12,11 @@ import type {
   CodexUsageSession
 } from '../codex-usage/types'
 import type {
+  DevinUsageDailyAggregate,
+  DevinUsagePersistedFile,
+  DevinUsageSession
+} from '../devin-usage/types'
+import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
@@ -20,6 +25,7 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
+  scanDevinUsageOnWorker,
   scanOpenCodeUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
@@ -91,6 +97,25 @@ export async function scanCodexUsageFilesViaWorker(
   dailyAggregates: CodexUsageDailyAggregate[]
 }> {
   const value = await scanCodexUsageOnWorker(
+    (body) => getSharedClient().scan(body),
+    worktrees,
+    previous
+  )
+  return {
+    processedFiles: value.source,
+    sessions: value.sessions,
+    dailyAggregates: value.dailyAggregates
+  }
+}
+export async function scanDevinUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  previous: DevinUsagePersistedFile[] = []
+): Promise<{
+  processedFiles: DevinUsagePersistedFile[]
+  sessions: DevinUsageSession[]
+  dailyAggregates: DevinUsageDailyAggregate[]
+}> {
+  const value = await scanDevinUsageOnWorker(
     (body) => getSharedClient().scan(body),
     worktrees,
     previous
