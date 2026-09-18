@@ -15,14 +15,20 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
-function Dialog({ open, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  // Why: keep-mounted Tasks portals to body; OverlayAllowedContext closes them without dropping draft state.
-  const gatedOpen = useGatedOverlayOpen(open)
+function Dialog({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  // Why: stay controlled while gating; parent `open` still restores a draft dialog when Tasks returns.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
   return (
     <DialogPrimitive.Root
       data-slot="dialog"
       {...props}
-      {...(gatedOpen === undefined ? {} : { open: gatedOpen })}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
     />
   )
 }

@@ -12,14 +12,20 @@ import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 import { translate } from '@/i18n/i18n'
 
-function Sheet({ open, ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  // Why: keep-mounted Tasks sheets portal to body; OverlayAllowedContext closes them without dropping selection.
-  const gatedOpen = useGatedOverlayOpen(open)
+function Sheet({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  // Why: stay controlled while gating; parent `open` still restores the sheet when Tasks returns.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
   return (
     <SheetPrimitive.Root
       data-slot="sheet"
       {...props}
-      {...(gatedOpen === undefined ? {} : { open: gatedOpen })}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
     />
   )
 }

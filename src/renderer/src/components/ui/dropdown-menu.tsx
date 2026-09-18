@@ -10,14 +10,20 @@ import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 import { useMenuPointerHighlight } from './menu-pointer-highlight'
 import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 
-function DropdownMenu({ open, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  // Why: keep-mounted Tasks row-action menus portal to body; OverlayAllowedContext closes them with the parent view.
-  const gatedOpen = useGatedOverlayOpen(open)
+function DropdownMenu({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  // Why: stay controlled so hiding Tasks cannot flip Radix uncontrolled↔controlled and reopen the menu on return.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
   return (
     <DropdownMenuPrimitive.Root
       data-slot="dropdown-menu"
       {...props}
-      {...(gatedOpen === undefined ? {} : { open: gatedOpen })}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
     />
   )
 }

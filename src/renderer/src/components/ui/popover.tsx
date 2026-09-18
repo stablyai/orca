@@ -12,14 +12,20 @@ import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
 
-function Popover({ open, ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
-  // Why: keep-mounted Tasks popovers portal to body; OverlayAllowedContext closes them with the parent view.
-  const gatedOpen = useGatedOverlayOpen(open)
+function Popover({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof PopoverPrimitive.Root>) {
+  // Why: stay controlled so hiding Tasks cannot flip Radix uncontrolled↔controlled.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
   return (
     <PopoverPrimitive.Root
       data-slot="popover"
       {...props}
-      {...(gatedOpen === undefined ? {} : { open: gatedOpen })}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
     />
   )
 }
