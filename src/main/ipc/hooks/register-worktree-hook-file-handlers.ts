@@ -1,3 +1,4 @@
+import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { ipcMain } from 'electron'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -6,7 +7,7 @@ import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatc
 import { isENOENT } from '../filesystem-path-containment'
 import { parseOrcaYaml } from '../../hooks'
 import {
-  isOrcaDirIgnoredByGit,
+  isIssueCommandIgnoredByGit,
   readIssueCommand,
   writeIssueCommand
 } from '../../issue-command-file'
@@ -108,7 +109,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           return
         }
         await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-        if (await isOrcaDirIgnoredByGit(repo.path, repo.connectionId)) {
+        if (await isIssueCommandIgnoredByGit(repo.path, repo.connectionId)) {
           await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
           return
         }
@@ -128,7 +129,11 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return
       }
-      await writeIssueCommand(repo.path, args.content)
+      await writeIssueCommand(
+        repo.path,
+        args.content,
+        getLocalProjectWorktreeGitOptions(store, repo)
+      )
     }
   )
 }

@@ -1,3 +1,4 @@
+import * as issueCommandFile from '../issue-command-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-command'
 
@@ -28,7 +29,10 @@ describe('remote issue command ignore rules', () => {
     addedAt: 0,
     connectionId: 'conn-1'
   }
-  const commands = new RuntimeRepositoryIssueCommand({ resolveRepo: async () => repo })
+  const commands = new RuntimeRepositoryIssueCommand({
+    resolveRepo: async () => repo,
+    getLocalGitArgs: () => []
+  })
 
   beforeEach(() => {
     vi.resetAllMocks()
@@ -41,12 +45,12 @@ describe('remote issue command ignore rules', () => {
   })
 
   it('uses the remote ignore rules and leaves .gitignore untouched', async () => {
-    mocks.remoteCheck.mockResolvedValue(['.orca'])
+    mocks.remoteCheck.mockResolvedValue(['.orca/issue-command'])
 
     await commands.write(repo.id, 'local command')
 
     expect(mocks.requireGit).toHaveBeenCalledWith('conn-1')
-    expect(mocks.remoteCheck).toHaveBeenCalledWith(repo.path, ['.orca'])
+    expect(mocks.remoteCheck).toHaveBeenCalledWith(repo.path, ['.orca/issue-command'])
     expect(mocks.localCheck).not.toHaveBeenCalled()
     expect(mocks.fs.readFile).not.toHaveBeenCalled()
     expect(mocks.fs.writeFile).toHaveBeenCalledExactlyOnceWith(
@@ -92,5 +96,30 @@ describe('remote issue command ignore rules', () => {
     expect(mocks.requireGit).not.toHaveBeenCalled()
     expect(mocks.fs.writeFile).not.toHaveBeenCalled()
     expect(mocks.fs.deletePath).toHaveBeenCalledWith(`${repo.path}/.orca/issue-command`, false)
+  })
+})
+
+describe('local issue command runtime routing', () => {
+  it('forwards the resolved WSL options to the local writer', async () => {
+    const repo = {
+      id: 'local',
+      path: '/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand').mockResolvedValue(undefined)
+    const getLocalGitArgs = vi.fn((): [{ wslDistro: string }] => [{ wslDistro: 'Ubuntu' }])
+    try {
+      const commands = new RuntimeRepositoryIssueCommand({
+        resolveRepo: async () => repo,
+        getLocalGitArgs
+      })
+      await commands.write(repo.id, 'command')
+      expect(getLocalGitArgs).toHaveBeenCalledWith(repo)
+      expect(write).toHaveBeenCalledExactlyOnceWith(repo.path, 'command', { wslDistro: 'Ubuntu' })
+    } finally {
+      write.mockRestore()
+    }
   })
 })

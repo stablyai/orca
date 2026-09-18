@@ -31,15 +31,18 @@ describe('issue command ignore rules', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it.each(['.orca', '.orca/', '/.orca/'])('respects global ignore pattern %s', async (pattern) => {
-    writeFileSync(join(root, 'ignore'), `${pattern}\n`)
-    writeFileSync(join(repo, '.gitignore'), 'node_modules/\n')
+  it.each(['.orca', '.orca/', '/.orca/', '.orca/*', '.orca/issue-command'])(
+    'respects global ignore pattern %s',
+    async (pattern) => {
+      writeFileSync(join(root, 'ignore'), `${pattern}\n`)
+      writeFileSync(join(repo, '.gitignore'), 'node_modules/\n')
 
-    await writeIssueCommand(repo, 'local command')
+      await writeIssueCommand(repo, 'local command')
 
-    expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('node_modules/\n')
-    expect(readFileSync(join(repo, '.orca', 'issue-command'), 'utf8')).toBe('local command\n')
-  })
+      expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('node_modules/\n')
+      expect(readFileSync(join(repo, '.orca', 'issue-command'), 'utf8')).toBe('local command\n')
+    }
+  )
 
   it('does not create .gitignore when the repository exclude already ignores .orca', async () => {
     writeFileSync(join(repo, '.git', 'info', 'exclude'), '.orca/\n')

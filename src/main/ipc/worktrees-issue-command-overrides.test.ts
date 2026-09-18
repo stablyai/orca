@@ -1,3 +1,5 @@
+import * as issueCommandFile from '../issue-command-file'
+import * as projectGitOptions from '../project-runtime-git-options'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createIssueCommandRunnerScriptMock,
@@ -91,6 +93,23 @@ vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).pty
 describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
     setupWorktreeHandlers()
+  })
+
+  it('forwards the resolved WSL options when writing a local override', async () => {
+    const resolveOptions = vi
+      .spyOn(projectGitOptions, 'getLocalProjectWorktreeGitOptions')
+      .mockReturnValue({ wslDistro: 'Ubuntu' })
+    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand').mockResolvedValue(undefined)
+    try {
+      await handlers['hooks:writeIssueCommand'](null, { repoId: 'repo-1', content: 'command' })
+      expect(resolveOptions).toHaveBeenCalledWith(store, expect.objectContaining({ id: 'repo-1' }))
+      expect(write).toHaveBeenCalledExactlyOnceWith('/workspace/repo', 'command', {
+        wslDistro: 'Ubuntu'
+      })
+    } finally {
+      resolveOptions.mockRestore()
+      write.mockRestore()
+    }
   })
 
   it('creates an issue-command runner for an existing repo/worktree pair', async () => {
@@ -282,7 +301,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1'
     })
-    const checkIgnoredPaths = vi.fn().mockResolvedValue(['.orca'])
+    const checkIgnoredPaths = vi.fn().mockResolvedValue(['.orca/issue-command'])
     getSshGitProviderMock.mockReturnValue({ checkIgnoredPaths })
     const fsProvider = {
       createDir: vi.fn().mockResolvedValue(undefined),
@@ -297,7 +316,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(getSshGitProviderMock).toHaveBeenCalledWith('conn-1')
-    expect(checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['.orca'])
+    expect(checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['.orca/issue-command'])
     expect(fsProvider.readFile).not.toHaveBeenCalled()
     expect(fsProvider.writeFile).toHaveBeenCalledExactlyOnceWith(
       '/remote/repo/.orca/issue-command',

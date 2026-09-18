@@ -2,6 +2,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
+import type { GitRuntimeOptions } from './git/git-runtime-options'
 import { checkIgnoredPaths } from './git/check-ignored-paths'
 import { requireSshGitProvider } from './providers/ssh-git-dispatch'
 
@@ -56,7 +57,11 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
  * Write the per-user issue command override to `{repoRoot}/.orca/issue-command`.
  * Empty content deletes the override so the shared `orca.yaml` command applies again.
  */
-export async function writeIssueCommand(repoPath: string, content: string): Promise<void> {
+export async function writeIssueCommand(
+  repoPath: string,
+  content: string,
+  options: GitRuntimeOptions = {}
+): Promise<void> {
   const filePath = getIssueCommandFilePath(repoPath)
   const trimmed = content.trim()
 
@@ -70,7 +75,7 @@ export async function writeIssueCommand(repoPath: string, content: string): Prom
     if (!existsSync(orcaDir)) {
       mkdirSync(orcaDir, { recursive: true })
     }
-    if (!(await isOrcaDirIgnoredByGit(repoPath))) {
+    if (!(await isIssueCommandIgnoredByGit(repoPath, undefined, options))) {
       ensureOrcaDirIgnored(repoPath)
     }
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
@@ -81,15 +86,18 @@ export async function writeIssueCommand(repoPath: string, content: string): Prom
   }
 }
 
-export async function isOrcaDirIgnoredByGit(
+/** Consult the execution host before changing shared ignore rules for a private override. */
+export async function isIssueCommandIgnoredByGit(
   repoPath: string,
-  connectionId?: string
+  connectionId?: string,
+  options: GitRuntimeOptions = {}
 ): Promise<boolean> {
   try {
+    const issueCommandPath = `${ORCA_DIR}/${ISSUE_COMMAND_FILENAME}`
     const ignored = connectionId
-      ? await requireSshGitProvider(connectionId).checkIgnoredPaths(repoPath, [ORCA_DIR])
-      : await checkIgnoredPaths(repoPath, [ORCA_DIR])
-    return ignored.includes(ORCA_DIR)
+      ? await requireSshGitProvider(connectionId).checkIgnoredPaths(repoPath, [issueCommandPath])
+      : await checkIgnoredPaths(repoPath, [issueCommandPath], options)
+    return ignored.includes(issueCommandPath)
   } catch {
     // Preserve the existing ignore-file fallback if Git cannot inspect the rules.
     return false
