@@ -16,7 +16,7 @@ import {
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useAppStore } from '@/store'
-import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../../shared/browser-family-labels'
 import type {
   BrowserSessionProfile,
   BrowserViewportPresetId
