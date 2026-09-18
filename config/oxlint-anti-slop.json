@@ -56,6 +56,15 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
+    // mock-descendant-sweep.ts (daemon and relay) is a test-only side-effect shim: its whole body
+    // is one vi.mock that keeps mock PTY PIDs away from the host process table, and it exists so
+    // 60 suites do not each inline the same hoisted factory. It is never imported by product code.
+    {
+      "files": ["**/mock-descendant-sweep.ts"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
     // The exemptions below are file-scoped rather than inline `oxlint-disable` comments
     // because the root lint scan does not load this plugin, so an inline directive naming
     // an anti-slop rule always reads back as an unused directive there.
