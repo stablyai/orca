@@ -140,7 +140,7 @@ describe('OpenCode status plugin module contract', () => {
     expect(posts.filter((post) => post.url.includes('/hook/opencode'))).toHaveLength(0)
   })
 
-  it('reports a v2 session.status event through the hook endpoint when driven via setup()', async () => {
+  it('derives busy/idle/start from v2 execution events when driven via setup()', async () => {
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     const posts: { url: string; body: unknown }[] = []
     globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
@@ -148,15 +148,11 @@ describe('OpenCode status plugin module contract', () => {
       return { ok: true } as Response
     }) as unknown as typeof globalThis.fetch
 
-    // Why: encoded OpenCodeEvent envelope — payload under `data`, not v1's
-    // `properties`. A verbatim forward would silently drop this event.
-    const busyEvent = {
-      id: 'evt_1',
-      type: 'session.status',
-      data: { sessionID: 'ses_root', status: { type: 'busy' } }
-    }
-    // Why: v2-style session domain — single-argument get returning the raw info
-    // without a `.data` wrapper. This exercises the client shim's normalization.
+    // Why: a normal v2 turn emits NO session.status/session.idle — liveness is
+    // `session.execution.started` -> `...succeeded`, each carrying only
+    // `{ sessionID }` (observed live on 2.0.7). The adapter must derive the v1
+    // busy/idle transitions from those, synthesizing the start anything v1
+    // posts at creation, confirmed roots only.
     const fakeCtx = {
       session: {
         get: async ({ sessionID }: { sessionID: string }) => ({
@@ -166,7 +162,8 @@ describe('OpenCode status plugin module contract', () => {
       },
       event: {
         subscribe: async function* () {
-          yield busyEvent
+          yield { id: 'evt_1', type: 'session.execution.started', data: { sessionID: 'ses_root' } }
+          yield { id: 'evt_2', type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } }
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
@@ -180,18 +177,11 @@ describe('OpenCode status plugin module contract', () => {
 
     expect(cleanup).toBeTypeOf('function')
     // Why: the setup subscription loop and lifecycle FIFO drain asynchronously.
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 200))
 
     const hookPosts = posts.filter((post) => post.url.includes('/hook/opencode'))
-    expect(hookPosts.some((post) => hookName(post) === 'SessionBusy')).toBe(true)
+    expect(hookPosts.map(hookName)).toEqual(['SessionStart', 'SessionBusy', 'SessionIdle'])
     expect(hookPosts[0]?.body).toMatchObject({ paneKey: 'tab-1:leaf-1' })
-
-    // Why: the stream ends when the generator returns — the adapter must dispose
-    // the factory then (not only on loader cleanup), otherwise the busy owner
-    // could never clear. Dispose of a busy owner publishes the final idle.
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    const afterStreamEnd = posts.filter((post) => post.url.includes('/hook/opencode'))
-    expect(afterStreamEnd.some((post) => hookName(post) === 'SessionIdle')).toBe(true)
 
     await (cleanup as () => Promise<unknown>)?.()
   })
@@ -207,6 +197,7 @@ describe('OpenCode status plugin module contract', () => {
     // Why: v2 reports the session flat (`data.id`) where v1 nests it under
     // `properties.info`; `session.text.delta` has no v1 counterpart and must
     // never reach the message-preview path (no role/message identity there).
+    // A later execution start for the same session must not double-post Start.
     const fakeCtx = {
       session: {
         get: async ({ sessionID }: { sessionID: string }) => ({
@@ -222,6 +213,7 @@ describe('OpenCode status plugin module contract', () => {
             type: 'session.text.delta',
             data: { sessionID: 'ses_root', delta: 'hello' }
           }
+          yield { id: 'evt_3', type: 'session.execution.started', data: { sessionID: 'ses_root' } }
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
@@ -229,7 +221,7 @@ describe('OpenCode status plugin module contract', () => {
 
     const module = await loadPluginModule()
     const cleanup = await module.default?.setup?.(fakeCtx)
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 200))
     await (cleanup as () => Promise<unknown>)?.()
 
     const hookPosts = posts.filter((post) => post.url.includes('/hook/opencode'))
@@ -237,11 +229,10 @@ describe('OpenCode status plugin module contract', () => {
       (post) =>
         (post.body as { payload?: { hook_event_name?: unknown } })?.payload?.hook_event_name
     )
-    expect(names).toContain('SessionStart')
-    // Why: the delta must not surface as a preview post or flip status to busy —
-    // only the SessionStart post is legitimate here (stream-end dispose publishes
-    // no idle because the factory never owned delivery).
-    expect(names).toEqual(['SessionStart'])
+    // Why: the delta must not surface as a preview post; the execution start
+    // reuses the creation's Start instead of posting a second one, then flips
+    // the pane busy, and stream-end dispose returns it to idle.
+    expect(names).toEqual(['SessionStart', 'SessionBusy', 'SessionIdle'])
   })
 
   it('keeps the named factory export so the factory-based loader still resolves', async () => {
