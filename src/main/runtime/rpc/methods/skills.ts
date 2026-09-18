@@ -1,4 +1,4 @@
-import { defineMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
@@ -54,6 +54,15 @@ export function resolveDiscoveryTarget(
   return resolveSkillDiscoveryTarget(target)
 }
 
+function rejectPairedSkillMutation(clientKind: RpcContext['clientKind'], action: string): void {
+  if (clientKind !== undefined) {
+    throw new AgentSkillSharingError(
+      AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
+      `${action} through a paired client is not supported. Run the command from Orca on the machine that stores the skills.`
+    )
+  }
+}
+
 function skillDeleteDependencies(
   runtime: Pick<OrcaRuntimeService, 'listRepos' | 'resolveSkillDiscoveryProviderRoots'>
 ): SkillDeleteRequestDependencies {
@@ -104,12 +113,7 @@ export const SKILL_METHODS = [
     params: AgentSkillShareRequestSchema,
     handler: async (params, { runtime, signal, clientKind }) => {
       runtime.assertAgentSkillSharingAllowed()
-      if (clientKind !== undefined) {
-        throw new AgentSkillSharingError(
-          AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
-          'Publishing skills through a paired client is not supported. Run the command from Orca on the machine that stores the skills.'
-        )
-      }
+      rejectPairedSkillMutation(clientKind, 'Publishing skills')
       const resolvedTarget = resolveDiscoveryTarget(params.target ?? {}, runtime)
       if (resolvedTarget.kind !== 'native-host') {
         throw new AgentSkillSharingError(
@@ -127,7 +131,8 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.install',
     params: SkillInstallRequestSchema,
-    handler: async (params, { runtime, signal, clientCapabilities }) => {
+    handler: async (params, { runtime, signal, clientCapabilities, clientKind }) => {
+      rejectPairedSkillMutation(clientKind, 'Installing skills')
       const result = await runtime.installSharedSkillRequest(params, signal)
       if (
         result.status === 'cancelled' &&
@@ -146,8 +151,10 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.installBundle',
     params: SkillBundleInstallRequestSchema,
-    handler: (params, { runtime, signal }) =>
-      runtime.installSharedSkillBundleRequest(params, signal)
+    handler: (params, { runtime, signal, clientKind }) => {
+      rejectPairedSkillMutation(clientKind, 'Installing skills')
+      return runtime.installSharedSkillBundleRequest(params, signal)
+    }
   }),
   defineMethod({
     name: 'skills.cancelInstall',
@@ -172,7 +179,10 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.removeInstall',
     params: SkillRemoveRequestSchema,
-    handler: (params, { runtime }) => runtime.removeSharedSkillInstallRequest(params)
+    handler: (params, { runtime, clientKind }) => {
+      rejectPairedSkillMutation(clientKind, 'Removing installed skills')
+      return runtime.removeSharedSkillInstallRequest(params)
+    }
   }),
   defineMethod({
     name: 'skills.listManagedInstalls',
@@ -182,17 +192,26 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.beginUpload',
     params: SkillUploadBeginRequestSchema,
-    handler: (params, { runtime }) => runtime.beginSkillUpload(params)
+    handler: (params, { runtime, clientKind }) => {
+      rejectPairedSkillMutation(clientKind, 'Uploading skills')
+      return runtime.beginSkillUpload(params)
+    }
   }),
   defineMethod({
     name: 'skills.uploadChunk',
     params: SkillUploadChunkRequestSchema,
-    handler: (params, { runtime }) => runtime.appendSkillUploadChunk(params)
+    handler: (params, { runtime, clientKind }) => {
+      rejectPairedSkillMutation(clientKind, 'Uploading skills')
+      return runtime.appendSkillUploadChunk(params)
+    }
   }),
   defineMethod({
     name: 'skills.commitUpload',
     params: SkillUploadCommitRequestSchema,
-    handler: (params, { runtime }) => runtime.commitSkillUpload(params.uploadId)
+    handler: (params, { runtime, clientKind }) => {
+      rejectPairedSkillMutation(clientKind, 'Uploading skills')
+      return runtime.commitSkillUpload(params.uploadId)
+    }
   }),
   defineMethod({
     name: 'skills.cancelUpload',
