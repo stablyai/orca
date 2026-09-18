@@ -8,7 +8,9 @@ import {
   bundleMobileWebApp,
   buildMobileWebAppBundle,
   entryStaticClosure,
-  mobileWebAppBuildOptions
+  mobileWebAppBuildOptions,
+  renameOutputsByContent,
+  routeChunkNames
 } from './build-mobile-web-app-bundle.mjs'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
@@ -569,6 +571,38 @@ describe('the CRLF guard', () => {
     await withScratch(async (scratch) => {
       await writeFile(join(scratch, 'engine.generated.ts'), 'export const X = "a\r\n"', 'utf8')
       await expect(assertNoCarriageReturnsInSource(scratch)).resolves.toBeUndefined()
+    })
+  })
+})
+
+describe('naming an output by its bytes', () => {
+  it('refuses two outputs that name each other', () => {
+    const emitted = (text) => new TextEncoder().encode(text)
+    const metafile = {
+      outputs: {
+        'dist/a.js': { imports: [{ path: 'dist/b.js', kind: 'import-statement' }] },
+        'dist/b.js': { imports: [{ path: 'dist/a.js', kind: 'import-statement' }] }
+      }
+    }
+    // Neither name can be final before the other is, so a cycle has no content hash to reach.
+    // esbuild's splitting emits a DAG; this is the hard stop for the day it does not.
+    expect(() =>
+      renameOutputsByContent(metafile, [
+        { path: 'dist/a.js', contents: emitted('import "/assets/b.js"') },
+        { path: 'dist/b.js', contents: emitted('import "/assets/a.js"') }
+      ])
+    ).toThrow(/output cycle/)
+  })
+
+  it('refuses a route it cannot find an output for', async () => {
+    await withScratch(async (scratch) => {
+      const module = join(scratch, 'index.tsx')
+      await writeFile(module, 'export default function Route() { return null }\n')
+      // The metafile is the only thing that knows which chunk holds a route. Without this the
+      // route reaches the manifest naming a chunk of undefined, which the phone fetches as a 404.
+      expect(() =>
+        routeChunkNames({ outputs: {} }, [{ key: './index.tsx', module }], new Map())
+      ).toThrow(/\.\/index\.tsx reached no output/)
     })
   })
 })
