@@ -77,6 +77,14 @@ export const OPERATION_MUTATIONS = {
   // rows nor an `unchanged` token reaches `admitWorktreeCatalogResponse` as an invalid admission
   // instead of being named at the boundary — main's answer, and the one the host screen showed as
   // an empty host rather than a failure (STA-3123).
+  // Writes every chunk of an asset at offset 0, so a multi-chunk asset reassembles as its last
+  // chunk over a zero-filled buffer. The length still matches the manifest; only the sha256 check
+  // and the decoded bytes in the projection say the bundle is wrong.
+  'mobile-web-bundle-chunk-placement': {
+    file: 'mobile-web-bundle-fetch.ts',
+    before: 'whole.set(bytes, offset)',
+    after: 'whole.set(bytes, 0)'
+  },
   'worktree-catalog-unchecked-reader': {
     file: 'worktree-catalog-operations.ts',
     before: "read: rpcResultVariant('worktree-catalog', worktreeCatalogSchema)",
