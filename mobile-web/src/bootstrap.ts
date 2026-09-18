@@ -17,12 +17,13 @@ async function readBuildId(): Promise<string> {
     throw new Error(`manifest request failed with ${String(response.status)}`)
   }
   const manifest: unknown = await response.json()
-  const buildId =
-    typeof manifest === 'object' && manifest !== null
-      ? (manifest as Record<string, unknown>).buildId
-      : undefined
-  if (!isBuildId(buildId)) {
+  // `in` narrows without an assertion; the manifest is untrusted JSON either way.
+  if (typeof manifest !== 'object' || manifest === null || !('buildId' in manifest)) {
     throw new Error('manifest has no buildId')
+  }
+  const { buildId } = manifest
+  if (!isBuildId(buildId)) {
+    throw new Error('manifest buildId is not a sha256 digest')
   }
   return buildId
 }
