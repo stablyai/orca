@@ -407,6 +407,12 @@ describe('agent process recognition', () => {
       agent: 'muse',
       processName: 'muse-bin-1.3.0-r3401.1'
     })
+    // Why: Linux truncates comm to 15 chars, so `muse-bin-1.0.3-R…` rows still match.
+    expect(recognizeAgentProcess('muse-bin-1.0.3-R')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.0.3-r'
+    })
+    expect(recognizeAgentProcess('muse-workbench')).toBeNull()
     expect(isRecognizedAgentType('muse-bin-1.3.0-R3401.1')).toBe(true)
     expect(isExpectedAgentProcess('muse', 'muse')).toBe(true)
     expect(isExpectedAgentProcess('muse-bin-1.3.0-R3401.1', 'muse')).toBe(true)
@@ -414,6 +420,7 @@ describe('agent process recognition', () => {
       true
     )
     expect(isExpectedAgentProcess('not-muse', 'muse')).toBe(false)
+    expect(isExpectedAgentProcess('muse-workbench', 'muse')).toBe(false)
   })
 
   it('does not recognize Muse headless exec runs as interactive agents', () => {
@@ -423,7 +430,16 @@ describe('agent process recognition', () => {
         '/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1 exec --session-id abc "hi"'
       )
     ).toBeNull()
+    // Why: `exec` past any position is never the TUI — `muse exec` dispatches headless
+    // while `muse <flags> exec` fails fast with an arg error (verified on Muse 1.3.0).
+    expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('muse --yolo exec "hi"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse -- yolo')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+    // Why: subcommand dispatch is case-sensitive, so an uppercase prompt is the TUI.
+    expect(recognizeAgentProcessFromCommandLine("muse 'EXEC'")).toEqual({
       agent: 'muse',
       processName: 'muse'
     })

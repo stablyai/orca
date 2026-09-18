@@ -18,10 +18,10 @@ describe('TUI_AGENT_CONFIG', () => {
     })
   })
 
-  it('launches Muse bare so prompts never route to a subcommand', () => {
+  it('launches Muse with no argv prompt so prompts never route to a subcommand', () => {
     expect(TUI_AGENT_CONFIG.muse).toMatchObject({
       detectCmd: 'muse',
-      launchCmd: 'muse',
+      launchCmd: 'muse --trust-workspace',
       expectedProcess: 'muse',
       promptInjectionMode: 'stdin-after-start'
     })

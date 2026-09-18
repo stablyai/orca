@@ -291,8 +291,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   muse: {
     detectCmd: 'muse',
+    // Why: skip the workspace trust menu so it cannot consume the drafted task — the TUI
+    // would otherwise sit on the dialog while Orca pastes into it. Permission bypass
+    // stays configurable via the yolo default args.
+    launchCmd: 'muse --trust-workspace',
     // Why: a leading positional matching a subcommand name (resume/exec/init/…) is routed
-    // to that subcommand even after `--`, so launch the bare TUI and inject after startup.
+    // to that subcommand even after `--`, so launch the TUI with no argv prompt and
+    // inject after startup.
     promptInjectionMode: 'stdin-after-start'
   }
 }

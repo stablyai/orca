@@ -138,7 +138,8 @@ describe('getDefaultSettings', () => {
       gemini: '--yolo',
       cursor: '--yolo',
       copilot: '--yolo',
-      grok: '--permission-mode bypassPermissions'
+      grok: '--permission-mode bypassPermissions',
+      muse: '--yolo'
     })
     expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
     expect(settings.agentDefaultArgs).not.toHaveProperty('kilo')

@@ -714,7 +714,7 @@ describe('tui agent startup plans', () => {
     })
   })
 
-  it('launches Muse bare so prompts never route to a subcommand', () => {
+  it('launches Muse with no argv prompt so prompts never route to a subcommand', () => {
     const plan = buildAgentStartupPlan({
       agent: 'muse',
       prompt: 'resume the migration',
@@ -723,33 +723,42 @@ describe('tui agent startup plans', () => {
     })
     expect(plan).toEqual({
       agent: 'muse',
-      launchCommand: 'muse',
+      launchCommand: 'muse --trust-workspace',
       expectedProcess: 'muse',
       followupPrompt: 'resume the migration',
-      launchConfig: { agentCommand: 'muse', agentArgs: '', agentEnv: {} }
+      launchConfig: { agentCommand: 'muse --trust-workspace', agentArgs: '', agentEnv: {} }
     })
   })
 
-  it('launches Muse with stdin-after-start prompt delivery', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'muse',
-      prompt: 'fix the tests',
-      cmdOverrides: {},
-      agentArgs: resolveTuiAgentLaunchArgs('muse', null),
-      platform: 'linux'
-    })
-    expect(plan).toEqual({
-      agent: 'muse',
-      launchCommand: "muse '--yolo'",
-      expectedProcess: 'muse',
-      followupPrompt: 'fix the tests',
-      launchConfig: {
-        agentCommand: "muse '--yolo'",
-        agentArgs: '--yolo',
-        agentEnv: {}
-      }
-    })
-  })
+  it.each([
+    ['yolo', 'linux', 'posix', undefined, "muse --trust-workspace '--yolo'"],
+    ['manual', 'linux', 'posix', { muse: '' }, 'muse --trust-workspace'],
+    ['yolo', 'darwin', 'posix', undefined, "muse --trust-workspace '--yolo'"],
+    ['manual', 'darwin', 'posix', { muse: '' }, 'muse --trust-workspace'],
+    ['yolo', 'win32', 'powershell', undefined, "muse --trust-workspace '--yolo'"],
+    ['manual', 'win32', 'powershell', { muse: '' }, 'muse --trust-workspace'],
+    ['yolo', 'win32', 'cmd', undefined, 'muse --trust-workspace "--yolo"'],
+    ['manual', 'win32', 'cmd', { muse: '' }, 'muse --trust-workspace']
+  ] as const)(
+    'launches Muse in %s mode on %s/%s with the prompt as followup',
+    (_, platform, shell, defaults, command) => {
+      const plan = buildAgentStartupPlan({
+        agent: 'muse',
+        prompt: 'fix it',
+        cmdOverrides: {},
+        platform,
+        shell,
+        agentArgs: resolveTuiAgentLaunchArgs('muse', defaults)
+      })
+
+      expect(plan).toMatchObject({
+        agent: 'muse',
+        launchCommand: command,
+        expectedProcess: 'muse',
+        followupPrompt: 'fix it'
+      })
+    }
+  )
 
   it('excludes transient draft prompt env from launch config', () => {
     const plan = buildAgentDraftLaunchPlan({

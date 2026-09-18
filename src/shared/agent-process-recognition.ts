@@ -80,6 +80,10 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   }
 }
 
+// Versioned binary execed by the `muse` launcher script; shared by recognition and the
+// expected-process check below.
+const MUSE_VERSIONED_BINARY_PREFIX = 'muse-bin-'
+
 function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   const exact = PROCESS_TO_AGENT.get(normalized)
   if (exact) {
@@ -93,9 +97,10 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
-  // Why: the `muse` launcher script execs a versioned `muse-bin-<version>`
-  // binary, so the foreground name never equals `muse` itself.
-  if (normalized.startsWith('muse-')) {
+  // Why: the `muse` launcher script execs a versioned `muse-bin-<version>` binary, so
+  // the foreground name never equals `muse` itself. The `muse-bin-` prefix also covers
+  // comm-truncated rows (`muse-bin-1.0.3-R`) without matching unrelated `muse-*` tools.
+  if (normalized.startsWith(MUSE_VERSIONED_BINARY_PREFIX)) {
     return PROCESS_TO_AGENT.get('muse')
   }
   return undefined
@@ -263,8 +268,6 @@ function recognizePythonEntrypoint(
 // exact-name check never matches and readiness/follow-up delivery would stall.
 // Scoped to muse: a generic `-suffix` rule would misclassify short agent names
 // (see the ante-obsidian test).
-const VERSIONED_EXPECTED_PROCESS_PREFIXES = new Set(['muse'])
-
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
   expectedProcess: string
@@ -277,8 +280,7 @@ export function isExpectedAgentProcess(
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
-    (VERSIONED_EXPECTED_PROCESS_PREFIXES.has(normalizedExpected) &&
-      normalizedProcess.startsWith(`${normalizedExpected}-`))
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith(MUSE_VERSIONED_BINARY_PREFIX))
   )
 }
 

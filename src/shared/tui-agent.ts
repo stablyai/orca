@@ -37,4 +37,4 @@ export type TuiAgent =
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
   | 'prime-agent' // Prime Agent (Prime Intellect)
-  | 'muse' // Muse Code
+  | 'muse' // Muse Code (Meta)
