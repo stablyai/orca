@@ -3,8 +3,9 @@
 The automation RPC identity schema follows `src/shared/task-provider-identity.ts`,
 re-exported by `src/shared/task-source-context.ts`. Only GitHub requires fields beyond
 `provider`: `owner` and `repo` are strings, and `host` is optional. GitLab, Linear,
-and Jira fields are optional nullable strings. Requiring a GitLab project or a
-Linear workspace/Jira site would contradict the domain type and account-wide scopes.
+Jira, and HamTeamBoard fields are optional nullable strings. Requiring a GitLab
+project, Linear workspace, Jira site, or HamTeamBoard project would contradict the
+domain type and account-wide scopes.
 
 The discriminated union validates these existing field types without trimming,
 coercing, or stripping identity fields. Unknown fields pass through as they did under
@@ -44,14 +45,14 @@ is the display-only project target above. The released CLI flag reader also call
 not a claim to have executed every historical mobile binary.
 
 No shipped mobile producer with a newly rejected payload was found. No new required
-field was added to the domain contract. GitLab, Linear, and Jira discriminant-only
-identities remain valid. Folder-workspace null/absent identities remain valid on
+field was added to the existing provider contracts. GitLab, Linear, Jira, and
+HamTeamBoard discriminant-only identities remain valid. Folder-workspace null/absent identities remain valid on
 both local and SSH hosts. No execution/status logic or client-side parsing changed.
 
 ## Regression evidence
 
 `src/main/runtime/rpc/methods/task-provider-identity.test.ts` checks unchanged valid
-identities for all four providers, required GitHub fields, every declared field's
+identities for all providers, required GitHub fields, every declared field's
 type, optional/null non-GitHub fields, unknown-field preservation, explicit GitLab
 discrimination with owner/repo present, local/SSH folder contexts, and update patches.
 

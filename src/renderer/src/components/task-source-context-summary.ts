@@ -64,6 +64,13 @@ export function getTaskSourceContextSummary(args: {
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
       })
+    case 'hamteamboard':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: null,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
   }
 }
 
@@ -198,6 +205,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'hamteamboard':
+      return identity.projectKey ?? identity.projectId ?? identity.serverUrl ?? null
   }
 }
 

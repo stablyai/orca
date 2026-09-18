@@ -12,7 +12,7 @@ import {
   type TaskProviderReadiness
 } from './task-source-setup-state'
 
-const ORDER: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+const ORDER: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'hamteamboard']
 
 function buildReadiness(
   overrides: Partial<Record<TaskProvider, Partial<TaskProviderReadiness>>> = {}
@@ -27,7 +27,8 @@ function buildReadiness(
       skillChecking: false,
       visible: true
     },
-    jira: { connected: true, checking: false, visible: true }
+    jira: { connected: true, checking: false, visible: true },
+    hamteamboard: { connected: false, checking: false, unavailable: true, visible: false }
   }
   for (const provider of ORDER) {
     Object.assign(base[provider], overrides[provider])

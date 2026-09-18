@@ -113,7 +113,7 @@ export function getIncompleteVisibleTaskProviders(
 }
 
 // A provider nobody has touched is the shipped default, not a problem: settings
-// expose all four, so treating "never connected" as a warning would fire on
+// expose every registered provider, so treating "never connected" as a warning would fire on
 // every fresh install. Setup counts as started once a credential or the skill
 // landed.
 export function hasStartedTaskProviderSetup(readiness: TaskProviderReadiness): boolean {
