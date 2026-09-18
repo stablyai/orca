@@ -240,7 +240,40 @@ describe('BridgeReplyAssembler refusals', () => {
       status: 'failed',
       refusal: 'duplicate-part'
     })
-    expect(assembler.accept(part(1, 2, 'b'))).toEqual({ status: 'pending' })
+  })
+
+  it('keeps a refused id refused, so a sender cannot start over on the next part', () => {
+    const assembler = new BridgeReplyAssembler()
+    assembler.accept(part(0, 3, '{"id"'))
+    expect(assembler.accept(part(0, 3, '{"id"'))).toEqual({
+      status: 'failed',
+      refusal: 'duplicate-part'
+    })
+    // A whole set for the same id would otherwise complete, the refusal forgotten.
+    const payload = payloadOf('small')
+    const serialized = JSON.stringify(payload)
+    for (const index of [0, 1, 2]) {
+      expect(assembler.accept(part(index, 3, serialized.slice(index * 5, index * 5 + 5)))).toEqual({
+        status: 'failed',
+        refusal: 'duplicate-part'
+      })
+    }
+    expect(
+      assembler.accept({ v: BRIDGE_PROTOCOL_VERSION, type: 'reply', id: ID, payload })
+    ).toEqual({ status: 'failed', refusal: 'duplicate-part' })
+    assembler.discard(ID)
+    expect(assembler.accept(part(0, 3, '{"id"'))).toEqual({ status: 'pending' })
+  })
+
+  it('refuses every later part of a reply that went past the ceiling', () => {
+    const assembler = new BridgeReplyAssembler()
+    const full = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
+    let answer: ReturnType<BridgeReplyAssembler['accept']> = { status: 'pending' }
+    for (let index = 0; index < 20; index += 1) {
+      answer = assembler.accept(part(index, 20, full))
+    }
+    // Thirteen full parts pass the ceiling; without the tombstone the rest would keep arriving.
+    expect(answer).toEqual({ status: 'failed', refusal: 'reply-too-large' })
   })
 
   it('refuses a part whose count disagrees with the parts already held', () => {
@@ -275,7 +308,30 @@ describe('BridgeReplyAssembler refusals', () => {
       status: 'failed',
       refusal: 'malformed-json'
     })
+    assembler.discard(overflowing)
     expect(assembler.accept(part(0, 2, 'a', overflowing))).toEqual({ status: 'pending' })
+  })
+
+  it('refuses the part that would push every reply in flight past the aggregate', () => {
+    const assembler = new BridgeReplyAssembler()
+    const idOf = (index: number): string => `id${String(index).padStart(20, '0')}`
+    const full = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
+    const remainder = 'x'.repeat(BRIDGE_MAX_REPLY_BYTES - 12 * BRIDGE_MAX_MESSAGE_BYTES)
+    // Four replies each held to exactly the per-reply ceiling is exactly the aggregate.
+    for (let id = 0; id < 4; id += 1) {
+      for (let index = 0; index < 12; index += 1) {
+        expect(assembler.accept(part(index, 20, full, idOf(id)))).toEqual({ status: 'pending' })
+      }
+      expect(assembler.accept(part(12, 20, remainder, idOf(id)))).toEqual({ status: 'pending' })
+    }
+    expect(assembler.accept(part(0, 20, 'x', idOf(4)))).toEqual({
+      status: 'failed',
+      refusal: 'too-many-pending'
+    })
+    expect(assembler.accept(part(13, 20, 'x', idOf(0)))).toEqual({
+      status: 'failed',
+      refusal: 'too-many-pending'
+    })
   })
 
   it('frees a slot when the page discards an id it abandoned', () => {

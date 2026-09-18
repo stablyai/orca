@@ -118,17 +118,34 @@ export function splitBridgeReply(id: string, payload: BridgeReplyPayload): Bridg
 type PendingReply = { of: number; chunks: Map<number, string>; units: number }
 
 /**
- * Parts may arrive in any order, so they are held by index rather than appended. Every failure drops
- * the id: a half-assembled reply whose sender has already moved on is not worth holding.
+ * Every half-assembled reply together. Without it, the per-reply ceiling times the in-flight cap is
+ * half a gigabyte of parts that never complete. Four whole replies at once is more than the page
+ * asks for and far less than the phone can lose.
+ */
+const BRIDGE_MAX_ASSEMBLING_BYTES = BRIDGE_MAX_REPLY_BYTES * 4
+
+/**
+ * Parts may arrive in any order, so they are held by index rather than appended.
+ *
+ * A failed id stays failed. Dropping it and starting over on the next part is what lets a sender
+ * walk past the ceiling one refusal at a time, so the refusal is remembered and every later part
+ * for that id gets the same answer. `discard` is how the page says the id is finished with, which
+ * is also how it becomes usable again.
  *
  * The number of ids held at once is bounded by the in-flight request cap, since a reply only exists
- * for a request the page made. Nothing here expires an id on its own, so C0.4 has to `discard` the
- * id of every request it settles or abandons, or a lost final part holds a slot until teardown.
+ * for a request the page made, and their bytes together by `BRIDGE_MAX_ASSEMBLING_BYTES`. Nothing
+ * here expires an id on its own, so C0.4 has to `discard` the id of every request it settles or
+ * abandons, or a lost final part holds a slot until teardown.
  */
 export class BridgeReplyAssembler {
   private readonly pending = new Map<string, PendingReply>()
+  private readonly refused = new Map<string, BridgeRefusal>()
 
   accept(message: BridgeReplyMessage): BridgeReplyAssembly {
+    const refusal = this.refused.get(message.id)
+    if (refusal !== undefined) {
+      return { status: 'failed', refusal }
+    }
     if (!('part' in message)) {
       this.pending.delete(message.id)
       return { status: 'complete', payload: message.payload }
@@ -144,6 +161,9 @@ export class BridgeReplyAssembler {
     const entry = held ?? { of: part.of, chunks: new Map<number, string>(), units: 0 }
     if (entry.chunks.has(part.i)) {
       return this.fail(id, 'duplicate-part')
+    }
+    if (this.assemblingUnits() + chunk.length > BRIDGE_MAX_ASSEMBLING_BYTES) {
+      return this.fail(id, 'too-many-pending')
     }
     // Code units, not bytes: a reply is never fewer bytes than code units, so this bounds what is
     // held without refusing a reply the joined measurement would accept. The ceiling itself is
@@ -163,17 +183,37 @@ export class BridgeReplyAssembler {
     return readAssembledPayload(entry)
   }
 
-  /** For a request the page abandoned, and for teardown. */
+  /** For a request the page abandoned, and for teardown. Also how a refused id is reopened. */
   discard(id: string): void {
     this.pending.delete(id)
+    this.refused.delete(id)
   }
 
   clear(): void {
     this.pending.clear()
+    this.refused.clear()
+  }
+
+  /** Code units, for the same reason the per-reply bound counts them: never more than the bytes. */
+  private assemblingUnits(): number {
+    let units = 0
+    for (const entry of this.pending.values()) {
+      units += entry.units
+    }
+    return units
   }
 
   private fail(id: string, refusal: BridgeRefusal): BridgeReplyAssembly {
     this.pending.delete(id)
+    // The oldest refusal goes rather than the map growing: an id the page has not discarded in 64
+    // refusals is one it is no longer waiting on.
+    if (this.refused.size >= BRIDGE_MAX_PENDING_REQUESTS) {
+      const oldest = this.refused.keys().next()
+      if (!oldest.done) {
+        this.refused.delete(oldest.value)
+      }
+    }
+    this.refused.set(id, refusal)
     return { status: 'failed', refusal }
   }
 }
