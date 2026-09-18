@@ -76,6 +76,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     minimaxCookieConfigured: false,
     minimaxApiKeyConfigured: false,
     grokAuthConfigured: false,
+    devinAuthConfigured: false,
     ...overrides
   }
 }
@@ -224,6 +225,14 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
   })
+
+  it('treats devinAuthConfigured as the durable signal for Devin', () => {
+    expect(
+      hasUsageProviderSettingsForProvider('devin', usageSettings({ devinAuthConfigured: true }))
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('devin', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('devin', null)).toBe(false)
+  })
 })
 
 describe('getVisibleUsageProvider', () => {
@@ -320,6 +329,20 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
+  it('keeps Devin visible while the snapshot is pending when CLI credentials exist', () => {
+    const visible = getVisibleUsageProvider(
+      'devin',
+      null,
+      usageSettings({ devinAuthConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'devin',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
   it('keeps MiniMax visible when the fetch returns unavailable for a configured cookie', () => {
     const unavailable = provider('unavailable', {
       provider: 'minimax',
@@ -398,7 +421,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          devin: undefined
         },
         usageSettings()
       )
@@ -416,7 +440,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          devin: provider('unavailable', { provider: 'devin' })
         },
         usageSettings()
       )
@@ -434,7 +459,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          devin: provider('unavailable', { provider: 'devin' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -467,7 +493,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          devin: provider('unavailable', { provider: 'devin' })
         },
         usageSettings()
       )
@@ -485,7 +512,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          devin: provider('unavailable', { provider: 'devin' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -505,7 +533,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          devin: provider('unavailable', { provider: 'devin' })
         },
         usageSettings({ antigravityUsageConfigured: true })
       )

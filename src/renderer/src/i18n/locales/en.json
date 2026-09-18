@@ -150,7 +150,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "devinToggleDescription": "Show Devin quota usage when signed in via Devin CLI."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3805,7 +3806,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "devinUsageMenu": "Devin Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3991,6 +3993,10 @@
                 "apiKey": "MiniMax API key expired. Replace it in Settings.",
                 "cookie": "MiniMax session cookie expired. Replace it in Settings."
               }
+            },
+            "devin": {
+              "runToRefresh": "Run Devin to refresh",
+              "runToRefreshDetail": "Run devin in a terminal on the computer running Orca and wait for it to start, then retry usage."
             }
           },
           "SshTargetStatusRow": {
@@ -9282,7 +9288,12 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
-            }
+            },
+            "devinUsageTitle": "Devin Usage",
+            "devinUsageDescription": "Show Devin quota usage from Devin CLI credentials.",
+            "devinKeyword": "devin",
+            "cognitionKeyword": "cognition",
+            "devinQuota": "quota"
           }
         },
         "auto": {
