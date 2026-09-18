@@ -212,6 +212,21 @@ describe('asset paths', () => {
     expect(parsed.success).toBe(false)
   })
 
+  it('accepts exactly one spelling of a parameterised content type', () => {
+    expect(
+      MobileWebBundleManifestSchema.safeParse(
+        manifestOf([{ ...ENTRY, contentType: 'text/html; charset=utf-8' }])
+      ).success
+    ).toBe(true)
+    // A2's builder emits the single-space form; the other spellings are the same bytes under a
+    // different build id.
+    for (const contentType of ['text/html;charset=utf-8', 'text/html;  charset=utf-8']) {
+      expect(
+        MobileWebBundleManifestSchema.safeParse(manifestOf([{ ...ENTRY, contentType }])).success
+      ).toBe(false)
+    }
+  })
+
   it('rejects an uppercase content type, which would give the same bytes two ids', () => {
     for (const contentType of ['Text/HTML; charset=utf-8', 'text/JavaScript', 'TEXT/PLAIN']) {
       expect(
