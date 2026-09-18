@@ -236,7 +236,9 @@ export class MacOSNativeProviderClient {
       pending.resolve(response.result)
       return
     }
-    pending.reject(new RuntimeClientError(response.error.code, response.error.message))
+    pending.reject(
+      new RuntimeClientError(response.error.code, response.error.message, response.error.data)
+    )
   }
   private handleSocketClose(socket: net.Socket): void {
     // Why: late close from a prior helper socket must not tear down the active replacement.

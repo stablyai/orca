@@ -24,8 +24,7 @@ export type NativeActionMethod = Exclude<
 
 export type NativeResponse =
   | { id: number; ok: true; result: unknown }
-  | { id: number; ok: false; error: { code: string; message: string } }
-
+  | { id: number; ok: false; error: { code: string; message: string; data?: unknown } }
 export type PendingNativeRequest = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void

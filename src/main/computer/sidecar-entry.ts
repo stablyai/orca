@@ -111,13 +111,13 @@ function isRequest(message: unknown): message is SidecarRequest {
   )
 }
 
-function errorToResponse(error: unknown): { code: string; message: string } {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-  ) {
-    return { code: (error as { code: string }).code, message: error.message }
+function errorToResponse(error: unknown): { code: string; message: string; data?: unknown } {
+  if (error instanceof Error && 'code' in error && typeof error.code === 'string') {
+    return {
+      code: error.code,
+      message: error.message,
+      data: 'data' in error ? error.data : undefined
+    }
   }
   return {
     code: 'accessibility_error',
