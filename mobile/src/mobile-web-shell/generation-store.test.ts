@@ -430,6 +430,19 @@ describe('generation store', () => {
     }
   })
 
+  it('returns the activation even when the recency index cannot be written', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    fs.failWritesAt('hosts.json')
+
+    const staged = await store.stageGeneration(HOST, buildResult({}))
+    const active = await store.commitGeneration(staged)
+
+    expect(active.buildId).toBe('a'.repeat(64))
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe('a'.repeat(64))
+    expect(fs.text('hosts.json')).toBeNull()
+  })
+
   it('keeps the adapter aligned with the port', () => {
     expect(adapterSatisfiesPort).toBe(true)
   })

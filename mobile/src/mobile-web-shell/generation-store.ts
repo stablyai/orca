@@ -63,10 +63,14 @@ export function createGenerationStore(options: {
   }
 
   async function writeHostIndex(index: ReadonlyMap<string, number>): Promise<void> {
-    await fs.writeText(
-      joinUri(fs.rootUri, HOST_INDEX_FILE_NAME),
-      JSON.stringify(Object.fromEntries(index))
-    )
+    // Recency, not truth: a full disk here must not turn an activation that is already on disk
+    // into a thrown commit, and the next activation rewrites the whole index anyway.
+    await fs
+      .writeText(
+        joinUri(fs.rootUri, HOST_INDEX_FILE_NAME),
+        JSON.stringify(Object.fromEntries(index))
+      )
+      .catch(() => undefined)
   }
 
   async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
