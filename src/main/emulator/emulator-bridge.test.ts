@@ -10,7 +10,9 @@ const {
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
-  netFetchMock
+  netFetchMock,
+  discoverAndroidSdkFromHostMock,
+  androidCommandRunnerMock
 } = vi.hoisted(() => ({
   execServeSimCommandMock: vi.fn(async () => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
@@ -18,10 +20,22 @@ const {
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
-  netFetchMock: vi.fn()
+  netFetchMock: vi.fn(),
+  // Default null: keep the android backend inert in these iOS-focused tests.
+  discoverAndroidSdkFromHostMock: vi.fn((): unknown => null),
+  androidCommandRunnerMock: vi.fn(async (_binary: string, _args: readonly string[]) => ({
+    stdout: '',
+    stderr: '',
+    code: 0
+  }))
 }))
 
-vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+// app.getPath: scrcpy-server-download (android backend transitive import).
+// net.fetch: iOS accessibility tree tests.
+vi.mock('electron', () => ({
+  app: { getPath: () => '/mock-userdata' },
+  net: { fetch: netFetchMock }
+}))
 
 vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: execServeSimCommandMock,
@@ -48,9 +62,14 @@ vi.mock('./simulator-app-visibility', () => ({
 
 // Keep the Android backend inert in these iOS-focused tests (no host SDK, no adb I/O).
 vi.mock('./android/android-sdk-host-discovery', () => ({
-  discoverAndroidSdkFromHost: () => null,
+  discoverAndroidSdkFromHost: discoverAndroidSdkFromHostMock,
   setConfiguredAndroidSdkPath: () => {}
 }))
+
+vi.mock('./android/android-command-runner', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, execFileAndroidCommandRunner: androidCommandRunnerMock }
+})
 
 // These tests exercise the iOS backend, which is gated to macOS.
 vi.mock('os', async (importOriginal) => {
@@ -90,6 +109,10 @@ describe('EmulatorBridge helper ownership', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+    discoverAndroidSdkFromHostMock.mockReset()
+    discoverAndroidSdkFromHostMock.mockReturnValue(null)
+    androidCommandRunnerMock.mockReset()
+    androidCommandRunnerMock.mockImplementation(async () => ({ stdout: '', stderr: '', code: 0 }))
   })
 
   it('stops the previous Orca-managed helper when a worktree switches devices', async () => {
@@ -448,6 +471,10 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+    discoverAndroidSdkFromHostMock.mockReset()
+    discoverAndroidSdkFromHostMock.mockReturnValue(null)
+    androidCommandRunnerMock.mockReset()
+    androidCommandRunnerMock.mockImplementation(async () => ({ stdout: '', stderr: '', code: 0 }))
   })
 
   it('reads iOS accessibility from the active worktree session', async () => {

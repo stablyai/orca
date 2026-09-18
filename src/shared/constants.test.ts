@@ -65,6 +65,13 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
   })
 
+  // ADB connection state is derived live from `adb devices -l` and must never
+  // be persisted — only the configured address is a setting, and it defaults
+  // unset like mobileEmulatorDefaultDeviceUdid.
+  it('has no saved ADB device address by default', () => {
+    expect(getDefaultSettings('/tmp').mobileEmulatorAdbAddress).toBeNull()
+  })
+
   it('defaults the menu bar icon on so the value round-trips across platforms', () => {
     expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
   })
