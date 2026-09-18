@@ -98,6 +98,7 @@ class MobileWebShellGenerationTest {
     assertFalse(MobileWebShellGeneration.isServableAssetPath("assets/./a.js"))
     assertFalse(MobileWebShellGeneration.isServableAssetPath("back\\slash"))
     assertFalse(MobileWebShellGeneration.isServableAssetPath("has space.js"))
+    assertTrue(MobileWebShellGeneration.isServableAssetPath("a".repeat(255)))
     assertFalse(MobileWebShellGeneration.isServableAssetPath("a".repeat(256)))
   }
 
@@ -110,6 +111,8 @@ class MobileWebShellGenerationTest {
     assertFalse(MobileWebShellGeneration.isServableContentType("text/html\r\nX-Injected: 1"))
     assertFalse(MobileWebShellGeneration.isServableContentType("text/html; charset=utf-8; x=1"))
     assertFalse(MobileWebShellGeneration.isServableContentType("TEXT/HTML"))
+    // A header value we did not mint character for character is a value we did not check.
+    assertFalse(MobileWebShellGeneration.isServableContentType("text/html; charset=UTF-8"))
     assertFalse(MobileWebShellGeneration.isServableContentType("text"))
     assertFalse(MobileWebShellGeneration.isServableContentType("text/html/extra"))
     assertFalse(MobileWebShellGeneration.isServableContentType("/html"))

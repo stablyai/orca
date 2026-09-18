@@ -119,6 +119,7 @@ import Foundation
     precondition(!MobileWebShellGeneration.isServableAssetPath("assets/./a.js"))
     precondition(!MobileWebShellGeneration.isServableAssetPath("back\\slash"))
     precondition(!MobileWebShellGeneration.isServableAssetPath("has space.js"))
+    precondition(MobileWebShellGeneration.isServableAssetPath(String(repeating: "a", count: 255)))
     precondition(!MobileWebShellGeneration.isServableAssetPath(String(repeating: "a", count: 256)))
   }
 
@@ -131,6 +132,8 @@ import Foundation
       + "\r\nX-Injected: 1"))
     precondition(!MobileWebShellGeneration.isServableContentType("text/html; charset=utf-8; x=1"))
     precondition(!MobileWebShellGeneration.isServableContentType("TEXT/HTML"))
+    // A header value we did not mint character for character is a value we did not check.
+    precondition(!MobileWebShellGeneration.isServableContentType("text/html; charset=UTF-8"))
     precondition(!MobileWebShellGeneration.isServableContentType("text"))
     precondition(!MobileWebShellGeneration.isServableContentType("text/html/extra"))
     precondition(!MobileWebShellGeneration.isServableContentType("/html"))
