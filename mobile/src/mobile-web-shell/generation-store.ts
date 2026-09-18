@@ -262,12 +262,13 @@ function requireBuildId(buildId: string): string {
 }
 
 /** The manifest schema bans traversal already, but this is the last code between a manifest and a
- *  write, and `manifest.json` is the store's own name rather than an asset's to take. */
+ *  write, and `manifest.json` is the store's own name rather than an asset's to take — folded,
+ *  because APFS and NTFS are case-insensitive and `Manifest.JSON` would land on the same file. */
 function requireStorablePath(path: string): string {
   const segments = path.split('/')
   const storable =
     path.length > 0 &&
-    path !== MANIFEST_FILE_NAME &&
+    path.toLowerCase() !== MANIFEST_FILE_NAME &&
     !path.includes('\\') &&
     segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
   if (!storable) {

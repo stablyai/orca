@@ -358,7 +358,8 @@ describe('generation store', () => {
       'assets/../../outside.js',
       '/etc/passwd',
       'assets//app.js',
-      'manifest.json'
+      'manifest.json',
+      'Manifest.JSON'
     ]
 
     for (const path of escapes) {
