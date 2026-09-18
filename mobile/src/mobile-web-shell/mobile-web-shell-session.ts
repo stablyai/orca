@@ -148,7 +148,12 @@ function onCacheRead(
   if (gates === null) {
     return step(session, { cached: generation })
   }
-  if (gates.reachability !== 'connected') {
+  if (gates.reachability === 'connecting') {
+    // A dial in progress is not a host that cannot be reached: opening the cache here would skip a
+    // compat check the connection about to land is what makes answerable.
+    return step(session, { cached: generation })
+  }
+  if (gates.reachability === 'unreachable') {
     // No compat check on this path, by design: the generation was compatible when it was cached and
     // a host nobody can reach cannot have changed since. The next entry while connected re-checks.
     return generation === null

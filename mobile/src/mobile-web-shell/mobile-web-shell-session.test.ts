@@ -185,6 +185,19 @@ describe('the offline rule', () => {
     expect(step.effects).toEqual([])
   })
 
+  it('waits on a cache read that lands mid-dial instead of opening it unchecked', () => {
+    const dialling = run(started().session, {
+      type: 'gates-changed',
+      gates: gates({ reachability: 'connecting' })
+    })
+    const step = run(dialling.session, { type: 'cache-read', generation: CACHED })
+    // Connecting is not unreachable: the compat check is a moment away, and skipping it would put a
+    // generation on screen the host is about to say it no longer serves.
+    expect(step.session.state).toEqual({ kind: 'checking' })
+    expect(step.session.cached).toEqual(CACHED)
+    expect(step.effects).toEqual([])
+  })
+
   it('restarts the flow when the host becomes reachable while offline is showing', () => {
     const offline = run(started({ reachability: 'unreachable' }).session, {
       type: 'cache-read',
