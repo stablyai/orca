@@ -124,7 +124,13 @@ afterAll(async () => {
 // green with every host route unreachable. Each route below names content only it can produce.
 const UNMATCHED = 'Unmatched Route'
 
-async function render(route) {
+/**
+ * `awaitText` is the route's own content, polled rather than read once: the route manifest defers
+ * every screen behind `import()`, so the entry's `mounted` signal now lands while the route's
+ * chunk is still being fetched and the body is briefly empty. Waiting for the string the caller
+ * is about to assert is what makes the check about the route and not about the timing.
+ */
+async function render(route, awaitText) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
   let reportUncaught = () => {}
@@ -170,6 +176,25 @@ async function render(route) {
     throw new Error(
       `${route} never mounted (entry ${state}): ${errors.join(' | ') || 'no page or console error'}`,
       { cause }
+    )
+  }
+  const painted = page.waitForFunction(
+    (needle) => document.body.innerText.includes(needle),
+    awaitText,
+    { timeout: 30_000, polling: 250 }
+  )
+  const paintCause = await Promise.race([
+    painted.then(
+      () => null,
+      (error) => error
+    ),
+    uncaught
+  ])
+  if (paintCause) {
+    throw new Error(
+      `${route} mounted but never painted ${JSON.stringify(awaitText)}: ` +
+        `${errors.join(' | ') || 'no page or console error'}`,
+      { cause: paintCause }
     )
   }
   const text = await page.evaluate(() => document.body.innerText)
@@ -246,7 +271,7 @@ describeRender('the page server this check runs against', () => {
 
 describeRender('the Route A page in a real browser', () => {
   it('mounts the worktree list route, not the unmatched screen', async () => {
-    const { errors, cspErrors, text } = await render(HOST_ROUTE)
+    const { errors, cspErrors, text } = await render(HOST_ROUTE, 'Host not found')
     expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
     // app/h/[hostId]/index.tsx: the placeholder client knows no host, so the list paints its
@@ -256,7 +281,7 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 
   it('routes a nested dynamic segment through the same context', async () => {
-    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/tasks`)
+    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/tasks`, 'Tasks')
     expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
     // app/h/[hostId]/tasks.tsx paints its header and its GitHub filter row.
@@ -266,7 +291,7 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 
   it('renders the unmatched route rather than crashing on a path with no module', async () => {
-    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`)
+    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`, UNMATCHED)
     expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
     // Asserted positively so the two negatives above are known to discriminate.

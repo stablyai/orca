@@ -81,21 +81,37 @@ routeContext.id = 'orca-mobile-web-app-routes'`
 
 /**
  * esbuild has no `require.context`, so the builder synthesizes the RequireContext expo-router's
- * own ExpoRoot consumes. Static imports, not a lazy getter: one chunk, no fetch behind the
- * page's CSP.
+ * own ExpoRoot consumes. The context itself stays synchronous — expo-router reads `keys()` to
+ * build the route tree before anything renders — and only the screen behind each key is deferred,
+ * through the `import()` esbuild splits into a per-route chunk.
+ *
+ * `default` is the whole module: a lazy module cannot answer `unstable_settings` or
+ * `ErrorBoundary`, which expo-router reads synchronously off the namespace. No route in the
+ * mounted subtree exports either, and `routeModuleNamedExports` below is what holds that.
  */
 export function renderMobileWebAppRouteManifest(routes) {
-  const importLines = routes.map(
-    ({ module }, index) => `import * as route${String(index)} from ${JSON.stringify(module)}`
-  )
   const entryLines = routes.map(
-    ({ key }, index) => `  [${JSON.stringify(key)}]: route${String(index)}`
+    ({ key, module }) =>
+      `  [${JSON.stringify(key)}]: { default: lazy(() => import(${JSON.stringify(module)})) }`
   )
-  return `${importLines.join('\n')}
+  return `import { lazy } from "react"
 const modules = {
 ${entryLines.join(',\n')}
 }
 ${ROUTE_CONTEXT_SOURCE}
 export default routeContext
 `
+}
+
+/**
+ * The expo-router exports a route module may carry besides `default`. Read off the namespace while
+ * the tree is built, so a lazy module would drop them silently rather than fail.
+ */
+export const ROUTE_MODULE_SYNCHRONOUS_EXPORTS = ['unstable_settings', 'ErrorBoundary']
+
+/** Which of those a route source declares, so the lazy manifest cannot swallow one. */
+export function routeModuleNamedExports(source) {
+  return ROUTE_MODULE_SYNCHRONOUS_EXPORTS.filter((name) =>
+    new RegExp(`export\\s+(const|let|var|function|async function)\\s+${name}\\b`).test(source)
+  )
 }

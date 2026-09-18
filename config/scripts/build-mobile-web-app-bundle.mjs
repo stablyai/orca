@@ -68,6 +68,9 @@ export const MOBILE_WEB_APP_SHIMS = [
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
 
+/** The entry output's name, so classifying the outputs never has to guess which one it is. */
+const ENTRY_CHUNK_NAME = 'entry'
+
 // mobile/web-entry/route-manifest.ts is a real typed file rather than a virtual specifier, so the
 // entry typechecks and Metro can still resolve it; only its body is replaced here.
 function routeManifestPlugin(manifestSource) {
@@ -104,12 +107,23 @@ export function mobileWebAppBuildOptions(routes) {
     // Virtual: write is false, so outdir only names the emitted files esbuild hands back.
     outdir: 'dist',
     write: false,
-    format: 'iife',
+    // esm, because `splitting` requires it and a per-route chunk is the point: with iife and
+    // static imports esbuild emitted one 8.16 MB script for all 14 routes.
+    format: 'esm',
+    splitting: true,
+    // Content-hashed, like the images, so a chunk's name survives into the served path unchanged
+    // and the buildId stays a pure function of the bytes.
+    chunkNames: '[hash]',
+    // Pinned rather than defaulted, so the entry is found by name and not by elimination.
+    entryNames: ENTRY_CHUNK_NAME,
     target: ['es2022'],
     charset: 'utf8',
     legalComments: 'none',
-    // Why no sourcemap and no metafile: both embed absolute paths, which would break reproducibility.
+    // No sourcemap: it is an emitted file and would carry this checkout's absolute paths into the
+    // bundle. The metafile carries them too but is never written and never hashed; it is the only
+    // thing that says which output is the entry and which of its imports are static.
     sourcemap: false,
+    metafile: true,
     logLevel: 'silent',
     jsx: 'automatic',
     // One React: resolve everything from mobile/node_modules, which is where the entry lives.
@@ -156,35 +170,82 @@ export function mobileWebAppBuildOptions(routes) {
   }
 }
 
+/**
+ * What the browser must have before the first route can paint: the entry plus every chunk it
+ * reaches by static import, transitively. A dynamic import is what the split exists to defer, so
+ * it is where this stops.
+ *
+ * The bound the verifier holds is this number and not the entry file alone, because esbuild puts
+ * the code shared by entry and routes in a chunk the entry imports statically: budgeting the entry
+ * file on its own would fall as the shared chunk grew.
+ */
+export function entryStaticClosure(metafile, entryOutputPath) {
+  const reached = new Set([entryOutputPath])
+  const queue = [entryOutputPath]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    for (const imported of metafile.outputs[current]?.imports ?? []) {
+      if (imported.kind !== 'import-statement' || reached.has(imported.path)) {
+        continue
+      }
+      reached.add(imported.path)
+      queue.push(imported.path)
+    }
+  }
+  return reached
+}
+
+const isScriptOutput = (path) => path.endsWith('.js')
+
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   const result = await esbuild.build(mobileWebAppBuildOptions(routes))
-  const script = result.outputFiles.find((file) => file.path.endsWith('.js'))
-  if (!script) {
-    throw new Error('[build-mobile-web-app-bundle] esbuild emitted no script')
+  const entryOutputPath = Object.keys(result.metafile.outputs).find(
+    (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
+  )
+  const entryFile = result.outputFiles.find(
+    (file) => basename(file.path) === `${ENTRY_CHUNK_NAME}.js`
+  )
+  if (!entryOutputPath || !entryFile) {
+    throw new Error('[build-mobile-web-app-bundle] esbuild emitted no entry script')
   }
-  const images = result.outputFiles
-    .filter((file) => file !== script)
-    .map((file) => ({ name: basename(file.path), bytes: Buffer.from(file.contents) }))
-    .sort((left, right) => (left.name < right.name ? -1 : 1))
+  const named = (file) => ({ name: basename(file.path), bytes: Buffer.from(file.contents) })
+  const byName = (left, right) => (left.name < right.name ? -1 : 1)
+  const others = result.outputFiles.filter((file) => file !== entryFile)
+  // Chunks keep esbuild's own names: the entry imports them by that name, and publicPath has
+  // already rewritten those specifiers to /assets/<name>.
+  const chunks = others
+    .filter((file) => isScriptOutput(file.path))
+    .map(named)
+    .sort(byName)
+  const images = others
+    .filter((file) => !isScriptOutput(file.path))
+    .map(named)
+    .sort(byName)
+  const closure = entryStaticClosure(result.metafile, entryOutputPath)
   return {
-    script: Buffer.from(script.contents),
+    script: Buffer.from(entryFile.contents),
+    chunks,
     images,
+    // Counted here because only the metafile knows which import is static; see entryStaticClosure.
+    entryStaticBytes: [...closure].reduce(
+      (total, path) => total + (result.metafile.outputs[path]?.bytes ?? 0),
+      0
+    ),
     routeKeys: routes.map((route) => route.key)
   }
 }
 
 export async function buildMobileWebAppBundle({ outDir = defaultOutDir } = {}) {
-  const [desktopVersion, protocolWindow, { script, images, routeKeys }] = await Promise.all([
-    readDesktopVersion(),
-    readProtocolWindow(),
-    bundleMobileWebApp()
-  ])
+  const [desktopVersion, protocolWindow, { script, chunks, images, entryStaticBytes, routeKeys }] =
+    await Promise.all([readDesktopVersion(), readProtocolWindow(), bundleMobileWebApp()])
+  // Only the entry is renamed: nothing references it but the document. A chunk is named inside
+  // the bytes that import it, so renaming one would break the import it is named by.
   const scriptAsset = hashedAsset(script, 'js')
   // esbuild already named these by content hash; keep that name so the reference inside the
   // script stays valid, and carry the sha256 in the manifest entry as every asset does.
-  const imageAssets = images.map(({ name, bytes }) => ({
+  const emittedAssets = [...chunks, ...images].map(({ name, bytes }) => ({
     bytes,
     path: `assets/${name}`,
     sha256: sha256Hex(bytes),
@@ -195,11 +256,13 @@ export async function buildMobileWebAppBundle({ outDir = defaultOutDir } = {}) {
   // Root-absolute, unlike the Phase A bootstrap's bare relative src: this document is served at
   // every route depth (/h/<hostId>/tasks), where a relative href resolves against the route and
   // 404s. A <base> tag would be the other fix, but the shell's CSP sets base-uri 'none'.
+  // type="module", because the entry is esm and reaches its routes through import(). Same-origin
+  // module and chunk both load under the shell's script-src 'self'; the policy is unchanged.
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
     '<title>Orca</title>\n</head>\n<body>\n<div id="root"></div>\n' +
-    `<script src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
+    `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')
   const indexAsset = {
     bytes: indexBytes,
@@ -211,17 +274,26 @@ export async function buildMobileWebAppBundle({ outDir = defaultOutDir } = {}) {
 
   const { manifest } = await writeMobileWebBundleTree({
     outDir,
-    written: [indexAsset, scriptAsset, ...imageAssets],
+    written: [indexAsset, scriptAsset, ...emittedAssets],
     desktopVersion,
     protocolWindow
   })
-  return { manifest, outDir, routeKeys }
+  return {
+    manifest,
+    outDir,
+    routeKeys,
+    entryStaticBytes,
+    // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
+    chunkCount: chunks.length + 1
+  }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
-  const { manifest, outDir, routeKeys } = await buildMobileWebAppBundle()
+  const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
+    await buildMobileWebAppBundle()
   console.log(
     `[build-mobile-web-app-bundle] OK — ${String(routeKeys.length)} route(s), ` +
+      `${String(chunkCount)} chunk(s), ${String(entryStaticBytes)} bytes before the first route, ` +
       `${String(manifest.assets.length)} asset(s), ${String(manifest.totalBytes)} bytes, ` +
       `buildId ${manifest.buildId} -> ${outDir}`
   )

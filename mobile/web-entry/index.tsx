@@ -1,6 +1,6 @@
 // Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
 // Dark: built by `build:mobile-web:app` into out/mobile-web-app, shipped by nothing until C1.
-import { useEffect, type PropsWithChildren } from 'react'
+import { Suspense, useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
 import { RpcClientProvider } from '../src/transport/client-context'
@@ -14,11 +14,17 @@ const MOUNT_STATE_ATTRIBUTE = 'orcaWebEntry'
 
 // The route tree starts at app/h, below the native root layout that owns the provider, so the
 // page supplies it here through ExpoRoot's own wrapper rather than mounting the native shell.
+// The boundary is for the route chunks the manifest defers; expo-router puts one around each
+// screen too, so this one only catches a suspend raised above them.
 function RootProviders({ children }: PropsWithChildren) {
   useEffect(() => {
     document.documentElement.dataset[MOUNT_STATE_ATTRIBUTE] = 'mounted'
   }, [])
-  return <RpcClientProvider>{children}</RpcClientProvider>
+  return (
+    <RpcClientProvider>
+      <Suspense fallback={null}>{children}</Suspense>
+    </RpcClientProvider>
+  )
 }
 
 const container = document.getElementById('root')
