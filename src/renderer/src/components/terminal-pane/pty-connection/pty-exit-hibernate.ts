@@ -20,6 +20,7 @@ import {
 import type { PtyPaneStartup } from '../pty-connection-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { forgetRetainedTerminalKittyState } from '../terminal-kitty-state-retention'
 
 /** PTY exit handling, hibernated-pane wake targets, and post-exit focus transfer. */
 export function installPtyExitHibernate(session: ConnectPanePtySession): void {
@@ -189,6 +190,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       opts.preserveRendererBinding === true ||
       consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
     session.resetRendererOrderedSeqForPtyExit(ptyId)
+    forgetRetainedTerminalKittyState(ptyId)
     const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
     if (currentPaneTransport && currentPaneTransport !== session.transport) {
       // Why: an old transport can deliver a late exit after this pane has

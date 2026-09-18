@@ -18,6 +18,14 @@ function event(overrides: Partial<TerminalShortcutEvent>): TerminalShortcutEvent
   }
 }
 
+function shiftEnterAction(data: string, legacy = '\x1b\r') {
+  return {
+    type: 'sendInput',
+    data,
+    kittyKeyboardInput: { kitty: '\x1b[13;2u', legacy }
+  }
+}
+
 describe('resolveTerminalShortcutAction', () => {
   it('preserves macOS readline ctrl chords for the shell', () => {
     const passthroughCases = [
@@ -70,10 +78,7 @@ describe('resolveTerminalShortcutAction', () => {
   it('keeps inactive shift-enter and delete helpers explicit', () => {
     expect(
       resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', shiftKey: true }), true)
-    ).toEqual({
-      type: 'sendInput',
-      data: '\x1b\r'
-    })
+    ).toEqual(shiftEnterAction('\x1b\r'))
     expect(resolveTerminalShortcutAction(event({ key: 'Backspace', ctrlKey: true }), true)).toEqual(
       { type: 'sendInput', data: '\x17' }
     )
@@ -101,10 +106,7 @@ describe('resolveTerminalShortcutAction', () => {
         0,
         true
       )
-    ).toEqual({
-      type: 'sendInput',
-      data: '\x1b\r'
-    })
+    ).toEqual(shiftEnterAction('\x1b\r'))
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', shiftKey: true }),
@@ -118,7 +120,7 @@ describe('resolveTerminalShortcutAction', () => {
         undefined,
         () => 'alt-enter'
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    ).toEqual(shiftEnterAction('\x1b\r'))
   })
 
   it('sends CSI-u Shift+Enter to Windows panes whose active agent requires it (#7620)', () => {
@@ -137,7 +139,7 @@ describe('resolveTerminalShortcutAction', () => {
         undefined,
         () => 'csi-u'
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    ).toEqual(shiftEnterAction('\x1b[13;2u', '\x1b[13;2u'))
   })
 
   it('uses CSI-u for a non-Windows PTY reached from Windows only while Kitty is active', () => {
@@ -156,8 +158,8 @@ describe('resolveTerminalShortcutAction', () => {
         getWindowsShiftEnterEncoding,
         () => false
       )
-    expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
-    expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(resolve(true)).toEqual(shiftEnterAction('\x1b[13;2u'))
+    expect(resolve(false)).toEqual(shiftEnterAction('\x1b\r'))
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
   })
 
@@ -176,8 +178,8 @@ describe('resolveTerminalShortcutAction', () => {
           undefined,
           encoding
         )
-      expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
-      expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
+      expect(resolve(true)).toEqual(shiftEnterAction('\x1b[13;2u'))
+      expect(resolve(false)).toEqual(shiftEnterAction('\x1b\r'))
     }
   })
 
@@ -221,7 +223,7 @@ describe('resolveTerminalShortcutAction', () => {
         getWindowsShiftEnterEncoding,
         isWindowsTerminalHost
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    ).toEqual(shiftEnterAction('\x1b[13;2u', '\x1b[13;2u'))
     expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
     expect(isWindowsTerminalHost).toHaveBeenCalledTimes(1)
@@ -242,7 +244,7 @@ describe('resolveTerminalShortcutAction', () => {
         getWindowsShiftEnterEncoding,
         isWindowsTerminalHost
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    ).toEqual(shiftEnterAction('\x1b[13;2u'))
     expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
     expect(isWindowsTerminalHost).toHaveBeenCalledTimes(2)
@@ -265,8 +267,8 @@ describe('resolveTerminalShortcutAction', () => {
         getWindowsShiftEnterEncoding,
         () => true
       )
-    expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
-    expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(resolve(true)).toEqual(shiftEnterAction('\x1b[13;2u'))
+    expect(resolve(false)).toEqual(shiftEnterAction('\x1b\r'))
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(2)
   })
 

@@ -30,6 +30,7 @@ export type TerminalOptionShortcutAction =
   | {
       type: 'sendInput'
       data: string
+      kittyKeyboardInput?: { kitty: string; legacy: string }
       optionKittyRelease?: TerminalOptionKittyRelease
       consumeOptionKeyUp?: boolean
     }
@@ -146,7 +147,19 @@ export function resolveTerminalOptionShortcutAction(
           kittyReportsAllKeysAsEscapeCodes(flags) && canSendComposedText ? event.key : undefined
       })
       if (data) {
-        return { type: 'sendInput', data, optionKittyRelease: createRelease(flags) }
+        return {
+          type: 'sendInput',
+          data,
+          ...(event.code === 'NumpadEnter'
+            ? {
+                kittyKeyboardInput: {
+                  kitty: data,
+                  legacy: shouldActAsMeta ? '\x1b\r' : '\r'
+                }
+              }
+            : {}),
+          optionKittyRelease: createRelease(flags)
+        }
       }
     }
   }

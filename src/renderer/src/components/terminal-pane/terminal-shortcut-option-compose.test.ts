@@ -38,6 +38,21 @@ describe('Option-composed characters in kitty keyboard panes', () => {
       layoutCharacterForCode
     )
 
+  it('settles Option+NumpadEnter between Kitty and legacy encodings', () => {
+    const input = event({ key: 'Enter', code: 'NumpadEnter', altKey: true })
+
+    expect(resolveKitty(input)).toEqual({
+      type: 'sendInput',
+      data: '\x1b[57414;3u',
+      kittyKeyboardInput: { kitty: '\x1b[57414;3u', legacy: '\r' }
+    })
+    expect(resolveKitty(input, 'true', 1)).toEqual({
+      type: 'sendInput',
+      data: '\x1b[57414;3u',
+      kittyKeyboardInput: { kitty: '\x1b[57414;3u', legacy: '\x1b\r' }
+    })
+  })
+
   // Turkish-Q composes '@' on Option+Q and '$' on Option+4. Reporting them as
   // alt+q / alt+4 makes Codex's '@' references and '$' skills untypable (#14024).
   it('types the layout-composed ASCII character instead of reporting a chord', () => {

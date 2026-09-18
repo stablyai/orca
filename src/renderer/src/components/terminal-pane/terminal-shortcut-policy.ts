@@ -61,6 +61,7 @@ export type TerminalShortcutAction =
   | {
       type: 'sendInput'
       data: string
+      kittyKeyboardInput?: { kitty: string; legacy: string }
       optionKittyRelease?: TerminalOptionKittyRelease
       consumeOptionKeyUp?: boolean
     }
@@ -175,7 +176,14 @@ export function resolveTerminalShortcutAction(
     const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
     // Why: CSI-u is application input, not universal; without trusted Windows evidence, require active KKP negotiation.
     const canSendCsiU = hasTrustedWindowsCsiU || (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0
-    return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
+    return {
+      type: 'sendInput',
+      data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r',
+      kittyKeyboardInput: {
+        kitty: '\x1b[13;2u',
+        legacy: hasTrustedWindowsCsiU ? '\x1b[13;2u' : '\x1b\r'
+      }
+    }
   }
 
   if (

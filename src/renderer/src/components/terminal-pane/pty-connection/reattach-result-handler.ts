@@ -19,6 +19,7 @@ import type { ReattachPayloadContext } from './reattach-payload-context'
 import { createReattachPayloadHandlers } from './apply-reattach-payload'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
+import { restoreRetainedTerminalKittyState } from '../terminal-kitty-state-retention'
 
 type ReattachResultSession = ReattachPayloadSession &
   Pick<
@@ -35,6 +36,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'disposed'
     | 'getSshMainModelSnapshotProbe'
     | 'handleReattachResult'
+    | 'kittyShortcutInputSettlement'
     | 'followsDirectSshReconnect'
     | 'mountFollowsTerminalPark'
     | 'registerEffectiveLaunchConfig'
@@ -90,8 +92,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       // unverifiable evidence until a fresh attach returns one.
       session.remotePtyIncarnationId = null
     }
+    const settleShortcutInput = (): void =>
+      session.kittyShortcutInputSettlement?.settle(session.kittyKeyboardModes?.flags ?? 0)
 
     if (connectResult?.exitedBeforeAttach) {
+      settleShortcutInput()
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
       return true
     }
@@ -101,6 +106,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       (typeof result === 'string' ? result : (staleSessionId ?? session.transport.getPtyId()))
     if (session.rejectObsoleteDirectSshReattach(retryPtyId)) {
       // Why: an obsolete reattach must stop consuming frames without killing the durable PTY a newer lease may adopt.
+      settleShortcutInput()
       return false
     }
     const ptyId =
@@ -115,6 +121,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         ptyId: staleSessionId ?? null
       })
       if (session.connectionId) {
+        settleShortcutInput()
         recoverUnverifiableDirectSshReattach(sessionBag, staleSessionId)
         return false
       }
@@ -172,6 +179,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     // sessionExpired arm fall through to startFreshColdRestoreAgentResume and
     // leave the attempt pending, which the 31s bound then ages out.
     session.settlePaneAttachAttempt?.(undefined, 'success')
+    restoreRetainedTerminalKittyState(ptyId, session.kittyKeyboardModes)
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
@@ -330,8 +338,12 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       await fitAfterReattachRestore()
     }
     if (!isCurrentReattachPayload() || !reattachPayload.reattachPayloadApplied) {
+      if (isCurrentReattachPayload()) {
+        settleShortcutInput()
+      }
       return false
     }
+    settleShortcutInput()
     session.scheduleReattachIdleAgentCursorReset()
 
     scheduleRuntimeGraphSync()
