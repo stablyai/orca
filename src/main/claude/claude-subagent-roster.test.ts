@@ -10,6 +10,7 @@ import type {
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
+  type StructuredAgentSessionAppendOptions,
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
@@ -31,10 +32,16 @@ function isGroupRow(identity: AgentJournalItemIdentity, groupId: string): boolea
 }
 
 function harness(groupKey: string | null = TURN_1) {
-  const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
+  // Options are captured, not dropped: producer attribution rides on them, and a harness
+  // that discards the argument reports every append as root and passes.
+  const items: {
+    identity: AgentJournalItemIdentity
+    body: AgentJournalItemBody
+    options: StructuredAgentSessionAppendOptions | undefined
+  }[] = []
   const tombstones: AgentJournalItemIdentity[] = []
   const sink: StructuredAgentSessionEventSink = {
-    appendItem: (identity, body) => items.push({ identity, body }),
+    appendItem: (identity, body, options) => items.push({ identity, body, options }),
     appendTombstone: (identity) => tombstones.push(identity),
     publish: vi.fn()
   }
@@ -137,6 +144,21 @@ describe('ClaudeSubagentRoster', () => {
       { provider: 'orca', clientMessageId: 'claude-subagents:claude-session:turn-1' }
     ])
     expect(items).toHaveLength(1)
+  })
+
+  it('marks every roster row child-produced, on the first write and on each revision', () => {
+    const { roster, items } = harness()
+    roster.observeSystemFrame(
+      started({ task_id: 'task-1', tool_use_id: 'toolu_1', description: 'Audit' })
+    )
+    roster.observeSystemFrame(
+      system('task_updated', { task_id: 'task-1', patch: { status: 'completed' } })
+    )
+    expect(items.length).toBeGreaterThan(1)
+    // The row is written from the parent's context and no `parent_tool_use_id` is near it,
+    // so nothing else would attribute it — yet it holds only children's state and is
+    // rewritten on every child transition. Unmarked, it alone re-stamps the session.
+    expect(items.map((item) => item.options?.producedBySubagent)).toEqual(items.map(() => true))
   })
 
   it('does not duplicate a resumed task re-announced under a new tool_use_id', () => {

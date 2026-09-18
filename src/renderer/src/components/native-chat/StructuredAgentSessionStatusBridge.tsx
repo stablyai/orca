@@ -190,10 +190,11 @@ function projectStatus(
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
-      stateStartedAt:
-        desired.state !== 'done' && current?.state === desired.state
-          ? current.stateStartedAt
-          : summary.updatedAt,
+      // No `stateStartedAt` here on purpose. The store's own entry builder holds the
+      // single rule — a same-state publication keeps the stamp, a state change restamps
+      // it — and that rule is the canonical host writer's, verbatim. Passing one from
+      // here overrode it with a second, divergent one, which is what let a settled row's
+      // acknowledgement clock move every time the session's journal clock did.
       evidenceObservedAt: summary.updatedAt
     },
     { tabId: tab.id, worktreeId: tab.worktreeId },

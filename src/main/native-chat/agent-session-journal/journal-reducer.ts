@@ -18,6 +18,7 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
@@ -67,7 +68,15 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   if (row.kind === 'epoch') {
     return
   }
-  state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
+  // Recency is the SESSION'S OWN agent's. A subagent's rows share this journal and are
+  // the newest ones in it while a child runs, so a journal-wide clock stamps an idle
+  // parent "now" on every child frame — and that clock becomes the row's
+  // `stateStartedAt`, which is the acknowledgement clock, so the parent also went
+  // unread again each time. A child's work reaches the parent's row as a status
+  // rollup instead; see the status feed.
+  if (isRootAgentJournalItem(row)) {
+    state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
+  }
   if (row.kind === 'item') {
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return

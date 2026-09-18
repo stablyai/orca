@@ -718,3 +718,68 @@ describe('producer attribution round-trips through the reducer', () => {
     expect(renderJournalState(state).items[0]?.producedBySubagent).toBeUndefined()
   })
 })
+
+describe("the session's recency clock", () => {
+  it("advances on the session's own rows and not on a subagent's", () => {
+    const state = fold([
+      { kind: 'item', itemId: 'root-1', revision: 1, body: text('delegating'), ...base(1) },
+      {
+        kind: 'item',
+        itemId: 'child-1',
+        revision: 1,
+        body: text('the child is reading files'),
+        ...base(2),
+        producedBySubagent: true
+      },
+      {
+        kind: 'item',
+        itemId: 'child-2',
+        revision: 1,
+        body: text('the child is still reading files'),
+        ...base(3),
+        producedBySubagent: true
+      }
+    ])
+    // Ordering still counts every row; only the clock is the session's own.
+    expect(state.lastSequence).toBe(3)
+    expect(state.lastActivityAt).toBe(base(1).ts)
+  })
+
+  it("resumes on the session's next own row", () => {
+    const state = fold([
+      { kind: 'item', itemId: 'root-1', revision: 1, body: text('delegating'), ...base(1) },
+      {
+        kind: 'item',
+        itemId: 'child-1',
+        revision: 1,
+        body: text('the child reported back'),
+        ...base(2),
+        producedBySubagent: true
+      },
+      { kind: 'item', itemId: 'root-2', revision: 1, body: text('done'), ...base(3) }
+    ])
+    expect(state.lastActivityAt).toBe(base(3).ts)
+  })
+
+  it('advances on a lifecycle batch a subagent did not produce, and holds on one it did', () => {
+    const own = fold([
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'settle-1',
+        mutations: [{ kind: 'item', itemId: 'i-1', revision: 1, body: text('settled') }],
+        ...base(1)
+      }
+    ])
+    expect(own.lastActivityAt).toBe(base(1).ts)
+    const child = fold([
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'settle-2',
+        mutations: [{ kind: 'item', itemId: 'i-2', revision: 1, body: text('settled') }],
+        ...base(1),
+        producedBySubagent: true
+      }
+    ])
+    expect(child.lastActivityAt).toBe(0)
+  })
+})

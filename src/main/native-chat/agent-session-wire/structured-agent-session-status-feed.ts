@@ -16,6 +16,8 @@ import { normalizeOptionalField } from '../../../shared/agent-status-field-norma
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import {
   agentSessionBackgroundTasksEqual,
+  isWorkingSubagentBackgroundTask,
+  type AgentSessionBackgroundTask,
   type AgentSessionBackgroundTaskState,
   type AgentSessionStatusEvent,
   type AgentSessionStatusSummary
@@ -74,6 +76,29 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
   )
+}
+
+/**
+ * The session's status once its still-running subagents are accounted for.
+ *
+ * The one thing a child is allowed to say about its parent's row, and it says only this.
+ * A session whose own agent has settled but whose subagent is still working is not
+ * finished, so the row reads busy — while the recency clock, the prompt, the tool line
+ * and the assistant prose all stay strictly the parent's own. Rolling a timestamp or a
+ * label up instead is the defect this replaces: it made an idle parent look like it had
+ * just spoken, and re-triggered its unread marker, every time a child emitted a frame.
+ *
+ * Narrow in both directions: `attention` outranks it (a parent waiting on the user is not
+ * merely busy), and a session with no turn at all stays null rather than becoming listable
+ * because of a child.
+ */
+function rollUpSubagentStatus(
+  status: AgentSessionStatusSummary['status'],
+  backgroundTasks: AgentSessionBackgroundTask[] | undefined
+): AgentSessionStatusSummary['status'] {
+  return status === 'idle' && (backgroundTasks ?? []).some(isWorkingSubagentBackgroundTask)
+    ? 'working'
+    : status
 }
 
 /** Wire the host's own deps into a feed; keeps the host at one call site.
@@ -255,6 +280,7 @@ export class StructuredAgentSessionStatusFeed {
       agent: session.params.provider,
       ...(session.hasProviderChild ? { hostExecutionOwned: true as const } : {}),
       ...projection.summary,
+      status: rollUpSubagentStatus(projection.summary.status, backgroundTasks),
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),

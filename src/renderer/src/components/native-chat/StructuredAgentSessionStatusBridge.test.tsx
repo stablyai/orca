@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/agent-session-wire'
 import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
 import { resolveAttention } from '../sidebar/smart-attention'
+import { computeAgentAcknowledgementTargets } from '@/attention/agent-attention-acknowledgement'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
@@ -444,7 +445,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
   })
 
   it.each(['claude', 'codex'] as const)(
-    'sorts restored %s completions by host time and advances identical turns',
+    'sorts a restored %s completion by host journal time, not by restore time',
     async (agent) => {
       const now = Date.now()
       mocks.store?.setState({
@@ -466,17 +467,88 @@ describe('StructuredAgentSessionStatusBridge', () => {
           updatedAt: now - 100
         })
       ])
+      // The stamp above is the store's own default for a row it has not seen before, and
+      // that is the whole of the bridge's timing argument: an authoritative host clock the
+      // store may accept even when it runs backwards. No `stateStartedAt`, because the
+      // rule that decides one belongs to the store, next to every other writer's.
+      expect(mocks.setAgentStatus.mock.calls.at(-1)?.[3]).toEqual({
+        updatedAt: now - 100,
+        allowOlderTimestamp: true,
+        evidenceObservedAt: now - 100
+      })
+    }
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    "holds a settled %s row's completion stamp, and its unread, as the host clock moves",
+    async (agent) => {
+      const now = Date.now()
+      mocks.store?.setState({
+        unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, agentSessionAgent: agent }] }
+      })
+      render(<StructuredAgentSessionStatusBridge />)
+      await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+      act(() =>
+        feed().emit({
+          type: 'snapshot',
+          sessions: [summary({ status: 'idle', updatedAt: now - 100 })]
+        })
+      )
+      const paneKey = statuses()[0].paneKey
+      // The user reads the finished row. Then the session's journal clock moves on
+      // without the session taking another turn — a subagent's frame, a roster
+      // revision, anything the host publishes while the row stays settled.
+      const acknowledgedTurnStartedAt = { [paneKey]: now - 90 }
       act(() =>
         feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: now - 50 }) })
       )
+
+      // The row finished when it finished. Nothing about a same-state publication says
+      // otherwise, so the sidebar keeps reading "100ms ago", not "now".
       expect(statuses()).toEqual([
-        expect.objectContaining({ stateStartedAt: now - 50, updatedAt: now - 50 })
+        expect.objectContaining({ stateStartedAt: now - 100, updatedAt: now - 50 })
       ])
       expect(
         resolveAttention([{ kind: 'hook', entry: statuses()[0], hasLivePty: false }], now)
-      ).toEqual({ cls: 2, attentionTimestamp: now - 50 })
+      ).toEqual({ cls: 2, attentionTimestamp: now - 100 })
+      // And it stays read. `stateStartedAt` is the acknowledgement clock, so moving it on a
+      // same-state ping marks a row the user has already seen unread all over again.
+      expect(
+        computeAgentAcknowledgementTargets(
+          { liveTurns: { [paneKey]: statuses()[0] }, retainedTurns: {}, acknowledgedTurnStartedAt },
+          paneKey
+        )
+      ).toEqual([])
     }
   )
+
+  // What the retracted half of the restore test was really protecting: two completions in a
+  // row must not leave the row frozen on the first. Covered directly, through the turn the
+  // row actually takes, rather than through a same-state publication standing in for one.
+  it('restamps a row on the second of two completions', async () => {
+    const now = Date.now()
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [summary({ status: 'idle', updatedAt: now - 100 })]
+      })
+    )
+    expect(statuses()).toEqual([expect.objectContaining({ stateStartedAt: now - 100 })])
+    act(() =>
+      feed().emit({ type: 'status', session: summary({ status: 'working', updatedAt: now - 80 }) })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', stateStartedAt: now - 80 })
+    ])
+    act(() =>
+      feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: now - 60 }) })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'done', stateStartedAt: now - 60 })
+    ])
+  })
 
   it('preserves the working age when host metadata advances during the same turn', async () => {
     render(<StructuredAgentSessionStatusBridge />)
@@ -507,8 +579,11 @@ describe('StructuredAgentSessionStatusBridge', () => {
     act(() =>
       feed().emit({ type: 'snapshot', sessions: [summary({ status: 'idle', updatedAt: 200 })] })
     )
+    // The corrected clock lands on `updatedAt`. The completion stamp does not move with it:
+    // the row was already `done` and stayed `done`, and that is the rule the canonical
+    // host-side writer applies to its own copy of this session's row.
     expect(statuses()).toEqual([
-      expect.objectContaining({ state: 'done', updatedAt: 200, stateStartedAt: 200 })
+      expect.objectContaining({ state: 'done', updatedAt: 200, stateStartedAt: 900 })
     ])
     const before = mocks.store?.getState().agentStatusByPaneKey
     const calls = mocks.setAgentStatus.mock.calls.length

@@ -7,11 +7,13 @@
 
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 
-/** Whether the session's own agent produced this item, rather than a subagent it
+/** Whether the session's own agent produced this row, rather than a subagent it
  *  spawned. Absence means root: the producer stamps every child row it writes, and
- *  rows written before the marker existed are root as far as any reader can tell. */
+ *  rows written before the marker existed are root as far as any reader can tell.
+ *  Takes a persisted journal row as readily as the item reduced from it — the
+ *  session's recency clock asks this question before an item exists. */
 export function isRootAgentJournalItem(
-  item: Pick<AgentJournalRenderItem, 'producedBySubagent'> | undefined
+  row: Pick<AgentJournalRenderItem, 'producedBySubagent'> | undefined
 ): boolean {
-  return item?.producedBySubagent !== true
+  return row?.producedBySubagent !== true
 }

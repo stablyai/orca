@@ -50,6 +50,21 @@ export type AgentSessionBackgroundTaskState = {
   supportsStopAll?: boolean
 }
 
+/** Whether a background task is a subagent that is working right now.
+ *
+ *  Narrow on purpose. `working` and `monitoring` are the two states a session list already
+ *  paints as busy, and an absent state is an old host's live task. `waiting` and `blocked`
+ *  are deliberately out: a child that wants something is not a parent that is busy, and a
+ *  rollup that carried them would be claiming the child's status rather than reporting that
+ *  the parent still has work outstanding. Kinds stay distinct — a backgrounded shell is not
+ *  a subagent. */
+export function isWorkingSubagentBackgroundTask(task: AgentSessionBackgroundTask): boolean {
+  return (
+    task.kind === 'agent' &&
+    (task.state === undefined || task.state === 'working' || task.state === 'monitoring')
+  )
+}
+
 function backgroundTaskFieldsEqual(
   left: AgentSessionBackgroundTask,
   right: AgentSessionBackgroundTask

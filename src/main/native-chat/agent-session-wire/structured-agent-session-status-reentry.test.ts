@@ -6,7 +6,7 @@ import type { AgentSessionExecutionLocation } from '../../../shared/agent-sessio
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { AgentHookServer } from '../../agent-hooks/server'
-import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-bed'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusSink

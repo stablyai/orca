@@ -329,7 +329,7 @@ describe('claude journal translation — subagents', () => {
 })
 
 describe('producer attribution', () => {
-  it("stamps a subagent frame's message, tool call and tool result, and leaves the roster row alone", () => {
+  it("stamps a subagent frame's message, tool call and tool result, and the roster row too", () => {
     const { translator, appended } = harness()
     translator.handle(userTurn('user-1'))
     translator.handle(assistantFrame('root-1', null, [{ type: 'text', text: 'delegating' }]))
@@ -343,6 +343,8 @@ describe('producer attribution', () => {
 
     const stamped = appended()
       .filter((item) => item.options?.producedBySubagent === true)
+      // The roster row is stamped too, and is asserted on its own below.
+      .filter((item) => orcaClientMessageId(item.identity) !== GROUP_ITEM_ID)
       .map((item) => item.body.kind)
     expect(stamped).toEqual(['message', 'tool-call', 'tool-call'])
 
@@ -353,13 +355,17 @@ describe('producer attribution', () => {
     )
     expect(rootProse?.options?.producedBySubagent).toBeUndefined()
 
-    // The roster group row is the PARENT's own display of its children, so it must
-    // stay root — stamping it would hide the subagent list from the parent.
+    // The roster group row holds nothing but children's state and is rewritten on every
+    // child transition, so it is child-produced even though the parent's code writes it.
+    // Leaving it root let it move the session's recency clock on its own, which is the
+    // defect with the attribution already in place. Nothing is hidden by stamping it: the
+    // transcript renders every producer's rows, and the sidebar's child list comes from the
+    // live roster the host publishes, not from this row.
     const rosterRow = appended().findLast(
       (item) => orcaClientMessageId(item.identity) === GROUP_ITEM_ID
     )
     expect(rosterRow).toBeDefined()
-    expect(rosterRow?.options?.producedBySubagent).toBeUndefined()
+    expect(rosterRow?.options?.producedBySubagent).toBe(true)
   })
 
   it("stamps a subagent's STREAMED prose, which carries no message envelope when it persists", () => {

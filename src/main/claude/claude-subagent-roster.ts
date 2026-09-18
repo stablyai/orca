@@ -363,6 +363,12 @@ export class ClaudeSubagentRoster {
   private write(group: RosterGroup): void {
     const agents = [...group.entries.values()].map((tracked) => tracked.entry)
     const options = { coalescingKey: `claude-subagents:${group.groupId}` }
+    // Child-produced, though it is written from the parent's context and no
+    // `parent_tool_use_id` comes near it: every byte of the row is children's state and it
+    // is rewritten on every child transition. Unmarked it moves the session's recency
+    // clock by itself. The removal below stays root — it only ever runs once the group
+    // holds no children at all.
+    const childRow = { ...options, producedBySubagent: true as const }
     if (agents.length === 0) {
       // The row's last child turned out not to be a subagent. An empty roster is
       // not a roster of nothing, so the row goes rather than reading "Ran 0".
@@ -380,7 +386,7 @@ export class ClaudeSubagentRoster {
       return
     }
     group.lastSerialized = serialized
-    this.deps.sink.appendItem(group.identity, body, options)
+    this.deps.sink.appendItem(group.identity, body, childRow)
     // Publish keeps the sink's own coalescing slot: sharing the row's key makes
     // each queued publish evict the append it was meant to flush.
     this.deps.sink.publish()

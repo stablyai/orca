@@ -68,7 +68,10 @@ export type {
   AgentSessionBackgroundTaskRunState,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
-export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
+export {
+  agentSessionBackgroundTasksEqual,
+  isWorkingSubagentBackgroundTask
+} from './agent-session-background-task-wire'
 
 export type AgentSessionTurnActivity = {
   turnId: string
