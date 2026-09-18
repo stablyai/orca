@@ -9,7 +9,12 @@ body {
   margin: 0;
   background: var(--bootstrap-bg);
   color: var(--bootstrap-fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
 }
 
 .bootstrap {
