@@ -9,6 +9,9 @@ export type UsageBreakdownRow = {
   eventsOrTurns: number
   hasInferredPricing?: boolean
   estimatedCostUsd?: number | null
+  inputTokens?: number
+  cachedInputTokens?: number
+  outputTokens?: number
 }
 
 type UsageBreakdownSectionProps = {
@@ -48,9 +51,32 @@ export function UsageBreakdownSection({
               <span className="shrink-0 text-muted-foreground">{formatTokens(row.tokens)}</span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {row.sessions}{' '}
-              {translate('auto.components.stats.UsageBreakdownSection.02a046792e', 'sessions •')}{' '}
-              {row.eventsOrTurns} {eventsOrTurnsLabel}
+              {translate(
+                'auto.components.stats.UsageBreakdownSection.sessionsEvents',
+                '{{value0}} sessions • {{value1}} {{value2}}',
+                { value0: row.sessions, value1: row.eventsOrTurns, value2: eventsOrTurnsLabel }
+              )}
+              {row.inputTokens !== undefined
+                ? translate(
+                    'auto.components.stats.UsageBreakdownSection.inputTokens',
+                    ' • in {{value0}}',
+                    { value0: formatTokens(row.inputTokens) }
+                  )
+                : ''}
+              {row.cachedInputTokens !== undefined && row.cachedInputTokens > 0
+                ? translate(
+                    'auto.components.stats.UsageBreakdownSection.cachedTokens',
+                    ' • cached {{value0}}',
+                    { value0: formatTokens(row.cachedInputTokens) }
+                  )
+                : ''}
+              {row.outputTokens !== undefined
+                ? translate(
+                    'auto.components.stats.UsageBreakdownSection.outputTokens',
+                    ' • out {{value0}}',
+                    { value0: formatTokens(row.outputTokens) }
+                  )
+                : ''}
               {row.hasInferredPricing
                 ? ` ${translate('auto.components.stats.UsageBreakdownSection.247c93ca92', '• inferred pricing')}`
                 : ''}

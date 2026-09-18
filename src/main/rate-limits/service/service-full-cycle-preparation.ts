@@ -3,6 +3,8 @@ import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
+import { fetchDevinRateLimits } from '../devin-fetcher'
+import { readDevinCredentials } from '../devin-credentials'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
@@ -30,6 +32,7 @@ export type FetchAllCyclePrepared = {
   miniMaxConfigChanged: boolean
   miniMaxGeneration: number
   claudeFetchGated: boolean
+  devinCredentialsOk: boolean
   results: [
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -39,6 +42,9 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>
   ]
   grokResultPromise: Promise<
+    { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
+  >
+  devinResultPromise: Promise<
     { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
   >
 }
@@ -86,6 +92,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const devinCredentialsReadResult = readDevinCredentials()
+    const devinCredentialsOk = devinCredentialsReadResult.status === 'ok'
+    // Why: a settled 'unavailable' means a signed-in plan with no quota
+    // windows. Re-asserting configured while the refetch is in flight would
+    // flash a "Devin --" chip on every poll; the apply step re-derives it.
+    this.devinAuthConfigured =
+      devinCredentialsOk && previousState.devin?.status !== 'unavailable'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -121,7 +134,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      devin: this.withFetchingStatus(previousState.devin, 'devin')
     })
 
     const missingWslCodexHome =
@@ -129,6 +143,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
+    }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    const devinResultPromise = fetchDevinRateLimits({
+      signal,
+      credentialsReadResult: devinCredentialsReadResult
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -194,6 +215,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxConfigChanged,
       miniMaxGeneration,
       claudeFetchGated,
+      devinCredentialsOk,
       results: [
         claudeResult,
         codexResult,
@@ -202,7 +224,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      devinResultPromise
     }
   }
 }

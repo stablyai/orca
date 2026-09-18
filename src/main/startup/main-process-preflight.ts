@@ -70,6 +70,7 @@ import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'
+import { initDevinUsagePath } from '../devin-usage/store'
 import { initOpenCodeUsagePath } from '../opencode-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
@@ -286,6 +287,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  initDevinUsagePath()
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
   registerDocPreviewSchemePrivileges()

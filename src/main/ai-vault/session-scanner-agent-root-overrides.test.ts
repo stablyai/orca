@@ -52,8 +52,24 @@ const CASES = [
     agent: 'devin',
     envVar: 'DEVIN_HOME',
     absolute: '/srv/devin',
-    absoluteRoot: join('/srv/devin', 'transcripts'),
-    defaultRoot: () => join(homedir(), '.local', 'share', 'devin', 'cli', 'transcripts')
+    absoluteRoot: join('/srv/devin', 'cli', 'transcripts'),
+    // Mirrors the platform-aware default in session-scanner-agent-sources.ts:
+    // %APPDATA%\devin\cli on Windows, $XDG_DATA_HOME/devin/cli elsewhere.
+    defaultRoot: () =>
+      join(
+        process.platform === 'win32'
+          ? join(
+              process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming'),
+              'devin',
+              'cli'
+            )
+          : join(
+              process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share'),
+              'devin',
+              'cli'
+            ),
+        'transcripts'
+      )
   },
   {
     agent: 'openclaw',
@@ -87,7 +103,9 @@ describe('agent scan roots from environment overrides', () => {
   for (const testCase of CASES) {
     describe(testCase.envVar, () => {
       it('uses an absolute override', async () => {
-        const roots = await rootDirsFor(testCase.agent, { [testCase.envVar]: testCase.absolute })
+        const roots = await rootDirsFor(testCase.agent, {
+          [testCase.envVar]: testCase.absolute
+        })
         expect(roots[0]).toBe(testCase.absoluteRoot)
       })
 
@@ -99,14 +117,18 @@ describe('agent scan roots from environment overrides', () => {
       })
 
       it.each(RELATIVE_VALUES)('falls back to the default root for %j', async (value) => {
-        const roots = await rootDirsFor(testCase.agent, { [testCase.envVar]: value })
+        const roots = await rootDirsFor(testCase.agent, {
+          [testCase.envVar]: value
+        })
         expect(roots[0]).toBe(testCase.defaultRoot())
       })
 
       // A relative root is the actual #13082 failure: it resolves against whichever Orca process
       // reads it, so the walk starts somewhere arbitrary and has no depth, entry or time cap.
       it.each(RELATIVE_VALUES)('never yields a relative root for %j', async (value) => {
-        const roots = await rootDirsFor(testCase.agent, { [testCase.envVar]: value })
+        const roots = await rootDirsFor(testCase.agent, {
+          [testCase.envVar]: value
+        })
         for (const root of roots) {
           expect(root).toBe(join(root))
           expect(root.startsWith('/') || /^[A-Za-z]:[\\/]/.test(root)).toBe(true)
