@@ -62,7 +62,9 @@ export function reconcileFederatedWorkerStart(
           entity: 'dispatch',
           id: params.dispatchId,
           from: 'pending',
-          to: 'dispatched'
+          to: 'dispatched',
+          // Why: this IS the pending->dispatched edge, the observed moment the worker started.
+          projection: { dispatched_at: new Date().toISOString() }
         })
       }
       const task = this.getTask(dispatch.task_id)

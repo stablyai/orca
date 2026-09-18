@@ -112,7 +112,12 @@ export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean; terminationReason?: string } = {}
+  options: {
+    workerProcessExited?: boolean
+    terminationReason?: string
+    /** Observed process exit code, when the caller has one in hand. */
+    exitCode?: number | null
+  } = {}
 ): DispatchContextRow | undefined {
   // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot cause SQLITE_BUSY_SNAPSHOT.
   const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
@@ -160,6 +165,7 @@ export function failDispatch(
         failure_count: before.failure_count + 1,
         last_failure: error,
         termination_reason: options.terminationReason ?? before.termination_reason,
+        exit_code: options.exitCode ?? before.exit_code,
         completed_at: before.completed_at ?? new Date().toISOString(),
         capability_revoked_at: before.capability_revoked_at ?? new Date().toISOString()
       }

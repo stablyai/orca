@@ -86,7 +86,8 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     const errorContext = describeTerminalExitCause(cause)
     const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
       workerProcessExited: true,
-      terminationReason: cause.kind
+      terminationReason: cause.kind,
+      exitCode
     })
     if (isDeliberateTerminalExit(cause)) {
       return

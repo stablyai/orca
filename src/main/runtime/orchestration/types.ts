@@ -302,6 +302,9 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** Observed process exit code, attributable to this Attempt. Null until a
+   *  process fact reports one; never inferred. */
+  exit_code: number | null
 }
 
 export type DecisionGateRow = {
