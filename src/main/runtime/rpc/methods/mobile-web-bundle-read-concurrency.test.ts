@@ -205,6 +205,19 @@ describe('a client that disconnects while its chunk is being read', () => {
     expect(gate.opens).toBe(1)
   })
 
+  // Honouring `signal` exists so a client that is gone stops costing file reads. Verification
+  // streams the whole asset, up to the contract's 10 MiB ceiling, so the check that matters is the
+  // one before it: not a single open.
+  it('does not hash the asset at all when the signal was already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const response = await chunk(0, { connectionId: 'conn-6', signal: controller.signal })
+
+    expect(errorMessage(response)).toBe('client_disconnected')
+    expect(gate.opens).toBe(0)
+  })
+
   it('releases the slot it was holding, so the connection is not permanently capped', async () => {
     const aborted = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () => {
       const controller = new AbortController()

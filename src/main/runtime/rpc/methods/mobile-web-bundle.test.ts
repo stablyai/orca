@@ -24,6 +24,7 @@ import {
 import {
   acquireMobileWebBundleReadSlot,
   MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS,
+  mobileWebBundleReadBucketCountForTests,
   resetMobileWebBundleReadAdmissionForTests
 } from './mobile-web-bundle-read-admission'
 import {
@@ -113,6 +114,20 @@ describe('an install that carries a mobile web bundle', () => {
     expect(body.chunkBytes).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
     expect(body.manifest.buildId).toBe(bundle.buildId)
     expect(body.manifest.assets).toEqual(bundle.assets)
+  })
+
+  // Read once per process: without the cache every chunk request re-parses the manifest, and the
+  // schema's refinement recomputes the buildId with a pure-JS sha256 on the event loop.
+  it('answers from the manifest it already read, without going back to disk', async () => {
+    const first = await call('mobileWeb.bundle.manifest')
+    writeFileSync(join(bundle.root, 'manifest.json'), 'not json', 'utf8')
+
+    const second = await call('mobileWeb.bundle.manifest')
+
+    expect(errorMessage(second)).toBeUndefined()
+    expect(MobileWebBundleManifestResultSchema.parse(second.ok && second.result).manifest).toEqual(
+      MobileWebBundleManifestResultSchema.parse(first.ok && first.result).manifest
+    )
   })
 
   it('pages every asset back byte for byte, and each reassembly matches its manifest hash', async () => {
@@ -253,6 +268,23 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
   })
 
+  // index.html is the one path a rebuild keeps, so a verdict keyed by path alone would carry build
+  // A's `false` onto build B's honest file and refuse it for the life of the process.
+  it('does not carry a failed verdict from one build onto the next build of the same path', async () => {
+    writeFileSync(join(bundle.root, 'index.html'), mobileWebBundleFiller(640, 99))
+    expect(
+      errorMessage(await chunk({ buildId: bundle.buildId, path: 'index.html', offset: 0 }))
+    ).toBe('mobile_web_bundle_asset_changed')
+
+    rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
+    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 8)
+    resetBundledMobileWebBundleCacheForTests()
+
+    const response = await chunk({ buildId: replacement.buildId, path: 'index.html', offset: 0 })
+
+    expect(errorMessage(response)).toBeUndefined()
+  })
+
   it('refuses an asset whose bytes on disk no longer hash to the manifest', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
     writeFileSync(join(bundle.root, script.path), mobileWebBundleFiller(script.byteLength, 99))
@@ -346,6 +378,18 @@ describe('an install that carries a mobile web bundle', () => {
         )
       ).ok
     ).toBe(true)
+  })
+
+  // Off the E2EE channel the bucket key is the device's pairing token, so a map that never drops a
+  // key retains one credential per socket, and reconnect churn is normal on mobile.
+  it('keeps no bucket for a connection that finished its reads', () => {
+    for (let socket = 0; socket < 50; socket++) {
+      const release = acquireMobileWebBundleReadSlot(`device-token-${String(socket)}`)
+      expect(release).not.toBeNull()
+      release?.()
+    }
+
+    expect(mobileWebBundleReadBucketCountForTests()).toBe(0)
   })
 
   // connectionId is set only for E2EE mobile sockets, so the device token is what keeps a

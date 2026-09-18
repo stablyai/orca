@@ -10,6 +10,12 @@ export function resetMobileWebBundleReadAdmissionForTests(): void {
   activeReads.clear()
 }
 
+/** Buckets currently holding at least one read. Exported so a test can prove the map does not
+ *  retain a device token per socket; nothing in the app may call this. */
+export function mobileWebBundleReadBucketCountForTests(): number {
+  return activeReads.size
+}
+
 /**
  * The bucket a chunk read is charged to. `connectionId` is set only for E2EE mobile sockets, so
  * keying on it alone would leave a plain-WebSocket phone in one shared unbounded bucket; the device
@@ -28,7 +34,8 @@ export function acquireMobileWebBundleReadSlot(bucket: string): (() => void) | n
   activeReads.set(bucket, active + 1)
   return () => {
     const remaining = (activeReads.get(bucket) ?? 1) - 1
-    // Dropping the key at zero is what keeps this from growing one entry per connection forever.
+    // Dropping the key at zero is what keeps this from retaining one entry per socket forever —
+    // and off the E2EE channel the key is the device's pairing token.
     if (remaining > 0) {
       activeReads.set(bucket, remaining)
     } else {
