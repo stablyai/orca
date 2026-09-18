@@ -47,7 +47,8 @@ export function createNestedRepositoryActions(
               await window.api.projectGroups.scanNested({
                 path,
                 connectionId,
-                scanId: controls?.scanId
+                scanId: controls?.scanId,
+                ...(controls?.options ? { options: controls.options } : {})
               })
             )
           } finally {
@@ -58,7 +59,7 @@ export function createNestedRepositoryActions(
           await callRuntimeRpc<NestedRepoScanResult>(
             target,
             'projectGroup.scanNested',
-            { path },
+            { path, ...(controls?.options ? { options: controls.options } : {}) },
             // Why: older runtime servers can't stream or cancel scans; keep a bounded failure path for large folders.
             { timeoutMs: 20_000 }
           )

@@ -43,6 +43,7 @@ export const STATIC_RIGHT_SIDEBAR_TABS = [
   'vault',
   'workspaces',
   'pr-checks',
+  'workspace-changes',
   'source-control',
   'checks',
   'ports'

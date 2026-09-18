@@ -5,6 +5,7 @@ import { getErrorCode } from '../git/worktree-operation-options'
 import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktreeGraph } from '../repo-worktrees'
 import { getLocalRepos } from './filesystem-allowed-roots'
+import { resolveFolderScopeGitRepoRootForStore } from './folder-scope-git-repo-roots'
 import { isDescendantOrEqual, normalizeExistingPath } from './filesystem-path-containment'
 
 const registeredWorktreeRoots = new Set<string>()
@@ -282,6 +283,11 @@ export async function resolveRegisteredWorktreePath(
   const normalizedTarget = await normalizeExistingPath(resolvedTarget)
   if (registeredWorktreeRoots.has(normalizedTarget)) {
     return normalizedTarget
+  }
+
+  const folderScopeRepoRoot = resolveFolderScopeGitRepoRootForStore(normalizedTarget, store)
+  if (folderScopeRepoRoot) {
+    return folderScopeRepoRoot
   }
 
   throw new Error('Access denied: unknown repository or worktree path')
