@@ -247,7 +247,24 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     env: buildHostEnv(spec.env),
     input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
-    maxOutputBytes: spec.maxOutputBytes
+    maxOutputBytes: spec.maxOutputBytes,
+    // Why: without this a timeout kills only the root. `terminate()` on the
+    // non-barrier path is a bare `child.kill()`, so whatever still holds the
+    // console is never reaped; the barrier issues `taskkill /pid <root> /t /f`
+    // while the root is still alive, which reaps it. Orca already tree-kills
+    // `wsl.exe` in production -- git's WSL lane threads the same flag
+    // (`git/command-runner/wsl-command-resolution.ts`) -- so this is wiring, not
+    // new machinery or a new risk.
+    //
+    // Observed: a wedged distro (`wsl --list` reports Running while every
+    // `--exec` hangs) accumulated 8,731 orphaned conhosts / 9,073 processes /
+    // 1.38M handles over two days on Windows 10 19045, after which process
+    // creation itself cost tens of seconds. Stated as an observation, not as the
+    // proven mechanism: a root-only kill against a HEALTHY distro does NOT leak
+    // (measured, conhost died in 6/6 attributed cases), so something wedge-
+    // specific holds the console open. Scope: this reaps Windows-side
+    // descendants only, never the hung guest-side process inside the distro.
+    terminationBarrier: true
   })
 
   return {
