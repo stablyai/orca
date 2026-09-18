@@ -18,6 +18,7 @@
     "../src/preload/runtime-environment-subscriptions.ts",
     "../src/preload/usage-provider-api.ts",
     "../src/shared/**/*",
+    "../src/types/**/*",
     "../src/main/gitlab/mappers.ts",
     "../src/main/ipc/deferred-emoji-shortcode-dataset.ts",
     "../src/main/ipc/worktree-branch-name.ts",

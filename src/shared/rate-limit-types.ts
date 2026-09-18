@@ -1,3 +1,5 @@
+import type { ConsoleBalance } from '../types/console-api'
+
 export type RateLimitWindow = {
   /** Percentage of the window consumed (0–100). */
   usedPercent: number
@@ -86,6 +88,10 @@ export type ProviderRateLimits = {
   error: string | null
   status: ProviderRateLimitStatus
   usageMetadata?: UsageRateLimitMetadata
+  /** Console organization balance, null if not available. */
+  consoleBalance?: ConsoleBalance
+  /** Error fetching console balance, null when consoleBalance is present. */
+  consoleBalanceError?: string
 }
 
 export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
