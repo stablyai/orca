@@ -51,9 +51,11 @@ private let bridgeInstaller = """
 
 /// The body of a `callAsyncJavaScript` call, with the payload bound to `m` as a real JS value, so no
 /// reply content is ever parsed as script text.
+///
+/// Unguarded on purpose: a missing global is a page the installer never ran in, and throwing is what
+/// rejects the host's promise. Checking for it would resolve a message nobody received.
 private let bridgeDeliver = """
-  const bridge = globalThis.orcaBridge
-  if (bridge) { bridge.__deliver(m) }
+  globalThis.orcaBridge.__deliver(m)
   """
 
 private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
