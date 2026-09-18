@@ -323,6 +323,11 @@ import Foundation
     // the install succeeded, so a corrupt generation reports its failure once rather than on every
     // commit for the life of the mount.
     precondition(props(directory: "/gen/corrupt").matches(props(directory: "/gen/corrupt")))
+
+    // A fourth prop that nobody compared is a prop that silently never reloads, so the record's
+    // shape is pinned here rather than left to whoever adds the field.
+    let fields = Mirror(reflecting: props()).children.compactMap(\.label).sorted()
+    precondition(fields == ["bridgeEnabled", "generationDirectory", "sessionId"])
   }
 
   static func checkBridgeAcceptance() {
