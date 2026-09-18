@@ -1,10 +1,25 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
 import { readMobileWebShellReachability } from './mobile-web-shell-session'
 
-const CLIENT = {} as unknown as RpcClient
+/** Only `client === null` is read, but a real shape keeps this out of the casting gate. */
+function fakeClient(): RpcClient {
+  return {
+    sendRequest: vi.fn(),
+    subscribe: vi.fn(() => () => {}),
+    updateTerminalSubscriptionViewport: vi.fn(),
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: vi.fn(),
+    close: vi.fn()
+  }
+}
+
+const CLIENT = fakeClient()
 
 function reachability(state: ConnectionState, client: RpcClient | null = CLIENT): string {
   return readMobileWebShellReachability(state, client)
