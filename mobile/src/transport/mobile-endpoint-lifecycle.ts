@@ -104,7 +104,7 @@ function createSupervisor(
     onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
-    setTimer: setTimeout,
-    clearTimer: clearTimeout
+    setTimer: (handler, ms) => setTimeout(handler, ms),
+    clearTimer: (handle) => clearTimeout(handle)
   })
 }

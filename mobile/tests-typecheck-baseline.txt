@@ -103,7 +103,6 @@ src/transport/host-removal-lifecycle.test.ts
 src/transport/host-status-gates.test.ts
 src/transport/host-store.test.ts
 src/transport/mobile-endpoint-supervisor-nudge.test.ts
-src/transport/mobile-relay-background-grace.test.ts
 src/transport/mobile-relay-background-lifecycle.test.ts
 src/transport/mobile-relay-direct-upgrade.test.ts
 src/transport/mobile-relay-e2ee-link.test.ts

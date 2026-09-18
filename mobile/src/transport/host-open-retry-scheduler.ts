@@ -1,3 +1,5 @@
+import type { ScheduleTimer } from './timer-scheduler'
+
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000] as const
 
 type RetryState = {
@@ -9,18 +11,19 @@ type RetryState = {
 type HostOpenRetrySchedulerOptions = {
   canRetry: (hostId: string, generation: number) => boolean
   open: (hostId: string) => void
-  setTimer?: typeof setTimeout
+  setTimer?: ScheduleTimer
   clearTimer?: typeof clearTimeout
 }
 
 export class HostOpenRetryScheduler {
   private readonly states = new Map<string, RetryState>()
-  private readonly setTimer: typeof setTimeout
+  private readonly setTimer: ScheduleTimer
   private readonly clearTimer: typeof clearTimeout
 
   constructor(private readonly options: HostOpenRetrySchedulerOptions) {
-    this.setTimer = options.setTimer ?? setTimeout
-    this.clearTimer = options.clearTimer ?? clearTimeout
+    // Why: browsers throw Illegal invocation when a global timer is called with a non-global receiver; Hermes does not.
+    this.setTimer = options.setTimer ?? ((handler, ms) => setTimeout(handler, ms))
+    this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle))
   }
 
   recordFailure(hostId: string, generation: number): { failureCount: number; nextDelayMs: number } {

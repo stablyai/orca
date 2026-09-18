@@ -24,7 +24,9 @@ export function navigateToMobileFilePreview(
   if (options.embedded && options.onRequestClose) {
     // Why: closing the dock immediately can unmount the subtree before Expo
     // commits the route transition.
-    const scheduleClose = options.scheduleClose ?? setTimeout
+    const scheduleClose =
+      options.scheduleClose ??
+      ((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
     scheduleClose(options.onRequestClose, 0)
   }
 }
