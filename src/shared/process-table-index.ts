@@ -70,12 +70,29 @@ export function collectDescendantsFromIndex<Row extends ProcessIdentityRow>(
   rootPid: number
 ): (Row & { depth: number })[] {
   const descendants: (Row & { depth: number })[] = []
-  const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
+  // Why the visited set: a process-table capture is not atomic, so PID reuse can
+  // produce duplicate or cyclic-looking ppid links (a descendant whose pid a later
+  // row reuses as an ancestor). Without it the stack grows without bound and the
+  // host OOMs -- the same hazard the ppid walk in pty-descendant-termination.ts
+  // already guards against. Well-formed tables have unique pids, so the guard never
+  // fires and the deepest-last ordering above is unchanged.
+  const visited = new Set<number>([rootPid])
+  const stack: { row: Row; depth: number }[] = []
+  const pushUnvisited = (row: Row, depth: number): void => {
+    if (visited.has(row.pid)) {
+      return
+    }
+    visited.add(row.pid)
+    stack.push({ row, depth })
+  }
+  for (const child of index.childrenByPpid.get(rootPid) ?? []) {
+    pushUnvisited(child, 1)
+  }
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
     descendants.push({ ...row, depth })
     for (const child of index.childrenByPpid.get(row.pid) ?? []) {
-      stack.push({ row: child, depth: depth + 1 })
+      pushUnvisited(child, depth + 1)
     }
   }
   return descendants
