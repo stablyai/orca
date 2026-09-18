@@ -10,6 +10,8 @@ import {
   type SwapVolumeFreeSpace
 } from './swap-volume-free-space'
 import { samplePreGoneSystemMemory } from './pre-gone-host-memory'
+import { setLinuxCgroupMemoryLimitReaderForTest } from './linux-cgroup-memory-limit'
+import { setLinuxMemoryPressureStallReaderForTest } from './linux-memory-pressure-stall'
 import {
   buildProcessGoneCrashDetails,
   resetPreGoneCrashSamplingForTest,
@@ -82,6 +84,10 @@ describe('pre-gone host memory', () => {
     resetPreGoneCrashSamplingForTest()
     setSystemMemoryInfoReaderForTest(null)
     setSwapVolumeFreeSpaceReaderForTest(null)
+    // Without these the linux readings below come from the CI host's own cgroup
+    // and PSI, so a capped or busy runner rewrites the label under test.
+    setLinuxCgroupMemoryLimitReaderForTest(() => undefined)
+    setLinuxMemoryPressureStallReaderForTest(() => undefined)
     appMetricsMock.mockClear()
     appMetricsMock.mockReturnValue(BROWSER_AND_RENDERER)
   })
