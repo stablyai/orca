@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 /**
  * The load state the native shell view reports, and the parser that rebuilds the union from the
  * flat dictionary a native event carries.
@@ -26,31 +28,45 @@ export type MobileWebShellLoadState =
   | { state: 'ready' }
   | { state: 'failed'; reason: MobileWebShellFailureReason }
 
-/** What the native event body actually is. The union above is derived from it, never asserted. */
-export type MobileWebShellLoadStatePayload = { state: string; reason?: string }
+/**
+ * What the native event body actually is; the union above is derived from it, never asserted.
+ * Own-property parse: zod reads a shape key straight off the value, so an inherited `reason` would
+ * otherwise count as one the shell sent.
+ */
+const loadStatePayloadSchema = z.object({
+  state: z.string(),
+  reason: z.string().optional()
+})
 
-function isFailureReason(value: unknown): value is MobileWebShellFailureReason {
+export type MobileWebShellLoadStatePayload = z.infer<typeof loadStatePayloadSchema>
+
+function isFailureReason(value: string | undefined): value is MobileWebShellFailureReason {
   return MOBILE_WEB_SHELL_FAILURE_REASONS.some((reason) => reason === value)
 }
 
-// hasOwn, not `in`: the payload crosses the native bridge, and an inherited `reason` must not be
-// read as one the shell sent.
-function readOwnField(payload: object, key: string): unknown {
-  return Object.hasOwn(payload, key) ? Reflect.get(payload, key) : undefined
+function ownEnumerableFields(payload: unknown): Record<string, unknown> | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null
+  }
+  return Object.fromEntries(Object.entries(payload))
 }
 
 /** Answers null for anything it does not recognise; a caller drops those rather than guessing. */
 export function parseMobileWebShellLoadState(payload: unknown): MobileWebShellLoadState | null {
-  if (typeof payload !== 'object' || payload === null) {
+  const fields = ownEnumerableFields(payload)
+  if (fields === null) {
     return null
   }
-  const state = readOwnField(payload, 'state')
+  const parsed = loadStatePayloadSchema.safeParse(fields)
+  if (!parsed.success) {
+    return null
+  }
+  const { state, reason } = parsed.data
   if (state === 'loading' || state === 'ready') {
     return { state }
   }
   if (state !== 'failed') {
     return null
   }
-  const reason = readOwnField(payload, 'reason')
   return isFailureReason(reason) ? { state: 'failed', reason } : null
 }
