@@ -38,7 +38,6 @@ export type GenerationStore = {
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
-  evictHostsBeyond(limit?: number): Promise<void>
 }
 
 /** Recency only, so anything unreadable degrades to "evict this host first". */
@@ -64,11 +63,14 @@ export function createGenerationStore(options: {
   }
 
   async function writeHostIndex(index: ReadonlyMap<string, number>): Promise<void> {
-    await fs.createDirectory(fs.rootUri)
-    await fs.writeText(
-      joinUri(fs.rootUri, HOST_INDEX_FILE_NAME),
-      JSON.stringify(Object.fromEntries(index))
-    )
+    // Recency, not truth: a full disk here must not turn an activation that is already on disk
+    // into a thrown commit, and the next activation rewrites the whole index anyway.
+    await fs
+      .writeText(
+        joinUri(fs.rootUri, HOST_INDEX_FILE_NAME),
+        JSON.stringify(Object.fromEntries(index))
+      )
+      .catch(() => undefined)
   }
 
   async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
@@ -80,7 +82,7 @@ export function createGenerationStore(options: {
     await fs.delete(hostRoot(hostKey))
   }
 
-  async function enforceHostLimit(limit: number, index: Map<string, number>): Promise<void> {
+  async function enforceHostLimit(index: Map<string, number>, activated: string): Promise<void> {
     const hosts = await listHostDirectories()
     const present = new Set(hosts.map((host) => host.name))
     for (const key of Array.from(index.keys())) {
@@ -89,11 +91,13 @@ export function createGenerationStore(options: {
       }
     }
     // A host with no index entry sorts first: the index is recency, not truth, so a lost or
-    // truncated one costs eviction order rather than a generation.
-    const ordered = [...hosts].sort(
-      (left, right) => (index.get(left.name) ?? 0) - (index.get(right.name) ?? 0)
-    )
-    for (const host of ordered.slice(0, Math.max(0, ordered.length - limit))) {
+    // truncated one costs eviction order rather than a generation. The host just activated is
+    // never a candidate, because `now()` is a wall clock: one backward jump would otherwise make
+    // the newest entry the oldest and evict the tree the caller is about to open.
+    const candidates = hosts
+      .filter((host) => host.name !== activated)
+      .sort((left, right) => (index.get(left.name) ?? 0) - (index.get(right.name) ?? 0))
+    for (const host of candidates.slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))) {
       await dropHostTree(host.name)
       index.delete(host.name)
     }
@@ -140,7 +144,6 @@ export function createGenerationStore(options: {
     // plus a fresh write is not a generation either side verified.
     await fs.delete(directory)
     try {
-      await fs.createDirectory(directory)
       for (const asset of assets) {
         await fs.writeBytes(asset.uri, asset.bytes)
       }
@@ -169,6 +172,11 @@ export function createGenerationStore(options: {
       await fs.delete(staged.directory)
       return active
     }
+    // Before any delete: an aborted or swept handle must not cost the live generation, and a tree
+    // that is no longer on disk cannot be renamed into one either.
+    if (!(await fs.fileExists(joinUri(staged.directory, MANIFEST_FILE_NAME)))) {
+      throw new Error(`staged generation ${staged.buildId} is no longer on disk`)
+    }
     // Every other generation goes before the rename, never after. A crash between the two leaves
     // zero generations, which the runbook's redownload rule already covers; the other order can
     // leave two directories under `generations/` with nothing to say which one is the activation.
@@ -178,16 +186,16 @@ export function createGenerationStore(options: {
     await fs.createDirectory(generations)
     await fs.moveDirectory(staged.directory, target)
     // Android below API 26 implements a directory move as a non-recursive copy plus a delete
-    // (expo-file-system android FileSystemPath.kt:158-173), which can land an empty directory.
+    // (expo-file-system android FileSystemPath.kt:158-173), which can land an empty directory. Its
+    // `delete()` then fails on the non-empty source, so the tmp tree survives for the next sweep.
     if (!(await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))) {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
     const index = await readHostIndex()
     index.set(staged.hostKey, now())
-    // Enforced here rather than left to the caller: the four-host ceiling is this module's
-    // invariant, and `evictHostsBeyond` exists for the launch path, not as its only enforcement.
-    await enforceHostLimit(MAX_CACHED_HOSTS, index)
+    // Enforced here rather than left to a caller: the four-host ceiling is this module's invariant.
+    await enforceHostLimit(index, staged.hostKey)
     return active
   }
 
@@ -208,7 +216,7 @@ export function createGenerationStore(options: {
   }
 
   // One queue for the whole store rather than one per host: every operation is a short burst of
-  // cache I/O, and a single order answers the stage/commit/sweep/evict interleavings at once. A
+  // cache I/O, and a single order answers the stage/commit/sweep/delete interleavings at once. A
   // second `stageGeneration` for the same host and build waits for the first rather than writing
   // into the tree it is still filling.
   let tail: Promise<unknown> = Promise.resolve()
@@ -224,11 +232,7 @@ export function createGenerationStore(options: {
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) => serialize(() => fs.delete(staged.directory)),
     sweepStagedGenerations: () => serialize(sweep),
-    deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
-    evictHostsBeyond: (limit = MAX_CACHED_HOSTS) =>
-      serialize(async () => {
-        await enforceHostLimit(limit, await readHostIndex())
-      })
+    deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey))
   }
 }
 
@@ -267,12 +271,13 @@ function requireBuildId(buildId: string): string {
 }
 
 /** The manifest schema bans traversal already, but this is the last code between a manifest and a
- *  write, and `manifest.json` is the store's own name rather than an asset's to take. */
+ *  write, and `manifest.json` is the store's own name rather than an asset's to take — folded,
+ *  because APFS and NTFS are case-insensitive and `Manifest.JSON` would land on the same file. */
 function requireStorablePath(path: string): string {
   const segments = path.split('/')
   const storable =
     path.length > 0 &&
-    path !== MANIFEST_FILE_NAME &&
+    path.toLowerCase() !== MANIFEST_FILE_NAME &&
     !path.includes('\\') &&
     segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
   if (!storable) {
