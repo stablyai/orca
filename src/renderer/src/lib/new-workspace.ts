@@ -11,6 +11,7 @@ import {
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
@@ -30,7 +31,7 @@ export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']
   /** GitHub Start assignment only; stripped when persisting the linked task. */
-  assignees?: { login: string }[]
+  assignees?: GitHubAssignableUser[]
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
   linearBranchName?: string

@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   assignUnassignedGitHubIssueOnStart,
   assignUnassignedGitHubIssueOnStartFailureMessage,
+  GITHUB_START_ASSIGNEE_ME,
   githubIssueHasAssignees,
   isGitHubIssueForStartAssignment,
   shouldAssignUnassignedGitHubIssueOnStart
@@ -116,6 +117,10 @@ describe('shouldAssignUnassignedGitHubIssueOnStart', () => {
 })
 
 describe('assignUnassignedGitHubIssueOnStart', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('adds the current user when starting an unassigned GitHub issue with the setting on', async () => {
     const addAssignees = vi.fn().mockResolvedValue(undefined)
     const patchWorkItem = vi.fn()
@@ -239,7 +244,37 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
       }
     )
 
-    expect(addAssignees).toHaveBeenCalledWith(expect.objectContaining({ logins: ['@me'] }))
+    expect(addAssignees).toHaveBeenCalledWith(
+      expect.objectContaining({ logins: [GITHUB_START_ASSIGNEE_ME] })
+    )
     expect(patchWorkItem).not.toHaveBeenCalled()
+  })
+
+  it('assigns @me on a runtime host instead of the desktop viewer login', async () => {
+    const addAssignees = vi.fn().mockResolvedValue(undefined)
+    const patchWorkItem = vi.fn()
+    const viewer = vi.fn().mockResolvedValue({ login: 'desktop-user' })
+    const sourceContext = {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'repo-1',
+      hostId: 'runtime:env-1' as const,
+      repoId: 'repo-1'
+    }
+    vi.stubGlobal('window', { api: { gh: { viewer } } })
+
+    await assignUnassignedGitHubIssueOnStart(
+      { enabled: true, item: unassignedIssue, repoId: 'repo-1', sourceContext },
+      { addAssignees, patchWorkItem }
+    )
+
+    expect(addAssignees).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      number: 21047,
+      logins: [GITHUB_START_ASSIGNEE_ME],
+      sourceContext
+    })
+    expect(patchWorkItem).not.toHaveBeenCalled()
+    expect(viewer).not.toHaveBeenCalled()
   })
 })

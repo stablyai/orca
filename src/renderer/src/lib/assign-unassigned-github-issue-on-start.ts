@@ -103,7 +103,13 @@ export function assignUnassignedGitHubIssueOnStartFailureMessage(): string {
   )
 }
 
-export async function resolveGitHubStartAssigneeLogin(): Promise<string> {
+export async function resolveGitHubStartAssigneeLogin(
+  sourceContext?: TaskSourceContext | null
+): Promise<string> {
+  // Why: runtime github.updateIssue uses that host's gh session; desktop gh:viewer is a different account.
+  if (sourceContext?.hostId.startsWith('runtime:')) {
+    return GITHUB_START_ASSIGNEE_ME
+  }
   try {
     const login = (await window.api.gh.viewer())?.login?.trim()
     if (login) {
@@ -140,7 +146,8 @@ export async function assignUnassignedGitHubIssueOnStart(
     return 'skipped'
   }
 
-  const resolveCurrentUserLogin = deps.resolveCurrentUserLogin ?? resolveGitHubStartAssigneeLogin
+  const resolveCurrentUserLogin =
+    deps.resolveCurrentUserLogin ?? (() => resolveGitHubStartAssigneeLogin(args.sourceContext))
   const addAssignees = deps.addAssignees ?? defaultAddAssignees
   const patchWorkItem =
     deps.patchWorkItem ??
