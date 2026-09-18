@@ -456,13 +456,24 @@ describe('PR Checks skip wiring', () => {
       '${{ steps.filter.outputs.mobile_dependencies }}'
     )
     const steps = prWorkflow.jobs.static_analysis.steps
-    const install = steps.findIndex((step) => step.name === 'Install mobile dependencies')
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-mobile-dependencies'
+    )
     const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
     expect(install).toBeGreaterThan(-1)
     expect(install).toBeLessThan(gate)
     expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
-    expect(steps[install]['working-directory']).toBe('mobile')
-    expect(steps[install].run).toContain('--frozen-lockfile')
+    // The install itself moved into the action the packaging jobs share; assert it there so
+    // this job cannot keep the step while the action stops installing anything.
+    const action = parse(
+      readFileSync(
+        join(projectDir, '.github/actions/install-mobile-dependencies/action.yml'),
+        'utf8'
+      )
+    )
+    const [installStep] = action.runs.steps
+    expect(installStep['working-directory']).toBe('mobile')
+    expect(installStep.run).toContain('--frozen-lockfile')
   })
 
   it('keeps the cheap root-directory guard on docs-only PRs', () => {
