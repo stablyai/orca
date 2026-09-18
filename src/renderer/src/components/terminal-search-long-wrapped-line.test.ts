@@ -32,7 +32,7 @@ import { safeFind } from './terminal-search-safe-find'
  * anything that is not the decoration error.
  */
 
-/** Reaches the ring behind the public buffer API to pin the negative-index state reflow leaves. */
+/** Checks retained rows outside the public buffer bounds. */
 type RingBufferProbe = {
   _core: { buffer: { lines: { _array: unknown[] } } }
 }
@@ -282,15 +282,22 @@ describe('terminal search inside one very long wrapped line', () => {
     for (let i = 0; i < 20; i++) {
       await write(terminal, `line ${i}\r\n`)
     }
-    // Narrowing a pane reflows the buffer, which leaves the ring holding entries at negative
-    // indices, so `getLine(-1)` answers with a stale wrapped line instead of undefined. The rewind
-    // has to stop at row 0 or it walks backwards forever and hangs the renderer.
+    // Reflow must retain the searchable tail without keeping evicted rows at negative indices.
     terminal.resize(15, 5)
     await write(terminal, '')
     expect(terminal.buffer.active.getLine(0)?.isWrapped).toBe(true)
     expect(
-      Object.keys((terminal as unknown as RingBufferProbe)._core.buffer.lines._array)
-    ).toContain('-1')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This real pinned xterm instance uses the CircularList backing array asserted below.
+      Object.keys((terminal as unknown as RingBufferProbe)._core.buffer.lines._array).filter(
+        (key) => Number(key) < 0
+      )
+    ).toEqual([])
+    const retainedLines = Array.from({ length: terminal.buffer.active.length }, (_, index) =>
+      terminal.buffer.active.getLine(index)?.translateToString(true)
+    )
+    expect(retainedLines.filter((line) => line?.startsWith('line '))).toEqual(
+      Array.from({ length: 20 }, (_, index) => `line ${index}`)
+    )
 
     const startedAt = performance.now()
     const found = safeFind((term, options) => search.findNext(term, options), NEEDLE, {

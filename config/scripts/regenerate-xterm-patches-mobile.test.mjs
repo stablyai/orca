@@ -39,11 +39,14 @@ describe('mobile xterm patch generation', () => {
     })
     expect(splitPatchEntries(profile.source).map((entry) => entry.path)).toEqual([
       'src/browser/ColorContrastCache.ts',
+      'src/common/buffer/Buffer.ts',
       'src/common/buffer/BufferLine.ts'
     ])
     expect(profile.source).toBe(
       selectPatchEntries(desktopSource, (file) =>
-        ['/ColorContrastCache.ts', '/BufferLine.ts'].some((suffix) => file.endsWith(suffix))
+        ['/ColorContrastCache.ts', '/Buffer.ts', '/BufferLine.ts'].some((suffix) =>
+          file.endsWith(suffix)
+        )
       )
     )
     expect(profile.manifest.packages[0].sourcePatch).toMatch(/^mobile\/patches\/xterm-src\//)
@@ -106,6 +109,7 @@ describe('mobile xterm patch generation', () => {
       'lib/xterm.mjs',
       'lib/xterm.mjs.map',
       'src/browser/ColorContrastCache.ts',
+      'src/common/buffer/Buffer.ts',
       'src/common/buffer/BufferLine.ts'
     ])
     expect(patch).not.toContain('xterm-composition-transaction-accepted')

@@ -45,6 +45,19 @@ index fdcd9d133199a6cd6ba9bea9606a02c03ad03b3d..0558a8873f680e8fb2a27cc833c49c5b
 +    this._entryCount++;
    }
  }
+diff --git a/src/common/buffer/Buffer.ts b/src/common/buffer/Buffer.ts
+index e3a88bfeb4bbf79214d799adec30cba8e4dc1b49..f11e55306dde553d8f68b17340c9022cd749e914 100644
+--- a/src/common/buffer/Buffer.ts
++++ b/src/common/buffer/Buffer.ts
+@@ -504,7 +504,7 @@ export class Buffer extends Disposable implements IBuffer {
+       for (let i = Math.min(this.lines.maxLength - 1, originalLinesLength + countToInsert - 1); i >= 0; i--) {
+         if (nextToInsert && nextToInsert.start > originalLineIndex + countInsertedSoFar) {
+           // Insert extra lines here, adjusting i as needed
+-          for (let nextI = nextToInsert.newLines.length - 1; nextI >= 0; nextI--) {
++          for (let nextI = nextToInsert.newLines.length - 1; nextI >= 0 && i >= 0; nextI--) {
+             this.lines.set(i--, nextToInsert.newLines[nextI]);
+           }
+           i++;
 diff --git a/src/common/buffer/BufferLine.ts b/src/common/buffer/BufferLine.ts
 index 4984f3a49abe8437475c206db1345f5f5fe3979c..43fd5c5b286f23f11d407c9098062e970b6a2ec6 100644
 --- a/src/common/buffer/BufferLine.ts

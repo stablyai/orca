@@ -1,0 +1,84 @@
+{
+  "historicalRef": "v1.4.198",
+  "installedHeadless": "6.1.0-beta.302",
+  "upstreamCommit": "d3e32b344dfe7dd6015cff6a9aeaaeaeccdc2789",
+  "versions": [
+    {
+      "path": "package.json",
+      "currentSha256": "039a5464a296a1ad4cd0456154da71843e1bd3c63337e24c3767119f44a573ec",
+      "historicalSha256": "947bd6d9f4d28251f3b8c07ba5e81a3b5ab53d3ebb6940d2ee0406d1ecc96f10",
+      "historicalExitCode": 0,
+      "equal": false
+    },
+    {
+      "path": "config/patches/xterm-upstream.json",
+      "currentSha256": "603900acb42e038c9717f8bb2962cfc3a9c5f4469eaaa6b548e610059b625aef",
+      "historicalSha256": "fb4b137d4ff659b87da863f85269657a38e8fb58430e9596d29c5626865e44ea",
+      "historicalExitCode": 0,
+      "equal": false
+    },
+    {
+      "path": "config/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch",
+      "currentSha256": "6085682c54a8cf1998963912a7f53ee3c16d053ba84aa23a3e27b663eb5e19c8",
+      "historicalSha256": "d103594f18c48eee356ae4ae160215150da2c3d87dcc7a31970337c27d533ac0",
+      "historicalExitCode": 0,
+      "equal": false
+    },
+    {
+      "path": "src/main/daemon/headless-emulator.ts",
+      "currentSha256": "ace96102285c3967cd9544e7696fe73e1ac6df576b476939aa9819f5c298bab6",
+      "historicalSha256": "b8bcb28dae2d9fb1b1361c9d32eb69357177943778bf56c2ce9848c82c9ba2a7",
+      "historicalExitCode": 0,
+      "equal": false
+    },
+    {
+      "path": "src/main/runtime/orca-runtime-create-pty-headless-terminal-state.ts",
+      "currentSha256": "21a9aef91c4debaf91aa2bd3a7d7b77bc46769cc7cead0609b8425350ea78636",
+      "historicalSha256": "67222b470b133cb473acf85e10de970535cceacf06964a5afeb50d640a0fb0ac",
+      "historicalExitCode": 0,
+      "equal": false
+    },
+    {
+      "path": "src/renderer/src/lib/pane-manager/pane-fit-measurability.ts",
+      "currentSha256": "e6952bb7e5ba019179ab3500a1de6a3cf3050aa85e6bea00e5ca30cd60c152ef",
+      "historicalSha256": "e6952bb7e5ba019179ab3500a1de6a3cf3050aa85e6bea00e5ca30cd60c152ef",
+      "historicalExitCode": 0,
+      "equal": true
+    },
+    {
+      "path": "src/main/daemon/daemon-session-scrollback-window.ts",
+      "currentSha256": "038507c6193b5a18eb0e39276d83a1335a33dfb3b87dcf93286ed91a449f9a68",
+      "historicalSha256": "038507c6193b5a18eb0e39276d83a1335a33dfb3b87dcf93286ed91a449f9a68",
+      "historicalExitCode": 0,
+      "equal": true
+    }
+  ],
+  "mapped": [
+    {
+      "source": "webpack://@xterm/xterm/./src/common/buffer/Buffer.ts",
+      "sha256": "48e2c3e2466bb7807e32f94d4cd387f87c89297379275505af093182179b4c63",
+      "matchesRendererSource": true
+    },
+    {
+      "source": "webpack://@xterm/xterm/./src/common/buffer/BufferReflow.ts",
+      "sha256": "1854aeeb43b443940234bcfec03a219132fef1d953309efbbe75e553400e89f6",
+      "matchesRendererSource": true
+    },
+    {
+      "source": "webpack://@xterm/xterm/./src/common/buffer/BufferLine.ts",
+      "sha256": "435b6bccb646071deda696d8e5ffccb5396524570a0d6f345093a1e0aebead1a",
+      "matchesRendererSource": true
+    },
+    {
+      "source": "webpack://@xterm/xterm/./src/common/services/BufferService.ts",
+      "sha256": "3313224dbf64073d086b26b01fc4e1643b2a07cda3d77a719dd0325e71a35715",
+      "matchesRendererSource": true
+    },
+    {
+      "source": "webpack://@xterm/xterm/./src/common/CoreTerminal.ts",
+      "sha256": "ed020d0d4a497b53cd0b6fd220344b2b48d7b78691cf7278db4e59261ff8ad65",
+      "matchesRendererSource": true
+    }
+  ],
+  "captureStage": "Before the reflow destination guard; primary worktree already includes the terminal-cell and contrast-cache patches."
+}

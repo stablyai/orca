@@ -1,0 +1,48 @@
+{
+  "stack": "#20992, which stacks on #20981",
+  "checks": {
+    "rootTests": {
+      "files": 5,
+      "passed": 92,
+      "newReflowCases": 8
+    },
+    "mobileTests": {
+      "files": 4,
+      "passed": 24,
+      "newReflowCases": 2
+    },
+    "canonicalHeadlessDesktopRegeneration": "check passed, including pristine bundle/source verification",
+    "canonicalMobileRegeneration": "check passed",
+    "portableProof": {
+      "memoryChildren": 9,
+      "parityCases": 28,
+      "lifecycleCases": 8,
+      "exitCode": 0
+    },
+    "lint": "normal, casting, type-aware, React Doctor, design-system scans passed for changed source/proof files",
+    "review": "independent agent review: no blocker"
+  },
+  "productSourceHashes": {
+    "config/patches/@xterm__headless@6.1.0-beta.302.patch": "28304f5766c6fbfeea52058024ac16113f65aec070ba8aa835337efcf3d070bf",
+    "config/patches/@xterm__xterm@6.1.0-beta.303.patch": "68b1f3b606c20f5fac1fa4116203efb9ed505db13505eab8de1651e8b150982b",
+    "config/patches/xterm-src/@xterm__headless@6.1.0-beta.302.src.patch": "cb3c1f4bddd83e8a3af2be10427257e6ec4ced928bf3501f40387f166639cc0a",
+    "config/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch": "81ae877cb2a4d8b67efb91155f7ab7ff7faec69331f555e85b36564135605bbb",
+    "config/scripts/regenerate-xterm-patches-mobile.mjs": "b6fdf2422f822bf24a40f9533c26b2fd4302814efd3c06b15a559612eeb4a688",
+    "config/scripts/regenerate-xterm-patches-mobile.test.mjs": "28864de6ff5788df728cff27c70968451e253bf18177ed8025564d018d616538",
+    "config/scripts/xterm-reflow-retention.test.mjs": "e4cc0869bbb493e02e7f57fcdf39c473d6f4ca215c6fed02a00b12457c5f4d0f",
+    "docs/reference/xterm-patch-regeneration.md": "ada02427224d04c9c3daddfb4055a5bc146333578fd85648724f136caaf7c89a",
+    "mobile/patches/@xterm__xterm@6.1.0-beta.303.patch": "3763a491aeafb7b0f81094295ce51b6b695bdfd6ede503119d73342c68e68f88",
+    "mobile/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch": "3701269d8106f48f0483ae29614c6f19b8c420159008f4c8cfba14b0ebab9ccd",
+    "mobile/pnpm-lock.yaml": "86551d0cba46df668ad63998f5dbbfaec0d3a68f9ae9d5d2f2e77f63fa6550bf",
+    "mobile/src/terminal/terminal-webview-reflow-retention.test.ts": "ccced9866c63e4f430ffb2c136aadad5afd93769e19d22c79913ea476767ca9e",
+    "pnpm-lock.yaml": "12ecbfeb7f00c411411a76ca10cef66fc0bcfe60f5b0b16eec1390f1ed37525b"
+  },
+  "proofResults": "results.json, parity-results.json, lifecycle-results.json; each records the evaluated source/variant hashes",
+  "publicationProjection": {
+    "basePr": 20992,
+    "baseHead": "ccac7bb908ef74856a9f51973faffc9204f085ff",
+    "testedLock": "primary worktree; productSourceHashes records the installed and tested lock",
+    "projectedLockSha256": "25529faea28ba3d6b7fc765cc2f4fbab15f3a441cb2009c983b408e2c4e24094",
+    "difference": "Preserves three occurrences of the base branch addon-webgl patch hash; all reflow sources, bundles and mobile lock are byte-identical. The projected root lock was checked for exact applicability, not installed separately."
+  }
+}

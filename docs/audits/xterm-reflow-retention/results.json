@@ -1,0 +1,967 @@
+{
+  "node": "v26.6.0",
+  "sources": {
+    "src/main/daemon/headless-emulator.ts": "ace96102285c3967cd9544e7696fe73e1ac6df576b476939aa9819f5c298bab6",
+    "src/shared/child-process/run-process.ts": "ae4dad239273351ce61269cd7f7abb8325f3f620be600fa9c0ae760c1dd7cbad",
+    "node_modules/@xterm/headless/lib-headless/xterm-headless.js": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+    "node_modules/@xterm/headless/lib-headless/xterm-headless.js.map": "e37222ea15578a15fd961508421f0514bae0e4ffa959ae1f57ba7b345ca17f1c",
+    "node_modules/@xterm/xterm/lib/xterm.js": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+    "node_modules/@xterm/xterm/src/common/buffer/Buffer.ts": "e22cc2cb1c3f83aba664bfafbdf532a6baa1ccbc44fc576dd0701fa4cec97b4b",
+    "node_modules/@xterm/xterm/src/common/CircularList.ts": "f5dcd4da189e42af4046d4a3c3df540a4768544b55f63836abd91b3397e6d78d",
+    "docs/audits/xterm-reflow-retention/child.cjs": "9ef79e23d3bb21fb50a2d92ca14f1bca460ac8ac9c40715967cc3e8609da5ccd",
+    "docs/audits/xterm-reflow-retention/install-candidate.cjs": "0c6c5b9f1c46c4b66951a20db857a87e84848a876a7a181147b1821f73eb2e49",
+    "docs/audits/xterm-reflow-retention/parity.cjs": "269b66a96e5f55b233a6710ed74391c6bdf1fb79d06d4771252a321847ba09fa",
+    "docs/audits/xterm-reflow-retention/lifecycle.cjs": "f8881f08ea243062722a09b9a9ac25b6c0a00aa061f8f9d66afb7ff7cc8cff40",
+    "docs/audits/xterm-reflow-retention/reproduce.cjs": "9f89b9815d2937773191f5825cbe05df638a684cfe24946970fd0e41d309bb8b"
+  },
+  "reports": [
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 80,
+        "capacity": 1000
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 1000,
+      "finalLength": 1000,
+      "createdRows": 0,
+      "createdCellBytes": 0,
+      "elapsedMs": 0.018958999999995285,
+      "before": {
+        "rss": 68288512,
+        "heapTotal": 12484608,
+        "heapUsed": 6974120,
+        "external": 3287085,
+        "arrayBuffers": 1261053
+      },
+      "observations": [
+        {
+          "phase": "after-resize",
+          "createdRows": 0,
+          "createdCellBytes": 0,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 68730880,
+          "heapTotal": 11698176,
+          "heapUsed": 7014736,
+          "external": 3327741,
+          "arrayBuffers": 1261053
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 0,
+          "createdCellBytes": 0,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 68747264,
+          "heapTotal": 11698176,
+          "heapUsed": 7017768,
+          "external": 3327741,
+          "arrayBuffers": 1261053
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 77097,
+        "systemCPUTime": 12113,
+        "maxRSS": 67232,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 4402,
+        "majorPageFault": 80,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 26,
+        "involuntaryContextSwitches": 441
+      },
+      "tail": [
+        "000998xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "000999xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        ""
+      ],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 2,
+        "capacity": 1000,
+        "fillCols": 2
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 1000,
+      "finalLength": 1000,
+      "createdRows": 0,
+      "createdCellBytes": 0,
+      "elapsedMs": 0.8227920000000069,
+      "before": {
+        "rss": 63324160,
+        "heapTotal": 11960320,
+        "heapUsed": 6968728,
+        "external": 3287085,
+        "arrayBuffers": 1261053
+      },
+      "observations": [
+        {
+          "phase": "after-resize",
+          "createdRows": 0,
+          "createdCellBytes": 0,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 67125248,
+          "heapTotal": 11960320,
+          "heapUsed": 7068504,
+          "external": 3327741,
+          "arrayBuffers": 1261053
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 0,
+          "createdCellBytes": 0,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 67452928,
+          "heapTotal": 11960320,
+          "heapUsed": 7089968,
+          "external": 3351741,
+          "arrayBuffers": 1008573
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 63274,
+        "systemCPUTime": 8867,
+        "maxRSS": 65872,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 4319,
+        "majorPageFault": 79,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 209
+      },
+      "tail": ["00", "00", ""],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 2,
+        "capacity": 1000
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 1000,
+      "finalLength": 1000,
+      "createdRows": 38961,
+      "createdCellBytes": 935064,
+      "elapsedMs": 23.847749999999998,
+      "before": {
+        "rss": 67747840,
+        "heapTotal": 12222464,
+        "heapUsed": 6974024,
+        "external": 3287085,
+        "arrayBuffers": 1261053
+      },
+      "observations": [
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 20000,
+          "createdCellBytes": 480000,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 79020032,
+          "heapTotal": 21397504,
+          "heapUsed": 16131112,
+          "external": 3327741,
+          "arrayBuffers": 1261053
+        },
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 38961,
+          "createdCellBytes": 935064,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 92323840,
+          "heapTotal": 34766848,
+          "heapUsed": 24734776,
+          "external": 3327741,
+          "arrayBuffers": 1261053
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 38961,
+          "createdCellBytes": 935064,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 92667904,
+          "heapTotal": 19038208,
+          "heapUsed": 7149192,
+          "external": 3351141,
+          "arrayBuffers": 912933
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 38961,
+          "createdCellBytes": 935064,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 92700672,
+          "heapTotal": 16941056,
+          "heapUsed": 7138896,
+          "external": 2415141,
+          "arrayBuffers": 348453
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 124455,
+        "systemCPUTime": 12525,
+        "maxRSS": 90528,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 5927,
+        "majorPageFault": 80,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 518
+      },
+      "tail": ["xx", "xx", ""],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 8,
+        "capacity": 1000
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 1000,
+      "finalLength": 1000,
+      "createdRows": 8991,
+      "createdCellBytes": 863136,
+      "elapsedMs": 8.315334,
+      "before": {
+        "rss": 68403200,
+        "heapTotal": 11960320,
+        "heapUsed": 6973008,
+        "external": 3287085,
+        "arrayBuffers": 1261053
+      },
+      "observations": [
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 76480512,
+          "heapTotal": 16678912,
+          "heapUsed": 10949304,
+          "external": 4190877,
+          "arrayBuffers": 2124189
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 76546048,
+          "heapTotal": 14843904,
+          "heapUsed": 7128056,
+          "external": 4190877,
+          "arrayBuffers": 2058045
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 76726272,
+          "heapTotal": 13008896,
+          "heapUsed": 7126208,
+          "external": 2550141,
+          "arrayBuffers": 483453
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 96540,
+        "systemCPUTime": 10550,
+        "maxRSS": 74928,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 4978,
+        "majorPageFault": 80,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 396
+      },
+      "tail": ["xxxxxxxx", "xxxxxxxx", ""],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 8,
+        "capacity": 5000
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 5000,
+      "finalLength": 5000,
+      "createdRows": 44991,
+      "createdCellBytes": 4319136,
+      "elapsedMs": 30.198749999999997,
+      "before": {
+        "rss": 78217216,
+        "heapTotal": 17465344,
+        "heapUsed": 8614360,
+        "external": 7127085,
+        "arrayBuffers": 5101053
+      },
+      "observations": [
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 20000,
+          "createdCellBytes": 1920000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 94257152,
+          "heapTotal": 27164672,
+          "heapUsed": 17272992,
+          "external": 9087741,
+          "arrayBuffers": 7021053
+        },
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 40000,
+          "createdCellBytes": 3840000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 101220352,
+          "heapTotal": 29523968,
+          "heapUsed": 25824072,
+          "external": 11007741,
+          "arrayBuffers": 8941053
+        },
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 44991,
+          "createdCellBytes": 4319136,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 105676800,
+          "heapTotal": 32669696,
+          "heapUsed": 27995744,
+          "external": 11486877,
+          "arrayBuffers": 9420189
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 44991,
+          "createdCellBytes": 4319136,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 105758720,
+          "heapTotal": 16416768,
+          "heapUsed": 8757008,
+          "external": 11486877,
+          "arrayBuffers": 9377085
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 44991,
+          "createdCellBytes": 4319136,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 105840640,
+          "heapTotal": 11436032,
+          "heapUsed": 8772376,
+          "external": 3279741,
+          "arrayBuffers": 1213053
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 176480,
+        "systemCPUTime": 14566,
+        "maxRSS": 103456,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 6731,
+        "majorPageFault": 81,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 619
+      },
+      "tail": ["xxxxxxxx", "xxxxxxxx", ""],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 200,
+        "newCols": 8,
+        "capacity": 5000
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 5000,
+      "finalLength": 5000,
+      "createdRows": 119976,
+      "createdCellBytes": 11517696,
+      "elapsedMs": 65.58779100000001,
+      "before": {
+        "rss": 85131264,
+        "heapTotal": 15892480,
+        "heapUsed": 8604248,
+        "external": 14328489,
+        "arrayBuffers": 12302493
+      },
+      "observations": [
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 20000,
+          "createdCellBytes": 1920000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 102268928,
+          "heapTotal": 26902528,
+          "heapUsed": 17116080,
+          "external": 16289181,
+          "arrayBuffers": 14222493
+        },
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 40000,
+          "createdCellBytes": 3840000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 108904448,
+          "heapTotal": 28475392,
+          "heapUsed": 25525736,
+          "external": 18209181,
+          "arrayBuffers": 16142493
+        },
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 60000,
+          "createdCellBytes": 5760000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 124485632,
+          "heapTotal": 38699008,
+          "heapUsed": 33884336,
+          "external": 20129181,
+          "arrayBuffers": 18062493
+        },
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 80000,
+          "createdCellBytes": 7680000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 138706944,
+          "heapTotal": 47611904,
+          "heapUsed": 42256552,
+          "external": 22049181,
+          "arrayBuffers": 19982493
+        },
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 100000,
+          "createdCellBytes": 9600000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 152813568,
+          "heapTotal": 56786944,
+          "heapUsed": 50616632,
+          "external": 23969181,
+          "arrayBuffers": 21902493
+        },
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 119976,
+          "createdCellBytes": 11517696,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 167378944,
+          "heapTotal": 66486272,
+          "heapUsed": 59023800,
+          "external": 25886877,
+          "arrayBuffers": 23820189
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 119976,
+          "createdCellBytes": 11517696,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 167526400,
+          "heapTotal": 16154624,
+          "heapUsed": 8769168,
+          "external": 25886877,
+          "arrayBuffers": 23740509
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 119976,
+          "createdCellBytes": 11517696,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 167575552,
+          "heapTotal": 10387456,
+          "heapUsed": 8783456,
+          "external": 3309981,
+          "arrayBuffers": 1243293
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 287311,
+        "systemCPUTime": 20573,
+        "maxRSS": 163648,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 10506,
+        "majorPageFault": 81,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 909
+      },
+      "tail": ["xxxxxxxx", "xxxxxxxx", ""],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 200,
+        "newCols": 20,
+        "capacity": 5000
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 5000,
+      "finalLength": 5000,
+      "createdRows": 44991,
+      "createdCellBytes": 10797840,
+      "elapsedMs": 31.367042000000005,
+      "before": {
+        "rss": 84246528,
+        "heapTotal": 15630336,
+        "heapUsed": 8604496,
+        "external": 14328489,
+        "arrayBuffers": 12302493
+      },
+      "observations": [
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 20000,
+          "createdCellBytes": 4800000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 104988672,
+          "heapTotal": 27164672,
+          "heapUsed": 17268448,
+          "external": 19169181,
+          "arrayBuffers": 17102493
+        },
+        {
+          "phase": "building-insertion-list",
+          "createdRows": 40000,
+          "createdCellBytes": 9600000,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 115949568,
+          "heapTotal": 29786112,
+          "heapUsed": 25826344,
+          "external": 23969181,
+          "arrayBuffers": 21902493
+        },
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 44991,
+          "createdCellBytes": 10797840,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 120848384,
+          "heapTotal": 32407552,
+          "heapUsed": 28003584,
+          "external": 25167021,
+          "arrayBuffers": 23100333
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 44991,
+          "createdCellBytes": 10797840,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 120946688,
+          "heapTotal": 16678912,
+          "heapUsed": 8780440,
+          "external": 25167021,
+          "arrayBuffers": 22851693
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 44991,
+          "createdCellBytes": 10797840,
+          "bufferLength": 5000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 121028608,
+          "heapTotal": 10911744,
+          "heapUsed": 8780864,
+          "external": 4649181,
+          "arrayBuffers": 2582493
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 182488,
+        "systemCPUTime": 14897,
+        "maxRSS": 118192,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 7598,
+        "majorPageFault": 80,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 540
+      },
+      "tail": ["xxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxx", ""],
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 8,
+        "capacity": 1000,
+        "wrapped": true
+      },
+      "candidate": {
+        "appliedGuard": false,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 1000,
+      "finalLength": 1000,
+      "createdRows": 8991,
+      "createdCellBytes": 863136,
+      "elapsedMs": 9.053666,
+      "before": {
+        "rss": 66273280,
+        "heapTotal": 11436032,
+        "heapUsed": 7025232,
+        "external": 3590389,
+        "arrayBuffers": 1564357
+      },
+      "observations": [
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 999,
+          "negativeCellBytes": 95904,
+          "rss": 74235904,
+          "heapTotal": 17465344,
+          "heapUsed": 11031792,
+          "external": 4494181,
+          "arrayBuffers": 2427493
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 999,
+          "negativeCellBytes": 95904,
+          "rss": 74285056,
+          "heapTotal": 15368192,
+          "heapUsed": 7567592,
+          "external": 4494181,
+          "arrayBuffers": 2376997
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 999,
+          "negativeCellBytes": 95904,
+          "rss": 74481664,
+          "heapTotal": 14057472,
+          "heapUsed": 7570472,
+          "external": 2863813,
+          "arrayBuffers": 797125
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 98646,
+        "systemCPUTime": 10743,
+        "maxRSS": 72832,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 4764,
+        "majorPageFault": 81,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 404
+      },
+      "tail": ["00009988", "00009989", ""],
+      "wrappedParity": {
+        "expectedFirst": "00008991",
+        "actualFirst": "00001991",
+        "mismatches": [
+          {
+            "index": 0,
+            "expected": "00008991",
+            "actual": "00001991"
+          }
+        ]
+      },
+      "exitCode": 0,
+      "timedOut": false
+    },
+    {
+      "input": {
+        "oldCols": 80,
+        "newCols": 8,
+        "capacity": 1000,
+        "wrapped": true,
+        "candidate": true
+      },
+      "candidate": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      },
+      "node": "v26.6.0",
+      "initialLength": 1000,
+      "finalLength": 1000,
+      "createdRows": 8991,
+      "createdCellBytes": 863136,
+      "elapsedMs": 9.039458000000003,
+      "before": {
+        "rss": 67289088,
+        "heapTotal": 11960320,
+        "heapUsed": 7034280,
+        "external": 3590389,
+        "arrayBuffers": 1564357
+      },
+      "observations": [
+        {
+          "phase": "before-final-trim-notification",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 74907648,
+          "heapTotal": 16678912,
+          "heapUsed": 10961696,
+          "external": 4494181,
+          "arrayBuffers": 2427493
+        },
+        {
+          "phase": "after-resize",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 75038720,
+          "heapTotal": 14319616,
+          "heapUsed": 7525768,
+          "external": 4494181,
+          "arrayBuffers": 2384773
+        },
+        {
+          "phase": "after-next-turn",
+          "createdRows": 8991,
+          "createdCellBytes": 863136,
+          "bufferLength": 1000,
+          "negativeSlotCount": 0,
+          "negativeCellBytes": 0,
+          "rss": 75153408,
+          "heapTotal": 12484608,
+          "heapUsed": 7098624,
+          "external": 2767909,
+          "arrayBuffers": 701221
+        }
+      ],
+      "resourceUsage": {
+        "userCPUTime": 92705,
+        "systemCPUTime": 10531,
+        "maxRSS": 73504,
+        "sharedMemorySize": 0,
+        "unsharedDataSize": 0,
+        "unsharedStackSize": 0,
+        "minorPageFault": 4807,
+        "majorPageFault": 80,
+        "swappedOut": 0,
+        "fsRead": 0,
+        "fsWrite": 0,
+        "ipcSent": 0,
+        "ipcReceived": 0,
+        "signalsCount": 0,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 328
+      },
+      "tail": ["00009988", "00009989", ""],
+      "wrappedParity": {
+        "expectedFirst": "00008991",
+        "actualFirst": "00008991",
+        "mismatches": []
+      },
+      "exitCode": 0,
+      "timedOut": false
+    }
+  ],
+  "parity": {
+    "exitCode": 0,
+    "timedOut": false,
+    "cases": 28
+  },
+  "lifecycle": {
+    "exitCode": 0,
+    "timedOut": false,
+    "cases": 8
+  }
+}

@@ -8,7 +8,11 @@ import { regenerateXtermPatches } from './regenerate-xterm-patches.mjs'
 import { splitPatchEntries } from './xterm-patch-text.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
-const MOBILE_SOURCES = ['src/browser/ColorContrastCache.ts', 'src/common/buffer/BufferLine.ts']
+const MOBILE_SOURCES = [
+  'src/browser/ColorContrastCache.ts',
+  'src/common/buffer/Buffer.ts',
+  'src/common/buffer/BufferLine.ts'
+]
 
 export function mobileXtermPatchProfile(manifest, mobilePackage, desktopSource) {
   const coreEntries = manifest.packages.filter((entry) => entry.name === '@xterm/xterm')

@@ -1,0 +1,712 @@
+{
+  "sourceHashes": {
+    "parity.cjs": "269b66a96e5f55b233a6710ed74391c6bdf1fb79d06d4771252a321847ba09fa",
+    "install-candidate.cjs": "0c6c5b9f1c46c4b66951a20db857a87e84848a876a7a181147b1821f73eb2e49"
+  },
+  "cases": [
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "oversized-wrapped",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1016,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1271,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "rotated-ring",
+      "originalStart": 37,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1016,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [
+        91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+        111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127
+      ],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1308,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "wide-combining-color",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 773,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1001,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "wide-boundary",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 849,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1101,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "multiple-wrapped-groups",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 359,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1241,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "reflow-cursor-enabled",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1015,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1270,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "cursor-group-skipped",
+      "originalStart": 0,
+      "finalRows": 127,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "hard-newline-overflow",
+      "originalStart": 1,
+      "finalRows": 128,
+      "baselineInvalidWrites": 2,
+      "baselineNegativeSlots": 1,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [127],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1281,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "small-wrapped-no-trim",
+      "originalStart": 0,
+      "finalRows": 9,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 9,
+        "expectedLength": 9,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "unfilled-viewport",
+      "originalStart": 0,
+      "finalRows": 8,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 8,
+        "expectedLength": 8,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "alternate-buffer",
+      "originalStart": 2,
+      "finalRows": 8,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "same-size",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "two-column-api-floor",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1433,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1601,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/headless",
+      "scenario": "twenty-column-runtime-floor",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 254,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 509,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "dfc93ca980570fa5f8f6eb02a042c19b9965083fb83499d2acf5a920bfd429d9",
+        "sourceSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "candidateSha256": "018f4f8669de997bd7537708d7e503923992e782dd1be113a472f7f14e161e09",
+        "before": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])",
+        "after": "for(let e=o.newLines.length-1;e>=0&&c>=0;e--)this.lines.set(c--,o.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "oversized-wrapped",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1016,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1271,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "rotated-ring",
+      "originalStart": 37,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1016,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [
+        91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+        111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127
+      ],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1308,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "wide-combining-color",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 773,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1001,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "wide-boundary",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 849,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1101,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "multiple-wrapped-groups",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 359,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1241,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "reflow-cursor-enabled",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1015,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1270,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "cursor-group-skipped",
+      "originalStart": 0,
+      "finalRows": 127,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "hard-newline-overflow",
+      "originalStart": 1,
+      "finalRows": 128,
+      "baselineInvalidWrites": 2,
+      "baselineNegativeSlots": 1,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [127],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1281,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "small-wrapped-no-trim",
+      "originalStart": 0,
+      "finalRows": 9,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 9,
+        "expectedLength": 9,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "unfilled-viewport",
+      "originalStart": 0,
+      "finalRows": 8,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 8,
+        "expectedLength": 8,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "alternate-buffer",
+      "originalStart": 2,
+      "finalRows": 8,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "same-size",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 0,
+      "baselineNegativeSlots": 0,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "two-column-api-floor",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 1433,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 1601,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    },
+    {
+      "packageName": "@xterm/xterm",
+      "scenario": "twenty-column-runtime-floor",
+      "originalStart": 0,
+      "finalRows": 128,
+      "baselineInvalidWrites": 254,
+      "baselineNegativeSlots": 127,
+      "candidateNegativeSlots": 0,
+      "lineDifferences": [0],
+      "cursorParity": true,
+      "markerParity": true,
+      "eventParity": true,
+      "oracle": {
+        "referenceLength": 509,
+        "expectedLength": 128,
+        "passed": true
+      },
+      "transform": {
+        "appliedGuard": true,
+        "baselineSha256": "6f0e5321230d42fbad2332289e745bae6e81bd026b43f6bee91307aef0eb8bf2",
+        "sourceSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "candidateSha256": "62d0355331022b967afcb1de4f1be0e03aa8dd6acea95df3f12f21373172e667",
+        "before": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])",
+        "after": "for(let e=a.newLines.length-1;e>=0&&l>=0;e--)this.lines.set(l--,a.newLines[e])"
+      }
+    }
+  ]
+}

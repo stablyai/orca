@@ -5,14 +5,13 @@
 Orca ships `@xterm/xterm` with source changes it needs and upstream has
 not taken: the IME composition hooks, the `xterm-composition-*` custom events
 they raise, the `ICompositionHelper` surface those hooks widen, and a `SortedList`
-fix, a bound on contrast-cache entries, and cleanup of overwritten BufferLine
-cell storage. pnpm applies them through
+fix, a bound on contrast-cache entries, cleanup of overwritten BufferLine cell storage, and a bound on reflow insertion indexes. pnpm applies them through
 `config/patches/@xterm__xterm@<version>.patch`.
 
-That patch touches ten files. Six are hand-authored source
+That patch touches eleven files. Seven are hand-authored source
 (`src/browser/ColorContrastCache.ts`, `src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
 `src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`,
-`src/common/buffer/BufferLine.ts`) and four
+`src/common/buffer/Buffer.ts`, `src/common/buffer/BufferLine.ts`) and four
 are the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`,
 and both sourcemaps). The bundle half is 7.3 MB of minified code. It is
 generated, and this document exists so nobody edits it by hand.
@@ -30,7 +29,7 @@ upstream commit the published tarball was built from.
 `@xterm/addon-webgl`, `@xterm/addon-search` and `@xterm/addon-serialize` are
 generated the same way, from their own source patches under
 `config/patches/xterm-src/`. Their entries differ only in `packageDir` and build
-steps. `@xterm/headless` uses the same BufferLine change and verifies its sources
+steps. `@xterm/headless` uses the same Buffer and BufferLine changes and verifies its sources
 through the published maps, as described below. `@xterm/addon-ligatures` is the
 one patch still written by hand — see [Known Gaps](#known-gaps).
 
@@ -110,13 +109,13 @@ identifier`, which is a symptom of where the tree sits and not of the patch.
 ## Mobile Memory Patches
 
 Mobile installs xterm in a separate pnpm project. Its patch includes only
-`ColorContrastCache.ts` and `BufferLine.ts`; the desktop IME and `SortedList`
+`ColorContrastCache.ts`, `Buffer.ts` and `BufferLine.ts`; the desktop IME and `SortedList`
 changes are excluded. `regenerate-xterm-patches-mobile.mjs` derives those source
 stanzas and reuses the
 desktop manifest's version, upstream commit, toolchain, and build steps. It fails
-if mobile pins a different version or either stanza is missing or duplicated.
+if mobile pins a different version or a required stanza is missing or duplicated.
 
-After editing either shared source and regenerating the desktop patch:
+After editing a shared source and regenerating the desktop patch:
 
 ```sh
 node config/scripts/regenerate-xterm-patches-mobile.mjs --write
