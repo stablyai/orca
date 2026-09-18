@@ -433,10 +433,11 @@ describe('try again', () => {
 })
 
 describe('a result from a superseded flow reports into nothing', () => {
-  it('drops the cache read of a run the gates restarted, and does not open it twice', () => {
-    const first = started()
+  it('drops the cache read of a run a reconnect replaced, so nothing opens unchecked', () => {
+    const first = started({ reachability: 'unreachable' })
     const restarted = run(first.session, { type: 'gates-changed', gates: gates() })
     expect(restarted.effects).toEqual([{ kind: 'open-cache' }])
+    // The offline read would have opened this generation with no compat check at all.
     const stale = run(restarted.session, {
       type: 'cache-read',
       flow: first.session.flow,
@@ -449,9 +450,12 @@ describe('a result from a superseded flow reports into nothing', () => {
     ])
   })
 
-  it('drops the manifest of a run the gates restarted, so only one download is ever asked for', () => {
+  it('drops the manifest of a run the socket drop replaced, so no download is asked for', () => {
     const first = afterCacheRead(null)
-    const restarted = run(first.session, { type: 'gates-changed', gates: gates() })
+    const restarted = run(first.session, {
+      type: 'gates-changed',
+      gates: gates({ reachability: 'unreachable' })
+    })
     const stale = run(restarted.session, {
       type: 'manifest-read',
       flow: first.session.flow,
@@ -460,9 +464,8 @@ describe('a result from a superseded flow reports into nothing', () => {
     expect(stale.effects).toEqual([])
     expect(stale.session.state).toEqual({ kind: 'checking' })
     const current = run(stale.session, { type: 'cache-read', generation: null })
-    expect(run(current.session, { type: 'manifest-read', manifest: MANIFEST }).effects).toEqual([
-      { kind: 'download' }
-    ])
+    expect(current.session.state).toEqual({ kind: 'offline' })
+    expect(current.effects).toEqual([])
   })
 
   it('keeps a workspace on screen when the manifest read the drop abandoned finally rejects', () => {
@@ -544,5 +547,46 @@ describe('only the state that mounted the view hears the view', () => {
     const step = run(wall.session, { type: 'shell-failed', reason: 'isolation-unavailable' })
     expect(step.session.state).toEqual(wall.session.state)
     expect(step.effects).toEqual([])
+  })
+})
+
+describe('a gates change that says nothing new starts nothing', () => {
+  it('leaves a check in flight alone rather than sweeping and reading a second time', () => {
+    const checking = started()
+    const again = run(checking.session, { type: 'gates-changed', gates: gates() })
+    expect(again.effects).toEqual([])
+    expect(again.session.flow).toBe(checking.session.flow)
+  })
+
+  it('holds the offline screen through a reconnect cycle that never reaches the host', () => {
+    const offline = run(started({ reachability: 'unreachable' }).session, {
+      type: 'cache-read',
+      generation: null
+    })
+    const cycled = run(
+      offline.session,
+      { type: 'gates-changed', gates: gates({ reachability: 'unreachable' }) },
+      { type: 'gates-changed', gates: gates({ reachability: 'unreachable' }) }
+    )
+    expect(cycled.effects).toEqual([])
+    expect(cycled.session.state).toEqual({ kind: 'offline' })
+  })
+
+  it('restarts on the verdict that changed, not on the object that was rebuilt', () => {
+    const checking = started({ statusPending: true })
+    const settled = run(checking.session, { type: 'gates-changed', gates: gates() })
+    expect(settled.effects).toEqual([{ kind: 'open-cache' }])
+  })
+
+  it('walls a check in flight the moment the host stops serving a bundle', () => {
+    const checking = started()
+    const step = run(checking.session, {
+      type: 'gates-changed',
+      gates: gates({ hostCapabilities: [] })
+    })
+    expect(step.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'bundle-unavailable' }
+    })
   })
 })

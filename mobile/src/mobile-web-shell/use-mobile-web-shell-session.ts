@@ -186,7 +186,18 @@ export function useMobileWebShellSession(args: {
         hostStatus: hostProtocolWindow
       }
     })
-  }, [dispatch, hostCapabilities, hostProtocolWindow, reachability, statusPending, statusReadable])
+    // `hostId` is in the list for the host whose gates read identically to the last one's: the
+    // reducer now starts nothing on a repeat verdict, so a session that never re-armed would sit
+    // in `checking` forever.
+  }, [
+    dispatch,
+    hostCapabilities,
+    hostId,
+    hostProtocolWindow,
+    reachability,
+    statusPending,
+    statusReadable
+  ])
 
   const retry = useCallback(() => {
     // A fresh epoch first: a failed download still in flight must not land on the retried session.

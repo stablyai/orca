@@ -72,6 +72,33 @@ function awaitsGates(state: MobileWebShellSessionState): boolean {
   return state.kind === 'checking' || state.kind === 'offline'
 }
 
+/**
+ * What the gates decide, as one comparable value.
+ *
+ * A restart is worth taking only when this changes. The gates object is rebuilt on every status
+ * refetch and every connection event, and most of those say exactly what the last one said: a
+ * reconnect cycle that re-derives the same verdict used to re-sweep the staging tree and flip an
+ * offline screen to a spinner and back for as long as the cycle ran.
+ */
+function gatesVerdict(gates: MobileWebShellGates): string {
+  if (gates.reachability !== 'connected') {
+    return gates.reachability
+  }
+  if (gates.statusPending) {
+    return 'pending'
+  }
+  if (!gates.statusReadable) {
+    return 'unreadable'
+  }
+  const verdict = evaluateMobileWebBundleCompat({
+    hostCapabilities: gates.hostCapabilities,
+    hostStatus: gates.hostStatus,
+    manifest: null
+  })
+  // Which block, not why: any blocked verdict walls, and the wall reads its own reason.
+  return verdict.kind
+}
+
 /** The first step of the flow, and the one "Try again" returns to. */
 function startFlow(
   session: MobileWebShellSession,
@@ -238,7 +265,8 @@ export function reduceMobileWebShellSession(
   }
   switch (event.type) {
     case 'gates-changed':
-      return awaitsGates(session.state)
+      return awaitsGates(session.state) &&
+        (session.gates === null || gatesVerdict(session.gates) !== gatesVerdict(event.gates))
         ? startFlow(session, event.gates)
         : step(session, { gates: event.gates })
     case 'cache-read':
