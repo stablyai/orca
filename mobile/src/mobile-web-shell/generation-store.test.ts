@@ -587,6 +587,25 @@ describe('generation store', () => {
     expect(fs.text('hosts.json')).toBe(JSON.stringify({ [HOST]: 10 }))
   })
 
+  it('refuses a staged handle it did not issue', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    const before = fs.paths()
+    const forged = {
+      hostKey: HOST,
+      buildId: 'b'.repeat(64),
+      // Aimed at the live generation, which commit would rename over and abort would delete.
+      directory: `${ROOT}/${HOST}/generations/${'a'.repeat(64)}`,
+      manifest: buildResult({}).manifest
+    }
+
+    await expect(store.commitGeneration(forged)).rejects.toThrow('did not issue')
+    await expect(store.abortStagedGeneration(forged)).rejects.toThrow('did not issue')
+    expect(fs.paths()).toEqual(before)
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe('a'.repeat(64))
+  })
+
   it('ignores a directory under the cache root that is not a host key', async () => {
     const fs = createFakeFileSystem()
     let clock = 0

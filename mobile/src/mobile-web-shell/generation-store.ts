@@ -47,6 +47,10 @@ export function createGenerationStore(options: {
 }): GenerationStore {
   const fs = options.fileSystem
   const now = options.now ?? Date.now
+  // `StagedGeneration` is structurally typed, so any object of that shape would otherwise let
+  // `commitGeneration` rename over, and `abortStagedGeneration` delete, a directory of the caller's
+  // choosing. Only handles this store minted are honoured.
+  const issuedHandles = new WeakSet<StagedGeneration>()
 
   const hostRoot = (hostKey: string): string => joinUri(fs.rootUri, requireHostKey(hostKey))
   const generationsRoot = (hostKey: string): string =>
@@ -172,10 +176,20 @@ export function createGenerationStore(options: {
       await fs.delete(directory).catch(() => undefined)
       throw error
     }
-    return { hostKey, buildId: manifest.buildId, directory, manifest }
+    const handle: StagedGeneration = { hostKey, buildId: manifest.buildId, directory, manifest }
+    issuedHandles.add(handle)
+    return handle
+  }
+
+  function requireIssuedHandle(staged: StagedGeneration): StagedGeneration {
+    if (!issuedHandles.has(staged)) {
+      throw new Error('generation store was handed a staged handle it did not issue')
+    }
+    return staged
   }
 
   async function commit(staged: StagedGeneration): Promise<ActiveGeneration> {
+    requireIssuedHandle(staged)
     const generations = generationsRoot(staged.hostKey)
     const target = joinUri(generations, staged.buildId)
     const active: ActiveGeneration = {
@@ -260,7 +274,8 @@ export function createGenerationStore(options: {
     readActiveGeneration: (hostKey) => serialize(() => readActive(hostKey)),
     stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
-    abortStagedGeneration: (staged) => serialize(() => fs.delete(staged.directory)),
+    abortStagedGeneration: (staged) =>
+      serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
     sweepStagedGenerations: () => serialize(sweep),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey))
   }
