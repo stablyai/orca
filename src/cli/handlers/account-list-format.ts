@@ -1,7 +1,14 @@
+import { getClaudeManagedAccountLabel } from '../../shared/claude-managed-account-label'
 import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
 
 type AccountsBlock = {
-  accounts: readonly { id: string; email: string; needsSignIn?: true }[]
+  accounts: readonly {
+    id: string
+    email: string
+    needsSignIn?: true
+    displayName?: string | null
+    organizationName?: string | null
+  }[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: {
     host: string | null
@@ -33,7 +40,7 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   ])
   const lines = block.accounts.map(
     (account) =>
-      `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
+      `  ${getClaudeManagedAccountLabel(account)}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
         account.needsSignIn ? ' (sign in again in Orca Settings > AI Provider Accounts)' : ''
       }`
   )

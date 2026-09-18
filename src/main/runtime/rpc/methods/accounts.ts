@@ -18,6 +18,7 @@ import {
   SelectAccountParams,
   SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
+  UpdateClaudeDisplayNameParams,
   HostAccountSignInStartParams,
   HostAccountSignInWaitParams,
   HostAccountSignInFlowParams,
@@ -175,6 +176,13 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     permission: 'accounts-admin',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeClaudeAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.updateClaudeDisplayName',
+    permission: 'accounts-admin',
+    params: UpdateClaudeDisplayNameParams,
+    handler: async (params, { runtime }) =>
+      runtime.updateClaudeAccountDisplayName(params.accountId, params.displayName)
   }),
   defineMethod({
     name: 'accounts.removeCodex',

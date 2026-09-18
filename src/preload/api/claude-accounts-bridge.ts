@@ -23,5 +23,7 @@ export const claudeAccountsApi = {
       callback(change)
     ipcRenderer.on('claudeAccounts:selectedElsewhere', listener)
     return () => ipcRenderer.removeListener('claudeAccounts:selectedElsewhere', listener)
-  }
+  },
+  updateDisplayName: (args: { accountId: string; displayName: string | null }) =>
+    ipcRenderer.invoke('claudeAccounts:updateDisplayName', args)
 } satisfies PreloadApi['claudeAccounts']
