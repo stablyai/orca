@@ -56,11 +56,11 @@ final class MobileWebShellLoadStateMachine {
 /// failure delegates as errors. Reporting those would fail a healthy page, swallow its `ready`, and
 /// send the caller off to delete a cached generation that is fine.
 ///
-/// Framework-free so `swiftc` can check it, so the WebKit constant is written out: `WKErrorDomain`
-/// with `WKError.frameLoadInterruptedByPolicyChange`, pinned against the real symbols by an assert
-/// in the view.
+/// The WebKit constant is written out because the iOS SDK exports no symbol for it: `WKErrorCode`
+/// stops at the content-rule-list and app-bound-domain errors, and the frame-load codes live in the
+/// legacy `WebKitErrorDomain`, which WKWebView still reports a policy-cancelled frame load under.
 enum MobileWebShellNavigationError {
-  static let webKitDomain = "WKErrorDomain"
+  static let webKitDomain = "WebKitErrorDomain"
   static let frameLoadInterruptedByPolicyChange = 102
 
   static func isIgnorable(domain: String, code: Int) -> Bool {

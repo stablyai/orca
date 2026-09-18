@@ -262,12 +262,14 @@ import Foundation
     let ignorable = MobileWebShellNavigationError.isIgnorable
     // Our own stopLoading on a prop update, and every navigation the policy delegate refuses.
     precondition(ignorable(NSURLErrorDomain, NSURLErrorCancelled))
-    precondition(ignorable("WKErrorDomain", 102))
+    precondition(ignorable("WebKitErrorDomain", 102))
     // Anything else is the document failing to load, which is the caller's cue to redownload.
     precondition(!ignorable(NSURLErrorDomain, NSURLErrorNetworkConnectionLost))
     precondition(!ignorable(NSURLErrorDomain, NSURLErrorResourceUnavailable))
-    precondition(!ignorable("WKErrorDomain", 101))
-    precondition(!ignorable("WKErrorDomain", NSURLErrorCancelled))
+    precondition(!ignorable("WebKitErrorDomain", 101))
+    precondition(!ignorable("WebKitErrorDomain", NSURLErrorCancelled))
+    // WKErrorDomain has no frame-load codes at all, so 102 there is some other error.
+    precondition(!ignorable("WKErrorDomain", 102))
     precondition(!ignorable("SomeOtherDomain", 102))
   }
 

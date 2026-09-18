@@ -146,11 +146,6 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
     installNetworkBlock(into: configuration.userContentController)
-    // The classifier is framework-free and cannot import these; this is where they are pinned.
-    assert(MobileWebShellNavigationError.isIgnorable(
-      domain: WKErrorDomain,
-      code: WKError.frameLoadInterruptedByPolicyChange.rawValue
-    ))
   }
 
   func setGenerationDirectory(_ value: String) {
