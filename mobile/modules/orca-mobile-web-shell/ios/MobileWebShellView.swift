@@ -171,29 +171,41 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     loadState.reset()
     pendingDocumentUrl = nil
     webView.stopLoading()
+    webView.isHidden = false
     emit(loadState.started())
     guard
       MobileWebShellOrigin.isValidSessionId(sessionId),
       let documentUrl = MobileWebShellOrigin.documentUrl(sessionId: sessionId)
     else {
       // The private origin is the isolation primitive; a malformed session id leaves us without one.
-      emit(loadState.failed(.isolationUnavailable))
+      failPropUpdate(.isolationUnavailable)
       return
     }
     guard
       let generation = try? MobileWebShellGeneration.load(directoryPath: generationDirectory)
     else {
-      emit(loadState.failed(.generationUnreadable))
+      failPropUpdate(.generationUnreadable)
       return
     }
     schemeHandler.sessionId = sessionId
     schemeHandler.generation = generation
     if isolationFailed {
-      emit(loadState.failed(.isolationUnavailable))
+      failPropUpdate(.isolationUnavailable)
       return
     }
     pendingDocumentUrl = documentUrl
     loadWhenIsolated()
+  }
+
+  /// The generation that failed to apply replaces whatever was on screen; leaving the previous one
+  /// served and visible would show a page the caller has just been told is not loaded.
+  private func failPropUpdate(_ reason: MobileWebShellFailureReason) {
+    schemeHandler.sessionId = nil
+    schemeHandler.generation = nil
+    pendingDocumentUrl = nil
+    webView.stopLoading()
+    webView.isHidden = true
+    emit(loadState.failed(reason))
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
@@ -209,7 +221,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
           // Compiling is asynchronous, so this can land after the generation was already refused;
           // the state machine is what keeps that from being a second terminal reason.
           if self.appliedSessionId != nil {
-            self.emit(self.loadState.failed(.isolationUnavailable))
+            self.failPropUpdate(.isolationUnavailable)
           }
           return
         }

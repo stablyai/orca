@@ -87,23 +87,33 @@ internal class OrcaMobileWebShellView(
     val host = mobileWebShellOriginHost(sessionId)
     if (origin == null || host == null) {
       // The private origin is the isolation primitive; a malformed session id leaves us without one.
-      emit(loadState.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
+      failPropUpdate(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE)
       return
     }
     val loaded = MobileWebShellGeneration.load(generationDirectory)
     if (loaded == null) {
-      emit(loadState.failed(MobileWebShellFailureReason.GENERATION_UNREADABLE))
+      failPropUpdate(MobileWebShellFailureReason.GENERATION_UNREADABLE)
       return
     }
     blocker?.remove()
     blocker = installMobileWebShellNetworkApiBlocker(view, origin)
     if (blocker == null) {
-      emit(loadState.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
+      failPropUpdate(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE)
       return
     }
     served = MobileWebShellServed(loaded, host)
     view.visibility = View.VISIBLE
     view.loadUrl("$origin/")
+  }
+
+  /**
+   * The generation that failed to apply replaces whatever was on screen; leaving the previous one
+   * served and visible would show a page the caller has just been told is not loaded.
+   */
+  private fun failPropUpdate(reason: MobileWebShellFailureReason) {
+    served = null
+    webView?.visibility = View.INVISIBLE
+    emit(loadState.failed(reason))
   }
 
   /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
