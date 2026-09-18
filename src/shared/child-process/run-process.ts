@@ -329,8 +329,7 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
     ...resolved.options,
     input: spec.input,
     timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
-    maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
-    encoding: 'buffer'
+    maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
   })
   if (result.error && (result.error as NodeJS.ErrnoException).code !== 'ETIMEDOUT') {
     throw result.error

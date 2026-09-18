@@ -97,6 +97,21 @@ describe('runProcessSync', () => {
     expect(result.stdout).toBe('hi')
     expect(result.code).toBe(3)
   })
+
+  it('returns string stdout/stderr without passing encoding buffer to spawnSync', () => {
+    // `encoding: 'buffer'` with a string `input` throws ERR_UNKNOWN_ENCODING
+    // before the child runs — this mirrors the Windows DPAPI path.
+    const result = runProcessSync({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("out"); process.stderr.write("err")'],
+      input: 'dpapi-data'
+    })
+    expect(typeof result.stdout).toBe('string')
+    expect(typeof result.stderr).toBe('string')
+    expect(result.stdout).toBe('out')
+    expect(result.stderr).toBe('err')
+    expect(result.code).toBe(0)
+  })
 })
 
 describe('bounded output', () => {
