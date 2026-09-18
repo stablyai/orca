@@ -290,6 +290,8 @@ describe('web runtime session tab actions', () => {
   // tabs a reachable host still holds.
   it.each([
     ['tab_not_found', 'unknown-tab'],
+    ['selector_not_found', 'unknown-tab'],
+    ['terminal_tab_not_found', 'unknown-tab'],
     ['runtime_rpc_timeout', 'failed']
   ])('classifies a %s close refusal as %s', async (code, outcome) => {
     const runtimeCall = vi
@@ -312,6 +314,8 @@ describe('web runtime session tab actions', () => {
   // whose handle is already gone -- and closing it again just restarted the same TTL loop.
   it.each([
     ['tab_not_found', true],
+    ['selector_not_found', true],
+    ['terminal_tab_not_found', true],
     ['runtime_rpc_timeout', false]
   ])('keeps a %s close suppressed past the close-intent TTL: %s', async (code, stillPending) => {
     const runtimeCall = vi

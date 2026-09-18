@@ -162,10 +162,13 @@ async function callWebRuntimeSessionTabMethod(
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
     }
-    // Why the split: only 'tab_not_found' is absence proof (see the outcome doc above). Restoring the
-    // mirror on it hands the user back a pane the host cannot close and whose handle is already gone
-    // (#9194), so keep the suppression and drop its TTL instead. Every other failure is a "not now".
-    const hostHasNoSuchTab = hasRuntimeRpcErrorCode(error, 'tab_not_found')
+    // Why the split: 'tab_not_found', 'selector_not_found', and 'terminal_tab_not_found' are absence proof (see the outcome doc above).
+    // Restoring the mirror on it hands the user back a pane the host cannot close and whose handle is already gone (#9194, #21189),
+    // so keep the suppression and drop its TTL instead. Every other failure is a "not now".
+    const hostHasNoSuchTab =
+      hasRuntimeRpcErrorCode(error, 'tab_not_found') ||
+      hasRuntimeRpcErrorCode(error, 'selector_not_found') ||
+      hasRuntimeRpcErrorCode(error, 'terminal_tab_not_found')
     for (const hostTabId of closeIntentTabIds) {
       if (hostHasNoSuchTab) {
         makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, hostTabId)
