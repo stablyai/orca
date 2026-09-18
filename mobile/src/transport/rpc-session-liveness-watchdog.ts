@@ -1,4 +1,4 @@
-import type { ScheduleTimer } from './timer-scheduler'
+import { defaultCancelTimer, defaultScheduleTimer, type ScheduleTimer } from './timer-scheduler'
 
 export const LIVENESS_IDLE_MS = 20_000
 export const LIVENESS_PROBE_TIMEOUT_MS = 8_000
@@ -52,8 +52,8 @@ export class RpcSessionLivenessWatchdog {
     this.missedProbeLimit = options.missedProbeLimit ?? MISSED_PROBE_LIMIT
     this.voluntaryProbeMinIntervalMs = options.voluntaryProbeMinIntervalMs ?? 0
     this.now = options.now ?? Date.now
-    this.setTimer = options.setTimer ?? ((handler, ms) => setTimeout(handler, ms))
-    this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle))
+    this.setTimer = options.setTimer ?? defaultScheduleTimer
+    this.clearTimer = options.clearTimer ?? defaultCancelTimer
   }
 
   start(identity: RpcSessionIdentity): void {

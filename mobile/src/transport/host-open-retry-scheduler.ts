@@ -1,4 +1,4 @@
-import type { ScheduleTimer } from './timer-scheduler'
+import { defaultCancelTimer, defaultScheduleTimer, type ScheduleTimer } from './timer-scheduler'
 
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000] as const
 
@@ -21,9 +21,8 @@ export class HostOpenRetryScheduler {
   private readonly clearTimer: typeof clearTimeout
 
   constructor(private readonly options: HostOpenRetrySchedulerOptions) {
-    // Why: browsers throw Illegal invocation when a global timer is called with a non-global receiver; Hermes does not.
-    this.setTimer = options.setTimer ?? ((handler, ms) => setTimeout(handler, ms))
-    this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle))
+    this.setTimer = options.setTimer ?? defaultScheduleTimer
+    this.clearTimer = options.clearTimer ?? defaultCancelTimer
   }
 
   recordFailure(hostId: string, generation: number): { failureCount: number; nextDelayMs: number } {
