@@ -199,6 +199,22 @@ describe('connectPanePty', () => {
     expect(staleTracker.flags).toBe(0)
   })
 
+  it('disarms leftover mouse tracking when spawning a fresh PTY (#15625)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { RESET_MOUSE_REPORTING } =
+      await import('../../../../shared/terminal-mode-reset-profiles')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(92)
+    const deps = createDeps({ tabId: 'tab-mouse-fresh-spawn' })
+
+    connectPanePty(pane as never, createManager(92) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(RESET_MOUSE_REPORTING, expect.any(Function))
+    expect(transport.connect).toHaveBeenCalled()
+  })
+
   // Why: deleting a worktree kills its PTYs for the filesystem teardown; the
   // renderer must not race a doomed respawn into a directory main is deleting
   // (main fences it with TerminalRemovalInProgressError and the pane is about to

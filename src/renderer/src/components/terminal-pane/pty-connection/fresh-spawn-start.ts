@@ -16,6 +16,7 @@ import type {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { findTerminalTabForPane } from './terminal-tab-id'
+import { RESET_MOUSE_REPORTING } from '../../../../../shared/terminal-mode-reset-profiles'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -57,6 +58,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // replaced PTY takes the stale-transport early return and skips it, so
     // a restart-in-place would leak the old TUI's flags into a fresh shell.
     session.kittyKeyboardModes.reset()
+    // Why: the same reused xterm can keep DECSET 1003/1006 from the killed
+    // TUI; motion then types SGR reports into the replacement shell (#15625).
+    session.writeReplayData(RESET_MOUSE_REPORTING)
     session.prepareFreshShellViewportForSpawn(options)
     const coldRestoreOverride =
       startupOverride && 'launchConfig' in startupOverride

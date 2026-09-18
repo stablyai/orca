@@ -4,12 +4,12 @@ import {
   RESET_GRAPHIC_RENDITION
 } from '../../shared/terminal-mode-reset-profiles'
 
-// Why the reset belongs in the seed and not only at replay: the recovered stream
-// re-arms mouse reporting from two independent sources (rehydrateSequences AND
-// SerializeAddon's own mode trailer inside snapshotAnsi), and the seed is what
-// feeds the daemon's emulator — so without it every downstream consumer that
-// re-serializes from that emulator, including mobile, inherits the dead TUI's
-// modes no matter which profile the desktop renderer applies. See
+// Why the reset belongs in the seed and not only at replay: SerializeAddon's
+// mode trailer inside snapshotAnsi can still re-arm mouse reporting even
+// after rehydrateSequences omits DECSET 1003/1006 (#18424), and the seed is
+// what feeds the daemon's emulator — so without it every downstream consumer
+// that re-serializes from that emulator, including mobile, inherits the dead
+// TUI's modes no matter which profile the desktop renderer applies. See
 // COLD_RESTORE_SEED_MODE_RESET for the precondition and the choice of bits.
 
 export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): readonly string[] {
