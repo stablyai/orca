@@ -96,7 +96,8 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
 }
 
 function looksLikePosixAbsolutePath(pathValue: string): boolean {
-  return pathValue.startsWith('/') && !pathValue.startsWith('//')
+  // Why: list/ps path equality must tolerate corrupt/missing path fields without throwing.
+  return typeof pathValue === 'string' && pathValue.startsWith('/') && !pathValue.startsWith('//')
 }
 
 function normalizeWindowsWorktreePathForComparison(pathValue: string): string {
