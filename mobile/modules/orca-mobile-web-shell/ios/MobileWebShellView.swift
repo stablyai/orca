@@ -115,7 +115,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var webView: WKWebView!
   private var generationDirectory = ""
   private var sessionId = ""
-  private var appliedProps: String?
+  private var appliedDirectory: String?
+  private var appliedSessionId: String?
   private var pendingDocumentUrl: URL?
   private var isolationReady = false
   private var isolationFailed = false
@@ -162,11 +163,11 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   /// Props arrive in no defined order, so neither setter starts anything; this does, once both are
-  /// in. A repeat of the same pair is not a retry — a retry is a remount under a new React key.
+  /// in. A repeat of the same pair is not a retry: a retry is a remount under a new React key.
   func propsDidUpdate() {
-    let props = "\(generationDirectory)\u{0}\(sessionId)"
-    guard props != appliedProps else { return }
-    appliedProps = props
+    guard generationDirectory != appliedDirectory || sessionId != appliedSessionId else { return }
+    appliedDirectory = generationDirectory
+    appliedSessionId = sessionId
     failureReported = false
     pendingDocumentUrl = nil
     webView.stopLoading()
@@ -205,7 +206,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
         guard let ruleList else {
           self.isolationFailed = true
           self.pendingDocumentUrl = nil
-          if self.appliedProps != nil {
+          if self.appliedSessionId != nil {
             self.report(state: "failed", reason: "isolation-unavailable")
           }
           return
@@ -271,7 +272,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-    guard appliedProps != nil else { return }
+    guard appliedSessionId != nil else { return }
     report(state: "loading")
   }
 
