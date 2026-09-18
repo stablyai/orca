@@ -18,11 +18,15 @@ import { _internals } from './hook-service'
 
 /**
  * OpenCode loads a plugin file either through a named factory export or through the
- * module default export. The default-export loader rejects the module outright unless
- * the default is an object exposing `server()` — verified against opencode 1.18.18,
- * which logs `failed to load plugin … must default export an object with server()` for
- * a default of `{ id, setup }` and accepts `{ id, server }`. These tests execute the
- * generated module so the shipped file is checked against both loaders, not a substring.
+ * module default export. The pre-v2 default-export loader rejects the module outright
+ * unless the default is an object exposing `server()` — verified against opencode
+ * 1.18.18, which logs `failed to load plugin … must default export an object with
+ * server()` for a default of `{ id, setup }` and accepts `{ id, server }`. The v2
+ * loader (opencode 2.x) inverts this: it rejects `{ id, server }` with `Missing key
+ * at ["default"]["effect"]` / `Missing key at ["default"]["setup"]` and requires a
+ * `setup()` (or `effect`) function. The default therefore carries both keys pointing
+ * at the same implementation. These tests execute the generated module so the shipped
+ * file is checked against both loaders, not a substring.
  */
 describe('OpenCode status plugin module contract', () => {
   type PluginHooks = {
@@ -30,7 +34,11 @@ describe('OpenCode status plugin module contract', () => {
     dispose?: () => Promise<void>
   }
   type PluginModule = {
-    default?: { id?: unknown; server?: (ctx: unknown) => Promise<PluginHooks> }
+    default?: {
+      id?: unknown
+      server?: (ctx: unknown) => Promise<PluginHooks>
+      setup?: (ctx: unknown) => Promise<unknown>
+    }
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
@@ -94,10 +102,89 @@ describe('OpenCode status plugin module contract', () => {
   it('rejects the shape OpenCode refuses: a default export without server()', async () => {
     const module = await loadPluginModule()
 
-    // Why: pins the specific reason the loader fails a module — `setup` alone is not
-    // accepted, so a default export must never regress to it.
+    // Why: pins the specific reason the pre-v2 loader fails a module — a default
+    // export must never regress to dropping `server`, even though the v2 loader
+    // additionally requires `setup`.
     expect(module.default).not.toBeUndefined()
     expect(Object.hasOwn(module.default ?? {}, 'server')).toBe(true)
+  })
+
+  it('exposes a callable setup() on the default export alongside server()', async () => {
+    const module = await loadPluginModule()
+
+    // Why: the v2 loader rejects a default of `{ id, server }` with `Missing key
+    // at ["default"]["effect"]` / `Missing key at ["default"]["setup"]`, so the
+    // default must carry `setup` too — pointing at the same implementation, not a
+    // second copy.
+    expect(module.default?.setup).toBeTypeOf('function')
+    expect(module.default?.server).toBeTypeOf('function')
+    expect(typeof module.default?.id).toBe('string')
+  })
+
+  it('setup without an event stream is a side-effect-free no-op', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const posts: { url: string; body: unknown }[] = []
+    globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
+      posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) })
+      return { ok: true } as Response
+    }) as unknown as typeof globalThis.fetch
+
+    const module = await loadPluginModule()
+    // Why: a pre-v2 context has no `event.subscribe` — setup must not instantiate
+    // the factory there (that would spawn a ghost owner that never receives
+    // events). The v1 `server` factory owns the lifecycle on such loaders.
+    const cleanup = await module.default?.setup?.({})
+
+    expect(cleanup).toBeTypeOf('function')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(posts.filter((post) => post.url.includes('/hook/opencode'))).toHaveLength(0)
+  })
+
+  it('reports a session lifecycle event through the hook endpoint when driven via setup()', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const posts: { url: string; body: unknown }[] = []
+    globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
+      posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) })
+      return { ok: true } as Response
+    }) as unknown as typeof globalThis.fetch
+
+    const busyEvent = {
+      type: 'session.status',
+      properties: { sessionID: 'ses_root', status: { type: 'busy' } }
+    }
+    // Why: v2-style session domain — single-argument get returning the raw info
+    // without a `.data` wrapper. This exercises the client shim's normalization.
+    const fakeCtx = {
+      session: {
+        get: async ({ sessionID }: { sessionID: string }) => ({
+          id: sessionID,
+          parentID: undefined
+        })
+      },
+      event: {
+        subscribe: async function* () {
+          yield busyEvent
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        }
+      }
+    }
+
+    const module = await loadPluginModule()
+    const cleanup = await module.default?.setup?.(fakeCtx)
+
+    expect(cleanup).toBeTypeOf('function')
+    // Why: the setup subscription loop and lifecycle FIFO drain asynchronously.
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await (cleanup as () => Promise<unknown>)?.()
+
+    const hookPosts = posts.filter((post) => post.url.includes('/hook/opencode'))
+    expect(
+      hookPosts.some(
+        (post) =>
+          (post.body as { payload?: { hook_event_name?: string } })?.payload
+            ?.hook_event_name === 'SessionBusy'
+      )
+    ).toBe(true)
   })
 
   it('keeps the named factory export so the factory-based loader still resolves', async () => {
