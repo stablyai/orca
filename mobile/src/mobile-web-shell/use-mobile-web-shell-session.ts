@@ -85,7 +85,7 @@ export function useMobileWebShellSession(args: {
   // Aborted on the same bump: a download nobody will use still holds four of the host's read slots.
   const downloadsRef = useRef<Set<AbortController>>(new Set())
   const runEffectRef = useRef<
-    ((epoch: number, effect: MobileWebShellSessionEffect) => void) | null
+    ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
   >(null)
 
   const dispatch = useCallback((epoch: number, event: MobileWebShellSessionEvent): void => {
@@ -96,7 +96,9 @@ export function useMobileWebShellSession(args: {
     sessionRef.current = stepped.session
     setState(stepped.session.state)
     for (const effect of stepped.effects) {
-      runEffectRef.current?.(epoch, effect)
+      // Every effect of a step belongs to the flow that step produced, and its result carries that
+      // number back, so a flow the session has since restarted reports into nothing.
+      runEffectRef.current?.(epoch, stepped.session.flow, effect)
     }
   }, [])
 
@@ -109,7 +111,7 @@ export function useMobileWebShellSession(args: {
   }, [])
 
   const runEffect = useCallback(
-    async (epoch: number, effect: MobileWebShellSessionEffect): Promise<void> => {
+    async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
       const store = storeRef.current
       if (store === null) {
         return
@@ -123,16 +125,17 @@ export function useMobileWebShellSession(args: {
           await store.deleteHostCache(hostKey).catch(() => undefined)
           return
         case 'open-cache':
-          send({ type: 'cache-read', generation: await openCache(store, hostKey) })
+          send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
           return
         case 'read-manifest':
-          await readManifest(clientRef.current, send)
+          await readManifest(clientRef.current, flow, send)
           return
         case 'download':
           await download({
             client: clientRef.current,
             store,
             hostKey,
+            flow,
             runtime,
             startedAt: startedAtRef.current,
             downloads: downloadsRef.current,
@@ -142,6 +145,7 @@ export function useMobileWebShellSession(args: {
         case 'open-generation':
           send({
             type: 'activated',
+            flow,
             generationDirectory: effect.directory,
             sessionId: runtime.mintSessionId(),
             buildId: effect.buildId,
@@ -150,14 +154,14 @@ export function useMobileWebShellSession(args: {
           })
           return
         case 'remount':
-          send({ type: 'remounted', sessionId: runtime.mintSessionId() })
+          send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
           return
       }
     },
     [dispatch, runtime]
   )
-  runEffectRef.current = (epoch, effect) => {
-    void runEffect(epoch, effect)
+  runEffectRef.current = (epoch, flow, effect) => {
+    void runEffect(epoch, flow, effect)
   }
 
   useEffect(() => {
@@ -226,10 +230,11 @@ async function openCache(
 
 async function readManifest(
   client: RpcClient | null,
+  flow: number,
   send: (event: MobileWebShellSessionEvent) => void
 ): Promise<void> {
   if (client === null) {
-    send({ type: 'download-failed' })
+    send({ type: 'download-failed', flow })
     return
   }
   try {
@@ -237,6 +242,7 @@ async function readManifest(
     const manifest = opened.manifest
     send({
       type: 'manifest-read',
+      flow,
       manifest: {
         buildId: manifest.buildId,
         schemaVersion: manifest.schemaVersion,
@@ -247,7 +253,7 @@ async function readManifest(
       }
     })
   } catch {
-    send({ type: 'download-failed' })
+    send({ type: 'download-failed', flow })
   }
 }
 
@@ -255,14 +261,15 @@ async function download(args: {
   client: RpcClient | null
   store: GenerationStore
   hostKey: string
+  flow: number
   runtime: MobileWebShellRuntime
   startedAt: number
   downloads: Set<AbortController>
   send: (event: MobileWebShellSessionEvent) => void
 }): Promise<void> {
-  const { client, store, hostKey, runtime, send } = args
+  const { client, store, hostKey, flow, runtime, send } = args
   if (client === null) {
-    send({ type: 'download-failed' })
+    send({ type: 'download-failed', flow })
     return
   }
   const controller = new AbortController()
@@ -271,12 +278,13 @@ async function download(args: {
     const fetched = await fetchMobileWebBundle({
       client,
       signal: controller.signal,
-      onProgress: (progress) => send({ type: 'fetch-progress', ...progress })
+      onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress })
     })
-    send({ type: 'download-staged' })
+    send({ type: 'download-staged', flow })
     const committed = await store.commitGeneration(await store.stageGeneration(hostKey, fetched))
     send({
       type: 'activated',
+      flow,
       generationDirectory: generationDirectoryPath(committed.directory),
       sessionId: runtime.mintSessionId(),
       buildId: committed.buildId,
@@ -284,7 +292,7 @@ async function download(args: {
       elapsedMs: runtime.now() - args.startedAt
     })
   } catch {
-    send({ type: 'download-failed' })
+    send({ type: 'download-failed', flow })
   } finally {
     args.downloads.delete(controller)
   }

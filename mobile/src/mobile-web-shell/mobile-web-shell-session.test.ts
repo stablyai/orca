@@ -39,13 +39,36 @@ const CACHED: CachedGeneration = {
   totalBytes: 4096
 }
 
+/** An event as a test writes it. An effect result is stamped with the flow the session is on, which
+ *  is what an in-order runner does; a test replaying a superseded run pins the flow itself. */
+type PendingEvent<E = MobileWebShellSessionEvent> = E extends { flow: number }
+  ? Omit<E, 'flow'> & { readonly flow?: number }
+  : E
+
+function stamp(flow: number, event: PendingEvent): MobileWebShellSessionEvent {
+  switch (event.type) {
+    case 'gates-changed':
+    case 'shell-failed':
+    case 'retry-pressed':
+      return event
+    case 'cache-read':
+    case 'manifest-read':
+    case 'fetch-progress':
+    case 'download-staged':
+    case 'activated':
+    case 'remounted':
+    case 'download-failed':
+      return { ...event, flow: event.flow ?? flow }
+  }
+}
+
 function run(
   session: MobileWebShellSession,
-  ...events: readonly MobileWebShellSessionEvent[]
+  ...events: readonly PendingEvent[]
 ): MobileWebShellStep {
   let step: MobileWebShellStep = { session, effects: [] }
   for (const event of events) {
-    step = reduceMobileWebShellSession(step.session, event)
+    step = reduceMobileWebShellSession(step.session, stamp(step.session.flow, event))
   }
   return step
 }
@@ -375,5 +398,93 @@ describe('try again', () => {
     const step = run(createMobileWebShellSession(), { type: 'retry-pressed' })
     expect(step.session.state).toEqual({ kind: 'checking' })
     expect(step.effects).toEqual([])
+  })
+})
+
+describe('a result from a superseded flow reports into nothing', () => {
+  it('drops the cache read of a run the gates restarted, and does not open it twice', () => {
+    const first = started()
+    const restarted = run(first.session, { type: 'gates-changed', gates: gates() })
+    expect(restarted.effects).toEqual([{ kind: 'open-cache' }])
+    const stale = run(restarted.session, {
+      type: 'cache-read',
+      flow: first.session.flow,
+      generation: CACHED
+    })
+    expect(stale.effects).toEqual([])
+    expect(stale.session.cached).toBeNull()
+    expect(run(stale.session, { type: 'cache-read', generation: CACHED }).effects).toEqual([
+      { kind: 'read-manifest' }
+    ])
+  })
+
+  it('drops the manifest of a run the gates restarted, so only one download is ever asked for', () => {
+    const first = afterCacheRead(null)
+    const restarted = run(first.session, { type: 'gates-changed', gates: gates() })
+    const stale = run(restarted.session, {
+      type: 'manifest-read',
+      flow: first.session.flow,
+      manifest: MANIFEST
+    })
+    expect(stale.effects).toEqual([])
+    expect(stale.session.state).toEqual({ kind: 'checking' })
+    const current = run(stale.session, { type: 'cache-read', generation: null })
+    expect(run(current.session, { type: 'manifest-read', manifest: MANIFEST }).effects).toEqual([
+      { kind: 'download' }
+    ])
+  })
+
+  it('keeps a workspace on screen when the manifest read the drop abandoned finally rejects', () => {
+    // The reproduced sequence: connected, cache read, manifest in flight, socket drops, the offline
+    // path opens the cached generation, and only then does the abandoned RPC settle.
+    const inFlight = afterCacheRead(CACHED)
+    const offline = run(inFlight.session, {
+      type: 'gates-changed',
+      gates: gates({ reachability: 'unreachable' })
+    })
+    const ready = run(
+      offline.session,
+      { type: 'cache-read', generation: CACHED },
+      {
+        type: 'activated',
+        generationDirectory: CACHED.directory,
+        sessionId: 'session-one',
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes,
+        elapsedMs: 4
+      }
+    )
+    expect(ready.session.state).toMatchObject({ kind: 'ready' })
+    const late = run(ready.session, { type: 'download-failed', flow: inFlight.session.flow })
+    expect(late.session.state).toEqual(ready.session.state)
+  })
+
+  it('applies a remount of the current flow and ignores one from a replaced run', () => {
+    const ready = readySession()
+    const remounting = run(ready.session, { type: 'shell-failed', reason: 'render-process-gone' })
+    const stale = run(remounting.session, {
+      type: 'remounted',
+      flow: remounting.session.flow - 1,
+      sessionId: 'session-stale'
+    })
+    expect(stale.session.state).toEqual(ready.session.state)
+    expect(
+      run(stale.session, { type: 'remounted', sessionId: 'session-two' }).session.state
+    ).toMatchObject({ sessionId: 'session-two' })
+  })
+})
+
+describe('the remount budget is one per session, not one per reconnect', () => {
+  it('keeps the latch set when the gates restart the flow after a load failure', () => {
+    const remounted = run(
+      readySession().session,
+      { type: 'shell-failed', reason: 'render-process-gone' },
+      { type: 'remounted', sessionId: 'session-two' },
+      { type: 'shell-failed', reason: 'document-load-failed' }
+    )
+    expect(remounted.session.remountedOnce).toBe(true)
+    const restarted = run(remounted.session, { type: 'gates-changed', gates: gates() })
+    expect(restarted.session.remountedOnce).toBe(true)
+    expect(run(restarted.session, { type: 'retry-pressed' }).session.remountedOnce).toBe(false)
   })
 })

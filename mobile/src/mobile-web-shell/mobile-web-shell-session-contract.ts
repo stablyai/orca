@@ -98,28 +98,47 @@ export type MobileWebShellSessionEffect =
   /** Mint a new session id for the generation already on screen, which is what remounts the view. */
   | { readonly kind: 'remount' }
 
+/**
+ * Events, in two kinds.
+ *
+ * The seven that carry a `flow` are results reported out of an effect, and the number is the flow
+ * the step that asked for them was in. Anything a superseded flow reports is dropped: a manifest
+ * read that was in flight when the socket dropped still rejects afterwards, and applying that
+ * rejection would replace a workspace already on screen with a download failure. The other three
+ * come from outside the flow entirely — the gates, the view, the retry button — and always apply.
+ */
 export type MobileWebShellSessionEvent =
   | { readonly type: 'gates-changed'; readonly gates: MobileWebShellGates }
-  | { readonly type: 'cache-read'; readonly generation: CachedGeneration | null }
-  | { readonly type: 'manifest-read'; readonly manifest: MobileWebShellManifestFacts }
+  | {
+      readonly type: 'cache-read'
+      readonly flow: number
+      readonly generation: CachedGeneration | null
+    }
+  | {
+      readonly type: 'manifest-read'
+      readonly flow: number
+      readonly manifest: MobileWebShellManifestFacts
+    }
   | {
       readonly type: 'fetch-progress'
+      readonly flow: number
       readonly completedAssets: number
       readonly totalAssets: number
       readonly receivedBytes: number
       readonly totalBytes: number
     }
-  | { readonly type: 'download-staged' }
+  | { readonly type: 'download-staged'; readonly flow: number }
   | {
       readonly type: 'activated'
+      readonly flow: number
       readonly generationDirectory: string
       readonly sessionId: string
       readonly buildId: string
       readonly totalBytes: number
       readonly elapsedMs: number
     }
-  | { readonly type: 'remounted'; readonly sessionId: string }
-  | { readonly type: 'download-failed' }
+  | { readonly type: 'remounted'; readonly flow: number; readonly sessionId: string }
+  | { readonly type: 'download-failed'; readonly flow: number }
   | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
   | { readonly type: 'retry-pressed' }
 
@@ -133,8 +152,13 @@ export type MobileWebShellSession = {
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null
+  /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
+   *  run belongs to, and echoed back on their results. */
+  readonly flow: number
 }
 
+/** A transition: the session it produced and the effects it owes. Every effect belongs to
+ *  `session.flow`, which is what the runner echoes back on the result. */
 export type MobileWebShellStep = {
   readonly session: MobileWebShellSession
   readonly effects: readonly MobileWebShellSessionEffect[]

@@ -37,7 +37,14 @@ export function readMobileWebShellReachability(
 const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
 
 export function createMobileWebShellSession(): MobileWebShellSession {
-  return { state: CHECKING, retriedOnce: false, remountedOnce: false, gates: null, cached: null }
+  return {
+    state: CHECKING,
+    retriedOnce: false,
+    remountedOnce: false,
+    gates: null,
+    cached: null,
+    flow: 0
+  }
 }
 
 function step(
@@ -66,7 +73,9 @@ function startFlow(
   gates: MobileWebShellGates,
   patch: Partial<MobileWebShellSession> = {}
 ): MobileWebShellStep {
-  const base = { ...patch, gates, remountedOnce: false }
+  // A new flow, so nothing the replaced one has in flight can land on this one. That is also what
+  // keeps a status refetch arriving mid-check from running the cache read and the download twice.
+  const base = { ...patch, gates, flow: session.flow + 1 }
   if (gates.reachability === 'connecting') {
     return step(session, { ...base, state: CHECKING })
   }
@@ -183,22 +192,27 @@ function onShellFailed(
   if (session.retriedOnce || session.gates === null) {
     return step(session, { state: failed })
   }
-  return step(session, { retriedOnce: true, cached: null, state: CHECKING }, [
-    { kind: 'delete-cache' },
-    { kind: 'open-cache' }
-  ])
+  return step(
+    session,
+    { retriedOnce: true, cached: null, state: CHECKING, flow: session.flow + 1 },
+    [{ kind: 'delete-cache' }, { kind: 'open-cache' }]
+  )
 }
 
 /**
  * One transition of the hybrid shell session: a state and the effects the runner owes it.
  *
  * Pure, so every rule above is a table test rather than a simulator run. The runner may drop an
- * effect's result (an unmount, a host change) but must never invent one.
+ * effect's result (an unmount, a host change) but must never invent one, and a result it reports
+ * late is dropped here by its flow rather than by whatever state the session happens to be in.
  */
 export function reduceMobileWebShellSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
+  if ('flow' in event && event.flow !== session.flow) {
+    return step(session, {})
+  }
   switch (event.type) {
     case 'gates-changed':
       return awaitsGates(session.state)
@@ -248,8 +262,18 @@ export function reduceMobileWebShellSession(
       return onShellFailed(session, event.reason)
     case 'retry-pressed':
       // Clears both latches, so the delete-and-refetch and the remount are each available again.
+      // Only here: a reconnect is not a reason to grant a second remount of the same session.
       return session.gates === null
-        ? step(session, { retriedOnce: false, remountedOnce: false, state: CHECKING })
-        : startFlow(session, session.gates, { retriedOnce: false, cached: null })
+        ? step(session, {
+            retriedOnce: false,
+            remountedOnce: false,
+            state: CHECKING,
+            flow: session.flow + 1
+          })
+        : startFlow(session, session.gates, {
+            retriedOnce: false,
+            remountedOnce: false,
+            cached: null
+          })
   }
 }
