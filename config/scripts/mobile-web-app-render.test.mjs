@@ -6,12 +6,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
 import { fileURLToPath } from 'node:url'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 
 // Why a real browser: the route tree is handed to expo-router's own ExpoRoot through a synthesized
 // RequireContext. Nothing short of mounting it proves that object is the shape ExpoRoot reads.
 const HOST_ROUTE = '/h/render-check-host'
+
+// The sharded `test` job does not install mobile dependencies, so the page cannot be built there.
+// The CSP suite below needs none of them and still runs. pr.yml's mobile_web_app job runs both.
+const bundles = mobileWebAppDependenciesPresent()
+const describeRender = bundles ? describe : describe.skip
 
 let scratch
 let server
@@ -58,8 +64,11 @@ async function readShellCsp() {
 }
 
 beforeAll(async () => {
-  scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-render-'))
   cspHeader = await readShellCsp()
+  if (!bundles) {
+    return
+  }
+  scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-render-'))
   const { outDir } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
@@ -95,7 +104,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   server?.close()
-  await rm(scratch, { recursive: true, force: true })
+  if (scratch) {
+    await rm(scratch, { recursive: true, force: true })
+  }
 })
 
 // expo-router's Unmatched screen mounts cleanly and paints text, so "no errors, some html" stays
@@ -166,7 +177,7 @@ describe('the shell policy this page is tested under', () => {
   })
 })
 
-describe('the Route A page in a real browser', () => {
+describeRender('the Route A page in a real browser', () => {
   it('mounts the worktree list route, not the unmatched screen', async () => {
     const { errors, cspErrors, text } = await render(HOST_ROUTE)
     expect(cspErrors).toEqual([])

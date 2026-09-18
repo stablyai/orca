@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundle-dependencies.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -484,5 +485,15 @@ describe('PR workflow parallelism', () => {
     // Chrome, which only guards the page if verify reads the job's result.
     expect(verifyStep.env.MOBILE_WEB_APP).toBe('${{ needs.mobile_web_app.result }}')
     expect(verifyStep.run).toContain('"$MOBILE_WEB_APP"')
+  })
+
+  it('makes the mobile_web_app job refuse to skip the tests it exists to run', () => {
+    // The bundling tests skip themselves without mobile/node_modules, which is what keeps the
+    // sharded `test` job green. Only this env var stops that skip from spreading to the one job
+    // that installs them, so a typo here would leave the whole job passing vacuously.
+    const step = workflow.jobs.mobile_web_app.steps.find((entry) =>
+      entry.run?.includes('build-mobile-web-app-bundle.test.mjs')
+    )
+    expect(step.env[MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV]).toBe('1')
   })
 })

@@ -695,7 +695,12 @@ jobs:
       - name: Build and verify the app bundle
         run: pnpm run build:mobile-web:app
 
+      # The bundling tests skip themselves where mobile dependencies are absent, which is how they
+      # stay green in the sharded `test` job. This is the job that installs them, so here a missing
+      # install has to fail rather than skip everything the job exists to run.
       - name: Builder, override census and render check
+        env:
+          ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/build-mobile-web-app-bundle.test.mjs \

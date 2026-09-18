@@ -26,9 +26,16 @@ import {
   assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
 import { MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const appDir = join(projectDir, 'mobile', 'app')
+
+// The sharded `test` job does not install mobile dependencies, so anything that runs esbuild over
+// the route tree is skipped there and run for real in pr.yml's mobile_web_app job.
+const bundles = mobileWebAppDependenciesPresent()
+const describeBundling = bundles ? describe : describe.skip
+const itBundling = bundles ? it : it.skip
 
 async function withScratch(run) {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-test-'))
@@ -139,7 +146,7 @@ describe('the CRLF pin', () => {
   })
 })
 
-describe('the app bundle', () => {
+describeBundling('the app bundle', () => {
   it('resolves react-native to react-native-web and leaves no require.context', async () => {
     const { script } = await bundleMobileWebApp()
     const source = script.toString('utf8')
@@ -239,13 +246,17 @@ describe('the Phase C budget', () => {
     expect(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS).toBeGreaterThan(1)
   })
 
-  it('is not already exceeded by the current bundle', async () => {
-    const { manifest } = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'd') })
-    )
-    expect(manifest.totalBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
-    expect(manifest.assets.length).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
-  }, 120_000)
+  itBundling(
+    'is not already exceeded by the current bundle',
+    async () => {
+      const { manifest } = await withScratch((scratch) =>
+        buildMobileWebAppBundle({ outDir: join(scratch, 'd') })
+      )
+      expect(manifest.totalBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
+      expect(manifest.assets.length).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
+    },
+    120_000
+  )
 })
 
 describe('the CRLF guard', () => {
