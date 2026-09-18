@@ -14,6 +14,7 @@ vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 
+import { app } from 'electron'
 import { createMainWindow } from './createMainWindow'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
@@ -50,7 +51,9 @@ describe('createMainWindow', () => {
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
+      send: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false)
     }
     const browserWindowInstance = {
       webContents,
@@ -63,7 +66,9 @@ describe('createMainWindow', () => {
       getSize: vi.fn(() => [1200, 800]),
       setSize: vi.fn(),
       setWindowButtonPosition: vi.fn(),
-      maximize: vi.fn(),
+      maximize: vi.fn(() => {
+        windowHandlers['maximize']?.()
+      }),
       show: vi.fn(),
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
@@ -204,16 +209,263 @@ describe('createMainWindow', () => {
     })
   })
 
-  it('does not install the startup reveal fallback on macOS', () => {
+  // Field: darwin SIGTRAP-at-startup (reports fa0a6033 / 8468e3ec, one machine, 9 launches in 77 min).
+  // GPU, network service and renderer all trap 195-738ms after main_window_created, before any paint,
+  // so ready-to-show never fires and macOS had no fallback: the app ran with no window at all.
+  it('reveals the startup window on macOS when ready-to-show never fires', () => {
     vi.useFakeTimers()
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('darwin', () => {
       createMainWindow(null)
-      vi.advanceTimersByTime(10_000)
+      vi.advanceTimersByTime(9_999)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // The fallback timer is not enough on its own: in fa0a6033 the main thread wedged ~5.5s after the
+  // window was created, before the 10s timer could run. The death itself is the signal.
+  it('reveals the startup window as soon as the renderer dies before first paint', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
+      createMainWindow(null)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // Project rule: an automated/background launch must never be forced on screen. The pre-paint
+  // death reveal is a second entry point into revealInitialWindow and has to honour it too.
+  it('keeps an explicit background launch hidden when the renderer dies before first paint', () => {
+    vi.useFakeTimers()
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    const showInactive = vi.fn()
+    Object.assign(browserWindowInstance, { showInactive })
+
+    withPlatform('darwin', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
 
       expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(showInactive).not.toHaveBeenCalled()
       expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  // The reveal is best-effort UI; the crash record and the recovery reload behind it are not.
+  it('still records the crash and schedules recovery when the pre-paint reveal throws', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    browserWindowInstance.show.mockImplementation(() => {
+      throw new Error('NSWindow orderFront failed')
+    })
+    const onRendererProcessGone = vi.fn()
+
+    withPlatform('darwin', () => {
+      createMainWindow(null, { onRendererProcessGone })
+      const loadsBefore = browserWindowInstance.loadFile.mock.calls.length
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(onRendererProcessGone).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(250)
+      expect(browserWindowInstance.loadFile.mock.calls.length).toBeGreaterThan(loadsBefore)
+
+      // A failed reveal must not latch the window hidden: the recovered load gets another chance.
+      browserWindowInstance.show.mockImplementation(() => undefined)
+      windowHandlers['ready-to-show']()
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // A maximized last session must not cost the reveal: maximize() notifies the renderer, and on this
+  // path the renderer is already dead, so the notification throws straight out of maximize().
+  it('reveals the window even when restoring maximized geometry throws', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    browserWindowInstance.maximize.mockImplementation(() => {
+      throw new Error('Render frame was disposed before WebFrameMain could be accessed')
+    })
+
+    withPlatform('darwin', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.maximize).toHaveBeenCalledTimes(1)
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // The maximize notification is the throw source; a dead frame must be skipped, not sent to.
+  it('skips the maximize notification when the renderer frame is gone', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    browserWindowInstance.webContents.isCrashed.mockReturnValue(true)
+
+    withPlatform('darwin', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.webContents.send).not.toHaveBeenCalledWith(
+        'window:maximize-changed',
+        true
+      )
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // The fallback is the only reveal signal when no first frame ever arrives, so a throw inside it must
+  // re-arm rather than spend it — otherwise a failed last resort latches the window hidden for good.
+  it('re-arms the reveal fallback when the fallback reveal itself throws', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+    browserWindowInstance.show.mockImplementation(() => {
+      throw new Error('NSWindow orderFront failed')
+    })
+
+    withPlatform('darwin', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(10_000)
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+
+      browserWindowInstance.show.mockImplementation(() => undefined)
+      vi.advanceTimersByTime(10_000)
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // Project rule: a headful automated run may put a window up but must never take the foreground.
+  it('reveals a headful automated launch without stealing focus', () => {
+    vi.useFakeTimers()
+    vi.stubEnv('ORCA_E2E_HEADFUL', '1')
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    const showInactive = vi.fn()
+    Object.assign(browserWindowInstance, { showInactive })
+
+    withPlatform('darwin', () => {
+      createMainWindow(null)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(showInactive).toHaveBeenCalledTimes(1)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+    })
+  })
+
+  // Teardown must not resurrect a window: a renderer dying during quit is noise, not a pre-paint death.
+  it('does not reveal when the renderer dies while the app is quitting', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
+      createMainWindow(null, { getIsQuitting: () => true })
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+    })
+  })
+
+  // Closing a window kills its renderer, so the pre-paint reveal must not re-show what the user just
+  // closed. This pins the isWindowClosing half of the guard; the quitting half is pinned above.
+  it('does not reveal when the renderer dies while the window is closing', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    const showInactive = vi.fn()
+    Object.assign(browserWindowInstance, { showInactive })
+
+    withPlatform('darwin', () => {
+      createMainWindow(null)
+      // Why before-quit: the auto-updater strips 'close' listeners, so this is where the latch is set.
+      const freezeBoundsOnQuit = (
+        app.on as unknown as { mock: { calls: [string, () => void][] } }
+      ).mock.calls.findLast(([event]) => event === 'before-quit')?.[1]
+      expect(freezeBoundsOnQuit).toBeTypeOf('function')
+      freezeBoundsOnQuit?.()
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(showInactive).not.toHaveBeenCalled()
+    })
+  })
+
+  // The liveness probes cannot catch a frame that dies between the check and the send, so the send is
+  // wrapped too. Without the wrapper the throw escapes maximize() and starves the reveal again.
+  it('reveals the window when the maximize notification throws despite a live-looking frame', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    browserWindowInstance.webContents.send.mockImplementation(() => {
+      throw new Error('Render frame was disposed before WebFrameMain could be accessed')
+    })
+
+    withPlatform('darwin', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.webContents.send).toHaveBeenCalledWith(
+        'window:maximize-changed',
+        true
+      )
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // Pins the isDestroyed term: a destroyed frame must be skipped outright, not probed by the try/catch.
+  it('skips the maximize notification when the renderer frame is destroyed', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    browserWindowInstance.webContents.isDestroyed.mockReturnValue(true)
+
+    withPlatform('darwin', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers['render-process-gone']({}, { reason: 'crashed', exitCode: 5 })
+
+      expect(browserWindowInstance.webContents.send).not.toHaveBeenCalledWith(
+        'window:maximize-changed',
+        true
+      )
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // The send sits BEFORE bounds persistence on the unmaximize path, so an unwrapped throw would lose the
+  // user's restored window size. This is what the try/catch inside sendMaximizeChanged actually buys.
+  it('still persists restored bounds when the unmaximize notification throws', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+    Object.assign(browserWindowInstance, {
+      getBounds: vi.fn(() => ({ x: 10, y: 20, width: 1100, height: 700 }))
+    })
+    browserWindowInstance.webContents.send.mockImplementation(() => {
+      throw new Error('Render frame was disposed before WebFrameMain could be accessed')
+    })
+    const store = createStartupRevealStore(false)
+
+    withPlatform('darwin', () => {
+      createMainWindow(store as never)
+      windowHandlers['unmaximize']()
+
+      expect(store.updateUI).toHaveBeenCalledWith({
+        windowMaximized: false,
+        windowBounds: { x: 10, y: 20, width: 1100, height: 700 }
+      })
+    })
+  })
+
+  it('cancels the macOS startup reveal fallback after ready-to-show', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
+      createMainWindow(null)
+      windowHandlers['ready-to-show']()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
     })
   })
 

@@ -165,6 +165,13 @@ export async function showRendererRecoveryPrompt(
         state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
       return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
     },
+    // Why: a renderer that dies before first paint leaves this window hidden, and on macOS the box
+    // below is a sheet inside it — the prompt exists but nobody can see or answer it (fa0a6033).
+    revealSurface: () => {
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        safelyRevealWindow(state.mainWindow)
+      }
+    },
     copyToClipboard: (text) => clipboard.writeText(text),
     reload: () => {
       if (!state.mainWindow || state.mainWindow.isDestroyed()) {

@@ -188,7 +188,8 @@ export function createMainWindow(
     mainWindow,
     opts,
     reloadMainWindow: (observer) => loadMainWindow(mainWindow, observer),
-    rendererWebContentsId
+    rendererWebContentsId,
+    revealInitialWindow: state.revealInitialWindow
   })
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
