@@ -49,6 +49,7 @@ export type BridgeRpcClientDiagnostic =
   | { kind: 'refused'; refusal: BridgeRefusal }
   | { kind: 'send-failed'; error: unknown }
   | { kind: 'stream-ended'; reason: BridgeStreamEndReason }
+  | { kind: 'stream-failed'; error: unknown }
   | { kind: 'state-out-of-order' }
   | { kind: 'binary-frame-dropped' }
 
@@ -182,6 +183,17 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     askForInit()
   }
 
+  /** The shell answers a refused `subscribe` with `error` on the stream's id. Nothing is pending to
+   *  reject there, so routing it to the requests would drop it and hold the page's slot forever. */
+  function failExchange(id: string, error: unknown): void {
+    if (subscriptions.has(id)) {
+      subscriptions.end(id)
+      report({ kind: 'stream-failed', error })
+      return
+    }
+    requests.fail(id, error)
+  }
+
   function dispatch(message: BridgeHostMessage, json: string): void {
     switch (message.type) {
       case 'init':
@@ -194,7 +206,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         requests.acceptReply(message)
         return
       case 'error':
-        requests.fail(message.id, reconstructBridgeError(message.error))
+        failExchange(message.id, reconstructBridgeError(message.error))
         return
       case 'event':
         subscriptions.deliver(message, utf8ByteLength(json))
@@ -258,7 +270,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   ): () => void {
     requireSession()
     // Thrown rather than reported: `subscribe` hands back an unsubscribe and nothing else, so a
-    // refusal the caller could read does not exist on this member.
+    // refusal the caller could read does not exist on this member. A refusal the shell posts back
+    // arrives too late to throw at all, and reaches the page as a `stream-failed` diagnostic.
     if (subscriptions.size >= BRIDGE_MAX_SUBSCRIPTIONS) {
       throw new BridgeClientCapExceededError(`over ${BRIDGE_MAX_SUBSCRIPTIONS} subscriptions`)
     }

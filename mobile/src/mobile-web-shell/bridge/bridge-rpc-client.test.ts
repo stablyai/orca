@@ -5,7 +5,7 @@ import {
 } from '../../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/types'
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
-import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
+import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { createBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 
 /**
@@ -134,6 +134,27 @@ describe('bridge round trip: subscriptions', () => {
     pair.rpc.streams[0]?.emit({ type: 'data', chunk: 'after' })
     await pair.flush()
     expect(onData).toHaveBeenCalledTimes(1)
+  })
+
+  it('frees the page slot when the shell refuses the subscribe', async () => {
+    const pair = await ready(createBridgePortPair())
+    const onData = vi.fn()
+    const refuse = vi.spyOn(pair.rpc, 'subscribe').mockImplementation(() => {
+      throw new Error('the terminal is gone')
+    })
+    pair.client.subscribe('terminal.stream', { terminal: 't' }, onData)
+    await pair.flush()
+    refuse.mockRestore()
+    expect(pair.diagnostics).toEqual([
+      { kind: 'stream-failed', error: expect.objectContaining({ message: 'the terminal is gone' }) }
+    ])
+    expect(onData).not.toHaveBeenCalled()
+    // A leaked slot is invisible until the page reaches its own cap, so that is where it is read.
+    for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
+      pair.client.subscribe('terminal.stream', {}, vi.fn())
+    }
+    await pair.flush()
+    expect(pair.rpc.streams).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
   })
 
   it('keeps a long stream alive, because the acks free the shell window', async () => {
