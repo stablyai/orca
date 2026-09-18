@@ -26,9 +26,20 @@ export async function installWslGuestHooks(options: {
   warn: (message: string) => void
   /** Canonical runtime-host installer for redirected Codex homes. */
   installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
+  /** Explicit Hermes profile selected by the launching WSL pane. */
+  profile?: string
 }): Promise<void> {
-  const { mux, guestHome, codexHomePath, distro, installHooks, settings, warn, installCodex } =
-    options
+  const {
+    mux,
+    guestHome,
+    codexHomePath,
+    distro,
+    installHooks,
+    settings,
+    warn,
+    installCodex,
+    profile
+  } = options
   let agents
   let claudeVersion: string | null = null
   try {
@@ -37,7 +48,11 @@ export async function installWslGuestHooks(options: {
         commands: buildManagedHookDetectionCommands(settings, 'linux')
       })
     )
-    agents = detected.agents
+    // Older guest relays omit managedHookTargets; do not send additive targets
+    // they cannot validate, while local/updated relays install Auggie normally.
+    agents = detected.agents.filter(
+      (agent) => agent !== 'aug' || detected.managedHookTargets?.includes(agent) === true
+    )
     claudeVersion = detected.claudeVersion
   } catch (error) {
     warn(
@@ -69,6 +84,7 @@ export async function installWslGuestHooks(options: {
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
+    ...(profile ? { profile } : {}),
     ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length

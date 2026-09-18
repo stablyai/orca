@@ -4,11 +4,10 @@ import {
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
-import { openCodeHookService } from '../../../opencode/hook-service'
-import { mimoCodeHookService } from '../../../mimo/hook-service'
+import { agentOverlayRegistry } from '../../../agent-hooks/overlay-registry'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
-import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
+import { hermesHookService } from '../../../hermes/hook-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
@@ -19,6 +18,7 @@ import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
 import {
   clearPiAgentShadowEnv,
   exposePiManagedExtensionEnv,
+  inheritOmpXdgEnvironment,
   isMimoLaunchCommand,
   resolveMimocodeSourceHome,
   resolveOpenCodeSourceConfigDir,
@@ -54,6 +54,14 @@ export function buildPtyHostEnv(
   const hasLaunchCommand =
     typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
 
+  if (piAgentKind === 'omp' || !hasLaunchCommand) {
+    // OMP uses XDG data/state/cache roots for daemon-owned fragments. Shell
+    // startup exports are not present in a direct daemon spawn, so carry the
+    // effective values into this PTY rather than silently falling back to
+    // ~/.omp.
+    inheritOmpXdgEnvironment(baseEnv)
+  }
+
   // Why: unattended agents must fail instead of looping on OS credential prompts; user terminals keep normal Git behavior.
   applyTerminalGitCredentialPromptGuard(baseEnv, {
     launchCommand: launchCommandHint,
@@ -66,7 +74,7 @@ export function buildPtyHostEnv(
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
     piAgentKind === 'omp'
-      ? resolvePiAgentSourceDir(baseEnv, 'omp')
+      ? resolvePiAgentSourceDir(baseEnv, 'omp', launchCommandHint, opts.shellPath)
       : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
   const preexistingPrimeAgentDir =
     piAgentKind === 'prime-agent'
@@ -74,8 +82,23 @@ export function buildPtyHostEnv(
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
   if (opts.agentStatusHooksEnabled) {
+    if (opts.launchAgent === 'hermes' && !opts.isWsl) {
+      try {
+        const status = hermesHookService.install({
+          env: { ...baseEnv },
+          launchCommand: launchCommandHint
+        })
+        if (status.state === 'error') {
+          console.warn(`[agent-hooks] Hermes launch-scoped install failed: ${status.detail}`)
+        }
+      } catch (error) {
+        console.warn(
+          `[agent-hooks] Hermes launch-scoped install threw: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
-    Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+    Object.assign(baseEnv, agentOverlayRegistry.buildOpenCodeEnv(id, preexistingOpenCodeConfigDir))
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
       baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
@@ -88,7 +111,7 @@ export function buildPtyHostEnv(
     }
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
-      Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
+      Object.assign(baseEnv, agentOverlayRegistry.buildMimoCodeEnv(id, preexistingMimocodeHome))
       if (baseEnv.MIMOCODE_HOME) {
         baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
         if (preexistingMimocodeHome) {
@@ -120,7 +143,7 @@ export function buildPtyHostEnv(
     if (opts.isWsl === true) {
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
-      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath)
+      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, launchCommandHint)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
@@ -151,7 +174,7 @@ export function buildPtyHostEnv(
     // otherwise install only into an existing agent dir (or userData for OMP
     // status so a typed `omp` still gets the shell wrapper extension).
     if (piAgentKind === 'pi') {
-      const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
+      const piEnv = agentOverlayRegistry.buildPiEnv(id, preexistingPiAgentDir, 'pi', {
         materializeDefaultHome: explicitPiAgentKind === 'pi'
       })
       Object.assign(baseEnv, piEnv)
@@ -159,7 +182,7 @@ export function buildPtyHostEnv(
     }
 
     if (shouldPrepareOmpShadow) {
-      const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp', {
+      const ompEnv = agentOverlayRegistry.buildPiEnv(id, preexistingOmpAgentDir, 'omp', {
         materializeDefaultHome: explicitPiAgentKind === 'omp'
       })
       Object.assign(baseEnv, ompEnv)
@@ -167,7 +190,7 @@ export function buildPtyHostEnv(
     }
 
     if (piAgentKind === 'prime-agent' && !opts.isWsl) {
-      const primeEnv = piTitlebarExtensionService.buildPtyEnv(
+      const primeEnv = agentOverlayRegistry.buildPiEnv(
         id,
         preexistingPrimeAgentDir,
         'prime-agent',

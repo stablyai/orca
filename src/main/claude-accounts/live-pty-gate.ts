@@ -5,6 +5,14 @@ const liveClaudePtyIds = new Set<string>()
 // survived the app restart inside the daemon.
 const seededUnconfirmedPtyIds = new Set<string>()
 let switchInProgress = false
+export type ClaudeExecutionAccountBinding = {
+  /** Undefined means a restored live PTY has not yet been reattached and cannot be attributed. */
+  accountId?: string | null
+  runtime: 'host' | 'wsl'
+  wslDistro: string | null
+  configDir: string
+}
+const claudeExecutionBindings = new Map<string, ClaudeExecutionAccountBinding>()
 // Woken by endClaudeAuthSwitch so a caller past the point of no return can wait the
 // swap out instead of refusing. See whenClaudeAuthSwitchSettles.
 const switchSettledListeners = new Set<() => void>()
@@ -74,9 +82,12 @@ export function confirmSeededClaudeLivePtys(aliveSessionIds: readonly string[]):
   notifyDrainedOnTransition(hadLivePtys)
 }
 
-export function markClaudePtySpawned(ptyId: string): void {
+export function markClaudePtySpawned(ptyId: string, binding?: ClaudeExecutionAccountBinding): void {
   liveClaudePtyIds.add(ptyId)
   seededUnconfirmedPtyIds.delete(ptyId)
+  if (binding && !claudeExecutionBindings.has(ptyId)) {
+    claudeExecutionBindings.set(ptyId, Object.freeze({ ...binding }))
+  }
   persistence?.addClaudeLivePtySessionId(ptyId)
 }
 
@@ -84,6 +95,7 @@ export function markClaudePtyExited(ptyId: string): void {
   const hadLivePtys = liveClaudePtyIds.size > 0
   liveClaudePtyIds.delete(ptyId)
   seededUnconfirmedPtyIds.delete(ptyId)
+  claudeExecutionBindings.delete(ptyId)
   persistence?.removeClaudeLivePtySessionId(ptyId)
   notifyDrainedOnTransition(hadLivePtys)
 }
@@ -119,6 +131,14 @@ function structuredChildGateId(childKey: string): string {
 
 export function hasLiveClaudePtys(): boolean {
   return liveClaudePtyIds.size > 0
+}
+
+/** Snapshot immutable launch bindings; unbound restored PTYs are intentionally absent. */
+export function listClaudeExecutionAccountBindings(): readonly {
+  ptyId: string
+  binding: ClaudeExecutionAccountBinding
+}[] {
+  return [...claudeExecutionBindings].map(([ptyId, binding]) => ({ ptyId, binding }))
 }
 
 export function beginClaudeAuthSwitch(): void {

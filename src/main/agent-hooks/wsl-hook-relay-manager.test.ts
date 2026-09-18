@@ -20,7 +20,8 @@ import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-ho
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
 } from '../../shared/agent-hook-relay'
 
 type GuestHarness = {
@@ -300,6 +301,34 @@ describe('WslHookRelayManager', () => {
       claudeVersion: '2.1.261'
     })
     manager.disposeAll()
+  })
+
+  it('keeps launch-scoped Hermes profiles explicit across concurrent requests', async () => {
+    const requestSpy = vi.spyOn(SshChannelMultiplexer.prototype, 'request')
+    const { manager, deps } = createManager({
+      waitForSentinel: vi.fn(async () => guestTransport({ detectedAgents: ['hermes'] }))
+    })
+    manager.ensureForDistro('Ubuntu', undefined, 'hermes --profile alpha')
+    await vi.waitFor(() =>
+      expect(deps.installHooks).toHaveBeenCalledWith(
+        expect.anything(),
+        home,
+        expect.objectContaining({ agents: ['hermes'], profile: 'alpha' })
+      )
+    )
+
+    // A second launch updates the existing relay without consulting the
+    // mutable ~/.hermes/active_profile marker.
+    manager.ensureForDistro('Ubuntu', undefined, 'hermes --profile beta')
+    await vi.waitFor(() =>
+      expect(requestSpy).toHaveBeenCalledWith(
+        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+        expect.objectContaining({ agents: ['hermes'], profile: 'beta' })
+      )
+    )
+    expect(deps.installHooks).toHaveBeenCalledTimes(1)
+    manager.disposeAll()
+    requestSpy.mockRestore()
   })
 
   it('reinstalls into a newly resolved runtime home without restarting the relay', async () => {

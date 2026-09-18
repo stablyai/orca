@@ -5,6 +5,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
+import type { ClaudeAccountTransitionResult } from '../../../../shared/claude-account-transition'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -172,7 +173,22 @@ export function createClaudeAccountActionRunner(
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
-      const next = await operation()
+      const result = await operation()
+      const transition = isClaudeAccountTransitionResult(result) ? result : undefined
+      if (transition?.state === 'rolled_back') {
+        setClaudeAccounts(transition.accounts)
+        toast.error(
+          translate(
+            'auto.components.settings.AccountsPane.claudeAccountSwitchFailed',
+            'Claude account update failed; the previous selection was restored.'
+          ),
+          { description: transition.error }
+        )
+        return
+      }
+      const next: ClaudeRateLimitAccountsState = transition
+        ? transition.accounts
+        : requireClaudeRateLimitAccountsState(result)
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
@@ -197,6 +213,24 @@ export function createClaudeAccountActionRunner(
           }
         )
       }
+      if (transition?.restartRequired) {
+        toast.info(
+          translate(
+            'auto.components.settings.AccountsPane.claudeLiveExecutionBinding',
+            'Live Claude executions keep their launch account binding.'
+          ),
+          {
+            description: translate(
+              'auto.components.settings.AccountsPane.claudeLiveExecutionBindingDetail',
+              '{{value0}} live execution(s) require restart; {{value1}} execution(s) have unknown binding.',
+              {
+                value0: transition.boundLiveExecutionCount,
+                value1: transition.unknownLiveExecutionCount
+              }
+            )
+          }
+        )
+      }
     } catch (error) {
       if (isClaudeAccountCancellation(error)) {
         return
@@ -214,4 +248,25 @@ export function createClaudeAccountActionRunner(
       setClaudeAction('idle')
     }
   }
+}
+
+function isClaudeAccountTransitionResult(
+  value: ClaudeRateLimitAccountsState | ClaudeAccountTransitionResult
+): value is ClaudeAccountTransitionResult {
+  return typeof value === 'object' && value !== null && 'state' in value && 'effect' in value
+}
+
+function isClaudeRateLimitAccountsState(
+  value: ClaudeRateLimitAccountsState | ClaudeAccountTransitionResult
+): value is ClaudeRateLimitAccountsState {
+  return typeof value === 'object' && value !== null && 'activeAccountId' in value
+}
+
+function requireClaudeRateLimitAccountsState(
+  value: ClaudeRateLimitAccountsState | ClaudeAccountTransitionResult
+): ClaudeRateLimitAccountsState {
+  if (!isClaudeRateLimitAccountsState(value)) {
+    throw new Error('Invalid Claude account transition response')
+  }
+  return value
 }

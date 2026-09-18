@@ -2,7 +2,7 @@
 // Extracted from the manager so its state machine stays readable; the manager
 // decides what a dead link means (cooldown, restart), this module guarantees
 // it finds out exactly once, whichever signal fires first.
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { SpawnedProcessWithStreams } from '../../shared/child-process/process-spec'
 
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_NOTIFICATION_METHOD } from '../../shared/agent-hook-relay'
@@ -10,7 +10,7 @@ import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 
 export type WslRelayLinkOptions = {
   mux: SshChannelMultiplexer
-  child: ChildProcessWithoutNullStreams
+  child: SpawnedProcessWithStreams
   distro: string
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
   warn: (message: string) => void

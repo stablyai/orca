@@ -23,4 +23,9 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       return claudeAccounts.selectAccountForTarget(args.accountId, args)
     }
   )
+  ipcMain.handle(
+    'claudeAccounts:selectWithTransition',
+    (_event, args: { accountId: string | null } & ClaudeAccountSelectionTarget) =>
+      claudeAccounts.selectAccountWithTransition(args.accountId, args.runtime ? args : undefined)
+  )
 }

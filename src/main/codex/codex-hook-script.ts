@@ -3,7 +3,8 @@ import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookStdinDrainEpilogue,
+  POSIX_HOOK_BOUNDED_JSON_STDIN
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 
@@ -14,6 +15,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'setlocal',
       // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'echo {}',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
@@ -24,7 +26,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
-    ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_BOUNDED_JSON_STDIN),
     ...buildPosixHookSpoolLines('codex'),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
@@ -55,6 +57,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  spool_hook_event',
+    "  printf '{}\\n'",
     '  exit 0',
     'fi',
     'post_codex_hook() {',
@@ -72,18 +75,21 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  grep -qiE "microsoft|wsl" /proc/sys/kernel/osrelease /proc/version 2>/dev/null',
     '}',
     'if post_codex_hook curl >/dev/null 2>&1; then',
+    "  printf '{}\\n'",
     '  exit 0',
     'fi',
     'if is_wsl_runtime; then',
     '  windows_curl=$(command -v curl.exe 2>/dev/null || true)',
     '  if [ -n "$windows_curl" ] && [ -x "$windows_curl" ]; then',
     '    if post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1; then',
+    "      printf '{}\\n'",
     '      exit 0',
     '    fi',
     '    # post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',
     '  fi',
     'fi',
     'spool_hook_event',
+    "printf '{}\\n'",
     'exit 0',
     ''
   ].join('\n')

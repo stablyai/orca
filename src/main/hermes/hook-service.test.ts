@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { execFile, execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -8,6 +8,7 @@ import { parse } from 'yaml'
 
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { HermesHookService, _internals } from './hook-service'
+import { resolveHermesHomeForLaunch } from './hermes-home-filesystem'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 
@@ -28,6 +29,67 @@ describe('HermesHookService', () => {
       process.env.HERMES_HOME = previousHermesHome
     }
     rmSync(homeDir, { recursive: true, force: true })
+  })
+
+  it.each([
+    ['--profile coder', 'coder'],
+    ['-p coder', 'coder'],
+    ['--profile=coder', 'coder'],
+    ['hermes --continue --profile "review-team"', 'review-team']
+  ])('resolves an explicit Hermes profile from the launch command (%s)', (command, profile) => {
+    expect(resolveHermesHomeForLaunch({ HERMES_HOME: homeDir }, command)).toBe(
+      join(homeDir, 'profiles', profile)
+    )
+  })
+
+  it('uses the active profile when a launch has no explicit profile', () => {
+    writeFileSync(join(homeDir, 'active_profile'), 'coder\n', 'utf8')
+    expect(resolveHermesHomeForLaunch({ HERMES_HOME: homeDir }, 'hermes --tui')).toBe(
+      join(homeDir, 'profiles', 'coder')
+    )
+  })
+
+  it('installs into the selected profile and preserves user comments', () => {
+    const profileHome = join(homeDir, 'profiles', 'coder')
+    const configPath = join(profileHome, 'config.yaml')
+    mkdirSync(profileHome, { recursive: true })
+    writeFileSync(
+      configPath,
+      '# keep this profile comment\nmodel: test-model\nplugins:\n  # keep plugin notes\n  enabled: []\n',
+      'utf8'
+    )
+
+    const status = new HermesHookService().install({
+      env: { HERMES_HOME: homeDir },
+      launchCommand: 'hermes --profile coder --tui'
+    })
+
+    expect(status.state).toBe('installed')
+    const updated = readFileSync(configPath, 'utf8')
+    expect(updated).toContain('# keep this profile comment')
+    expect(updated).toContain('# keep plugin notes')
+    expect(updated).toContain(_internals.HERMES_PLUGIN_NAME)
+    expect(existsSync(join(homeDir, 'config.yaml'))).toBe(false)
+  })
+
+  it('keeps scoped lifecycle status and removal isolated across profiles', () => {
+    const service = new HermesHookService()
+    const coderScope = { env: { HERMES_HOME: homeDir }, launchCommand: 'hermes --profile coder' }
+    const reviewScope = {
+      env: { HERMES_HOME: homeDir },
+      launchCommand: 'hermes --profile review'
+    }
+
+    expect(service.install(coderScope).state).toBe('installed')
+    expect(service.install(reviewScope).state).toBe('installed')
+    expect(service.getStatus(coderScope).state).toBe('installed')
+    expect(service.getStatus(reviewScope).state).toBe('installed')
+
+    expect(service.remove(coderScope).state).toBe('not_installed')
+    expect(service.getStatus(reviewScope).state).toBe('installed')
+
+    service.remove()
+    expect(service.getStatus(reviewScope).state).toBe('not_installed')
   })
 
   it('installs the managed Hermes plugin and enables it in config.yaml', () => {

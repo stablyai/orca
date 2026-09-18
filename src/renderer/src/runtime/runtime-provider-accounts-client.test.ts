@@ -8,6 +8,7 @@ import {
   removeClaudeProviderAccount,
   removeCodexProviderAccount,
   selectClaudeProviderAccount,
+  selectClaudeProviderAccountWithTransition,
   selectCodexProviderAccount,
   watchProviderAccounts,
   type ProviderAccountsSnapshot
@@ -55,6 +56,7 @@ const runtimeEnvironmentSubscribe = vi.fn()
 const claudeListLocal = vi.fn()
 const codexListLocal = vi.fn()
 const claudeSelectLocal = vi.fn()
+const claudeSelectTransitionLocal = vi.fn()
 const codexSelectLocal = vi.fn()
 const claudeRemoveLocal = vi.fn()
 const codexRemoveLocal = vi.fn()
@@ -100,6 +102,7 @@ beforeEach(() => {
       claudeAccounts: {
         list: claudeListLocal,
         select: claudeSelectLocal,
+        selectWithTransition: claudeSelectTransitionLocal,
         remove: claudeRemoveLocal
       },
       codexAccounts: {
@@ -422,6 +425,44 @@ describe('provider account mutations', () => {
       wslDistro: null
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('returns the transition contract for local and remote owners', async () => {
+    const transition = {
+      state: 'succeeded' as const,
+      accountId: 'acc-1',
+      previousAccountId: null,
+      accounts: emptyClaudeState(),
+      effect: 'future_launches_only' as const,
+      restartRequired: true,
+      boundLiveExecutionCount: 1,
+      unknownLiveExecutionCount: 0
+    }
+    claudeSelectTransitionLocal.mockResolvedValue(transition)
+    await expect(
+      selectClaudeProviderAccountWithTransition(LOCAL, {
+        accountId: 'acc-1',
+        runtime: 'host',
+        wslDistro: null
+      })
+    ).resolves.toEqual(transition)
+    expect(claudeSelectTransitionLocal).toHaveBeenCalledWith({
+      accountId: 'acc-1',
+      runtime: 'host',
+      wslDistro: null
+    })
+
+    runtimeEnvironmentCall.mockReturnValue({ id: 'transition', ok: true, result: transition })
+    await expect(
+      selectClaudeProviderAccountWithTransition(REMOTE, {
+        accountId: 'acc-1',
+        runtime: 'host',
+        wslDistro: null
+      })
+    ).resolves.toEqual(transition)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'accounts.selectClaudeWithTransition' })
+    )
   })
 
   it('routes select and remove through the active runtime accounts RPC when remote', async () => {

@@ -2,7 +2,7 @@
 // stdout until the READY sentinel, then hand the remaining stdio over as a
 // MultiplexerTransport. WSL twin of the SSH deploy's waitForSentinel, over a
 // ChildProcess instead of a ClientChannel.
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { SpawnedProcessWithStreams } from '../../shared/child-process/process-spec'
 
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
@@ -26,7 +26,7 @@ export type WslRelayStartupFailure = {
  *  remaining stdio over as a MultiplexerTransport. WSL twin of the SSH
  *  deploy's waitForSentinel, over a ChildProcess instead of a ClientChannel. */
 export function waitForWslRelaySentinel(
-  child: ChildProcessWithoutNullStreams
+  child: SpawnedProcessWithStreams
 ): Promise<MultiplexerTransport> {
   return new Promise((resolve, reject) => {
     let settled = false

@@ -24,6 +24,13 @@ export const loginPreflightExecFileMock: Mock = vi.fn()
 export const spawnMock: Mock = vi.fn()
 export const openCodeBuildPtyEnvMock: Mock = vi.fn()
 export const mimoCodeBuildPtyEnvMock: Mock = vi.fn()
+export const hermesInstallMock: Mock = vi.fn(() => ({
+  agent: 'hermes',
+  state: 'installed',
+  configPath: '/tmp/.hermes/config.yaml',
+  managedHooksPresent: true,
+  detail: null
+}))
 export const isPwshAvailableMock: Mock = vi.fn()
 export const wslUncDirectoryExistsAsyncMock: Mock = vi.fn()
 export const openCodeClearPtyMock: Mock = vi.fn()
@@ -114,6 +121,12 @@ export const openCodeHookServiceModuleMock = () => ({
 export const mimoHookServiceModuleMock = () => ({
   mimoCodeHookService: {
     buildPtyEnv: mimoCodeBuildPtyEnvMock
+  }
+})
+
+export const hermesHookServiceModuleMock = () => ({
+  hermesHookService: {
+    install: hermesInstallMock
   }
 })
 

@@ -3,6 +3,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../shared/managed-account-types'
+import type { ClaudeAccountTransitionResult } from '../../../shared/claude-account-transition'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
@@ -251,6 +252,24 @@ export async function selectClaudeProviderAccount(
     )
   }
   return window.api.claudeAccounts.select(selection)
+}
+
+/** Selects only the default for future launches and returns immutable live-
+ * execution binding evidence for the UI. */
+export async function selectClaudeProviderAccountWithTransition(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  selection: ProviderAccountSelection
+): Promise<ClaudeAccountTransitionResult> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<ClaudeAccountTransitionResult>(
+      target,
+      'accounts.selectClaudeWithTransition',
+      { accountId: selection.accountId },
+      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
+    )
+  }
+  return window.api.claudeAccounts.selectWithTransition(selection)
 }
 
 export async function selectCodexProviderAccount(

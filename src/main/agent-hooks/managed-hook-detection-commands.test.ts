@@ -30,4 +30,10 @@ describe('managed hook detection commands', () => {
     })
     expect(commands.find((command) => command.id === 'codex')?.reportVersion).toBeUndefined()
   })
+
+  it('uses the vendor executable while retaining the canonical aug target id', () => {
+    const commands = buildManagedHookDetectionCommands(null, 'linux')
+    expect(commands).toContainEqual({ id: 'aug', cmd: 'auggie' })
+    expect(detectedManagedHookAgents(['aug'])).toEqual(['aug'])
+  })
 })

@@ -11,7 +11,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   fetchProviderAccountsSnapshot,
-  selectClaudeProviderAccount
+  selectClaudeProviderAccountWithTransition
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
 import {
@@ -139,11 +139,16 @@ export function ClaudeSwitcherMenu({
     }
     setIsSwitching(true)
     try {
-      const next = await selectClaudeProviderAccount(settings, {
+      const transition = await selectClaudeProviderAccountWithTransition(settings, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
       })
+      if (transition.state === 'rolled_back') {
+        console.error('Claude account switch rolled back:', transition.error)
+        return
+      }
+      const next = transition.accounts
       recordFeatureInteraction('claude-account-switching')
       if (mountedRef.current) {
         setAccounts(next)

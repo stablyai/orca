@@ -19,6 +19,7 @@ export type ManagedHookRuntime = {
     hostKeyFingerprint?: string
     agents?: readonly AgentHookTarget[]
     claudeVersion?: string
+    profile?: string
   }) => Promise<ManagedHookInstallSummary>
 }
 
@@ -51,6 +52,12 @@ function readClaudeVersion(params: unknown): string | undefined {
   return parseClaudeCliVersion(typeof raw === 'string' ? raw : null) ?? undefined
 }
 
+function readProfile(params: unknown): string | undefined {
+  const raw =
+    params !== null && typeof params === 'object' && 'profile' in params ? params.profile : null
+  return typeof raw === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(raw) ? raw : undefined
+}
+
 let managedHookRuntime: ManagedHookRuntime | null = null
 
 function loadManagedHookRuntime(): ManagedHookRuntime {
@@ -73,11 +80,13 @@ export function registerManagedHookInstaller(
       const hostKeyFingerprint = readHostKeyFingerprint(params)
       const agents = readAgents(params)
       const claudeVersion = readClaudeVersion(params)
+      const profile = readProfile(params)
       return await loadRuntime().installManagedHooks({
         signal: context.signal,
         ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
         agents,
-        ...(claudeVersion ? { claudeVersion } : {})
+        ...(claudeVersion ? { claudeVersion } : {}),
+        ...(profile ? { profile } : {})
       })
     }
   )

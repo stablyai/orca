@@ -199,6 +199,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'auggie': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'antigravity': {
       const id = readSessionId(payload, ['conversationId'])
       return id ? { key: 'conversation_id', id } : null

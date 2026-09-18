@@ -23,12 +23,14 @@ import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 type FakeIncomingMessage = EventEmitter & {
   headers: IncomingHttpHeaders
   destroy: ReturnType<typeof vi.fn>
+  pause: ReturnType<typeof vi.fn>
 }
 
 function createReadableRequest(headers: IncomingHttpHeaders = {}): FakeIncomingMessage {
   const req = new EventEmitter() as FakeIncomingMessage
   req.headers = headers
   req.destroy = vi.fn(() => req.emit('close'))
+  req.pause = vi.fn()
   return req
 }
 
@@ -144,7 +146,7 @@ describe('shared agent-hook-listener', () => {
     req.emit('data', Buffer.alloc(HOOK_REQUEST_MAX_BYTES + 1))
 
     await expect(body).rejects.toThrow('payload too large')
-    expect(req.destroy).toHaveBeenCalledTimes(1)
+    expect(req.pause).toHaveBeenCalledTimes(1)
     expectRequestParserListenersReleased(req)
   })
 

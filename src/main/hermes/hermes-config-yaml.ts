@@ -1,10 +1,12 @@
-import { parse, stringify } from 'yaml'
+import { parse, parseDocument, stringify, YAMLMap } from 'yaml'
 
 import { HERMES_PLUGIN_NAME } from './hermes-managed-plugin-source'
 
 export type HermesConfig = Record<string, unknown>
 
-export type ConfigParseResult = { ok: true; config: HermesConfig } | { ok: false; detail: string }
+export type ConfigParseResult =
+  | { ok: true; config: HermesConfig; source?: string }
+  | { ok: false; detail: string }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -41,7 +43,49 @@ export function parseHermesConfig(content: string | null): ConfigParseResult {
   }
 }
 
-export function serializeHermesConfig(config: HermesConfig): string {
+export function serializeHermesConfig(config: HermesConfig, source?: string): string {
+  if (source !== undefined && source.trim().length > 0) {
+    try {
+      const document = parseDocument(source)
+      if (document.errors.length === 0) {
+        const original = document.toJS()
+        if (isRecord(original)) {
+          for (const [key, value] of Object.entries(config)) {
+            // Mutate an existing mapping in place so comments attached to
+            // nested pairs survive the managed update.
+            if (key === 'plugins' && isRecord(value)) {
+              const pluginsNode = document.get(key, true)
+              if (pluginsNode instanceof YAMLMap) {
+                for (const [pluginKey, pluginValue] of Object.entries(value)) {
+                  pluginsNode.set(pluginKey, pluginValue)
+                }
+                const pluginKeysToRemove = pluginsNode.items
+                  .map((pair) => pair.key)
+                  .filter(
+                    (pairKey): pairKey is string =>
+                      typeof pairKey === 'string' && !(pairKey in value)
+                  )
+                for (const pairKey of pluginKeysToRemove) {
+                  pluginsNode.delete(pairKey)
+                }
+                continue
+              }
+            }
+            document.set(key, value)
+          }
+          for (const key of Object.keys(original)) {
+            if (!(key in config)) {
+              document.delete(key)
+            }
+          }
+          return document.toString()
+        }
+      }
+    } catch {
+      // Fall back to a canonical serialization below. Parsing already
+      // succeeded for the normal write path, so this is defensive only.
+    }
+  }
   return `${stringify(config, { lineWidth: 0 }).trimEnd()}\n`
 }
 
@@ -85,7 +129,7 @@ export function updateConfigContent(
   if (!parsed.ok) {
     return { content: null, detail: parsed.detail }
   }
-  return { content: serializeHermesConfig(updater(parsed.config)) }
+  return { content: serializeHermesConfig(updater(parsed.config), content ?? undefined) }
 }
 
 export function getConfigEnablement(config: HermesConfig): {

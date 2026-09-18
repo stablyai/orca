@@ -555,6 +555,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.removeClaude': RemoveAccountParams,
   'accounts.removeCodex': RemoveAccountParams,
   'accounts.selectClaude': SelectAccountParams,
+  'accounts.selectClaudeWithTransition': SelectAccountParams,
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.subscribe': null,

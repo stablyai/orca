@@ -6,7 +6,11 @@ import {
   parseClaudeStatusLineBody
 } from '../../../shared/claude-statusline-rate-limits'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
-import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
+import {
+  isAgentHookRequestTooLargeError,
+  readRequestBody,
+  respondWithAgentHookRequestTooLarge
+} from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/listener-limits'
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
@@ -14,6 +18,7 @@ import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hoo
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
+import { recordIntegrationDelivery } from '../integration-health-receipts'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
   /** Start the loopback listener after hydration and spool replay have settled. */
@@ -121,9 +126,29 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
             this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
           }
         }
+        // Why after the status block: a delivery receipt is diagnostics and must not sit in
+        // front of ingestion. The endpoint dir is null until setup and again after stop();
+        // the receipt owns that check so no call site can throw an event away.
+        if (normalized.event) {
+          recordIntegrationDelivery({
+            source,
+            body: aliasedBody,
+            executionId: normalized.event.launchToken,
+            paneKey: normalized.event.paneKey,
+            host: this.env === 'remote' ? 'remote' : 'local',
+            healthDir: this.endpointDir
+          })
+        }
         res.writeHead(204)
         res.end()
       } catch (error) {
+        if (isAgentHookRequestTooLargeError(error)) {
+          // Return an explicit bounded-transport classification while keeping
+          // the hook fail-open for the agent. Destroy only after the response
+          // is flushed so callers can observe 413 instead of ECONNRESET.
+          respondWithAgentHookRequestTooLarge(res, req)
+          return
+        }
         // Why (#11217): an authenticated POST whose body dies short of its own Content-Length was cut
         // by something on the loopback path, not by a bad payload. Fail open as before, but count it —
         // this is the one failure mode that silently stops status for every runtime at once.

@@ -21,6 +21,8 @@ import { getStatusPluginDeliverySource } from './status-plugin-delivery-source'
 import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source'
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
+import { createIntegrationHealthStore } from '../agent-hooks/integration-health'
+import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
@@ -83,6 +85,7 @@ export class OpenCodeHookService {
       if (!configDir) {
         return {}
       }
+      this.recordPluginArtifact(configDir)
       return { OPENCODE_CONFIG_DIR: configDir }
     }
 
@@ -102,7 +105,26 @@ export class OpenCodeHookService {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
+    this.recordPluginArtifact(overlayDir)
     return { OPENCODE_CONFIG_DIR: overlayDir }
+  }
+
+  // Why: artifact bookkeeping is diagnostics — a failed health write must never cost the
+  // user the overlay that carries the status plugin, which is the outage this file prevents.
+  private recordPluginArtifact(scope: string): void {
+    try {
+      createIntegrationHealthStore(
+        join(getAppEnvironment().getPath('userData'), 'agent-hooks', 'integration-health.json')
+      ).recordArtifact({
+        integration: 'opencode',
+        host: 'local',
+        scope,
+        bytes: getOpenCodePluginSource(),
+        version: ORCA_HOOK_PROTOCOL_VERSION
+      })
+    } catch {
+      // Intentionally swallowed: the launch environment must not depend on a health write.
+    }
   }
 
   private getOverlayRoot(): string {

@@ -24,6 +24,24 @@ vi.mock('../claude/claude-session-end-hook-capability', () => ({
 }))
 
 vi.mock('./managed-agent-hook-registry', () => ({
+  MANAGED_AGENT_INTEGRATIONS: [
+    {
+      agent: 'claude',
+      install: mocks.installClaude,
+      refreshManagedScripts: mocks.refreshClaude,
+      remove: mocks.removeClaude,
+      removeAsync: mocks.removeClaudeAsync,
+      getStatus: mocks.statusClaude
+    },
+    {
+      agent: 'codex',
+      install: mocks.installCodex,
+      refreshManagedScripts: mocks.refreshCodex,
+      remove: mocks.removeCodex,
+      removeAsync: mocks.removeCodexAsync,
+      getStatus: mocks.statusCodex
+    }
+  ],
   MANAGED_AGENT_HOOK_INSTALLERS: [
     ['claude', mocks.installClaude],
     ['codex', mocks.installCodex]
@@ -176,6 +194,24 @@ describe('managed agent hook controls', () => {
 
     expect(mocks.probeClaudeVersion).toHaveBeenCalledWith('/opt/bin/claude')
     expect(mocks.installClaude).toHaveBeenCalledWith({ cliVersion: '2.1.261' })
+  })
+
+  it('forwards launch scope to profile-aware integrations', async () => {
+    mocks.detect.mockResolvedValue({ claude: { state: 'found' } })
+
+    await installManagedAgentHooks(
+      { agentCmdOverrides: {} },
+      {
+        agents: ['claude'],
+        env: { HERMES_HOME: '/tmp/hermes' },
+        launchCommand: 'hermes --profile review-team'
+      }
+    )
+
+    expect(mocks.installClaude).toHaveBeenCalledWith({
+      env: { HERMES_HOME: '/tmp/hermes' },
+      launchCommand: 'hermes --profile review-team'
+    })
   })
 
   it('only refreshes scripts for the selected agents', async () => {

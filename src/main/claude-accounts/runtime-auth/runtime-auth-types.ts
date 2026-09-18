@@ -2,6 +2,9 @@ import type { ClaudeManagedAccount } from '../../../shared/managed-account-types
 import type { ClaudeEnvPatch } from '../environment'
 
 export type ClaudeRuntimeAuthPreparation = {
+  /** Account selected when this execution was prepared; immutable once spawned. */
+  /** Present for account-bound launches; omitted by legacy callers. */
+  accountId?: string | null
   configDir: string
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null

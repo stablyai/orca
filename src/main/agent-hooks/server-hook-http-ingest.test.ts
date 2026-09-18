@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { HOOK_REQUEST_MAX_BYTES } from '../../shared/agent-hook-listener/request-body'
 import { buildBody, PANE, LEAF_2, LEAF_3 } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -44,6 +45,30 @@ async function postClaudeHook(
 }
 
 describe('AgentHookServer listener replay', () => {
+  it('classifies oversized authenticated hook bodies with 413', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify({ value: 'x'.repeat(HOOK_REQUEST_MAX_BYTES + 1) })
+      })
+
+      expect(response.status).toBe(413)
+      await expect(response.json()).resolves.toEqual({
+        error: 'hook_request_too_large',
+        maxBytes: HOOK_REQUEST_MAX_BYTES
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('accepts raw JSON hook bodies with base64 metadata headers', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

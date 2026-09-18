@@ -91,7 +91,21 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
     failedProviders: []
   })),
   selectCodexProviderAccount: vi.fn(async () => codexSnapshot(null)),
-  selectClaudeProviderAccount: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+  selectClaudeProviderAccount: vi.fn(async () => ({ accounts: [], activeAccountId: null })),
+  selectClaudeProviderAccountWithTransition: vi.fn(async () => ({
+    state: 'succeeded',
+    accountId: null,
+    previousAccountId: null,
+    accounts: {
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    },
+    effect: 'future_launches_only',
+    restartRequired: false,
+    boundLiveExecutionCount: 0,
+    unknownLiveExecutionCount: 0
+  }))
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({

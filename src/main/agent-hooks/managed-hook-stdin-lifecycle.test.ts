@@ -66,6 +66,7 @@ import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
   POSIX_HOOK_JSON_STDIN_PRELUDE,
   POSIX_HOOK_JSON_STDIN_READER,
+  POSIX_HOOK_BOUNDED_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -565,14 +566,18 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     for (const [agent, script] of scripts) {
       const captureIndex = Math.max(
         script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`),
+        script.indexOf(`payload=$(${POSIX_HOOK_BOUNDED_JSON_STDIN_READER})`)
       )
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
       // Why: the JSON reader dereferences a variable the prelude sets, so a script
       // that carries the reader must carry its prelude above the capture line.
-      if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
+      if (
+        script.includes(POSIX_HOOK_JSON_STDIN_READER) ||
+        script.includes(POSIX_HOOK_BOUNDED_JSON_STDIN_READER)
+      ) {
         const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
         expect(script.indexOf(prelude), `${agent} JSON reader prelude`).toBeGreaterThanOrEqual(0)
         expect(script.indexOf(prelude), `${agent} prelude before capture`).toBeLessThan(

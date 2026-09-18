@@ -1389,7 +1389,12 @@ export class SshRelaySession {
           commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
         })
       )
-      const agents = detected.agents
+      // A newer client may detect an additive target (for example Auggie)
+      // while connected to an older relay. Send it only when the relay
+      // advertises the target capability; legacy relays omit this field.
+      const agents = detected.agents.filter(
+        (agent) => agent !== 'aug' || detected.managedHookTargets?.includes(agent) === true
+      )
       if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
         return
       }

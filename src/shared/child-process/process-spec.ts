@@ -1,11 +1,19 @@
 // The public contract for Orca's single child-process entry point. Split from
 // run-process.ts so the runner stays under its line cap; import the runtime
 // functions from run-process, which re-exports everything here.
-import type { ChildProcess, SpawnOptions as NodeSpawnOptions } from 'node:child_process'
+import type {
+  ChildProcess,
+  ChildProcessWithoutNullStreams,
+  SpawnOptions as NodeSpawnOptions
+} from 'node:child_process'
 
 export type ChildProcessHandle = ChildProcess
 
 export type SpawnedProcess = ChildProcess
+
+// Why: `spawnProcess` returns this, so the owner publishes it — otherwise every caller
+// that merely names the handle has to import node:child_process and trip the guard test.
+export type SpawnedProcessWithStreams = ChildProcessWithoutNullStreams
 
 /**
  * The single place Orca starts a child process.

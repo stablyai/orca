@@ -2,6 +2,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
+import type { ClaudeAccountTransitionResult } from '../../shared/claude-account-transition'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
 
@@ -56,6 +57,11 @@ export type ClaudeAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+  selectWithTransition: (args: {
+    accountId: string | null
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<ClaudeAccountTransitionResult>
 }
 
 export type GrokAccountsApi = {

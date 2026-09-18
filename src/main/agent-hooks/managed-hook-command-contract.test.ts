@@ -135,6 +135,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       remote: (path) => [getDevinRemoteManagedCommand(path)]
     }
   ],
+  ['aug', standardCommands],
   [
     'kimi',
     {

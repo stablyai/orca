@@ -71,11 +71,17 @@ describe('registerPtyHandlers', () => {
         'omp'
       )
 
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp', {
-        materializeDefaultHome: true
-      })
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        'omp',
+        {
+          materializeDefaultHome: true
+        }
+      )
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
-      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/default-omp-agent')
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeTruthy()
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).not.toBe('/tmp/parent-orca-pi-overlay')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })

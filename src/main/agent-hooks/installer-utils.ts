@@ -161,12 +161,13 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
  */
 export function buildWindowsAgentHookPostCommand(
   source: AgentHookSource,
-  extraFormLines: readonly string[] = []
+  extraFormLines: readonly string[] = [],
+  hookPathname = `/hook/${source}`
 ): string {
   // Why: PowerShell startup makes inline per-turn Codex hooks visibly slow, so mirror the POSIX curl path.
   // Why: fully-qualify curl so a repo-local curl.exe can't hijack hook payloads.
   return [
-    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%${hookPathname}" ^`,
     '  --connect-timeout 0.5 --max-time 1.5 ^',
     '  -H "Content-Type: application/x-www-form-urlencoded" ^',
     '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',

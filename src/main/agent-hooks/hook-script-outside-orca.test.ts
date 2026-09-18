@@ -7,7 +7,8 @@ import { _internals as codexInternals } from '../codex/hook-service'
 import { buildPosixHookSpoolLines } from './hook-stdin-contract'
 
 /** Managed hooks are installed into the user's agent config, so they also run when the
- *  agent is launched from a plain terminal. There they must be inert and silent. */
+ *  agent is launched from a plain terminal. There they must be inert and return the
+ *  vendor-required neutral JSON response without creating Orca state. */
 function runHook(dir: string, extraEnv: NodeJS.ProcessEnv = {}) {
   const script = join(dir, 'codex-hook.sh')
   writeFileSync(script, codexInternals.getManagedScript('posix'))
@@ -31,7 +32,7 @@ describe('managed hook outside an Orca terminal', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-'))
     const res = runHook(dir)
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
   })
@@ -40,7 +41,7 @@ describe('managed hook outside an Orca terminal', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-partial-'))
     const res = runHook(dir, { ORCA_PANE_KEY: 'tab:0', ORCA_TAB_ID: 'tab' })
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
   })
@@ -52,7 +53,7 @@ describe('managed hook outside an Orca terminal', () => {
       ORCA_PANE_KEY: 'tab:0'
     })
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     // a stale env var must not create a spool tree for an Orca that is not installed here
     expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
@@ -64,7 +65,7 @@ describe('managed hook outside an Orca terminal', () => {
     writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
     const res = runHook(dir, { ORCA_AGENT_HOOK_ENDPOINT: endpoint })
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env'])
   })

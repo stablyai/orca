@@ -27,6 +27,7 @@ type GuestInstallState = {
   codexHomePath?: string
   opencodeOverlayDir?: string
   lastInstallAt?: number
+  hermesProfile?: string
 }
 
 export async function runWslRelayGuestInstall(
@@ -44,7 +45,8 @@ export async function runWslRelayGuestInstall(
     installHooks: deps.installHooks,
     installCodex: deps.installCodex,
     settings: deps.managedHookSettings(),
-    warn: deps.warn
+    warn: deps.warn,
+    profile: state.hermesProfile
   })
   // Why: ship OpenCode's status plugin and record the guest overlay dir the
   // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.

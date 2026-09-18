@@ -14,5 +14,10 @@ export const claudeAccountsApi = {
     accountId: string | null
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
-  }) => ipcRenderer.invoke('claudeAccounts:select', args)
+  }) => ipcRenderer.invoke('claudeAccounts:select', args),
+  selectWithTransition: (args: {
+    accountId: string | null
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => ipcRenderer.invoke('claudeAccounts:selectWithTransition', args)
 } satisfies PreloadApi['claudeAccounts']

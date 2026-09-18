@@ -485,4 +485,86 @@ describe('ClaudeAccountService credential capture', () => {
       wslDistro: 'Ubuntu'
     })
   })
+
+  it('returns immutable execution binding evidence and rolls selection back on failure', async () => {
+    setPlatform('linux')
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
+    rmSync(tempDir, { recursive: true, force: true })
+    const firstAuthPath = join(tempDir, 'claude-accounts', 'first', 'auth')
+    const secondAuthPath = join(tempDir, 'claude-accounts', 'second', 'auth')
+    mkdirSync(firstAuthPath, { recursive: true })
+    mkdirSync(secondAuthPath, { recursive: true })
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'first',
+          email: 'first@example.com',
+          managedAuthPath: firstAuthPath,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'second',
+          email: 'second@example.com',
+          managedAuthPath: secondAuthPath,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'first',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'first', wsl: {} }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { markClaudePtySpawned, markClaudePtyExited } = await import('./live-pty-gate')
+    const liveId = 'transition-live-binding'
+    markClaudePtySpawned(liveId, {
+      accountId: 'first',
+      runtime: 'host',
+      wslDistro: null,
+      configDir: firstAuthPath
+    })
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeAuth as never
+      )
+      const result = await service.selectAccountWithTransition('second', { runtime: 'host' })
+      expect(result).toMatchObject({
+        state: 'succeeded',
+        effect: 'future_launches_only',
+        restartRequired: true,
+        boundLiveExecutionCount: 1
+      })
+
+      rateLimits.refreshForClaudeAccountChange.mockRejectedValueOnce(new Error('sync failed'))
+      const rolledBack = await service.selectAccountWithTransition('first', { runtime: 'host' })
+      expect(rolledBack).toMatchObject({ state: 'rolled_back', error: 'sync failed' })
+      expect(settings.activeClaudeManagedAccountId).toBe('second')
+    } finally {
+      markClaudePtyExited(liveId)
+    }
+  })
 })

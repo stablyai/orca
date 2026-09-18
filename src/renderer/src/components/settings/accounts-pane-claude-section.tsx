@@ -1,6 +1,6 @@
 import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
+import { selectClaudeProviderAccountWithTransition } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -122,7 +122,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             type="button"
             onClick={() =>
               void runClaudeAccountAction('select:system', () =>
-                selectClaudeProviderAccount(settings, {
+                selectClaudeProviderAccountWithTransition(settings, {
                   accountId: null,
                   runtime: accountRuntime.runtime,
                   wslDistro: accountRuntime.wslDistro
@@ -201,7 +201,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                         void runClaudeAccountAction(
                           `select:${account.id}`,
                           () =>
-                            selectClaudeProviderAccount(settings, {
+                            selectClaudeProviderAccountWithTransition(settings, {
                               accountId: account.id,
                               ...accountRuntimeView
                             }),

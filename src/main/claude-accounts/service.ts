@@ -21,6 +21,7 @@ import {
 } from './claude-managed-auth-storage'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+import type { ClaudeAccountSwitchResult } from './claude-account-selection'
 
 export type ClaudeAccountAddTarget = {
   runtime?: 'host' | 'wsl'
@@ -108,6 +109,13 @@ export class ClaudeAccountService {
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId, target))
+  }
+
+  async selectAccountWithTransition(
+    accountId: string | null,
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeAccountSwitchResult> {
+    return this.serializeMutation(() => this.selection.selectWithTransition(accountId, target))
   }
 
   cancelPendingLogin(): boolean {

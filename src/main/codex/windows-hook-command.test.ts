@@ -111,7 +111,10 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
               .map((payload) => invoke(getManagedCommand(scriptPath), payload))
           )
           for (const result of results) {
-            expect(result).toMatchObject({ code: 0, stdout: '', stderr: '', timedOut: false })
+            expect(result).toMatchObject({ code: 0, stderr: '', timedOut: false })
+            // Why: the managed script answers Codex with a neutral JSON object, the same
+            // contract the POSIX runner emits; cmd's echo appends CRLF.
+            expect(result.stdout.trim()).toBe('{}')
           }
         }
         expect(posts).toHaveLength(CODEX_EVENTS.length)
@@ -122,12 +125,10 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
           expect(post.get('worktreeId')).toBe(env.ORCA_WORKTREE_ID)
         }
         await new Promise<void>((resolve) => server.close(() => resolve()))
-        expect(await invoke(getManagedCommand(scriptPath), payloads[0])).toMatchObject({
-          code: 0,
-          stdout: '',
-          stderr: '',
-          timedOut: false
-        })
+        const afterServerClosed = await invoke(getManagedCommand(scriptPath), payloads[0])
+        expect(afterServerClosed).toMatchObject({ code: 0, stderr: '', timedOut: false })
+        // The script still runs with Orca context, so it still answers with neutral JSON.
+        expect(afterServerClosed.stdout.trim()).toBe('{}')
         rmSync(scriptPath)
         expect(await invoke(getManagedCommand(scriptPath), payloads[0])).toMatchObject({
           code: 0,

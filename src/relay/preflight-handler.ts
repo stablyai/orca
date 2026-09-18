@@ -4,11 +4,10 @@ import { promisify } from 'node:util'
 import path, { win32 } from 'node:path'
 import type { RelayDispatcher } from './dispatcher'
 import { buildRelayCommandEnv } from './relay-command-env'
-import { isPwshAvailableAsync } from '../main/pwsh'
-import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
-import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 import { runProcess } from '../shared/child-process/run-process'
+import { AGENT_HOOK_TARGETS } from '../shared/agent-hook-types'
+import { detectWindowsTerminalCapabilities } from './preflight-windows-capabilities'
 
 const execFileAsync = promisify(execFile)
 
@@ -49,16 +48,15 @@ export class PreflightHandler {
   private registerHandlers(): void {
     this.dispatcher.onRequest('preflight.detectAgents', (p) => this.detectAgents(p))
     this.dispatcher.onRequest('preflight.detectWindowsTerminalCapabilities', () =>
-      this.detectWindowsTerminalCapabilities()
+      detectWindowsTerminalCapabilities()
     )
   }
 
-  // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
-  // on the relay side. This keeps the relay bundle minimal and makes the protocol
-  // self-describing — the relay doesn't need to know the agent catalog.
+  // The client sends commands so the relay bundle stays self-describing.
   private async detectAgents(params: Record<string, unknown>): Promise<{
     agents: string[]
     versions?: Record<string, string>
+    managedHookTargets?: readonly string[]
   }> {
     const commands = params.commands as AgentDetectionCommand[]
     if (!Array.isArray(commands)) {
@@ -108,36 +106,14 @@ export class PreflightHandler {
 
     return {
       agents: [...new Set(detectedCommands.map(({ id }) => id))],
+      ...(commands.some((command) => command.id === 'aug')
+        ? { managedHookTargets: [...AGENT_HOOK_TARGETS] }
+        : {}),
       ...(Object.keys(versions).length > 0 ? { versions } : {})
     }
   }
 
-  private async detectWindowsTerminalCapabilities(): Promise<{
-    wslAvailable: boolean
-    wslDistros: string[]
-    pwshAvailable: boolean
-    gitBashAvailable: boolean
-    hostPlatform: NodeJS.Platform | null
-  }> {
-    const [wslAvailable, pwshAvailable, gitBashAvailable] = await Promise.all([
-      isWslAvailableAsync().catch(() => false),
-      isPwshAvailableAsync().catch(() => false),
-      Promise.resolve(isGitBashAvailable()).catch(() => false)
-    ])
-    const wslDistros = wslAvailable ? await listWslDistrosAsync().catch(() => []) : []
-    return {
-      wslAvailable,
-      wslDistros,
-      pwshAvailable,
-      gitBashAvailable,
-      hostPlatform: process.platform
-    }
-  }
-
-  // Why: SSH exec channels give the relay a minimal environment without shell
-  // startup files sourced. Ask the user's configured shell so agent dirs added
-  // by zsh/bash/fish startup hooks match the remote terminal experience.
-  // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
+  // Resolve through the configured shell so startup-defined agent paths match the terminal.
 }
 
 async function probeCommandVersion(executablePath: string): Promise<string | null> {

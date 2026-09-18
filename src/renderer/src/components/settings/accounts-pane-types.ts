@@ -4,6 +4,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
+import type { ClaudeAccountTransitionResult } from '../../../../shared/claude-account-transition'
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget
@@ -55,7 +56,7 @@ export type CodexAccountActionRunner = (
 
 export type ClaudeAccountActionRunner = (
   action: ClaudeAccountAction,
-  operation: () => Promise<ClaudeRateLimitAccountsState>,
+  operation: () => Promise<ClaudeRateLimitAccountsState | ClaudeAccountTransitionResult>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
 

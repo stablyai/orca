@@ -349,6 +349,32 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('classifies oversized authenticated hook bodies with 413', async () => {
+    const forward = vi.fn()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({ value: 'x'.repeat(HOOK_REQUEST_MAX_BYTES + 1) })
+      })
+
+      expect(response.status).toBe(413)
+      await expect(response.json()).resolves.toEqual({
+        error: 'hook_request_too_large',
+        maxBytes: HOOK_REQUEST_MAX_BYTES
+      })
+      expect(forward).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('replays cached payloads on demand', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

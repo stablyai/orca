@@ -69,6 +69,7 @@ export function configureLocalPtyProvider(args: {
         }),
         launchCommand: ctx?.command,
         launchAgent: ctx?.launchAgent,
+        shellPath: ctx?.shellPath,
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),

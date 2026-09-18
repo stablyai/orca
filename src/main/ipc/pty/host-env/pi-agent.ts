@@ -7,6 +7,8 @@ import {
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS } from './spawn-env-keys'
 
@@ -19,10 +21,32 @@ export function readEnvWithProcessFallback(
 
 export function resolvePiAgentSourceDir(
   baseEnv: Record<string, string>,
-  kind: PiAgentKind
+  kind: PiAgentKind,
+  launchCommand?: string,
+  shellPath?: string
 ): string | undefined {
   const sourceKey = SOURCE_AGENT_DIR_ENV_BY_KIND[kind]
   const primaryKey = PRIMARY_AGENT_DIR_ENV_BY_KIND[kind]
+
+  const ompProfile =
+    kind === 'omp'
+      ? [
+          readOmpProfileFromCommand(launchCommand),
+          readEnvWithProcessFallback(baseEnv, 'OMP_PROFILE'),
+          readEnvWithProcessFallback(baseEnv, 'PI_PROFILE')
+        ].find((candidate) => candidate !== undefined && isSafeOmpProfile(candidate))
+      : undefined
+
+  // OMP's `default` profile is the base config root and honors an explicit
+  // PI_CODING_AGENT_DIR; only named profiles use the nested profile tree.
+  if (kind === 'omp' && ompProfile && ompProfile !== 'default') {
+    const configuredRoot =
+      readEnvWithProcessFallback(baseEnv, 'PI_CONFIG_DIR') ??
+      readSessionShellStartupEnvVar('PI_CONFIG_DIR', baseEnv, shellPath)
+    const configDir =
+      configuredRoot ?? join(readEnvWithProcessFallback(baseEnv, 'HOME') ?? homedir(), '.omp')
+    return join(configDir, 'profiles', ompProfile, 'agent')
+  }
 
   const sourceDir = readEnvWithProcessFallback(baseEnv, sourceKey)
   if (sourceDir) {
@@ -47,7 +71,45 @@ export function resolvePiAgentSourceDir(
     return publicDir
   }
 
+  // OMP keeps its configurable root in PI_CONFIG_DIR; PI_CODING_AGENT_DIR is
+  // only populated after OMP has booted. Resolve the root before launch so the
+  // managed extension is materialized in the same profile the binary will use.
+  if (kind === 'omp') {
+    const configuredRoot =
+      readEnvWithProcessFallback(baseEnv, 'PI_CONFIG_DIR') ??
+      readSessionShellStartupEnvVar('PI_CONFIG_DIR', baseEnv, shellPath)
+    if (configuredRoot) {
+      return join(configuredRoot, 'agent')
+    }
+    if (launchCommand?.trim()) {
+      return join(readEnvWithProcessFallback(baseEnv, 'HOME') ?? homedir(), '.omp', 'agent')
+    }
+  }
+
   return readSessionShellStartupEnvVar(primaryKey, baseEnv)
+}
+
+function readOmpProfileFromCommand(command: string | undefined): string | undefined {
+  const match = command?.match(/(?:^|\s)--profile(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s]+))/)
+  const profile = match?.[1] ?? match?.[2] ?? match?.[3]
+  return profile && isSafeOmpProfile(profile) ? profile : undefined
+}
+
+function isSafeOmpProfile(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)
+}
+
+/** Copy XDG roots discovered from the user's actual shell into daemon spawns. */
+export function inheritOmpXdgEnvironment(baseEnv: Record<string, string>): void {
+  for (const name of ['XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const) {
+    if (baseEnv[name] !== undefined) {
+      continue
+    }
+    const value = readSessionShellStartupEnvVar(name, baseEnv) ?? process.env[name]
+    if (value) {
+      baseEnv[name] = value
+    }
+  }
 }
 
 export function resolveScopedPiAgentSourceDir(

@@ -27,6 +27,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
       activeAccount.wslLinuxAuthPath
     ) {
       return {
+        accountId: activeAccountId,
         configDir: activeAccount.managedAuthPath,
         runtime: 'wsl',
         wslDistro: activeAccount.wslDistro ?? null,
@@ -45,6 +46,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
         const windowsConfigDir = join(wslHome, '.claude')
         const linuxConfigDir = `${wslHomeInfo.linuxPath.replace(/\/$/, '')}/.claude`
         return {
+          accountId: activeAccountId,
           configDir: windowsConfigDir,
           runtime: 'wsl',
           wslDistro: distro,
@@ -55,6 +57,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
         }
       }
       return {
+        accountId: activeAccountId,
         configDir: paths.configDir,
         runtime: 'wsl',
         wslDistro: normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro,
@@ -65,6 +68,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
       }
     }
     return {
+      accountId: activeAccountId,
       configDir: paths.configDir,
       runtime: 'host',
       wslDistro: null,

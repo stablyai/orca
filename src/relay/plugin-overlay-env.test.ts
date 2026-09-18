@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { __resetShellStartupEnvCache } from '../main/pty/shell-startup-env'
-import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
+import {
+  inheritOmpXdgEnvironment,
+  resolveOpenCodeSourceConfigDir,
+  resolvePiSourceAgentDir
+} from './plugin-overlay-env'
 
 describe('plugin overlay env source resolution', () => {
   let homeDir: string
@@ -40,9 +44,55 @@ describe('plugin overlay env source resolution', () => {
       expect(resolveOpenCodeSourceConfigDir(env, '/bin/zsh')).toBe(
         join(homeDir, 'company-opencode')
       )
-      expect(resolvePiSourceAgentDir(env, '/bin/zsh', 'pi')).toBe(join(homeDir, 'company-pi'))
+      expect(resolvePiSourceAgentDir(env, '/bin/zsh', 'pi')).toMatchObject({
+        path: join(homeDir, 'company-pi'),
+        createIfMissing: false
+      })
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'resolves OMP profile and XDG roots from the remote shell',
+    () => {
+      const configDir = join(homeDir, 'omp-config')
+      const dataDir = join(homeDir, 'xdg-data')
+      mkdirSync(dataDir, { recursive: true })
+      writeFileSync(
+        join(homeDir, '.zshrc'),
+        [
+          `export PI_CONFIG_DIR="$HOME/${configDir.slice(homeDir.length + 1)}"`,
+          `export XDG_DATA_HOME="$HOME/${dataDir.slice(homeDir.length + 1)}"`
+        ].join('\n')
+      )
+
+      const env: Record<string, string> = { HOME: homeDir, SHELL: '/bin/zsh' }
+      expect(resolvePiSourceAgentDir(env, '/bin/zsh', 'omp', 'omp --profile review')).toMatchObject(
+        {
+          path: join(configDir, 'profiles', 'review', 'agent'),
+          origin: 'explicit-profile',
+          createIfMissing: true
+        }
+      )
+      expect(inheritOmpXdgEnvironment(env, '/bin/zsh')).toEqual({ XDG_DATA_HOME: dataDir })
+    }
+  )
+
+  it('treats explicit OMP default as the base root and preserves PI_CODING_AGENT_DIR', () => {
+    const explicitDir = join(homeDir, 'custom-agent')
+    expect(
+      resolvePiSourceAgentDir(
+        {
+          HOME: homeDir,
+          PI_CONFIG_DIR: join(homeDir, 'omp-config'),
+          PI_CODING_AGENT_DIR: explicitDir,
+          OMP_PROFILE: 'default'
+        },
+        undefined,
+        'omp',
+        'omp --profile default'
+      )
+    ).toMatchObject({ path: explicitDir, origin: 'source-override' })
+  })
 
   it.skipIf(process.platform === 'win32')(
     'discovers overlay sources from a custom zsh ZDOTDIR',
@@ -91,7 +141,7 @@ describe('plugin overlay env source resolution', () => {
         '/bin/zsh',
         'prime-agent'
       )
-    ).toBe(join(homeDir, 'company-prime'))
+    ).toMatchObject({ path: join(homeDir, 'company-prime'), createIfMissing: false })
     expect(
       resolvePiSourceAgentDir(
         {
@@ -102,7 +152,7 @@ describe('plugin overlay env source resolution', () => {
         '/bin/zsh',
         'prime-agent'
       )
-    ).toBe('/remote/original-prime')
+    ).toMatchObject({ path: '/remote/original-prime', createIfMissing: false })
   })
 
   // Why: the session env is the only place a fish user's XDG_CONFIG_HOME shows up

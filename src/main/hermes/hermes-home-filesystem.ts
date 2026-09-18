@@ -25,12 +25,47 @@ export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
   return explicit ? explicit : join(homedir(), '.hermes')
 }
 
-export function getConfigPath(): string {
-  return join(getHermesHome(), 'config.yaml')
+function isSafeProfileName(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)
 }
 
-export function getPluginDir(): string {
-  return join(getHermesHome(), 'plugins', HERMES_PLUGIN_NAME)
+export function getHermesProfileFromCommand(command: string | undefined): string | undefined {
+  if (!command) {
+    return undefined
+  }
+  const match = command.match(/(?:^|\s)(?:--profile|-p)(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s]+))/)
+  const profile = match?.[1] ?? match?.[2] ?? match?.[3]
+  return profile && isSafeProfileName(profile) ? profile : undefined
+}
+
+function activeHermesProfile(home: string): string | undefined {
+  try {
+    const profile = readFileSync(join(home, 'active_profile'), 'utf8').trim()
+    return profile && isSafeProfileName(profile) ? profile : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Resolve the profile Hermes will actually read for one launch. */
+export function resolveHermesHomeForLaunch(
+  env: NodeJS.ProcessEnv = process.env,
+  launchCommand?: string
+): string {
+  const root = getHermesHome(env)
+  const profile = getHermesProfileFromCommand(launchCommand) ?? activeHermesProfile(root)
+  if (!profile || profile === 'default') {
+    return root
+  }
+  return join(root, 'profiles', profile)
+}
+
+export function getConfigPath(home = getHermesHome()): string {
+  return join(home, 'config.yaml')
+}
+
+export function getPluginDir(home = getHermesHome()): string {
+  return join(home, 'plugins', HERMES_PLUGIN_NAME)
 }
 
 function getManifestPath(pluginDir = getPluginDir()): string {
@@ -45,13 +80,15 @@ export function readConfigFile(configPath: string): ConfigParseResult {
   if (!existsSync(configPath)) {
     return { ok: true, config: {} }
   }
-  return parseHermesConfig(readFileSync(configPath, 'utf-8'))
+  const source = readFileSync(configPath, 'utf-8')
+  const parsed = parseHermesConfig(source)
+  return parsed.ok ? { ...parsed, source } : parsed
 }
 
-export function writeConfigFile(configPath: string, config: HermesConfig): void {
+export function writeConfigFile(configPath: string, config: HermesConfig, source?: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
-  const serialized = serializeHermesConfig(config)
+  const serialized = serializeHermesConfig(config, source)
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === serialized) {

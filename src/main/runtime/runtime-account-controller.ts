@@ -13,6 +13,7 @@ import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/ra
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import type { ClaudeAccountSwitchResult } from '../claude-accounts/claude-account-selection'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -87,6 +88,10 @@ export class RuntimeAccountController {
 
   selectClaude(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
     return this.requireServices().claudeAccounts.selectAccount(accountId)
+  }
+
+  selectClaudeWithTransition(accountId: string | null): Promise<ClaudeAccountSwitchResult> {
+    return this.requireServices().claudeAccounts.selectAccountWithTransition(accountId)
   }
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {

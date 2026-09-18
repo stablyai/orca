@@ -31,6 +31,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
+import type { PiSourceAgentDirResolution } from './plugin-overlay-env'
 
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 
@@ -283,7 +284,7 @@ export class PluginOverlayManager {
    *  export ORCA_OMP_STATUS_EXTENSION without ORCA_OMP_SOURCE_AGENT_DIR. */
   materializePi(
     id: string,
-    existingAgentDir?: string,
+    existingAgentDir?: PiSourceAgentDirResolution,
     kind: PiAgentKind = 'pi',
     options?: { materializeDefaultHome?: boolean }
   ): MaterializePiResult | null {
@@ -292,8 +293,8 @@ export class PluginOverlayManager {
       return null
     }
     try {
-      const sourceAgentDir = existingAgentDir ?? this.getDefaultPiAgentDir(kind)
-      if (existingAgentDir && !existsSync(existingAgentDir)) {
+      const sourceAgentDir = existingAgentDir?.path ?? this.getDefaultPiAgentDir(kind)
+      if (existingAgentDir && !existsSync(sourceAgentDir) && !existingAgentDir.createIfMissing) {
         return null
       }
       const materializeDefaultHome = options?.materializeDefaultHome !== false

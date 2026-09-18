@@ -75,11 +75,11 @@ describe('OpenCode hook plugin source', () => {
     const digest = (source: string): string => createHash('sha256').update(source).digest('hex')
 
     expect(digest(getOpenCodePluginSource())).toBe(
-      'd14859a36c88aefe3a45cd232789503296e0a23438b151c773414bad64ab8eaa'
+      '30d7bfabe92ce0cbec9f250ac35475f74e131ba727e0b4cf82d816c73e124272'
     )
     expect(
       digest(getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false }))
-    ).toBe('4de14bee0c27ce55f29f70b19aa6ce9967e09b098bba139fb88f0511af7d4fca')
+    ).toBe('be7005b2c9f70449c654caa6fe1e402a9503378a30a83c1e76dba3561b3085e6')
   })
 
   it('filters child sessions via parentID lookup before forwarding events', () => {
@@ -265,6 +265,26 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     const pluginSource = readFileSync(pluginPath, 'utf8')
     expect(pluginSource).toContain('OrcaOpenCodeStatusPlugin')
     expect(pluginSource).toContain('messageID: part.messageID')
+  })
+
+  // Why: the health receipt is diagnostics. A failed write must not cost the user the config
+  // dir carrying the status plugin — that would be the very outage this service exists to stop.
+  it('still installs the plugin when the integration-health write fails', () => {
+    const healthDir = join(userDataDir, 'agent-hooks')
+    rmSync(healthDir, { recursive: true, force: true })
+    // A regular file where the health store needs a directory makes its mkdir throw.
+    writeFileSync(healthDir, '')
+    try {
+      const service = new OpenCodeHookService()
+      const env = service.buildPtyEnv(daemonSessionId)
+
+      expect(env.OPENCODE_CONFIG_DIR).toBe(join(userDataDir, 'opencode-hooks', 'shared'))
+      expect(existsSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'))).toBe(
+        true
+      )
+    } finally {
+      rmSync(healthDir, { force: true })
+    }
   })
 
   it('clearPty leaves the shared OpenCode config dir off the teardown hot path', () => {

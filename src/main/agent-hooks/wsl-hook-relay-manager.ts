@@ -1,7 +1,5 @@
-// Host-side lifecycle manager for the guest-resident WSL agent-hook relay
-// (STA-1515): one relay per distro per instance, ensured from every WSL PTY
-// spawn, forwarding envelopes into ingestRemote and installing guest hooks.
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+// Host-side lifecycle manager for one guest relay per WSL distro and app instance.
+import type { SpawnedProcessWithStreams } from '../../shared/child-process/process-spec'
 
 import {
   runWslRelayGuestInstall,
@@ -12,7 +10,6 @@ import {
   defaultWslHookRelayDeps,
   isWslHookRelayAllowed,
   FAILURE_COOLDOWN_BASE_MS,
-  FAILURE_COOLDOWN_MAX_MS,
   NO_NODE_COOLDOWN_MS,
   REINSTALL_ONE_SHOT_DELAY_MS,
   RUNNING_TEARDOWN_COOLDOWN_MS,
@@ -24,6 +21,14 @@ import { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
+import { getHermesProfileFromCommand } from '../hermes/hermes-home-filesystem'
+import {
+  updateWslRelayHermesProfile,
+  wslRelayLaunchCommandForHermesProfile
+} from './wsl-hook-relay-hermes-profile'
+import { markWslRelayFailed } from './wsl-hook-relay-failure'
+import { resolveWslDefaultDistro } from './wsl-hook-relay-default-distro'
+import { resumeStoppedWslRelays } from './wsl-hook-relay-resume'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_FS_METHODS,
@@ -38,12 +43,13 @@ type DistroState = {
   /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
   distro: string
   phase: 'starting' | 'running' | 'failed'
-  child?: ChildProcessWithoutNullStreams
+  child?: SpawnedProcessWithStreams
   mux?: SshChannelMultiplexer
   guestHome?: string
   codexHomePath?: string
   guestEndpointFilePath?: string
   opencodeOverlayDir?: string
+  hermesProfile?: string
   failures: number
   cooldownUntil: number
   connectedAt?: number
@@ -69,7 +75,12 @@ export class WslHookRelayManager {
       warn: (message) => this.deps.warn(message),
       isDisposed: () => this.disposed,
       isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
+      restart: (distro) =>
+        this.ensureForDistro(
+          distro,
+          this.stateFor(distro)?.codexHomePath,
+          wslRelayLaunchCommandForHermesProfile(this.stateFor(distro)?.hermesProfile)
+        ),
       dropState: (state) => {
         // Why: identity-guarded — a fresh ensure() may own this key by now;
         // deleting by key alone would orphan its live relay child.
@@ -86,11 +97,16 @@ export class WslHookRelayManager {
   }
 
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
-  ensureForDistro(distro: string | null, codexHomePath?: string | null): void {
+  ensureForDistro(
+    distro: string | null,
+    codexHomePath?: string | null,
+    launchCommand?: string
+  ): void {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
-    void this.ensureInternal(distro, codexHomePath ?? undefined).catch((err) => {
+    const hermesProfile = getHermesProfileFromCommand(launchCommand)
+    void this.ensureInternal(distro, codexHomePath ?? undefined, hermesProfile).catch((err) => {
       const detail = err instanceof Error ? err.message : String(err)
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
@@ -132,25 +148,24 @@ export class WslHookRelayManager {
   /** Restarts what a hooks-off teardown stopped. Skips distros the user has since shut
    *  down: `wsl -d` BOOTS a stopped distro, and nothing in it is waiting on status. */
   resumeStoppedRelays(): void {
-    const distros = [...this.stoppedByHooksOff]
-    this.stoppedByHooksOff.clear()
-    for (const [distro, codexHomePath] of distros) {
-      void this.deps
-        .isDistroRunning(distro)
-        .then((running) => {
-          if (running) {
-            this.ensureForDistro(distro, codexHomePath)
-          }
-        })
-        .catch(() => undefined)
-    }
+    resumeStoppedWslRelays(
+      this.stoppedByHooksOff,
+      this.deps.isDistroRunning,
+      (distro, codexHomePath) => this.ensureForDistro(distro, codexHomePath)
+    )
   }
 
   private async ensureInternal(
     requestedDistro: string | null,
-    requestedCodexHomePath?: string
+    requestedCodexHomePath?: string,
+    requestedHermesProfile?: string
   ): Promise<void> {
-    const distro = requestedDistro ?? (await this.resolveDefaultDistro())
+    const distro =
+      requestedDistro ??
+      (this.defaultDistro = await resolveWslDefaultDistro(
+        this.defaultDistro,
+        this.deps.listDistros
+      ))
     if (!distro || this.disposed) {
       return
     }
@@ -167,6 +182,7 @@ export class WslHookRelayManager {
         existing.codexHomePath = requestedCodexHomePath
         existing.lastInstallAt = 0
       }
+      updateWslRelayHermesProfile(existing, requestedHermesProfile)
       if (existing.phase === 'running') {
         void maybeRerunWslRelayGuestInstall(this.deps, existing)
         return
@@ -188,8 +204,7 @@ export class WslHookRelayManager {
       }
       return
     }
-    // Why: restart-stable instance identity keeps the guest endpoint file at
-    // ONE path across restarts so daemon-surviving agents re-coordinate.
+    // Restart-stable identity keeps one guest endpoint path across relaunches.
     const instanceKey =
       sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined) ?? `port${port}`
     if (existing) {
@@ -199,10 +214,10 @@ export class WslHookRelayManager {
       distro,
       phase: 'starting',
       failures: existing?.failures ?? 0,
-      // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
-      // crash — dropping it would blank status on panes spawned mid-relaunch.
+      // Persist the instance-keyed endpoint path so relaunches preserve status.
       opencodeOverlayDir: existing?.opencodeOverlayDir,
       codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
+      hermesProfile: requestedHermesProfile ?? existing?.hermesProfile,
       cooldownUntil: 0
     }
     this.states.set(key, state)
@@ -223,26 +238,29 @@ export class WslHookRelayManager {
           state.child = child
         },
         onNoNode: () =>
-          this.markFailed(
+          markWslRelayFailed(
+            this.deps,
+            this.recovery,
             state,
             `no node >= 18 found in distro '${state.distro}'; agent hooks stay degraded there`,
-            { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
+            NO_NODE_COOLDOWN_MS
           ),
         onFailure: (message) =>
-          this.markFailed(state, message, {
-            cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
-          }),
+          markWslRelayFailed(this.deps, this.recovery, state, message, FAILURE_COOLDOWN_BASE_MS),
         connect: (transport, child) => this.connect(state, transport, child, instanceKey)
       })
     } catch (err) {
-      // Why: teardown may have already recorded this failure; don't double-
-      // count. A request-level error can leave a live child — never leak it.
+      // Teardown may have recorded this failure; avoid double-counting and child leaks.
       state.child?.kill()
       state.mux?.dispose()
       if (state.phase !== 'failed') {
-        this.markFailed(state, err instanceof Error ? err.message : String(err), {
-          cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
-        })
+        markWslRelayFailed(
+          this.deps,
+          this.recovery,
+          state,
+          err instanceof Error ? err.message : String(err),
+          FAILURE_COOLDOWN_BASE_MS
+        )
       }
     }
   }
@@ -250,7 +268,7 @@ export class WslHookRelayManager {
   private async connect(
     state: DistroState,
     transport: MultiplexerTransport,
-    child: ChildProcessWithoutNullStreams,
+    child: SpawnedProcessWithStreams,
     instanceKey: string
   ): Promise<void> {
     const mux = new SshChannelMultiplexer(transport)
@@ -276,9 +294,13 @@ export class WslHookRelayManager {
         ) {
           state.failures = 0
         }
-        this.markFailed(state, `relay link for '${state.distro}' ${reason}; scheduling restart`, {
-          cooldownBaseMs: wasRunning ? RUNNING_TEARDOWN_COOLDOWN_MS : FAILURE_COOLDOWN_BASE_MS
-        })
+        markWslRelayFailed(
+          this.deps,
+          this.recovery,
+          state,
+          `relay link for '${state.distro}' ${reason}; scheduling restart`,
+          wasRunning ? RUNNING_TEARDOWN_COOLDOWN_MS : FAILURE_COOLDOWN_BASE_MS
+        )
       }
     })
 
@@ -314,41 +336,6 @@ export class WslHookRelayManager {
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch(() => {
       // Fresh relays have nothing to replay; tolerate.
     })
-  }
-
-  /** Records + breadcrumbs the failure and always arms the restart timer —
-   *  one failed relaunch must not end self-recovery; the timer's
-   *  distro-running probe keeps this from booting stopped distros. */
-  private markFailed(
-    state: DistroState,
-    message: string,
-    options: { cooldownBaseMs: number }
-  ): void {
-    state.phase = 'failed'
-    state.failures++
-    state.child = undefined
-    state.mux = undefined
-    if (state.reinstallTimer) {
-      clearTimeout(state.reinstallTimer)
-      state.reinstallTimer = undefined
-    }
-    state.cooldownUntil =
-      Date.now() + Math.min(options.cooldownBaseMs * state.failures, FAILURE_COOLDOWN_MAX_MS)
-    this.deps.warn(`[agent-hooks] WSL hook relay (${state.distro}): ${message}`)
-    this.recovery.scheduleRestart(state)
-  }
-
-  private async resolveDefaultDistro(): Promise<string | null> {
-    if (this.defaultDistro) {
-      return this.defaultDistro
-    }
-    try {
-      const distros = await this.deps.listDistros()
-      this.defaultDistro = distros[0] ?? null
-    } catch {
-      this.defaultDistro = null
-    }
-    return this.defaultDistro
   }
 }
 

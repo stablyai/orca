@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +17,8 @@ const { execFile } = await import('node:child_process')
 const execFileMock = vi.mocked(execFile)
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
-const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
+const { installManagedHooks, resolveRelayGrokHome, resolveRelayHermesProfile } =
+  await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
 
@@ -156,5 +157,34 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
     })
 
     expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
+  })
+
+  it('installs Hermes into the execution host active profile', async () => {
+    const home = await createTempHome()
+    await stubLoginShell(home)
+    await mkdir(join(home, '.hermes'), { recursive: true })
+    await writeFile(join(home, '.hermes', 'active_profile'), 'review-team\n', 'utf8')
+
+    await expect(installManagedHooks({ agents: ['hermes'] })).resolves.toEqual({
+      installers: 1,
+      errors: 0
+    })
+
+    expect(resolveRelayHermesProfile(home)).toBe('review-team')
+    expect(
+      await readdir(join(home, '.hermes', 'profiles', 'review-team', 'plugins', 'orca-status'))
+    ).toEqual(expect.arrayContaining(['__init__.py', 'plugin.yaml']))
+  })
+
+  it('ignores invalid or oversized active Hermes profiles', async () => {
+    const home = await createTempHome()
+    await mkdir(join(home, '.hermes'), { recursive: true })
+    const activeProfile = join(home, '.hermes', 'active_profile')
+
+    await writeFile(activeProfile, '../other\n', 'utf8')
+    expect(resolveRelayHermesProfile(home)).toBeUndefined()
+
+    await writeFile(activeProfile, 'x'.repeat(513), 'utf8')
+    expect(resolveRelayHermesProfile(home)).toBeUndefined()
   })
 })

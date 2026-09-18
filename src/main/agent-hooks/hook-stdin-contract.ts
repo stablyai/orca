@@ -89,6 +89,12 @@ const POSIX_HOOK_JSON_STDIN_HOME_GUARD = '{ [ -d "${HOME:-}" ] || unset HOME; }'
 // that only ships `python` does not drop straight to the `cat` hang.
 export const POSIX_HOOK_JSON_STDIN_READER = `${POSIX_HOOK_JSON_STDIN_HOME_GUARD}; ${jsonStdinInterpreter('python3')} || ${jsonStdinInterpreter('python')} || ${POSIX_HOOK_STDIN_READER}`
 
+// Hook callers that keep stdin open (notably Codex's macOS bridge) must never
+// fall back to an unbounded `cat`.  Missing Python is a bounded no-op: the
+// vendor can continue without an Orca observation, while its TUI remains
+// responsive and the event can still be recovered by the provider adapter.
+export const POSIX_HOOK_BOUNDED_JSON_STDIN_READER = `${POSIX_HOOK_JSON_STDIN_HOME_GUARD}; ${jsonStdinInterpreter('python3')} || ${jsonStdinInterpreter('python')} || { exit 0; }`
+
 /** Optional reader override for an agent whose caller keeps stdin open after the payload.
  *  `prelude` must be emitted before the capture line; keep them together. */
 export type PosixHookStdinReader = {
@@ -98,6 +104,11 @@ export type PosixHookStdinReader = {
 
 export const POSIX_HOOK_JSON_STDIN: PosixHookStdinReader = {
   reader: POSIX_HOOK_JSON_STDIN_READER,
+  prelude: POSIX_HOOK_JSON_STDIN_PRELUDE
+}
+
+export const POSIX_HOOK_BOUNDED_JSON_STDIN: PosixHookStdinReader = {
+  reader: POSIX_HOOK_BOUNDED_JSON_STDIN_READER,
   prelude: POSIX_HOOK_JSON_STDIN_PRELUDE
 }
 

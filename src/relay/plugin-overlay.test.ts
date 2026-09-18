@@ -110,6 +110,26 @@ describe('PluginOverlayManager', () => {
     ).toContain('// omp extension')
   })
 
+  it('materializes an explicit OMP profile source when the profile is new', () => {
+    const ompRoot = join(homeDir, 'omp-config')
+    const resolution = resolvePiSourceAgentDir(
+      { HOME: homeDir, PI_CONFIG_DIR: ompRoot },
+      undefined,
+      'omp',
+      'omp --profile review'
+    )
+    manager.setSources({ ompExtensionSource: '// omp extension' })
+
+    const result = manager.materializePi('tab-new-omp-profile:0', resolution, 'omp', {
+      materializeDefaultHome: true
+    })
+
+    expect(result?.sourceAgentDir).toBe(join(ompRoot, 'profiles', 'review', 'agent'))
+    expect(
+      existsSync(join(ompRoot, 'profiles', 'review', 'agent', 'extensions', 'orca-agent-status.ts'))
+    ).toBe(true)
+  })
+
   it('uses only the Prime-specific source in the default Prime agent dir', () => {
     manager.setSources({ piExtensionSource: '// pi extension' })
     expect(manager.materializePi('tab-prime-missing:0', undefined, 'prime-agent')).toBeNull()
@@ -184,7 +204,11 @@ describe('PluginOverlayManager', () => {
     writeFileSync(join(customAgentDir, 'extensions', 'custom.ts'), 'custom extension')
 
     manager.setSources({ piExtensionSource: '// pi extension' })
-    const result = manager.materializePi('tab-custom-pi:0', customAgentDir)
+    const result = manager.materializePi('tab-custom-pi:0', {
+      path: customAgentDir,
+      origin: 'source-override',
+      createIfMissing: false
+    })
     const dir = result?.sourceAgentDir
 
     expect(dir).toBeDefined()
@@ -321,7 +345,13 @@ describe('PluginOverlayManager', () => {
   it('does not override a missing preexisting Pi agent dir', () => {
     manager.setSources({ piExtensionSource: '// pi extension' })
 
-    expect(manager.materializePi('tab-missing-pi:0', join(homeDir, 'missing-pi'))).toBeNull()
+    expect(
+      manager.materializePi('tab-missing-pi:0', {
+        path: join(homeDir, 'missing-pi'),
+        origin: 'source-override',
+        createIfMissing: false
+      })
+    ).toBeNull()
   })
 
   it('clearOverlay removes OpenCode overlays without deleting real Pi/OMP homes', () => {
@@ -395,7 +425,10 @@ describe('resolvePiSourceAgentDir', () => {
       ORCA_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
     }
     try {
-      expect(resolvePiSourceAgentDir(env, undefined, 'pi')).toBe('/user/.pi/agent')
+      expect(resolvePiSourceAgentDir(env, undefined, 'pi')).toMatchObject({
+        path: '/user/.pi/agent',
+        createIfMissing: false
+      })
       expect(resolvePiSourceAgentDir(env, undefined, 'omp')).toBeUndefined()
     } finally {
       rmSync(env.HOME, { recursive: true, force: true })
@@ -409,7 +442,10 @@ describe('resolvePiSourceAgentDir', () => {
       ORCA_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
     }
     try {
-      expect(resolvePiSourceAgentDir(env, undefined, 'omp')).toBe('/user/custom-omp-agent')
+      expect(resolvePiSourceAgentDir(env, undefined, 'omp')).toMatchObject({
+        path: '/user/custom-omp-agent',
+        createIfMissing: false
+      })
     } finally {
       rmSync(env.HOME, { recursive: true, force: true })
     }

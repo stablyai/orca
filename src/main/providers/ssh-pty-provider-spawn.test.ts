@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
+import { AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD } from '../../shared/agent-hook-relay'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
 import { AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION } from '../../shared/agent-session-host-authority'
@@ -237,6 +238,22 @@ describe('spawn', () => {
     })
     expect(result).toEqual({ id: scopedPty1 })
     expect(provider.hasPty(scopedPty1)).toBe(true)
+  })
+
+  it('carries an explicit Hermes profile to the remote host before launch', async () => {
+    mux.request.mockResolvedValue({ id: 'pty-hermes' })
+
+    await provider.spawn({
+      cols: 80,
+      rows: 24,
+      command: 'hermes --profile review',
+      launchAgent: 'hermes'
+    })
+
+    expectRequest(mux.request, AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, {
+      agents: ['hermes'],
+      profile: 'review'
+    })
   })
 
   it('keeps a spawned PTY live across an overlapping stale process list', async () => {

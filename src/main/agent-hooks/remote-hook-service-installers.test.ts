@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
-import type { SFTPWrapper } from 'ssh2'
 
 vi.mock('electron', () => ({
   app: {
@@ -16,25 +15,20 @@ import { CommandCodeHookService, commandCodeHookService } from '../command-code/
 import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
 import { AmpHookService, ampHookService } from '../amp/hook-service'
-import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
+import { claudeHookService } from '../claude/hook-service'
 import { GrokHookService, grokHookService } from '../grok/hook-service'
 import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { auggieHookService } from '../auggie/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
 } from './remote-managed-hook-installers'
-
-type FakeFs = {
-  files: Map<string, string>
-  dirs: Set<string>
-  modes: Map<string, number>
-  failRenameTo: Set<string>
-}
+import { createRemoteHookFakeSftp as createFakeSftp } from './remote-hook-sftp-test-fixture'
 
 const EXPECTED_CURSOR_HOOK_RESPONSES = {
   beforeSubmitPrompt: '{"continue":true}',
@@ -47,172 +41,7 @@ const EXPECTED_CURSOR_HOOK_RESPONSES = {
   afterAgentResponse: '{}'
 } satisfies Record<CursorEvent, string>
 
-function createFakeSftp(initialFiles: Record<string, string> = {}): {
-  sftp: SFTPWrapper
-  fs: FakeFs
-} {
-  const fs: FakeFs = {
-    files: new Map(Object.entries(initialFiles)),
-    dirs: new Set(['/']),
-    modes: new Map(),
-    failRenameTo: new Set()
-  }
-  const noEntryError = (path: string): { code: number; message: string } => ({
-    code: 2,
-    message: `ENOENT ${path}`
-  })
-  const fakeStats = (mode: number): { mode: number } => ({ mode })
-
-  const sftp = {
-    readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
-      const v = fs.files.get(path)
-      if (v === undefined) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, v)
-    },
-    writeFile: (
-      path: string,
-      content: string,
-      options: string | { mode?: number },
-      cb: (err: unknown) => void
-    ): void => {
-      fs.files.set(path, content)
-      if (typeof options !== 'string' && options.mode !== undefined) {
-        fs.modes.set(path, options.mode)
-      }
-      cb(null)
-    },
-    rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
-      if (fs.failRenameTo.has(dst)) {
-        cb({ code: 4, message: `rename failed ${dst}` })
-        return
-      }
-      const v = fs.files.get(src)
-      if (v === undefined) {
-        cb(noEntryError(src))
-        return
-      }
-      fs.files.set(dst, v)
-      fs.files.delete(src)
-      const mode = fs.modes.get(src)
-      if (mode !== undefined) {
-        fs.modes.set(dst, mode)
-        fs.modes.delete(src)
-      }
-      cb(null)
-    },
-    unlink: (path: string, cb: (err: unknown) => void): void => {
-      fs.files.delete(path)
-      fs.modes.delete(path)
-      cb(null)
-    },
-    chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
-      fs.modes.set(path, mode)
-      cb(null)
-    },
-    stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
-    },
-    readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
-      if (fs.dirs.has(path)) {
-        cb(null, [])
-        return
-      }
-      cb(noEntryError(path))
-    },
-    mkdir: (path: string, cb: (err: unknown) => void): void => {
-      fs.dirs.add(path)
-      cb(null)
-    }
-  } as unknown as SFTPWrapper
-  return { sftp, fs }
-}
-
 describe('remote hook service installers', () => {
-  it('always writes POSIX scripts for SSH remotes even from a Windows host', async () => {
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    try {
-      const installers = [
-        {
-          path: '/home/dev/.orca/agent-hooks/claude-hook.sh',
-          install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/openclaude-hook.sh',
-          install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/codex-hook.sh',
-          install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/gemini-hook.sh',
-          install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/antigravity-hook.sh',
-          install: (sftp: SFTPWrapper) =>
-            new AntigravityHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.config/amp/plugins/orca-agent-status.ts',
-          install: (sftp: SFTPWrapper) => new AmpHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/cursor-hook.sh',
-          install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/command-code-hook.sh',
-          install: (sftp: SFTPWrapper) =>
-            new CommandCodeHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/grok-hook.sh',
-          install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/copilot-hook.sh',
-          install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
-          install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
-          install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, '/home/dev')
-        }
-      ]
-
-      for (const { install, path } of installers) {
-        const { sftp, fs } = createFakeSftp()
-        const status = await install(sftp)
-        expect(status.state).toBe('installed')
-        const script = fs.files.get(path)
-        if (path.includes('/.config/amp/plugins/')) {
-          expect(script).toContain('/hook/amp')
-          expect(script).toContain("amp.on('agent.start'")
-        } else {
-          expect(script).toMatch(/^#!\/bin\/sh\n/)
-        }
-        expect(script).not.toContain('@echo off')
-        expect(script).not.toContain('powershell -NoProfile')
-      }
-    } finally {
-      if (originalPlatform) {
-        Object.defineProperty(process, 'platform', originalPlatform)
-      }
-    }
-  })
-
   it('installs remote Codex hooks with matching trust entries', async () => {
     const { sftp, fs } = createFakeSftp({
       '/home/dev/.codex/hooks.json': `${JSON.stringify({
@@ -709,7 +538,8 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['aug', auggieHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
@@ -865,6 +695,38 @@ describe('remote hook service installers', () => {
       '/hook/hermes'
     )
     expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
+  })
+
+  it('installs remote Hermes hooks into the launch-scoped profile', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: ['hermes'],
+      hermesProfile: 'review-team'
+    })
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        agent: 'hermes',
+        state: 'installed',
+        configPath: '/home/dev/.hermes/profiles/review-team/config.yaml'
+      })
+    ])
+    expect(
+      fs.files.get('/home/dev/.hermes/profiles/review-team/plugins/orca-status/plugin.yaml')
+    ).toContain('pre_llm_call')
+    expect(fs.files.has('/home/dev/.hermes/config.yaml')).toBe(false)
+  })
+
+  it('rejects an unsafe remote Hermes profile without mutating config', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new HermesHookService().installRemote(sftp, '/home/dev', {
+      profile: '../other'
+    })
+
+    expect(status).toMatchObject({ state: 'error', detail: 'Invalid Hermes profile name' })
+    expect(fs.files.size).toBe(0)
   })
 
   it('does not overwrite a remote user-authored Amp plugin file', async () => {

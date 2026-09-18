@@ -3,7 +3,10 @@ import {
   extractExecutableToken,
   isSafeOverrideExecutableToken
 } from '../../shared/managed-agent-command-token'
-import { MANAGED_AGENT_HOOK_TARGETS } from '../../shared/managed-agent-hook-targets'
+import {
+  MANAGED_AGENT_HOOK_TARGETS,
+  isManagedAgentHookTarget
+} from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgentDetectionCommand } from '../ipc/tui-agent-detection-commands'
@@ -49,6 +52,8 @@ export function detectedManagedHookAgents(values: unknown): AgentHookTarget[] {
 export function readManagedHookDetectionResult(value: unknown): {
   agents: AgentHookTarget[]
   claudeVersion: string | null
+  /** Undefined means the relay predates additive target capability reporting. */
+  managedHookTargets?: AgentHookTarget[]
 } {
   if (value === null || typeof value !== 'object') {
     return { agents: [], claudeVersion: null }
@@ -59,10 +64,19 @@ export function readManagedHookDetectionResult(value: unknown): {
     versions !== null && typeof versions === 'object' && 'claude' in versions
       ? versions.claude
       : null
+  const rawManagedHookTargets =
+    'managedHookTargets' in value && Array.isArray(value.managedHookTargets)
+      ? value.managedHookTargets
+      : undefined
   return {
     agents,
     claudeVersion: parseClaudeCliVersion(
       typeof rawClaudeVersion === 'string' ? rawClaudeVersion : null
-    )
+    ),
+    ...(rawManagedHookTargets
+      ? {
+          managedHookTargets: rawManagedHookTargets.filter(isManagedAgentHookTarget)
+        }
+      : {})
   }
 }

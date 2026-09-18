@@ -1,4 +1,4 @@
-import type { IncomingMessage } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { classifyTruncatedHookRequest } from '../agent-hook-transport-interference'
 import { assertJsonTextStructureWithinLimits } from '../json-text-structure-limit'
@@ -10,6 +10,35 @@ const AGENT_HOOK_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 128 * 1024,
   nestingDepth: 64
 } as const
+
+/** The peer sent more than the listener can safely retain. */
+export class AgentHookRequestTooLargeError extends Error {
+  readonly code = 'HOOK_REQUEST_TOO_LARGE'
+  readonly maxBytes = HOOK_REQUEST_MAX_BYTES
+
+  constructor(readonly receivedBytes: number) {
+    super(`payload too large (${receivedBytes} bytes; maximum ${HOOK_REQUEST_MAX_BYTES})`)
+    this.name = 'AgentHookRequestTooLargeError'
+  }
+}
+
+export function isAgentHookRequestTooLargeError(
+  error: unknown
+): error is AgentHookRequestTooLargeError {
+  return error instanceof AgentHookRequestTooLargeError
+}
+
+/** Send the bounded transport classification before closing the unread request. */
+export function respondWithAgentHookRequestTooLarge(
+  res: ServerResponse,
+  req: IncomingMessage
+): void {
+  res.writeHead(413, { 'content-type': 'application/json' })
+  res.end(
+    JSON.stringify({ error: 'hook_request_too_large', maxBytes: HOOK_REQUEST_MAX_BYTES }),
+    () => req.destroy()
+  )
+}
 
 export function parseAgentHookJson(content: string): unknown {
   // Why: Cursor on Windows writes UTF-8-with-BOM to the hook's stdin and `JSON.parse` rejects U+FEFF,
@@ -63,8 +92,16 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
       // Why: bound by bytes (not UTF-16 units) and stop accumulating after rejection so a client can't push memory past the cap.
       const nextByteLength = byteLength + chunk.length
       if (nextByteLength > HOOK_REQUEST_MAX_BYTES) {
-        settleReject(new Error('payload too large'))
-        req.destroy()
+        settleReject(new AgentHookRequestTooLargeError(nextByteLength))
+        // Pause first so the caller can send a bounded 413 response. The
+        // response completion callback destroys the unread request/socket.
+        // The fallback keeps test doubles and unusual stream implementations
+        // from retaining an unbounded body when pause is unavailable.
+        if (typeof req.pause === 'function') {
+          req.pause()
+        } else {
+          req.destroy()
+        }
         return
       }
       if (retained.length < nextByteLength) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { hermesInstallMock, spawnMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { delimiter } from 'node:path'
@@ -21,6 +21,9 @@ vi.mock('../opencode/hook-service', () =>
 )
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+)
+vi.mock('../hermes/hook-service', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.hermesHookServiceModuleMock())
 )
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
@@ -147,10 +150,28 @@ describe('registerPtyHandlers', () => {
             agentStatusHooksEnabled: true
           }
         )
-        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome)
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome, undefined)
       } finally {
         ensureForDistro.mockRestore()
       }
+    })
+
+    it('materializes Hermes hooks for the selected launch profile', () => {
+      const env = { HERMES_HOME: '/home/alice/custom-hermes' }
+
+      buildPtyHostEnv('pty-hermes', env, {
+        isPackaged: true,
+        userDataPath: '/tmp/orca-user-data',
+        selectedCodexHomePath: null,
+        agentStatusHooksEnabled: true,
+        launchAgent: 'hermes',
+        launchCommand: 'hermes --profile review-team'
+      })
+
+      expect(hermesInstallMock).toHaveBeenCalledWith({
+        env: expect.objectContaining({ HERMES_HOME: '/home/alice/custom-hermes' }),
+        launchCommand: 'hermes --profile review-team'
+      })
     })
 
     it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {

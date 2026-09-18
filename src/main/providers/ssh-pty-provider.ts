@@ -25,6 +25,8 @@ import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
 import { createSshPtyProviderRpcOperations } from './ssh-pty-provider-rpc-operations'
+import { AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD } from '../../shared/agent-hook-relay'
+import { getHermesProfileFromCommand } from '../hermes/hermes-home-filesystem'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -130,6 +132,7 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   private async spawnWithoutTerminalRuntimeRepair(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    this.requestLaunchScopedManagedHooks(opts)
     if (opts.agentSessionEnsure && opts.sessionId) {
       throw new Error('agent_session_claim_unavailable')
     }
@@ -183,6 +186,23 @@ export class SshPtyProvider implements IPtyProvider {
       acceptLivePty: (id) => this.livePtyIds.add(id),
       toAppPtyId: this.toAppPtyId
     })
+  }
+
+  /** Carry explicit Hermes launch scope to the execution host without making
+   * bookkeeping a prerequisite for a user action. The relay serializes the
+   * idempotent install under its host lock; older relays reject the optional
+   * request and the PTY still launches normally. */
+  private requestLaunchScopedManagedHooks(opts: PtySpawnOptions): void {
+    if (opts.launchAgent !== 'hermes') {
+      return
+    }
+    const profile = getHermesProfileFromCommand(opts.command)
+    void this.mux
+      .request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, {
+        agents: ['hermes'],
+        ...(profile ? { profile } : {})
+      })
+      .catch(() => undefined)
   }
 
   async supportsAgentSessionClaims(options: { signal?: AbortSignal } = {}): Promise<boolean> {

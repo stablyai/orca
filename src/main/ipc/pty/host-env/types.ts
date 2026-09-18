@@ -23,6 +23,8 @@ export type BuildPtyHostEnvOptions = {
   launchCommand?: string
   /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
   launchAgent?: TuiAgent
+  /** Effective shell selected for this PTY; used to resolve shell startup exports. */
+  shellPath?: string
   isWsl?: boolean
   /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
   wslDistro?: string | null

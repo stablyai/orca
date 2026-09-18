@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
@@ -26,7 +29,10 @@ describe('AgentHookServer OpenCode lifecycle', () => {
   }> {
     const server = new AgentHookServer()
     servers.push(server)
-    await server.start({ env: 'production' })
+    await server.start({
+      env: 'production',
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-server-health-'))
+    })
     const env = server.buildPtyEnv()
     return {
       server,
@@ -43,6 +49,7 @@ describe('AgentHookServer OpenCode lifecycle', () => {
             tabId: 'tab-opencode',
             worktreeId: 'wt-opencode',
             env: 'production',
+            version: '1',
             payload
           })
         })
@@ -69,6 +76,28 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({ paneKey: PANE, state: 'working', agentType: 'opencode' })
     ])
+  })
+
+  it('records loader and delivery receipts with wire version and execution identity', async () => {
+    const { server, post } = await setup()
+    await post({ hook_event_name: 'SessionBusy', sessionID: 'health-session' }, 'exec-health')
+    const healthPath = join(dirname(server.lastStatusPath!), 'integration-health.json')
+    const health: unknown = JSON.parse(readFileSync(healthPath, 'utf8'))
+    expect(health).toEqual(
+      expect.objectContaining({
+        records: expect.arrayContaining([
+          expect.objectContaining({
+            integration: 'opencode',
+            scope: PANE,
+            executionId: 'exec-health',
+            artifactId: 'opencode:1',
+            version: '1',
+            loader: 'loaded',
+            delivery: 'observed'
+          })
+        ])
+      })
+    )
   })
 
   it('accepts a resumed fresh user MessagePart but not arbitrary Busy', async () => {

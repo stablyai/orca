@@ -17,7 +17,10 @@ export const AGENT_HOOK_TARGETS = [
   'copilot',
   'hermes',
   'devin',
-  'kimi'
+  'kimi',
+  // Stored TUI id is `aug`; the provider implementation is Auggie (`auggie`).
+  // Keep the wire id stable and map the provider name only at the descriptor.
+  'aug'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 

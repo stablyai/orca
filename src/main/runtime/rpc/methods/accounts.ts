@@ -45,6 +45,12 @@ export const ACCOUNT_METHODS = [
     handler: async (params, { runtime }) => runtime.selectClaudeAccount(params.accountId)
   }),
   defineMethod({
+    name: 'accounts.selectClaudeWithTransition',
+    params: SelectAccountParams,
+    handler: async (params, { runtime }) =>
+      runtime.selectClaudeAccountWithTransition(params.accountId)
+  }),
+  defineMethod({
     name: 'accounts.selectCodex',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)

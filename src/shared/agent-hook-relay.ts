@@ -52,7 +52,8 @@ const AGENT_HOOK_SOURCES = [
   'copilot',
   'hermes',
   'devin',
-  'kimi'
+  'kimi',
+  'auggie'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
@@ -219,6 +220,8 @@ export type AgentHookInstallManagedHooksParams = {
   agents: readonly AgentHookTarget[]
   /** Execution-host Claude version; absent means retain the legacy hook set. */
   claudeVersion?: string
+  /** Optional per-launch provider profile; absent preserves host default. */
+  profile?: string
 }
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.
