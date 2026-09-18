@@ -95,6 +95,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   let inFlight = 0
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
   // between the two the view belongs to no document, so nothing is served and nothing is posted.
+  // No epoch rides along: one native listener delivers page frames in order, so a straggler from
+  // the closed document is always behind it and ahead of the next document's `ready`.
   let serving = true
   let postFailureReported = false
   let notifyFailureReported = false
