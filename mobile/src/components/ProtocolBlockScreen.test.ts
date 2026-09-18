@@ -101,8 +101,7 @@ describe('ProtocolBlockScreen', () => {
     const output = render({
       kind: 'blocked',
       reason: 'bundle-shell-too-old',
-      schemaVersion: 2,
-      supportedSchemaVersions: [1]
+      schemaVersion: 2
     })
     expect(output).toContain('Update Orca Mobile')
     expect(output).toContain(
@@ -154,8 +153,7 @@ describe('ProtocolBlockScreen', () => {
     const output = render({
       kind: 'blocked',
       reason: 'bundle-shell-too-old',
-      schemaVersion: 2,
-      supportedSchemaVersions: [1]
+      schemaVersion: 2
     })
     expect(output).toContain('Update Orca Mobile from GitHub Releases')
     expect(primaryActionUrl()).toBe(RELEASES_URL)
