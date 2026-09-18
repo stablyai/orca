@@ -385,12 +385,19 @@ export async function buildMobileWebAppBundle({ appDir, outDir = defaultOutDir }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
-  const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
-    await buildMobileWebAppBundle()
-  console.log(
-    `[build-mobile-web-app-bundle] OK — ${String(routeKeys.length)} route(s), ` +
-      `${String(chunkCount)} chunk(s), ${String(entryStaticBytes)} bytes before the first route, ` +
-      `${String(manifest.assets.length)} asset(s), ${String(manifest.totalBytes)} bytes, ` +
-      `buildId ${manifest.buildId} -> ${outDir}`
-  )
+  try {
+    const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
+      await buildMobileWebAppBundle()
+    console.log(
+      `[build-mobile-web-app-bundle] OK — ${String(routeKeys.length)} route(s), ` +
+        `${String(chunkCount)} chunk(s), ${String(entryStaticBytes)} bytes before the first route, ` +
+        `${String(manifest.assets.length)} asset(s), ${String(manifest.totalBytes)} bytes, ` +
+        `buildId ${manifest.buildId} -> ${outDir}`
+    )
+  } catch (error) {
+    // The route guards fail here by design, and every throw on this path already names its
+    // source, so a stack only buries which route and which export.
+    console.error(error.message)
+    process.exit(1)
+  }
 }
