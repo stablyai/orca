@@ -37,8 +37,17 @@ enum MobileWebShellBridge {
   /// The frame is the one the last accepted message came from, and nil is the whole answer for a
   /// page that has never spoken, a load that failed and a renderer that died: a post with nowhere
   /// proven to go is refused, never delivered to whatever frame happens to be current.
-  static func canPost(toFrameOriginHost host: String?, sessionId: String) -> Bool {
+  ///
+  /// `hasCommittedDocument` is the same arming acceptance reads. Between a new provisional
+  /// navigation and its commit there is no document the held frame belongs to, and `WKFrameInfo` is
+  /// a snapshot that outlives the frame it describes, so it cannot be asked.
+  static func canPost(
+    toFrameOriginHost host: String?,
+    sessionId: String,
+    hasCommittedDocument: Bool
+  ) -> Bool {
     guard
+      hasCommittedDocument,
       let host,
       MobileWebShellOrigin.isValidSessionId(sessionId),
       MobileWebShellOrigin.asciiLowercased(host)
@@ -49,6 +58,28 @@ enum MobileWebShellBridge {
 
   static func acceptsByteCount(_ byteCount: Int) -> Bool {
     byteCount <= maxMessageByteCount
+  }
+}
+
+/// Where a native post may go: the frame of the last accepted message and the host that frame
+/// reported when it spoke. One value, so the frame and the host it is checked against can never be
+/// from different documents, and generic over the frame so the rule needs no WebKit type.
+///
+/// Held for the document that armed it and no longer. Every boundary that ends that document clears
+/// it — a new provisional navigation, the commit that replaces it, a load failure, a dead renderer,
+/// a prop update — so the document now on screen has to speak before anything is posted to it.
+struct MobileWebShellBridgeTarget<Frame> {
+  private var armed: (frame: Frame, originHost: String)?
+
+  var frame: Frame? { armed?.frame }
+  var originHost: String? { armed?.originHost }
+
+  mutating func arm(frame: Frame, originHost: String) {
+    armed = (frame: frame, originHost: originHost)
+  }
+
+  mutating func clear() {
+    armed = nil
   }
 }
 

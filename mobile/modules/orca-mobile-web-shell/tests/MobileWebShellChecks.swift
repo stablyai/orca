@@ -393,8 +393,16 @@ import Foundation
   }
 
   static func checkBridgePostTarget() {
-    func canPost(_ host: String?, _ sessionId: String = session) -> Bool {
-      MobileWebShellBridge.canPost(toFrameOriginHost: host, sessionId: sessionId)
+    func canPost(
+      _ host: String?,
+      _ sessionId: String = session,
+      committed: Bool = true
+    ) -> Bool {
+      MobileWebShellBridge.canPost(
+        toFrameOriginHost: host,
+        sessionId: sessionId,
+        hasCommittedDocument: committed
+      )
     }
 
     precondition(canPost(session))
@@ -410,6 +418,48 @@ import Foundation
     precondition(!canPost("\u{212A}ey", "key"))
     precondition(!canPost(session, ""))
     precondition(!canPost("", ""))
+
+    // In flight: a navigation has started and not committed, so there is no document to post into
+    // even while a frame from the one being replaced is still held.
+    precondition(!canPost(session, committed: false))
+  }
+
+  /// The target across one document replacing another, in the order the navigation delegate runs:
+  /// a frame armed by document A is never what a post to document B goes to.
+  static func checkBridgeTargetLifecycle() {
+    func canPost(_ target: MobileWebShellBridgeTarget<String>, committed: Bool) -> Bool {
+      MobileWebShellBridge.canPost(
+        toFrameOriginHost: target.originHost,
+        sessionId: session,
+        hasCommittedDocument: committed
+      )
+    }
+
+    var target = MobileWebShellBridgeTarget<String>()
+    precondition(target.frame == nil && target.originHost == nil)
+    precondition(!canPost(target, committed: true))
+
+    // didCommit for document A, then A's first accepted message.
+    target.clear()
+    target.arm(frame: "frame-a", originHost: session)
+    precondition(target.frame == "frame-a")
+    precondition(canPost(target, committed: true))
+
+    // didStartProvisionalNavigation for document B. Refused twice over: nothing armed, and nothing
+    // committed to post into.
+    target.clear()
+    precondition(target.frame == nil)
+    precondition(!canPost(target, committed: false))
+
+    // didCommit for document B. Arming re-opens, so the clear has to happen here as well or A's
+    // frame becomes postable again as B's.
+    target.clear()
+    precondition(!canPost(target, committed: true))
+
+    // B speaks for itself, and that is the only way a post reaches it.
+    target.arm(frame: "frame-b", originHost: session)
+    precondition(target.frame == "frame-b")
+    precondition(canPost(target, committed: true))
   }
 
   static func checkBridgeByteCap() {
@@ -446,6 +496,7 @@ import Foundation
     checkAppliedProps()
     checkBridgeAcceptance()
     checkBridgePostTarget()
+    checkBridgeTargetLifecycle()
     checkBridgeByteCap()
     print("mobile web shell checks OK")
   }

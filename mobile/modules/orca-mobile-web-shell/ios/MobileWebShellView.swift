@@ -157,13 +157,6 @@ internal final class MobileWebShellBridgeDeliveryFailedException: GenericExcepti
   }
 }
 
-/// The frame a native post may go to, and the host it reported when it last spoke. One value, so
-/// the frame and the host it is checked against can never be from different documents.
-private struct MobileWebShellBridgeTarget {
-  let frame: WKFrameInfo
-  let originHost: String
-}
-
 internal final class MobileWebShellBridgeUnavailableException: Exception, @unchecked Sendable {
   override var reason: String {
     "The mobile web shell bridge is not installed on this view"
@@ -188,7 +181,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private let bridgeGate = MobileWebShellBridgeGate()
   private var bridgeEnabled = false
   private var bridgeInstalled = false
-  private var bridgeTarget: MobileWebShellBridgeTarget?
+  private var bridgeTarget = MobileWebShellBridgeTarget<WKFrameInfo>()
   private var webView: WKWebView!
   private var generationDirectory = ""
   private var sessionId = ""
@@ -343,27 +336,27 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       MobileWebShellBridge.accepts(source, sessionId: appliedSessionId ?? ""),
       bridgeGate.accepts(byteCount: json.utf8.count)
     else { return }
-    bridgeTarget = MobileWebShellBridgeTarget(frame: message.frameInfo, originHost: origin.host)
+    bridgeTarget.arm(frame: message.frameInfo, originHost: origin.host)
     onBridgeMessage(["json": json])
   }
 
   /// Anything that ends the document the page spoke from ends the only target native has.
   private func clearBridgeTarget() {
-    bridgeTarget = nil
+    bridgeTarget.clear()
   }
 
   /// Settles on what WebKit did, not on what we handed it: a post into a dead renderer, a document
-  /// that failed to load or a page that has never spoken rejects here, and the delivery itself
-  /// resolves only once the page has run it. Resolving either of those optimistically turns a
-  /// request the RN host is waiting on into one that never settles.
+  /// that failed to load, a navigation still in flight or a page that has never spoken rejects here,
+  /// and the delivery itself resolves only once the page has run it. Resolving any of those
+  /// optimistically turns a request the RN host is waiting on into one that never settles.
   func postBridgeMessage(_ json: String, promise: Promise) throws {
-    let target = bridgeTarget
     guard
       MobileWebShellBridge.canPost(
-        toFrameOriginHost: target?.originHost,
-        sessionId: appliedSessionId ?? ""
+        toFrameOriginHost: bridgeTarget.originHost,
+        sessionId: appliedSessionId ?? "",
+        hasCommittedDocument: loadState.hasCommittedDocument
       ),
-      let frame = target?.frame
+      let frame = bridgeTarget.frame
     else {
       throw MobileWebShellBridgeUnavailableException()
     }
@@ -496,6 +489,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// something to hear. Earlier than `didFinish`, because the page speaks at document start.
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
     guard isDocumentUrl(webView.url) else { return }
+    // Cleared here too, not only at the provisional start: arming is what this re-opens, so the
+    // frame the replaced document spoke from must not be inheritable by the one replacing it.
+    clearBridgeTarget()
     loadState.committed()
   }
 
