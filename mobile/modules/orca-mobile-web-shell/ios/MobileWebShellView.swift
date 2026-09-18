@@ -120,7 +120,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var pendingDocumentUrl: URL?
   private var isolationReady = false
   private var isolationFailed = false
-  private var failureReported = false
+  private let loadState = MobileWebShellLoadStateMachine()
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -168,28 +168,28 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     guard generationDirectory != appliedDirectory || sessionId != appliedSessionId else { return }
     appliedDirectory = generationDirectory
     appliedSessionId = sessionId
-    failureReported = false
+    loadState.reset()
     pendingDocumentUrl = nil
     webView.stopLoading()
-    report(state: "loading")
+    emit(loadState.started())
     guard
       MobileWebShellOrigin.isValidSessionId(sessionId),
       let documentUrl = MobileWebShellOrigin.documentUrl(sessionId: sessionId)
     else {
       // The private origin is the isolation primitive; a malformed session id leaves us without one.
-      report(state: "failed", reason: "isolation-unavailable")
+      emit(loadState.failed(.isolationUnavailable))
       return
     }
     guard
       let generation = try? MobileWebShellGeneration.load(directoryPath: generationDirectory)
     else {
-      report(state: "failed", reason: "generation-unreadable")
+      emit(loadState.failed(.generationUnreadable))
       return
     }
     schemeHandler.sessionId = sessionId
     schemeHandler.generation = generation
     if isolationFailed {
-      report(state: "failed", reason: "isolation-unavailable")
+      emit(loadState.failed(.isolationUnavailable))
       return
     }
     pendingDocumentUrl = documentUrl
@@ -206,8 +206,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
         guard let ruleList else {
           self.isolationFailed = true
           self.pendingDocumentUrl = nil
+          // Compiling is asynchronous, so this can land after the generation was already refused;
+          // the state machine is what keeps that from being a second terminal reason.
           if self.appliedSessionId != nil {
-            self.report(state: "failed", reason: "isolation-unavailable")
+            self.emit(self.loadState.failed(.isolationUnavailable))
           }
           return
         }
@@ -224,18 +226,17 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
   }
 
-  private func report(state: String, reason: String? = nil) {
-    var payload: [String: Any] = ["state": state]
-    if let reason {
+  private func emit(_ emission: MobileWebShellLoadEmission?) {
+    guard let emission else { return }
+    var payload: [String: Any] = ["state": emission.state]
+    if let reason = emission.reason {
       payload["reason"] = reason
     }
     onLoadState(payload)
   }
 
   private func reportDocumentFailure() {
-    guard !failureReported else { return }
-    failureReported = true
-    report(state: "failed", reason: "document-load-failed")
+    emit(loadState.failed(.documentLoadFailed))
   }
 
   private func isDocumentUrl(_ url: URL?) -> Bool {
@@ -273,12 +274,12 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     guard appliedSessionId != nil else { return }
-    report(state: "loading")
+    emit(loadState.started())
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     guard isDocumentUrl(webView.url) else { return }
-    report(state: "ready")
+    emit(loadState.finished())
   }
 
   func webView(
@@ -296,7 +297,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// Reported, never recovered from here. Renderer memory pressure and a WebView provider update
   /// look identical at this point, so the retry policy is the caller's and lives in one place.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-    report(state: "failed", reason: "render-process-gone")
+    emit(loadState.failed(.renderProcessGone))
   }
 
   func webView(
