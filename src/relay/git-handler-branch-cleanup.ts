@@ -5,8 +5,9 @@ import {
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { parseWorktreeList } from '../shared/git-worktree-porcelain-parser'
+import { verifyDeletedBranchCheckout } from '../shared/git-branch-delete-verification'
 
-export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
+export async function deleteMergedRelayBranchAfterWorktreeRemoval(
   git: GitExec,
   repoPath: string,
   branchName: string,
@@ -16,20 +17,21 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   const runGit = (args: string[], options?: { stdin?: string }) =>
     options ? git(args, repoPath, options) : git(args, repoPath)
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  // Why: SSH worktrees hit the same squash-merge shape as local worktrees.
-  // Git's no-op merge proof lets us clean up only branches whose changes
-  // already exist on the saved base ref.
+  // A tracking branch proves publication, not integration into the base.
   if (
     !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
       runGit,
       branchName,
       targetRefs,
-      capabilities
+      capabilities,
+      branchHead
     ))
   ) {
     return false
   }
-  await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, branchHead)
+  await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, branchHead, {
+    pruneStaleWorktrees: true
+  })
   return true
 }
 
@@ -45,10 +47,11 @@ export async function forceDeletePreservedRelayBranch(
   if (!expectedHead) {
     throw new Error('Expected branch head is required for preserved branch delete.')
   }
-  await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, expectedHead, () => {
-    return new Error(
-      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
-    )
+  await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, expectedHead, {
+    mapUpdateRefError: () =>
+      new Error(
+        `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+      )
   })
 }
 
@@ -57,9 +60,17 @@ async function deleteRelayBranchAtExpectedHead(
   repoPath: string,
   branchName: string,
   expectedHead: string,
-  mapUpdateRefError?: (error: unknown) => Error
+  options: {
+    mapUpdateRefError?: (error: unknown) => Error
+    pruneStaleWorktrees?: boolean
+  } = {}
 ): Promise<void> {
-  if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
+  let checkedOut = await isRelayBranchCheckedOut(git, repoPath, branchName)
+  if (checkedOut && options.pruneStaleWorktrees) {
+    await git(['worktree', 'prune'], repoPath)
+    checkedOut = await isRelayBranchCheckedOut(git, repoPath, branchName)
+  }
+  if (checkedOut) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
   try {
@@ -67,19 +78,13 @@ async function deleteRelayBranchAtExpectedHead(
   } catch (error) {
     // Why: only stale ref writes get the force-delete message; checkout guards
     // and removeWorktree cleanup still rely on their distinct/raw failures.
-    throw mapUpdateRefError?.(error) ?? error
+    throw options.mapUpdateRefError?.(error) ?? error
   }
-  if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
-    try {
-      await git(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
-    } catch (restoreError) {
-      console.warn(
-        `relay removeWorktree: failed to restore local branch "${branchName}" after concurrent checkout`,
-        restoreError
-      )
-    }
-    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
-  }
+  await verifyDeletedBranchCheckout(
+    branchName,
+    () => isRelayBranchCheckedOut(git, repoPath, branchName),
+    () => git(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
+  )
   try {
     await git(['config', '--remove-section', `branch.${branchName}`], repoPath)
   } catch {

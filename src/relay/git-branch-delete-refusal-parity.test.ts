@@ -1,15 +1,4 @@
-/**
- * The relay and the desktop each carried their own `getErrorText`, and they had
- * drifted: the relay read `message` + `stderr` + `stdout`, the desktop only
- * `message` + `stderr`. So a `git branch -d` refusal that arrived on `stdout`
- * routed the SSH removal through prune-and-retry while the local removal gave up
- * and preserved the branch.
- *
- * These tests push the same failure through both published removal entry points —
- * `removeWorktreeOp` (what `git.removeWorktree` runs on the host) and `removeWorktree`
- * (the local runner) — and require the same branch-deletion commands and the same
- * `RemoveWorktreeResult`. A second error-text reader on either side fails here.
- */
+// Rollback must recognize checkout refusals from either stream on both execution paths.
 import type * as FsPromises from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -85,18 +74,18 @@ type RefusalStream = 'stdout' | 'stderr'
 const REFUSAL_TEXT = `error: cannot delete branch '${BRANCH}' used by worktree at '/repo-stale'`
 
 /**
- * A `branch -d` rejection carrying the refusal on exactly one stream. `message` stays
+ * A `branch -D` rejection carrying the refusal on exactly one stream. `message` stays
  * generic so the assertion is about the stream, not about Node's stderr echo.
  */
 function branchDeleteRefusal(stream: RefusalStream): Error {
-  return Object.assign(new Error('Command failed: git branch -d'), {
+  return Object.assign(new Error('Command failed: git branch -D'), {
     code: 1,
     stdout: stream === 'stdout' ? REFUSAL_TEXT : '',
     stderr: stream === 'stderr' ? REFUSAL_TEXT : ''
   })
 }
 
-/** Refuses the first `branch -d`, accepts the retry that follows `worktree prune`. */
+/** Refuses the first `branch -D`, accepts the retry that follows `worktree prune`. */
 function scriptRelayGit(stream: RefusalStream): {
   git: GitExec
   calls: string[][]
@@ -111,7 +100,7 @@ function scriptRelayGit(stream: RefusalStream): {
     if (args[0] === 'worktree' && args[1] === 'list') {
       return { stdout: worktreeListPorcelain(true), stderr: '' }
     }
-    if (args[0] === 'branch' && args[1] === '-d') {
+    if (args[0] === 'branch' && args[1] === '-D') {
       branchDeleteCount += 1
       if (branchDeleteCount === 1) {
         throw branchDeleteRefusal(stream)
@@ -131,7 +120,7 @@ function scriptDesktopGit(stream: RefusalStream): string[][] {
     if (args[0] === 'worktree' && args[1] === 'list') {
       return { stdout: worktreeListPorcelain(branchDeleteCount === 0), stderr: '' }
     }
-    if (args[0] === 'branch' && args[1] === '-d') {
+    if (args[0] === 'branch' && args[1] === '-D') {
       branchDeleteCount += 1
       if (branchDeleteCount === 1) {
         throw branchDeleteRefusal(stream)
@@ -149,7 +138,7 @@ async function removeOverRelay(
   const { git, calls } = scriptRelayGit(stream)
   const result = await removeWorktreeOp(
     git,
-    { worktreePath: WORKTREE_PATH },
+    { worktreePath: WORKTREE_PATH, forceBranchDelete: true },
     new GitCapabilityCache()
   )
   return { result, branchCalls: branchDeletionCalls(calls) }
@@ -159,7 +148,7 @@ async function removeLocally(
   stream: RefusalStream
 ): Promise<{ result: RemoveWorktreeResult; branchCalls: string[] }> {
   const calls = scriptDesktopGit(stream)
-  const result = await removeWorktree(REPO_PATH, WORKTREE_PATH)
+  const result = await removeWorktree(REPO_PATH, WORKTREE_PATH, false, { forceBranchDelete: true })
   return { result, branchCalls: branchDeletionCalls(calls) }
 }
 
@@ -175,7 +164,7 @@ beforeEach(() => {
   moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined)
 })
 
-describe('relay/desktop branch-delete refusal parity', () => {
+describe('relay/desktop rollback branch-delete refusal parity', () => {
   it('prunes and retries on both paths when the refusal arrives on stdout', async () => {
     const relay = await removeOverRelay('stdout')
     const local = await removeLocally('stdout')
@@ -183,9 +172,9 @@ describe('relay/desktop branch-delete refusal parity', () => {
     expect(relay.branchCalls).toEqual(local.branchCalls)
     expect(relay.result).toEqual(local.result)
     expect(local.branchCalls).toEqual([
-      `branch -d -- ${BRANCH}`,
+      `branch -D -- ${BRANCH}`,
       'worktree prune',
-      `branch -d -- ${BRANCH}`
+      `branch -D -- ${BRANCH}`
     ])
     expect(local.result).toEqual({})
   })
@@ -197,9 +186,9 @@ describe('relay/desktop branch-delete refusal parity', () => {
     expect(relay.branchCalls).toEqual(local.branchCalls)
     expect(relay.result).toEqual(local.result)
     expect(local.branchCalls).toEqual([
-      `branch -d -- ${BRANCH}`,
+      `branch -D -- ${BRANCH}`,
       'worktree prune',
-      `branch -d -- ${BRANCH}`
+      `branch -D -- ${BRANCH}`
     ])
   })
 })

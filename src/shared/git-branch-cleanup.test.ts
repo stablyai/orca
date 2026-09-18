@@ -3,9 +3,30 @@ import {
   branchHasNoUnmergedChangesOnAnyTarget,
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   refreshBranchCleanupTargetRefs,
+  getBranchCleanupTargetRefs,
   type GitBranchCleanupExec
 } from './git-branch-cleanup'
 import { GitCapabilityCache } from './git-capability-cache'
+
+describe('getBranchCleanupTargetRefs', () => {
+  it.each([
+    [
+      'refs/remotes/upstream/release',
+      'refs/remotes/origin/main',
+      ['refs/remotes/upstream/release']
+    ],
+    ['', 'refs/remotes/origin/main', ['refs/remotes/origin/main']],
+    ['', '', ['HEAD']]
+  ])(
+    'uses the saved base, then repository default, then HEAD (%s)',
+    async (base, defaultRef, expected) => {
+      const runGit = vi.fn<GitBranchCleanupExec>(async (args) => ({
+        stdout: String(args[0] === 'config' ? base : defaultRef)
+      }))
+      expect(await getBranchCleanupTargetRefs(runGit, 'feature/test')).toEqual(expected)
+    }
+  )
+})
 
 function baseProofResponses(
   responses: Partial<Record<string, string | Error>> = {}
@@ -92,6 +113,56 @@ describe('refreshBranchCleanupTargetRefs', () => {
 })
 
 describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
+  it('uses the captured commit for an ancestry proof even if the named branch moved', async () => {
+    const runGit = vi.fn<GitBranchCleanupExec>(async (args) => {
+      if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'base-tip\n' }
+      }
+      if (args.join(' ') === 'merge-base base-tip captured-head') {
+        return { stdout: 'captured-head\n' }
+      }
+      throw new Error(`Unexpected proof: ${args.join(' ')}`)
+    })
+    expect(
+      await branchHasNoUnmergedChangesOnAnyTarget(
+        runGit,
+        'feature/test',
+        ['HEAD'],
+        new GitCapabilityCache(),
+        'captured-head'
+      )
+    ).toBe(true)
+    expect(runGit.mock.calls.flatMap(([args]) => args)).not.toContain('refs/heads/feature/test')
+  })
+
+  it('pins the squash and patch-equivalence proofs to the captured commit', async () => {
+    const runGit = vi.fn<GitBranchCleanupExec>(async (args) => {
+      const responses: Record<string, string> = {
+        'rev-parse --verify --quiet HEAD^{commit}': 'base-tip\n',
+        'merge-base base-tip captured-head': 'ancestor\n',
+        'merge-tree --write-tree base-tip captured-head': 'changed-tree\n',
+        'rev-parse --verify --quiet base-tip^{tree}': 'base-tree\n',
+        'rev-list --right-only --merges --count base-tip...captured-head': '0\n',
+        'cherry -v base-tip captured-head': '- captured-head already integrated\n'
+      }
+      const response = responses[args.join(' ')]
+      if (response === undefined) {
+        throw new Error(`Unexpected proof: ${args.join(' ')}`)
+      }
+      return { stdout: response }
+    })
+    expect(
+      await branchHasNoUnmergedChangesOnAnyTarget(
+        runGit,
+        'feature/test',
+        ['HEAD'],
+        new GitCapabilityCache(),
+        'captured-head'
+      )
+    ).toBe(true)
+    expect(runGit).toHaveBeenCalledWith(['cherry', '-v', 'base-tip', 'captured-head'], undefined)
+  })
+
   it('accepts a branch with merge commits when a target squash commit matches its net patch', async () => {
     const runGit = baseProofResponses()
 
@@ -121,6 +192,25 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
       )
     ).resolves.toBe(false)
   })
+
+  it.each(['', 'invalid', new Error('history unavailable')])(
+    'preserves patch-equivalent commits when merge history cannot be verified (%s)',
+    async (mergeCount) => {
+      const runGit = baseProofResponses({
+        'rev-list --right-only --merges --count target...refs/heads/feature/test': mergeCount,
+        'cherry -v target refs/heads/feature/test': '- branch-only patch\n'
+      })
+
+      await expect(
+        branchHasNoUnmergedChangesOnAnyTarget(
+          runGit,
+          'feature/test',
+          ['refs/remotes/origin/main'],
+          new GitCapabilityCache()
+        )
+      ).resolves.toBe(false)
+    }
+  )
 
   it('preserves when a matching squash candidate still changes after merging the branch', async () => {
     const runGit = baseProofResponses({
