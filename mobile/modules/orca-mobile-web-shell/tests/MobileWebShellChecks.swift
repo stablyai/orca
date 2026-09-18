@@ -242,6 +242,29 @@ import Foundation
 
     refused.reset()
     precondition(refused.failed(.generationUnreadable)?.reason == "generation-unreadable")
+
+    // A document is heard only between its own commit and the end of that load.
+    let arming = MobileWebShellLoadStateMachine()
+    precondition(!arming.hasCommittedDocument)
+    _ = arming.started()
+    // The previous document is alive and same-origin until the next one commits.
+    precondition(!arming.hasCommittedDocument)
+    arming.committed()
+    precondition(arming.hasCommittedDocument)
+
+    // A new prop triple: the committed document is the one being replaced.
+    arming.reset()
+    precondition(!arming.hasCommittedDocument)
+    arming.committed()
+    arming.documentEnded()
+    precondition(!arming.hasCommittedDocument)
+
+    // A failure ends the document, and nothing after it re-arms: a retry is a remount.
+    arming.committed()
+    _ = arming.failed(.renderProcessGone)
+    precondition(!arming.hasCommittedDocument)
+    arming.committed()
+    precondition(!arming.hasCommittedDocument)
   }
 
   static func checkResponseHeaders() {
@@ -287,12 +310,14 @@ import Foundation
   static func bridgeSource(
     isOurWebView: Bool = true,
     isMainFrame: Bool = true,
+    hasCommittedDocument: Bool = true,
     originProtocol: String = MobileWebShellOrigin.scheme,
     originHost: String = session
   ) -> MobileWebShellBridgeSource {
     MobileWebShellBridgeSource(
       isOurWebView: isOurWebView,
       isMainFrame: isMainFrame,
+      hasCommittedDocument: hasCommittedDocument,
       originProtocol: originProtocol,
       originHost: originHost
     )
@@ -357,6 +382,10 @@ import Foundation
     // A subframe, and a message routed to a WebView that is not ours.
     precondition(!acceptsBridge(bridgeSource(isMainFrame: false)))
     precondition(!acceptsBridge(bridgeSource(isOurWebView: false)))
+
+    // The document the current props replaced: same session, same origin, still alive between
+    // `stopLoading` and the next commit, speaking for a load already reported as `loading`.
+    precondition(!acceptsBridge(bridgeSource(hasCommittedDocument: false)))
 
     // No applied session is not an empty one: nothing may be accepted before a load.
     precondition(!MobileWebShellBridge.accepts(bridgeSource(originHost: ""), sessionId: ""))

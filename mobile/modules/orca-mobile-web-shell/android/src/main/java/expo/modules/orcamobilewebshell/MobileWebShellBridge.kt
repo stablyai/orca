@@ -20,9 +20,16 @@ internal fun acceptsMobileWebShellBridgeByteCount(byteCount: Int): Boolean =
  * here; what is left is the frame. CSP already says `frame-src 'none'`, but the injected object
  * reaches every same-origin frame, so the shell states the main-frame rule itself rather than
  * inheriting it from a header a future bundle could need relaxed.
+ *
+ * The document the current props replaced is same-origin whenever only the directory or the bridge
+ * prop changed, and it is alive until the next one commits, so it has to be refused by when it
+ * spoke rather than by where it spoke from.
  */
-internal fun acceptsMobileWebShellBridgeFrame(isMainFrame: Boolean, isStringMessage: Boolean): Boolean =
-  isMainFrame && isStringMessage
+internal fun acceptsMobileWebShellBridgeFrame(
+  isMainFrame: Boolean,
+  isStringMessage: Boolean,
+  hasCommittedDocument: Boolean
+): Boolean = isMainFrame && isStringMessage && hasCommittedDocument
 
 /**
  * Refusal is silent: the shell exposes no new state and tells the page nothing, because a page that

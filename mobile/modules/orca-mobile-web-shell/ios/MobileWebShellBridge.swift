@@ -24,6 +24,7 @@ enum MobileWebShellBridge {
     guard
       source.isOurWebView,
       source.isMainFrame,
+      source.hasCommittedDocument,
       source.originProtocol == MobileWebShellOrigin.scheme,
       MobileWebShellOrigin.isValidSessionId(sessionId),
       MobileWebShellOrigin.asciiLowercased(source.originHost)
@@ -55,6 +56,8 @@ enum MobileWebShellBridge {
 struct MobileWebShellBridgeSource {
   var isOurWebView: Bool
   var isMainFrame: Bool
+  /// Whether a document has committed under the props this message is being judged against.
+  var hasCommittedDocument: Bool
   var originProtocol: String
   var originHost: String
 }

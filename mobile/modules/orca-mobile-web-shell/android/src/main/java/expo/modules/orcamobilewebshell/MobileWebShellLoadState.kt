@@ -32,11 +32,31 @@ internal class MobileWebShellLoadStateMachine {
   var epoch: Int = 0
     private set
 
+  /**
+   * Whether a document under the current prop triple has committed. The document a load replaces
+   * stays alive between `stopLoading` and the next commit, and it is same-origin whenever only the
+   * directory or the bridge prop changed, so without this it passes every origin check and speaks
+   * for a load the caller has already been told is `loading`.
+   */
+  var hasCommittedDocument = false
+    private set
+
   /** A new prop pair. Nothing else reopens a terminal state: a retry is a remount. */
   fun reset() {
     terminal = false
     last = null
     epoch += 1
+    documentEnded()
+  }
+
+  fun committed() {
+    if (terminal) return
+    hasCommittedDocument = true
+  }
+
+  /** The committed document is gone: a new load, a failure, or a renderer that died. */
+  fun documentEnded() {
+    hasCommittedDocument = false
   }
 
   fun started(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("loading", null))
@@ -46,6 +66,7 @@ internal class MobileWebShellLoadStateMachine {
   fun failed(reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? {
     val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName))
     terminal = true
+    documentEnded()
     return emission
   }
 

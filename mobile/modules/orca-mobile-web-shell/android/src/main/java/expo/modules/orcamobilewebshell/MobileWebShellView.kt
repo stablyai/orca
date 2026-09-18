@@ -130,7 +130,10 @@ internal class OrcaMobileWebShellView(
    * served and visible would show a page the caller has just been told is not loaded.
    */
   private fun failPropUpdate(reason: MobileWebShellFailureReason) {
-    replyProxy = null
+    // The listener outlives the props it was installed under, and the document it was installed
+    // for is still alive after `stopLoading`: left in place it would keep posting through an
+    // origin this mount has just stopped serving, and re-arm the reply proxy doing it.
+    removeBridgeListener()
     served = null
     webView?.visibility = View.INVISIBLE
     emit(loadState.failed(reason))
@@ -143,11 +146,7 @@ internal class OrcaMobileWebShellView(
    * offer the listener at all.
    */
   private fun applyBridgeListener(view: WebView, origin: String): Boolean {
-    if (bridgeInstalled) {
-      WebViewCompat.removeWebMessageListener(view, MOBILE_WEB_SHELL_BRIDGE_OBJECT)
-      bridgeInstalled = false
-    }
-    replyProxy = null
+    removeBridgeListener()
     val outcome = mobileWebShellBridgeInstall(
       bridgeEnabled,
       WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
@@ -166,12 +165,27 @@ internal class OrcaMobileWebShellView(
     }.isSuccess
   }
 
+  /** The one way the bridge goes away, so no disable path can leave a listener behind. */
+  private fun removeBridgeListener() {
+    val view = webView
+    if (bridgeInstalled && view != null) {
+      WebViewCompat.removeWebMessageListener(view, MOBILE_WEB_SHELL_BRIDGE_OBJECT)
+    }
+    bridgeInstalled = false
+    replyProxy = null
+  }
+
   /** Chromium calls this on the UI thread, which is also the only thread that may reply. */
   private val bridgeListener = WebViewCompat.WebMessageListener {
     _, message, _, isMainFrame, proxy ->
     val isStringMessage = message.type == WebMessageCompat.TYPE_STRING
     val json = if (isStringMessage) message.data else null
-    if (acceptsMobileWebShellBridgeFrame(isMainFrame, isStringMessage) && json != null &&
+    if (
+      acceptsMobileWebShellBridgeFrame(
+        isMainFrame,
+        isStringMessage,
+        loadState.hasCommittedDocument
+      ) && json != null &&
       bridgeGate.accepts(json.toByteArray(Charsets.UTF_8).size)
     ) {
       replyProxy = proxy
@@ -195,12 +209,9 @@ internal class OrcaMobileWebShellView(
   /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
   fun destroyWebView() {
     val view = webView ?: return
+    removeBridgeListener()
+    loadState.documentEnded()
     webView = null
-    if (bridgeInstalled) {
-      WebViewCompat.removeWebMessageListener(view, MOBILE_WEB_SHELL_BRIDGE_OBJECT)
-      bridgeInstalled = false
-    }
-    replyProxy = null
     blocker?.remove()
     blocker = null
     served = null
@@ -265,6 +276,9 @@ internal class OrcaMobileWebShellView(
    */
   private fun reportDocumentFailure() {
     replyProxy = null
+    // Synchronously, unlike the emission: the error document commits before the post runs, and a
+    // page that failed is not one to hear from in the meantime.
+    loadState.documentEnded()
     // Set before the post, not inside it: onPageFinished runs in between and would otherwise
     // report `ready` over the failure and make the error page visible again.
     documentFailed = true
@@ -349,7 +363,11 @@ internal class OrcaMobileWebShellView(
       // The document that spoke is being replaced, so its proxy stops being somewhere to post: the
       // next one has to say `ready` first, which is what the envelope has it do.
       replyProxy = null
+      loadState.documentEnded()
       if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
+      // The load the caller was told about is the one now on screen, so this is where the page
+      // becomes something to hear. Chromium runs page script after this.
+      loadState.committed()
       emit(loadState.started())
     }
 

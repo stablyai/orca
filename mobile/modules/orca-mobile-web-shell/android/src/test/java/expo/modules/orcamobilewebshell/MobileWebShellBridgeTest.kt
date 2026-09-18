@@ -37,15 +37,24 @@ class MobileWebShellBridgeTest {
   }
 
   @Test
-  fun `hears only a string message from the main frame`() {
-    assertTrue(acceptsMobileWebShellBridgeFrame(isMainFrame = true, isStringMessage = true))
+  fun `hears only a string message from the main frame of a committed document`() {
+    assertTrue(frame())
     // CSP says frame-src 'none', but Chromium injects the object into every same-origin frame, so
     // the shell states the rule itself rather than inheriting it from a header C0.7 has to relax.
-    assertFalse(acceptsMobileWebShellBridgeFrame(isMainFrame = false, isStringMessage = true))
+    assertFalse(frame(isMainFrame = false))
     // An ArrayBuffer message: getData() throws on one, and base64 in JSON is the only binary lane.
-    assertFalse(acceptsMobileWebShellBridgeFrame(isMainFrame = true, isStringMessage = false))
-    assertFalse(acceptsMobileWebShellBridgeFrame(isMainFrame = false, isStringMessage = false))
+    assertFalse(frame(isStringMessage = false))
+    assertFalse(frame(isMainFrame = false, isStringMessage = false))
+    // The document the current props replaced, still alive and still same-origin, speaking for a
+    // load the caller has already been told is `loading`.
+    assertFalse(frame(hasCommittedDocument = false))
   }
+
+  private fun frame(
+    isMainFrame: Boolean = true,
+    isStringMessage: Boolean = true,
+    hasCommittedDocument: Boolean = true
+  ) = acceptsMobileWebShellBridgeFrame(isMainFrame, isStringMessage, hasCommittedDocument)
 
   @Test
   fun `asks for the listener only when the bridge was asked for`() {

@@ -335,6 +335,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     let source = MobileWebShellBridgeSource(
       isOurWebView: message.webView === webView,
       isMainFrame: message.frameInfo.isMainFrame,
+      hasCommittedDocument: loadState.hasCommittedDocument,
       originProtocol: origin.`protocol`,
       originHost: origin.host
     )
@@ -482,11 +483,20 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-    // The document that spoke is being replaced, so its frame stops being somewhere to post: the
-    // next one has to say `ready` first, which is what the envelope has it do.
+    // The document that spoke is being replaced, so it stops being somewhere to post and stops
+    // being someone to hear: the next one has to commit, then say `ready`, which is what the
+    // envelope has it do.
     clearBridgeTarget()
+    loadState.documentEnded()
     guard appliedSessionId != nil else { return }
     emit(loadState.started())
+  }
+
+  /// The load the caller was told about is the one now on screen, so this is where the page becomes
+  /// something to hear. Earlier than `didFinish`, because the page speaks at document start.
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    guard isDocumentUrl(webView.url) else { return }
+    loadState.committed()
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
