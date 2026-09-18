@@ -19,12 +19,20 @@ function bytesOf(text: string): Uint8Array {
   return new TextEncoder().encode(text)
 }
 
+type HostCall = { method: string; params: unknown }
+
 type HostOptions = {
   chunkBytes?: number
   buildId?: string
   /** Replaces the reply the host would have sent for this request. */
-  intercept?: (call: { method: string; params: Record<string, unknown> }) => unknown
+  intercept?: (call: HostCall) => unknown
   onInFlight?: (inFlight: number) => void
+}
+
+/** Box first, so params that are not an object read as absent instead of throwing. */
+function paramField(params: unknown, key: string): unknown {
+  const boxed: Record<string, unknown> = Object(params)
+  return boxed[key]
 }
 
 /** A host that serves a fixed asset table by the same rules the real one does. */
@@ -50,15 +58,15 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
     totalBytes: assets.reduce((total, entry) => total + entry.byteLength, 0),
     assets
   }
-  const calls: { method: string; params: Record<string, unknown> }[] = []
+  const calls: HostCall[] = []
   let inFlight = 0
 
-  const answer = (method: string, params: Record<string, unknown>): unknown => {
+  const answer = (method: string, params: unknown): unknown => {
     if (method === 'mobileWeb.bundle.manifest') {
       return { manifest, chunkBytes }
     }
-    const path = String(params.path)
-    const offset = Number(params.offset)
+    const path = String(paramField(params, 'path'))
+    const offset = Number(paramField(params, 'offset'))
     const content = bytes.get(path)!
     const slice = content.subarray(offset, offset + chunkBytes)
     return {
@@ -74,7 +82,7 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
 
   const client: RpcClient = {
     sendRequest: vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
-      const call = { method, params: (params ?? {}) as Record<string, unknown> }
+      const call: HostCall = { method, params: params ?? {} }
       calls.push(call)
       inFlight += 1
       options.onInFlight?.(inFlight)
@@ -154,7 +162,7 @@ describe('fetchMobileWebBundle', () => {
       {
         chunkBytes: 3,
         intercept: (call) =>
-          call.method === 'mobileWeb.bundle.chunk' && call.params.offset === 3
+          call.method === 'mobileWeb.bundle.chunk' && paramField(call.params, 'offset') === 3
             ? {
                 buildId: BUILD_ID,
                 path: 'index.html',
@@ -179,7 +187,7 @@ describe('fetchMobileWebBundle', () => {
       {
         chunkBytes: 3,
         intercept: (call) =>
-          call.method === 'mobileWeb.bundle.chunk' && call.params.offset === 3
+          call.method === 'mobileWeb.bundle.chunk' && paramField(call.params, 'offset') === 3
             ? {
                 buildId: 'c'.repeat(64),
                 path: 'index.html',
