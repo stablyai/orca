@@ -168,16 +168,16 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
  * What this tree measures, per class, over all 787 goldens.
  *
  * A ratchet, not a description: the run fails when a class grows past its number here, when
- * anything lands in `unclassified`, or when fewer goldens replay byte-identically than this says.
- * Each class is an upper bound and `identical` a lower one, and this module's test pins the sum of
- * every number below to the size of the corpus — which is what stops one class being loosened on
- * its own, since a class that grows has to be paid for out of another.
+ * anything lands in `unclassified`, or when the goldens that replay byte-identically are not
+ * exactly this many. Each class is an upper bound, and this module's test pins the sum of every
+ * number below to the size of the corpus — which is what stops one class being loosened on its
+ * own, since a class that grows has to be paid for out of another.
  *
- * `identical` only moves up and a class only moves down, with one exception that is not a
- * regression. Two excluded classes can trade members when a fix changes which difference a run
- * meets first, and then both numbers move here at once, in opposite directions, leaving the sum
- * alone. That trade cannot hide a golden that stopped replaying byte-identically, because such a
- * golden takes `identical` down with it and the run refuses that outright.
+ * `identical` only moves up and a class only moves down, and either move is an edit here rather
+ * than a run that quietly passes. Two excluded classes can also trade members when a fix changes
+ * which difference a run meets first, and then both numbers move at once, in opposite directions,
+ * leaving the sum alone. That trade cannot hide a golden that stopped replaying byte-identically,
+ * because such a golden takes `identical` off its number and the run refuses that outright.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
   identical: 396,

@@ -18,6 +18,13 @@ import {
   type BridgedParityEvidence
 } from '../bridged-parity/divergence-classes'
 import {
+  c1PageClosureDrift,
+  c1PageClosureExclusions,
+  C1_PAGE_CLOSURE,
+  type BridgedParityVerdict,
+  type C1PageClosureObservation
+} from '../bridged-parity/c1-page-closure'
+import {
   divergingFields,
   paramsMismatchEvidence,
   recordingWithoutRpcMeta,
@@ -61,7 +68,9 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * golden leaving a class as another arrives.
  *
  * 396 of the 787 replay byte for byte. The other 391 fall in five classes, 341 / 3 / 6 / 33 / 8,
- * and none of them is a reason to re-record anything.
+ * and none of them is a reason to re-record anything. `c1-page-closure.ts` then pins, golden by
+ * golden, the 103 recorded at a call site the C1 page owns, because a count over 787 cannot tell a
+ * domain's regression from another domain's improvement.
  *
  * 1. **result-absent-settlement, 341** and **2. result-absent-observation, 7.**
  *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
@@ -139,6 +148,8 @@ const counts: Record<BridgedParityClass, number> = {
 let identical = 0
 const members = new Map<BridgedParityClass, string[]>()
 const samples = new Map<BridgedParityClass, string>()
+/** Every golden's own verdict, which is what the C1 closure is pinned against golden by golden. */
+const observed = new Map<string, C1PageClosureObservation>()
 
 /**
  * The page's client over the shared port pair, holding the recorder's scripted client shell-side.
@@ -240,15 +251,20 @@ function describeParamsMismatch(evidence: BridgedParityEvidence): string {
  */
 async function verdict(
   id: string,
+  family: string,
   scenarios: readonly RecordingScenario[],
   run: Replay
 ): Promise<void> {
+  const record = (name: BridgedParityVerdict): void => {
+    observed.set(id, { family, verdict: name })
+  }
   const expected = readGolden(directory, id)
   const fields = run.recording === null ? [] : divergingFields(expected.recording, run.recording)
   if (run.recording !== null && fields.length === 0) {
     // Not redundant with the field walk: this one also pins the encoding and the header.
     compareGolden(expected, { ...expected, recording: run.recording })
     identical += 1
+    record('identical')
     return
   }
   const asIf = await replay(id, scenarios, withReplyMeta)
@@ -268,6 +284,7 @@ async function verdict(
   }
   const name = classifyBridgedParity(evidence)
   counts[name] += 1
+  record(name)
   if (name === 'unclassified') {
     throw new Error(
       `Unclassified bridged divergence: ${id}\n${explain(fields, run)}\n${describeParamsMismatch(evidence)}with \`_meta\` supplied:\n${explain(asIfFields, asIf)}`
@@ -284,7 +301,12 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
   () => {
     for (const pilot of pilotGoldens(input.scenarios)) {
       it(`${pilot.id}: bridged parity`, async () => {
-        await verdict(pilot.id, [pilot.scenario], await replay(pilot.id, [pilot.scenario]))
+        await verdict(
+          pilot.id,
+          pilot.family,
+          [pilot.scenario],
+          await replay(pilot.id, [pilot.scenario])
+        )
       })
     }
     for (const golden of familyGoldens(input.scenarios)) {
@@ -292,7 +314,7 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
         `${golden.id}: bridged parity`,
         async () => {
           const scenarios = [...golden.scenarios()]
-          await verdict(golden.id, scenarios, await replay(golden.id, scenarios))
+          await verdict(golden.id, golden.family, scenarios, await replay(golden.id, scenarios))
         },
         golden.timeoutMs
       )
@@ -334,7 +356,34 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
           [name]: Math.min(count, BRIDGED_PARITY_BASELINE[asClass(name)])
         })
       }
-      expect(identical).toBeGreaterThanOrEqual(BRIDGED_PARITY_BASELINE.identical)
+      // Exact, not a floor, and the size of the run is pinned with it: every class above is an
+      // upper bound, so without this a corpus that lost goldens outside the identical set would
+      // satisfy all of them.
+      const pinned = total(BRIDGED_PARITY_BASELINE)
+      expect({ corpus, identical }).toEqual({ corpus: pinned, identical: pinned - excludedCount })
+    })
+
+    it('gives every golden the C1 page closure records the verdict it is pinned to', () => {
+      const closure = [...observed].filter(([, seen]) => seen.family in C1_PAGE_CLOSURE)
+      const diverged = closure.filter(([, seen]) => seen.verdict !== 'identical')
+      process.stdout.write(
+        `\nC1 page closure: ${closure.length} goldens in ${
+          Object.keys(C1_PAGE_CLOSURE).length
+        } families, ${closure.length - diverged.length} byte-identical\n`
+      )
+      for (const [id, seen] of diverged) {
+        process.stdout.write(`  ${id}: ${seen.verdict}\n`)
+      }
+      // Each by id, because the counts above cannot see this domain: a closure golden that stopped
+      // replaying identically is paid for by any of the other 684 that started.
+      expect({ closure: c1PageClosureDrift(observed) }).toEqual({ closure: [] })
+      // A closure golden may sit in an excluded class only where that class is one of the proven
+      // observation artifacts, which is what having a reason in the table means.
+      expect(
+        c1PageClosureExclusions().filter(
+          ([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined
+        )
+      ).toEqual([])
     })
   }
 )
