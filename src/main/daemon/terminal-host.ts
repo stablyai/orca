@@ -54,7 +54,6 @@ export class TerminalHost {
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
-  private maxTombstones: number
   private creationFenced = false
   private disposePromise: Promise<void> | null = null
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
@@ -71,8 +70,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
-    this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
+    this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
   async createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -123,20 +121,7 @@ export class TerminalHost {
             ...(this.reportReadinessEvent
               ? { reportReadinessEvent: this.reportReadinessEvent }
               : {}),
-            onSessionExit: (sessionId, generation) => {
-              const session = this.sessions.get(sessionId)
-              if (session) {
-                pruneRetiredPtyIncarnations(this.retiredIncarnations)
-                this.retiredIncarnations.set(sessionId, {
-                  incarnationId: session.incarnationId,
-                  code: session.exitCode ?? 0,
-                  expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
-                })
-              }
-              this.agentSessionOwners.release(sessionId, generation)
-              this.agentSessionGenerations.forget(sessionId, generation)
-              this.reapSession(sessionId)
-            }
+            onSessionExit: this.handleSessionExit.bind(this)
           })
         }
       })
@@ -144,6 +129,21 @@ export class TerminalHost {
       this.pendingCreations.delete(opts.sessionId)
       settleCreation()
     }
+  }
+
+  private handleSessionExit(sessionId: string, generation: string | undefined): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      pruneRetiredPtyIncarnations(this.retiredIncarnations)
+      this.retiredIncarnations.set(sessionId, {
+        incarnationId: session.incarnationId,
+        code: session.exitCode ?? 0,
+        expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
+      })
+    }
+    this.agentSessionOwners.release(sessionId, generation)
+    this.agentSessionGenerations.forget(sessionId, generation)
+    this.reapSession(sessionId)
   }
 
   private assertCreateOrAttachAllowed(opts: InternalCreateOrAttachOptions): void {

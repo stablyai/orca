@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   existsSyncMock,
+  loginPreflightExecFileMock,
   spawnMock,
   openCodeClearPtyMock,
   piClearPtyMock
@@ -162,9 +163,25 @@ describe('registerPtyHandlers', () => {
       rows: 24
     })) as { id: string }
 
+    let finishSnapshot: (() => void) | undefined
+    loginPreflightExecFileMock.mockImplementationOnce(
+      (
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string) => void
+      ) => {
+        finishSnapshot = () => callback(null, '')
+      }
+    )
     const killPromise = handlers.get('pty:kill')!(null, { id: spawnResult.id }) as Promise<void>
 
-    expect(killSpy).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(finishSnapshot).toBeTypeOf('function'))
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(onDataDisposable.dispose).not.toHaveBeenCalled()
+    expect(onExitDisposable.dispose).not.toHaveBeenCalled()
+    finishSnapshot?.()
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledTimes(1))
     expect(onDataDisposable.dispose).not.toHaveBeenCalled()
     expect(onExitDisposable.dispose).not.toHaveBeenCalled()
 

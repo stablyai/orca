@@ -8,6 +8,7 @@ import type {
   AgentSessionBackgroundTaskRunState
 } from '../../shared/agent-session-wire'
 import { backgroundTaskFallbackText } from '../../shared/native-chat-background-task-row'
+import { ownRetainedString } from '../../shared/own-retained-string'
 
 const MAX_TASK_ID_LENGTH = 512
 const MAX_TASK_TEXT_LENGTH = 512
@@ -39,7 +40,7 @@ function boundedTaskText(value: unknown): string | undefined {
     return undefined
   }
   const trimmed = value.trim().replace(/\s+/g, ' ')
-  return trimmed.length > 0 ? trimmed.slice(0, MAX_TASK_TEXT_LENGTH) : undefined
+  return trimmed.length > 0 ? ownRetainedString(trimmed.slice(0, MAX_TASK_TEXT_LENGTH)) : undefined
 }
 
 export function taskDescription(value: unknown): string | undefined {

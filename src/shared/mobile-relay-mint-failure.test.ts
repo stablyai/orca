@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { mobileRelayMintFailureFromUnknown } from './mobile-relay-mint-failure'
 
+// The producer end of this contract is pinned separately, in
+// src/main/runtime/relay/relay-control-timeout-classification.test.ts.
 describe('mobileRelayMintFailureFromUnknown', () => {
   it('keeps known machine-readable Relay codes for diagnostics', () => {
     expect(

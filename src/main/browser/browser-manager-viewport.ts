@@ -164,6 +164,9 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
         })
+        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
+          return false
+        }
         // Navigation must see the preset while the final CDP write is in flight.
         this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
         await this.sendViewportUserAgentOverride(guest, override.mobile)
@@ -179,6 +182,9 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           enabled: false,
           maxTouchPoints: 0
         })
+        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
+          return false
+        }
         const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
         // A navigation after this point must not re-install the override behind the clear.
         this.viewportUaOverrideMobileByTabId.delete(browserTabId)
@@ -204,7 +210,10 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
             await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
           }
         } catch (error) {
-          if (trackedMobile !== undefined) {
+          if (
+            trackedMobile !== undefined &&
+            this.webContentsIdByTabId.get(browserTabId) === webContentsId
+          ) {
             this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
           }
           throw error

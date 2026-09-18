@@ -226,7 +226,7 @@ export class CodexPromptRegistry {
 
   clearTurn(threadId: string, turnId: string): void {
     const prompts = new Set(
-      [...this.byAddress.values(), ...this.boundPrompts.values()].filter(
+      [...this.byAddress.values(), ...this.boundPrompts.values(), ...this.claims.keys()].filter(
         (prompt) => prompt.threadId === threadId && codexPromptMatchesTurn(prompt, turnId)
       )
     )

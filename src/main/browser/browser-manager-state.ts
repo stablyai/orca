@@ -75,7 +75,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   ): void
   protected abstract cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void
   protected abstract hasActiveGrabOp(browserTabId: string): boolean
-  protected abstract unregisterGuest(browserTabId: string): void
+  protected abstract unregisterGuest(
+    browserTabId: string,
+    reason?: 'page-closed' | 'guest-destroyed'
+  ): void
   protected abstract cancelDownloadInternal(downloadId: string, reason: string): void
   protected abstract bindDownloadToTab(downloadId: string, browserTabId: string): void
   protected abstract flushDownloadSnapshot(downloadId: string): void

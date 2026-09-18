@@ -5,6 +5,7 @@ import { getRepoIdFromWorktreeId } from './worktree/id'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
 import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from './utf8-byte-limits'
 import { parseExecutionHostId } from './execution-host'
+import { ownRetainedString } from './own-retained-string'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -53,7 +54,9 @@ export function capTerminalScrollbackSessionBuffer(buffer: string): string {
   if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)) {
     return buffer
   }
-  return clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+  return ownRetainedString(
+    clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+  )
 }
 
 function capTerminalScrollbackLeafBuffers(buffers: Record<string, string> | undefined): {

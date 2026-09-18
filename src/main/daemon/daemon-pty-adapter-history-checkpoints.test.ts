@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Periodic/final history checkpointing: scheduling, work caps, cooldown and shutdown writes. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'

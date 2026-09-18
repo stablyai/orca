@@ -107,14 +107,16 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
           ? existing.ptyGeneration + 1
           : (existing?.ptyGeneration ?? 0)
       const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
+      // Retained history stays addressable, but a renderer graph cannot revoke a host-certified exit.
+      const connected = ptyId !== null && this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
       const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
       nextLeaves.set(leafKey, {
         ...leaf,
         ptyId,
         ptyGeneration,
-        connected: ptyId !== null,
-        writable: this.graphStatus === 'ready' && ptyId !== null,
+        connected,
+        writable: this.graphStatus === 'ready' && connected,
         lastOutputAt: tailSource?.lastOutputAt ?? null,
         lastExitCode: tailSource?.lastExitCode ?? null,
         lastExitCause: tailSource?.lastExitCause ?? null,
@@ -138,7 +140,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
             : graphSyncedAt
       })
 
-      if (leaf.ptyId) {
+      if (leaf.ptyId && connected) {
         this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {
           connected: true,
           lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,

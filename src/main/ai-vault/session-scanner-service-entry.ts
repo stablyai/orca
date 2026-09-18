@@ -187,6 +187,9 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'cancel') {
+    if (!pending.has(raw.id)) {
+      return
+    }
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
     return

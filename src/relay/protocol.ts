@@ -50,18 +50,62 @@ export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
   return encodeFrame(MessageType.Handshake, 0, 0, payload)
 }
 
+// Why the fields are checked and not just the type: this frame arrives before any credential, and
+// both sides interpolate its version fields into log lines. `JSON.parse` can produce values a
+// template literal throws on, so anything that reaches a reader must already be a string.
+const HANDSHAKE_STRING_FIELDS: Readonly<Record<HandshakeMessage['type'], readonly string[]>> = {
+  'orca-relay-handshake': ['version'],
+  'orca-relay-handshake-ok': ['version'],
+  'orca-relay-handshake-mismatch': ['expected', 'got'],
+  'orca-relay-handshake-credential-mismatch': []
+}
+
+// Optional fields are peer-supplied too, so the parser only proves the type of what it returns if
+// it refuses a present-but-wrong one. `endpointCredential` survives today only because its single
+// reader compares it and never interpolates it; the next reader to log it would restore the bug
+// this function exists to stop. Absent stays absent — refusing that would break a bridge that
+// legitimately presents no credential.
+const HANDSHAKE_OPTIONAL_STRING_FIELDS: Readonly<
+  Record<HandshakeMessage['type'], readonly string[]>
+> = {
+  'orca-relay-handshake': ['endpointCredential'],
+  'orca-relay-handshake-ok': [],
+  'orca-relay-handshake-mismatch': [],
+  'orca-relay-handshake-credential-mismatch': []
+}
+
 export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
-  const msg = JSON.parse(payload.toString('utf-8')) as HandshakeMessage
-  const t = (msg as { type?: string }).type
-  if (
-    t !== 'orca-relay-handshake' &&
-    t !== 'orca-relay-handshake-ok' &&
-    t !== 'orca-relay-handshake-mismatch' &&
-    t !== 'orca-relay-handshake-credential-mismatch'
-  ) {
-    throw new Error(`Unknown handshake type: ${t}`)
+  const parsed: unknown = JSON.parse(payload.toString('utf-8'))
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Handshake payload is not an object')
   }
-  return msg
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typeof/null guard directly above is exactly what makes this an index-able object; every read below still proves its own field.
+  const msg = parsed as Record<string, unknown>
+  const t = msg.type
+  const required =
+    typeof t === 'string' && Object.hasOwn(HANDSHAKE_STRING_FIELDS, t)
+      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reached only when Object.hasOwn proved t is a key of this record, on the same line.
+        HANDSHAKE_STRING_FIELDS[t as HandshakeMessage['type']]
+      : null
+  if (required === null) {
+    // Why typeof and not String(t): a peer-supplied `{ "type": { "toString": 1 } }` makes String()
+    // itself throw "Cannot convert object to primitive value", replacing the one diagnostic this
+    // line exists to produce.
+    throw new Error(`Unknown handshake type: ${typeof t === 'string' ? t : typeof t}`)
+  }
+  for (const field of required) {
+    if (typeof msg[field] !== 'string') {
+      throw new Error(`Handshake field ${field} is not a string`)
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the required === null bail above already refused every t that is not one of the four keys.
+  for (const field of HANDSHAKE_OPTIONAL_STRING_FIELDS[t as HandshakeMessage['type']]) {
+    if (msg[field] !== undefined && typeof msg[field] !== 'string') {
+      throw new Error(`Handshake field ${field} is not a string`)
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the one place the shape is proved: the type is one of the four literals and every field the union declares has been checked to be a string.
+  return msg as unknown as HandshakeMessage
 }
 
 export const KEEPALIVE_SEND_MS = 5_000

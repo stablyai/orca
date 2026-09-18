@@ -72,7 +72,10 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     return true
   }
 
-  unregisterGuest(browserTabId: string): void {
+  unregisterGuest(
+    browserTabId: string,
+    reason: 'page-closed' | 'guest-destroyed' = 'page-closed'
+  ): void {
     // Why the check on the exit door too: a document page withdraws by revoking its grant, never
     // through here, so its id arriving is misaddressed — and the cancel below would evict that
     // preview's live grab on the strength of it.
@@ -108,10 +111,14 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       mouseWheelZoomCleanup()
       this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
     }
-    // Why: downloads are per-tab chrome; closing the tab must cancel active writes, not orphan them.
+    let hasActiveDownloads = false
     for (const [downloadId, download] of this.downloadsById.entries()) {
       if (download.browserTabId === browserTabId && !download.terminalEvent) {
-        this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
+        if (reason === 'page-closed') {
+          this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
+        } else {
+          hasActiveDownloads = true
+        }
       }
     }
     const wcId = this.webContentsIdByTabId.get(browserTabId)
@@ -119,7 +126,10 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.tabIdByWebContentsId.delete(wcId)
     }
     this.webContentsIdByTabId.delete(browserTabId)
-    this.rendererWebContentsIdByTabId.delete(browserTabId)
+    // A destroyed guest can recover in an open page while its downloads still report progress.
+    if (!hasActiveDownloads) {
+      this.rendererWebContentsIdByTabId.delete(browserTabId)
+    }
     this.workspaceIdByPageId.delete(browserTabId)
     this.sessionProfileIdByPageId.delete(browserTabId)
     this.worktreeIdByTabId.delete(browserTabId)

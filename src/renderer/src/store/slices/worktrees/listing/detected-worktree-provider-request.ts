@@ -16,6 +16,7 @@ import type {
 } from './worktree-slice-types'
 import { isRuntimeMethodNotFoundError } from './runtime-worktree-rpc-errors'
 import { toLegacyDetectedWorktreeResult } from './worktree-host-ownership'
+import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
 
 export async function listDetectedWorktreesForRepo(
   settings: AppState['settings'],
@@ -86,7 +87,8 @@ export function isDetectedWorktreeListResult(value: unknown): value is DetectedW
     (result.source === 'git' ||
       result.source === 'metadata-fallback' ||
       result.source === 'session-fallback') &&
-    Array.isArray(result.worktrees)
+    Array.isArray(result.worktrees) &&
+    (result.failureKind === undefined || isWorktreeScanFailureKind(result.failureKind))
   )
 }
 
