@@ -14,31 +14,20 @@ enum MobileWebShellBridge {
   /// holds the same ceiling; native is the one that cannot be talked out of it.
   static let maxMessageByteCount = 640 * 1024
 
+  /// Every clause is an allow, so a message shape nobody anticipated is refused rather than passed.
+  ///
   /// Simulator-verified 2026-09-18: `WKFrameInfo.securityOrigin` does populate for a custom scheme,
   /// but WebKit ASCII-lowercases the host, so `orca-mobile-web://sess-01JN_aZ9/` reports host
   /// `sess-01jn_az9`. Session ids are base64url and mixed case, so exact equality would refuse every
-  /// message. Folding is ASCII-only and never Unicode: U+212A KELVIN SIGN case-folds to `k` under
-  /// `NSString.caseInsensitiveCompare`, which would let a host we never minted match one we did.
-  static func asciiLowercased(_ value: String) -> String {
-    var scalars = String.UnicodeScalarView()
-    for scalar in value.unicodeScalars {
-      guard (65...90).contains(scalar.value), let lowered = Unicode.Scalar(scalar.value + 32) else {
-        scalars.append(scalar)
-        continue
-      }
-      scalars.append(lowered)
-    }
-    return String(scalars)
-  }
-
-  /// Every clause is an allow, so a message shape nobody anticipated is refused rather than passed.
+  /// message; the fold is `MobileWebShellOrigin.asciiLowercased`, shared with the request predicate.
   static func accepts(_ source: MobileWebShellBridgeSource, sessionId: String) -> Bool {
     guard
       source.isOurWebView,
       source.isMainFrame,
       source.originProtocol == MobileWebShellOrigin.scheme,
       MobileWebShellOrigin.isValidSessionId(sessionId),
-      asciiLowercased(source.originHost) == asciiLowercased(sessionId)
+      MobileWebShellOrigin.asciiLowercased(source.originHost)
+        == MobileWebShellOrigin.asciiLowercased(sessionId)
     else { return false }
     return true
   }

@@ -95,6 +95,16 @@ import Foundation
     precondition(resolve(parts(path: "/", hasRangeHeader: true)) == nil)
     precondition(resolve(parts(path: "/", scheme: "https")) == nil)
     precondition(resolve(parts(path: "/", scheme: nil)) == nil)
+    // The same ASCII-only fold as the bridge: a Kelvin-sign host is a host nobody minted, and a
+    // caseInsensitiveCompare here would serve it every asset.
+    precondition(MobileWebShellOrigin.resolveRequestPath(
+      parts(path: "/", host: "\u{212A}ey"),
+      sessionId: "key"
+    ) == nil)
+    precondition(MobileWebShellOrigin.resolveRequestPath(
+      parts(path: "/", host: "KEY"),
+      sessionId: "key"
+    ) == "/")
     precondition(resolve(parts(path: "/", host: "other-session")) == nil)
     precondition(resolve(parts(path: "/", host: nil)) == nil)
     precondition(resolve(parts(path: "/", port: 443)) == nil)
@@ -309,7 +319,7 @@ import Foundation
       bridgeSource(originHost: "\u{212A}ey"),
       sessionId: "key"
     ))
-    precondition(MobileWebShellBridge.asciiLowercased("\u{212A}EY") == "\u{212A}ey")
+    precondition(MobileWebShellOrigin.asciiLowercased("\u{212A}EY") == "\u{212A}ey")
 
     // Another scheme reaching the same handler.
     precondition(!acceptsBridge(bridgeSource(originProtocol: "https")))
