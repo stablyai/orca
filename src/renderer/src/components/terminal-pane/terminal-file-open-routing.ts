@@ -162,8 +162,12 @@ export function openDetectedFilePath(
 
     try {
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-      if (canOpenWithSystemDefault) {
-        await window.api.fs.authorizeExternalPath({ targetPath: mappedFilePath })
+      if (canOpenWithSystemDefault && !isPathInsideWorktree(mappedFilePath, worktreePath)) {
+        try {
+          await window.api.fs.grantExternalFile({ targetPath: mappedFilePath })
+        } catch {
+          await window.api.fs.grantExternalDirectory({ targetPath: mappedFilePath })
+        }
       }
       statResult = await statRuntimePath(fileContext, mappedFilePath)
     } catch {

@@ -215,7 +215,11 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       const results: ComposerDropItemResult[] = []
       for (const filePath of paths) {
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          try {
+            await window.api.fs.grantExternalFile({ targetPath: filePath })
+          } catch {
+            await window.api.fs.grantExternalDirectory({ targetPath: filePath })
+          }
           const stat = await window.api.fs.stat({ filePath })
           results.push({
             status: 'imported',

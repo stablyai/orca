@@ -48,7 +48,7 @@ let authorizeMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   authorizeMock = vi.fn().mockResolvedValue(undefined)
-  vi.stubGlobal('window', { api: { fs: { authorizeExternalPath: authorizeMock } } })
+  vi.stubGlobal('window', { api: { fs: { grantExternalFile: authorizeMock } } })
 })
 
 afterEach(() => {

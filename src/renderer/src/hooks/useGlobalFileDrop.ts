@@ -162,7 +162,7 @@ export function useGlobalFileDrop(): void {
             const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
             // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
             if (!connectionId && !isRemoteRuntimePath) {
-              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+              await window.api.fs.grantExternalFile({ targetPath: filePath })
             }
             const stat = await statRuntimePath(fileContext, filePath)
             if (stat.isDirectory) {

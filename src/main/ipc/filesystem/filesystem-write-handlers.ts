@@ -4,7 +4,11 @@ import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/ssh-connection-generation'
 import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { tryDeleteWslUncPath } from '../../wsl-unc-delete'
-import { authorizeExternalPath, resolveAuthorizedPath } from '../filesystem-auth'
+import {
+  grantExternalDirectoryFromRenderer,
+  grantExternalFileFromRenderer,
+  resolveAuthorizedPath
+} from '../filesystem-auth'
 import { isENOENT } from '../filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -85,7 +89,17 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
 
   registerFilesystemMutationHandlers(store)
 
-  ipcMain.handle('fs:authorizeExternalPath', (_event, args: { targetPath: string }): void => {
-    authorizeExternalPath(args.targetPath)
-  })
+  ipcMain.handle(
+    'fs:grantExternalFile',
+    async (_event, args: { targetPath: string }): Promise<void> => {
+      await grantExternalFileFromRenderer(args.targetPath)
+    }
+  )
+
+  ipcMain.handle(
+    'fs:grantExternalDirectory',
+    async (_event, args: { targetPath: string }): Promise<void> => {
+      await grantExternalDirectoryFromRenderer(args.targetPath)
+    }
+  )
 }

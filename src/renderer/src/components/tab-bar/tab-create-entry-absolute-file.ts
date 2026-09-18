@@ -9,7 +9,7 @@ import {
 
 type AbsoluteFileOperations = {
   assertAbsolutePathAllowed: () => void
-  authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
+  grantExternalFile: (args: { targetPath: string }) => Promise<void>
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: { preview?: boolean; targetGroupId?: string }
@@ -28,7 +28,9 @@ export async function openAbsoluteTabEntryFile(args: {
 }): Promise<void> {
   const filePath = validateNewTabEntryAbsolutePath(args.filePath, args.localPlatform)
   args.operations.assertAbsolutePathAllowed()
-  await args.operations.authorizeExternalPath({ targetPath: filePath })
+  if (toWorktreeRelativePath(filePath, args.worktreePath) === null) {
+    await args.operations.grantExternalFile({ targetPath: filePath })
+  }
   args.operations.assertAbsolutePathAllowed()
   let stat: Awaited<ReturnType<typeof statRuntimePath>>
   try {
