@@ -73,6 +73,9 @@ export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'> & 
   connected?: boolean
   /** Current SSH lifecycle state, when the desktop has one for this target. */
   connectionStatus?: SshConnectionStatus
+  /** Paired Orca server whose access endpoint resolves to the machine this target dials. Lets a
+   *  caller prefer the runtime path over SSH; the address itself stays HUB-private. */
+  coLocatedEnvironmentId?: string
 }
 
 /** Identity of a removed SSH target, recorded so that re-adding the same host

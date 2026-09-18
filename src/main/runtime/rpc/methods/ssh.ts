@@ -4,23 +4,46 @@ import {
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
 } from '../../../ssh/ssh-target-registry'
+import { findCoLocatedEnvironmentIds } from '../../../ssh/ssh-target-environment-colocation'
 import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
-import type { SshTargetSummary } from '../../../../shared/ssh-types'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { listEnvironments } from '../../../../shared/runtime-environment-store'
+import type {
+  SshTarget as RegisteredSshTarget,
+  SshTargetSummary
+} from '../../../../shared/ssh-types'
 import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
 
+// Why best-effort: a headless server has no pairing store, and a slow resolver must never hold
+// up a listing whose other fields are already known.
+async function coLocatedEnvironmentIds(
+  targets: readonly RegisteredSshTarget[]
+): Promise<Map<string, string>> {
+  try {
+    const environments = listEnvironments(getAppEnvironment().getPath('userData'))
+    return await findCoLocatedEnvironmentIds(targets, environments)
+  } catch {
+    return new Map()
+  }
+}
+
 // Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
-function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
-  return listRegisteredSshTargets().map(({ id, label, generation }) => {
+async function listRegisteredSshTargetSummaries(): Promise<SshTargetSummary[]> {
+  const targets = listRegisteredSshTargets()
+  const coLocated = await coLocatedEnvironmentIds(targets)
+  return targets.map(({ id, label, generation }) => {
     const state = getRegisteredSshState(id)
     const remotePlatform = state?.remotePlatform
+    const coLocatedEnvironmentId = coLocated.get(id)
     return {
       id,
       label,
       ...(generation === undefined ? {} : { generation }),
       connected: state?.status === 'connected',
       ...(state?.status === undefined ? {} : { connectionStatus: state.status }),
-      ...(remotePlatform === undefined ? {} : { remotePlatform })
+      ...(remotePlatform === undefined ? {} : { remotePlatform }),
+      ...(coLocatedEnvironmentId === undefined ? {} : { coLocatedEnvironmentId })
     }
   })
 }
@@ -49,13 +72,13 @@ export const SSH_METHODS = [
     name: 'ssh.listTargets',
     params: null,
     // Why: legacy clients can call this method directly, so it must preserve the same HUB-private secret boundary.
-    handler: () => ({ targets: listRegisteredSshTargetSummaries() })
+    handler: async () => ({ targets: await listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listTargetSummaries',
     params: null,
     // Why: paired clients need display identity only; SSH addresses, jump chains, and credentials remain HUB-private.
-    handler: () => ({ targets: listRegisteredSshTargetSummaries() })
+    handler: async () => ({ targets: await listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listRemovedTargetLabels',
