@@ -79,6 +79,7 @@ beforeEach(() => {
     sortOrder: 1,
     lastActivityAt: 1
   }
+  const clearFilters = vi.fn()
   args = {
     groupBy: 'repo',
     renderedSidebarRowKeys: new Set(),
@@ -90,7 +91,8 @@ beforeEach(() => {
     worktrees: [worktree],
     folderWorkspaces: [],
     hasFilters: true,
-    clearFilters: vi.fn()
+    clearFilters,
+    revealWorkspaceFilters: clearFilters
   }
 })
 

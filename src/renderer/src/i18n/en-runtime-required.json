@@ -2791,12 +2791,6 @@
       }
     }
   },
-  "sidebar": {
-    "revealFiltered": {
-      "confirm": "Clear filters and reveal",
-      "description": "The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters."
-    }
-  },
   "worktreeJumpPalette": {
     "filter": {
       "chipOverflow": "+{{value0}}",

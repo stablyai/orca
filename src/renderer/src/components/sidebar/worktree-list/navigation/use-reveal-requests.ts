@@ -41,7 +41,7 @@ export function useSidebarRevealRequests(args: {
   folderWorkspaces: readonly FolderWorkspace[]
   hasFilters: boolean
   clearFilters: () => void
-  revealWorkspaceFilters?: (worktree: Worktree) => void
+  revealWorkspaceFilters: (worktree: Worktree) => void
 }): void {
   const {
     groupBy,
@@ -55,7 +55,7 @@ export function useSidebarRevealRequests(args: {
     folderWorkspaces,
     hasFilters,
     clearFilters,
-    revealWorkspaceFilters = clearFilters
+    revealWorkspaceFilters
   } = args
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
@@ -82,21 +82,28 @@ export function useSidebarRevealRequests(args: {
       return
     }
     if (!renderedSidebarRowKeys.has(rowKey) && hasFilters) {
-      const target = worktreeMap.get(rowKey)
+      const target = getKnownSidebarWorktreeById(
+        rowKey,
+        worktreeMap,
+        folderWorkspaces,
+        worktrees,
+        currentSidebarExecutionHostId
+      )
       if (target) {
         revealWorkspaceFilters(target)
-      } else {
-        clearFilters()
       }
     }
   }, [
     clearFilters,
     groupBy,
     hasFilters,
+    currentSidebarExecutionHostId,
+    folderWorkspaces,
     pendingRevealSidebarRow,
     renderedSidebarRowKeys,
     setGroupBy,
     worktreeMap,
+    worktrees,
     revealWorkspaceFilters
   ])
 
