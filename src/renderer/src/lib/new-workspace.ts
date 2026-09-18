@@ -30,7 +30,7 @@ export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']
   /** GitHub Start assignment only; stripped when persisting the linked task. */
-  assignees?: readonly { login: string }[]
+  assignees?: { login: string }[]
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
   linearBranchName?: string
