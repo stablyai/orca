@@ -9,7 +9,6 @@ type SidebarActivationRepo = {
 
 const mocks = vi.hoisted(() => {
   const repos: SidebarActivationRepo[] = []
-  const settings: { defaultTuiAgent: string } | null = null
   return {
     activateAndRevealFolderWorkspace: vi.fn(),
     activateAndRevealWorktree: vi.fn(),
@@ -17,7 +16,7 @@ const mocks = vi.hoisted(() => {
     storeState: {
       getKnownWorktreeById: vi.fn(),
       repos,
-      settings
+      settings: null as { defaultTuiAgent: string } | null
     }
   }
 })
