@@ -236,8 +236,8 @@ function dependencies(
     saveHost: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: (handler, ms) => setTimeout(handler, ms),
+    clearTimer: (handle) => clearTimeout(handle),
     ...overrides
   }
 }

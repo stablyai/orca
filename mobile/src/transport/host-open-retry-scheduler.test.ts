@@ -50,7 +50,7 @@ describe('HostOpenRetryScheduler', () => {
   })
 
   it('schedules and clears with no injected timers when the global rejects a non-global receiver', async () => {
-    installIllegalInvocationTimerGuards()
+    const timers = installIllegalInvocationTimerGuards()
     const open = vi.fn()
     const scheduler = new HostOpenRetryScheduler({ canRetry: () => true, open })
 
@@ -60,6 +60,8 @@ describe('HostOpenRetryScheduler', () => {
 
     scheduler.recordFailure('host-1', 1)
     scheduler.cancel('host-1')
+    expect(timers.cleared).toHaveLength(1)
+    expect(timers.cleared[0]).toBe(timers.scheduled[1])
     await vi.advanceTimersByTimeAsync(60_000)
     expect(open).toHaveBeenCalledOnce()
   })

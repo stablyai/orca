@@ -138,11 +138,11 @@ describe('RelayReconnectController cadence', () => {
       {
         now: () => 0,
         randomBytes: () => new Uint8Array([0, 0]),
-        setTimer: ((callback: () => void, delay: number) => {
+        setTimer: (callback, delay) => {
           delays.push(delay)
           return 1 as unknown as ReturnType<typeof setTimeout>
-        }) as unknown as typeof setTimeout,
-        clearTimer: (() => {}) as unknown as typeof clearTimeout
+        },
+        clearTimer: () => {}
       },
       vi.fn()
     )

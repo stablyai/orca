@@ -14,7 +14,7 @@ describe('RpcSessionLivenessWatchdog default timers', () => {
   })
 
   it('schedules and clears with no injected timers when the global rejects a non-global receiver', async () => {
-    installIllegalInvocationTimerGuards()
+    const timers = installIllegalInvocationTimerGuards()
     const sendProbe = vi.fn(() => true)
     const terminate = vi.fn()
     const watchdog = new RpcSessionLivenessWatchdog({ transport: 'direct', sendProbe, terminate })
@@ -25,6 +25,8 @@ describe('RpcSessionLivenessWatchdog default timers', () => {
     expect(sendProbe).toHaveBeenCalledOnce()
 
     watchdog.stop(identity)
+    expect(timers.cleared).toHaveLength(1)
+    expect(timers.cleared[0]).toBe(timers.scheduled[1])
     await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
     expect(terminate).not.toHaveBeenCalled()
   })

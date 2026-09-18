@@ -393,8 +393,8 @@ function createController(
     {
       now: Date.now,
       randomBytes: () => new Uint8Array([128, 0]),
-      setTimer: setTimeout,
-      clearTimer: clearTimeout
+      setTimer: (handler, ms) => setTimeout(handler, ms),
+      clearTimer: (handle) => clearTimeout(handle)
     },
     onRetry
   )
