@@ -440,6 +440,23 @@ describe('the Phase C budget', () => {
     120_000
   )
 
+  it('says which node may be statically imported, and does not promise a route may', async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'verify-mobile-web-app-bundle.mjs'),
+      'utf8'
+    )
+    // The bound reads like a per-route escape hatch and is not one: 5 of the 14 routes break it
+    // on their own. What keeps it survivable is that expo-router wants a synchronous export off
+    // layout nodes only, so the note has to name the layout and the export that drives it.
+    const doc = source.slice(
+      0,
+      source.indexOf('export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES')
+    )
+    const note = doc.slice(doc.lastIndexOf('/**'))
+    expect(note).toContain('h/_layout.tsx')
+    expect(note).toContain('unstable_settings')
+  })
+
   it('budgets what loads first well under what the whole page weighs', () => {
     // The point of the split: the entry budget is the one a route must not grow, and it is a
     // fraction of the total the bundle is still allowed to weigh.

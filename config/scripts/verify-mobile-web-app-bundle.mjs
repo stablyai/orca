@@ -39,6 +39,13 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS = 64
  * reaches by static import. This is the budget splitting exists to hold — it was 8.16 MB as one
  * chunk and measures 0.89 MiB split — so a route re-imported statically, or `splitting` dropped,
  * fails the build here instead of arriving as a slow first open on a phone.
+ *
+ * It is not a per-route escape hatch. Importing one route statically already breaks this bound
+ * for 5 of the 14: session at 7.16 MiB, tasks 5.91, source-control 5.78, review 5.77,
+ * files/preview 5.21. What keeps the hatch usable at all is that expo-router reads
+ * `unstable_settings` off layout nodes only, and the subtree's one layout, `h/_layout.tsx`,
+ * measures 2.22 MiB static. Any other route needing a synchronous export needs this number
+ * re-measured, not a static import.
  */
 export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES = 3 * 1024 * 1024
 
