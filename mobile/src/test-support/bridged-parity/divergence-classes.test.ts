@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   classifyBridgedParity,
@@ -137,6 +139,17 @@ describe('what the pin still admits', () => {
     const reasoned = classes.filter((name) => BRIDGED_PARITY_EXCLUSIONS[name] !== undefined)
     const counted = classes.filter((name) => BRIDGED_PARITY_BASELINE[name] > 0)
     expect([...reasoned].sort()).toEqual([...counted].sort())
+  })
+
+  it('accounts for every golden in the corpus, once each', () => {
+    // What ties the two halves of the ratchet together. Each class is an upper bound and `identical`
+    // a lower one, so on their own a class could be loosened by one and nothing would notice; with
+    // the sum pinned to the corpus, a class that grows has to be paid for out of another.
+    const goldens = readdirSync(resolve(import.meta.dirname, '../../../rpc-foundation/goldens'))
+    const counted = Object.values(BRIDGED_PARITY_BASELINE).reduce((sum, count) => sum + count, 0)
+    expect({ counted }).toEqual({
+      counted: goldens.filter((name) => name.endsWith('.json')).length
+    })
   })
 
   it('leaves nothing for the reader to close: the `_meta` class is zero', () => {
