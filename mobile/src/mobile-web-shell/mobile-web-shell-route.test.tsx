@@ -52,13 +52,21 @@ async function renderRoute(): Promise<ReactTestRenderer> {
   return rendered.tree
 }
 
-const dev = globalThis as { __DEV__?: boolean }
+/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
+ *  the test says which build kind it is running as without asserting a type on `globalThis`. */
+function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
+  if (isDevelopmentBuild === undefined) {
+    Reflect.deleteProperty(globalThis, '__DEV__')
+    return
+  }
+  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
+}
 
 describe('the hybrid shell route', () => {
   beforeEach(() => {
     dependencies.storage.clear()
     dependencies.mounted.length = 0
-    dev.__DEV__ = true
+    setDevelopmentBuild(true)
   })
 
   it('redirects to the host screen with the flag unset, and mounts nothing', async () => {
@@ -82,7 +90,7 @@ describe('the hybrid shell route', () => {
   })
 
   it('redirects a store build whose container kept a flag a development build set', async () => {
-    delete dev.__DEV__
+    setDevelopmentBuild(undefined)
     dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
     const tree = await renderRoute()
     expect(byName(tree, 'Redirect')).toHaveLength(1)
