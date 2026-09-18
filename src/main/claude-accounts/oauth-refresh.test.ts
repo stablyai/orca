@@ -7,17 +7,25 @@ import {
   refreshClaudeOauthCredentials
 } from './oauth-refresh'
 
-const { netFetchMock } = vi.hoisted(() => ({
-  netFetchMock: vi.fn()
+const { fetchMock, envHttpProxyAgentMock, dispatcherCloseMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  envHttpProxyAgentMock: vi.fn(),
+  dispatcherCloseMock: vi.fn().mockResolvedValue(undefined)
 }))
 
+// Why: the token endpoint refuses Chromium's stack (orca#18716); the refresh
+// must never go through Electron's net.fetch again.
 vi.mock('electron', () => ({
-  net: { fetch: netFetchMock },
-  session: { defaultSession: {} }
+  net: {
+    fetch: () => {
+      throw new Error('refresh must not use electron net.fetch')
+    }
+  }
 }))
 
-vi.mock('../network/proxy-settings', () => ({
-  ensureElectronProxyFromEnvironment: vi.fn().mockResolvedValue({ source: 'none' })
+vi.mock('undici', () => ({
+  fetch: fetchMock,
+  EnvHttpProxyAgent: envHttpProxyAgentMock
 }))
 
 const NOW = 1_700_000_000_000
@@ -127,37 +135,51 @@ describe('applyRefreshedToken', () => {
 })
 
 describe('refreshClaudeOauthCredentials', () => {
+  const NO_PROXY_ENV = {}
+
   beforeEach(() => {
     vi.clearAllMocks()
+    envHttpProxyAgentMock.mockImplementation(
+      function (this: { close: typeof dispatcherCloseMock }) {
+        this.close = dispatcherCloseMock
+      }
+    )
   })
 
   afterEach(() => {
     vi.clearAllMocks()
   })
 
-  it('returns null without a refresh token (no network call)', async () => {
-    const result = await refreshClaudeOauthCredentials(
-      credentials({ refreshToken: undefined }),
-      NOW
-    )
-    expect(result).toBeNull()
-    expect(netFetchMock).not.toHaveBeenCalled()
-  })
-
-  it('posts a form-urlencoded refresh grant and persists the rotation', async () => {
-    netFetchMock.mockResolvedValue({
+  function okResponse(): { ok: true; json: () => Promise<Record<string, unknown>> } {
+    return {
       ok: true,
       json: async () => ({
         access_token: 'fresh-access',
         expires_in: 3600,
         refresh_token: 'fresh-refresh'
       })
+    }
+  }
+
+  it('returns null without a refresh token (no network call)', async () => {
+    const result = await refreshClaudeOauthCredentials(credentials({ refreshToken: undefined }), {
+      now: NOW,
+      env: NO_PROXY_ENV
+    })
+    expect(result).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('posts a form-urlencoded refresh grant through Node fetch and persists the rotation', async () => {
+    fetchMock.mockResolvedValue(okResponse())
+
+    const result = await refreshClaudeOauthCredentials(credentials(), {
+      now: NOW,
+      env: NO_PROXY_ENV
     })
 
-    const result = await refreshClaudeOauthCredentials(credentials(), NOW)
-
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = netFetchMock.mock.calls[0]
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://platform.claude.com/v1/oauth/token')
     expect(init.method).toBe('POST')
     expect(init.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
@@ -165,22 +187,112 @@ describe('refreshClaudeOauthCredentials', () => {
     expect(body.get('grant_type')).toBe('refresh_token')
     expect(body.get('refresh_token')).toBe('old-refresh')
     expect(body.get('client_id')).toBe('9d1c250a-e61b-44d9-88ed-5944d1962f5e')
+    expect(init.dispatcher).toBeUndefined()
+    expect(envHttpProxyAgentMock).not.toHaveBeenCalled()
 
     const oauth = parseClaudeOauthBlob(result!)!
     expect(oauth.accessToken).toBe('fresh-access')
     expect(oauth.refreshToken).toBe('fresh-refresh')
   })
 
-  it('returns null on a non-ok response and logs the status for diagnosability', async () => {
+  it('tunnels through the shell proxy with its NO_PROXY list', async () => {
+    fetchMock.mockResolvedValue(okResponse())
+
+    await refreshClaudeOauthCredentials(credentials(), {
+      now: NOW,
+      env: { HTTPS_PROXY: 'http://user:pw@proxy.corp:3128', NO_PROXY: 'localhost,.corp' }
+    })
+
+    expect(envHttpProxyAgentMock).toHaveBeenCalledWith({
+      httpProxy: 'http://user:pw@proxy.corp:3128',
+      httpsProxy: 'http://user:pw@proxy.corp:3128',
+      noProxy: 'localhost,.corp'
+    })
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeInstanceOf(envHttpProxyAgentMock)
+    expect(dispatcherCloseMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("prefers Orca's configured proxy over the shell's and replaces NO_PROXY with its bypass rules", async () => {
+    fetchMock.mockResolvedValue(okResponse())
+
+    await refreshClaudeOauthCredentials(credentials(), {
+      now: NOW,
+      env: { HTTPS_PROXY: 'http://shell-proxy:8080', NO_PROXY: 'localhost' },
+      networkProxySettings: {
+        httpProxyUrl: 'http://orca-proxy:9090',
+        httpProxyBypassRules: '*.internal;10.0.0.0/8'
+      }
+    })
+
+    expect(envHttpProxyAgentMock).toHaveBeenCalledWith({
+      httpProxy: 'http://orca-proxy:9090',
+      httpsProxy: 'http://orca-proxy:9090',
+      noProxy: '*.internal,10.0.0.0/8'
+    })
+  })
+
+  it('refuses to bypass a SOCKS proxy: no request, null result, warning', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    netFetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) })
-    expect(await refreshClaudeOauthCredentials(credentials(), NOW)).toBeNull()
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('429'))
+
+    const result = await refreshClaudeOauthCredentials(credentials(), {
+      now: NOW,
+      env: { ALL_PROXY: 'socks5://proxy.corp:1080' }
+    })
+
+    expect(result).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(envHttpProxyAgentMock).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('socks5: proxies are not supported'))
     warn.mockRestore()
   })
 
-  it('returns null when the request throws (never rejects)', async () => {
-    netFetchMock.mockRejectedValue(new Error('network down'))
-    await expect(refreshClaudeOauthCredentials(credentials(), NOW)).resolves.toBeNull()
+  it('settles as soon as the caller aborts, without waiting for the request timeout', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const controller = new AbortController()
+    fetchMock.mockImplementation(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        })
+    )
+
+    const pending = refreshClaudeOauthCredentials(credentials(), {
+      now: NOW,
+      env: NO_PROXY_ENV,
+      signal: controller.signal
+    })
+    controller.abort()
+
+    await expect(pending).resolves.toBeNull()
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('returns null on a non-ok response, logs the status, and drains the body', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const cancel = vi.fn().mockResolvedValue(undefined)
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      body: { cancel },
+      json: async () => ({})
+    })
+    expect(
+      await refreshClaudeOauthCredentials(credentials(), { now: NOW, env: NO_PROXY_ENV })
+    ).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('429'))
+    expect(cancel).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
+  it('returns null when the request throws (never rejects) and still closes the dispatcher', async () => {
+    fetchMock.mockRejectedValue(new Error('network down'))
+    await expect(
+      refreshClaudeOauthCredentials(credentials(), {
+        now: NOW,
+        env: { HTTPS_PROXY: 'http://proxy.corp:3128' }
+      })
+    ).resolves.toBeNull()
+    expect(dispatcherCloseMock).toHaveBeenCalledTimes(1)
   })
 })
