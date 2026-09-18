@@ -6,8 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildMobileWebBundle } from './build-mobile-web-bundle.mjs'
 
 const require = createRequire(import.meta.url)
-const { assertMobileWebBundleBuilt } = require('./verify-packaged-mobile-web-bundle.cjs')
+const {
+  MOBILE_WEB_BUNDLE_DIR,
+  assertMobileWebBundleBuilt
+} = require('./verify-packaged-mobile-web-bundle.cjs')
 const electronBuilderConfig = require('../electron-builder.config.cjs')
+const REPO_ROOT = join(import.meta.dirname, '..', '..')
 
 async function withBundle(run) {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-guard-'))
@@ -186,5 +190,25 @@ describe('electron-builder packaging wiring', () => {
 
   it('runs the bundle guard in beforePack', () => {
     expect(String(electronBuilderConfig.beforePack)).toContain('assertMobileWebBundleBuilt')
+  })
+
+  it('defaults the bundle root to out/mobile-web when electron-builder calls it', () => {
+    expect(MOBILE_WEB_BUNDLE_DIR).toBe(join(REPO_ROOT, 'out', 'mobile-web'))
+    // electron-builder passes the context alone, so the default is what ships.
+    expect(electronBuilderConfig.beforePack.length).toBe(1)
+  })
+
+  it('verifies the bundle root it is given, not the repo one', async () => {
+    // The seam exists so unit tests need no built out/; it would be worthless if the root were
+    // accepted and then ignored.
+    await withBundle(async ({ bundleDir }) => {
+      await rm(join(bundleDir, 'manifest.json'))
+      expect(() =>
+        electronBuilderConfig.beforePack(
+          { electronPlatformName: process.platform, arch: process.arch === 'arm64' ? 3 : 1 },
+          bundleDir
+        )
+      ).toThrow(/no bundle manifest/)
+    })
   })
 })

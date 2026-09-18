@@ -3,7 +3,7 @@ const { readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 
 const projectDir = resolve(__dirname, '..', '..')
-const defaultBundleDir = join(projectDir, 'out', 'mobile-web')
+const MOBILE_WEB_BUNDLE_DIR = join(projectDir, 'out', 'mobile-web')
 const REMEDY = 'Run pnpm build:mobile-web (build:desktop and build:release already do).'
 const ENTRYPOINT = 'index.html'
 const SHA256_PATTERN = /^[0-9a-f]{64}$/
@@ -156,7 +156,7 @@ function assertNoUnlistedFiles(bundleDir, manifest) {
  * would ship an app that advertises the bundle capability and then errors on every request. The
  * hash check, not the existence check, is what catches a half-written or stale out/.
  */
-function assertMobileWebBundleBuilt(bundleDir = defaultBundleDir) {
+function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   const manifest = parseManifest(bundleDir)
   assertNoUnlistedFiles(bundleDir, manifest)
   for (const asset of manifest.assets) {
@@ -187,4 +187,4 @@ function assertMobileWebBundleBuilt(bundleDir = defaultBundleDir) {
   )
 }
 
-module.exports = { assertMobileWebBundleBuilt }
+module.exports = { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt }
