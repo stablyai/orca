@@ -42,13 +42,22 @@ class MobileWebShellCspTest {
   @Test
   fun `denies only what the native layer cannot see, with a shape the page cannot restore`() {
     val blocker = MOBILE_WEB_SHELL_NETWORK_API_BLOCKER
-    assertTrue(blocker.contains("'WebSocket'"))
-    assertTrue(blocker.contains("'serviceWorker'"))
+    // Whole definitions, not `contains("writable:false")`: one property's descriptor could lose a
+    // flag and still match because another property still carries it.
+    assertTrue(
+      blocker.contains("globalThis,'WebSocket',{value:deny,configurable:false,writable:false}")
+    )
+    assertTrue(
+      blocker.contains(
+        "Navigator.prototype,'serviceWorker',{get:function(){return undefined},configurable:false}"
+      )
+    )
+    assertTrue(
+      blocker.contains("navigator,'serviceWorker',{value:undefined,configurable:false,writable:false}")
+    )
     // CSP is the fence for fetch and XMLHttpRequest; a script that replaced them would put one
     // policy in two places and hide which one is actually holding.
     assertFalse(blocker.contains("fetch"))
     assertFalse(blocker.contains("XMLHttpRequest"))
-    assertTrue(blocker.contains("configurable:false"))
-    assertTrue(blocker.contains("writable:false"))
   }
 }
