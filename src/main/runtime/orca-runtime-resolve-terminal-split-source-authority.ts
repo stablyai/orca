@@ -15,6 +15,7 @@ import {
   resolveClaudeAgentTeamsShimBin
 } from './claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 
 export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPtyBackedTerminal {
   protected resolveTerminalSplitSourceAuthority(
@@ -146,7 +147,13 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       leaderHandle: args.handle,
       baseEnv,
       shimDir,
-      shimBin
+      shimBin,
+      // Why: teammate panes launch on the local host, so the local Windows shell preference decides their grammar.
+      paneShell: resolveLocalWindowsAgentStartupShell({
+        platform: process.platform,
+        isRemote: false,
+        terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null
+      })
     })
     const env = auth ? { ...auth.envPatch, ...launch.env } : launch.env
     return envToDelete ? { env, envToDelete } : { env }
