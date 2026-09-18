@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,6 +7,7 @@ import { buildMobileWebBundle, isDirectInvocation } from './build-mobile-web-bun
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const bundleDir = join(projectDir, 'out', 'mobile-web')
+const sourceDir = join(projectDir, 'src', 'mobile-web')
 
 // Phase A budget, not the contract ceiling: a bootstrap page past a quarter-megabyte has stopped
 // being a bootstrap. Phase C raises these deliberately.
@@ -29,7 +30,46 @@ async function buildIntoScratch() {
   }
 }
 
+async function listSourceFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const entryPath = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...(await listSourceFiles(entryPath)))
+    } else if (entry.isFile()) {
+      files.push(entryPath)
+    }
+  }
+  return files.sort()
+}
+
+/**
+ * A CRLF checkout changes the bytes of every text source, which changes every asset hash and so
+ * the buildId. .gitattributes pins eol=lf; this is what notices when that pin stops working.
+ */
+export async function assertNoCarriageReturnsInSource(directory = sourceDir) {
+  const offenders = []
+  for (const file of await listSourceFiles(directory)) {
+    // Binary assets are pinned -text and may legitimately contain 0x0d.
+    if (file.endsWith('.png')) {
+      continue
+    }
+    if ((await readFile(file)).includes(0x0d)) {
+      offenders.push(file.slice(directory.length + 1))
+    }
+  }
+  if (offenders.length > 0) {
+    fail(
+      `CRLF in mobile web source, which would change every asset hash and the buildId: ` +
+        `${offenders.join(', ')}. Check the .gitattributes eol=lf pin for src/mobile-web.`
+    )
+  }
+}
+
 export async function verifyMobileWebBundle() {
+  await assertNoCarriageReturnsInSource()
+
   let manifest
   try {
     manifest = JSON.parse(await readFile(join(bundleDir, 'manifest.json'), 'utf8'))

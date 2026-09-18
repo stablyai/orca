@@ -1,5 +1,6 @@
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +13,8 @@ import {
 } from './build-mobile-web-bundle.mjs'
 import {
   MOBILE_WEB_BUNDLE_PHASE_A_MAX_ASSETS,
-  MOBILE_WEB_BUNDLE_PHASE_A_MAX_TOTAL_BYTES
+  MOBILE_WEB_BUNDLE_PHASE_A_MAX_TOTAL_BYTES,
+  assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
 
 async function buildIntoScratch() {
@@ -191,5 +193,40 @@ describe('isDirectInvocation', () => {
     const source = await readFile(new URL('./build-mobile-web-bundle.mjs', import.meta.url), 'utf8')
     expect(source).not.toMatch(/file:\/\/\$\{process\.argv\[1\]\}/)
     expect(source).toContain('pathToFileURL')
+  })
+})
+
+describe('mobile web source line endings', () => {
+  it('accepts the committed source tree', async () => {
+    await expect(assertNoCarriageReturnsInSource()).resolves.toBeUndefined()
+  })
+
+  it('rejects a CRLF source file, because CRLF changes every asset hash and the buildId', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-eol-'))
+    try {
+      await writeFile(join(scratch, 'bootstrap.ts'), 'const a = 1\r\nconst b = 2\r\n', 'utf8')
+      await expect(assertNoCarriageReturnsInSource(scratch)).rejects.toThrow(
+        /CRLF in mobile web source/
+      )
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('pins eol=lf for every committed text source and -text for the binary', () => {
+    const files = execFileSync('git', ['ls-files', 'src/mobile-web'], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean)
+    expect(files.length).toBeGreaterThanOrEqual(4)
+    for (const file of files) {
+      const attributes = execFileSync('git', ['check-attr', 'text', 'eol', '--', file], {
+        encoding: 'utf8'
+      })
+      if (file.endsWith('.png')) {
+        expect(attributes).toContain('text: unset')
+      } else {
+        expect(attributes).toContain('eol: lf')
+      }
+    }
   })
 })

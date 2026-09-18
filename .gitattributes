@@ -41,3 +41,10 @@
 # Generated method->params catalog: compared byte-for-byte by
 # verify:rpc-params-catalog, so a CRLF checkout would fail the gate.
 /src/shared/rpc-contract/rpc-params-catalog.generated.ts linguist-generated=true text eol=lf
+# Mobile web bundle source. Every text byte here is hashed into an asset digest and
+# from there into buildId, so a CRLF checkout produces a different bundle id for the
+# same commit (91af2897 vs 9d78435e). The PNG is -text because it must not be touched.
+/src/mobile-web/index.html text eol=lf
+/src/mobile-web/src/*.ts text eol=lf
+/src/mobile-web/src/*.css text eol=lf
+/src/mobile-web/src/*.png -text
