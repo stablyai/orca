@@ -173,6 +173,42 @@ describe('RepositoryPane search entries', () => {
     }
   })
 
+  // AGENTS.md folder-workspace rule: unlike hooks/symlinks/sparse/MCP, workspace trust
+  // is path-scoped, so the section must NOT be gated on `!isFolder`.
+  it('renders the workspace trust section for a folder-opened project', () => {
+    useAppStore.setState({
+      settingsSearchQuery: 'Example Repo',
+      settingsSearchInputQuery: 'Example Repo'
+    })
+
+    try {
+      const html = renderToStaticMarkup(
+        React.createElement(
+          TooltipProvider,
+          null,
+          React.createElement(RepositoryPane, {
+            repo: { ...repo, kind: 'folder' },
+            yamlHooks: null,
+            hasHooksFile: false,
+            hooksInspectionReady: true,
+            mayNeedUpdate: false,
+            updateRepo: vi.fn(),
+            removeProject: vi.fn()
+          })
+        )
+      )
+
+      expect(html).toContain('Workspace Trust')
+      expect(html).toContain('Not trusted')
+      expect(html).not.toContain('Worktree Hooks')
+    } finally {
+      useAppStore.setState({
+        settingsSearchQuery: '',
+        settingsSearchInputQuery: ''
+      })
+    }
+  })
+
   it('warns about live terminals and active tasks before project runtime changes', () => {
     const worktreeId = 'repo-1::/tmp/repo'
     useAppStore.setState({

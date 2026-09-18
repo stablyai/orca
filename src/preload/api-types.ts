@@ -35,6 +35,7 @@ import type { JiraApi } from './api/jira-api'
 import type { LinearApi } from './api/linear-api'
 import type { MobileApi } from './api/mobile-api'
 import type { NativeChatApi } from './api/native-chat-api'
+import type { NpmPackageInfoApi } from './api/npm-package-info-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding-api'
 import type { OrcaProfileApi } from './api/orca-profile-api'
 import type {
@@ -60,6 +61,7 @@ import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
+import type { WorkspaceTrustApi } from './api/workspace-trust-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
 // Flattens contracts that share one PreloadApi key: an intersection is not type-identical to the flat shape.
@@ -74,6 +76,7 @@ export type PreloadApi = {
   projects: ProjectsApi
   projectGroups: ProjectGroupsApi
   folderWorkspaces: FolderWorkspacesApi
+  workspaceTrust: WorkspaceTrustApi
   sparsePresets: SparsePresetsApi
   worktrees: WorktreeApi
   workspaceCleanup: WorkspaceCleanupApi
@@ -125,6 +128,7 @@ export type PreloadApi = {
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   docPreview: DocPreviewApi['docPreview']
+  npmPackageInfo: NpmPackageInfoApi['npmPackageInfo']
   stats: StatsApi
   memory: MemoryApi
   claudeUsage: ClaudeUsageApi

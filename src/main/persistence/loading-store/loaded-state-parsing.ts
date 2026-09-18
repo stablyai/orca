@@ -267,8 +267,11 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
 
-    const migrated = this.cohorts.migrateTabSwitchKeybindings(
-      this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
+    const migrated = this.cohorts.migrateWorkspaceTrust(
+      this.cohorts.migrateTabSwitchKeybindings(
+        this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
+        fileExistedOnLoad
+      ),
       fileExistedOnLoad
     )
 
