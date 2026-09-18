@@ -73,6 +73,7 @@ export function computeMobileWebBundleId(assets: readonly MobileWebBundleAsset[]
 
 function validateManifestInvariants(
   manifest: {
+    buildId: string
     entrypoint: string
     totalBytes: number
     minCompatibleRuntimeProtocolVersion: number
@@ -116,6 +117,15 @@ function validateManifestInvariants(
       code: 'custom',
       path: ['minCompatibleRuntimeProtocolVersion'],
       message: 'protocol window must not be inverted'
+    })
+  }
+  // Last because it is the only check that hashes. A stale id would survive every other check and
+  // then serve the wrong bytes under a cache key the client already trusts.
+  if (manifest.buildId !== computeMobileWebBundleId(manifest.assets)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['buildId'],
+      message: 'buildId must be the content hash of the asset list'
     })
   }
 }

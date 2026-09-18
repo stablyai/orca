@@ -160,6 +160,19 @@ describe('manifest invariants', () => {
     ).toBe(false)
   })
 
+  it('rejects a buildId that is not the content hash of the assets', () => {
+    expect(
+      MobileWebBundleManifestSchema.safeParse(manifestOf(twoAssets, { buildId: 'f'.repeat(64) }))
+        .success
+    ).toBe(false)
+    // A stale id: correct for a previous asset list, so only the recomputation catches it.
+    expect(
+      MobileWebBundleManifestSchema.safeParse(
+        manifestOf(twoAssets, { buildId: computeMobileWebBundleId([ENTRY]) })
+      ).success
+    ).toBe(false)
+  })
+
   it('rejects an inverted protocol window', () => {
     expect(
       MobileWebBundleManifestSchema.safeParse(
