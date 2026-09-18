@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { GITHUB_START_ASSIGNEE_ME } from '@/lib/assign-unassigned-github-issue-on-start'
 
 const mocks = vi.hoisted(() => {
   const createWorktree = vi.fn()
@@ -243,21 +244,15 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
         expect.objectContaining({
           repo: 'repo-1',
           number: 21047,
-          updates: { addAssignees: ['octocat'] },
+          updates: { addAssignees: [GITHUB_START_ASSIGNEE_ME] },
           ownerRepo: { host: 'github.com', owner: 'stablyai', repo: 'orca' }
         }),
         expect.objectContaining({ timeoutMs: 30_000 })
       )
     })
     expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
-    await vi.waitFor(() => {
-      expect(mocks.store.patchWorkItem).toHaveBeenCalledWith(
-        'issue:21047',
-        { assignees: [{ login: 'octocat', name: null, avatarUrl: '' }] },
-        'repo-1',
-        { sourceContext: runtimeSourceContext }
-      )
-    })
+    expect(mockApi.gh.viewer).not.toHaveBeenCalled()
+    expect(mocks.store.patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('does not wait for GitHub assignment before revealing the workspace', async () => {
