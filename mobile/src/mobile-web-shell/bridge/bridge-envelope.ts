@@ -41,6 +41,9 @@ export const BRIDGE_CONNECTION_STATES = [
   'auth-failed'
 ] as const
 
+/** Closed against `BrowserScreencastFormat`; the pin lives in this module's test. */
+export const BRIDGE_BINARY_FORMATS = ['jpeg', 'png'] as const
+
 /** Closed against `ForegroundNudgeReason`; the pin lives in this module's test. */
 export const BRIDGE_FOREGROUND_NUDGE_REASONS = ['focus', 'app-resume', 'network-change'] as const
 
@@ -104,6 +107,22 @@ export const BridgeReplyPayloadSchema = z.union([
     _meta: rpcMetaSchema
   })
 ])
+
+/**
+ * `BrowserScreencastFrameMetadata` field for field, loose so a field a newer host adds still reaches
+ * the page. Every value is a finite number there, which is what `z.number()` accepts.
+ */
+const screencastMetadataSchema = z.looseObject({
+  offsetTop: z.number().optional(),
+  pageScaleFactor: z.number().optional(),
+  deviceWidth: z.number().optional(),
+  deviceHeight: z.number().optional(),
+  imageWidth: z.number().optional(),
+  imageHeight: z.number().optional(),
+  scrollOffsetX: z.number().optional(),
+  scrollOffsetY: z.number().optional(),
+  timestamp: z.number().optional()
+})
 
 const replyPartSchema = z.object({
   i: z
@@ -182,7 +201,15 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('event'),
     id: idSchema,
     seq: z.number().int().nonnegative(),
-    binary: z.object({ b64: z.string() })
+    // A binary listener is handed a decoded `BrowserScreencastFrame`, never bytes, so every field
+    // but the image crosses beside the base64. `seq` is the bridge's backpressure counter;
+    // `frameSeq` is the screencast's own, and conflating them loses one of the two.
+    binary: z.object({
+      b64: z.string(),
+      format: z.enum(BRIDGE_BINARY_FORMATS),
+      frameSeq: z.number().int().nonnegative(),
+      metadata: screencastMetadataSchema
+    })
   }),
   z.object({
     v: versionSchema,

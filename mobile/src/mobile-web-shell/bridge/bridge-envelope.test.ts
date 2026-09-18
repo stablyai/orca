@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import {
+  BrowserScreencastOpcode,
+  type BrowserScreencastFormat,
+  type BrowserScreencastFrame
+} from '../../transport/browser-screencast-protocol'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
 import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
 import {
@@ -7,11 +12,13 @@ import {
   BRIDGE_MAX_REPLY_PARTS
 } from './bridge-caps'
 import {
+  BRIDGE_BINARY_FORMATS,
   BRIDGE_CONNECTION_STATES,
   BRIDGE_FOREGROUND_NUDGE_REASONS,
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
   readBridgeHostMessage,
+  type BridgeHostMessage,
   type BridgeReplyPayload
 } from './bridge-envelope'
 
@@ -29,6 +36,27 @@ const SUCCESS_PAYLOAD = {
   ok: true,
   result: { worktrees: [] },
   _meta: { runtimeId: 'runtime-a' }
+}
+
+const BINARY_FRAME = {
+  b64: 'AAAA',
+  format: 'jpeg',
+  frameSeq: 7,
+  metadata: { imageWidth: 390, imageHeight: 844, timestamp: 1_700_000_000.5 }
+}
+
+type BridgeBinaryEvent = Extract<BridgeHostMessage, { binary: unknown }>
+
+/** Compile-time pin: everything a decoded frame holds but its bytes crosses as a field. */
+function asDecodedFrameFields(
+  binary: BridgeBinaryEvent['binary']
+): Omit<BrowserScreencastFrame, 'image'> {
+  return {
+    opcode: BrowserScreencastOpcode.Frame,
+    seq: binary.frameSeq,
+    format: binary.format,
+    metadata: binary.metadata
+  }
 }
 
 function readClient(message: unknown): ReturnType<typeof readBridgeClientMessage> {
@@ -157,7 +185,7 @@ describe('host messages', () => {
     ],
     ['a reply part', { type: 'reply', id: ID, part: { i: 0, of: 2 }, chunk: '{"id"' }],
     ['an event', { type: 'event', id: ID, seq: 0, payload: { type: 'data' } }],
-    ['a binary event', { type: 'event', id: ID, seq: 1, binary: { b64: 'AAAA' } }],
+    ['a binary event', { type: 'event', id: ID, seq: 1, binary: BINARY_FRAME }],
     ['an unsubscribed end', { type: 'end', id: ID, reason: 'unsubscribed' }],
     ['a closed end', { type: 'end', id: ID, reason: 'closed' }],
     ['an overflow end', { type: 'end', id: ID, reason: 'overflow' }],
@@ -212,6 +240,27 @@ describe('host messages', () => {
       })
     ],
     ['a part count of zero', client({ type: 'reply', id: ID, part: { i: 0, of: 0 }, chunk: 'x' })],
+    [
+      'a binary event carrying only its bytes',
+      client({ type: 'event', id: ID, seq: 1, binary: { b64: 'AAAA' } })
+    ],
+    [
+      'a binary event without the screencast frame seq',
+      client({
+        type: 'event',
+        id: ID,
+        seq: 1,
+        binary: { b64: 'AAAA', format: 'jpeg', metadata: {} }
+      })
+    ],
+    [
+      'a binary event in a format the screencast cannot produce',
+      client({ type: 'event', id: ID, seq: 1, binary: { ...BINARY_FRAME, format: 'webp' } })
+    ],
+    [
+      'a binary event whose metadata is not an object',
+      client({ type: 'event', id: ID, seq: 1, binary: { ...BINARY_FRAME, metadata: 7 } })
+    ],
     [
       'an end for a reason that is not one of the three',
       client({ type: 'end', id: ID, reason: 'done' })
@@ -293,6 +342,29 @@ describe('type pins', () => {
       failWhenDisconnected: true
     }
     expect(readClient(client({ type: 'request', id: ID, method: 'm', options })).ok).toBe(true)
+  })
+
+  it('closes the binary formats over the screencast protocol', () => {
+    const asProtocol = (value: (typeof BRIDGE_BINARY_FORMATS)[number]): BrowserScreencastFormat =>
+      value
+    const asBridge = (value: BrowserScreencastFormat): (typeof BRIDGE_BINARY_FORMATS)[number] =>
+      value
+    expect(BRIDGE_BINARY_FORMATS.map(asProtocol).map(asBridge)).toEqual([...BRIDGE_BINARY_FORMATS])
+  })
+
+  it('carries a decoded screencast frame whole, minus its bytes', () => {
+    const read = readHost(client({ type: 'event', id: ID, seq: 1, binary: BINARY_FRAME }))
+    const binary =
+      read.ok && read.message.type === 'event' && 'binary' in read.message
+        ? read.message.binary
+        : null
+    expect(binary).toEqual(BINARY_FRAME)
+    expect(binary === null ? null : asDecodedFrameFields(binary)).toEqual({
+      opcode: BrowserScreencastOpcode.Frame,
+      seq: BINARY_FRAME.frameSeq,
+      format: BINARY_FRAME.format,
+      metadata: BINARY_FRAME.metadata
+    })
   })
 })
 
