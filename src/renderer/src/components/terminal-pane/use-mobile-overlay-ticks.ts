@@ -3,7 +3,10 @@ import { onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
-import { applyDesktopFitFallbackAfterReplay } from './desktop-fit-fallback'
+import {
+  applyDesktopFitFallbackAfterReplay,
+  fitAndRefreshDesktopPane
+} from './desktop-fit-fallback'
 import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
 import type { PtyTransport } from './pty-transport'
 
@@ -100,9 +103,10 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
       }
       if (event.mode === 'desktop-fit') {
         // Why: fitAddon.fit() measures the DOM, so run under rAF after layout settles; the timeout is a safety net if fit silently threw.
+        // Why: size restore alone leaves TUI pixels stale until scroll — refresh after fit.
         const fitAffectedPanes = (): void => {
           for (const pane of getAffectedPanes()) {
-            safeFit(pane)
+            fitAndRefreshDesktopPane(pane)
           }
         }
         scheduleFitFrame(fitAffectedPanes)
