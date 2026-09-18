@@ -14,12 +14,26 @@ class BridgeViewGoneError extends Error {
   }
 }
 
-function reportBridgeDiagnostic(diagnostic: BridgeHostDiagnostic): void {
-  if (diagnostic.kind === 'refused') {
-    console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
-    return
+/**
+ * One line per kind, for the life of one host.
+ *
+ * A page that is failing frames fails all of them, and a line each buries the first — the one that
+ * says why. The host already holds `post-failed` to one; this is the same bound for the kinds it
+ * does not, and a new host starts the count over because a new page is new evidence.
+ */
+function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnostic) => void {
+  const reported = new Set<BridgeHostDiagnostic['kind']>()
+  return (diagnostic) => {
+    if (reported.has(diagnostic.kind)) {
+      return
+    }
+    reported.add(diagnostic.kind)
+    if (diagnostic.kind === 'refused') {
+      console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
+      return
+    }
+    console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
   }
-  console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
 }
 
 /**
@@ -83,7 +97,7 @@ export function useMobileWebShellBridge(args: {
           ? Promise.reject(new BridgeViewGoneError())
           : mounted.handle.postBridgeMessage(json)
       },
-      onDiagnostic: reportBridgeDiagnostic
+      onDiagnostic: createBridgeDiagnosticReporter()
     })
     hostRef.current = { sessionId, host }
     return () => {

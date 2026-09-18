@@ -262,6 +262,23 @@ describe('teardown', () => {
   })
 })
 
+describe('diagnostics', () => {
+  it('warns once for the frames one page has refused, not once each', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver('{"v":1,"type":')
+    await mounted.deliver(clientFrame({ type: 'request', id: 'short', method: 'x' }))
+    expect(warned).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts the count over for the next page', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver('{"v":1,"type":')
+    await mounted.update(readyState('session-two'))
+    await mounted.deliver('{"v":1,"type":')
+    expect(warned).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('client changes', () => {
   it('rebuilds the host on a new client, so nothing crosses to the one that was replaced', async () => {
     const first = fakeClient()
