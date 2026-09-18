@@ -345,6 +345,27 @@ describe('generation store', () => {
     expect((await store.readActiveGeneration(oldest))?.buildId).toBe('a'.repeat(64))
   })
 
+  it('never counts or evicts a host that is only mid-download', async () => {
+    const fs = createFakeFileSystem()
+    let clock = 0
+    const store = createGenerationStore({ fileSystem: fs, now: () => (clock += 1) })
+    const oldest = deriveHostCacheKey('a')
+    const downloading = deriveHostCacheKey('downloading')
+    for (const name of ['a', 'b', 'c', 'd']) {
+      await activate(store, deriveHostCacheKey(name))
+    }
+    const staged = await store.stageGeneration(downloading, buildResult({}))
+
+    await activate(store, deriveHostCacheKey('e'))
+
+    // The ceiling is four cached generations, so the fifth activation evicts the least recently
+    // activated host and leaves the download alone.
+    expect(fs.paths().some((path) => path.startsWith(oldest))).toBe(false)
+    expect(fs.text(`${staged.directory.slice(ROOT.length + 1)}/manifest.json`)).not.toBeNull()
+    await store.commitGeneration(staged)
+    expect((await store.readActiveGeneration(downloading))?.buildId).toBe('a'.repeat(64))
+  })
+
   it('serializes two stage calls for one host and build', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })

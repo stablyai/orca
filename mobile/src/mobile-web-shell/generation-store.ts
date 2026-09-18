@@ -78,13 +78,27 @@ export function createGenerationStore(options: {
     return entries.filter((entry) => entry.isDirectory && isHostCacheKey(entry.name))
   }
 
+  /** The ceiling counts cached generations, so a host that only holds a download in progress is
+   *  neither counted nor evictable: evicting it would delete the tree its own commit is about to
+   *  rename. Sweeping still walks every host directory, staged-only ones included. */
+  async function listActivatedHosts(): Promise<readonly string[]> {
+    const activated: string[] = []
+    for (const host of await listHostDirectories()) {
+      const generations = await fs.list(joinUri(fs.rootUri, host.name, GENERATIONS_DIRECTORY_NAME))
+      if (generations.some((entry) => entry.isDirectory)) {
+        activated.push(host.name)
+      }
+    }
+    return activated
+  }
+
   async function dropHostTree(hostKey: string): Promise<void> {
     await fs.delete(hostRoot(hostKey))
   }
 
   async function enforceHostLimit(index: Map<string, number>, activated: string): Promise<void> {
-    const hosts = await listHostDirectories()
-    const present = new Set(hosts.map((host) => host.name))
+    const hosts = await listActivatedHosts()
+    const present = new Set(hosts)
     for (const key of Array.from(index.keys())) {
       if (!present.has(key)) {
         index.delete(key)
@@ -95,11 +109,11 @@ export function createGenerationStore(options: {
     // never a candidate, because `now()` is a wall clock: one backward jump would otherwise make
     // the newest entry the oldest and evict the tree the caller is about to open.
     const candidates = hosts
-      .filter((host) => host.name !== activated)
-      .sort((left, right) => (index.get(left.name) ?? 0) - (index.get(right.name) ?? 0))
+      .filter((host) => host !== activated)
+      .sort((left, right) => (index.get(left) ?? 0) - (index.get(right) ?? 0))
     for (const host of candidates.slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))) {
-      await dropHostTree(host.name)
-      index.delete(host.name)
+      await dropHostTree(host)
+      index.delete(host)
     }
     await writeHostIndex(index)
   }
