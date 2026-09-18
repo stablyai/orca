@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => {
         assignUnassignedGitHubIssuesOnStart: false
       } as { assignUnassignedGitHubIssuesOnStart: boolean },
       createWorktree,
-      setSidebarOpen
+      setSidebarOpen,
+      patchWorkItem: vi.fn()
     }
   }
 })
@@ -220,6 +221,14 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
         })
       )
     })
+    await vi.waitFor(() => {
+      expect(mocks.store.patchWorkItem).toHaveBeenCalledWith(
+        'issue:21047',
+        { assignees: [{ login: 'octocat', name: null, avatarUrl: '' }] },
+        'repo-1',
+        { sourceContext: undefined }
+      )
+    })
   })
 
   it('threads a runtime sourceContext so assignment runs on the owning host', async () => {
@@ -241,6 +250,14 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
       )
     })
     expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(mocks.store.patchWorkItem).toHaveBeenCalledWith(
+        'issue:21047',
+        { assignees: [{ login: 'octocat', name: null, avatarUrl: '' }] },
+        'repo-1',
+        { sourceContext: runtimeSourceContext }
+      )
+    })
   })
 
   it('does not wait for GitHub assignment before revealing the workspace', async () => {
@@ -271,6 +288,7 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
     expect(mocks.createWorktree).toHaveBeenCalled()
     await Promise.resolve()
     expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
+    expect(mocks.store.patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('does not treat missing assignee data as unassigned when starting work', async () => {
@@ -281,6 +299,7 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
     expect(mocks.createWorktree).toHaveBeenCalled()
     await Promise.resolve()
     expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
+    expect(mocks.store.patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('does not assign when starting work with the setting off', async () => {
@@ -288,6 +307,7 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
 
     expect(mocks.createWorktree).toHaveBeenCalled()
     expect(mockApi.gh.updateIssue).not.toHaveBeenCalled()
+    expect(mocks.store.patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('still creates the workspace when assigning the GitHub issue throws', async () => {
@@ -303,5 +323,6 @@ describe('launchWorkItemDirect GitHub start assignment', () => {
         "Couldn't assign the GitHub issue to you. The workspace was still created."
       )
     })
+    expect(mocks.store.patchWorkItem).not.toHaveBeenCalled()
   })
 })
