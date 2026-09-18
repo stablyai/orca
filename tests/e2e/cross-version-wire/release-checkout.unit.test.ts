@@ -20,6 +20,10 @@ import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   REPO_ROOT,
+  resolveBaselineReleaseRef,
+  resolveBaselineReleaseRefs,
+  selectLatestStableReleaseTag,
+  selectStableReleaseTags,
   type CheckoutLockOptions,
   type CheckoutStagingContext,
   type ReleaseCheckout
@@ -258,6 +262,47 @@ afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+describe('stable release tag selection', () => {
+  it('ignores legacy, mobile, and prerelease tags and orders newest first', () => {
+    expect(
+      selectStableReleaseTags(
+        ['v799', 'mobile-v9.0.0', 'v1.4.177-rc.3', 'v1.4.175', 'v1.4.176', 'v1.4.180'],
+        2
+      )
+    ).toEqual(['v1.4.180', 'v1.4.176'])
+  })
+
+  it('orders by version component, not lexically', () => {
+    expect(selectStableReleaseTags(['v1.4.9', 'v1.4.10', 'v1.4.100'], 3)).toEqual([
+      'v1.4.100',
+      'v1.4.10',
+      'v1.4.9'
+    ])
+  })
+
+  it('returns every stable tag it has when fewer exist than asked for', () => {
+    expect(selectStableReleaseTags(['v1.4.175', 'v1.4.177-rc.3'], 2)).toEqual(['v1.4.175'])
+    expect(selectStableReleaseTags([], 2)).toEqual([])
+    expect(selectStableReleaseTags(['v1.4.175'], 0)).toEqual([])
+  })
+
+  it('keeps the single-baseline selector agreeing with the newest of the list', () => {
+    const tags = ['v1.4.175', 'v1.4.176', 'v1.4.180']
+    expect(selectLatestStableReleaseTag(tags)).toBe(selectStableReleaseTags(tags, 2)[0])
+    expect(selectLatestStableReleaseTag([])).toBeNull()
+  })
+
+  it('resolves real repository tags without hard-coding a version', () => {
+    const refs = resolveBaselineReleaseRefs(2)
+    expect(refs.length).toBeGreaterThan(0)
+    for (const ref of refs) {
+      expect(ref).toMatch(/^v\d+\.\d+\.\d+$/)
+    }
+    expect(new Set(refs).size).toBe(refs.length)
+    expect(refs[0]).toBe(resolveBaselineReleaseRef())
+  })
 })
 
 describe('release checkout materialization', () => {
