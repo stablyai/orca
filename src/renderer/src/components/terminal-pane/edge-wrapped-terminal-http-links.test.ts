@@ -368,6 +368,54 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
   })
 
+  it('joins a URL split across two PowerShell lines before opening', () => {
+    const cols = 80
+    const firstRow = 'https://example.com/orca-14291/wrapped-url-part-one'
+    const continuationRow = '/wrapped-url-part-two'
+    const expectedUrl = `${firstRow}${continuationRow}`
+    const rows = [makeBufferLine(firstRow, cols), makeBufferLine(continuationRow, cols)]
+    const buffer = { getLine: (y: number) => rows[y] }
+
+    expect(firstRow.length).toBeLessThan(cols)
+    expect(
+      openHttpLinkAtBufferPosition(buffer, { x: firstRow.indexOf('https') + 8, y: 1 }, cols, {
+        worktreeId: 'wt-1',
+        modifierHeld: true
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
+
+    openUrlMock.mockReset()
+    expect(
+      openHttpLinkAtBufferPosition(buffer, { x: 2, y: 2 }, cols, {
+        worktreeId: 'wt-1',
+        modifierHeld: true
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
+  })
+
+  it('joins a PowerShell Format-List hanging-indent URL remainder', () => {
+    const cols = 80
+    const firstRow = `DocumentationUri : https://example.com/docs/${'lear'.padEnd(cols - 44, 'n')}`
+    const continuationRow = `${' '.repeat(19)}ning-powershell/guide.md`
+    const expectedUrl = `https://example.com/docs/${'lear'.padEnd(cols - 44, 'n')}ning-powershell/guide.md`
+    const rows = [makeBufferLine(firstRow, cols), makeBufferLine(continuationRow, cols)]
+    const buffer = { getLine: (y: number) => rows[y] }
+
+    expect(firstRow).toHaveLength(cols)
+    expect(
+      openHttpLinkAtBufferPosition(buffer, { x: firstRow.indexOf('https') + 8, y: 1 }, cols, {
+        worktreeId: 'wt-1',
+        modifierHeld: true
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
+  })
+
   it('does not glue a mid-row URL to a next-line Windows path', () => {
     const firstRow = 'Repo: https://example.com/repo/'
     const secondRow = 'C:\\Users\\demo\\project\\file.ts'
