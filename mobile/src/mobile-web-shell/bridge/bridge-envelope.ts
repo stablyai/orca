@@ -251,6 +251,27 @@ export type BridgeHostMessage = z.infer<typeof BridgeHostMessageSchema>
 export type BridgeReplyMessage = Extract<BridgeHostMessage, { type: 'reply' }>
 export type BridgeReplyPayload = z.infer<typeof BridgeReplyPayloadSchema>
 
+/**
+ * The exchange a frame the page's reader refused was answering, when it named one.
+ *
+ * A refused frame is dropped, and a dropped `reply` or `error` would otherwise leave the request it
+ * answered pending for the life of the document. The id is salvaged through the same caps the
+ * reader applies, never trusted: the caller settles only an exchange it already holds, so a frame
+ * naming anything else still changes nothing.
+ */
+export function readRefusedBridgeFrameId(raw: string): string | null {
+  const framed = parseBridgeMessage(raw, 'shell-to-page')
+  if (!framed.ok) {
+    return null
+  }
+  const frame = framed.message
+  if (typeof frame !== 'object' || frame === null || !('id' in frame)) {
+    return null
+  }
+  const { id } = frame
+  return typeof id === 'string' && BRIDGE_ID_PATTERN.test(id) ? id : null
+}
+
 /** What the RN host accepts from the page. */
 export function readBridgeClientMessage(raw: string): BridgeRead<BridgeClientMessage> {
   return readMessage(raw, BridgeClientMessageSchema, 'page-to-shell')

@@ -1,13 +1,9 @@
 import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
-import {
-  BRIDGE_MAX_PENDING_REQUESTS,
-  BRIDGE_MAX_SUBSCRIPTIONS,
-  utf8ByteLength,
-  type BridgeRefusal
-} from './bridge-caps'
+import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
+import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import { createBridgeInitHandshake } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
@@ -16,20 +12,16 @@ import {
   BridgeSendFailedError,
   BridgeShellReplacedError
 } from './bridge-client-errors'
+import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { BridgeClientRequests } from './bridge-client-requests'
-import {
-  BridgeClientSubscriptions,
-  type BridgeStreamEndReason
-} from './bridge-client-subscriptions'
+import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import {
   BRIDGE_PROTOCOL_VERSION,
-  readBridgeHostMessage,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
   type BridgeGrants,
   type BridgeHostMessage
 } from './bridge-envelope'
-import { reconstructBridgeError } from './bridge-error-capture'
 
 export {
   BridgeClientCapExceededError,
@@ -43,15 +35,7 @@ export {
 /** Base64url, and the length the envelope's id pattern requires. Base36 digits are a subset of it. */
 const BRIDGE_ID_CHARS = 22
 
-/** Nothing here is recoverable in place; each is worth a line in a log and none is retried. */
-export type BridgeRpcClientDiagnostic =
-  | { kind: 'refused'; refusal: BridgeRefusal }
-  | { kind: 'send-failed'; error: unknown }
-  | { kind: 'stream-ended'; reason: BridgeStreamEndReason }
-  | { kind: 'stream-failed'; error: unknown }
-  | { kind: 'state-out-of-order' }
-  | { kind: 'binary-frame-dropped' }
-  | { kind: 'unknown-id' }
+export type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 
 /** What `init` said this page is attached to. `grants` is what a call site checks before it posts. */
 export type BridgeShellSession = {
@@ -178,65 +162,19 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     handshake.restart()
   }
 
-  /** The shell's own words where it had any, the way the native client passes an RPC error message
-   *  through to the listener it ends. */
-  function describeStreamFailure(error: unknown): string {
-    return error instanceof Error ? error.message : 'the shell could not keep this stream open'
-  }
+  const readInboundFrame = createBridgeInboundFrameReader({
+    requests,
+    subscriptions,
+    report,
+    acceptInit,
+    acceptState
+  })
 
-  /** The shell answers a refused `subscribe` with `error` on the stream's id. Nothing is pending to
-   *  reject there, so routing it to the requests would drop it and hold the page's slot forever. */
-  function failExchange(id: string, error: unknown): void {
-    if (subscriptions.has(id)) {
-      // Reported before the listener runs, so a listener that throws cannot swallow the diagnostic.
-      report({ kind: 'stream-failed', error })
-      subscriptions.end(id, describeStreamFailure(error), error)
-      return
-    }
-    if (!requests.has(id)) {
-      report({ kind: 'unknown-id' })
-    }
-    // Still routed: an id with a half-assembled reply behind it holds a slot until it is discarded.
-    requests.fail(id, error)
-  }
-
-  function dispatch(message: BridgeHostMessage, json: string): void {
-    switch (message.type) {
-      case 'init':
-        acceptInit(message)
-        return
-      case 'state':
-        acceptState(message.connection)
-        return
-      case 'reply':
-        if (!requests.has(message.id)) {
-          report({ kind: 'unknown-id' })
-        }
-        requests.acceptReply(message)
-        return
-      case 'error':
-        failExchange(message.id, reconstructBridgeError(message.error))
-        return
-      case 'event':
-        subscriptions.deliver(message, utf8ByteLength(json))
-        return
-      case 'end':
-        report({ kind: 'stream-ended', reason: message.reason })
-        subscriptions.end(message.id, `the shell ended this stream (${message.reason})`)
-        return
-    }
-  }
-
+  /** After `close` the page is not the document the shell is answering any more. */
   function receive(json: string): void {
-    if (closed) {
-      return
+    if (!closed) {
+      readInboundFrame(json)
     }
-    const read = readBridgeHostMessage(json)
-    if (!read.ok) {
-      report({ kind: 'refused', refusal: read.refusal })
-      return
-    }
-    dispatch(read.message, json)
   }
 
   function sendRequest(...args: [string, unknown?, SendRequestOptions?]): Promise<RpcResponse> {

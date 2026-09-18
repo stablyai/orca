@@ -1,3 +1,4 @@
+import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import type { BridgeRefusal } from './bridge-caps'
 
 /** Everything the page's own client raises, as opposed to what it reconstructs from the shell. */
@@ -34,10 +35,13 @@ export class BridgeClientCapExceededError extends Error {
   }
 }
 
+/** The shell answered and the page could not read the answer, so the desktop has already run the
+ *  request: a caller told this was a definite failure would offer to retry what already happened. */
 export class BridgeReplyRefusedError extends Error {
   constructor(refusal: BridgeRefusal) {
     super(`the reply could not be read (${refusal})`)
     this.name = 'BridgeReplyRefusedError'
+    markRpcDeliveryUnknown(this)
   }
 }
 
