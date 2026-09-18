@@ -16,7 +16,14 @@ const CONTENT_TYPE_BY_EXTENSION = {
   css: 'text/css; charset=utf-8',
   html: 'text/html; charset=utf-8',
   js: 'text/javascript; charset=utf-8',
-  png: 'image/png'
+  png: 'image/png',
+  // The Phase C app bundle emits images as same-origin assets rather than data: URLs, which the
+  // shell's img-src 'self' refuses. Fonts are absent by design: the policy sets font-src 'none'.
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml'
 }
 
 /**
@@ -41,11 +48,11 @@ export function computeMobileWebBundleBuildId(assets) {
   return createHash('sha256').update(serializeMobileWebBundleAssets(assets), 'utf8').digest('hex')
 }
 
-function sha256Hex(bytes) {
+export function sha256Hex(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-function contentTypeForExtension(extension) {
+export function contentTypeForExtension(extension) {
   const contentType = CONTENT_TYPE_BY_EXTENSION[extension]
   if (!contentType) {
     throw new Error(`[build-mobile-web-bundle] no content type registered for .${extension}`)
@@ -65,7 +72,7 @@ function readIntegerConstant(source, name) {
  * Parsed rather than imported because protocol-version.ts is TypeScript and this script runs on
  * bare node during packaging, before any build output exists.
  */
-async function readProtocolWindow() {
+export async function readProtocolWindow() {
   const source = await readFile(join(projectDir, 'src', 'shared', 'protocol-version.ts'), 'utf8')
   return {
     runtimeProtocolVersion: readIntegerConstant(source, 'RUNTIME_PROTOCOL_VERSION'),
@@ -77,7 +84,7 @@ async function readProtocolWindow() {
   }
 }
 
-async function readDesktopVersion() {
+export async function readDesktopVersion() {
   const packageJson = JSON.parse(await readFile(join(projectDir, 'package.json'), 'utf8'))
   if (typeof packageJson.version !== 'string' || packageJson.version.length === 0) {
     throw new Error('[build-mobile-web-bundle] root package.json has no version')
@@ -124,7 +131,7 @@ async function transformEntries(protocolWindow, desktopVersion) {
   return { script, stylesheet }
 }
 
-function hashedAsset(bytes, extension) {
+export function hashedAsset(bytes, extension) {
   const sha256 = sha256Hex(bytes)
   return {
     bytes,
@@ -172,7 +179,24 @@ export async function buildMobileWebBundle({ outDir = defaultOutDir } = {}) {
     contentType: contentTypeForExtension('html')
   }
 
-  const written = [indexAsset, ...hashed]
+  return writeMobileWebBundleTree({
+    outDir,
+    written: [indexAsset, ...hashed],
+    desktopVersion,
+    protocolWindow
+  })
+}
+
+/**
+ * Manifest assembly and the on-disk write, shared by the Phase A bootstrap bundle and the Phase C
+ * app bundle so both produce the same manifest shape the contract module and verifier read.
+ */
+export async function writeMobileWebBundleTree({
+  outDir,
+  written,
+  desktopVersion,
+  protocolWindow
+}) {
   const assets = written
     .map(({ path, sha256, byteLength, contentType }) => ({ path, sha256, byteLength, contentType }))
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))

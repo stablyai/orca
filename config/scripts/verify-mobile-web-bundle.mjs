@@ -48,11 +48,26 @@ async function listSourceFiles(directory) {
  * A CRLF checkout changes the bytes of every text source, which changes every asset hash and so
  * the buildId. .gitattributes pins eol=lf; this is what notices when that pin stops working.
  */
+/** Pinned `-text` in .gitattributes: they may legitimately contain 0x0d. */
+const BINARY_SOURCE_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.ttf',
+  '.otf',
+  '.woff',
+  '.woff2'
+]
+
 export async function assertNoCarriageReturnsInSource(directory = sourceDir) {
   const offenders = []
   for (const file of await listSourceFiles(directory)) {
-    // Binary assets are pinned -text and may legitimately contain 0x0d.
-    if (file.endsWith('.png')) {
+    if (BINARY_SOURCE_EXTENSIONS.some((extension) => file.endsWith(extension))) {
+      continue
+    }
+    // Written by mobile's postinstall, gitignored, so no eol pin applies and none is needed.
+    if (file.endsWith('.generated.ts')) {
       continue
     }
     if ((await readFile(file)).includes(0x0d)) {
@@ -62,7 +77,7 @@ export async function assertNoCarriageReturnsInSource(directory = sourceDir) {
   if (offenders.length > 0) {
     fail(
       `CRLF in mobile web source, which would change every asset hash and the buildId: ` +
-        `${offenders.join(', ')}. Check the .gitattributes eol=lf pin for src/mobile-web.`
+        `${offenders.join(', ')}. Check the .gitattributes eol=lf pin for ${directory}.`
     )
   }
 }
