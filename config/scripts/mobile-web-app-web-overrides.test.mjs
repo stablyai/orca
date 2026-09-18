@@ -7,8 +7,9 @@ const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
 const allowlistPath = join(mobileDir, 'web-entry', 'web-overrides.json')
 
-// The trees the builder's resolveExtensions covers. mobile/packages is a vendored Expo module
-// with its own web build; the app entry never resolves into it through a .web.* sibling.
+// The trees a .web.* sibling is honoured in: src and web-entry through the builder's
+// resolveExtensions, app through the route manifest's own sibling preference. mobile/packages is a
+// vendored Expo module with its own web build; the app entry never resolves into it.
 const SCANNED = ['src', 'app', 'web-entry']
 const WEB_SIBLING = /\.web\.(tsx|ts|jsx|js)$/
 

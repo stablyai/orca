@@ -13,13 +13,13 @@ import {
   contentTypeForExtension
 } from './build-mobile-web-bundle.mjs'
 import {
-  collectMobileWebAppRouteKeys,
+  collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest
 } from './mobile-web-app-route-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
-const appDir = join(mobileDir, 'app')
+const defaultAppDir = join(mobileDir, 'app')
 const entryPoint = join(mobileDir, 'web-entry', 'index.tsx')
 const defaultOutDir = join(projectDir, 'out', 'mobile-web-app')
 
@@ -73,8 +73,9 @@ const lucideBarrelPlugin = {
   }
 }
 
-export async function bundleMobileWebApp() {
-  const routeKeys = await collectMobileWebAppRouteKeys(appDir)
+// appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
+export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
+  const routes = await collectMobileWebAppRoutes(appDir)
   const result = await esbuild.build({
     // Fixed so no absolute path of this checkout can reach the output.
     absWorkingDir: mobileDir,
@@ -95,10 +96,7 @@ export async function bundleMobileWebApp() {
     // One React: resolve everything from mobile/node_modules, which is where the entry lives.
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
-    plugins: [
-      routeManifestPlugin(renderMobileWebAppRouteManifest(appDir, routeKeys)),
-      lucideBarrelPlugin
-    ],
+    plugins: [routeManifestPlugin(renderMobileWebAppRouteManifest(routes)), lucideBarrelPlugin],
     resolveExtensions: [
       '.web.tsx',
       '.web.ts',
@@ -145,7 +143,11 @@ export async function bundleMobileWebApp() {
     .filter((file) => file !== script)
     .map((file) => ({ name: basename(file.path), bytes: Buffer.from(file.contents) }))
     .sort((left, right) => (left.name < right.name ? -1 : 1))
-  return { script: Buffer.from(script.contents), images, routeKeys }
+  return {
+    script: Buffer.from(script.contents),
+    images,
+    routeKeys: routes.map((route) => route.key)
+  }
 }
 
 export async function buildMobileWebAppBundle({ outDir = defaultOutDir } = {}) {

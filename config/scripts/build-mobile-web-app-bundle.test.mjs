@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +12,7 @@ import {
   MOBILE_WEB_APP_ROUTE_ROOT,
   ROUTE_CONTEXT_SOURCE,
   collectMobileWebAppRouteKeys,
+  collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest
 } from './mobile-web-app-route-manifest.mjs'
 import {
@@ -61,11 +62,30 @@ describe('route manifest', () => {
   })
 
   it('emits one static import per key', async () => {
-    const source = renderMobileWebAppRouteManifest('/app', ['./h/index.tsx', './h/_layout.tsx'])
+    const source = renderMobileWebAppRouteManifest([
+      { key: './h/index.tsx', module: '/app/h/index.tsx' },
+      { key: './h/_layout.tsx', module: '/app/h/_layout.tsx' }
+    ])
     expect(source).toContain('import * as route0 from "/app/h/index.tsx"')
     expect(source).toContain('import * as route1 from "/app/h/_layout.tsx"')
     // A lazy getter would need a chunk fetch, which the page's script-src 'self' does not serve.
     expect(source).not.toContain('import(')
+  })
+
+  it('imports a .web.tsx sibling under the native route key', async () => {
+    await withScratch(async (scratch) => {
+      const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
+      await mkdir(directory, { recursive: true })
+      await writeFile(join(directory, 'index.tsx'), 'export default function Route() {}\n')
+      expect(await collectMobileWebAppRoutes(scratch)).toEqual([
+        { key: './h/index.tsx', module: join(directory, 'index.tsx') }
+      ])
+      await writeFile(join(directory, 'index.web.tsx'), 'export default function Route() {}\n')
+      // The key is still the native filename, so the override changes the code and not the URL.
+      expect(await collectMobileWebAppRoutes(scratch)).toEqual([
+        { key: './h/index.tsx', module: join(directory, 'index.web.tsx') }
+      ])
+    })
   })
 })
 
@@ -112,6 +132,24 @@ describe('the app bundle', () => {
     const { routeKeys } = await bundleMobileWebApp()
     expect(routeKeys).toEqual(await collectMobileWebAppRouteKeys(appDir))
   }, 120_000)
+
+  it("bundles a route's .web.tsx sibling instead of the native file, changing the bytes", async () => {
+    await withScratch(async (scratch) => {
+      const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
+      await mkdir(directory, { recursive: true })
+      const route = (marker) => `export default function Route() { return '${marker}' }\n`
+      await writeFile(join(directory, 'index.tsx'), route('native-route-marker'))
+      const before = await bundleMobileWebApp({ appDir: scratch })
+      expect(before.script.toString('utf8')).toContain('native-route-marker')
+
+      await writeFile(join(directory, 'index.web.tsx'), route('web-route-marker'))
+      const after = await bundleMobileWebApp({ appDir: scratch })
+      expect(after.script.toString('utf8')).toContain('web-route-marker')
+      expect(after.script.toString('utf8')).not.toContain('native-route-marker')
+      // Different script bytes means a different asset sha and so a different buildId.
+      expect(after.script.equals(before.script)).toBe(false)
+    })
+  }, 240_000)
 
   it('names every shim it applies', () => {
     expect(MOBILE_WEB_APP_SHIMS).toEqual([
