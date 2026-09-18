@@ -12,8 +12,6 @@ const STAGING_DIRECTORY_NAME = 'tmp'
 const MANIFEST_FILE_NAME = 'manifest.json'
 const HOST_INDEX_FILE_NAME = 'hosts.json'
 
-const BUILD_ID_PATTERN = /^[a-f0-9]{64}$/
-
 /** The architecture reference's cache ceiling: four hosts, least recently activated evicted. */
 export const MAX_CACHED_HOSTS = 4
 
@@ -141,7 +139,7 @@ export function createGenerationStore(options: {
     result: MobileWebBundleFetchResult
   ): Promise<StagedGeneration> {
     const manifest = result.manifest
-    const directory = joinUri(stagingRoot(hostKey), requireBuildId(manifest.buildId))
+    const directory = joinUri(stagingRoot(hostKey), manifest.buildId)
     const assets = manifest.assets.map((asset) => ({
       uri: joinUri(directory, requireStorablePath(asset.path)),
       bytes: requireExactBytes(result.assets.get(asset.path), asset)
@@ -273,13 +271,6 @@ function requireHostKey(hostKey: string): string {
     throw new Error('generation store was handed something that is not a host cache key')
   }
   return hostKey
-}
-
-function requireBuildId(buildId: string): string {
-  if (!BUILD_ID_PATTERN.test(buildId)) {
-    throw new Error('generation store was handed a build id that is not a sha256 digest')
-  }
-  return buildId
 }
 
 /** The manifest schema bans traversal already, but this is the last code between a manifest and a
