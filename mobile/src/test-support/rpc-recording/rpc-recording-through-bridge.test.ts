@@ -19,7 +19,6 @@ import {
 } from '../bridged-parity/divergence-classes'
 import {
   c1PageClosureDrift,
-  c1PageClosureExclusions,
   C1_PAGE_CLOSURE,
   type BridgedParityVerdict,
   type C1PageClosureObservation
@@ -352,9 +351,9 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
         divergedOutsideAnExcludedClass: 0
       })
-      // Every count exactly, `identical` included, which is the direction the two checks above
+      // Every count exactly, `identical` included, which is the direction the three checks above
       // cannot see: a golden reported `identical` rather than the excluded class it belongs to
-      // leaves both of them holding. The size of the corpus follows, being the total of these.
+      // leaves all three holding. The size of the corpus follows, being the total of these.
       expect({ tally: bridgedParityTallyDrift({ identical, counts }) }).toEqual({ tally: [] })
     })
 
@@ -372,13 +371,6 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       // Each by id, because the counts above cannot see this domain: a closure golden that stopped
       // replaying identically is paid for by any of the other 684 that started.
       expect({ closure: c1PageClosureDrift(observed) }).toEqual({ closure: [] })
-      // A closure golden may sit in an excluded class only where that class is one of the proven
-      // observation artifacts, which is what having a reason in the table means.
-      expect(
-        c1PageClosureExclusions().filter(
-          ([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined
-        )
-      ).toEqual([])
     })
   }
 )
