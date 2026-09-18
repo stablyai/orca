@@ -40,8 +40,7 @@ struct MobileWebShellGeneration {
     let parsed = try? JSONSerialization.jsonObject(with: manifestData)
     guard
       let root = parsed as? [String: Any],
-      let schema = root["schemaVersion"] as? Int,
-      schema == schemaVersion,
+      isPinnedSchemaVersion(root["schemaVersion"]),
       let declaredEntrypoint = root["entrypoint"] as? String,
       declaredEntrypoint == entrypoint,
       let assets = root["assets"] as? [[String: Any]],
@@ -75,6 +74,17 @@ struct MobileWebShellGeneration {
       contentType: manifestContentType
     )
     return MobileWebShellGeneration(entries: entries)
+  }
+
+  /// `as? Int` is not this check: NSNumber bridges `true` and `1.0` to 1, and the contract pins the
+  /// integer 1. JSONSerialization keeps the written form, so the number's own type answers it.
+  static func isPinnedSchemaVersion(_ value: Any?) -> Bool {
+    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
+      return false
+    }
+    let numberType = String(cString: number.objCType)
+    guard numberType != "d", numberType != "f" else { return false }
+    return number.intValue == schemaVersion
   }
 
   /// Re-checked here rather than trusted: the schema that pins this shape is on the other side of
