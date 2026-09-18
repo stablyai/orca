@@ -149,7 +149,10 @@ describe('assertMobileWebBundleBuilt', () => {
 
 describe('electron-builder packaging wiring', () => {
   it('excludes the mobile-web source tree from app.asar', () => {
-    expect(electronBuilderConfig.files).toContain('!mobile-web{,/**/*}')
+    expect(electronBuilderConfig.files).toContain('!src/mobile-web{,/**/*}')
+    // The source tree lives under src/, which is excluded wholesale; the explicit entry above
+    // only survives as a marker, so assert the broad rule is still what does the work.
+    expect(electronBuilderConfig.files).toContain('!src{,/**/*}')
   })
 
   it('does not exclude the built bundle, so out/mobile-web ships like out/web', () => {

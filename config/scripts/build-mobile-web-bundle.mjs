@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
-const sourceDir = join(projectDir, 'mobile-web')
+const sourceDir = join(projectDir, 'src', 'mobile-web')
 const defaultOutDir = join(projectDir, 'out', 'mobile-web')
 
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1
