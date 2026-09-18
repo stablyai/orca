@@ -52,7 +52,7 @@ type SubscriptionsOptions = {
 
 /** Every stream the page opened, and the ack it owes the shell for each one. */
 export class BridgeClientSubscriptions {
-  private readonly streams = new Map<string, OpenStream>()
+  private streams = new Map<string, OpenStream>()
 
   constructor(private readonly options: SubscriptionsOptions) {}
 
@@ -146,8 +146,12 @@ export class BridgeClientSubscriptions {
   /** For a shell replaced under the page: every stream it was serving died with it, and the
    *  listeners are the only ones in a position to do anything about that. */
   failAll(message: string): void {
-    for (const id of [...this.streams.keys()]) {
-      this.end(id, message)
+    // Out of the ledger before any listener runs: one that resubscribes on the way down is opening
+    // a stream against the shell that is arriving, and this loop must not take that one with it.
+    const ended = this.streams
+    this.streams = new Map()
+    for (const stream of ended.values()) {
+      stream.onData(bridgeStreamError(message))
     }
   }
 
