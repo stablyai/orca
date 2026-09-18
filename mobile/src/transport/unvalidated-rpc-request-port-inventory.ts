@@ -25,6 +25,12 @@ export type UnvalidatedRpcRequestPortEntry = {
 
 /** Modules whose job is the port. These do not shrink to zero. */
 export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequestPortEntry[] = [
+  // Carries the port across the page boundary for the hybrid shell. Not a call site: it picks no
+  // method, reads no reply and decides no acceptance — the page names the method and runs the
+  // typed operation over it, exactly as a native screen does over a socket client.
+  { file: 'src/mobile-web-shell/bridge-host.ts', references: 3 },
+  // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
+  { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.
