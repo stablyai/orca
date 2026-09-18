@@ -127,6 +127,8 @@ export function buildDefaultSettings(args: {
     openLinksInAppPreferencePrompted: false,
     openLinksInAppModifierInverts: false,
     terminalLinkActionPopoverEnabled: true,
+    terminalLinkClickBehavior: 'actions',
+    terminalUrlMiddleClickBehavior: 'open',
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     experimentalStructuredNativeChat: false,

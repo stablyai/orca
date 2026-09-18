@@ -11330,7 +11330,8 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Show link actions",
-          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal."
+          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal.",
+          "descriptionV2": "Control clicks on detected URLs printed in terminal panes and chat transcripts."
         },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",

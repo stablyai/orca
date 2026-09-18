@@ -213,6 +213,10 @@ export type GlobalSettings = {
   openLinksInAppModifierInverts?: boolean
   /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
+  /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */
+  terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
+  /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
+  terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
