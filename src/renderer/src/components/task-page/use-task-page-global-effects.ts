@@ -1,6 +1,7 @@
 import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useAppStore } from '@/store'
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
@@ -42,7 +43,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
+      // Why: keep-mounted Tasks still owned window Esc and would wipe the parked issue off-view.
+      if (event.key !== 'Escape' || useAppStore.getState().activeView !== 'tasks') {
         return
       }
       const target = event.target
