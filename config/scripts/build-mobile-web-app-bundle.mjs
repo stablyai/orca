@@ -341,7 +341,9 @@ export async function buildMobileWebAppBundle({ appDir, outDir = defaultOutDir }
     routeKeys,
     entryStaticBytes,
     // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
-    chunkCount: chunks.length + 1
+    chunkCount: chunks.length + 1,
+    // Everything the routes import that is not a script, which is the rest of the asset budget.
+    imageCount: images.length
   }
 }
 

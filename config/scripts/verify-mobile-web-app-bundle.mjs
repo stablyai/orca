@@ -11,13 +11,16 @@ const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const defaultBundleDir = join(projectDir, 'out', 'mobile-web-app')
 
 /**
- * The document, the route chunks and the images the route tree imports. Was 64 while the bundle
- * was one script: splitting the 14 routes emits 53 chunks, because esbuild gives every distinct
- * set of importers its own shared chunk. Measured at 96, held under the native map's own 256
- * (MOBILE_WEB_SHELL_MAX_ASSETS) so the ceiling that trips first is this one, and above what
- * mobileWebAppBundleMaxChunks allows so the chunk ceiling is the one that names the problem.
+ * The document, the route chunks and the images the route tree imports. Derived rather than
+ * pinned, because a flat number stops agreeing with the chunk ceiling as routes are added: at 128
+ * and 42 images, 18 routes are already allowed 88 chunks, and 88 + 42 + 1 is 131, so the asset
+ * count would have failed first and named the count rather than the split that caused it. Written
+ * as chunks + images + the document, a bundle at the chunk ceiling sits exactly at this one, so
+ * the chunk ceiling always trips first and the failure says what actually grew.
  */
-export const MOBILE_WEB_APP_BUNDLE_MAX_ASSETS = 128
+export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
+  return mobileWebAppBundleMaxChunks(routeCount) + imageCount + 1
+}
 
 /**
  * Phase C byte budget for the app bundle, not the contract ceiling (10 MiB per asset,
@@ -86,12 +89,6 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
 
-  if (manifest.assets.length > MOBILE_WEB_APP_BUNDLE_MAX_ASSETS) {
-    fail(
-      `bundle has ${String(manifest.assets.length)} assets, over the Phase C budget of ` +
-        `${String(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)}`
-    )
-  }
   if (manifest.totalBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
       `bundle is ${String(manifest.totalBytes)} bytes, over the Phase C budget of ` +
@@ -111,6 +108,15 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
   // Read off the fresh build rather than the manifest: neither bound is a manifest field, and the
   // buildId just proved this build is the one on disk.
+  // After the fresh build, which is what knows how many of the assets are images.
+  const maxAssets = mobileWebAppBundleMaxAssets(first.routeKeys.length, first.imageCount)
+  if (manifest.assets.length > maxAssets) {
+    fail(
+      `bundle has ${String(manifest.assets.length)} assets, over the Phase C budget of ` +
+        `${String(maxAssets)} for ${String(first.routeKeys.length)} route(s) and ` +
+        `${String(first.imageCount)} image(s)`
+    )
+  }
   const maxChunks = mobileWebAppBundleMaxChunks(first.routeKeys.length)
   if (first.chunkCount > maxChunks) {
     fail(

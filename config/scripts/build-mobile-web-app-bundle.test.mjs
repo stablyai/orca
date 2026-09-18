@@ -20,10 +20,10 @@ import {
   routeModuleSynchronousExports
 } from './mobile-web-app-route-manifest.mjs'
 import {
-  MOBILE_WEB_APP_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_APP_SOURCE_DIRS,
+  mobileWebAppBundleMaxAssets,
   mobileWebAppBundleMaxChunks,
   verifyMobileWebAppBundle
 } from './verify-mobile-web-app-bundle.mjs'
@@ -38,7 +38,10 @@ import {
   sha256Hex,
   writeMobileWebBundleTree
 } from './build-mobile-web-bundle.mjs'
-import { MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
+import {
+  MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
+  MOBILE_WEB_BUNDLE_MAX_ASSETS
+} from '../../src/shared/mobile-web-bundle/manifest-contract.js'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
@@ -540,17 +543,18 @@ describeBundling('the app bundle', () => {
 describe('the Phase C budget', () => {
   it('sits below the contract per-asset ceiling, so growth trips a build not a phone', () => {
     expect(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES).toBeLessThan(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
-    expect(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS).toBeGreaterThan(1)
   })
 
   itBundling(
     'is not already exceeded by the current bundle',
     async () => {
-      const { manifest, chunkCount, entryStaticBytes, routeKeys } = await withScratch((scratch) =>
-        buildMobileWebAppBundle({ outDir: join(scratch, 'd') })
+      const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } = await withScratch(
+        (scratch) => buildMobileWebAppBundle({ outDir: join(scratch, 'd') })
       )
       expect(manifest.totalBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
-      expect(manifest.assets.length).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
+      expect(manifest.assets.length).toBeLessThanOrEqual(
+        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+      )
       expect(chunkCount).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(routeKeys.length))
       expect(entryStaticBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)
     },
@@ -601,11 +605,37 @@ describe('the Phase C budget', () => {
     expect(mobileWebAppBundleMaxChunks(15) - mobileWebAppBundleMaxChunks(14)).toBe(4)
   })
 
-  itBundling('leaves room for the images under the asset ceiling', async () => {
-    // Every chunk is a manifest asset, so the ceiling the chunks may reach has to stay below it.
-    const routeCount = (await collectMobileWebAppRouteKeys(appDir)).length
-    expect(mobileWebAppBundleMaxChunks(routeCount)).toBeLessThan(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
+  it('derives the asset ceiling so the chunk ceiling is always the one that trips first', () => {
+    // A bundle's assets are its chunks, its images and the document. Asserting one constant under
+    // another did not say that: with 42 images, 4 * 18 + 16 chunks plus 42 plus the document is
+    // 131 assets, over the flat 128 the ceiling used to be, so from 18 routes on the asset count
+    // failed first and named the wrong thing.
+    for (const routeCount of [14, 18, 24, 40]) {
+      for (const imageCount of [0, 42, 120]) {
+        const chunks = mobileWebAppBundleMaxChunks(routeCount)
+        expect(mobileWebAppBundleMaxAssets(routeCount, imageCount)).toBe(chunks + imageCount + 1)
+        // The ordering claim itself: a bundle at the chunk ceiling is exactly at the asset
+        // ceiling, so no bundle can pass the chunk check and fail the asset one.
+        expect(chunks + imageCount + 1).toBeLessThanOrEqual(
+          mobileWebAppBundleMaxAssets(routeCount, imageCount)
+        )
+      }
+    }
   })
+
+  itBundling(
+    'keeps the derived ceiling under the map the phone actually holds',
+    async () => {
+      const { manifest, routeKeys, imageCount } = await withScratch((scratch) =>
+        buildMobileWebAppBundle({ outDir: join(scratch, 'e') })
+      )
+      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+      expect(manifest.assets.length).toBeLessThanOrEqual(ceiling)
+      // The native side refuses a manifest past this, so the derived ceiling has to stay inside it.
+      expect(ceiling).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ASSETS)
+    },
+    120_000
+  )
 })
 
 describe('the verifier', () => {
