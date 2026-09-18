@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BlockedVerdict } from './ProtocolBlockScreen'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
-const nativeTestState = vi.hoisted(() => ({
-  openUrl: vi.fn(),
-  platform: { OS: 'ios' as 'ios' | 'android' }
-}))
+const nativeTestState = vi.hoisted(() => {
+  // Declared wide so a test can switch stores; an assertion here would only widen the same literal.
+  const platform: { OS: 'ios' | 'android' } = { OS: 'ios' }
+  return { openUrl: vi.fn(), platform }
+})
 
 vi.mock('react-native', () => ({
   Linking: { openURL: nativeTestState.openUrl },
