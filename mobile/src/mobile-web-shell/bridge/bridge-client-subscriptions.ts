@@ -17,8 +17,8 @@ export type BridgeStreamEndReason = Extract<BridgeHostMessage, { type: 'end' }>[
  *
  * The shell ends a stream at 256 unacked frames or 4 MiB. A quarter of each leaves room for the
  * frames already in flight when an ack is posted, so a page that is keeping up never walks the
- * shell's window down to the point where it ends a stream. `bridge-rpc-client.test.ts` pins the
- * ratio against the shell's own numbers.
+ * shell's window down to the point where it ends a stream. `bridge-rpc-client-frames.test.ts` pins
+ * the ratio against the shell's own numbers.
  */
 export const BRIDGE_ACK_INTERVAL_FRAMES = 64
 export const BRIDGE_ACK_INTERVAL_BYTES = 1024 * 1024

@@ -6,6 +6,7 @@ import {
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge-caps'
+import { BRIDGE_MAX_UNACKED_BYTES, BRIDGE_MAX_UNACKED_FRAMES } from '../bridge-host-subscriptions'
 import {
   BRIDGE_ACK_INTERVAL_BYTES,
   BRIDGE_ACK_INTERVAL_FRAMES
@@ -502,8 +503,9 @@ describe('bridge client caps', () => {
 
 describe('bridge client acks', () => {
   it('stays well inside the window the shell ends a stream at', () => {
-    expect(BRIDGE_ACK_INTERVAL_FRAMES * 4).toBeLessThanOrEqual(256)
-    expect(BRIDGE_ACK_INTERVAL_BYTES * 4).toBeLessThanOrEqual(4 * 1024 * 1024)
+    // The shell's own numbers, not a copy of them: a window narrowed there has to fail here.
+    expect(BRIDGE_ACK_INTERVAL_FRAMES * 4).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_FRAMES)
+    expect(BRIDGE_ACK_INTERVAL_BYTES * 4).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_BYTES)
   })
 
   it('acks the last seq it read once the frame interval is due', () => {
