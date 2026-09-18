@@ -12,6 +12,7 @@ import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import type { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import type { TerminalHost } from './terminal-host'
 import { SessionNotFoundError, type DaemonRequest } from './types'
+import { routeKillOwned } from './daemon-kill-owned'
 
 type DaemonRequestRouterOptions = {
   host: TerminalHost
@@ -92,6 +93,8 @@ export class DaemonRequestRouter {
         )
       case 'kill':
         return this.kill(clientId, request.payload.sessionId, request.payload.immediate)
+      case 'killOwned':
+        return routeKillOwned(this.options, clientId, request.payload)
       case 'signal':
         this.options.host.signal(request.payload.sessionId, request.payload.signal)
         return {}
