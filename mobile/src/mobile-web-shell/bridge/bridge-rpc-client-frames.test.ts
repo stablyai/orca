@@ -145,6 +145,18 @@ describe('bridge client handshake', () => {
     expect(page.sent.length).toBeGreaterThan(3)
   })
 
+  it('asks no less often than the ceiling, however long the shell stays quiet', () => {
+    const page = createPageClient()
+    // Past the ceiling: doubling from the floor reaches it in six steps. An unclamped backoff is
+    // the same thing for a minute and then a page that gives up on a shell booting behind it.
+    vi.advanceTimersByTime(BRIDGE_READY_RETRY_MAX_MS * 4)
+    const asked = page.sent.length
+    vi.advanceTimersByTime(BRIDGE_READY_RETRY_MAX_MS)
+    expect(page.sent).toHaveLength(asked + 1)
+    vi.advanceTimersByTime(BRIDGE_READY_RETRY_MAX_MS * 10)
+    expect(page.sent).toHaveLength(asked + 11)
+  })
+
   it('stops asking once init lands', () => {
     const page = createPageClient()
     page.start()
