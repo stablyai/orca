@@ -68,7 +68,9 @@ export const BRIDGE_REFUSALS = [
   /** A reply part that disagrees with the parts already held for its id. */
   'inconsistent-part',
   /** A reply part index that arrived twice. */
-  'duplicate-part'
+  'duplicate-part',
+  /** A part for a new id while `BRIDGE_MAX_PENDING_REQUESTS` replies are already half-assembled. */
+  'too-many-pending'
 ] as const
 
 export type BridgeRefusal = (typeof BRIDGE_REFUSALS)[number]

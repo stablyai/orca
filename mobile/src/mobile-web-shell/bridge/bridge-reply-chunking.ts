@@ -1,5 +1,6 @@
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
+  BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_REPLY_BYTES,
   BRIDGE_MAX_REPLY_PARTS,
   utf8ByteLength,
@@ -104,6 +105,10 @@ type PendingReply = { of: number; chunks: Map<number, string>; bytes: number }
 /**
  * Parts may arrive in any order, so they are held by index rather than appended. Every failure drops
  * the id: a half-assembled reply whose sender has already moved on is not worth holding.
+ *
+ * The number of ids held at once is bounded by the in-flight request cap, since a reply only exists
+ * for a request the page made. Nothing here expires an id on its own, so C0.4 has to `discard` the
+ * id of every request it settles or abandons, or a lost final part holds a slot until teardown.
  */
 export class BridgeReplyAssembler {
   private readonly pending = new Map<string, PendingReply>()
@@ -117,6 +122,9 @@ export class BridgeReplyAssembler {
     const held = this.pending.get(id)
     if (part.i >= part.of || (held !== undefined && held.of !== part.of)) {
       return this.fail(id, 'inconsistent-part')
+    }
+    if (held === undefined && this.pending.size >= BRIDGE_MAX_PENDING_REQUESTS) {
+      return this.fail(id, 'too-many-pending')
     }
     const entry = held ?? { of: part.of, chunks: new Map<number, string>(), bytes: 0 }
     if (entry.chunks.has(part.i)) {

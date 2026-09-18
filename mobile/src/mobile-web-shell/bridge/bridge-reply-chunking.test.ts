@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
+  BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_REPLY_BYTES,
   BRIDGE_MAX_REPLY_PARTS,
   utf8ByteLength
@@ -204,6 +205,37 @@ describe('BridgeReplyAssembler refusals', () => {
     expect(new BridgeReplyAssembler().accept(part(2, 2, 'a'))).toEqual({
       status: 'failed',
       refusal: 'inconsistent-part'
+    })
+  })
+
+  it('holds no more half-assembled replies than there can be requests in flight', () => {
+    const assembler = new BridgeReplyAssembler()
+    const idOf = (index: number): string => `id${String(index).padStart(20, '0')}`
+    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+      expect(assembler.accept(part(0, 2, 'a', idOf(index)))).toEqual({ status: 'pending' })
+    }
+    const overflowing = idOf(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(assembler.accept(part(0, 2, 'a', overflowing))).toEqual({
+      status: 'failed',
+      refusal: 'too-many-pending'
+    })
+    // A part for an id already held still lands: the bound is on ids, not on parts.
+    expect(assembler.accept(part(1, 2, 'b', idOf(0)))).toEqual({
+      status: 'failed',
+      refusal: 'malformed-json'
+    })
+    expect(assembler.accept(part(0, 2, 'a', overflowing))).toEqual({ status: 'pending' })
+  })
+
+  it('frees a slot when the page discards an id it abandoned', () => {
+    const assembler = new BridgeReplyAssembler()
+    const idOf = (index: number): string => `id${String(index).padStart(20, '0')}`
+    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+      assembler.accept(part(0, 2, 'a', idOf(index)))
+    }
+    assembler.discard(idOf(3))
+    expect(assembler.accept(part(0, 2, 'a', idOf(BRIDGE_MAX_PENDING_REQUESTS)))).toEqual({
+      status: 'pending'
     })
   })
 
