@@ -43,6 +43,12 @@ export type UsageRateLimitMetadata = {
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
   retryAtMs?: number
+  /**
+   * Unix ms when Claude usage first entered a transient "refreshing sign-in" failure
+   * (`stale-token` / `refreshable-credentials-without-token` / `delegated-refresh-required`).
+   * Preserved across repeated failed polls so the UI can escalate past an indefinite spinner (#8974).
+   */
+  refreshingSinceMs?: number
 }
 
 export type ProviderRateLimits = {
