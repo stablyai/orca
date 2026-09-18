@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Minimal static HTTP file server for the update-feed E2E case.
+
+Serves /srv/feed so electron-updater (generic provider) can poll
+latest-linux.yml and download the artifact. stdlib only.
+"""
+import argparse
+import functools
+import http.server
+
+ROOT = "/srv/feed"
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):  # noqa: A002 - stdlib signature
+        pass  # keep container logs quiet
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8123)
+    parser.add_argument("--root", default=ROOT)
+    args = parser.parse_args()
+    handler = functools.partial(Handler, directory=args.root)
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", args.port), handler)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
