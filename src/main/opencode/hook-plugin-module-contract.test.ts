@@ -186,7 +186,7 @@ describe('OpenCode status plugin module contract', () => {
     await (cleanup as () => Promise<unknown>)?.()
   })
 
-  it('maps a flat v2 session.created to SessionStart and drops unmapped v2 text events', async () => {
+  it('maps a real v2 session.created to SessionStart and drops unmapped v2 text events', async () => {
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     const posts: { url: string; body: unknown }[] = []
     globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
@@ -194,9 +194,10 @@ describe('OpenCode status plugin module contract', () => {
       return { ok: true } as Response
     }) as unknown as typeof globalThis.fetch
 
-    // Why: v2 reports the session flat (`data.id`) where v1 nests it under
-    // `properties.info`; `session.text.delta` has no v1 counterpart and must
-    // never reach the message-preview path (no role/message identity there).
+    // Why: v2 carries the session id as `data.sessionID` (plus optional
+    // `data.parentID`) where v1 nests both under `properties.info`;
+    // `session.text.delta` has no v1 counterpart and must never reach the
+    // message-preview path (no role/message identity there).
     // A later execution start for the same session must not double-post Start.
     const fakeCtx = {
       session: {
@@ -207,7 +208,7 @@ describe('OpenCode status plugin module contract', () => {
       },
       event: {
         subscribe: async function* () {
-          yield { id: 'evt_1', type: 'session.created', data: { id: 'ses_root' } }
+          yield { id: 'evt_1', type: 'session.created', data: { sessionID: 'ses_root' } }
           yield {
             id: 'evt_2',
             type: 'session.text.delta',
