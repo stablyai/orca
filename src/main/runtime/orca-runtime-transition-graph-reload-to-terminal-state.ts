@@ -86,8 +86,16 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
       repos
     })
     if (connection.kind === 'ambiguous') {
-      // Why: a PTY spawns on one runtime target; mixed child-repo connections need an explicit V2 routing decision.
-      throw new Error('folder_workspace_connection_ambiguous')
+      // Why: mixed-host groups are catalog state, not an error — this resolver runs
+      // on every graph sync, and throwing wedges startup before callbacks drain.
+      // Fall back to the record authority (workspace then group), matching
+      // resolveFolderWorkspaceStatusPath; explicit launches still reject ambiguity
+      // earlier via assertFolderWorkspacePathUsable.
+      return (
+        workspace.connectionId ??
+        projectGroups.find((group) => group.id === workspace.projectGroupId)?.connectionId ??
+        null
+      )
     }
     return connection.kind === 'ssh' ? connection.connectionId : null
   }

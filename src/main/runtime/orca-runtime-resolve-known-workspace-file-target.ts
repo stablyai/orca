@@ -1,10 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPersistHeadlessTerminalTitle } from './orca-runtime-persist-headless-terminal-title'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
@@ -52,19 +48,18 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
     for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
-      try {
-        const candidateConnectionId = this.resolveFolderWorkspaceConnectionId(folderWorkspace)
-        const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-        const target = {
+      const candidateConnectionId =
+        this.resolveFolderWorkspaceConnectionId(folderWorkspace) ?? undefined
+      const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      const target = {
+        worktree,
+        executionHostId: getRuntimeFileTargetExecutionHostId({
           worktree,
-          executionHostId: candidateConnectionId
-            ? toSshExecutionHostId(candidateConnectionId)
-            : LOCAL_EXECUTION_HOST_ID
-        }
-        targets.set(`${target.executionHostId}\0${worktree.id}`, target)
-      } catch {
-        // An ambiguous folder workspace has no single filesystem authority.
+          connectionId: candidateConnectionId
+        }),
+        ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
       }
+      targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
 
     const owner = findRuntimeWorkspaceFileOwner(
