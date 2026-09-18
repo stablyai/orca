@@ -190,6 +190,65 @@ describe('active agent note send', () => {
     ).resolves.toEqual({ status: 'permission', code: 'terminal-send-permission' })
   })
 
+  it('maps guarded refusedReason status-unavailable to the existing note-send status', async () => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-1',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-1',
+              leafId: LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'idle' } }
+      }
+      if (method === 'terminal.wait') {
+        return {
+          wait: {
+            handle: 'term-1',
+            condition: 'tui-idle',
+            satisfied: true,
+            status: 'running',
+            exitCode: null
+          }
+        }
+      }
+      if (method === 'terminal.send') {
+        expect(params).toMatchObject({
+          terminal: 'term-1',
+          requireAgentStatus: 'sendable'
+        })
+        return {
+          send: {
+            handle: 'term-1',
+            accepted: false,
+            bytesWritten: 0,
+            refusedReason: 'status-unavailable'
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({ worktreeId: 'wt-1', prompt: 'notes' })
+    ).resolves.toEqual({ status: 'status-unavailable', code: 'status-unavailable' })
+  })
+
   it('keeps active-focused sends compatible when an older runtime lacks agentStatus', async () => {
     const methods: string[] = []
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {

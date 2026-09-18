@@ -25,6 +25,7 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { isTerminalForegroundInspectionUnavailable } from './terminal-foreground-status-unavailable'
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
   async replaceStructuredAgentSessionTab(replacement: ConversationReplacement): Promise<void> {
@@ -209,6 +210,18 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
     const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false
     return { foregroundProcess, hasChildProcesses }
+  }
+
+  /**
+   * True when the pane is live but foreground membership cannot be read
+   * (pre-v11 daemon, transport inspect unavailable). Distinct from "no agent" (#12946).
+   */
+  async isTerminalForegroundStatusUnavailable(handle: string): Promise<boolean> {
+    try {
+      return isTerminalForegroundInspectionUnavailable(await this.inspectTerminalProcess(handle))
+    } catch {
+      return false
+    }
   }
 
   async searchRepoRefs(
