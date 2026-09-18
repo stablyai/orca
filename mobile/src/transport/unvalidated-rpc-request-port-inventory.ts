@@ -34,6 +34,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
   // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
   { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
+  // Placeholder page transport until C0.4's BridgeRpcClient replaces it; rejects every call, reads no reply.
+  { file: 'src/transport/client-context.web.tsx', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.

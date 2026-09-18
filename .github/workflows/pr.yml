@@ -29,6 +29,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
       mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
+      mobile_web_app: ${{ steps.filter.outputs.mobile_web_app }}
       static_analysis: ${{ steps.filter.outputs.static_analysis }}
       typecheck: ${{ steps.filter.outputs.typecheck }}
       git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
@@ -648,6 +649,64 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts \
             src/main/orcad/external-chromium-browser-process.integration.test.ts
 
+  # Why its own job: it needs mobile/node_modules and a real browser, and the sharded `test`
+  # matrix would pay for both on every shard to run two files. Dark through Phase C: this proves
+  # `build:mobile-web:app` on every PR that touches the page, and ships nothing -- packaging still
+  # builds the Phase A bootstrap via build:mobile-web.
+  mobile_web_app:
+    name: mobile web app bundle
+    needs: [code_paths]
+    if: needs.code_paths.outputs.mobile_web_app == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Why no native-runtime: the builder is esbuild and the render check is a browser. Nothing
+      # in this job loads node-pty.
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      # Why the runner's Google Chrome and not a downloaded chromium: same reason as the orcad
+      # browser job -- Ubuntu 24.04 only ships an AppArmor userns profile for the Chrome .deb.
+      # Why fail instead of skip: a silently skipped render check is the failure this job exists
+      # to prevent.
+      - name: Resolve Chrome for the render check
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::No Google Chrome on the runner; the render check would silently skip."
+            exit 1
+          fi
+          "$chrome" --version
+          echo "ORCA_MOBILE_WEB_RENDER_BROWSER=$chrome" >> "$GITHUB_ENV"
+
+      - name: Build and verify the app bundle
+        run: pnpm run build:mobile-web:app
+
+      # The bundling tests skip themselves where mobile dependencies are absent, which is how they
+      # stay green in the sharded `test` job. This is the job that installs them, so here a missing
+      # install has to fail rather than skip everything the job exists to run.
+      - name: Builder, override census and render check
+        env:
+          ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            config/scripts/build-mobile-web-app-bundle.test.mjs \
+            config/scripts/mobile-web-app-web-overrides.test.mjs \
+            config/scripts/mobile-web-app-render.test.mjs
+
   cross-version-wire:
     name: cross-version wire compatibility
     needs: [code_paths]
@@ -1020,6 +1079,7 @@ jobs:
       - shell_contracts
       - test
       - orcad_browser
+      - mobile_web_app
       - cross-version-wire
       - managed_hook_node18
       - package
@@ -1056,6 +1116,8 @@ jobs:
           TEST_SHOULD_RUN: ${{ needs.code_paths.outputs.test }}
           ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
           ORCAD_BROWSER_SHOULD_RUN: ${{ needs.code_paths.outputs.orcad_browser }}
+          MOBILE_WEB_APP: ${{ needs.mobile_web_app.result }}
+          MOBILE_WEB_APP_SHOULD_RUN: ${{ needs.code_paths.outputs.mobile_web_app }}
           CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
           CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
@@ -1098,6 +1160,7 @@ jobs:
           check_job shell_contracts "$SHELL_CONTRACTS" "$SHELL_CONTRACTS_SHOULD_RUN"
           check_job test "$TEST" "$TEST_SHOULD_RUN"
           check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
+          check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
