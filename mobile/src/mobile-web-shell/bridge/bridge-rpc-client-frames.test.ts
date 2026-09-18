@@ -560,6 +560,17 @@ describe('bridge client acks', () => {
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
   })
 
+  it('posts no cancel for a stream the shell ended before the page let go', () => {
+    const page = createPageClient()
+    page.start()
+    const dispose = page.client.subscribe('terminal.stream', {}, vi.fn())
+    const id = idOf(page, 0)
+    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'closed' })
+    // The screen unmounts on its own schedule, which is routinely after the shell gave up.
+    dispose()
+    expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
+  })
+
   it('retires a stream the shell ended and reports why', () => {
     const page = createPageClient()
     page.start()
