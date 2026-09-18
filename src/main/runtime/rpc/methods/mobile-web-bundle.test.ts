@@ -10,10 +10,7 @@ import {
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcDispatcher } from '../dispatcher'
 
-const { getAppPath } = vi.hoisted(() => ({ getAppPath: vi.fn<() => string>() }))
-vi.mock('electron', () => ({ app: { getAppPath } }))
-
-import { resetBundledMobileWebBundleCacheForTests } from '../../../startup/bundled-mobile-web-bundle'
+import { resetBundledMobileWebBundleCacheForTests } from '../../bundled-mobile-web-bundle'
 import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
 import {
   acquireMobileWebBundleReadSlot,
@@ -21,6 +18,8 @@ import {
   resetMobileWebBundleReadAdmissionForTests
 } from './mobile-web-bundle-read-admission'
 import {
+  captureAppEnvironment,
+  installMobileWebBundleAppPath,
   mobileWebBundleDispatcher,
   mobileWebBundleFiller,
   sha256Hex,
@@ -29,6 +28,7 @@ import {
 } from './mobile-web-bundle.test-fixture'
 
 let scratch: string
+let restoreAppEnvironment: () => void
 let dispatcher: RpcDispatcher
 
 function request(method: string, params?: unknown): RpcRequest {
@@ -76,7 +76,8 @@ async function download(buildId: string, path: string): Promise<{ bytes: Buffer;
 
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-'))
-  getAppPath.mockReturnValue(scratch)
+  restoreAppEnvironment = captureAppEnvironment()
+  installMobileWebBundleAppPath(scratch)
   resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
   resetMobileWebBundleReadAdmissionForTests()
@@ -85,6 +86,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  restoreAppEnvironment()
   rmSync(scratch, { recursive: true, force: true })
   vi.restoreAllMocks()
 })
@@ -366,7 +368,7 @@ describe('an install that carries a mobile web bundle', () => {
 describe('the unpacked layout, where appPath is out/main', () => {
   it('finds the bundle beside it', async () => {
     const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
-    getAppPath.mockReturnValue(join(scratch, 'out', 'main'))
+    installMobileWebBundleAppPath(join(scratch, 'out', 'main'))
     resetBundledMobileWebBundleCacheForTests()
 
     const response = await call('mobileWeb.bundle.manifest')

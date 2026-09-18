@@ -21,7 +21,7 @@ type OpenGate = {
   reset(): void
 }
 
-const { getAppPath, gate } = vi.hoisted(() => {
+const { gate } = vi.hoisted(() => {
   const gate: OpenGate = {
     blocker: null,
     unlatch: null,
@@ -41,10 +41,8 @@ const { getAppPath, gate } = vi.hoisted(() => {
       gate.opens = 0
     }
   }
-  return { getAppPath: vi.fn<() => string>(), gate }
+  return { gate }
 })
-
-vi.mock('electron', () => ({ app: { getAppPath } }))
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
@@ -61,19 +59,22 @@ vi.mock('node:fs/promises', async () => {
   }
 })
 
-import { resetBundledMobileWebBundleCacheForTests } from '../../../startup/bundled-mobile-web-bundle'
+import { resetBundledMobileWebBundleCacheForTests } from '../../bundled-mobile-web-bundle'
 import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
 import {
   MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS,
   resetMobileWebBundleReadAdmissionForTests
 } from './mobile-web-bundle-read-admission'
 import {
+  captureAppEnvironment,
+  installMobileWebBundleAppPath,
   mobileWebBundleDispatcher,
   writeSyntheticMobileWebBundle,
   type SyntheticMobileWebBundle
 } from './mobile-web-bundle.test-fixture'
 
 let scratch: string
+let restoreAppEnvironment: () => void
 let bundle: SyntheticMobileWebBundle
 let dispatcher: RpcDispatcher
 
@@ -104,7 +105,8 @@ async function settleMicrotasks(): Promise<void> {
 
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-reads-'))
-  getAppPath.mockReturnValue(scratch)
+  restoreAppEnvironment = captureAppEnvironment()
+  installMobileWebBundleAppPath(scratch)
   bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 7)
   gate.reset()
   resetBundledMobileWebBundleCacheForTests()
@@ -114,6 +116,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  restoreAppEnvironment()
   gate.reset()
   rmSync(scratch, { recursive: true, force: true })
   vi.restoreAllMocks()

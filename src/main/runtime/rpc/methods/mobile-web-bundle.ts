@@ -19,7 +19,7 @@ import type { MobileWebBundleAsset } from '../../../../shared/mobile-web-bundle/
 import {
   loadBundledMobileWebBundle,
   type BundledMobileWebBundle
-} from '../../../startup/bundled-mobile-web-bundle'
+} from '../../bundled-mobile-web-bundle'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import {
   readMobileWebBundleAssetChunk,

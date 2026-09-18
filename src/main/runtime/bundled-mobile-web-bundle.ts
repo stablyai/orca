@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import {
   MobileWebBundleManifestSchema,
   type MobileWebBundleManifest
@@ -13,10 +13,19 @@ export type BundledMobileWebBundle = {
   manifest: MobileWebBundleManifest
 }
 
-/** Probed exactly like getBundledWebClientRoot: the bundle ships inside app.asar under out/, so
- *  the two entrypoint layouts that move appPath are the only ones that can move it. */
+/**
+ * Probed exactly like getBundledWebClientRoot: the bundle ships inside app.asar under out/, so the
+ * two entrypoint layouts that move appPath are the only ones that can move it.
+ *
+ * Read through the AppEnvironment port rather than `electron.app`, because this module is reachable
+ * from the runtime's import graph and the runtime must stay bootable on plain Node. A host with no
+ * environment installed has no install root, which is the same answer as having no bundle.
+ */
 export function getBundledMobileWebBundleRoot(): string | undefined {
-  const appPath = app.getAppPath()
+  if (!hasAppEnvironment()) {
+    return undefined
+  }
+  const appPath = getAppEnvironment().getAppPath()
   const roots = [
     join(appPath, 'out', 'mobile-web'),
     // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the bundle.
