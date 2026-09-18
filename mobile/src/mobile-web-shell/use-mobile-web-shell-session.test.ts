@@ -27,6 +27,7 @@ type Doubles = {
     hostProtocolWindow: { protocolVersion: number; minCompatibleMobileVersion: number }
   }
   manifestReads: number
+  manifestClients: unknown[]
   fetches: { signal: AbortSignal; settle: Settle<MobileWebBundleFetchResult> }[]
   manifest: MobileWebBundleManifestRead
 }
@@ -53,6 +54,7 @@ const doubles = vi.hoisted((): Doubles => {
       hostProtocolWindow: { protocolVersion: 10, minCompatibleMobileVersion: 1 }
     },
     manifestReads: 0,
+    manifestClients: [],
     fetches: [],
     manifest
   }
@@ -67,8 +69,9 @@ vi.mock('../components/HostProtocolGate', () => ({ useHostProtocolGates: () => d
 vi.mock('../transport/client-context', () => ({ useHostClient: () => doubles.connection }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
-  runRpcOperation: async () => {
+  runRpcOperation: async (client: unknown) => {
     doubles.manifestReads += 1
+    doubles.manifestClients.push(client)
     return { manifest: doubles.manifest }
   }
 }))
@@ -135,6 +138,7 @@ function createFakeStore(): {
 type Mounted = {
   tree: ReactTestRenderer
   retry: () => void
+  rerender: () => void
 }
 
 async function mount(store: GenerationStore): Promise<Mounted> {
@@ -155,7 +159,11 @@ async function mount(store: GenerationStore): Promise<Mounted> {
   if (tree === null) {
     throw new Error('the hook did not mount')
   }
-  return { tree, retry: () => handle.retry() }
+  return {
+    tree,
+    retry: () => handle.retry(),
+    rerender: () => tree.update(createElement(Probe))
+  }
 }
 
 async function flush(): Promise<void> {
@@ -165,6 +173,7 @@ async function flush(): Promise<void> {
 describe('the hybrid shell runner', () => {
   beforeEach(() => {
     doubles.manifestReads = 0
+    doubles.manifestClients.length = 0
     doubles.fetches.length = 0
     doubles.connection = { client: {}, state: 'connected' }
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
@@ -206,6 +215,30 @@ describe('the hybrid shell runner', () => {
     await flush()
     expect(fake.staged()).toBe(0)
     expect(fake.committed()).toBe(0)
+  })
+
+  it('reads the manifest through the client the host has now, not the one it opened with', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(null)
+    await flush()
+    expect(doubles.manifestClients).toHaveLength(1)
+    // A reconnect hands the screen a new client object with the same reachability, so nothing the
+    // gates effect watches changes; only the next flow can show which one the runner kept.
+    const reconnected = {}
+    doubles.connection = { client: reconnected, state: 'connected' }
+    await act(async () => {
+      mounted.rerender()
+    })
+    await act(async () => {
+      mounted.retry()
+    })
+    fake.settleCacheRead(null)
+    await flush()
+    expect(doubles.manifestClients.at(-1)).toBe(reconnected)
+    await act(async () => {
+      mounted.tree.unmount()
+    })
   })
 
   it('abandons the download still in flight when Try again starts a new one', async () => {

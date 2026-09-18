@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as ExpoCrypto from 'expo-crypto'
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { useHostProtocolGates } from '../components/HostProtocolGate'
@@ -74,11 +74,7 @@ export function useMobileWebShellSession(args: {
 
   const sessionRef = useRef(createMobileWebShellSession())
   const [state, setState] = useState(sessionRef.current.state)
-  const clientRef = useRef<RpcClient | null>(client)
-  clientRef.current = client
-  // Derived in render, not in an effect, so the reducer's first effect already has it; it is a hash.
-  const hostKeyRef = useRef('')
-  hostKeyRef.current = deriveHostCacheKey(hostId)
+  const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
   const startedAtRef = useRef(runtime.now())
   // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
   const epochRef = useRef(0)
@@ -116,7 +112,6 @@ export function useMobileWebShellSession(args: {
       if (store === null) {
         return
       }
-      const hostKey = hostKeyRef.current
       const send = (event: MobileWebShellSessionEvent) => dispatch(epoch, event)
       switch (effect.kind) {
         case 'delete-cache':
@@ -128,11 +123,11 @@ export function useMobileWebShellSession(args: {
           send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
           return
         case 'read-manifest':
-          await readManifest(clientRef.current, flow, send)
+          await readManifest(client, flow, send)
           return
         case 'download':
           await download({
-            client: clientRef.current,
+            client,
             store,
             hostKey,
             flow,
@@ -158,11 +153,16 @@ export function useMobileWebShellSession(args: {
           return
       }
     },
-    [dispatch, runtime]
+    [client, dispatch, hostKey, runtime]
   )
-  runEffectRef.current = (epoch, flow, effect) => {
-    void runEffect(epoch, flow, effect)
-  }
+  // Written after the commit, never during render: React may replay or discard a render, and a
+  // closure from one that never committed would run effects for a session that never existed.
+  // Declared above every effect that dispatches, so the first one already finds it.
+  useEffect(() => {
+    runEffectRef.current = (epoch, flow, effect) => {
+      void runEffect(epoch, flow, effect)
+    }
+  }, [runEffect])
 
   useEffect(() => {
     // A new host is a new session: the old one's latches, cache handle and in-flight work all go.
