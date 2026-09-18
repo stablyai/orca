@@ -50,7 +50,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 import { createPtySubprocess } from './pty-subprocess'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { WorkingDirectoryValidationAbortedError } from '../providers/working-directory-validation'
-import { useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import { platformNativePtyCwd, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 
 describe('createPtySubprocess cwd cancellation identity', () => {
   useDaemonPtySubprocessEnv({
@@ -62,8 +62,9 @@ describe('createPtySubprocess cwd cancellation identity', () => {
   })
 
   it('reports a canceled cwd probe as an attach cancellation, not a spawn failure', async () => {
+    const cwd = platformNativePtyCwd('/Volumes/dead/repo', 'C:\\Volumes\\dead\\repo')
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new WorkingDirectoryValidationAbortedError('/Volumes/dead/repo')
+      new WorkingDirectoryValidationAbortedError(cwd)
     )
     const abort = new AbortController()
     abort.abort()
@@ -73,7 +74,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'canceled-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/Volumes/dead/repo',
+        cwd,
         cancelSignal: abort.signal
       })
     ).rejects.toThrow(TerminalAttachCanceledError)
@@ -81,8 +82,9 @@ describe('createPtySubprocess cwd cancellation identity', () => {
   })
 
   it('leaves a genuine missing-directory failure alone', async () => {
+    const cwd = platformNativePtyCwd('/gone', 'C:\\gone')
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new Error('Working directory "/gone" does not exist. It may have been deleted.')
+      new Error(`Working directory "${cwd}" does not exist. It may have been deleted.`)
     )
 
     await expect(
@@ -90,7 +92,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'missing-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/gone'
+        cwd
       })
     ).rejects.toThrow(/does not exist/)
   })
