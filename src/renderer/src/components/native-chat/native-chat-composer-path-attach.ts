@@ -18,10 +18,13 @@ export function registerNativeChatComposerPathAttach(
 ): () => void {
   attachers.set(scopeKey, attacher)
   return () => {
-    if (attachers.get(scopeKey) === attacher) {
-      attachers.delete(scopeKey)
+    if (attachers.get(scopeKey) !== attacher) {
+      return
     }
-    if (lastFocusedScopeKey === scopeKey && !attachers.has(scopeKey)) {
+    attachers.delete(scopeKey)
+    // Drop the mark only when this scope is gone. Replacing the attacher object
+    // for a live pane must not look like an unmount.
+    if (lastFocusedScopeKey === scopeKey) {
       lastFocusedScopeKey = null
     }
   }

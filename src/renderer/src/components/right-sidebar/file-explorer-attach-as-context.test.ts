@@ -3,7 +3,6 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { attachExplorerFileAsContext } from './file-explorer-attach-as-context'
-import { formatNativeChatFileReference } from '@/components/native-chat/native-chat-composer-target'
 import {
   registerNativeChatComposerPathAttach,
   resetNativeChatComposerPathAttachForTests
@@ -23,7 +22,7 @@ describe('attachExplorerFileAsContext', () => {
     expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith(['/repo/src/index.ts'], 'ssh-1')
   })
 
-  it('falls back to inserting a formatted file reference into a focused composer', () => {
+  it('does not mutate a focused textarea when no native-chat composer is registered', () => {
     const textarea = document.createElement('textarea')
     textarea.value = 'review  here'
     textarea.selectionStart = 7
@@ -31,8 +30,8 @@ describe('attachExplorerFileAsContext', () => {
     document.body.appendChild(textarea)
     textarea.focus()
 
-    expect(attachExplorerFileAsContext('/repo/My File.ts')).toBe(true)
-    expect(textarea.value).toBe(`review ${formatNativeChatFileReference('/repo/My File.ts')}  here`)
+    expect(attachExplorerFileAsContext('/repo/My File.ts')).toBe(false)
+    expect(textarea.value).toBe('review  here')
   })
 
   it('does not insert into a focused input that is not a composer textarea', () => {

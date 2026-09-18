@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { NativeChatResolvedPathOptions } from './native-chat-resolved-path-ownership'
 import {
   markNativeChatComposerPathAttachFocused,
@@ -14,9 +14,24 @@ export function useNativeChatComposerPathAttach(
   ) => void,
   disabled: boolean
 ): void {
+  const attacherRef = useRef({ attachResolvedPaths, disabled })
+  useLayoutEffect(() => {
+    attacherRef.current = { attachResolvedPaths, disabled }
+  }, [attachResolvedPaths, disabled])
+
+  // Caret moves recreate attachResolvedPaths; register against the pane id only
+  // so cleanup cannot drop last-focused between two ready composers.
   useEffect(
-    () => registerNativeChatComposerPathAttach(scopeKey, { attachResolvedPaths, disabled }),
-    [attachResolvedPaths, disabled, scopeKey]
+    () =>
+      registerNativeChatComposerPathAttach(scopeKey, {
+        attachResolvedPaths: (paths, connectionId, options) => {
+          attacherRef.current.attachResolvedPaths(paths, connectionId, options)
+        },
+        get disabled() {
+          return attacherRef.current.disabled
+        }
+      }),
+    [scopeKey]
   )
 
   useEffect(() => {
