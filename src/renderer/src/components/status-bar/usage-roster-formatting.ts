@@ -14,6 +14,23 @@ export function formatPlanLabel(planType: string | null | undefined): string | n
     .join(' ')
 }
 
+// Relative "Updated …" copy for inactive roster rows; matches tooltip thresholds.
+export function formatUsageUpdatedLabel(updatedAt: number, now: number): string | null {
+  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return null
+  }
+  const diff = Math.max(0, now - updatedAt)
+  if (diff < 60_000) {
+    return 'Updated just now'
+  }
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) {
+    return `Updated ${mins}m ago`
+  }
+  const hours = Math.floor(mins / 60)
+  return `Updated ${hours}h ago`
+}
+
 // Match usage-bar 60/80 thresholds while keeping low consumption neutral.
 export function usageTextColorClass(usedPercent: number): string {
   if (usedPercent >= 80) {
