@@ -8,6 +8,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchDevinRateLimits } from './devin-fetcher'
+import { readDevinCredentials } from './devin-credentials'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   deferred,
@@ -15,7 +17,8 @@ import {
   flushMicrotasks,
   mockFreshBackgroundProviderFetches,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
@@ -125,6 +128,25 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('clears devinAuthConfigured when a signed-in plan reports no quota windows', async () => {
+    vi.mocked(readDevinCredentials).mockReturnValue({
+      status: 'ok',
+      credentials: { sessionToken: 'tok', apiServerUrl: 'https://server.codeium.com' }
+    })
+    vi.mocked(fetchDevinRateLimits).mockResolvedValue(
+      unavailableProvider('devin', 'Devin did not report quota windows for this account')
+    )
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0))
+    const service = new RateLimitService()
+
+    expect(service.getState().devinAuthConfigured).toBe(true)
+    await serviceInternals(service).fetchAll()
+
+    expect(service.getState().devinAuthConfigured).toBe(false)
+    expect(service.getState().devin?.status).toBe('unavailable')
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {

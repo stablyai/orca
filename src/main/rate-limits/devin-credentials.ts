@@ -40,6 +40,11 @@ function parseCredentialsToml(raw: string): DevinCredentials | null {
   for (const line of raw.split(/\r?\n/)) {
     const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*"(.*)"\s*$/)
     if (!match) {
+      // Why: a credential key that does not parse distinguishes a corrupt file
+      // (report 'error') from a signed-out one (report 'missing').
+      if (/^\s*(windsurf_api_key|api_server_url)\b/.test(line)) {
+        throw new SyntaxError('malformed credentials line')
+      }
       continue
     }
     if (match[1] === 'windsurf_api_key' && match[2].length > 0) {
@@ -51,11 +56,22 @@ function parseCredentialsToml(raw: string): DevinCredentials | null {
   if (!sessionToken) {
     return null
   }
+  let normalizedApiServerUrl: URL
+  try {
+    normalizedApiServerUrl = new URL(apiServerUrl ?? DEFAULT_DEVIN_API_SERVER)
+  } catch {
+    throw new SyntaxError('malformed api_server_url')
+  }
+  // Why: the session token rides in the request body — an http:// override
+  // would send it cleartext to whatever host the file names.
+  if (normalizedApiServerUrl.protocol !== 'https:') {
+    throw new SyntaxError('Devin API server must use HTTPS')
+  }
   return {
     sessionToken: sessionToken.startsWith(DEVIN_SESSION_TOKEN_PREFIX)
       ? sessionToken
       : `${DEVIN_SESSION_TOKEN_PREFIX}${sessionToken}`,
-    apiServerUrl: (apiServerUrl ?? DEFAULT_DEVIN_API_SERVER).replace(/\/+$/, '')
+    apiServerUrl: normalizedApiServerUrl.href.replace(/\/+$/, '')
   }
 }
 

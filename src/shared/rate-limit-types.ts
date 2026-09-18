@@ -142,7 +142,7 @@ export type RateLimitState = {
   minimaxApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
-  /** True when main finds a Devin CLI credentials file (credentials.toml next to DEVIN_HOME). */
+  /** True when main finds a Devin CLI credentials file (credentials.toml under DEVIN_HOME). */
   devinAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget

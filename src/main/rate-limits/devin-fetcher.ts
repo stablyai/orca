@@ -85,8 +85,9 @@ function quotaResult(quota: DevinUserStatusQuota): ProviderRateLimits {
   )
   if (!session && !weekly) {
     // Why: a signed-in plan that reports no dated quota windows (credit-billed
-    // plans omit them) has no visible quota — 'unavailable' hides the bar
-    // rather than pinning a permanent error chip.
+    // plans omit them) has no visible quota. 'unavailable' also clears the
+    // devinAuthConfigured probe in the apply step, so the bar hides instead
+    // of pinning a permanent "--" slot.
     return result('unavailable', 'Devin did not report quota windows for this account')
   }
   return {
