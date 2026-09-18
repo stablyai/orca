@@ -345,6 +345,24 @@ describe('generation store', () => {
     expect((await store.readActiveGeneration(oldest))?.buildId).toBe('a'.repeat(64))
   })
 
+  it('counts a recommit of the build a host already has as use of that host', async () => {
+    const fs = createFakeFileSystem()
+    let clock = 0
+    const store = createGenerationStore({ fileSystem: fs, now: () => (clock += 1) })
+    const kept = deriveHostCacheKey('a')
+    const evicted = deriveHostCacheKey('b')
+    for (const name of ['a', 'b', 'c', 'd']) {
+      await activate(store, deriveHostCacheKey(name))
+    }
+    // A redownload of the bundle host A already has, which takes the same-build commit path.
+    await activate(store, kept)
+
+    await activate(store, deriveHostCacheKey('e'))
+
+    expect(fs.paths().some((path) => path.startsWith(evicted))).toBe(false)
+    expect((await store.readActiveGeneration(kept))?.buildId).toBe('a'.repeat(64))
+  })
+
   it('never counts or evicts a host that is only mid-download', async () => {
     const fs = createFakeFileSystem()
     let clock = 0

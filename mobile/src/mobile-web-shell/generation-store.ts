@@ -193,6 +193,12 @@ export function createGenerationStore(options: {
       existing?.isDirectory === true &&
       (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
     ) {
+      // Still an activation, so it still counts as use: without this a host that redownloads the
+      // bundle it already has stays the least recently activated and is evicted first. No eviction
+      // pass, because the host count did not change.
+      const index = await readHostIndex()
+      index.set(staged.hostKey, now())
+      await writeHostIndex(index)
       await fs.delete(staged.directory)
       return active
     }
