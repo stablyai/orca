@@ -50,8 +50,8 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * `unclassified`, or if one diverges in a class `BRIDGED_PARITY_EXCLUSIONS` does not name. The
  * corpus is a fixed size, so those together pin every count exactly.
  *
- * 396 of the 787 replay byte for byte. The rest are 341 / 7 / 33 /
- * 10, and none of them is a reason to re-record anything.
+ * 396 of the 787 replay byte for byte. The other 391 fall in four classes, 341 / 7 / 33 / 10, and
+ * none of them is a reason to re-record anything.
  *
  * 1. **result-absent-settlement, 341** and **2. result-absent-observation, 7.**
  *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
