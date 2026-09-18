@@ -153,7 +153,8 @@ export async function executeWorktreeCreation(
   }
   // The VM's checkout is now this workspace (or its project), so the sidebar may list it.
   releaseVmCreateCheckout(creationId)
-  await assignUnassignedGitHubIssueOnStart({
+  // Why: assignment is best-effort and can wait on gh; do not delay reveal.
+  void assignUnassignedGitHubIssueOnStart({
     enabled: useAppStore.getState().settings?.assignUnassignedGitHubIssuesOnStart === true,
     item: preparedRequest.linkedWorkItem
       ? {
@@ -163,7 +164,7 @@ export async function executeWorktreeCreation(
       : preparedRequest.linkedWorkItem,
     repoId: preparedRequest.repoId,
     sourceContext: preparedRequest.taskSourceContext
-  })
+  }).catch(() => undefined)
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true

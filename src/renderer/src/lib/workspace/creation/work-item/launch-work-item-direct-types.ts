@@ -2,6 +2,7 @@ import type { AgentLaunchInputViews } from '../../../../../../shared/agent-launc
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { LinkedWorkItemContext } from '@/lib/work-items/linked-work-item-context'
 import type { TaskProvider } from '../../../../../../shared/work-items/task-providers'
+import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../../shared/workspace-source'
 import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
@@ -59,4 +60,5 @@ export type LaunchWorkItemDirectArgs = {
     Pick<AgentSessionLaunchRequest, 'preferredSurface'>
   promptDelivery?: 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
+  sourceContext?: TaskSourceContext | null
 }
