@@ -20,17 +20,12 @@ import type {
   KimiUsagePersistedFile
 } from './types'
 
-type KimiWireRecord = {
-  type?: string
-  model?: string
-  modelAlias?: string
-  usage?: Record<string, unknown>
-  usageScope?: string
-  time?: number
-}
-
 function ensureNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
 }
 
 function extractString(value: unknown): string | null {
@@ -82,9 +77,13 @@ export async function parseKimiWireForUsage(
   const stream = createReadStream(wirePath, { encoding: 'utf-8' })
   const rl = createInterface({ input: stream, crlfDelay: Infinity })
   for await (const line of rl) {
-    let record: KimiWireRecord
+    let record: Record<string, unknown>
     try {
-      record = JSON.parse(line) as KimiWireRecord
+      const parsed: unknown = JSON.parse(line)
+      if (!isObjectRecord(parsed)) {
+        continue
+      }
+      record = parsed
     } catch {
       continue
     }
@@ -96,7 +95,7 @@ export async function parseKimiWireForUsage(
       continue
     }
     const usage = record.usage
-    if (!usage || typeof usage !== 'object') {
+    if (!isObjectRecord(usage)) {
       continue
     }
     const inputTokens = ensureNumber(usage.inputOther)
@@ -134,7 +133,8 @@ export async function parseKimiWireForUsage(
 
 async function readKimiStateRecord(statePath: string): Promise<Record<string, unknown> | null> {
   try {
-    return JSON.parse(await readFile(statePath, 'utf-8')) as Record<string, unknown>
+    const parsed: unknown = JSON.parse(await readFile(statePath, 'utf-8'))
+    return isObjectRecord(parsed) ? parsed : null
   } catch {
     return null
   }

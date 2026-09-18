@@ -107,6 +107,7 @@ export class KimiUsageStore {
       if (!existsSync(usageFile)) {
         return getDefaultState()
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: app-owned snapshots are normalized below and malformed files fall back through this catch.
       const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as KimiUsagePersistedState
       return normalizePersistedState({
         ...getDefaultState(),

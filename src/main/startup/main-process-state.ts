@@ -56,6 +56,7 @@ export const mainProcessState = {
   claudeUsage: null as ClaudeUsageStore | null,
   codexUsage: null as CodexUsageStore | null,
   openCodeUsage: null as OpenCodeUsageStore | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the composition root starts each service slot as null until startup assigns its concrete instance.
   kimiUsage: null as KimiUsageStore | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,

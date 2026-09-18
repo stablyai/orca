@@ -485,6 +485,7 @@ describe('registerCoreHandlers', () => {
       claudeUsage as never,
       codexUsage as never,
       openCodeUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler registration test exercises only the mocked usage-store surface.
       kimiUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
@@ -659,6 +660,7 @@ describe('registerCoreHandlers', () => {
       claudeUsage2 as never,
       codexUsage2 as never,
       openCodeUsage2 as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler registration test exercises only the mocked usage-store surface.
       kimiUsage2 as never,
       codexAccounts2 as never,
       claudeAccounts2 as never,

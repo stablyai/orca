@@ -1,4 +1,4 @@
-﻿import type { KimiUsageSessionRow } from '../../../../shared/kimi-usage-types'
+import type { KimiUsageSessionRow } from '../../../../shared/kimi-usage-types'
 import { translate } from '@/i18n/i18n'
 import { formatSessionTime, formatTokens } from './usage-formatters'
 

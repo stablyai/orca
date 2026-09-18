@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react'
+import { useEffect } from 'react'
 import {
   Activity,
   DatabaseZap,
@@ -55,6 +55,14 @@ const RANGE_LABELS: Record<KimiUsageRange, string> = {
   get all() {
     return translate('auto.components.stats.KimiUsagePane.rangeAll', 'All time')
   }
+}
+
+function isKimiUsageScope(value: string): value is KimiUsageScope {
+  return SCOPE_OPTIONS.some((option) => option.value === value)
+}
+
+function isKimiUsageRange(value: string): value is KimiUsageRange {
+  return RANGE_OPTIONS.some((option) => option === value)
 }
 
 export function KimiUsagePane(): React.JSX.Element {
@@ -172,7 +180,11 @@ export function KimiUsagePane(): React.JSX.Element {
               </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={scope}
-                onValueChange={(value) => void setKimiUsageScope(value as KimiUsageScope)}
+                onValueChange={(value) => {
+                  if (isKimiUsageScope(value)) {
+                    void setKimiUsageScope(value)
+                  }
+                }}
               >
                 {SCOPE_OPTIONS.map((option) => (
                   <DropdownMenuRadioItem key={option.value} value={option.value}>
@@ -186,7 +198,11 @@ export function KimiUsagePane(): React.JSX.Element {
               </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={range}
-                onValueChange={(value) => void setKimiUsageRange(value as KimiUsageRange)}
+                onValueChange={(value) => {
+                  if (isKimiUsageRange(value)) {
+                    void setKimiUsageRange(value)
+                  }
+                }}
               >
                 {RANGE_OPTIONS.map((option) => (
                   <DropdownMenuRadioItem key={option} value={option}>

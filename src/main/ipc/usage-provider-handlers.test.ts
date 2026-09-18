@@ -25,7 +25,9 @@ describe('usage provider IPC handlers', () => {
     registerUsageProviderHandlers({
       claudeUsage: claudeUsage as never,
       codexUsage: codexUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the IPC registration test uses only the explicitly mocked usage methods.
       openCodeUsage: openCodeUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the IPC registration test uses only the explicitly mocked usage methods.
       kimiUsage: kimiUsage as never
     })
 
