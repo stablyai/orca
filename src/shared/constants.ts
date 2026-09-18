@@ -187,6 +187,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,
+    elevenLabsApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null
   }

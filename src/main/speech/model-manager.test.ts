@@ -6,10 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { hasOpenAiSpeechApiKeyMock, netRequestMock } = vi.hoisted(() => ({
-  hasOpenAiSpeechApiKeyMock: vi.fn(),
-  netRequestMock: vi.fn()
-}))
+const { hasElevenLabsSpeechApiKeyMock, hasOpenAiSpeechApiKeyMock, netRequestMock } = vi.hoisted(
+  () => ({
+    hasElevenLabsSpeechApiKeyMock: vi.fn(),
+    hasOpenAiSpeechApiKeyMock: vi.fn(),
+    netRequestMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -22,6 +25,10 @@ vi.mock('electron', () => ({
 
 vi.mock('./openai-api-key-store', () => ({
   hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+}))
+
+vi.mock('./elevenlabs-api-key-store', () => ({
+  hasElevenLabsSpeechApiKey: hasElevenLabsSpeechApiKeyMock
 }))
 
 type ModelManagerInternals = {
@@ -51,6 +58,8 @@ describe('ModelManager', () => {
     netRequestMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
+    hasElevenLabsSpeechApiKeyMock.mockReset()
+    hasElevenLabsSpeechApiKeyMock.mockReturnValue(false)
   })
 
   it('requires pinned, internally consistent metadata for every model file', () => {
@@ -163,6 +172,27 @@ describe('ModelManager', () => {
 
       await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
         id: 'openai-gpt-4o-mini-transcribe',
+        status: 'ready'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('marks ElevenLabs transcription models ready only when their API key is configured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+
+      await expect(manager.getModelState('elevenlabs-scribe-v2')).resolves.toEqual({
+        id: 'elevenlabs-scribe-v2',
+        status: 'not-downloaded'
+      })
+
+      hasElevenLabsSpeechApiKeyMock.mockReturnValue(true)
+
+      await expect(manager.getModelState('elevenlabs-scribe-v2')).resolves.toEqual({
+        id: 'elevenlabs-scribe-v2',
         status: 'ready'
       })
     } finally {

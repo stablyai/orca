@@ -10,6 +10,11 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearElevenLabsSpeechApiKey,
+  hasElevenLabsSpeechApiKey,
+  saveElevenLabsSpeechApiKey
+} from '../speech/elevenlabs-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -32,6 +37,20 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
+    return { configured: false }
+  })
+
+  ipcMain.handle('speech:getElevenLabsApiKeyStatus', async () => {
+    return { configured: hasElevenLabsSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveElevenLabsApiKey', async (_event, apiKey: string) => {
+    saveElevenLabsSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearElevenLabsApiKey', async () => {
+    clearElevenLabsSpeechApiKey()
     return { configured: false }
   })
 

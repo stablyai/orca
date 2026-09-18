@@ -17,6 +17,12 @@ export const speechApi = {
     ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
   clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+  getElevenLabsApiKeyStatus: (): Promise<{ configured: boolean }> =>
+    ipcRenderer.invoke('speech:getElevenLabsApiKeyStatus'),
+  saveElevenLabsApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+    ipcRenderer.invoke('speech:saveElevenLabsApiKey', apiKey),
+  clearElevenLabsApiKey: (): Promise<{ configured: boolean }> =>
+    ipcRenderer.invoke('speech:clearElevenLabsApiKey'),
   downloadModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:downloadModel', modelId),
   cancelDownload: (modelId: string): Promise<void> =>

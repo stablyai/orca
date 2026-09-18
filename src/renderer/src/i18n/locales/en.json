@@ -8863,7 +8863,11 @@
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted"
+          "cd9fe37556": "Microphone permission granted",
+          "2ccb18cca4": "ElevenLabs API key saved",
+          "21b58e3e55": "Failed to save ElevenLabs API key",
+          "e180cc22b6": "ElevenLabs API key cleared",
+          "95a5aa12a0": "Failed to clear ElevenLabs API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -10677,7 +10681,11 @@
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
-              "micDefault": "system default"
+              "micDefault": "system default",
+              "9cdb533e82": "ElevenLabs Transcription",
+              "d1654ccb55": "Configure the ElevenLabs API key used for cloud speech-to-text models.",
+              "ada0b40926": "elevenlabs",
+              "8c548043aa": "scribe"
             }
           }
         },
@@ -11953,6 +11961,25 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "ElevenLabsTranscriptionSettingsRow": {
+          "ebf0266b9d": "ElevenLabs Transcription",
+          "30eb012cce": "Connected",
+          "0efd514d02": "API key configured for cloud speech-to-text models.",
+          "22f48cc15b": "Add an ElevenLabs API key before selecting the Scribe model.",
+          "d978729921": "Replace key",
+          "f5fa4d00d4": "Disconnect ElevenLabs API key",
+          "4035a3db84": "Add API key"
+        },
+        "ElevenLabsTranscriptionKeyDialog": {
+          "229c3e3d71": "ElevenLabs Transcription",
+          "97aca13c79": "Audio is sent to ElevenLabs only when an ElevenLabs speech model is selected.",
+          "05552652fe": "API Key",
+          "0537b3d6ea": "API key configured",
+          "7e3b18261e": "sk_...",
+          "c6579737f7": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "2c25731e54": "Clear Key",
+          "79cb03e588": "Save Key"
         }
       },
       "right": {

@@ -1,7 +1,12 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { getSecretStore } from '../../shared/secret-store'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import {
+  clearStoredSpeechSecret,
+  getSpeechSecretFilePath,
+  hasStoredSpeechSecret,
+  readStoredSpeechSecret,
+  writeStoredSpeechSecret
+} from './speech-secret-file'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string
@@ -10,23 +15,8 @@ type StoredOpenAiKey = {
 const OPENAI_SPEECH_TOKEN_FILE = 'openai-speech-token.enc'
 let cachedOpenAiSpeechApiKey: string | null = null
 
-function getOrcaDir(): string {
-  return join(homedir(), '.orca')
-}
-
-function ensureOrcaDir(): void {
-  const dir = getOrcaDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-}
-
-function getOpenAiKeyPath(): string {
-  return join(getOrcaDir(), OPENAI_SPEECH_TOKEN_FILE)
-}
-
 function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
-  const keyPath = getOpenAiKeyPath()
+  const keyPath = getSpeechSecretFilePath(OPENAI_SPEECH_TOKEN_FILE)
   if (!existsSync(keyPath)) {
     return null
   }
@@ -42,26 +32,12 @@ function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
 }
 
 export function hasOpenAiSpeechApiKey(): boolean {
-  // Why: Settings and model-state refresh call this on startup; checking file
-  // existence avoids a decrypt that triggers macOS keychain prompts.
-  return existsSync(getOpenAiKeyPath())
+  return hasStoredSpeechSecret(OPENAI_SPEECH_TOKEN_FILE)
 }
 
 export function saveOpenAiSpeechApiKey(apiKey: string): void {
-  const trimmed = apiKey.trim()
-  if (!trimmed) {
-    throw new Error('OpenAI API key is required')
-  }
-  ensureOrcaDir()
-  if (getSecretStore().isEncryptionAvailable()) {
-    writeFileSync(getOpenAiKeyPath(), getSecretStore().encryptString(trimmed), { mode: 0o600 })
-    cachedOpenAiSpeechApiKey = trimmed
-    return
-  }
-
-  console.warn('[speech] secret encryption unavailable — storing OpenAI speech key in plaintext')
-  writeFileSync(getOpenAiKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
-  cachedOpenAiSpeechApiKey = trimmed
+  writeStoredSpeechSecret(OPENAI_SPEECH_TOKEN_FILE, apiKey, 'OpenAI')
+  cachedOpenAiSpeechApiKey = apiKey.trim()
 }
 
 export function readOpenAiSpeechApiKey(): string {
@@ -69,29 +45,25 @@ export function readOpenAiSpeechApiKey(): string {
     return cachedOpenAiSpeechApiKey
   }
 
-  const keyPath = getOpenAiKeyPath()
-  if (!existsSync(keyPath)) {
-    throw new Error('OpenAI API key is not configured')
-  }
-  try {
-    const raw = readFileSync(keyPath)
-    const legacyJson = readLegacyJsonStoredOpenAiKey()
-    if (legacyJson) {
+  // Why: installs from before the sealed-blob format keep the key inside a JSON envelope.
+  // Reading that shape (instead of migrating it) preserves the existing decrypt contract.
+  const legacyJson = readLegacyJsonStoredOpenAiKey()
+  if (legacyJson) {
+    try {
       cachedOpenAiSpeechApiKey = getSecretStore().decryptString(
         Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
       )
       return cachedOpenAiSpeechApiKey
+    } catch {
+      throw new Error('OpenAI API key could not be decrypted')
     }
-    cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
-      ? getSecretStore().decryptString(raw)
-      : raw.toString('utf8')
-    return cachedOpenAiSpeechApiKey
-  } catch {
-    throw new Error('OpenAI API key could not be decrypted')
   }
+
+  cachedOpenAiSpeechApiKey = readStoredSpeechSecret(OPENAI_SPEECH_TOKEN_FILE, 'OpenAI')
+  return cachedOpenAiSpeechApiKey
 }
 
 export function clearOpenAiSpeechApiKey(): void {
   cachedOpenAiSpeechApiKey = null
-  rmSync(getOpenAiKeyPath(), { force: true })
+  clearStoredSpeechSecret(OPENAI_SPEECH_TOKEN_FILE)
 }

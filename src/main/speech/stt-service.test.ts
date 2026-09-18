@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  MockElevenLabsTranscriptionSession,
   MockOpenAiTranscriptionSession,
   MockWorker,
   getCloudSessions,
   getCreatedWorkerCount,
+  getElevenLabsCloudSessions,
   getLastWorker,
+  readElevenLabsSpeechApiKeyMock,
   readOpenAiSpeechApiKeyMock,
   resetCloudSessions,
   resetWorkers
@@ -97,15 +100,39 @@ const {
     }
   }
 
+  class HoistedMockElevenLabsTranscriptionSession {
+    static instances: HoistedMockElevenLabsTranscriptionSession[] = []
+    feedCalls: { samples: Float32Array; sampleRate: number }[] = []
+
+    constructor(
+      readonly modelId: string,
+      readonly readApiKey: () => string
+    ) {
+      HoistedMockElevenLabsTranscriptionSession.instances.push(this)
+    }
+
+    feedAudio(samples: Float32Array, sampleRate: number): void {
+      this.feedCalls.push({ samples, sampleRate })
+    }
+
+    finish(): Promise<string> {
+      return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
+    }
+  }
+
   return {
+    MockElevenLabsTranscriptionSession: HoistedMockElevenLabsTranscriptionSession,
     MockOpenAiTranscriptionSession: HoistedMockOpenAiTranscriptionSession,
     MockWorker: HoistedMockWorker,
     getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
+    getElevenLabsCloudSessions: () => HoistedMockElevenLabsTranscriptionSession.instances,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
+    readElevenLabsSpeechApiKeyMock: vi.fn(() => 'test-elevenlabs-key'),
     readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
     resetCloudSessions: () => {
       HoistedMockOpenAiTranscriptionSession.instances = []
+      HoistedMockElevenLabsTranscriptionSession.instances = []
     },
     resetWorkers: () => {
       HoistedMockWorker.created = 0
@@ -137,14 +164,22 @@ vi.mock('./model-catalog', () => ({
           streaming: false,
           sampleRate: 16000
         }
-      : {
-          id: 'model-a',
-          type: 'transducer',
-          provider: 'local',
-          streaming: true,
-          sampleRate: 16000,
-          files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-        }
+      : id === 'elevenlabs-model'
+        ? {
+            id,
+            type: 'elevenlabs',
+            provider: 'elevenlabs',
+            streaming: false,
+            sampleRate: 16000
+          }
+        : {
+            id: 'model-a',
+            type: 'transducer',
+            provider: 'local',
+            streaming: true,
+            sampleRate: 16000,
+            files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
+          }
 }))
 
 vi.mock('./openai-api-key-store', () => ({
@@ -155,6 +190,14 @@ vi.mock('./openai-transcription-client', () => ({
   OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
 }))
 
+vi.mock('./elevenlabs-api-key-store', () => ({
+  readElevenLabsSpeechApiKey: readElevenLabsSpeechApiKeyMock
+}))
+
+vi.mock('./elevenlabs-transcription-client', () => ({
+  ElevenLabsTranscriptionSession: MockElevenLabsTranscriptionSession
+}))
+
 import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'
 
 describe('SttService', () => {
@@ -162,6 +205,7 @@ describe('SttService', () => {
     resetCloudSessions()
     resetWorkers()
     readOpenAiSpeechApiKeyMock.mockClear()
+    readElevenLabsSpeechApiKeyMock.mockClear()
   })
 
   it('reuses an idle warm worker for a second dictation with the same owner', async () => {
@@ -345,6 +389,31 @@ describe('SttService', () => {
     expect(sink).toHaveBeenCalledWith({
       type: 'final',
       text: 'openai-model:test-openai-key'
+    })
+    expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
+  })
+
+  it('uses the ElevenLabs transcription session for the Scribe model', async () => {
+    const sink = vi.fn()
+    const modelManagerStub = {
+      getModelState: vi.fn().mockResolvedValue({ id: 'elevenlabs-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService only calls getModelState/getModelDir, which this stub implements; the real ModelManager's private state is irrelevant to this dispatch check.
+    const service = new SttService(modelManagerStub as never)
+
+    await service.startDictation('elevenlabs-model', sink, undefined, 'desktop')
+    service.feedAudio(new Float32Array([0.25, -0.25]), 48000, 'desktop')
+    await service.stopDictation('desktop')
+
+    expect(getCreatedWorkerCount()).toBe(0)
+    expect(getCloudSessions()).toHaveLength(0)
+    expect(getElevenLabsCloudSessions()).toHaveLength(1)
+    expect(getElevenLabsCloudSessions()[0].feedCalls).toHaveLength(1)
+    expect(sink).toHaveBeenCalledWith({ type: 'ready' })
+    expect(sink).toHaveBeenCalledWith({
+      type: 'final',
+      text: 'elevenlabs-model:test-elevenlabs-key'
     })
     expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
   })

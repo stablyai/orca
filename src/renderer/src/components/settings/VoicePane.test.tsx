@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../shared/developer-permissions-types'
 import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultSettings, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { handleVoiceDictationToggle, VoicePane } from './VoicePane'
 
 const { useAppStoreMock, useShortcutLabelMock } = vi.hoisted(() => ({
@@ -60,6 +60,9 @@ function installWindowApi(
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
+        getElevenLabsApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveElevenLabsApiKey: vi.fn(async () => ({ configured: true })),
+        clearElevenLabsApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
         downloadModel: vi.fn()
       }
@@ -320,6 +323,58 @@ describe('VoicePane', () => {
         openAiApiKeyConfigured: false,
         microphoneDeviceId: 'usb-mic',
         microphoneDeviceLabel: 'USB Microphone'
+      }
+    })
+  })
+
+  it('clears the ElevenLabs key from its settings row', async () => {
+    const updateSettings = vi.fn()
+    useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        modelStates: [],
+        refreshModelStates: vi.fn(),
+        markFeatureTipsSeen: vi.fn(),
+        recordFeatureInteraction: vi.fn()
+      })
+    )
+    useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
+    installWindowApi(vi.fn(async () => deniedMicrophoneResult))
+    window.api.speech.getElevenLabsApiKeyStatus = vi.fn(async () => ({ configured: true }))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('C:/tmp'),
+      voice: {
+        ...getDefaultVoiceSettings(),
+        elevenLabsApiKeyConfigured: true
+      }
+    }
+    await act(async () => {
+      root.render(<VoicePane settings={settings} updateSettings={updateSettings} />)
+    })
+
+    const disconnect = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Disconnect ElevenLabs API key"]'
+    )
+    if (!disconnect) {
+      throw new Error('Disconnect ElevenLabs API key button was not rendered')
+    }
+
+    await act(async () => {
+      disconnect.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    root.unmount()
+
+    expect(window.api.speech.clearElevenLabsApiKey).toHaveBeenCalledOnce()
+    expect(updateSettings).toHaveBeenCalledWith({
+      voice: {
+        ...getDefaultVoiceSettings(),
+        elevenLabsApiKeyConfigured: false
       }
     })
   })

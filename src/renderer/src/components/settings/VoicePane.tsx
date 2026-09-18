@@ -5,13 +5,18 @@ import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/spee
 import { Separator } from '../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { ElevenLabsTranscriptionKeyDialog } from './ElevenLabsTranscriptionKeyDialog'
+import { ElevenLabsTranscriptionSettingsRow } from './ElevenLabsTranscriptionSettingsRow'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from './settings-search'
-import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
+import {
+  getElevenLabsTranscriptionSearchEntry,
+  getOpenaiTranscriptionSearchEntry
+} from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
 
 export { handleVoiceDictationToggle }
@@ -34,6 +39,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
   const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
+  const [elevenLabsDialogOpen, setElevenLabsDialogOpen] = useState(false)
+  const [elevenLabsApiKeyDraft, setElevenLabsApiKeyDraft] = useState('')
+  const [elevenLabsKeyPending, setElevenLabsKeyPending] = useState(false)
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
   // Why: every write here is a read-modify-write of the whole voice object, and the
@@ -73,19 +81,39 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         }
       })
       .catch(() => {})
-    void window.api.speech
-      .getOpenAiApiKeyStatus()
-      .then((status) => {
-        if (!cancelled && status.configured !== voiceSettings.openAiApiKeyConfigured) {
-          updateVoiceSettings({ openAiApiKeyConfigured: status.configured })
-          refreshModelStates()
-        }
-      })
-      .catch(() => {})
+    // Why: both probes write the same `voice` object, so resolve them together and hand the
+    // settings store one merged update — two racing writers would drop one provider's flag.
+    void Promise.all([
+      window.api.speech.getOpenAiApiKeyStatus().catch(() => null),
+      window.api.speech.getElevenLabsApiKeyStatus().catch(() => null)
+    ]).then(([openAiStatus, elevenLabsStatus]) => {
+      if (cancelled) {
+        return
+      }
+      const updates: Partial<VoiceSettings> = {}
+      if (openAiStatus && openAiStatus.configured !== voiceSettings.openAiApiKeyConfigured) {
+        updates.openAiApiKeyConfigured = openAiStatus.configured
+      }
+      if (
+        elevenLabsStatus &&
+        elevenLabsStatus.configured !== voiceSettings.elevenLabsApiKeyConfigured
+      ) {
+        updates.elevenLabsApiKeyConfigured = elevenLabsStatus.configured
+      }
+      if (Object.keys(updates).length > 0) {
+        updateVoiceSettings(updates)
+        refreshModelStates()
+      }
+    })
     return () => {
       cancelled = true
     }
-  }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+  }, [
+    refreshModelStates,
+    updateVoiceSettings,
+    voiceSettings.openAiApiKeyConfigured,
+    voiceSettings.elevenLabsApiKeyConfigured
+  ])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -140,11 +168,32 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     selectedModel?.provider === 'openai' ||
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
+  const showElevenLabsSettingsRow =
+    voiceSettings.elevenLabsApiKeyConfigured ||
+    selectedModel?.provider === 'elevenlabs' ||
+    (settingsSearchQuery.trim() !== '' &&
+      matchesSettingsSearch(settingsSearchQuery, getElevenLabsTranscriptionSearchEntry()))
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
     setOpenAiApiKeyDraft('')
     setOpenAiDialogOpen(true)
+  }
+
+  const openElevenLabsDialog = (modelId: string | null = null): void => {
+    setPendingCloudModelId(modelId)
+    setElevenLabsApiKeyDraft('')
+    setElevenLabsDialogOpen(true)
+  }
+
+  // Why: the model list only knows a model is cloud; the pane routes it to the provider whose
+  // key makes it selectable, keeping provider knowledge out of the dropdown.
+  const openCloudDialog = (modelId: string): void => {
+    if (catalog.find((m) => m.id === modelId)?.provider === 'elevenlabs') {
+      openElevenLabsDialog(modelId)
+      return
+    }
+    openOpenAiDialog(modelId)
   }
 
   const saveOpenAiApiKey = async (): Promise<void> => {
@@ -209,6 +258,68 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     }
   }
 
+  const saveElevenLabsApiKey = async (): Promise<void> => {
+    setElevenLabsKeyPending(true)
+    try {
+      await window.api.speech.saveElevenLabsApiKey(elevenLabsApiKeyDraft)
+      updateVoiceSettings({
+        elevenLabsApiKeyConfigured: true,
+        sttModel: pendingCloudModelId ?? voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      setElevenLabsDialogOpen(false)
+      setElevenLabsApiKeyDraft('')
+      setPendingCloudModelId(null)
+      toast.success(
+        translate('auto.components.settings.VoicePane.2ccb18cca4', 'ElevenLabs API key saved')
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.21b58e3e55',
+              'Failed to save ElevenLabs API key'
+            )
+      )
+    } finally {
+      if (mountedRef.current) {
+        setElevenLabsKeyPending(false)
+      }
+    }
+  }
+
+  const clearElevenLabsApiKey = async (): Promise<void> => {
+    setElevenLabsKeyPending(true)
+    try {
+      await window.api.speech.clearElevenLabsApiKey()
+      updateVoiceSettings({
+        elevenLabsApiKeyConfigured: false,
+        sttModel: selectedModel?.provider === 'elevenlabs' ? '' : voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      setElevenLabsDialogOpen(false)
+      setElevenLabsApiKeyDraft('')
+      setPendingCloudModelId(null)
+      toast.success(
+        translate('auto.components.settings.VoicePane.e180cc22b6', 'ElevenLabs API key cleared')
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.95a5aa12a0',
+              'Failed to clear ElevenLabs API key'
+            )
+      )
+    } finally {
+      if (mountedRef.current) {
+        setElevenLabsKeyPending(false)
+      }
+    }
+  }
+
   return (
     <div ref={handlePaneRef} className="space-y-1">
       <VoiceDictationSettingsSection
@@ -223,7 +334,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
-        onOpenOpenAiDialog={openOpenAiDialog}
+        onOpenCloudDialog={openCloudDialog}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -239,6 +350,18 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         </>
       )}
 
+      {showElevenLabsSettingsRow && (
+        <>
+          <Separator />
+          <ElevenLabsTranscriptionSettingsRow
+            configured={voiceSettings.elevenLabsApiKeyConfigured}
+            disabled={elevenLabsKeyPending}
+            onConfigure={() => openElevenLabsDialog(null)}
+            onClear={() => void clearElevenLabsApiKey()}
+          />
+        </>
+      )}
+
       <OpenAiTranscriptionKeyDialog
         open={openAiDialogOpen}
         configured={voiceSettings.openAiApiKeyConfigured}
@@ -248,6 +371,17 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onApiKeyDraftChange={setOpenAiApiKeyDraft}
         onSave={() => void saveOpenAiApiKey()}
         onClear={() => void clearOpenAiApiKey()}
+      />
+
+      <ElevenLabsTranscriptionKeyDialog
+        open={elevenLabsDialogOpen}
+        configured={voiceSettings.elevenLabsApiKeyConfigured}
+        apiKeyDraft={elevenLabsApiKeyDraft}
+        pending={elevenLabsKeyPending}
+        onOpenChange={setElevenLabsDialogOpen}
+        onApiKeyDraftChange={setElevenLabsApiKeyDraft}
+        onSave={() => void saveElevenLabsApiKey()}
+        onClear={() => void clearElevenLabsApiKey()}
       />
     </div>
   )
