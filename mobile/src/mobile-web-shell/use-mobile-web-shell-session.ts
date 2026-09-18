@@ -8,7 +8,6 @@ import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
 import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-operations'
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import {
   createExpoGenerationFileSystem,
@@ -17,8 +16,8 @@ import {
 import { deriveHostCacheKey } from './host-cache-key'
 import {
   createMobileWebShellSession,
+  readMobileWebShellReachability,
   reduceMobileWebShellSession,
-  type MobileWebShellReachability,
   type MobileWebShellSessionEffect,
   type MobileWebShellSessionEvent,
   type MobileWebShellSessionState
@@ -41,18 +40,6 @@ function defaultRuntime(): MobileWebShellRuntime {
     mintSessionId: () => encodeBase64Url(ExpoCrypto.getRandomBytes(SESSION_ID_BYTES)),
     now: Date.now
   }
-}
-
-/** A socket still being made is not an offline host: only a settled non-connection opens a cached
- *  generation without asking the host anything. */
-export function readMobileWebShellReachability(
-  connState: ConnectionState,
-  client: RpcClient | null
-): MobileWebShellReachability {
-  if (connState === 'connected') {
-    return client === null ? 'connecting' : 'connected'
-  }
-  return connState === 'disconnected' || connState === 'auth-failed' ? 'unreachable' : 'connecting'
 }
 
 export type MobileWebShellSessionView = {
