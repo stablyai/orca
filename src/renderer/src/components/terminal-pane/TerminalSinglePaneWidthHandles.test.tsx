@@ -147,3 +147,49 @@ describe('hosts without the width cap', () => {
     expect(screen.queryAllByRole('separator')).toHaveLength(0)
   })
 })
+
+describe('review follow-ups', () => {
+  it('releases the previous drag when a second handle is pressed', () => {
+    const { container, left, right, onCommit } = renderHandles()
+    stubCapture(right)
+    stubCapture(left)
+    fireEvent.pointerDown(right, { button: 0, pointerId: 1, clientX: 1300 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 1400, isPrimary: true })
+
+    // A second press must abandon the first drag rather than orphan its state.
+    fireEvent.pointerDown(left, { button: 0, pointerId: 2, clientX: 300 })
+    expect(onCommit).not.toHaveBeenCalled()
+    expect(container.style.getPropertyValue('--pane-single-max-width')).toBe('')
+
+    fireEvent.pointerMove(window, { pointerId: 2, clientX: 250, isPrimary: true })
+    fireEvent.pointerUp(window, { pointerId: 2, clientX: 250, isPrimary: true })
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith(1100)
+  })
+
+  it('resizes from the keyboard, since the handles are focusable separators', () => {
+    const { left, right, onCommit } = renderHandles()
+    expect(right).toHaveProperty('tabIndex', 0)
+    expect(right.getAttribute('aria-valuenow')).toBe('1000')
+
+    fireEvent.keyDown(right, { key: 'ArrowRight' })
+    expect(onCommit).toHaveBeenLastCalledWith(1040)
+
+    fireEvent.keyDown(right, { key: 'ArrowLeft' })
+    expect(onCommit).toHaveBeenLastCalledWith(960)
+
+    // The left handle widens in the opposite direction.
+    fireEvent.keyDown(left, { key: 'ArrowLeft' })
+    expect(onCommit).toHaveBeenLastCalledWith(1040)
+
+    fireEvent.keyDown(right, { key: 'ArrowRight', shiftKey: true })
+    expect(onCommit).toHaveBeenLastCalledWith(1200)
+  })
+
+  it('ignores keys that are not the resize arrows', () => {
+    const { right, onCommit } = renderHandles()
+    fireEvent.keyDown(right, { key: 'Enter' })
+    fireEvent.keyDown(right, { key: 'ArrowUp' })
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+})
