@@ -9,6 +9,7 @@ import {
   REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS,
   REACT_COMMIT_CASCADE_NOTICE_LIMIT,
   createReactCommitCascadeState,
+  observeReactCommit,
   recordReactCommit,
   resetReactCommitCascadeTelemetryForTests,
   type ReactCommitCascadeState
@@ -335,5 +336,150 @@ describe('repeated arm and end cycles', () => {
       changedKeys: undefined
     })
     expect(state.cascadeRoot).toBeNull()
+  })
+})
+
+/**
+ * Why the payload carries both: the crumb is the only artefact triage sees, and
+ * a lane that was inferred from commit timing must never be readable as one
+ * sampled from `root.pendingLanes`.
+ */
+describe('cascade evidence', () => {
+  it('reports the sampled lanes and marks a lane-confirmed run', () => {
+    const state = createReactCommitCascadeState()
+    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT })
+
+    expect(cascadePayload()).toMatchObject({
+      pendingLanes: SYNC_LANE,
+      laneCommits: REACT_COMMIT_CASCADE_NOTICE_LIMIT,
+      evidence: 'lanes'
+    })
+  })
+
+  it('never synthesizes lanes for a run counted by re-entrancy alone', () => {
+    const state = createReactCommitCascadeState()
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT; commit += 1) {
+      recordReactCommit({
+        state,
+        root: ROOT,
+        pendingLanes: 0,
+        reentrant: true,
+        readNowMs: () => 1_000
+      })
+    }
+
+    expect(cascadePayload()).toMatchObject({
+      pendingLanes: 0,
+      laneCommits: 0,
+      evidence: 'reentrant'
+    })
+  })
+
+  it('marks a run mixed when only some commits held cascading lanes', () => {
+    const state = createReactCommitCascadeState()
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT; commit += 1) {
+      recordReactCommit({
+        state,
+        root: ROOT,
+        pendingLanes: commit % 2 === 0 ? SYNC_LANE : 0,
+        reentrant: true,
+        readNowMs: () => 1_000
+      })
+    }
+
+    const payload = cascadePayload()
+    expect(payload.evidence).toBe('mixed')
+    expect(payload.laneCommits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT / 2)
+  })
+
+  it('ends a run on a commit that is neither lane-cascading nor re-entrant', () => {
+    const state = createReactCommitCascadeState()
+    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1 })
+
+    recordReactCommit({ state, root: ROOT, pendingLanes: 0, readNowMs: () => 1_000 })
+
+    expect(state.commits).toBe(0)
+    expect(state.laneCommits).toBe(0)
+    expect(state.cascadeRoot).toBeNull()
+  })
+})
+
+/** The production entry point owns the re-entrancy term; the seam only receives it. */
+describe('observeReactCommit re-entrancy', () => {
+  const QUIET_ROOT = { pendingLanes: 0 }
+
+  // The first commit of a tick has nothing to be re-entrant against, so the run
+  // is one shorter than the burst.
+  it('counts a same-tick burst of zero-lane commits', () => {
+    for (let commit = 0; commit <= REACT_COMMIT_CASCADE_NOTICE_LIMIT; commit += 1) {
+      observeReactCommit(QUIET_ROOT, 0)
+    }
+
+    expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
+    expect(cascadePayload().evidence).toBe('reentrant')
+  })
+
+  it('starts a new run after a microtask checkpoint', async () => {
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1; commit += 1) {
+      observeReactCommit(QUIET_ROOT, 0)
+    }
+    await Promise.resolve()
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1; commit += 1) {
+      observeReactCommit(QUIET_ROOT, 0)
+    }
+
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
+  })
+
+  // Why this and not a state assertion: the shared state is module-private, so
+  // the released root slot is only observable as a run that restarts from zero.
+  it('drops a run with no lane evidence at the span checkpoint', async () => {
+    for (let commit = 0; commit <= REACT_COMMIT_CASCADE_ARM_COMMITS; commit += 1) {
+      observeReactCommit(QUIET_ROOT, 0)
+    }
+    await Promise.resolve()
+
+    // Enough to finish the dropped run, and one short of a fresh one.
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1; commit += 1) {
+      observeReactCommit(QUIET_ROOT, REACT_CASCADING_LANES)
+    }
+
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
+  })
+
+  // The other half of the same rule: a lane cascade is measured, legitimately
+  // spans ticks, and must survive the checkpoint that drops an inferred run.
+  it('keeps a lane-measured run across a span checkpoint', async () => {
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_ARM_COMMITS; commit += 1) {
+      observeReactCommit(QUIET_ROOT, REACT_CASCADING_LANES)
+    }
+    await Promise.resolve()
+    for (
+      let commit = 0;
+      commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT - REACT_COMMIT_CASCADE_ARM_COMMITS;
+      commit += 1
+    ) {
+      observeReactCommit(QUIET_ROOT, REACT_CASCADING_LANES)
+    }
+
+    expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
+    expect(cascadePayload().evidence).toBe('lanes')
+  })
+
+  // Why fail closed: with no checkpoint to clear the flag, the first commit would
+  // latch it and every later commit in the renderer's life would read re-entrant.
+  it('reports nothing re-entrant when queueMicrotask is unavailable', () => {
+    const host = globalThis as { queueMicrotask?: typeof queueMicrotask }
+    const original = host.queueMicrotask
+    delete host.queueMicrotask
+    try {
+      for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT * 2; commit += 1) {
+        observeReactCommit(QUIET_ROOT, 0)
+      }
+    } finally {
+      host.queueMicrotask = original
+    }
+
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 })
