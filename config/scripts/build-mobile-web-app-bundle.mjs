@@ -30,29 +30,53 @@ const defaultOutDir = join(projectDir, 'out', 'mobile-web-app')
 export const ROUTE_MANIFEST_MODULE = 'mobile/web-entry/route-manifest.ts'
 
 /**
- * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. Named so a test can
- * assert the list rather than re-deriving it from the esbuild options.
+ * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. `appliesTo` reads the
+ * esbuild option that implements the shim, so the list cannot claim a shim the build does not
+ * apply and a dropped option fails the named shim rather than the whole build.
  */
 export const MOBILE_WEB_APP_SHIMS = [
-  // react-native has no browser build; react-native-web is the whole point of Route A.
-  'react-native-web-alias',
-  // RN ships untranspiled JSX inside .js files (expo-router's own build/ included).
-  'js-as-jsx',
-  // RN code assumes a Hermes/Metro `global`; the browser only has `globalThis`.
-  'global-as-globalthis',
-  // RN and Expo modules read process.env at module scope, before any of our code runs.
-  'process-banner',
-  // lucide-react-native@1.14.0's barrel re-exports LucideProvider from a context.mjs that does not
-  // export it. Metro's loose CJS interop tolerates it; esbuild's strict ESM does not. Web-build
-  // only: patching the package would change what the shipped native app consumes.
-  'lucide-barrel-provider',
-  // esbuild has no require.context, so the route tree is generated and injected.
-  'route-manifest'
+  {
+    // react-native has no browser build; react-native-web is the whole point of Route A.
+    name: 'react-native-web-alias',
+    appliesTo: (options) => options.alias?.['react-native'] === 'react-native-web'
+  },
+  {
+    // RN ships untranspiled JSX inside .js files (expo-router's own build/ included).
+    name: 'js-as-jsx',
+    appliesTo: (options) => options.loader?.['.js'] === 'jsx'
+  },
+  {
+    // RN code assumes a Hermes/Metro `global`; the browser only has `globalThis`.
+    name: 'global-as-globalthis',
+    appliesTo: (options) => options.define?.global === 'globalThis'
+  },
+  {
+    // RN and Expo modules read process.env at module scope, before any of our code runs.
+    name: 'process-banner',
+    appliesTo: (options) => options.banner?.js?.includes('globalThis.process ??=') === true
+  },
+  {
+    // lucide-react-native@1.14.0's barrel re-exports LucideProvider from a context.mjs that does
+    // not export it. Metro's loose CJS interop tolerates it; esbuild's strict ESM does not.
+    // Web-build only: patching the package would change what the shipped native app consumes.
+    name: 'lucide-barrel-provider',
+    appliesTo: (options) =>
+      options.plugins?.some((plugin) => plugin.name === LUCIDE_PLUGIN_NAME) === true
+  },
+  {
+    // esbuild has no require.context, so the route tree is generated and injected.
+    name: 'route-manifest',
+    appliesTo: (options) =>
+      options.plugins?.some((plugin) => plugin.name === ROUTE_MANIFEST_PLUGIN_NAME) === true
+  }
 ]
+
+const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
+const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
 
 function routeManifestPlugin(manifestSource) {
   return {
-    name: 'orca-route-manifest',
+    name: ROUTE_MANIFEST_PLUGIN_NAME,
     setup(build) {
       build.onLoad({ filter: /web-entry[\\/]route-manifest\.ts$/ }, () => ({
         contents: manifestSource,
@@ -64,7 +88,7 @@ function routeManifestPlugin(manifestSource) {
 }
 
 const lucideBarrelPlugin = {
-  name: 'orca-lucide-barrel-provider',
+  name: LUCIDE_PLUGIN_NAME,
   setup(build) {
     build.onLoad({ filter: /lucide-react-native[\\/].*[\\/]context\.mjs$/ }, async (args) => ({
       contents: `${await readFile(args.path, 'utf8')}\nexport const LucideProvider = ({ children }) => children;\n`,
@@ -73,10 +97,9 @@ const lucideBarrelPlugin = {
   }
 }
 
-// appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
-export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
-  const routes = await collectMobileWebAppRoutes(appDir)
-  const result = await esbuild.build({
+/** Split out so a test can read the options MOBILE_WEB_APP_SHIMS claims, without a build. */
+export function mobileWebAppBuildOptions(routes) {
+  return {
     // Fixed so no absolute path of this checkout can reach the output.
     absWorkingDir: mobileDir,
     entryPoints: [entryPoint],
@@ -134,7 +157,13 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
       'process.env.EXPO_OS': '"web"',
       'process.env.EXPO_ROUTER_IMPORT_MODE': '"sync"'
     }
-  })
+  }
+}
+
+// appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
+export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
+  const routes = await collectMobileWebAppRoutes(appDir)
+  const result = await esbuild.build(mobileWebAppBuildOptions(routes))
   const script = result.outputFiles.find((file) => file.path.endsWith('.js'))
   if (!script) {
     throw new Error('[build-mobile-web-app-bundle] esbuild emitted no script')

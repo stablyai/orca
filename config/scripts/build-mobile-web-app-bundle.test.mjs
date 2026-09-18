@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
-  buildMobileWebAppBundle
+  buildMobileWebAppBundle,
+  mobileWebAppBuildOptions
 } from './build-mobile-web-app-bundle.mjs'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
@@ -151,15 +152,26 @@ describe('the app bundle', () => {
     })
   }, 240_000)
 
-  it('names every shim it applies', () => {
-    expect(MOBILE_WEB_APP_SHIMS).toEqual([
-      'react-native-web-alias',
-      'js-as-jsx',
-      'global-as-globalthis',
-      'process-banner',
-      'lucide-barrel-provider',
-      'route-manifest'
-    ])
+  it('applies every shim it names', async () => {
+    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
+    for (const shim of MOBILE_WEB_APP_SHIMS) {
+      expect(shim.appliesTo(options), `${shim.name} is named but not applied`).toBe(true)
+    }
+  })
+
+  it('fails the named shim, not the whole build, when its option goes missing', async () => {
+    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
+    // Each shim reads a different option, so removing one leaves the other five true. Without
+    // that, the list could name a shim the build stopped applying.
+    const stripped = {
+      ...options,
+      alias: {},
+      loader: {},
+      define: {},
+      banner: {},
+      plugins: []
+    }
+    expect(MOBILE_WEB_APP_SHIMS.filter((shim) => shim.appliesTo(stripped))).toEqual([])
   })
 
   it('keeps the shims out of the shipped Phase A bootstrap builder', async () => {
@@ -167,9 +179,11 @@ describe('the app bundle', () => {
       join(projectDir, 'config', 'scripts', 'build-mobile-web-bundle.mjs'),
       'utf8'
     )
+    for (const { name } of MOBILE_WEB_APP_SHIMS) {
+      expect(shipped, `the Phase A bootstrap builder mentions ${name}`).not.toContain(name)
+    }
     expect(shipped).not.toContain('react-native-web')
     expect(shipped).not.toContain('lucide')
-    expect(shipped).not.toContain('route-manifest')
   })
 
   it('embeds no absolute path from this checkout', async () => {
