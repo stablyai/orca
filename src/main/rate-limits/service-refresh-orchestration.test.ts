@@ -149,6 +149,58 @@ describe('RateLimitService', () => {
     expect(service.getState().devin?.status).toBe('unavailable')
   })
 
+  it('keeps a settled unavailable Devin provider hidden while a refetch is in flight', async () => {
+    vi.mocked(readDevinCredentials).mockReturnValue({
+      status: 'ok',
+      credentials: { sessionToken: 'tok', apiServerUrl: 'https://server.codeium.com' }
+    })
+    vi.mocked(fetchDevinRateLimits).mockResolvedValue(
+      unavailableProvider('devin', 'Devin did not report quota windows for this account')
+    )
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0))
+    const service = new RateLimitService()
+    await serviceInternals(service).fetchAll()
+    expect(service.getState().devinAuthConfigured).toBe(false)
+
+    const pendingDevin = deferred<ProviderRateLimits>()
+    vi.mocked(fetchDevinRateLimits).mockImplementationOnce(() => pendingDevin.promise)
+    const refetch = serviceInternals(service).fetchAll()
+    await flushMicrotasks()
+
+    // Without the previous-settled-status guard the preparation write would
+    // re-assert configured=true and flash a "Devin --" chip every poll.
+    expect(service.getState().devinAuthConfigured).toBe(false)
+
+    pendingDevin.resolve(
+      unavailableProvider('devin', 'Devin did not report quota windows for this account')
+    )
+    await refetch
+    expect(service.getState().devinAuthConfigured).toBe(false)
+  })
+
+  it('re-shows the Devin provider when a later fetch reports quota again', async () => {
+    vi.mocked(readDevinCredentials).mockReturnValue({
+      status: 'ok',
+      credentials: { sessionToken: 'tok', apiServerUrl: 'https://server.codeium.com' }
+    })
+    vi.mocked(fetchDevinRateLimits)
+      .mockResolvedValueOnce(
+        unavailableProvider('devin', 'Devin did not report quota windows for this account')
+      )
+      .mockResolvedValueOnce(okProvider('devin', 40))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0))
+    const service = new RateLimitService()
+    await serviceInternals(service).fetchAll()
+    expect(service.getState().devinAuthConfigured).toBe(false)
+
+    await serviceInternals(service).fetchAll()
+
+    expect(service.getState().devinAuthConfigured).toBe(true)
+    expect(service.getState().devin?.status).toBe('ok')
+  })
+
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
     const service = new RateLimitService()
     const firstClaude = deferred<ProviderRateLimits>()

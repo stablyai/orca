@@ -26,6 +26,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       miniMaxConfigChanged,
       miniMaxGeneration,
       claudeFetchGated,
+      devinCredentialsOk,
       results: [
         claudeResult,
         codexResult,
@@ -231,11 +232,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           } satisfies ProviderRateLimits)
     this.trackActiveFailureStreak('devin', devin)
     // Why: 'unavailable' here means a signed-in plan with no quota windows
-    // (missing credentials already leave the probe false). Clearing the
-    // configured signal keeps a credit-billed plan from pinning a "--" slot.
-    if (devin.status === 'unavailable') {
-      this.devinAuthConfigured = false
-    }
+    // (missing credentials already leave the probe false). Re-deriving the
+    // configured signal — not just clearing — also covers a later result that
+    // regains quota, while keeping a credential read failure hidden.
+    this.devinAuthConfigured = devinCredentialsOk && devin.status !== 'unavailable'
     this.updateState({
       ...this.state,
       devin: this.applyStalePolicy(devin, previousState.devin)

@@ -32,6 +32,7 @@ export type FetchAllCyclePrepared = {
   miniMaxConfigChanged: boolean
   miniMaxGeneration: number
   claudeFetchGated: boolean
+  devinCredentialsOk: boolean
   results: [
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -92,7 +93,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
     const devinCredentialsReadResult = readDevinCredentials()
-    this.devinAuthConfigured = devinCredentialsReadResult.status === 'ok'
+    const devinCredentialsOk = devinCredentialsReadResult.status === 'ok'
+    // Why: a settled 'unavailable' means a signed-in plan with no quota
+    // windows. Re-asserting configured while the refetch is in flight would
+    // flash a "Devin --" chip on every poll; the apply step re-derives it.
+    this.devinAuthConfigured =
+      devinCredentialsOk && previousState.devin?.status !== 'unavailable'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -209,6 +215,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxConfigChanged,
       miniMaxGeneration,
       claudeFetchGated,
+      devinCredentialsOk,
       results: [
         claudeResult,
         codexResult,

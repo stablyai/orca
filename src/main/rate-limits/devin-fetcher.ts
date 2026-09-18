@@ -130,6 +130,9 @@ async function fetchUserStatus(
   const requestBody = encodeGetUserStatusRequest(credentials.sessionToken, cliVersion)
   const res = await net.fetch(`${credentials.apiServerUrl}${GET_USER_STATUS_PATH}`, {
     method: 'POST',
+    // Why: net.fetch follows redirects by default and a 307/308 re-sends the
+    // body — a redirect could carry sessionToken to an http:// target.
+    redirect: 'error',
     headers: {
       'Content-Type': 'application/proto',
       'Connect-Protocol-Version': '1',
