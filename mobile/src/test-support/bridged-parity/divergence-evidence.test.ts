@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
 import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
+import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import {
   divergingFields,
   paramsMismatchEvidence,
+  refusalReleasedStream,
   refusedFrames,
   scriptsAbsentResultReply,
   withoutRpcMeta,
@@ -122,6 +124,22 @@ describe('reading the scenario', () => {
         scenario([{ complete: 'a#1', params: null, reply: { ok: true, result: null } }])
       )
     ).toBe(false)
+  })
+})
+
+describe('reading what the page did about a frame it refused', () => {
+  const refused: BridgeRpcClientDiagnostic = { kind: 'refused', refusal: 'unrecognised-message' }
+  const failed: BridgeRpcClientDiagnostic = { kind: 'stream-failed', error: new Error('gone') }
+  const ended: BridgeRpcClientDiagnostic = { kind: 'stream-ended', reason: 'closed' }
+
+  it('sees a refusal the page answered by letting a stream go', () => {
+    expect(refusalReleasedStream([ended, refused, failed, ended])).toBe(true)
+  })
+
+  it('sees nothing in a release the shell asked for, which reports the same kind', () => {
+    expect(refusalReleasedStream([failed, ended])).toBe(false)
+    expect(refusalReleasedStream([refused, ended, failed])).toBe(false)
+    expect(refusalReleasedStream([refused])).toBe(false)
   })
 })
 

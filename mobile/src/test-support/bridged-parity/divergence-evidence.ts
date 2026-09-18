@@ -1,3 +1,4 @@
+import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
 import { firstDifference } from '../rpc-recording/golden-recording'
 import { canonicalJson, OBSERVATION_FIELDS } from '../rpc-recording/golden-value-pool'
@@ -112,6 +113,20 @@ export function scriptsAbsentResultReply(scenario: RecordingScenario): boolean {
     }
     return 'ok' in step.reply && step.reply.ok === true && !('result' in step.reply)
   })
+}
+
+/**
+ * The page refused a frame on a stream it was holding, and let the stream go because of it.
+ *
+ * Read as a pair and in order: `stream-failed` alone is also what an `error` frame from the shell
+ * reports, and that one is the shell saying it has already retired the stream. Only a refusal
+ * followed by a release is the page giving up on a stream the shell is still serving.
+ */
+export function refusalReleasedStream(diagnostics: readonly BridgeRpcClientDiagnostic[]): boolean {
+  return diagnostics.some(
+    (diagnostic, index) =>
+      diagnostic.kind === 'refused' && diagnostics[index + 1]?.kind === 'stream-failed'
+  )
 }
 
 /** The name the scripted transport prints for a request whose params stopped matching. */

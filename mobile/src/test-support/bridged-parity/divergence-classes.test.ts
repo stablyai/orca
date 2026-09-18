@@ -13,7 +13,8 @@ const base: BridgedParityEvidence = {
   threwWhileRecording: false,
   divergingFields: [],
   scriptsAbsentResultReply: false,
-  paramsMismatch: null
+  paramsMismatch: null,
+  refusalReleasedStream: false
 }
 
 /** What the ten scenarios that script an `undefined`-valued param look like when the bridge drops it. */
@@ -89,6 +90,24 @@ describe('classifying one diverging golden', () => {
         }
       })
     ).toBe('unclassified')
+  })
+
+  it('names a throw that came of the page releasing a stream it refused a frame on', () => {
+    const released = {
+      ...base,
+      threwWhileRecording: true,
+      scriptsAbsentResultReply: true,
+      refusalReleasedStream: true
+    }
+    expect(classifyBridgedParity(released)).toBe('result-absent-stream-release')
+    // Without the injected partition there is nothing to refuse, so a release is somebody's bug.
+    expect(classifyBridgedParity({ ...released, scriptsAbsentResultReply: false })).toBe(
+      'unclassified'
+    )
+    // A stream released with no refusal behind it is not this class either.
+    expect(classifyBridgedParity({ ...released, refusalReleasedStream: false })).toBe(
+      'unclassified'
+    )
   })
 
   it('names the ordinal class ahead of the partition a matrix golden also carries', () => {

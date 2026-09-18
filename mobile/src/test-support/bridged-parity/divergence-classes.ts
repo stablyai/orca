@@ -14,6 +14,7 @@ export type BridgedParityClass =
   | 'reply-meta-required'
   | 'result-absent-settlement'
   | 'result-absent-observation'
+  | 'result-absent-stream-release'
   | 'params-undefined'
   | 'write-ordinal'
   | 'unclassified'
@@ -54,6 +55,8 @@ export type BridgedParityEvidence = {
   scriptsAbsentResultReply: boolean
   /** Null unless the throw was the scripted transport refusing one request's params. */
   paramsMismatch: ParamsMismatchEvidence | null
+  /** The page refused a frame on a stream it held and released that stream because of it. */
+  refusalReleasedStream: boolean
 }
 
 /**
@@ -96,8 +99,11 @@ export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedP
     return 'reply-meta-required'
   }
   if (evidence.threwWhileRecording) {
-    return movedOnlyKeysScriptedUndefined(evidence.paramsMismatch)
-      ? 'params-undefined'
+    if (movedOnlyKeysScriptedUndefined(evidence.paramsMismatch)) {
+      return 'params-undefined'
+    }
+    return evidence.scriptsAbsentResultReply && evidence.refusalReleasedStream
+      ? 'result-absent-stream-release'
       : 'unclassified'
   }
   const [first] = evidence.divergingFields
@@ -132,6 +138,12 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
   'result-absent-observation':
     'the same injection, seen first as a different checkpoint set or a lost effect rather than as ' +
     'the settlement that never arrives',
+  'result-absent-stream-release':
+    'the same injection delivered on a stream: the page refuses the frame and releases a stream ' +
+    'the shell is still serving, so it posts the `cancel` that is the only thing releasing the ' +
+    "shell's slot, and the unsubscribe that publishes renames the recorder's later occurrences " +
+    'before there is a recording to compare — the native client never refuses the frame, so it ' +
+    'never reaches the release at all',
   'params-undefined':
     'an own property valued `undefined` is already absent from the bytes the native run puts on ' +
     'the wire, so the bridged run sends the identical frame; what differs is the pre-serialization ' +
@@ -159,8 +171,12 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
   // hide one.
   'result-absent-settlement': 341,
-  'result-absent-observation': 7,
+  // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
+  // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
+  // checkpoint or the ordinal that used to be what differed first.
+  'result-absent-observation': 3,
+  'result-absent-stream-release': 6,
   'params-undefined': 33,
-  'write-ordinal': 10,
+  'write-ordinal': 8,
   unclassified: 0
 }

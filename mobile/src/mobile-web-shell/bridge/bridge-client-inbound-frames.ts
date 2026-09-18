@@ -37,13 +37,25 @@ export function createBridgeInboundFrameReader(
 ): (json: string) => void {
   const { requests, subscriptions, report } = port
 
-  /** The shell answers a refused `subscribe` with `error` on the stream's id. Nothing is pending to
-   *  reject there, so routing it to the requests would drop it and hold the page's slot forever. */
-  function failExchange(id: string, error: unknown): void {
+  /**
+   * The shell answers a refused `subscribe` with `error` on the stream's id. Nothing is pending to
+   * reject there, so routing it to the requests would drop it and hold the page's slot forever.
+   *
+   * `shellRetiredStream` is what separates the two ways a stream dies. An `error` or an `end` is the
+   * shell saying it has already let go, and a `cancel` back would say the same thing twice. A frame
+   * this reader refused is not that: the shell is still serving the stream, so the page has to ask
+   * it to stop or the slot is held on both sides.
+   */
+  function failExchange(id: string, error: unknown, shellRetiredStream: boolean): void {
     if (subscriptions.has(id)) {
       // Reported before the listener runs, so a listener that throws cannot swallow the diagnostic.
       report({ kind: 'stream-failed', error })
-      subscriptions.end(id, describeStreamFailure(error), error)
+      const message = describeStreamFailure(error)
+      if (shellRetiredStream) {
+        subscriptions.end(id, message, error)
+      } else {
+        subscriptions.abandon(id, message, error)
+      }
       return
     }
     if (!requests.has(id)) {
@@ -68,7 +80,7 @@ export function createBridgeInboundFrameReader(
         requests.acceptReply(message)
         return
       case 'error':
-        failExchange(message.id, reconstructBridgeError(message.error))
+        failExchange(message.id, reconstructBridgeError(message.error), true)
         return
       case 'event':
         subscriptions.deliver(message, utf8ByteLength(json))
@@ -91,7 +103,7 @@ export function createBridgeInboundFrameReader(
     // reader has refused reaches nothing the page did not open itself.
     const id = readRefusedBridgeFrameId(json)
     if (id !== null && (requests.has(id) || subscriptions.has(id))) {
-      failExchange(id, new BridgeReplyRefusedError(read.refusal))
+      failExchange(id, new BridgeReplyRefusedError(read.refusal), false)
     }
   }
 }

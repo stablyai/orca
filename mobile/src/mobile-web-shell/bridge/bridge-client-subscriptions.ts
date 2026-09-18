@@ -124,6 +124,23 @@ export class BridgeClientSubscriptions {
     stream.onData(bridgeStreamError(message, error))
   }
 
+  /**
+   * A stream the page is giving up on that the shell has not retired.
+   *
+   * Both halves are needed and neither implies the other. The listener is told, the way `end` tells
+   * it, and the shell is asked to stop, because it is still serving a stream nothing else will
+   * release: its own backstop counts unacked frames, and a stream that has gone quiet never reaches
+   * it. Without the cancel the slot is held until the document goes.
+   */
+  abandon(id: string, message: string, error?: unknown): void {
+    const stream = this.streams.get(id)
+    if (stream === undefined) {
+      return
+    }
+    this.cancel(id)
+    stream.onData(bridgeStreamError(message, error))
+  }
+
   /** The page is done with the stream. Idempotent: a second dispose posts nothing. */
   cancel(id: string): void {
     if (!this.streams.delete(id)) {

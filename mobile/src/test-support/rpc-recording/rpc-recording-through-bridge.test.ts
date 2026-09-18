@@ -18,6 +18,7 @@ import {
   divergingFields,
   paramsMismatchEvidence,
   recordingWithoutRpcMeta,
+  refusalReleasedStream,
   refusedFrames,
   scriptsAbsentResultReply,
   withReplyMeta
@@ -50,8 +51,8 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * `unclassified`, or if one diverges in a class `BRIDGED_PARITY_EXCLUSIONS` does not name. The
  * corpus is a fixed size, so those together pin every count exactly.
  *
- * 396 of the 787 replay byte for byte. The other 391 fall in four classes, 341 / 7 / 33 / 10, and
- * none of them is a reason to re-record anything.
+ * 396 of the 787 replay byte for byte. The other 391 fall in five classes, 341 / 3 / 6 / 33 / 8,
+ * and none of them is a reason to re-record anything.
  *
  * 1. **result-absent-settlement, 341** and **2. result-absent-observation, 7.**
  *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
@@ -64,7 +65,14 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  *    others the listener got far enough to act, so what differs first is downstream of the reply:
  *    a different set of checkpoints, or an effect that no longer happens. The suite names all of
  *    the second class in its output for as long as the class is small enough to name.
- * 3. **params-undefined, 33.** An own property whose value is `undefined` does not survive
+ * 3. **result-absent-stream-release, 6.** The same injection a third time, delivered on a stream
+ *    rather than as a reply. The page refuses the frame, and a frame it refused is not a stream the
+ *    shell retired, so it posts the `cancel` that is the only thing releasing the shell's slot for
+ *    it. That unsubscribe is a physical payload the native run has no counterpart for, and it takes
+ *    the recorder's next occurrence name for that method, so the scenario stops matching and the
+ *    run throws before there is a recording to compare. The native client never refuses the frame,
+ *    so it never reaches the release: the difference is the injected shape, not the release.
+ * 4. **params-undefined, 33.** An own property whose value is `undefined` does not survive
  *    JSON — and it does not survive the native path either. `tw-smart-search-all-providers` records
  *    `{"filter":"assigned","limit":50}` as the bytes its `linear.listIssues` request put on the
  *    wire, with the scenario's `workspaceId` already gone, so the bridged run sends the identical
@@ -74,7 +82,7 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  *    not where it lives: `projectMobileRpcRequestParams` rewrites `worktree.ps` alone, none of the
  *    ten scenarios in this class calls it, and the bridge host forwards into the same
  *    `StableLogicalRpcClient` the native screens hold, so there is no shell-side copy to move.
- * 4. **write-ordinal, 10.** Not a reorder on the wire: the page posts its frames in the order
+ * 5. **write-ordinal, 8.** Not a reorder on the wire: the page posts its frames in the order
  *    the operation made them and the payloads publish below the bridge in that same order. What
  *    moves is every write the operation makes *above* the bridge, the logical `sendRequest` stamp
  *    and each device effect, because those happen at the call while a same-turn `subscribe` payload
@@ -85,7 +93,8 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * The class this suite was landed to name — a page reader narrower than the transport it stands in
  * for — is gone: `BridgeReplyPayloadSchema` is `isRpcResponse` itself, so every reply the phone
  * accepts today crosses. A frame the reader still refuses now settles the exchange it named instead
- * of leaving it pending for the life of the document. The counterfactual replay stays, and its
+ * of leaving it pending for the life of the document, and where that exchange is a stream the page
+ * also cancels it, because the shell has not retired a stream whose frame the page dropped. The counterfactual replay stays, and its
  * class stays pinned at zero: it is what tells a future narrowing apart from a payload that moved.
  */
 
@@ -113,6 +122,7 @@ const counts: Record<BridgedParityClass, number> = {
   'reply-meta-required': 0,
   'result-absent-settlement': 0,
   'result-absent-observation': 0,
+  'result-absent-stream-release': 0,
   'params-undefined': 0,
   'write-ordinal': 0,
   unclassified: 0
@@ -246,7 +256,8 @@ async function verdict(
     threwWhileRecording: asIf.recording === null,
     divergingFields: asIfFields,
     scriptsAbsentResultReply: scenarios.some(scriptsAbsentResultReply),
-    paramsMismatch: paramsMismatchEvidence(asIf.thrown, failing, asIf.pairs.at(-1)?.toShell ?? [])
+    paramsMismatch: paramsMismatchEvidence(asIf.thrown, failing, asIf.pairs.at(-1)?.toShell ?? []),
+    refusalReleasedStream: asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics))
   }
   const name = classifyBridgedParity(evidence)
   counts[name] += 1

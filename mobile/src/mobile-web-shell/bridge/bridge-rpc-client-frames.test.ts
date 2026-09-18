@@ -522,18 +522,39 @@ describe('bridge client refusals and send failures', () => {
     })
   })
 
-  it('ends the stream an event it could not read belonged to', () => {
+  it('ends the stream an event it could not read belonged to, and cancels it at the shell', () => {
     const page = createPageClient()
     page.start()
-    const ended: string[] = []
-    page.client.subscribe('terminal.stream', { terminal: 't1' }, () => {
-      ended.push('data')
+    const ended: unknown[] = []
+    page.client.subscribe('terminal.stream', { terminal: 't1' }, (result) => {
+      ended.push(result)
     })
     page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'event', id: idOf(page, 0), seq: -1 })
     expect(page.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual([
       'refused',
       'stream-failed'
     ])
+    expect(ended).toHaveLength(1)
+    // The shell did not retire this stream — it is still sending on it — so nothing but the page's
+    // own `cancel` releases the slot it holds there. Its overflow backstop counts unacked frames,
+    // which a stream that has gone quiet never reaches.
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'cancel',
+      id: idOf(page, 0),
+      target: 'subscription'
+    })
+  })
+
+  it('cancels nothing for a stream the shell has already retired', () => {
+    const page = createPageClient()
+    page.start()
+    page.client.subscribe('terminal.stream', { terminal: 't1' }, () => undefined)
+    const id = idOf(page, 0)
+    const posted = page.frames().length
+    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'closed' })
+    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'error', id, error: { message: 'gone' } })
+    expect(page.frames()).toHaveLength(posted)
   })
 
   it('leaves a refused frame that names no open exchange to the diagnostic alone', async () => {
