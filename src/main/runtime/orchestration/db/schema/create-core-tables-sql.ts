@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS runs (
   home_database         TEXT NOT NULL DEFAULT 'this_database',
   coordinator_handle    TEXT,
   coordinator_pane_key  TEXT,
+  coordinator_principal TEXT,
   consumer_generation   INTEGER NOT NULL DEFAULT 0,
   legacy                INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
@@ -55,6 +56,9 @@ CREATE TABLE IF NOT EXISTS run_coordinator_handles (
 CREATE INDEX IF NOT EXISTS idx_run_coordinator_handles_handle
   ON run_coordinator_handles(terminal_handle, run_id);
 
+-- The principal-aware (COALESCE) trigger form is owned by migrate-v41, which every DB passes
+-- through: the static SQL below must stay compilable against a pre-v41 runs table, where naming
+-- NEW.coordinator_principal would break the first runs INSERT of the migration chain.
 CREATE TRIGGER IF NOT EXISTS trg_runs_remember_coordinator_insert
 AFTER INSERT ON runs
 WHEN NEW.legacy = 0 AND NEW.coordinator_handle IS NOT NULL
@@ -159,6 +163,7 @@ CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   worktree_id              TEXT,
   terminal_handle          TEXT NOT NULL,
   pane_key                 TEXT,
+  principal                TEXT,
   process_incarnation      TEXT,
   endpoint_id              TEXT,
   endpoint_incarnation     TEXT,

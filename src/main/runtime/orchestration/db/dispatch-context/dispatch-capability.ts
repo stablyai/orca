@@ -1,4 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { principalFromPaneKey } from '../../../../../shared/orchestration-principal'
 import { OrchestrationError } from '../../orchestration-error'
 import { hashDispatchCapability } from '../dispatch-capability-hash'
 import { isEquivalentPaneKey } from '../pane-key-match'
@@ -27,7 +28,8 @@ export function mintDispatchCapability(
     this.db
       .prepare(
         `UPDATE dispatch_contexts
-         SET capability_hash = ?, assignee_pane_key = ?, process_incarnation = ?,
+         SET capability_hash = ?, assignee_pane_key = ?, assignee_principal = ?,
+             process_incarnation = ?,
              capability_revoked_at = NULL,
              consumer_generation = consumer_generation + 1
          WHERE id = ?`
@@ -35,6 +37,7 @@ export function mintDispatchCapability(
       .run(
         hashDispatchCapability(capability),
         params.paneKey,
+        principalFromPaneKey(params.paneKey),
         params.processIncarnation,
         params.dispatchId
       )

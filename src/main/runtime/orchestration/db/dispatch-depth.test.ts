@@ -283,4 +283,42 @@ describe('nested worker depth', () => {
     expect(row.process_incarnation).toBeNull()
     expect(db.resolveCreatorDepth({ kind: 'terminal', handle: 'term_ctx' })).toBe(1)
   })
+
+  it('pins the invariant "equal principals imply self-created": no nesting parent', () => {
+    // In PR1 this passes through the pane-key path; the resolver PR's read-switch to principal
+    // equality must keep it true, so it inherits this red test if it breaks the invariant.
+    db = new OrchestrationDb(':memory:')
+    const SELF_PANE = 'tab_self:11111111-1111-4111-8111-111111111111'
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'own bookkeeping' })
+    const row = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_self',
+      assigneePaneKey: SELF_PANE,
+      creator: { kind: 'terminal', handle: 'term_self', paneKey: SELF_PANE },
+      maxDepth: UNCAPPED
+    })
+    expect(row.creator_principal).toBe(`pane:${SELF_PANE}`)
+    expect(row.creator_principal).toBe(row.assignee_principal)
+    expect(
+      db.resolveCreatorDepth({ kind: 'terminal', handle: 'term_self', paneKey: SELF_PANE })
+    ).toBe(0)
+
+    // A genuinely delegated row (different panes, different principals) still counts.
+    const delegated = db.createTask({ runId: 'run_legacy_local', spec: 'delegated' })
+    const worker = db.createDispatchContext({
+      taskId: delegated.id,
+      assigneeHandle: 'term_delegate',
+      assigneePaneKey: 'tab_delegate:22222222-2222-4222-8222-222222222222',
+      creator: { kind: 'terminal', handle: 'term_self', paneKey: SELF_PANE },
+      maxDepth: UNCAPPED
+    })
+    expect(worker.creator_principal).not.toBe(worker.assignee_principal)
+    expect(
+      db.resolveCreatorDepth({
+        kind: 'terminal',
+        handle: 'term_delegate',
+        paneKey: 'tab_delegate:22222222-2222-4222-8222-222222222222'
+      })
+    ).toBe(1)
+  })
 })

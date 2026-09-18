@@ -77,7 +77,7 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
     .prepare(
       `UPDATE runs
        SET objective = 'Legacy orchestration state (adopted; inspect only)',
-           coordinator_handle = NULL, coordinator_pane_key = NULL,
+           coordinator_handle = NULL, coordinator_pane_key = NULL, coordinator_principal = NULL,
            updated_at = datetime('now')
        WHERE id = ?`
     )

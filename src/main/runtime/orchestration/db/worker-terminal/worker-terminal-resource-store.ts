@@ -3,6 +3,7 @@ import type {
   WorkerTerminalOwnershipState
 } from '../../worker-terminal-ownership'
 import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
+import { principalFromPaneKey } from '../../../../../shared/orchestration-principal'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -72,9 +73,9 @@ export function createWorkerTerminalResourceStatement(
     .prepare(
       `INSERT INTO worker_terminal_resources (
          id, origin_dispatch_id, owner_dispatch_id, worktree_id, terminal_handle,
-         pane_key, process_incarnation, endpoint_id, endpoint_incarnation, host_scope, ownership_state, release_state,
-         retained_reason
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_requested', ?)`
+         pane_key, principal, process_incarnation, endpoint_id, endpoint_incarnation, host_scope,
+         ownership_state, release_state, retained_reason
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_requested', ?)`
     )
     .run(
       id,
@@ -83,6 +84,7 @@ export function createWorkerTerminalResourceStatement(
       params.worktreeId,
       params.terminalHandle,
       params.paneKey,
+      principalFromPaneKey(params.paneKey),
       params.processIncarnation,
       params.endpointId ?? null,
       params.endpointIncarnation ?? params.processIncarnation,
@@ -181,7 +183,8 @@ export function transferWorkerTerminalResourceStatement(
       `UPDATE worker_terminal_resources
        SET owner_dispatch_id = ?, prior_owner_dispatch_ids = ?, release_state = 'not_requested',
            retained_reason = NULL, release_requested_at = NULL, release_completed_at = NULL,
-           release_error = NULL, terminal_handle = ?, pane_key = ?, process_incarnation = ?,
+           release_error = NULL, terminal_handle = ?, pane_key = ?, principal = ?,
+           process_incarnation = ?,
            endpoint_id = COALESCE(?, endpoint_id), endpoint_incarnation = ?,
            host_scope = ?, updated_at = datetime('now')
        WHERE id = ? AND ownership_state = 'owned'`
@@ -191,6 +194,7 @@ export function transferWorkerTerminalResourceStatement(
       JSON.stringify(priorOwners),
       params.terminalHandle,
       params.paneKey,
+      principalFromPaneKey(params.paneKey),
       params.processIncarnation,
       params.endpointId ?? null,
       params.endpointIncarnation ?? params.processIncarnation,

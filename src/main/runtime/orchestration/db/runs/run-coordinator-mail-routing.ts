@@ -12,11 +12,13 @@ export function rememberRunCoordinatorHandle(
     .run(runId, terminalHandle)
 }
 
+// COALESCE: a handle-less session coordinator is cached by its principal, which is a mailbox
+// address like any other, so the string-equality readers match it unchanged.
 export function rememberCurrentRunCoordinatorHandles(this: OrchestrationDb): void {
   this.db.exec(`
     INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
-    SELECT id, coordinator_handle FROM runs
-    WHERE legacy = 0 AND coordinator_handle IS NOT NULL
+    SELECT id, COALESCE(coordinator_handle, coordinator_principal) FROM runs
+    WHERE legacy = 0 AND (coordinator_handle IS NOT NULL OR coordinator_principal IS NOT NULL)
   `)
 }
 

@@ -21,12 +21,15 @@ export function recordFailedStartDispatchIdentity(
   db.db
     .prepare(
       `UPDATE dispatch_contexts
-         SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?, host_scope = ?
+         SET assignee_handle = ?, assignee_pane_key = ?, assignee_principal = ?,
+             process_incarnation = ?, host_scope = ?
        WHERE id = ? AND status = 'failed' AND capability_hash IS NULL`
     )
     .run(
       resource.terminal_handle,
       resource.pane_key,
+      // Copied, not re-derived: a future session resource keeps its identity through this path.
+      resource.principal,
       resource.process_incarnation,
       resource.host_scope,
       worker.dispatch_id
