@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useHostClient } from '../transport/client-context'
 import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
 import { readMobileWebBundleErrorCode } from '../transport/mobile-web-bundle-operations'
-import type { RpcClient } from '../transport/rpc-client'
 
 export type MobileWebBundleProbeState =
   | { status: 'idle' }
@@ -16,7 +16,7 @@ export type MobileWebBundleProbeState =
   | { status: 'failed'; detail: string }
 
 /** The host's own code when it refused, its message otherwise. A client-side integrity failure has
- *  no code and reads as the sentence it threw. */
+ *  no code, and so does a schema refusal the dispatcher raised before the handler ran. */
 function describeFailure(error: unknown): string {
   const code = readMobileWebBundleErrorCode(error)
   if (code !== null) {
@@ -28,30 +28,31 @@ function describeFailure(error: unknown): string {
 /**
  * Drives one bundle fetch from the troubleshooting screen. Dev-only: nothing in a shipped build
  * mounts this, and nothing here caches or renders what it downloads.
+ *
+ * The host is dialled on the first tap, not on mount: acquiring a client is what opens a connection,
+ * and opening Troubleshoot opened none before this row existed. Each request owns its
+ * `AbortController` so a re-run, an unmount, or StrictMode's second mount abandons the previous
+ * fetch instead of racing it — and, since the fetch checks that signal before every chunk, stops its
+ * reads rather than letting them hold the host's read slots.
  */
-export function useMobileWebBundleProbe(client: RpcClient | null): {
+export function useMobileWebBundleProbe(hostId: string | null): {
   state: MobileWebBundleProbeState
   run: () => void
+  awaitingHost: boolean
 } {
   const [state, setState] = useState<MobileWebBundleProbeState>({ status: 'idle' })
-  const runIdRef = useRef(0)
-  const abortRef = useRef<AbortController | null>(null)
+  const [request, setRequest] = useState<{ id: number } | null>(null)
+  const { client } = useHostClient(request !== null && hostId !== null ? hostId : undefined)
 
-  const run = useCallback(() => {
-    if (!client) {
-      setState({ status: 'failed', detail: 'no paired host is connected' })
+  useEffect(() => {
+    if (request === null || client === null) {
       return
     }
-    // A second tap abandons the first run rather than racing it to the same state.
-    abortRef.current?.abort()
+    let abandoned = false
     const controller = new AbortController()
-    abortRef.current = controller
-    const runId = runIdRef.current + 1
-    runIdRef.current = runId
-    setState({ status: 'running' })
     fetchMobileWebBundle({ client, signal: controller.signal }).then(
       (fetched) => {
-        if (runIdRef.current !== runId) {
+        if (abandoned) {
           return
         }
         setState({
@@ -63,13 +64,26 @@ export function useMobileWebBundleProbe(client: RpcClient | null): {
         })
       },
       (error: unknown) => {
-        if (runIdRef.current !== runId) {
+        if (abandoned) {
           return
         }
         setState({ status: 'failed', detail: describeFailure(error) })
       }
     )
-  }, [client])
+    return () => {
+      abandoned = true
+      controller.abort()
+    }
+  }, [client, request])
 
-  return { state, run }
+  const run = useCallback(() => {
+    if (hostId === null) {
+      setState({ status: 'failed', detail: 'no paired host to fetch from' })
+      return
+    }
+    setState({ status: 'running' })
+    setRequest((previous) => ({ id: (previous?.id ?? 0) + 1 }))
+  }, [hostId])
+
+  return { state, run, awaitingHost: request !== null && client === null }
 }
