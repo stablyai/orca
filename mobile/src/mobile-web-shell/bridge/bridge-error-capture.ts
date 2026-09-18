@@ -48,18 +48,22 @@ function boundMessage(message: string): string {
 /**
  * A code is dropped rather than truncated: half a code is not a smaller code, it is a different
  * one, and a cyclic or unserializable code would take `JSON.stringify` down with the whole frame.
+ * What is carried is the snapshot that was measured, not the value it came from: a stateful
+ * `toJSON` runs again when the frame is serialized, and the second answer is nobody's budget.
  */
 function boundCode(code: unknown): { code?: unknown } {
   if (code === undefined) {
     return {}
   }
-  let serialized: string | undefined
   try {
-    serialized = JSON.stringify(code)
+    const serialized = JSON.stringify(code)
+    if (serialized === undefined || serialized.length > BRIDGE_MAX_ERROR_CODE_CHARS) {
+      return {}
+    }
+    return { code: JSON.parse(serialized) }
   } catch {
     return {}
   }
-  return serialized === undefined || serialized.length > BRIDGE_MAX_ERROR_CODE_CHARS ? {} : { code }
 }
 
 function errorCaptureSchema(remainingCauses: number): z.ZodType<BridgeErrorCapture> {
@@ -112,8 +116,17 @@ export function captureBridgeError(error: unknown, depth = 0): BridgeErrorCaptur
     return {
       category: 'Error',
       message: BRIDGE_UNREADABLE_ERROR_MESSAGE,
-      isRpcDeliveryUnknown: isRpcDeliveryUnknown(error)
+      isRpcDeliveryUnknown: readDeliveryUnknownMark(error)
     }
+  }
+}
+
+/** The mark is read through `instanceof`, which is a trap: a revoked proxy throws in the fallback too. */
+function readDeliveryUnknownMark(error: unknown): boolean {
+  try {
+    return isRpcDeliveryUnknown(error)
+  } catch {
+    return false
   }
 }
 

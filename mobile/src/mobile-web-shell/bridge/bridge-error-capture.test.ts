@@ -150,6 +150,23 @@ describe('captureBridgeError', () => {
     })
   })
 
+  it('captures something for a proxy whose prototype cannot be read', () => {
+    const unreadable = {
+      category: 'Error',
+      message: BRIDGE_UNREADABLE_ERROR_MESSAGE,
+      isRpcDeliveryUnknown: false
+    }
+    const revocable = Proxy.revocable(new Error('gone'), {})
+    revocable.revoke()
+    expect(captureBridgeError(revocable.proxy)).toEqual(unreadable)
+    const trapped = new Proxy(new Error('trapped'), {
+      getPrototypeOf: () => {
+        throw new Error('getPrototypeOf')
+      }
+    })
+    expect(captureBridgeError(trapped)).toEqual(unreadable)
+  })
+
   it('reads a code defined as a getter', () => {
     const error = new Error('closed')
     Object.defineProperty(error, 'code', { get: () => 'from-getter', enumerable: true })
@@ -321,6 +338,31 @@ describe('captureBridgeError budgets', () => {
     expect('code' in captureBridgeError(Object.assign(new Error('x'), { code: overBudget }))).toBe(
       false
     )
+  })
+
+  it('carries the code it measured, not what a second serialization would produce', () => {
+    let reads = 0
+    const growing = {
+      toJSON: () => {
+        reads += 1
+        return reads === 1 ? 'small' : 'x'.repeat(BRIDGE_MAX_ERROR_CODE_CHARS * 2)
+      }
+    }
+    const captured = captureBridgeError(Object.assign(new Error('x'), { code: growing }))
+    expect(JSON.stringify(captured)).toContain('"code":"small"')
+    expect(reads).toBe(1)
+    let thrown = 0
+    const poisoned = {
+      toJSON: () => {
+        thrown += 1
+        if (thrown > 1) {
+          throw new Error('second read')
+        }
+        return 'once'
+      }
+    }
+    const second = captureBridgeError(Object.assign(new Error('x'), { code: poisoned }))
+    expect(JSON.stringify(second)).toContain('"code":"once"')
   })
 
   it('keeps the worst error frame the budgets allow inside the frame cap', () => {
