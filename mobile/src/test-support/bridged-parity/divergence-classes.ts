@@ -187,3 +187,72 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   'write-ordinal': 8,
   unclassified: 0
 }
+
+/** A class this small is named golden by golden in the run's output rather than counted. */
+export const BRIDGED_PARITY_NAMEABLE = 8
+
+/**
+ * Which goldens are in each class small enough to name, so the pin holds membership and not a count.
+ *
+ * A count alone is blind to a trade. Every predicate above reads the scenario rather than the
+ * refused frame — `scriptsAbsentResultReply` asks whether the scenario scripts the injected shape
+ * anywhere, not whether the frame the page refused was one — so a real refusal inside a stream
+ * golden is named an excluded class. One golden leaving that class as the real refusal puts another
+ * in moves no number here, and the sum and the `identical` floor both still hold. The ids are what
+ * notices. Where a class is too large to list, its predicate stands on its own and the count is all
+ * the pin has; that is why the classes here are the small ones and why the test above requires
+ * every class of `BRIDGED_PARITY_NAMEABLE` or fewer to appear.
+ */
+export const BRIDGED_PARITY_MEMBERS: Readonly<
+  Partial<Record<BridgedParityClass, readonly string[]>>
+> = {
+  'result-absent-observation': [
+    'matrix-notifications.desktop-stream-notifications.subscribe-1-1',
+    'matrix-notifications.desktop-stream-notifications.subscribe-1-2',
+    'matrix-session.native-chat-page-nativechat.subscribe-2-1'
+  ],
+  'result-absent-stream-release': [
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-1-1',
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-1-2',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3',
+    'matrix-session.native-chat-page-nativechat.subscribe-1-1'
+  ],
+  'write-ordinal': [
+    'settings-home-coalesced',
+    'live-worktree-name-stream',
+    'host-worktree-refresh-stream',
+    'matrix-live-worktree-name-worktree.show-1',
+    'matrix-live-worktree-name-worktree.show-2',
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
+    'matrix-live-worktree-name-worktree.show-3',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1'
+  ]
+}
+
+/**
+ * Each pinned class whose goldens are not the ones it is pinned to, said in one line.
+ *
+ * Both directions are reported. A golden that arrived is the finding; a golden that left is what
+ * paid for it, and a class that empties is a fix whose edit belongs here beside the count.
+ */
+export function bridgedParityMembershipDrift(
+  observed: ReadonlyMap<string, readonly string[]>
+): readonly string[] {
+  const drift: string[] = []
+  for (const [name, pinned] of Object.entries(BRIDGED_PARITY_MEMBERS)) {
+    if (pinned === undefined) {
+      continue
+    }
+    const seen = observed.get(name) ?? []
+    const arrived = seen.filter((id) => !pinned.includes(id))
+    const left = pinned.filter((id) => !seen.includes(id))
+    if (arrived.length > 0 || left.length > 0) {
+      drift.push(
+        `${name}: arrived ${arrived.join(', ') || '(none)'}; left ${left.join(', ') || '(none)'}`
+      )
+    }
+  }
+  return drift
+}

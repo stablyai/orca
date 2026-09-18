@@ -2,10 +2,13 @@ import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  bridgedParityMembershipDrift,
   classifyBridgedParity,
   BRIDGED_PARITY_BASELINE,
   BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_FLAG,
+  BRIDGED_PARITY_MEMBERS,
+  BRIDGED_PARITY_NAMEABLE,
   type BridgedParityClass,
   type BridgedParityEvidence
 } from './divergence-classes'
@@ -150,6 +153,53 @@ describe('what the pin still admits', () => {
     expect({ counted }).toEqual({
       counted: goldens.filter((name) => name.endsWith('.json')).length
     })
+  })
+
+  it('names the goldens in a class small enough to name, and as many as it counts', () => {
+    const nameable = classes.filter(
+      (name) =>
+        BRIDGED_PARITY_BASELINE[name] > 0 &&
+        BRIDGED_PARITY_BASELINE[name] <= BRIDGED_PARITY_NAMEABLE
+    )
+    expect(nameable.length).toBeGreaterThan(0)
+    for (const name of nameable) {
+      const pinned = BRIDGED_PARITY_MEMBERS[name] ?? []
+      expect({ [name]: pinned.length }).toEqual({ [name]: BRIDGED_PARITY_BASELINE[name] })
+      expect({ [name]: new Set(pinned).size }).toEqual({ [name]: pinned.length })
+    }
+  })
+
+  /** The membership a run that diverges exactly as the pin says would hand the rule. */
+  function asPinned(): Map<string, readonly string[]> {
+    const run = new Map<string, readonly string[]>()
+    for (const name of classes) {
+      const pinned = BRIDGED_PARITY_MEMBERS[name]
+      if (pinned !== undefined) {
+        run.set(name, pinned)
+      }
+    }
+    return run
+  }
+
+  it('holds such a class to which goldens are in it, not only to how many', () => {
+    // The trade a count cannot see: every predicate reads the scenario rather than the frame the
+    // page refused — `scriptsAbsentResultReply` asks whether the scenario scripts the injected
+    // shape anywhere — so a real refusal in a stream golden lands in an excluded class. Let one
+    // golden leave as it arrives and the count, the sum and the `identical` floor all hold.
+    expect(bridgedParityMembershipDrift(asPinned())).toEqual([])
+    const pinned = BRIDGED_PARITY_MEMBERS['write-ordinal'] ?? []
+    const traded = asPinned()
+    traded.set('write-ordinal', [...pinned.slice(1), 'matrix-regressed-golden-1-1'])
+    const drift = bridgedParityMembershipDrift(traded)
+    expect(drift.length).toBe(1)
+    expect(drift[0]).toContain('matrix-regressed-golden-1-1')
+    expect(drift[0]).toContain(pinned[0])
+  })
+
+  it('says nothing about a class too large for the run to name', () => {
+    const run = asPinned()
+    run.set('result-absent-settlement', ['whatever-diverged'])
+    expect(bridgedParityMembershipDrift(run)).toEqual([])
   })
 
   it('leaves nothing for the reader to close: the `_meta` class is zero', () => {

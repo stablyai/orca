@@ -7,9 +7,11 @@ import {
 } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import type { RpcClient } from '../../transport/rpc-client'
 import {
+  bridgedParityMembershipDrift,
   BRIDGED_PARITY_BASELINE,
   BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_FLAG,
+  BRIDGED_PARITY_NAMEABLE,
   classifyBridgedParity,
   type BridgedParityClass,
   type BridgedParityEvidence
@@ -49,7 +51,9 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * `classifyBridgedParity`, which reads the frames and the scenario rather than the failure's text.
  * The run fails if any class grows past `BRIDGED_PARITY_BASELINE`, if a single golden lands in
  * `unclassified`, or if one diverges in a class `BRIDGED_PARITY_EXCLUSIONS` does not name. The
- * corpus is a fixed size, so those together pin every count exactly.
+ * corpus is a fixed size, so those together pin every count exactly, and for a class small enough
+ * to name `BRIDGED_PARITY_MEMBERS` pins which goldens are in it — a count alone cannot see one
+ * golden leaving a class as another arrives.
  *
  * 396 of the 787 replay byte for byte. The other 391 fall in five classes, 341 / 3 / 6 / 33 / 8,
  * and none of them is a reason to re-record anything.
@@ -130,8 +134,6 @@ const counts: Record<BridgedParityClass, number> = {
 let identical = 0
 const members = new Map<BridgedParityClass, string[]>()
 const samples = new Map<BridgedParityClass, string>()
-/** Small enough that naming every member beats naming a count. */
-const NAMEABLE = 8
 
 /**
  * The page's client over the shared port pair, holding the recorder's scripted client shell-side.
@@ -295,7 +297,7 @@ describe.runIf(process.env[BRIDGED_PARITY_FLAG] === '1')(
         `identical ${identical}`,
         ...Object.entries(counts).map(([name, count]) => {
           const named = members.get(asClass(name)) ?? []
-          return count > 0 && count <= NAMEABLE
+          return count > 0 && count <= BRIDGED_PARITY_NAMEABLE
             ? `${name} ${count}: ${named.join(', ')}`
             : `${name} ${count}`
         })
@@ -314,6 +316,10 @@ describe.runIf(process.env[BRIDGED_PARITY_FLAG] === '1')(
         process.stdout.write(`\n${name} sample\n${sample}\n`)
       }
       expect(counts.unclassified).toBe(0)
+      // Not implied by the counts below. A class is named by a predicate that reads the scenario,
+      // not the frame the page refused, so a golden that started refusing for real can walk into an
+      // excluded class while another walks out and no number here moves.
+      expect({ membership: bridgedParityMembershipDrift(members) }).toEqual({ membership: [] })
       // The whole claim in one line: nothing diverges that no predicate has named and counted.
       expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
         divergedOutsideAnExcludedClass: 0
