@@ -12,10 +12,10 @@
 // reporting.
 
 import { findStream, isMinidump, MinidumpView } from './minidump-stream-reader'
+import { readExceptionRecord, type AccessViolationKind } from './minidump-exception-record'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
 
 const STREAM_TYPE_MODULE_LIST = 4
-const STREAM_TYPE_EXCEPTION = 6
 
 const MODULE_RECORD_SIZE = 108
 // 8x headroom over a measured 1042-image macOS renderer, whose whole list a
@@ -24,11 +24,6 @@ const MAX_MODULE_LIST_MODULES = 8_192
 const MODULE_BASE_OFFSET = 0
 const MODULE_SIZE_OFFSET = 8
 const MODULE_NAME_RVA_OFFSET = 20
-
-// MINIDUMP_EXCEPTION_STREAM: ThreadId u32, __alignment u32, then MINIDUMP_EXCEPTION.
-const EXCEPTION_RECORD_OFFSET = 8
-const EXCEPTION_CODE_OFFSET = EXCEPTION_RECORD_OFFSET + 0
-const EXCEPTION_ADDRESS_OFFSET = EXCEPTION_RECORD_OFFSET + 16
 
 const CHROMIUM_LOG_MARKERS = [
   Buffer.from(':FATAL:', 'ascii'),
@@ -53,10 +48,32 @@ export type MinidumpCrashSignature = {
   readonly processType?: string
   /** Win32 exception code / POSIX signal, e.g. 0x80000003 STATUS_BREAKPOINT. */
   readonly exceptionCode?: number
+  /**
+   * Raw MINIDUMP_EXCEPTION.ExceptionAddress. Windows writes the faulting
+   * instruction here; Crashpad's POSIX and Mach snapshots write si_addr and
+   * EXC_BAD_ACCESS's code[1], which are the faulting instruction for some
+   * exception classes and the data address the fault touched for others (0x0
+   * where si_addr is undefined, e.g. SIGTRAP). Reported as-is; never substituted.
+   */
   readonly exceptionAddress?: string
-  /** Module whose image range contains `exceptionAddress`. */
+  /**
+   * Faulting instruction, read from the crashing thread's CONTEXT. A trap frame
+   * (x86 int3, arm64 BRK) can report past the trapping instruction, so treat
+   * this as a disassembly starting point rather than an exact address.
+   */
+  readonly instructionPointer?: string
+  /**
+   * Module whose image range contains the faulting *instruction*. Derived from
+   * `exceptionAddress` only where the platform and exception class say that
+   * field is an instruction; otherwise the image it lands in is memory the
+   * crash touched, not code that ran. See `minidump-exception-record`.
+   */
   readonly faultingModule?: string
   readonly faultingModuleOffset?: string
+  /** Windows access violations only: what the faulting instruction attempted. */
+  readonly accessKind?: AccessViolationKind
+  /** Windows access violations only: the address that could not be accessed. */
+  readonly accessAddress?: string
   /** Allowlisted Crashpad annotations, verbatim. */
   readonly annotations: Readonly<Record<string, string>>
 }
@@ -240,16 +257,26 @@ export function parseMinidumpCrashSignature(
       signature.checkLine = location.line
     }
   }
-  const exception = findStream(view, STREAM_TYPE_EXCEPTION)
+  const exception = readExceptionRecord(view)
   if (exception) {
-    const code = view.u32(exception.rva + EXCEPTION_CODE_OFFSET)
-    const address = view.u64(exception.rva + EXCEPTION_ADDRESS_OFFSET)
-    if (code !== null) {
+    const { code, address, instructionPointer, codeAddress, accessKind, accessAddress } = exception
+    if (code !== undefined) {
       signature.exceptionCode = code
     }
-    if (address !== null) {
+    if (address !== undefined) {
       signature.exceptionAddress = toHex(address)
-      const faulting = findFaultingModule(readModules(view), address)
+    }
+    if (instructionPointer !== undefined) {
+      signature.instructionPointer = toHex(instructionPointer)
+    }
+    if (accessKind) {
+      signature.accessKind = accessKind
+    }
+    if (accessAddress !== undefined) {
+      signature.accessAddress = toHex(accessAddress)
+    }
+    if (codeAddress !== undefined) {
+      const faulting = findFaultingModule(readModules(view), codeAddress)
       if (faulting) {
         signature.faultingModule = faulting.name
         signature.faultingModuleOffset = faulting.offset
@@ -282,6 +309,15 @@ export function minidumpSignatureDetails(
   }
   if (signature.exceptionAddress) {
     details.minidumpExceptionAddress = signature.exceptionAddress
+  }
+  if (signature.instructionPointer) {
+    details.minidumpInstructionPointer = signature.instructionPointer
+  }
+  if (signature.accessKind) {
+    details.minidumpAccessKind = signature.accessKind
+  }
+  if (signature.accessAddress) {
+    details.minidumpAccessAddress = signature.accessAddress
   }
   if (signature.faultingModule) {
     details.minidumpFaultingModule = signature.faultingModule
