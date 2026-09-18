@@ -20,6 +20,7 @@ export type PreflightIntegrationStatuses = {
   giteaStatus: GiteaStatus
   giteaAccount: string | null
   giteaBaseUrl: string | null
+  giteaAuthError: string | null
 }
 
 type TokenApiPreflightStatus = {
@@ -36,6 +37,7 @@ type GiteaPreflightStatus = {
   account: string | null
   baseUrl: string | null
   tokenConfigured: boolean
+  authError?: string | null
 }
 
 export function tokenApiStatusFromPreflight(
@@ -107,7 +109,8 @@ export function getPreflightIntegrationStatuses(
       azureDevOpsBaseUrl: null,
       giteaStatus: 'checking',
       giteaAccount: null,
-      giteaBaseUrl: null
+      giteaBaseUrl: null,
+      giteaAuthError: null
     }
   }
 
@@ -136,6 +139,7 @@ export function getPreflightIntegrationStatuses(
     azureDevOpsBaseUrl: azureDevOps?.baseUrl ?? null,
     giteaStatus: maybeChecking('gitea', refreshingProviders, giteaStatusFromPreflight(gitea)),
     giteaAccount: gitea?.account ?? null,
-    giteaBaseUrl: gitea?.baseUrl ?? null
+    giteaBaseUrl: gitea?.baseUrl ?? null,
+    giteaAuthError: gitea?.authError ?? null
   }
 }

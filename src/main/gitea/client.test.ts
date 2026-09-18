@@ -377,7 +377,8 @@ describe('Gitea client', () => {
       authenticated: true,
       account: null,
       baseUrl: null,
-      tokenConfigured: true
+      tokenConfigured: true,
+      authError: null
     })
   })
 
@@ -393,9 +394,30 @@ describe('Gitea client', () => {
       authenticated: true,
       account: 'gitea-user',
       baseUrl: 'https://git.example.com/api/v1',
-      tokenConfigured: true
+      tokenConfigured: true,
+      authError: null
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://git.example.com/api/v1/user')
+  })
+
+  it('surfaces Gitea API auth failure messages instead of collapsing to a bare miss', async () => {
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com'
+    process.env.ORCA_GITEA_TOKEN = 'secret-token-value'
+    const message =
+      'token does not have at least one of required scope(s), required=[read:user], token scope=write:package'
+    const fetchMock = vi.fn(async () =>
+      Response.json({ message, url: 'https://git.example.com/api/swagger' }, { status: 403 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaAuthStatus()).resolves.toEqual({
+      configured: true,
+      authenticated: false,
+      account: null,
+      baseUrl: 'https://git.example.com/api/v1',
+      tokenConfigured: true,
+      authError: message
+    })
   })
 
   it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
