@@ -37,6 +37,30 @@ describe('native chat composer path attach', () => {
     expect(background).not.toHaveBeenCalled()
   })
 
+  it('keeps last-focused when the focused composer replaces its attacher', () => {
+    const background = vi.fn()
+    const beforeCaret = vi.fn()
+    const afterCaret = vi.fn()
+    registerNativeChatComposerPathAttach('pane-a', {
+      attachResolvedPaths: background,
+      disabled: false
+    })
+    registerNativeChatComposerPathAttach('pane-b', {
+      attachResolvedPaths: beforeCaret,
+      disabled: false
+    })
+    markNativeChatComposerPathAttachFocused('pane-b')
+    registerNativeChatComposerPathAttach('pane-b', {
+      attachResolvedPaths: afterCaret,
+      disabled: false
+    })
+
+    expect(attachResolvedPathsToActiveNativeChatComposer(['/repo/b.ts'])).toBe(true)
+    expect(afterCaret).toHaveBeenCalledExactlyOnceWith(['/repo/b.ts'], undefined)
+    expect(beforeCaret).not.toHaveBeenCalled()
+    expect(background).not.toHaveBeenCalled()
+  })
+
   it('skips a disabled composer and does not guess among several ready ones', () => {
     const disabled = vi.fn()
     const first = vi.fn()
