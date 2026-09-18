@@ -14,6 +14,7 @@ const {
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
+const { assertMobileWebBundleBuilt } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
   verifyPackagedWindowsNodePty
@@ -180,6 +181,9 @@ module.exports = {
     '!config{,/**/*}',
     '!docs{,/**/*}',
     '!mobile{,/**/*}',
+    // Why: the built bundle ships from out/mobile-web (included by the out rules, like out/web);
+    // the source tree is a build input with no runtime consumer.
+    '!mobile-web{,/**/*}',
     '!native{,/**/*}',
     '!skills{,/**/*}',
     // Why: guide/stub authoring sources are compiled into runtime artifacts; shipping
@@ -291,6 +295,7 @@ module.exports = {
   },
   beforePack: (context) => {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
+    assertMobileWebBundleBuilt()
   },
   afterPack: async (context) => {
     const resourcesDir =
