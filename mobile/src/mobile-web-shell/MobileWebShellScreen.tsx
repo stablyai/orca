@@ -11,6 +11,7 @@ import type {
   MobileWebShellFailureCause,
   MobileWebShellSessionState
 } from './mobile-web-shell-session-contract'
+import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import {
   useMobileWebShellSession,
   type MobileWebShellRuntime
@@ -123,6 +124,7 @@ export type MobileWebShellScreenProps = {
 export function MobileWebShellScreen({ hostId, runtime }: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
   const { state, retry, reportShellFailure } = useMobileWebShellSession({ hostId, runtime })
+  const bridge = useMobileWebShellBridge({ hostId, session: state })
 
   if (state.kind === 'wall') {
     return <ProtocolBlockScreen verdict={state.verdict} />
@@ -152,9 +154,12 @@ export function MobileWebShellScreen({ hostId, runtime }: MobileWebShellScreenPr
     >
       <OrcaMobileWebShellView
         key={state.sessionId}
+        ref={bridge.viewRef}
         style={styles.shellView}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
+        bridgeEnabled={bridge.bridgeEnabled}
+        onBridgeMessage={bridge.onBridgeMessage}
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)
           if (parsed?.state === 'failed') {

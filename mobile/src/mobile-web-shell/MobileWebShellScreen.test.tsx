@@ -55,6 +55,9 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
     parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState
   }
 })
+// The real bridge hook runs, so the props it owns are the ones the view is handed here; only the
+// client lookup is stubbed, because reaching it imports the Expo runtime this test does not have.
+vi.mock('../transport/client-context', () => ({ useHostClient: () => ({ client: null }) }))
 vi.mock('./use-mobile-web-shell-session', () => ({
   useMobileWebShellSession: () => ({
     state: dependencies.state,
@@ -198,6 +201,17 @@ describe('the hybrid shell screen', () => {
     const view = byName(tree, 'ShellViewProbe')[0]
     expect(view.props.generationDirectory).toBe(DIRECTORY)
     expect(view.props.sessionId).toBe('session-one')
+  })
+
+  it('opens the bridge channel on a ready session and hands it a receiver', async () => {
+    const tree = await render(readyState('session-one'))
+    const view = byName(tree, 'ShellViewProbe')[0]
+    expect(view.props.bridgeEnabled).toBe(true)
+    expect(typeof view.props.onBridgeMessage).toBe('function')
+    // Delivered with no client behind it: there is no host to answer, and nothing throws.
+    await act(async () => {
+      view.props.onBridgeMessage({ nativeEvent: { json: '{"v":1,"type":"ready"}' } })
+    })
   })
 
   it('rebuilds the view rather than updating it when the session id changes', async () => {
