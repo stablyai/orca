@@ -25,11 +25,12 @@ export {
   markWorkerTerminalUserOwned
 }
 
-/** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
+/** `databaseId` is the real order key. v4 always carries a rowid; `dispatchId` still
+ *  identifies the anchor. v1/v2 were minted under ascending order. */
 export type WorkerTerminalOrderingKey = {
   createdAt: string
   dispatchId: string
-  databaseId?: number
+  databaseId: number
 }
 export type WorkerTerminalListingSnapshot =
   | { databaseId: number }
@@ -57,15 +58,11 @@ function resolveAnchorRowId(
   after: WorkerTerminalOrderingKey,
   runId: string | undefined
 ): number {
-  const conditions = ['id = ?']
-  const values: (string | number)[] = [after.dispatchId]
+  const conditions = ['id = ?', 'rowid = ?']
+  const values: (string | number)[] = [after.dispatchId, after.databaseId]
   if (runId) {
     conditions.push('run_id = ?')
     values.push(runId)
-  }
-  if (after.databaseId !== undefined) {
-    conditions.push('rowid = ?')
-    values.push(after.databaseId)
   }
   const anchor = this.db
     .prepare(`SELECT rowid AS rowid FROM dispatch_contexts WHERE ${conditions.join(' AND ')}`)
@@ -129,10 +126,12 @@ export function listWorkerTerminalResources(
     }
   }
   if (params.after) {
-    // Order and fence must share one key, or a row created between pages moves across the cut.
-    // A pre-v3 cursor is resolved from its anchor row; when a reset deleted that row
-    // `rowid > NULL` matched nothing and the page read as a finished, empty inventory.
-    where.push('d.rowid > ?')
+    // Newest-first (v4) pages walk toward older rowids. Order and fence share this key so a
+    // row created between pages cannot move across the cut. v1/v2 must not use this fence:
+    // they were minted ascending, and serving them here repeats already-seen older rows.
+    // A v4 cursor whose anchor a reset deleted must not match `rowid < NULL` and read as a
+    // finished, empty inventory.
+    where.push('d.rowid < ?')
     values.push(resolveAnchorRowId.call(this, params.after, params.runId))
   }
   let detailWhere = where
@@ -155,6 +154,7 @@ export function listWorkerTerminalResources(
   if (detailLimit !== undefined) {
     detailValues.push(detailLimit)
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: better-sqlite3 returns untyped rows; the SELECT aliases are this shape.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id,
@@ -181,7 +181,7 @@ export function listWorkerTerminalResources(
          LEFT JOIN tasks t ON t.id = d.task_id AND t.run_id = d.run_id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
         ${detailWhere.length > 0 ? `WHERE ${detailWhere.join(' AND ')}` : ''}
-        ORDER BY d.rowid ASC${limitClause}`
+        ORDER BY d.rowid DESC${limitClause}`
     )
     .all(...detailValues) as {
     dispatch_id: string
@@ -252,30 +252,11 @@ export function getWorkerTerminalListingSnapshot(
     .get(...(runId ? [runId] : [])) as { database_id: number | null }
   return row.database_id === null ? null : { databaseId: row.database_id }
 }
-export function getWorkerTerminalOrderingKey(
-  this: OrchestrationDb,
-  dispatchId: string
-): WorkerTerminalOrderingKey | null {
-  const row = this.db
-    .prepare(
-      `SELECT d.id AS dispatch_id, d.rowid AS database_id,
-              COALESCE(w.created_at, d.created_at) AS created_at
-         FROM dispatch_contexts d
-         LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
-        WHERE d.id = ?`
-    )
-    .get(dispatchId) as { dispatch_id: string; created_at: string; database_id: number } | undefined
-  return row
-    ? { createdAt: row.created_at, dispatchId: row.dispatch_id, databaseId: row.database_id }
-    : null
-}
-
 export type WorkerTerminalListingMethods = {
   markWorkerTerminalUserOwned: typeof markWorkerTerminalUserOwned
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
-  getWorkerTerminalOrderingKey: typeof getWorkerTerminalOrderingKey
   countWorkerTerminalInventory: typeof countWorkerTerminalInventory
   getWorkerAttentionFacts: typeof getWorkerAttentionFacts
   getWorkerAttentionFactsForDispatches: typeof getWorkerAttentionFactsForDispatches
@@ -287,7 +268,6 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     listWorkerTerminalReleaseBacklog,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,
-    getWorkerTerminalOrderingKey,
     countWorkerTerminalInventory,
     getWorkerAttentionFacts,
     getWorkerAttentionFactsForDispatches

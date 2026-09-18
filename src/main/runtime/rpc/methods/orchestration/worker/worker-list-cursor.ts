@@ -1,5 +1,5 @@
-/** `databaseId` is the real order key. `createdAt`/`dispatchId` stay required so a cursor this
- *  server mints is still decodable by an older peer. */
+/** v4 requires `after.databaseId` so a replaced Dispatch cannot be re-resolved by id.
+ *  v1/v2 stay decodable so callers can expire them instead of reinterpreting ascending cursors. */
 type WorkerListCursorAfter = { createdAt: string; dispatchId: string; databaseId?: number }
 
 type WorkerListCursorV1 = {
@@ -20,7 +20,17 @@ type WorkerListCursorV3 = {
   offset: number
 }
 
-type WorkerListCursor = WorkerListCursorV1 | WorkerListCursorV2 | WorkerListCursorV3
+type WorkerListCursorV4 = {
+  version: 4
+  snapshot: { databaseId: number }
+  after: { createdAt: string; dispatchId: string; databaseId: number }
+}
+
+type WorkerListCursor =
+  | WorkerListCursorV1
+  | WorkerListCursorV2
+  | WorkerListCursorV3
+  | WorkerListCursorV4
 
 export function encodeWorkerListCursor(cursor: WorkerListCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
@@ -62,6 +72,7 @@ export function decodeWorkerListCursor(value: string): WorkerListCursor | null {
       return parsed as WorkerListCursorV1
     }
     const databaseId = (parsed.snapshot as Partial<WorkerListCursorV2['snapshot']>).databaseId
+    const afterDatabaseId = parsed.after.databaseId
     if (
       parsed.version === 2 &&
       Number.isSafeInteger(databaseId) &&
@@ -70,6 +81,25 @@ export function decodeWorkerListCursor(value: string): WorkerListCursor | null {
       typeof parsed.after.dispatchId === 'string'
     ) {
       return parsed as WorkerListCursorV2
+    }
+    if (
+      parsed.version === 4 &&
+      Number.isSafeInteger(databaseId) &&
+      Number(databaseId) > 0 &&
+      Number.isSafeInteger(afterDatabaseId) &&
+      Number(afterDatabaseId) > 0 &&
+      typeof parsed.after.createdAt === 'string' &&
+      typeof parsed.after.dispatchId === 'string'
+    ) {
+      return {
+        version: 4,
+        snapshot: { databaseId: Number(databaseId) },
+        after: {
+          createdAt: parsed.after.createdAt,
+          dispatchId: parsed.after.dispatchId,
+          databaseId: Number(afterDatabaseId)
+        }
+      }
     }
     return null
   } catch {

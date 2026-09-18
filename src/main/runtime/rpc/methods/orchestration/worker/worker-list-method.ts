@@ -56,23 +56,8 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
     let cursor: WorkerListCursor | null = params.cursor
       ? decodeWorkerListCursor(params.cursor)
       : null
-    if (params.cursor && !cursor) {
-      const legacyKey = db.getWorkerTerminalOrderingKey(params.cursor)
-      if (!legacyKey) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          `Unknown worker-list cursor ${params.cursor}.`
-        )
-      }
-      const snapshot = db.getWorkerTerminalListingSnapshot(params.run)
-      if (!snapshot) {
-        return {
-          workers: [],
-          counts: {},
-          page: { limit, total: 0, hasMore: false, nextCursor: null }
-        }
-      }
-      cursor = { version: 2, snapshot, after: legacyKey }
+    if (cursor?.version === 1 || cursor?.version === 2 || (params.cursor && !cursor)) {
+      throw new OrchestrationError('worker_list_cursor_expired', WORKER_LIST_CURSOR_EXPIRED_MESSAGE)
     }
     if (cursor?.version === 3) {
       return projectWorkerListPage({
@@ -95,7 +80,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
       runId: params.run,
       terminalState: params.terminalState,
       snapshot,
-      after: cursor?.after,
+      after: cursor?.version === 4 ? cursor.after : undefined,
       limit:
         !cursor && params.terminalState
           ? ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
@@ -245,27 +230,17 @@ async function projectWorkerListPageWithFilteredSnapshot(
               ...snapshotCursor,
               offset: snapshotCursor.offset + pageRows.length
             })
-          : encodeWorkerListCursor(
-              args.snapshot && 'databaseId' in args.snapshot
-                ? {
-                    version: 2,
-                    snapshot: args.snapshot,
-                    after: {
-                      createdAt: nextRow.createdAt,
-                      dispatchId: nextRow.dispatchId,
-                      databaseId: nextRow.databaseId
-                    }
-                  }
-                : {
-                    version: 1,
-                    snapshot: args.snapshot!,
-                    after: {
-                      createdAt: nextRow.createdAt,
-                      dispatchId: nextRow.dispatchId,
-                      databaseId: nextRow.databaseId
-                    }
-                  }
-            )
+          : args.snapshot && 'databaseId' in args.snapshot
+            ? encodeWorkerListCursor({
+                version: 4,
+                snapshot: args.snapshot,
+                after: {
+                  createdAt: nextRow.createdAt,
+                  dispatchId: nextRow.dispatchId,
+                  databaseId: nextRow.databaseId
+                }
+              })
+            : null
         : null
   }
   const rowsByDispatchId = new Map(pageRows.map((row) => [row.dispatchId, row]))

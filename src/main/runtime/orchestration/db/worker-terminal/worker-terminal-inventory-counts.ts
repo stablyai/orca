@@ -50,6 +50,7 @@ export function scanWorkerTerminalStates(
   where: string[],
   values: (string | number)[]
 ): WorkerTerminalStateRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: better-sqlite3 returns untyped rows; the SELECT aliases are this shape.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id,
@@ -61,7 +62,7 @@ export function scanWorkerTerminalStates(
          LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
         ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-        ORDER BY d.rowid ASC`
+        ORDER BY d.rowid DESC`
     )
     .all(...values) as {
     dispatch_id: string
