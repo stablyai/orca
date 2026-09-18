@@ -119,9 +119,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => {
-      sendFrame(frame)
-    },
+    send: (frame) => sendFrame(frame),
     onDroppedBinaryFrame: () => {
       report({ kind: 'binary-frame-dropped' })
     }
@@ -279,7 +277,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       throw new BridgeClientCapExceededError(`over ${BRIDGE_MAX_SUBSCRIPTIONS} subscriptions`)
     }
     const id = nextId()
-    subscriptions.open(id, method, params, onData, subscribeOptions?.onBinaryFrame)
+    // A frame that never left already told the listener and gave the slot back; the caller still
+    // gets a dispose, because it has no way to know which of the two it is holding.
+    if (!subscriptions.open(id, method, params, onData, subscribeOptions?.onBinaryFrame)) {
+      return () => undefined
+    }
     let disposed = false
     return () => {
       if (disposed) {

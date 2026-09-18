@@ -23,6 +23,18 @@ export type BridgeStreamEndReason = Extract<BridgeHostMessage, { type: 'end' }>[
 export const BRIDGE_ACK_INTERVAL_FRAMES = 64
 export const BRIDGE_ACK_INTERVAL_BYTES = 1024 * 1024
 
+/**
+ * What a listener is handed when its stream dies under it, in the shape the native client's
+ * `emitError` uses. Consumers read `type` and act on it — `host-worktree-refresh.ts` clears the flag
+ * that says the event stream is live — so a stream that merely stops delivering leaves them waiting
+ * on a replay that is never coming.
+ */
+export type BridgeStreamErrorResult = { type: 'error'; message: string; error?: unknown }
+
+export function bridgeStreamError(message: string, error?: unknown): BridgeStreamErrorResult {
+  return error === undefined ? { type: 'error', message } : { type: 'error', message, error }
+}
+
 type OpenStream = {
   onData: (result: unknown) => void
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
@@ -32,7 +44,8 @@ type OpenStream = {
 }
 
 type SubscriptionsOptions = {
-  send: (frame: BridgeClientMessage) => void
+  /** False when the frame never left the page. */
+  send: (frame: BridgeClientMessage) => boolean
   /** A binary frame with no listener or no decodable image. Neither is recoverable in place. */
   onDroppedBinaryFrame: () => void
 }
@@ -51,15 +64,18 @@ export class BridgeClientSubscriptions {
     return this.streams.has(id)
   }
 
+  /** False when the `subscribe` never left the page. The shell has not heard of the stream, so
+   *  nothing will ever end it: the slot goes back here and the listener is told, which is what the
+   *  native client does with a subscribe it could not send. */
   open(
     id: string,
     method: string,
     params: unknown,
     onData: (result: unknown) => void,
     onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  ): void {
+  ): boolean {
     this.streams.set(id, { onData, onBinaryFrame, lastSeq: 0, unackedFrames: 0, unackedBytes: 0 })
-    this.options.send({
+    const sent = this.options.send({
       v: BRIDGE_PROTOCOL_VERSION,
       type: 'subscribe',
       id,
@@ -69,6 +85,12 @@ export class BridgeClientSubscriptions {
       // encode binary is one a listener is waiting on.
       ...(onBinaryFrame === undefined ? {} : { wantsBinary: true })
     })
+    if (sent) {
+      return true
+    }
+    this.streams.delete(id)
+    onData(bridgeStreamError('the subscribe could not be posted to the shell'))
+    return false
   }
 
   /** `bytes` is the raw frame as the shell measured it, so both sides' windows agree exactly. */

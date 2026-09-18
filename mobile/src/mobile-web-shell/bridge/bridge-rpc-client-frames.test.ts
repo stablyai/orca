@@ -488,6 +488,32 @@ describe('bridge client caps', () => {
     await Promise.allSettled(answers)
   })
 
+  it('frees the page slot when the subscribe frame never left the page', () => {
+    let live = true
+    const page = createPageClient({
+      send: () => {
+        if (!live) {
+          throw new Error('the port is gone')
+        }
+      }
+    })
+    page.start()
+    live = false
+    const onData = vi.fn()
+    // Every one of these is a slot the shell was never told about, and nothing will ever end it.
+    for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
+      page.client.subscribe('terminal.stream', {}, onData)
+    }
+    expect(onData).toHaveBeenCalledTimes(BRIDGE_MAX_SUBSCRIPTIONS)
+    expect(onData.mock.calls.at(-1)?.[0]).toEqual({ type: 'error', message: expect.any(String) })
+    expect(page.diagnostics).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
+    live = true
+    // Short of this, the page is at its cap for the life of the document: only a reload clears it.
+    const dispose = page.client.subscribe('terminal.stream', {}, vi.fn())
+    dispose()
+    expect(page.frames().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
+  })
+
   it('refuses the subscription past the shell grant at the call site', () => {
     const page = createPageClient()
     page.start()
