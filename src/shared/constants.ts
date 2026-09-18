@@ -188,7 +188,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
-    microphoneDeviceLabel: null
+    microphoneDeviceLabel: null,
+    openAiCompatible: { baseUrl: '', model: '' }
   }
 }
 

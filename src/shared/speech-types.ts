@@ -79,4 +79,17 @@ export type VoiceSettings = {
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */
   microphoneDeviceLabel: string | null
+  /** Redirects cloud dictation to any service that speaks the OpenAI transcription API. */
+  openAiCompatible: OpenAiCompatibleSettings
+}
+
+export type OpenAiCompatibleSettings = {
+  /**
+   * Base URL of an OpenAI-compatible transcription service (Groq, OpenRouter,
+   * a local Whisper server, …). Empty string = OpenAI itself. The path
+   * `/v1/audio/transcriptions` is appended when the URL carries none.
+   */
+  baseUrl: string
+  /** Model name sent to that service; empty = the catalog model's OpenAI name. */
+  model: string
 }
