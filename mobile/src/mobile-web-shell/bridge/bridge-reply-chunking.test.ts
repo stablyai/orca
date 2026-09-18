@@ -334,6 +334,17 @@ describe('BridgeReplyAssembler refusals', () => {
     })
   })
 
+  it('forgets every refusal when it is cleared for teardown', () => {
+    const assembler = new BridgeReplyAssembler()
+    assembler.accept(part(0, 2, 'a'))
+    expect(assembler.accept(part(0, 2, 'a'))).toEqual({
+      status: 'failed',
+      refusal: 'duplicate-part'
+    })
+    assembler.clear()
+    expect(assembler.accept(part(0, 2, 'a'))).toEqual({ status: 'pending' })
+  })
+
   it('frees a slot when the page discards an id it abandoned', () => {
     const assembler = new BridgeReplyAssembler()
     const idOf = (index: number): string => `id${String(index).padStart(20, '0')}`

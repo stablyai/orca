@@ -294,14 +294,22 @@ describe('captureBridgeError budgets', () => {
     )
   })
 
-  it('drops a code that cannot be serialized rather than throwing on it', () => {
+  it('drops a code that cannot be serialized and keeps the rest of the error', () => {
     const cyclic: Record<string, unknown> = {}
     cyclic.self = cyclic
-    expect('code' in captureBridgeError(Object.assign(new Error('x'), { code: cyclic }))).toBe(
-      false
-    )
+    const error = Object.assign(new Error('outer', { cause: new Error('inner') }), { code: cyclic })
+    expect(captureBridgeError(error)).toEqual({
+      category: 'Error',
+      message: 'outer',
+      isRpcDeliveryUnknown: false,
+      cause: { category: 'Error', message: 'inner', isRpcDeliveryUnknown: false }
+    })
     const unserializable = Object.assign(new Error('x'), { code: () => undefined })
-    expect('code' in captureBridgeError(unserializable)).toBe(false)
+    expect(captureBridgeError(unserializable)).toEqual({
+      category: 'Error',
+      message: 'x',
+      isRpcDeliveryUnknown: false
+    })
   })
 
   it('drops a code past its budget and keeps one at it', () => {
