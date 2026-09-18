@@ -3,7 +3,6 @@
 import '@testing-library/jest-dom/vitest'
 
 import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -164,6 +163,7 @@ vi.mock('../mobile/WindowsFirewallNotice', () => ({
 }))
 
 import { MobilePane } from './MobilePane'
+import { pairedDevice, renderMobilePane, unmountMobilePaneRoots } from './mobile-pane-test-mount'
 
 describe('MobilePane pairing connection mode', () => {
   const getPairingQR = mocks.getPairingQR
@@ -267,10 +267,22 @@ describe('MobilePane pairing connection mode', () => {
       connectionMode: 'local-only'
     })
     await user.click(screen.getByRole('button', { name: 'Use LAN' }))
-    await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     await waitFor(() =>
       expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
     )
+    // Why: the persisted mode is host policy that withdraws Relay from every
+    // paired phone; a mint-recovery button only promises a LAN QR (#18211).
+    expect(updateSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mobilePairingConnectionMode: 'local-only' })
+    )
+    // The recovery moves the mint, not policy, so the radio must keep reading
+    // the host policy that is actually in force.
+    expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
+    // And because the radio never moved, the equality guard in the change
+    // handler no longer swallows a later click on LAN.
+    await user.click(screen.getByRole('button', { name: 'choose-local' }))
+    expect(updateSettings).toHaveBeenCalledWith({ mobilePairingConnectionMode: 'local-only' })
+    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
   })
 
   it('does not show mint failure after an honest Relay mint', async () => {
@@ -403,7 +415,7 @@ describe('MobilePane pairing connection mode', () => {
       })
     })
     await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,local'))
-    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
   })
 
   it('restores a saved local-only preference without user interaction', () => {
@@ -749,35 +761,6 @@ describe('MobilePane pairing connection mode', () => {
     )
   })
 })
-
-const mountedRoots: Root[] = []
-
-function pairedDevice(deviceId: string): PairedDevice {
-  return {
-    deviceId,
-    name: deviceId,
-    pairedAt: 1,
-    lastSeenAt: 2
-  }
-}
-
-async function renderMobilePane(): Promise<void> {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
-  await act(async () => {
-    root.render(<MobilePane />)
-  })
-}
-
-async function unmountMobilePaneRoots(): Promise<void> {
-  await act(async () => {
-    for (const root of mountedRoots.splice(0)) {
-      root.unmount()
-    }
-  })
-}
 
 describe('MobilePane', () => {
   beforeEach(() => {

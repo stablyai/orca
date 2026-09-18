@@ -102,6 +102,74 @@ describe('liveness safety net lifecycle', () => {
   })
 })
 
+describe('host LAN policy applies to already-paired devices (#18211)', () => {
+  function serviceUnderPolicy(
+    hostMode: () => 'automatic' | 'local-only',
+    deviceMode: 'automatic' | 'local-only' = 'automatic'
+  ) {
+    const registry = {
+      getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
+      getMobilePairingConnectionMode: () => deviceMode
+    }
+    const coordinator = { reconcile: vi.fn(), stop: vi.fn() }
+    const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
+    Object.assign(service, {
+      coordinator,
+      demandLedger: { nextPendingExpiry: () => null, acquireTransient: () => () => {} },
+      hostMobilePairingConnectionMode: hostMode,
+      stopped: false,
+      livenessTimer: null,
+      demandExpiryTimer: null
+    })
+    Object.defineProperty(service, 'runtimeRpc', {
+      value: { getDeviceRegistry: () => registry }
+    })
+    return { service, coordinator }
+  }
+
+  afterEach(() => vi.useRealTimers())
+
+  it('refuses every relay grant for an automatic device once the host picks LAN', async () => {
+    vi.useFakeTimers()
+    const { service } = serviceUnderPolicy(() => 'local-only')
+    await expect(service.getEndpoints(context({ transport: 'direct' }), {})).resolves.toEqual({
+      v: 1,
+      relay: null
+    })
+    await expect(
+      service.provisionRelay(context({ transport: 'direct' }), {
+        reqId: 'install-1',
+        newResumeTokenHash: 'A'.repeat(43)
+      })
+    ).rejects.toThrow('relay_disabled_for_device')
+    // Why: createPairingRelay had no per-device gate at all; the choke point
+    // in withTransientDemand is what covers it.
+    await expect(service.createPairingRelay('device-1')).rejects.toThrow(
+      'relay_disabled_for_device'
+    )
+    service.stop()
+  })
+
+  it('never grants Relay to a local-only device even when the host allows it', async () => {
+    vi.useFakeTimers()
+    const { service } = serviceUnderPolicy(() => 'automatic', 'local-only')
+    await expect(service.createPairingRelay('device-1')).rejects.toThrow(
+      'relay_disabled_for_device'
+    )
+    service.stop()
+  })
+
+  it('pairingPolicyChanged reconciles without the pairing-churn linger', () => {
+    vi.useFakeTimers()
+    const { service, coordinator } = serviceUnderPolicy(() => 'local-only')
+    service.pairingPolicyChanged()
+    expect(coordinator.reconcile).toHaveBeenLastCalledWith({ skipLinger: true })
+    service.demandStateChanged()
+    expect(coordinator.reconcile).toHaveBeenLastCalledWith(undefined)
+    service.stop()
+  })
+})
+
 describe('local-only mobile pairing', () => {
   it('refuses endpoint discovery and provisioning without opening Relay demand', async () => {
     const registry = {

@@ -29,8 +29,8 @@ function binding(relayDeviceId: string, inviteExpiresAt?: number): RelayDeviceBi
 describe('RelayDemandLedger', () => {
   it('reference-counts concurrent main-process work', () => {
     const { ledger } = fixture(1_000)
-    const releaseFirst = ledger.acquireTransient('pairing:device-1')
-    const releaseSecond = ledger.acquireTransient('pairing:device-1')
+    const releaseFirst = ledger.acquireTransient('pairing:device-1', 'device-1')
+    const releaseSecond = ledger.acquireTransient('pairing:device-1', 'device-1')
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
     releaseFirst()
     releaseFirst()

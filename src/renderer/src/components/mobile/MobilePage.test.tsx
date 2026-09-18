@@ -65,6 +65,7 @@ vi.mock('./MobilePageContent', () => ({
     pairingQrError: boolean
     relayMintFailure: MobileRelayMintFailure | null
     onRetryRelay: () => void
+    onUseLan: () => void
     selectedAddress: string | undefined
     loadNetworkInterfaces: () => void
     openAndroidInstallGuide: () => void
@@ -107,6 +108,9 @@ vi.mock('./MobilePageContent', () => ({
       </button>
       <button type="button" onClick={props.onRetryRelay}>
         Retry Relay
+      </button>
+      <button type="button" onClick={props.onUseLan}>
+        Use LAN
       </button>
       <button type="button" onClick={() => props.handleAddressChange('10.0.0.2')}>
         Change address
@@ -428,6 +432,40 @@ describe('MobilePage pairing connection mode', () => {
     )
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('retried'))
     expect(screen.getByTestId('relay-failure')).toHaveTextContent('none')
+  })
+
+  it('does not persist host policy from the Relay-failure Use LAN recovery button', async () => {
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    await openPairingStep()
+    await waitFor(() =>
+      expect(screen.getByTestId('relay-failure')).toHaveTextContent('create_pairing_relay')
+    )
+    getPairingQR.mockResolvedValueOnce({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://host',
+      connectionMode: 'local-only'
+    })
+    await user.click(screen.getByRole('button', { name: 'Use LAN' }))
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,local'))
+    // Why: the persisted mode is host policy that withdraws Relay from every
+    // paired phone; this button only promises a LAN QR (#18211).
+    expect(mocks.storeState.updateSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mobilePairingConnectionMode: 'local-only' })
+    )
+    // The recovery moves the mint, not policy, so the radio must keep reading
+    // the host policy that is actually in force.
+    expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
   })
 
   it('switches to LAN while a Relay retry is still unresolved', async () => {

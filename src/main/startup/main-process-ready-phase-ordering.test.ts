@@ -113,7 +113,7 @@ describe('initial proxy application ordering', () => {
 
     const windowIndex = desktop.indexOf('openMainWindow()')
     const proxyIndex = desktop.indexOf('await state.initialProxyApplicationReady')
-    const relayIndex = desktop.indexOf('new DesktopRelayService(')
+    const relayIndex = desktop.indexOf('startDesktopRelayService(')
 
     expect(windowIndex).toBeGreaterThanOrEqual(0)
     expect(proxyIndex).toBeGreaterThan(windowIndex)
