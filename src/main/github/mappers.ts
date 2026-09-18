@@ -8,7 +8,8 @@ import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
 export function mapCheckRunRESTStatus(status: string): PRCheckDetail['status'] {
   const s = status?.toLowerCase()
-  if (s === 'queued') {
+  // Waiting/requested/pending are non-terminal manual or environment holds (#13327).
+  if (s === 'queued' || s === 'pending' || s === 'requested' || s === 'waiting') {
     return 'queued'
   }
   if (s === 'in_progress') {
@@ -68,7 +69,7 @@ export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['con
 
 export function mapCheckStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toUpperCase()
-  if (s === 'PENDING' || s === 'QUEUED') {
+  if (s === 'PENDING' || s === 'QUEUED' || s === 'WAITING' || s === 'REQUESTED') {
     return 'queued'
   }
   if (s === 'IN_PROGRESS') {
@@ -100,7 +101,13 @@ export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
   if (s === 'SKIPPED') {
     return 'skipped'
   }
-  if (s === 'PENDING' || s === 'QUEUED' || s === 'IN_PROGRESS') {
+  if (
+    s === 'PENDING' ||
+    s === 'QUEUED' ||
+    s === 'IN_PROGRESS' ||
+    s === 'WAITING' ||
+    s === 'REQUESTED'
+  ) {
     return 'pending'
   }
   if (s === 'NEUTRAL') {
