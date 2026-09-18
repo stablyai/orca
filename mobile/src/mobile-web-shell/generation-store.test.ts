@@ -229,15 +229,18 @@ describe('generation store', () => {
     expect(await store.readActiveGeneration(HOST)).toBeNull()
   })
 
-  it('leaves no generation and no tmp when a download is interrupted before commit', async () => {
+  it('leaves no generation and no tmp for any host when a download is interrupted', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
+    const other = deriveHostCacheKey('host-b')
 
     await store.stageGeneration(HOST, buildResult({}))
+    await store.stageGeneration(other, buildResult({}))
     await store.sweepStagedGenerations()
 
     expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
+    expect(await store.readActiveGeneration(other)).toBeNull()
   })
 
   it('treats a second commit of the same build as a no-op', async () => {
@@ -337,17 +340,39 @@ describe('generation store', () => {
   it('serializes two stage calls for one host and build', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
+    // One build id cannot really carry two asset lists; differing ones are what make an interleaved
+    // pair visible, because unserialized both of them land in the one staged directory.
+    const staging = `${HOST}/tmp/${'a'.repeat(64)}`
+    const earlier = buildResult({ assets: [{ path: 'assets/earlier.js', byteLength: 2 }] })
+    const later = buildResult({ assets: [{ path: 'assets/later.js', byteLength: 3 }] })
 
     const [first, second] = await Promise.all([
-      store.stageGeneration(HOST, buildResult({})),
-      store.stageGeneration(HOST, buildResult({}))
+      store.stageGeneration(HOST, earlier),
+      store.stageGeneration(HOST, later)
     ])
 
     expect(first.directory).toBe(second.directory)
-    // Two interleaved stages would write one tree twice over; serialized, the second one starts by
-    // dropping the first's tree, so the write log is exactly two whole stagings.
-    expect(fs.writes).toHaveLength(6)
-    expect(fs.writes.at(-1)).toBe(`${HOST}/tmp/${'a'.repeat(64)}/manifest.json`)
+    // Each staging is a contiguous run ending in its manifest; interleaved they would alternate.
+    expect(fs.writes).toEqual([
+      `${staging}/assets/earlier.js`,
+      `${staging}/manifest.json`,
+      `${staging}/assets/later.js`,
+      `${staging}/manifest.json`
+    ])
+    expect(fs.paths().filter((path) => path.startsWith(`${staging}/assets/`))).toEqual([
+      `${staging}/assets/later.js`
+    ])
+  })
+
+  it('drops residue from an earlier attempt instead of staging over it', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    const staging = `${HOST}/tmp/${'a'.repeat(64)}`
+    fs.seed(`${staging}/assets/orphan.js`, { kind: 'file', bytes: new Uint8Array(1) })
+
+    await store.stageGeneration(HOST, buildResult({}))
+
+    expect(fs.paths().some((path) => path.endsWith('orphan.js'))).toBe(false)
   })
 
   it('refuses a path that escapes the staged tree, and a host key that is not one', async () => {
@@ -453,6 +478,20 @@ describe('generation store', () => {
 
     await expect(store.commitGeneration(staged)).rejects.toThrow('no longer on disk')
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe('a'.repeat(64))
+  })
+
+  it('prunes an index entry whose host tree is gone', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs, now: () => 10 })
+    const stale = deriveHostCacheKey('uninstalled')
+    fs.seed('hosts.json', {
+      kind: 'file',
+      bytes: new TextEncoder().encode(JSON.stringify({ [stale]: 5 }))
+    })
+
+    await activate(store, HOST)
+
+    expect(fs.text('hosts.json')).toBe(JSON.stringify({ [HOST]: 10 }))
   })
 
   it('keeps the adapter aligned with the port', () => {
