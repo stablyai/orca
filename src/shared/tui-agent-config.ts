@@ -130,8 +130,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'gjc',
     // Why: npm `gajae-code` also ships a `gajae-code` bin; wrappers may exec that name instead of `gjc`.
     detectCmdAliases: ['gajae-code'],
-    promptInjectionMode: 'flag-prompt',
-    // Why: generic TUI like mimo/opencode; Gajae has no documented composer-prefill flag.
+    // Why: GJC docs launch bare `gjc`; README has no `--prompt`. Gajae has no documented composer-prefill flag.
+    promptInjectionMode: 'stdin-after-start',
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
   pi: {
