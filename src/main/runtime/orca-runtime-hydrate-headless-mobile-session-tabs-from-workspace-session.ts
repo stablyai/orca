@@ -1,9 +1,11 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithWaitForSessionTabsInventoryPublication } from './orca-runtime-wait-for-session-tabs-inventory-publication'
+import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
+import { resolveHostMobileTerminalTheme } from './resolve-host-mobile-terminal-theme'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
@@ -28,6 +30,19 @@ import {
 import { headlessMobileSnapshotContentUnchanged } from './mobile-session-snapshot-equality'
 
 export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends OrcaRuntimeWithWaitForSessionTabsInventoryPublication {
+  protected buildHeadlessMobileSessionTerminalTabs(
+    worktreeId: string,
+    persistedTabs: readonly TerminalTab[],
+    session: WorkspaceSessionState
+  ) {
+    return buildHeadlessMobileSessionTerminalTabs(
+      worktreeId,
+      persistedTabs,
+      session,
+      resolveHostMobileTerminalTheme(this.store?.getSettings?.())
+    )
+  }
+
   protected hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
     worktreeId?: string,
     options: {
@@ -111,7 +126,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
         reconciledWorktreeIds.add(entryWorktreeId)
         continue
       }
-      const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
+      const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
         session
