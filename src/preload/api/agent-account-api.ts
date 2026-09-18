@@ -64,6 +64,10 @@ export type ClaudeAccountsApi = {
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
   onSelectedElsewhere?: (callback: (change: ClaudeAccountSelectionChange) => void) => () => void
+  updateDisplayName: (args: {
+    accountId: string
+    displayName: string | null
+  }) => Promise<ClaudeRateLimitAccountsState>
 }
 
 export type GrokAccountsApi = {

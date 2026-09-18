@@ -67,7 +67,8 @@ import {
   SelectAccountParams,
   SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
-  SelectDataAccountParams
+  SelectDataAccountParams,
+  UpdateClaudeDisplayNameParams
 } from './accounts-params'
 import { AgentActivityClearParams, AgentActivitySetReadParams } from './agent-activity-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
@@ -815,6 +816,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.setHostLaunchEnv': HostAccountLaunchEnvParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
+  'accounts.updateClaudeDisplayName': UpdateClaudeDisplayNameParams,
   'accounts.zcodePlanClearApiKey': null,
   'accounts.zcodePlanCredentialsStatus': null,
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
