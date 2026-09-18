@@ -115,6 +115,17 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
   return { client, calls, manifest }
 }
 
+function chunkCallCount(calls: readonly HostCall[]): number {
+  return calls.filter((call) => call.method === 'mobileWeb.bundle.chunk').length
+}
+
+/** Long enough for an unstopped worker pool to page three 40-byte assets one byte at a time. */
+async function drainPendingHostWork(): Promise<void> {
+  for (let tick = 0; tick < 300; tick += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 describe('fetchMobileWebBundle', () => {
   it('pages every asset to eof and returns the verified bytes', async () => {
     const host = bundleHost({ 'index.html': '<h1>orca</h1>', 'assets/app.js': 'x=1' })
@@ -353,6 +364,105 @@ describe('fetchMobileWebBundle', () => {
     await expect(fetchMobileWebBundle({ client: host.client })).rejects.toThrow(
       'bundle asset index.html made no progress at 0'
     )
+  })
+
+  it('stops the other workers mid-asset once one asset is refused', async () => {
+    const host = bundleHost(
+      {
+        'a.js': 'x',
+        'b.js': 'b'.repeat(40),
+        'c.js': 'c'.repeat(40),
+        'd.js': 'd'.repeat(40)
+      },
+      {
+        chunkBytes: 1,
+        intercept: (call) =>
+          call.method === 'mobileWeb.bundle.chunk' && paramField(call.params, 'path') === 'a.js'
+            ? new Error('mobile_web_bundle_asset_unknown')
+            : undefined
+      }
+    )
+
+    const error = await fetchMobileWebBundle({ client: host.client }).catch(
+      (thrown: unknown) => thrown
+    )
+    const atRejection = chunkCallCount(host.calls)
+    await drainPendingHostWork()
+
+    // The refusal is what the caller sees; the internal stop never surfaces.
+    expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_asset_unknown')
+    // 120 chunks would page the other three assets to the end. One more round of four is the most
+    // the abandoned workers can add, because each checks the stop before it asks for a chunk.
+    expect(chunkCallCount(host.calls)).toBeLessThanOrEqual(atRejection + 4)
+    expect(chunkCallCount(host.calls)).toBeLessThan(10)
+  })
+
+  it('asks for nothing at all when the caller arrives already aborted', async () => {
+    const host = bundleHost({ 'index.html': 'abc' })
+
+    await expect(
+      fetchMobileWebBundle({ client: host.client, signal: AbortSignal.abort() })
+    ).rejects.toThrow('mobile web bundle fetch aborted')
+    expect(host.calls).toHaveLength(0)
+  })
+
+  it('refuses an asset the host over-pages with real bytes', async () => {
+    const host = bundleHost(
+      { 'index.html': 'abcdef' },
+      {
+        chunkBytes: 3,
+        // Never says eof, so the third reply writes past the six bytes the manifest declares.
+        intercept: (call) =>
+          call.method === 'mobileWeb.bundle.chunk'
+            ? {
+                buildId: BUILD_ID,
+                path: 'index.html',
+                offset: paramField(call.params, 'offset'),
+                assetByteLength: 6,
+                sha256: toHex(sha256(bytesOf('abcdef'))),
+                dataBase64: encodeBase64(bytesOf('abc')),
+                eof: false
+              }
+            : undefined
+      }
+    )
+
+    await expect(fetchMobileWebBundle({ client: host.client })).rejects.toThrow(
+      'bundle asset index.html is longer than the manifest declares'
+    )
+  })
+
+  it('counts the bytes it received rather than the total the manifest claims', async () => {
+    const host = bundleHost({ 'index.html': 'abcdef' }, { chunkBytes: 3 })
+    // The mobile reader is loose, so it does not carry the host schema's sum refinement: a manifest
+    // whose total disagrees with its assets must not decide what the fetch reports.
+    host.manifest.totalBytes = 999
+
+    const fetched = await fetchMobileWebBundle({ client: host.client })
+
+    expect(fetched.totalBytes).toBe(6)
+  })
+
+  it('reads a schema refusal whose message is prose as a generic failure', async () => {
+    // The dispatcher refuses params that fail the host schema before the bundle handler runs, so the
+    // message is zod prose rather than one of the six codes.
+    const host = bundleHost(
+      { 'index.html': 'abc' },
+      {
+        intercept: (call) =>
+          call.method === 'mobileWeb.bundle.chunk'
+            ? new Error('Invalid input: expected string, received number')
+            : undefined
+      }
+    )
+
+    const error = await fetchMobileWebBundle({ client: host.client }).catch(
+      (thrown: unknown) => thrown
+    )
+
+    expect(readMobileWebBundleErrorCode(error)).toBeNull()
+    expect(error).toBeInstanceOf(Error)
+    expect(String(error)).toContain('Invalid input: expected string, received number')
   })
 
   it('surfaces the host code when the bundle is not there to serve', async () => {

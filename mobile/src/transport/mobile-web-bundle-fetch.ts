@@ -42,26 +42,25 @@ export async function fetchMobileWebBundle(args: {
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
-  throwIfAborted(args.signal)
+  const stopped = new AbortController()
+  throwIfStopped(args.signal, stopped.signal)
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
   const pending = [...manifest.assets]
   const assets = new Map<string, Uint8Array>()
   let receivedBytes = 0
-  let stopped = false
 
   const worker = async (): Promise<void> => {
     try {
       for (let asset = pending.shift(); asset !== undefined; asset = pending.shift()) {
-        if (stopped) {
-          return
-        }
+        throwIfStopped(args.signal, stopped.signal)
         const bytes = await readBundleAsset({
           client: args.client,
           asset,
           buildId: manifest.buildId,
           chunkBytes: opened.chunkBytes,
-          signal: args.signal
+          signal: args.signal,
+          stopped: stopped.signal
         })
         assets.set(asset.path, bytes)
         receivedBytes += bytes.byteLength
@@ -73,8 +72,9 @@ export async function fetchMobileWebBundle(args: {
         })
       }
     } catch (error) {
-      // One failed asset stops the other three rather than paging a bundle nobody will use.
-      stopped = true
+      // One failed asset stops the other three mid-asset, not just between assets: every chunk they
+      // would still ask for holds one of the host's four read slots against the caller's retry.
+      stopped.abort()
       throw error
     }
   }
@@ -90,11 +90,12 @@ async function readBundleAsset(args: {
   buildId: string
   chunkBytes: number
   signal?: AbortSignal
+  stopped: AbortSignal
 }): Promise<Uint8Array> {
   const whole = new Uint8Array(args.asset.byteLength)
   let offset = 0
   for (;;) {
-    throwIfAborted(args.signal)
+    throwIfStopped(args.signal, args.stopped)
     const chunk = await runRpcOperation(args.client, mobileWebBundleChunkRead, {
       buildId: args.buildId,
       path: args.asset.path,
@@ -163,9 +164,14 @@ function assertChunkDescribesAsset(
   }
 }
 
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) {
+/** The caller's abort is what it asked for; the internal one never leaves this module, because the
+ *  asset that failed rejects first and is what `Promise.all` reports. */
+function throwIfStopped(caller: AbortSignal | undefined, stopped: AbortSignal): void {
+  if (caller?.aborted === true) {
     throw new Error('mobile web bundle fetch aborted')
+  }
+  if (stopped.aborted) {
+    throw new Error('mobile web bundle fetch stopped after an earlier asset failed')
   }
 }
 
