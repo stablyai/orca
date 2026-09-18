@@ -24,6 +24,10 @@ export class BridgeClientRequests {
     return this.pending.size
   }
 
+  has(id: string): boolean {
+    return this.pending.has(id)
+  }
+
   open(id: string, request: PendingRequest): void {
     this.pending.set(id, request)
   }

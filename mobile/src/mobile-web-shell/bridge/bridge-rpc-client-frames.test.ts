@@ -311,6 +311,25 @@ describe('bridge client replies', () => {
     await expect(answer).rejects.toThrow('duplicate-part')
   })
 
+  it('drops a reply or an error for an id it never opened, and says so', () => {
+    const page = createPageClient()
+    page.start()
+    const stranger = 'z'.repeat(22)
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id: stranger,
+      payload: { id: stranger, ok: true, result: 1, _meta: { runtimeId: 'runtime-a' } }
+    })
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'error',
+      id: stranger,
+      error: { category: 'Error', message: 'gone', isRpcDeliveryUnknown: false }
+    })
+    expect(page.diagnostics).toEqual([{ kind: 'unknown-id' }, { kind: 'unknown-id' }])
+  })
+
   it('frees the assembler slot of every id nobody is waiting on', async () => {
     const page = createPageClient()
     page.start()
@@ -388,19 +407,6 @@ describe('bridge client replies', () => {
     })
     await expect(answer).resolves.toEqual(payload)
     await Promise.all(settled)
-  })
-
-  it('drops a reply for an id it never opened', async () => {
-    const page = createPageClient()
-    page.start()
-    page.deliver({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id: 'zzzzzzzzzzzzzzzzzzzzzz',
-      payload: { id: 'x', ok: true, result: 1, _meta: { runtimeId: 'runtime-a' } }
-    })
-    expect(page.diagnostics).toEqual([])
-    await expect(Promise.resolve()).resolves.toBeUndefined()
   })
 })
 

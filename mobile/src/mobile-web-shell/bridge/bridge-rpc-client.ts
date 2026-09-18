@@ -52,6 +52,7 @@ export type BridgeRpcClientDiagnostic =
   | { kind: 'stream-failed'; error: unknown }
   | { kind: 'state-out-of-order' }
   | { kind: 'binary-frame-dropped' }
+  | { kind: 'unknown-id' }
 
 /** What `init` said this page is attached to. `grants` is what a call site checks before it posts. */
 export type BridgeShellSession = {
@@ -191,6 +192,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       report({ kind: 'stream-failed', error })
       return
     }
+    if (!requests.has(id)) {
+      report({ kind: 'unknown-id' })
+    }
+    // Still routed: an id with a half-assembled reply behind it holds a slot until it is discarded.
     requests.fail(id, error)
   }
 
@@ -203,6 +208,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         acceptState(message.connection)
         return
       case 'reply':
+        if (!requests.has(message.id)) {
+          report({ kind: 'unknown-id' })
+        }
         requests.acceptReply(message)
         return
       case 'error':
