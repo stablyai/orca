@@ -174,6 +174,8 @@ import Foundation
       ["path": "assets/a\(index).js", "contentType": "text/javascript; charset=utf-8"]
     }
     precondition(generation(manifest(assets: tooMany)) == nil)
+    // A JSON string is not a JSON number, and the contract pins a number.
+    precondition(generation(Data(#"{"schemaVersion":"1","entrypoint":"index.html","assets":[{"path":"index.html","contentType":"text/html"}]}"#.utf8)) == nil)
     precondition(generation(Data("not json".utf8)) == nil)
     precondition(generation(Data("[]".utf8)) == nil)
   }
