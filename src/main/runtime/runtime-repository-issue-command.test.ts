@@ -62,6 +62,18 @@ describe('remote issue command ignore rules', () => {
     )
   })
 
+  it('routes the review kind to its own remote file', async () => {
+    mocks.remoteCheck.mockResolvedValue(['.orca/review-command'])
+
+    await commands.write(repo.id, 'Review it', 'review')
+
+    expect(mocks.remoteCheck).toHaveBeenCalledWith(repo.path, ['.orca/review-command'])
+    expect(mocks.fs.writeFile).toHaveBeenCalledExactlyOnceWith(
+      `${repo.path}/.orca/review-command`,
+      'Review it\n'
+    )
+  })
+
   it('adds the rule if the remote host does not ignore .orca', async () => {
     await commands.write(repo.id, 'local command')
 
@@ -159,7 +171,12 @@ describe('local issue command runtime routing', () => {
       expect(typeof options).toBe('function')
       expect(typeof options === 'function' ? options() : options).toEqual({ wslDistro: 'Ubuntu' })
       expect(getLocalGitArgs).toHaveBeenCalledWith(repo)
-      expect(write).toHaveBeenCalledExactlyOnceWith(repo.path, 'command', expect.any(Function))
+      expect(write).toHaveBeenCalledExactlyOnceWith(
+        repo.path,
+        'command',
+        expect.any(Function),
+        'issue'
+      )
     } finally {
       write.mockRestore()
     }

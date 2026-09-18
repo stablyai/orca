@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
+import { REPO_COMMAND_YAML_KEY, type RepoCommandKind } from '../../../shared/repo-command-kind'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import {
   checkRuntimeHooks,
@@ -166,7 +167,8 @@ async function confirmIssueCommandReadResult(
   repoId: string,
   hostId: ExecutionHostId,
   result: IssueCommandReadResult,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  kind: RepoCommandKind = 'issue'
 ): Promise<'run' | 'skip'> {
   if (isCancelled()) {
     return 'skip'
@@ -180,7 +182,7 @@ async function confirmIssueCommandReadResult(
   return confirmScriptContent(
     state,
     repoId,
-    'issueCommand',
+    REPO_COMMAND_YAML_KEY[kind],
     getIssueCommandTrustContent(result),
     hostId,
     isCancelled
@@ -198,12 +200,20 @@ export function confirmRuntimeIssueCommandRead(
   repoId: string,
   hostId: ExecutionHostId,
   result: IssueCommandReadResult,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  kind: RepoCommandKind = 'issue'
 ): Promise<ConfirmedRuntimeIssueCommand> {
   return enqueueTrustPrompt(async () => ({
     result,
     template: getIssueCommandTrustContent(result),
-    trustDecision: await confirmIssueCommandReadResult(state, repoId, hostId, result, isCancelled)
+    trustDecision: await confirmIssueCommandReadResult(
+      state,
+      repoId,
+      hostId,
+      result,
+      isCancelled,
+      kind
+    )
   }))
 }
 
@@ -211,14 +221,16 @@ export async function readAndConfirmRuntimeIssueCommand(
   state: AppState,
   repoId: string,
   hostId: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  kind: RepoCommandKind = 'issue'
 ): Promise<ConfirmedRuntimeIssueCommand> {
   let result: IssueCommandReadResult
   try {
     result = await readRuntimeIssueCommand(
       settingsForHookRepoOwner(state, repoId, hostId),
       repoId,
-      hostId
+      hostId,
+      kind
     )
   } catch {
     result = {
@@ -230,7 +242,7 @@ export async function readAndConfirmRuntimeIssueCommand(
       source: 'none'
     }
   }
-  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
+  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled, kind)
 }
 
 export async function ensureHooksConfirmed(
@@ -251,14 +263,15 @@ export async function ensureHooksConfirmed(
 
     let scriptContent = ''
     try {
-      if (scriptKind === 'issueCommand') {
+      if (scriptKind === 'issueCommand' || scriptKind === 'reviewCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
         // Why: hostId disambiguates duplicate repo ids on the local IPC path,
         // matching the checkRuntimeHooks call below.
         const result = await readRuntimeIssueCommand(
           settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
-          hostId
+          hostId,
+          scriptKind === 'reviewCommand' ? 'review' : 'issue'
         )
         if (result.source === 'local') {
           return 'run'

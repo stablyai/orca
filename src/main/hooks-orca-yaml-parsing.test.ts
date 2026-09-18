@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseOrcaYaml } from './hooks'
+import { parseOrcaYaml, RECOGNIZED_ORCA_YAML_KEYS } from './hooks'
 
 // Mock fs used by loadHooks
 vi.mock('fs', () => ({
@@ -138,6 +138,34 @@ describe('parseOrcaYaml', () => {
       },
       issueCommand: 'claude -p "Read issue #{{issue}}"'
     })
+  })
+
+  it('parses reviewCommand alongside issueCommand', () => {
+    const yaml = [
+      'issueCommand: Complete {{artifact_url}}',
+      'reviewCommand: |',
+      '  Review {{artifact_url}}'
+    ].join('\n')
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      issueCommand: 'Complete {{artifact_url}}',
+      reviewCommand: 'Review {{artifact_url}}'
+    })
+  })
+
+  it('treats a file with only reviewCommand as hooks, not null', () => {
+    expect(parseOrcaYaml('reviewCommand: Review {{artifact_url}}\n')).toEqual({
+      scripts: {},
+      reviewCommand: 'Review {{artifact_url}}'
+    })
+  })
+
+  it('returns null when reviewCommand is blank', () => {
+    expect(parseOrcaYaml('reviewCommand: "   "')).toBeNull()
+  })
+
+  it('does not flag reviewCommand as an unrecognized key', () => {
+    expect(RECOGNIZED_ORCA_YAML_KEYS.has('reviewCommand')).toBe(true)
   })
 
   it('parses default terminal tabs from orca.yaml', () => {

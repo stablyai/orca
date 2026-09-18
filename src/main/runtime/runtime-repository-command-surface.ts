@@ -70,6 +70,11 @@ export type RuntimeRepositoryCommandSurface = {
   inspectRepoSetupScriptImports: RuntimeRepositoryHooksCommands['inspectRepoSetupScriptImports']
   readRepoIssueCommand: RuntimeRepositoryIssueCommand['read']
   writeRepoIssueCommand: RuntimeRepositoryIssueCommand['write']
+  readRepoReviewCommand: (repo: string) => ReturnType<RuntimeRepositoryIssueCommand['read']>
+  writeRepoReviewCommand: (
+    repo: string,
+    content: string
+  ) => ReturnType<RuntimeRepositoryIssueCommand['write']>
 } & Pick<RuntimeHostedReviewCommands, HostedReviewCommandName> &
   Pick<RuntimeGitHubRepositoryQueryCommands, GitHubRepositoryQueryCommandName>
 
@@ -160,6 +165,9 @@ export function installRuntimeRepositoryCommandSurface(
     checkRepoHooks: hooks.checkRepoHooks.bind(hooks),
     inspectRepoSetupScriptImports: hooks.inspectRepoSetupScriptImports.bind(hooks),
     readRepoIssueCommand: issueCommand.read.bind(issueCommand),
-    writeRepoIssueCommand: issueCommand.write.bind(issueCommand)
+    writeRepoIssueCommand: issueCommand.write.bind(issueCommand),
+    readRepoReviewCommand: (repo: string) => issueCommand.read(repo, 'review'),
+    writeRepoReviewCommand: (repo: string, content: string) =>
+      issueCommand.write(repo, content, 'review')
   })
 }

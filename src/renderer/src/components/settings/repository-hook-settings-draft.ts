@@ -117,8 +117,11 @@ export function getLocalCommandSourcePolicyNotice({
 export function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
   const formatScript = (key: string, command?: string): string =>
     command ? `\n  ${key}: |\n${command.replace(/^/gm, '    ')}` : ''
-  const issueCommand = hooks?.issueCommand
-    ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
-    : ''
-  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
+  const commandBlocks = (['issueCommand', 'reviewCommand'] as const)
+    .map((key) => {
+      const value = hooks?.[key]
+      return value ? `\n${key}: |\n${value.replace(/^/gm, '  ')}` : ''
+    })
+    .join('')
+  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${commandBlocks}`
 }

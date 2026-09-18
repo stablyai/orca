@@ -132,6 +132,7 @@ export function useComposerTargetState(
     enableIssueAutomation: composerTargetStore.enableIssueAutomation,
     hasLoadedIssueCommand: asyncComposerState.hasLoadedIssueCommand,
     issueCommandTemplate: asyncComposerState.issueCommandTemplate,
+    reviewCommandTemplate: asyncComposerState.reviewCommandTemplate,
     linkDebouncedQuery: asyncComposerState.linkDebouncedQuery,
     linkDirectItem: asyncComposerState.linkDirectItem,
     linkItems: asyncComposerState.linkItems,

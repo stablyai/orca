@@ -5,18 +5,29 @@ import { loadHooks } from './hooks'
 import type { GitRuntimeOptions } from './git/git-runtime-options'
 import { checkIgnoredPaths } from './git/check-ignored-paths'
 import { requireSshGitProvider } from './providers/ssh-git-dispatch'
+import { REPO_COMMAND_YAML_KEY, type RepoCommandKind } from '../shared/repo-command-kind'
 
 type IssueCommandGitOptions = GitRuntimeOptions | (() => GitRuntimeOptions)
 
 const ORCA_DIR = '.orca'
-const ISSUE_COMMAND_FILENAME = 'issue-command'
-
-export function getIssueCommandFilePath(repoPath: string): string {
-  return join(repoPath, ORCA_DIR, ISSUE_COMMAND_FILENAME)
+const REPO_COMMAND_FILENAME: Record<RepoCommandKind, string> = {
+  issue: 'issue-command',
+  review: 'review-command'
 }
 
-export function getSharedIssueCommand(repoPath: string): string | null {
-  return loadHooks(repoPath)?.issueCommand?.trim() || null
+export function getRepoCommandRelativePath(kind: RepoCommandKind): string {
+  return `${ORCA_DIR}/${REPO_COMMAND_FILENAME[kind]}`
+}
+
+export function getIssueCommandFilePath(repoPath: string, kind: RepoCommandKind = 'issue'): string {
+  return join(repoPath, ORCA_DIR, REPO_COMMAND_FILENAME[kind])
+}
+
+export function getSharedIssueCommand(
+  repoPath: string,
+  kind: RepoCommandKind = 'issue'
+): string | null {
+  return loadHooks(repoPath)?.[REPO_COMMAND_YAML_KEY[kind]]?.trim() || null
 }
 
 export type ResolvedIssueCommand = {
@@ -30,8 +41,11 @@ export type ResolvedIssueCommand = {
 /**
  * Resolve the GitHub issue command using local override first, then tracked repo config.
  */
-export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
-  const filePath = getIssueCommandFilePath(repoPath)
+export function readIssueCommand(
+  repoPath: string,
+  kind: RepoCommandKind = 'issue'
+): ResolvedIssueCommand {
+  const filePath = getIssueCommandFilePath(repoPath, kind)
   let localContent: string | null = null
 
   if (existsSync(filePath)) {
@@ -43,7 +57,7 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
     }
   }
 
-  const sharedContent = getSharedIssueCommand(repoPath)
+  const sharedContent = getSharedIssueCommand(repoPath, kind)
   const effectiveContent = localContent ?? sharedContent
 
   return {
@@ -62,9 +76,10 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
 export async function writeIssueCommand(
   repoPath: string,
   content: string,
-  options: IssueCommandGitOptions = {}
+  options: IssueCommandGitOptions = {},
+  kind: RepoCommandKind = 'issue'
 ): Promise<void> {
-  const filePath = getIssueCommandFilePath(repoPath)
+  const filePath = getIssueCommandFilePath(repoPath, kind)
   const trimmed = content.trim()
 
   try {
@@ -77,12 +92,12 @@ export async function writeIssueCommand(
     if (!existsSync(orcaDir)) {
       mkdirSync(orcaDir, { recursive: true })
     }
-    if (!(await isIssueCommandIgnoredByGit(repoPath, undefined, options))) {
+    if (!(await isIssueCommandIgnoredByGit(repoPath, undefined, options, kind))) {
       ensureOrcaDirIgnored(repoPath)
     }
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
   } catch (err) {
-    console.error('[hooks] Failed to write issue command:', err)
+    console.error(`[hooks] Failed to write ${kind} command:`, err)
     // Why: re-throw so the IPC handler surfaces the write failure to the renderer's .catch().
     throw err
   }
@@ -92,10 +107,11 @@ export async function writeIssueCommand(
 export async function isIssueCommandIgnoredByGit(
   repoPath: string,
   connectionId?: string,
-  options: IssueCommandGitOptions = {}
+  options: IssueCommandGitOptions = {},
+  kind: RepoCommandKind = 'issue'
 ): Promise<boolean> {
   try {
-    const issueCommandPath = `${ORCA_DIR}/${ISSUE_COMMAND_FILENAME}`
+    const issueCommandPath = getRepoCommandRelativePath(kind)
     const ignored = connectionId
       ? await requireSshGitProvider(connectionId).checkIgnoredPaths(repoPath, [issueCommandPath])
       : await checkIgnoredPaths(

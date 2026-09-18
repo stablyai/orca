@@ -153,4 +153,86 @@ describe('runtime hooks client', () => {
       hostId: 'ssh:server'
     })
   })
+  describe('review kind', () => {
+    it('forwards kind over local IPC', async () => {
+      hooksReadIssueCommand.mockResolvedValue({
+        source: 'none',
+        localContent: null,
+        sharedContent: null,
+        effectiveContent: null,
+        localFilePath: ''
+      })
+      await readRuntimeIssueCommand(
+        { activeRuntimeEnvironmentId: null },
+        'repo-1',
+        undefined,
+        'review'
+      )
+      await writeRuntimeIssueCommand(
+        { activeRuntimeEnvironmentId: null },
+        'repo-1',
+        'Review it',
+        undefined,
+        'review'
+      )
+      expect(hooksReadIssueCommand).toHaveBeenCalledWith({ repoId: 'repo-1', kind: 'review' })
+      expect(hooksWriteIssueCommand).toHaveBeenCalledWith({
+        repoId: 'repo-1',
+        content: 'Review it',
+        kind: 'review'
+      })
+    })
+
+    it('calls the review RPC methods on a runtime host', async () => {
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'rpc-1',
+        ok: true,
+        result: {
+          source: 'shared',
+          localContent: null,
+          sharedContent: 'Review it',
+          effectiveContent: 'Review it',
+          localFilePath: '/r/.orca/review-command'
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      await readRuntimeIssueCommand(
+        { activeRuntimeEnvironmentId: 'env-1' },
+        'repo-1',
+        undefined,
+        'review'
+      )
+      expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
+        selector: 'env-1',
+        method: 'repo.reviewCommandRead',
+        params: { repo: 'repo-1' },
+        timeoutMs: 15_000
+      })
+      await writeRuntimeIssueCommand(
+        { activeRuntimeEnvironmentId: 'env-1' },
+        'repo-1',
+        'Review it',
+        undefined,
+        'review'
+      )
+      expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
+        selector: 'env-1',
+        method: 'repo.reviewCommandWrite',
+        params: { repo: 'repo-1', content: 'Review it' },
+        timeoutMs: 15_000
+      })
+    })
+
+    it('still reads the issue command with no kind and no extra arg', async () => {
+      hooksReadIssueCommand.mockResolvedValue({
+        source: 'none',
+        localContent: null,
+        sharedContent: null,
+        effectiveContent: null,
+        localFilePath: ''
+      })
+      await readRuntimeIssueCommand({ activeRuntimeEnvironmentId: null }, 'repo-1')
+      expect(hooksReadIssueCommand).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    })
+  })
 })

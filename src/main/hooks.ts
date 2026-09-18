@@ -138,10 +138,11 @@ export function hasHooksFile(repoPath: string): boolean {
 }
 
 // Why: detect unrecognised keys so the UI can suggest an update instead of showing a "could not be parsed" error.
-const RECOGNIZED_ORCA_YAML_KEYS = new Set([
+export const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'scripts',
   'setupAgentStartupPolicy',
   'issueCommand',
+  'reviewCommand',
   'defaultTabs',
   'environmentRecipes',
   'worktree'

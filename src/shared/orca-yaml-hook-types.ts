@@ -10,6 +10,7 @@ export type OrcaHooks = {
   }
   setupAgentStartupPolicy?: SetupAgentStartupPolicy
   issueCommand?: string // Shared default command for linked GitHub issues
+  reviewCommand?: string // Shared default prompt for a linked pull/merge request
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
   environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
   environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
@@ -73,6 +74,7 @@ export type PersistedTrustedOrcaHookRepo = {
   setup?: PersistedTrustedOrcaHookEntry
   archive?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
+  reviewCommand?: PersistedTrustedOrcaHookEntry
   vmRecipe?: PersistedTrustedOrcaHookEntry
 }
 

@@ -126,6 +126,7 @@ docs/**
 !docs/reference/windows-process-enumeration.md
 !docs/reference/wsl-runner-verification.md
 !docs/reference/remote-wire-compatibility.md
+!docs/reference/repo-prompt-templates.md
 !docs/reference/renderer-agent-status-performance.md
 !docs/reference/ssh-execution-boundary.md
 !docs/reference/ssh-host-key-verification.md

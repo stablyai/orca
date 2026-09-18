@@ -45,7 +45,7 @@ describe('TaskPage workspace creation source boundaries', () => {
     expect(section).toContain('prefilledName: getGitHubWorkItemWorkspaceSeed(item)')
     expect(section).toContain('initialRepoId: item.repoId')
     expect(section).toContain('initialGitHubWorkItem: item')
-    expect(section).toContain("enableIssueAutomation: item.type === 'issue'")
+    expect(section).toContain('enableIssueAutomation: true')
     expect(section).toContain("telemetrySource: 'sidebar'")
   })
 
