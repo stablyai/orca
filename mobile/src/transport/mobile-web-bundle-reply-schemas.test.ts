@@ -216,5 +216,30 @@ describe('mobile web bundle error codes', () => {
         new Error('invalid_argument: the bundle is mobile_web_bundle_unavailable here')
       )
     ).toBeNull()
+    // Unanchored, this one reads as a refusal; the code is neither the whole message nor what
+    // follows the envelope code.
+    expect(
+      readMobileWebBundleErrorCode(new Error('RPC mobile_web_bundle_unavailable failed'))
+    ).toBeNull()
+  })
+
+  it('reads a dispatcher schema refusal, whose message is prose, as no code at all', () => {
+    for (const message of [
+      'invalid_argument: Invalid input: expected string, received number',
+      'invalid_argument: too_small: expected string to have >=1 characters'
+    ]) {
+      expect(readMobileWebBundleErrorCode(new Error(message))).toBeNull()
+    }
+  })
+})
+
+describe('mobile web bundle operation descriptors', () => {
+  it('accepts no reply but a result', () => {
+    // A salvage or bare-message policy would hand the fetch a half-bundle that fails a hash check
+    // much later, far from the cause.
+    for (const operation of [mobileWebBundleManifestRead, mobileWebBundleChunkRead]) {
+      expect(operation.acceptance).toBe('require-result-or-throw')
+      expect(operation.barrier).toBe('on-settle')
+    }
   })
 })
