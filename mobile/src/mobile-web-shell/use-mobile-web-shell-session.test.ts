@@ -5,6 +5,7 @@ import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bun
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
+import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
 /**
  * The runner, not the rules: what the reducer decides has table tests, and this covers the three
@@ -100,16 +101,23 @@ function stagedGeneration(): StagedGeneration {
   }
 }
 
-/** A store whose cache read is held open, so a test can decide when the answer arrives. */
+/** A store whose cache read is held open, so a test can decide when the answer arrives. Staging can
+ *  be held open too, which is the only way to stand inside the window between it and the commit. */
 function createFakeStore(): {
   store: GenerationStore
   settleCacheRead: Settle<ActiveGeneration | null>
+  holdStage: () => void
+  settleStage: () => void
   staged: () => number
   committed: () => number
+  aborted: () => number
 } {
   let settleCacheRead: Settle<ActiveGeneration | null> = () => {}
+  let releaseStage: () => void = () => {}
+  let heldStage = false
   let staged = 0
   let committed = 0
+  let aborted = 0
   const store: GenerationStore = {
     readActiveGeneration: () =>
       new Promise<ActiveGeneration | null>((resolve) => {
@@ -117,21 +125,33 @@ function createFakeStore(): {
       }),
     stageGeneration: async () => {
       staged += 1
+      if (heldStage) {
+        await new Promise<void>((resolve) => {
+          releaseStage = resolve
+        })
+      }
       return stagedGeneration()
     },
     commitGeneration: async () => {
       committed += 1
       return activeGeneration()
     },
-    abortStagedGeneration: async () => undefined,
+    abortStagedGeneration: async () => {
+      aborted += 1
+    },
     sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => undefined
   }
   return {
     store,
     settleCacheRead: (value) => settleCacheRead(value),
+    holdStage: () => {
+      heldStage = true
+    },
+    settleStage: () => releaseStage(),
     staged: () => staged,
-    committed: () => committed
+    committed: () => committed,
+    aborted: () => aborted
   }
 }
 
@@ -139,16 +159,21 @@ type Mounted = {
   tree: ReactTestRenderer
   retry: () => void
   rerender: () => void
+  states: () => readonly MobileWebShellSessionState[]
 }
 
 async function mount(store: GenerationStore): Promise<Mounted> {
-  const handle: { retry: () => void } = { retry: () => {} }
+  const handle: { retry: () => void; states: MobileWebShellSessionState[] } = {
+    retry: () => {},
+    states: []
+  }
   function Probe() {
     const session = useMobileWebShellSession({
       hostId: HOST_ID,
       runtime: { createStore: () => store, mintSessionId: () => 'session-id', now: () => 0 }
     })
     handle.retry = session.retry
+    handle.states.push(session.state)
     return null
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -162,7 +187,8 @@ async function mount(store: GenerationStore): Promise<Mounted> {
   return {
     tree,
     retry: () => handle.retry(),
-    rerender: () => tree.update(createElement(Probe))
+    rerender: () => tree.update(createElement(Probe)),
+    states: () => handle.states
   }
 }
 
@@ -215,6 +241,38 @@ describe('the hybrid shell runner', () => {
     await flush()
     expect(fake.staged()).toBe(0)
     expect(fake.committed()).toBe(0)
+  })
+
+  it('takes the staged tree back out when the unmount lands between staging and the commit', async () => {
+    const fake = createFakeStore()
+    fake.holdStage()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(null)
+    await flush()
+    const inFlight = doubles.fetches[0]
+    if (inFlight === undefined) {
+      throw new Error('no download was started')
+    }
+    inFlight.settle({
+      manifest: doubles.manifest,
+      assets: new Map(),
+      totalBytes: 2048,
+      elapsedMs: 1
+    })
+    await flush()
+    expect(fake.staged()).toBe(1)
+
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+    await act(async () => {
+      fake.settleStage()
+    })
+    // The commit is the write the staging tree cannot undo: it renames into the active slot and
+    // moves the host index, so a generation nobody asked for would be the one the next mount opens.
+    expect(fake.committed()).toBe(0)
+    expect(fake.aborted()).toBe(1)
+    expect(mounted.states().map((state) => state.kind)).not.toContain('ready')
   })
 
   it('reads the manifest through the client the host has now, not the one it opened with', async () => {
