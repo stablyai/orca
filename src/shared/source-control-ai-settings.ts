@@ -1,5 +1,6 @@
 import { isCustomAgentId } from './commit-message-agent-spec'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
+import { omitUndefinedValues } from './rpc-contract/ui-update-value-tolerance-params'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_ACTION_IDS,
@@ -61,19 +62,21 @@ export function sourceControlAiSettingsFromLegacy(
   const legacyActionRecipe = actionRecipeFromLegacyCommitMessageAi(legacy)
   return {
     ...defaults,
-    enabled: legacy.enabled,
-    agentId: legacy.agentId,
-    selectedModelByAgent: { ...legacy.selectedModelByAgent },
-    selectedModelByAgentByHost: copyRecord(legacy.selectedModelByAgentByHost) ?? {},
-    discoveredModelsByAgent: copyRecord(legacy.discoveredModelsByAgent) ?? {},
-    discoveredModelsByAgentByHost: copyRecord(legacy.discoveredModelsByAgentByHost) ?? {},
-    selectedThinkingByModel: { ...legacy.selectedThinkingByModel },
-    customAgentCommand: legacy.customAgentCommand,
-    instructionsByOperation: {
-      commitMessage: legacy.customPrompt ?? '',
-      pullRequest: '',
-      branchName: legacy.customPrompt ?? ''
-    },
+    ...omitUndefinedValues({
+      enabled: legacy.enabled,
+      agentId: legacy.agentId,
+      selectedModelByAgent: { ...legacy.selectedModelByAgent },
+      selectedModelByAgentByHost: copyRecord(legacy.selectedModelByAgentByHost) ?? {},
+      discoveredModelsByAgent: copyRecord(legacy.discoveredModelsByAgent) ?? {},
+      discoveredModelsByAgentByHost: copyRecord(legacy.discoveredModelsByAgentByHost) ?? {},
+      selectedThinkingByModel: { ...legacy.selectedThinkingByModel },
+      customAgentCommand: legacy.customAgentCommand,
+      instructionsByOperation: {
+        commitMessage: legacy.customPrompt ?? '',
+        pullRequest: '',
+        branchName: legacy.customPrompt ?? ''
+      }
+    }),
     actions: {
       ...defaults.actions,
       commitMessage: legacyActionRecipe,
@@ -92,7 +95,9 @@ export function normalizeSourceControlAiSettings(
   value: SourceControlAiSettings | null | undefined,
   legacy?: CommitMessageAiSettings | null
 ): SourceControlAiSettings {
-  const base = value ?? sourceControlAiSettingsFromLegacy(legacy)
+  // Persisted settings reach main over structured clone, which preserves an own key whose
+  // value is undefined; spread over the defaults it would clobber them (crash 21699b66).
+  const base = omitUndefinedValues(value ?? sourceControlAiSettingsFromLegacy(legacy))
   const defaults = getDefaultSourceControlAiSettings()
   const normalizedLaunchActionDefaults = normalizeSourceControlAiActionDefaults(
     base.launchActionDefaults
@@ -132,7 +137,7 @@ export function normalizeSourceControlAiSettings(
       ]
     })
   ) as SourceControlAiSettings['actions']
-  return {
+  return omitUndefinedValues({
     ...defaults,
     ...base,
     selectedModelByAgent: { ...defaults.selectedModelByAgent, ...base.selectedModelByAgent },
@@ -148,11 +153,11 @@ export function normalizeSourceControlAiSettings(
     },
     instructionsByOperation: {
       ...defaults.instructionsByOperation,
-      ...base.instructionsByOperation
+      ...omitUndefinedValues(base.instructionsByOperation ?? {})
     },
     modelOverridesByOperation: copyRecord(base.modelOverridesByOperation),
     prCreationDefaults: { ...defaults.prCreationDefaults, ...base.prCreationDefaults },
     actions: { ...defaults.actions, ...normalizedActions, ...migratedTextActions },
     launchActionDefaults: normalizedLaunchActionDefaults ?? defaults.launchActionDefaults
-  }
+  })
 }
