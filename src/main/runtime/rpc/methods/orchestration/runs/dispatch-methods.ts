@@ -32,7 +32,7 @@ async function resolveDispatchWorktreePath(
   if (!worktreeId) {
     return undefined
   }
-  return (await runtime.showManagedWorktree(`id:${worktreeId}`)).path
+  return (await runtime.showTerminalWorkspaceLaunchScope(`id:${worktreeId}`)).path
 }
 
 export const ORCHESTRATION_DISPATCH_METHODS = [

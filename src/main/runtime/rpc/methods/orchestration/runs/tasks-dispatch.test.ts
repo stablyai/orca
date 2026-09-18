@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { buildInjectRejectionMessage } from '../../../../../../shared/orchestration-dispatch-refusal-contract'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
@@ -220,37 +221,16 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.dispatch', () => {
-    function resolvedWorktree(
+    function resolvedWorkspaceScope(
+      id: string,
       path: string
-    ): Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>> {
+    ): Awaited<ReturnType<OrcaRuntimeService['showTerminalWorkspaceLaunchScope']>> {
       return {
-        id: 'repo::dispatch-worktree',
-        repoId: 'repo',
+        id,
         path,
-        head: 'dispatch-head',
-        branch: 'dispatch-worker',
-        isBare: false,
-        isMainWorktree: false,
-        displayName: 'dispatch-worker',
-        comment: '',
-        linkedIssue: null,
-        linkedPR: null,
-        linkedLinearIssue: null,
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 0,
-        parentWorktreeId: null,
-        childWorktreeIds: [],
-        lineage: null,
-        git: {
-          path,
-          head: 'dispatch-head',
-          branch: 'dispatch-worker',
-          isBare: false,
-          isMainWorktree: false
-        }
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
       }
     }
 
@@ -324,8 +304,8 @@ describe('orchestration RPC methods', () => {
         launchTokenHash: 'launch-token-hash',
         hostScope: { kind: 'local', hostId: 'local' }
       })
-      vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue(
-        resolvedWorktree('/tmp/dispatch-worktree')
+      vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope').mockResolvedValue(
+        resolvedWorkspaceScope('repo::dispatch-worktree', '/tmp/dispatch-worktree')
       )
       const task = db.createTask({ spec: 'work' })
 
@@ -435,8 +415,8 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
         handle === 'term_a' ? dispatchAuthority('repo::dispatch-worktree') : null
       )
-      vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue(
-        resolvedWorktree('/tmp/dispatch-worktree')
+      vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope').mockResolvedValue(
+        resolvedWorkspaceScope('repo::dispatch-worktree', '/tmp/dispatch-worktree')
       )
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
@@ -473,6 +453,59 @@ describe('orchestration RPC methods', () => {
 
       expect(dispatched).toContain('Your worktree path is: /tmp/dispatch-worktree')
       expect(preview).toContain('Your worktree path is: /tmp/dispatch-worktree')
+    })
+
+    it.each([
+      ['a folder workspace', 'folder:dispatch-folder', '/tmp/dispatch-folder'],
+      ['the floating terminal', FLOATING_TERMINAL_WORKTREE_ID, '/tmp/dispatch-floating']
+    ] as const)('resolves the terminal workspace path for %s', async (_label, worktreeId, path) => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(
+        dispatchAuthority(worktreeId)
+      )
+      const resolveScope = vi
+        .spyOn(runtime, 'showTerminalWorkspaceLaunchScope')
+        .mockResolvedValue(resolvedWorkspaceScope(worktreeId, path))
+
+      const dispatched = preambleFrom(
+        await call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          returnPreamble: true
+        })
+      )
+      const preview = preambleFrom(
+        await call('orchestration.dispatchShow', {
+          task: task.id,
+          preamble: true,
+          from: 'term_coord'
+        })
+      )
+
+      expect(resolveScope).toHaveBeenCalledWith(`id:${worktreeId}`)
+      expect(dispatched).toContain(`Your worktree path is: ${path}`)
+      expect(preview).toContain(`Your worktree path is: ${path}`)
+    })
+
+    it('fails closed when terminal workspace path resolution fails', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(
+        dispatchAuthority('folder:stale')
+      )
+      vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope').mockRejectedValue(
+        new Error('selector_not_found')
+      )
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a'
+        })
+      ).rejects.toThrow('selector_not_found')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(db.getTask(task.id)?.status).toBe('ready')
     })
 
     it('injects preamble through the agent prompt path instead of raw terminal send', async () => {
