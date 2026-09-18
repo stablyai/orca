@@ -58,7 +58,9 @@ jobs:
         with:
           path: dist/win-unpacked
           # mobile/ is in the key because beforePack requires out/mobile-web, whose bytes come from
-          # the mobile install; a mobile-only change must miss this cache, not reuse a stale build.
+          # the mobile install and, once Phase C flips the bundle, from the page trees below; a
+          # mobile-only change must miss this cache, not reuse a stale installer. src/** and
+          # config/** already cover src/mobile-web and the two bundle builders.
           key: >-
             win-unpacked-${{ hashFiles(
               'src/**',
@@ -66,7 +68,10 @@ jobs:
               'package.json',
               'pnpm-lock.yaml',
               'mobile/package.json',
-              'mobile/pnpm-lock.yaml'
+              'mobile/pnpm-lock.yaml',
+              'mobile/app/**',
+              'mobile/src/**',
+              'mobile/web-entry/**'
             ) }}
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
