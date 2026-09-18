@@ -12,6 +12,7 @@ import {
 } from './build-mobile-web-app-bundle.mjs'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
+  ROUTE_SOURCE_LOADERS,
   collectMobileWebAppRouteKeys,
   collectMobileWebAppRoutes
 } from './mobile-web-app-route-manifest.mjs'
@@ -264,6 +265,15 @@ describeBundling('the app bundle', () => {
     expect(options.splitting).toBe(true)
     expect(options.chunkNames).toBe('[hash]')
     expect(options.metafile).toBe(true)
+  })
+
+  it('reads a route source the same way the export guard does', async () => {
+    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
+    // The guard parses each route on its own, outside this build. Sharing the table is what stops
+    // a loader the bundle relies on from being missing there and reported as a syntax error.
+    for (const [extension, loader] of Object.entries(ROUTE_SOURCE_LOADERS)) {
+      expect(options.loader[extension], extension).toBe(loader)
+    }
   })
 
   it('applies every shim it names', async () => {

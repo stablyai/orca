@@ -156,6 +156,24 @@ describe('route manifest', () => {
     })
   }, 60_000)
 
+  itBundling(
+    'reads a .js route that carries JSX, which the app tree allows',
+    async () => {
+      await withScratch(async (scratch) => {
+        // React Native ships untranspiled JSX inside .js, and collectMobileWebAppRoutes accepts a
+        // .js route, so the guard has to parse one the same way the bundle does.
+        const file = join(scratch, 'jsx-route.js')
+        await writeFile(
+          file,
+          'const boundary = () => <div />\nexport { boundary as ErrorBoundary }\nexport default () => <div />\n',
+          'utf8'
+        )
+        expect((await routeModuleSynchronousExports(file)).named).toEqual(['ErrorBoundary'])
+      })
+    },
+    60_000
+  )
+
   it('imports a .web.tsx sibling under the native route key', async () => {
     await withScratch(async (scratch) => {
       const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)

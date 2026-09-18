@@ -111,6 +111,14 @@ export default routeContext
  */
 export const ROUTE_MODULE_SYNCHRONOUS_EXPORTS = ['unstable_settings', 'ErrorBoundary']
 
+/**
+ * How esbuild has to read a route's own source. React Native ships untranspiled JSX inside `.js`,
+ * including expo-router's own build/, so a `.js` route that carries JSX is a syntax error without
+ * this. The builder spreads the same table into its own loaders, which is what keeps the guard
+ * reading a route exactly as the bundle does.
+ */
+export const ROUTE_SOURCE_LOADERS = { '.js': 'jsx' }
+
 /** esbuild's own normalized output for a re-export whose names it did not resolve. */
 const STAR_REEXPORT = /^export \* from "(.*)";$/gm
 
@@ -134,6 +142,7 @@ export async function routeModuleSynchronousExports(modulePath) {
     write: false,
     format: 'esm',
     metafile: true,
+    loader: ROUTE_SOURCE_LOADERS,
     // Never written; it only names the single output the metafile is keyed by.
     outdir: 'route-exports',
     logLevel: 'silent'

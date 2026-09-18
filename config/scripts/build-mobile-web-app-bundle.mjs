@@ -13,6 +13,7 @@ import {
   contentTypeForExtension
 } from './build-mobile-web-bundle.mjs'
 import {
+  ROUTE_SOURCE_LOADERS,
   assertRoutesCarryNoSynchronousExports,
   collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest
@@ -148,7 +149,7 @@ export function mobileWebAppBuildOptions(routes) {
     // img-src 'self', which refuses data:. Content-hashed names keep the buildId reproducible.
     // A font would fail the build here rather than silently ship under font-src 'none'.
     loader: {
-      '.js': 'jsx',
+      ...ROUTE_SOURCE_LOADERS,
       '.png': 'file',
       '.jpg': 'file',
       '.jpeg': 'file',
