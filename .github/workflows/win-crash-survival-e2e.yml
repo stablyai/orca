@@ -70,6 +70,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist/orca-windows-setup.exe
+          # The mobile page trees are in the key because beforePack builds the mobile web bundle
+          # into the installer; src/** and config/** already cover src/mobile-web and the two
+          # bundle builders. A mobile-only change must miss this cache, not reuse a stale exe.
           key: >-
             crash-survival-installer-${{ hashFiles(
               'src/**',
@@ -88,7 +91,12 @@ jobs:
               '.npmrc',
               'package.json',
               'pnpm-lock.yaml',
-              'pnpm-workspace.yaml'
+              'pnpm-workspace.yaml',
+              'mobile/package.json',
+              'mobile/pnpm-lock.yaml',
+              'mobile/app/**',
+              'mobile/src/**',
+              'mobile/web-entry/**'
             ) }}
 
       # Why: production edits miss the installer cache by design, but Electron

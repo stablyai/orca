@@ -62,6 +62,8 @@
 /mobile/src/**/*.png -text
 /mobile/src/**/*.jpg -text
 /mobile/src/**/*.jpeg -text
+/mobile/src/**/*.gif -text
+/mobile/src/**/*.ico -text
 /mobile/src/**/*.webp -text
 /mobile/src/**/*.ttf -text
 /mobile/src/**/*.otf -text
@@ -70,6 +72,8 @@
 /mobile/app/**/*.png -text
 /mobile/app/**/*.jpg -text
 /mobile/app/**/*.jpeg -text
+/mobile/app/**/*.gif -text
+/mobile/app/**/*.ico -text
 /mobile/app/**/*.webp -text
 /mobile/app/**/*.ttf -text
 /mobile/app/**/*.otf -text
@@ -78,6 +82,8 @@
 /mobile/web-entry/**/*.png -text
 /mobile/web-entry/**/*.jpg -text
 /mobile/web-entry/**/*.jpeg -text
+/mobile/web-entry/**/*.gif -text
+/mobile/web-entry/**/*.ico -text
 /mobile/web-entry/**/*.webp -text
 /mobile/web-entry/**/*.ttf -text
 /mobile/web-entry/**/*.otf -text

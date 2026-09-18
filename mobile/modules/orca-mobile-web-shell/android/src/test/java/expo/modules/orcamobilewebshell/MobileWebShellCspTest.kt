@@ -1,5 +1,6 @@
 package expo.modules.orcamobilewebshell
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,7 +11,8 @@ class MobileWebShellCspTest {
     val directives = MOBILE_WEB_SHELL_CSP.split("; ")
     assertTrue(directives.contains("default-src 'none'"))
     assertTrue(directives.contains("script-src 'self'"))
-    assertTrue(directives.contains("style-src 'self'"))
+    // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
+    assertTrue(directives.contains("style-src 'self' 'unsafe-inline'"))
     assertTrue(directives.contains("img-src 'self'"))
     // The bootstrap page reads ./manifest.json from its own origin, which is one read-only
     // directory behind the manifest map, so 'self' reaches nothing it cannot already read.
@@ -26,7 +28,14 @@ class MobileWebShellCspTest {
 
   @Test
   fun `grants nothing the build rules say the bundle never needs`() {
-    assertFalse(MOBILE_WEB_SHELL_CSP.contains("unsafe-inline"))
+    // 'unsafe-inline' is granted to style-src and to nothing else: the page's code still has to
+    // arrive as a fetched same-origin script, which is the directive that matters.
+    val directives = MOBILE_WEB_SHELL_CSP.split("; ")
+    assertEquals(
+      listOf("style-src 'self' 'unsafe-inline'"),
+      directives.filter { it.contains("unsafe-inline") }
+    )
+    assertTrue(directives.contains("script-src 'self'"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("unsafe-eval"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("data:"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("blob:"))

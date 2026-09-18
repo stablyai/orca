@@ -206,14 +206,17 @@ import Foundation
     let directives = header.components(separatedBy: "; ")
     precondition(directives.contains("default-src 'none'"))
     precondition(directives.contains("script-src 'self'"))
+    // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
+    precondition(directives.contains("style-src 'self' 'unsafe-inline'"))
     precondition(directives.contains("connect-src 'self'"))
     precondition(directives.contains("worker-src 'none'"))
     precondition(directives.contains("frame-src 'none'"))
     precondition(directives.contains("base-uri 'none'"))
     precondition(directives.contains("form-action 'none'"))
     precondition(directives.contains("frame-ancestors 'none'"))
-    // An inline script or an eval would make the no-inline-script build rule unenforced.
-    precondition(!header.contains("unsafe-inline"))
+    // 'unsafe-inline' is granted to style-src and to nothing else: the page's code still has to
+    // arrive as a fetched same-origin script, which is the directive that matters.
+    precondition(directives.filter { $0.contains("unsafe-inline") } == ["style-src 'self' 'unsafe-inline'"])
     precondition(!header.contains("unsafe-eval"))
     precondition(!header.contains("data:"))
     precondition(!header.contains("blob:"))

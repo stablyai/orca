@@ -8,9 +8,10 @@ package expo.modules.orcamobilewebshell
 internal val MOBILE_WEB_SHELL_CSP = listOf(
   "default-src 'none'",
   "script-src 'self'",
-  // 'self' holds only while the bundle ships linked stylesheets. React Native Web emits runtime
-  // style elements, so Phase C has to revisit this openly rather than relax it quietly.
-  "style-src 'self'",
+  // React Native Web 0.21.2 injects its stylesheet at runtime with no nonce support, so the
+  // Phase C page cannot paint under 'self' alone (measured: the render check under this exact
+  // header). This relaxes styling only; script-src 'self' is untouched.
+  "style-src 'self' 'unsafe-inline'",
   "img-src 'self'",
   "font-src 'none'",
   // The origin is one read-only directory behind the manifest map, so 'self' reaches nothing the
