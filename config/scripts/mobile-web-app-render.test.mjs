@@ -119,16 +119,45 @@ const UNMATCHED = 'Unmatched Route'
 async function render(route) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
-  page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
+  let abortMount = () => {}
+  // An uncaught error from the entry means nothing will ever mount. Racing it against the wait
+  // reports that error in a second instead of a 30s timeout that names nothing -- which is what a
+  // native-only route module, throwing at import before React runs, looks like from here.
+  const mountAborted = new Promise((_resolve, reject) => {
+    abortMount = reject
+  })
+  page.on('pageerror', (error) => {
+    errors.push(`${error.name}: ${error.message}`)
+    abortMount(error)
+  })
   page.on('console', (message) => {
     if (message.type() === 'error') {
       errors.push(`console.error: ${message.text()}`)
     }
   })
   await page.goto(`${origin}${route}`, { waitUntil: 'load' })
-  await page.waitForFunction(() => (document.getElementById('root')?.children.length ?? 0) > 0, {
-    timeout: 30_000
-  })
+  // The entry's own signal, not "#root has children": an error boundary or a half-painted tree
+  // also fills #root, and this only lands once expo-router's tree below the wrapper has committed.
+  // Polled on a timer rather than Playwright's default animation frames, which a page that never
+  // paints never delivers.
+  const mounted = page.waitForFunction(
+    () => document.documentElement.dataset.orcaWebEntry === 'mounted',
+    {
+      timeout: 30_000,
+      polling: 250
+    }
+  )
+  try {
+    await Promise.race([mounted, mountAborted])
+  } catch (cause) {
+    const state = await page.evaluate(
+      () => document.documentElement.dataset.orcaWebEntry ?? 'absent'
+    )
+    throw new Error(
+      `${route} never mounted (entry ${state}): ${errors.join(' | ') || 'no page or console error'}`,
+      { cause }
+    )
+  }
   const text = await page.evaluate(() => document.body.innerText)
   await page.close()
   // A CSP refusal reaches the page as a console error, so the caller's empty-errors assertion is
