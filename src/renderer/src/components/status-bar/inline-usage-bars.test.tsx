@@ -140,4 +140,37 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('width:58%')
     expect(markup).not.toContain('width:32%')
   })
+
+  function errorLimits(failureKind?: string): ProviderRateLimits {
+    return {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'failed',
+      status: 'error',
+      ...(failureKind
+        ? {
+            usageMetadata: {
+              failureKind: failureKind as NonNullable<
+                ProviderRateLimits['usageMetadata']
+              >['failureKind']
+            }
+          }
+        : {})
+    }
+  }
+
+  it('tells a dead login apart from a throttled or unreachable usage endpoint', async () => {
+    const { InlineUsageBars } = await import('./InlineProviderUsage')
+    const render = (limits: ProviderRateLimits): string =>
+      renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(render(errorLimits('reauth-required'))).toContain('Sign in to see usage')
+    expect(render(errorLimits('stale-token'))).toContain('Sign in to see usage')
+    expect(render(errorLimits())).toContain('Sign in to see usage')
+    expect(render(errorLimits('rate-limited'))).toContain('Usage temporarily unavailable')
+    expect(render(errorLimits('network'))).toContain('Usage unavailable')
+    expect(render(errorLimits('network'))).not.toContain('Sign in')
+  })
 })
