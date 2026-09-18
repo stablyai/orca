@@ -103,7 +103,7 @@ export function EditorPanelHeader({
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
   )
-  const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
+  const { canNavigate, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
 
@@ -227,7 +227,7 @@ export function EditorPanelHeader({
                   'auto.components.editor.EditorPanelHeader.2076ecfc9c',
                   'Previous change'
                 )}
-                disabled={changeCount === 0}
+                disabled={!canNavigate}
               >
                 <ArrowUp size={14} />
               </button>
@@ -253,7 +253,7 @@ export function EditorPanelHeader({
                   'auto.components.editor.EditorPanelHeader.631dab0df3',
                   'Next change'
                 )}
-                disabled={changeCount === 0}
+                disabled={!canNavigate}
               >
                 <ArrowDown size={14} />
               </button>

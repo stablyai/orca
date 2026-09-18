@@ -1,4 +1,4 @@
-import { Suspense, type JSX, type Ref } from 'react'
+import { Suspense, useCallback, useEffect, useState, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
@@ -12,8 +12,20 @@ import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { translate } from '@/i18n/i18n'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { installMonacoDiffChangeNavigationShortcut } from './editor-shortcuts'
+import { useDiffNavigation } from './diff-navigation-context'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
+
+function assignPanelRef(ref: Ref<HTMLDivElement>, node: HTMLDivElement | null): void {
+  if (typeof ref === 'function') {
+    ref(node)
+    return
+  }
+  if (ref) {
+    ref.current = node
+  }
+}
 
 type EditorPanelShellProps = {
   panelRef: Ref<HTMLDivElement>
@@ -96,8 +108,34 @@ export function EditorPanelShell({
   onRenameConfirm,
   markdownAnnotationsEnabled
 }: EditorPanelShellProps): JSX.Element {
+  const [rootNode, setRootNode] = useState<HTMLDivElement | null>(null)
+  const { goToNextDiff, goToPreviousDiff } = useDiffNavigation()
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      assignPanelRef(panelRef, node)
+      setRootNode(node)
+    },
+    [panelRef]
+  )
+
+  useEffect(() => {
+    if (!rootNode || !model.hasWorktreeDiffNavigation || model.isChangesMode) {
+      return
+    }
+    return installMonacoDiffChangeNavigationShortcut({
+      getContainerDomNode: () => rootNode,
+      navigate: (direction) => {
+        if (direction === 'next') {
+          goToNextDiff()
+        } else {
+          goToPreviousDiff()
+        }
+      }
+    })
+  }, [goToNextDiff, goToPreviousDiff, model.hasWorktreeDiffNavigation, model.isChangesMode, rootNode])
+
   return (
-    <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
+    <div ref={setRootRef} className="flex flex-col flex-1 min-w-0 min-h-0">
       {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
         <EditorPanelHeader
           activeFile={activeFile}
@@ -150,7 +188,7 @@ export function EditorPanelShell({
           isNotebook={model.isNotebook}
           mdViewMode={model.mdViewMode}
           inlineMarkdownRenderState={model.inlineMarkdownRenderState}
-          isChangesMode={model.isDiffSurface && !model.isSingleDiff}
+          isChangesMode={model.isChangesMode}
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}
           handleContentChange={onContentChange}
