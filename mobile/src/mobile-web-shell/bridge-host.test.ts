@@ -578,6 +578,37 @@ describe('teardown', () => {
     expect(bridge.client.stateListeners()).toBe(1)
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(1)
+    // Full service, not just an answered `ready`: the state fan-out reaches this document too.
+    bridge.client.pushState('reconnecting')
+    expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'reconnecting' } })
+    expect(bridge.diagnostics).toEqual([])
+  })
+
+  it('forwards no straggler from the document that said goodbye', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    // Frames the closed document posted before it went away. Forwarding one now would answer it
+    // into whichever document loads in next.
+    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    bridge.host.receive(subscribeFrame(OTHER))
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.client.streams).toHaveLength(0)
+    expect(bridge.client.foregroundCalls).toEqual([])
+    expect(bridge.posted).toHaveLength(0)
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 3 }, () => ({ kind: 'frame-after-close' }))
+    )
+  })
+
+  it('posts nothing into a view that belongs to no document yet', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    // The client keeps running between documents, and this listener is still attached: a `state`
+    // posted now arrives in the replacement document before its own `init`.
+    bridge.client.pushState('reconnecting')
+    bridge.client.pushState('connected')
+    expect(bridge.posted).toHaveLength(0)
     expect(bridge.diagnostics).toEqual([])
   })
 })

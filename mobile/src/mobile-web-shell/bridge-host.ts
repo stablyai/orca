@@ -35,6 +35,9 @@ export type BridgeHostDiagnostic =
   /** A client that threw where the bridge only forwards. Nothing is owed to the page for a notify,
    *  so the throw is reported rather than answered. */
   | { kind: 'notify-failed'; error: unknown }
+  /** A frame that arrived between a page's `close` and the next document's `ready`. It belongs to
+   *  the closed document, and serving it would answer into whatever loads in next. */
+  | { kind: 'frame-after-close' }
 
 export type BridgeHostOptions = {
   client: RpcClient
@@ -86,6 +89,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId } = options
   const pending = new Map<string, PendingRequest>()
   let closed = false
+  // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
+  // between the two the view belongs to no document, so nothing is served and nothing is posted.
+  let serving = true
   let postFailureReported = false
   let notifyFailureReported = false
 
@@ -102,6 +108,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   function sendJson(json: string): void {
     // Defensive: teardown already settles everything that could post; this fences callers added later.
     if (closed) {
+      return
+    }
+    // Between documents the view still exists and still accepts posts, which is exactly why this is
+    // checked: a `state` frame sent now lands in the next document before it has said `ready`.
+    if (!serving) {
       return
     }
     // A `post` that throws where it should reject would escape into the client's own state-change
@@ -298,10 +309,18 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   }
 
   function dispatch(message: BridgeClientMessage): void {
+    // `ready` is what claims the view, whether it is the first document's or a replacement's; a
+    // re-asked `ready` from the document already being served is answered the same way.
+    if (message.type === 'ready') {
+      serving = true
+      sendInit()
+      return
+    }
+    if (!serving) {
+      options.onDiagnostic?.({ kind: 'frame-after-close' })
+      return
+    }
     switch (message.type) {
-      case 'ready':
-        sendInit()
-        return
       case 'request':
         handleRequest(message)
         return
@@ -331,6 +350,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         // Not a latch. The document that loads next into this same view says `ready` over this same
         // host, and a host that had shut itself would leave that `ready` retrying forever.
         settleAll(false)
+        serving = false
         return
     }
   }
