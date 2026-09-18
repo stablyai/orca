@@ -12,16 +12,52 @@ type FederationSetupStageArgs = {
   effects: FederationEffect[]
 }
 
-function recordStage(args: FederationSetupStageArgs, stage: string): void {
+/** One writer derives what a stage leaves behind, so no caller can persist a narrower residual
+ *  set than the effects it just recorded. */
+function writeStage(args: {
+  db: OrchestrationDb
+  dispatchId: string
+  stage: string
+  worktreeId: string
+  terminalHandle?: string
+  setupState?: string
+  effects: FederationEffect[]
+}): void {
   args.db.recordRemoteAttachmentStage({
+    dispatchId: args.dispatchId,
+    stage: args.stage,
+    worktreeId: args.worktreeId,
+    ...(args.terminalHandle ? { terminalHandle: args.terminalHandle } : {}),
+    ...(args.setupState ? { setupState: args.setupState } : {}),
+    effects: args.effects,
+    residualResources: args.effects.filter(isFederationResidualEffect)
+  })
+}
+
+function recordStage(args: FederationSetupStageArgs, stage: string): void {
+  writeStage({
+    db: args.db,
     dispatchId: args.dispatchId,
     stage,
     worktreeId: args.worktreeId,
     terminalHandle: args.terminalHandle,
     setupState: args.setup.state,
-    effects: args.effects,
-    residualResources: args.effects.filter(isFederationResidualEffect)
+    effects: args.effects
   })
+}
+
+/**
+ * The remote worktree exists from `createManagedWorktree` onward, but nothing owned it until the
+ * terminal was ready. Recording it here, before any later step can throw, is what lets a failed
+ * attach name something to reclaim: the attachment row is the only record the home peer reads back.
+ */
+export function persistFederatedWorktreeCreation(args: {
+  db: OrchestrationDb
+  dispatchId: string
+  worktreeId: string
+  effects: FederationEffect[]
+}): void {
+  writeStage({ ...args, stage: 'worktree_created' })
 }
 
 export function persistFederatedReadinessStage(args: FederationSetupStageArgs): void {
