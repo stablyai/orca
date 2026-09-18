@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml:1:1-72
+INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml:1:1-72
+	package
+		INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml:1:11-69
+uses-sdk
+INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml
+INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /private/tmp/ota-b3-shell/mobile/modules/orca-mobile-web-shell/android/src/main/AndroidManifest.xml
