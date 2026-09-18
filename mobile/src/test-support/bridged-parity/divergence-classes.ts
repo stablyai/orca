@@ -172,11 +172,11 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
  * grew, a class that shrank, and a golden that moved out of a class into `identical` are each a red
  * run whose answer is an edit here.
  *
- * Exact rather than an upper bound because a bound cannot see the up direction at all: a golden
- * reported `identical` instead of the excluded class it belongs to leaves every per-class bound,
- * the sum and the size of the corpus holding. Two excluded classes trading members when a fix
- * changes which difference a run meets first is the same story — both numbers move, and both moves
- * are edits here rather than a run that quietly passes.
+ * Exact rather than a bound because a bound cannot see the up direction at all: a golden reported
+ * `identical` instead of the excluded class it belongs to still leaves nothing unclassified and
+ * nothing diverging outside an excluded class, which is everything else the suite asks. Two
+ * excluded classes trading members when a fix changes which difference a run meets first is the
+ * same story — both numbers move, and both moves are edits here rather than a quiet pass.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
   identical: 396,
@@ -206,10 +206,10 @@ export type BridgedParityTally = {
 /**
  * Every number a run reported that `BRIDGED_PARITY_BASELINE` does not, said in one line each.
  *
- * Both directions, and `identical` on the same footing as a class, because that is the one the rest
- * of the suite is blind to. Its other checks are a per-class upper bound, a sum over the classes and
- * the size of the corpus, and a golden reported `identical` instead of the excluded class it belongs
- * to satisfies all three at once.
+ * Both directions, and `identical` on the same footing as a class, because that is the direction
+ * nothing else in the suite sees. A golden reported `identical` instead of the excluded class it
+ * belongs to leaves `unclassified` empty, leaves every diverging golden inside a class the
+ * exclusions name, and leaves the corpus its size: this is the only number that moves.
  */
 export function bridgedParityTallyDrift(tally: BridgedParityTally): readonly string[] {
   const ran: Readonly<Record<string, number>> = { ...tally.counts, identical: tally.identical }

@@ -234,9 +234,9 @@ describe('what the pin still admits', () => {
   })
 
   it('goes red on a golden that stopped diverging, which every other check lets through', () => {
-    // The direction a bound cannot see. One `result-absent-settlement` golden reported `identical`
-    // instead: each class is still within its bound, the diverging classes still sum to the
-    // exclusions, and the corpus is still 787. Only the number for `identical` moved.
+    // The direction the rest of the suite cannot see. One `result-absent-settlement` golden
+    // reported `identical` instead: nothing is unclassified, every diverging golden is still in an
+    // excluded class, and the corpus is still 787. Only these two numbers moved.
     const tally = asCounted()
     const moved: BridgedParityTally = {
       identical: tally.identical + 1,

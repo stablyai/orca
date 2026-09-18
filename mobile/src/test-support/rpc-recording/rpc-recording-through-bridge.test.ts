@@ -352,9 +352,9 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
         divergedOutsideAnExcludedClass: 0
       })
-      // Every count exactly, `identical` included, which is what the checks above cannot do: they
-      // are an upper bound and a sum, and a golden reported `identical` rather than the excluded
-      // class it belongs to satisfies both. The size of the corpus follows, being their total.
+      // Every count exactly, `identical` included, which is the direction the two checks above
+      // cannot see: a golden reported `identical` rather than the excluded class it belongs to
+      // leaves both of them holding. The size of the corpus follows, being the total of these.
       expect({ tally: bridgedParityTallyDrift({ identical, counts }) }).toEqual({ tally: [] })
     })
 
