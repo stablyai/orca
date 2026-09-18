@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon, ZhipuIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import type { StatusBarController } from './use-status-bar-controller'
@@ -133,6 +133,16 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('zhipu')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('zhipu')
+          }}
+        >
+          <ZhipuIcon size={14} />
+          {translate('auto.components.status.bar.StatusBar.zhipuUsageMenu', 'Zhipu / Z.AI Usage')}
+        </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}
           onCheckedChange={() => {
