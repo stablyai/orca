@@ -37,7 +37,10 @@ function formatPriorRetryPlacement(prior: PriorRetryPlacement | undefined): stri
   }
   const parts: string[] = []
   if (prior.resolvedWorktreeId) {
-    parts.push(`worktree ${prior.resolvedWorktreeId}`)
+    const selector = prior.resolvedWorktreeId.startsWith('id:')
+      ? prior.resolvedWorktreeId
+      : `id:${prior.resolvedWorktreeId}`
+    parts.push(`--worktree ${selector}`)
   } else if (prior.worktree) {
     parts.push(`--worktree ${prior.worktree}`)
   }

@@ -92,7 +92,7 @@ describe('assertRetryOfRepeatsPlacement', () => {
           resolvedWorktreeId: 'repo::lane'
         })
       )
-    ).toThrow(/Prior attempt used worktree repo::lane/)
+    ).toThrow(/Prior attempt used --worktree id:repo::lane/)
   })
 
   it('names the prior --worktree selector when no resolved id is recorded', () => {
@@ -147,7 +147,7 @@ describe('worker-start --retry-of without placement', () => {
     ).rejects.toMatchObject({
       code: 'invalid_argument',
       message: expect.stringMatching(
-        /does not inherit placement.*--worktree <selector>.*--terminal <handle>.*worktree repo::worktree/s
+        /does not inherit placement.*--worktree <selector>.*--terminal <handle>.*--worktree id:repo::worktree/s
       )
     })
     expect(harness.db.getTask(started.taskId)?.status).toBe('failed')
