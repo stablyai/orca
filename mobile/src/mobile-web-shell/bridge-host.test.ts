@@ -381,6 +381,27 @@ describe('subscriptions', () => {
     bridge.host.receive(subscribeFrame(ID))
     expect(bridge.frames()).toHaveLength(2)
   })
+
+  it('unsubscribes a stream that overflowed inside subscribe, exactly once', () => {
+    const client = createFakeRpcClient()
+    let unsubscribes = 0
+    const bridge = harness({
+      client: {
+        ...client,
+        subscribe: (_method, _params, onData) => {
+          onData('z'.repeat(BRIDGE_MAX_MESSAGE_BYTES))
+          return () => {
+            unsubscribes += 1
+          }
+        }
+      }
+    })
+    bridge.host.receive(subscribeFrame(ID))
+    expect(bridge.frames()).toEqual([{ v: 1, type: 'end', id: ID, reason: 'overflow' }])
+    // The stream was already retired when its unsubscribe arrived, so storing it on the record
+    // would leak the client's stream with nothing left to read it.
+    expect(unsubscribes).toBe(1)
+  })
 })
 
 describe('backpressure', () => {

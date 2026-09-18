@@ -82,6 +82,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   let postFailureReported = false
 
   function sendJson(json: string): void {
+    // Defensive: teardown already settles everything that could post; this fences callers added later.
     if (closed) {
       return
     }
