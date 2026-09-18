@@ -2,7 +2,8 @@ import type { AppState } from '../../types'
 import type {
   BrowserCookieImportResult,
   BrowserPage,
-  BrowserSessionProfile
+  BrowserSessionProfile,
+  DefaultBrowserSessionProfileIdByHostId
 } from '../../../../../shared/browser-workspace-types'
 import {
   getSettingsFocusedExecutionHostId,
@@ -142,10 +143,57 @@ export function getDefaultBrowserProfileForHost(
   state: AppState,
   hostId: ExecutionHostId
 ): string | null {
-  return (
-    state.defaultBrowserSessionProfileIdByHostId[hostId] ??
-    (getBrowserSettingsHostId(state) === hostId ? state.defaultBrowserSessionProfileId : null)
-  )
+  // Why key presence and not ??: an explicit Default is stored as null, and it persists now,
+  // so treating it as "nothing stored" would make this host inherit the shown host's profile
+  // on every launch instead of just until the next one.
+  if (hostId in state.defaultBrowserSessionProfileIdByHostId) {
+    return state.defaultBrowserSessionProfileIdByHostId[hostId] ?? null
+  }
+  return getBrowserSettingsHostId(state) === hostId ? state.defaultBrowserSessionProfileId : null
+}
+
+// Why derive the scalar here: Settings → Browser reads it for the host it is showing, so a
+// restored map that left it null would still paint Default after a relaunch.
+export function hydratedDefaultBrowserSessionProfileSelection(
+  state: Pick<AppState, 'browserSessionHostIdOverride' | 'settings'>,
+  persisted: unknown
+): {
+  defaultBrowserSessionProfileId: string | null
+  defaultBrowserSessionProfileIdByHostId: DefaultBrowserSessionProfileIdByHostId
+} {
+  const byHostId = (persisted ?? {}) as DefaultBrowserSessionProfileIdByHostId
+  return {
+    defaultBrowserSessionProfileId: byHostId[getBrowserSettingsHostId(state)] ?? null,
+    defaultBrowserSessionProfileIdByHostId: byHostId
+  }
+}
+
+// Why: a deleted profile must not stay the persisted selection, or the next launch restores
+// a profile that no longer exists and the pane silently falls back to Default anyway.
+export function clearedDefaultBrowserProfileForHostUpdate(
+  state: AppState,
+  hostId: ExecutionHostId,
+  deletedProfileId: string
+): Partial<BrowserSlice> {
+  const wasSelectedOnThisHost = getDefaultBrowserProfileForHost(state, hostId) === deletedProfileId
+  if (!wasSelectedOnThisHost) {
+    return {}
+  }
+
+  const update: Partial<BrowserSlice> = {
+    defaultBrowserSessionProfileIdByHostId: {
+      ...state.defaultBrowserSessionProfileIdByHostId,
+      [hostId]: null
+    }
+  }
+
+  // The scalar only mirrors the host Settings is showing. Today's only caller deletes
+  // on exactly that host, so this always fires; the guard keeps a future caller that
+  // deletes elsewhere from blanking the pane.
+  if (getBrowserSettingsHostId(state) === hostId) {
+    update.defaultBrowserSessionProfileId = null
+  }
+  return update
 }
 
 export function browserImportStateForHostUpdate(

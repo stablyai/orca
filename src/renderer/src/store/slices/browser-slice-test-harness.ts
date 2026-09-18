@@ -22,6 +22,7 @@ export type BrowserMockApi = {
     notifyActiveTabChanged: Mock
   }
   runtimeEnvironments: { call: Mock }
+  ui: { set: Mock }
 }
 
 export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): BrowserMockApi {
@@ -42,7 +43,8 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
     },
     runtimeEnvironments: {
       call: runtimeEnvironmentTransportCall
-    }
+    },
+    ui: { set: vi.fn().mockResolvedValue(undefined) }
   }
 }
 

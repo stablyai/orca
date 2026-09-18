@@ -207,6 +207,9 @@ export const UiUpdateFields = z
       .optional(),
     browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
+    defaultBrowserSessionProfileIdByHostId: z
+      .record(z.string(), NullableString.optional())
+      .optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),
