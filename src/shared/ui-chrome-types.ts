@@ -49,6 +49,9 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
+/** Optional fields on compact/full agent rows in the workspace sidebar. */
+export type AgentRowDisplayField = 'provider-icon' | 'secondary-status' | 'model' | 'relative-time'
+
 // Re-exported so existing importers keep one home for UI chrome types; the
 // value domain lives with the normalizers that police it.
 export type { ActivityGroupBy, ThreadReadFilter } from './agents-view-thread-filters'

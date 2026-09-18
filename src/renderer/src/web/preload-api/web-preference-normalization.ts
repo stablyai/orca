@@ -1,3 +1,4 @@
+import { normalizeAgentRowDisplayFields } from '../../../../shared/agent-row-display-fields'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
@@ -48,6 +49,9 @@ export function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    agentRowDisplayFields: normalizeAgentRowDisplayFields(
+      safeUpdates.agentRowDisplayFields ?? base.agentRowDisplayFields
     ),
     usagePercentageDisplay: normalizeUsagePercentageDisplay(
       safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay

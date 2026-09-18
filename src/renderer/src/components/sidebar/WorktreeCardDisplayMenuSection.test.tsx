@@ -9,6 +9,7 @@ import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection
 const setWorktreeCardMode = vi.fn()
 const setWorktreeCardProperties = vi.fn()
 const setAgentActivityDisplayMode = vi.fn()
+const setAgentRowDisplayFields = vi.fn()
 
 let settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
 let projectGroups: unknown[] = []
@@ -24,13 +25,21 @@ let worktreeCardProperties = [
   'ports',
   'inline-agents'
 ]
+let agentRowDisplayFields: string[] = [
+  'provider-icon',
+  'secondary-status',
+  'model',
+  'relative-time'
+]
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
       agentActivityDisplayMode: 'compact',
+      agentRowDisplayFields: [...agentRowDisplayFields],
       projectGroups,
       setAgentActivityDisplayMode,
+      setAgentRowDisplayFields,
       setWorktreeCardMode,
       setWorktreeCardProperties,
       settings,
@@ -128,7 +137,9 @@ beforeEach(() => {
     'ports',
     'inline-agents'
   ]
+  agentRowDisplayFields = ['provider-icon', 'secondary-status', 'model', 'relative-time']
   setAgentActivityDisplayMode.mockReset()
+  setAgentRowDisplayFields.mockReset()
   setWorktreeCardMode.mockReset()
   setWorktreeCardProperties.mockReset()
 })
@@ -176,5 +187,36 @@ describe('WorktreeCardDisplayMenuSection', () => {
 
     expect(container?.textContent).toContain('Branch / folder path')
     expect(container?.textContent).not.toContain('Branch name')
+  })
+
+  it('toggles agent row display fields from the show-properties menu', () => {
+    renderMenu()
+
+    expect(container?.textContent).toContain('Agent row fields')
+    expect(container?.textContent).toContain('Model label')
+
+    const modelButton = Array.from(container?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Model label'
+    )
+    expect(modelButton).toBeDefined()
+
+    act(() => {
+      modelButton?.click()
+    })
+
+    expect(setAgentRowDisplayFields).toHaveBeenCalledWith([
+      'provider-icon',
+      'secondary-status',
+      'relative-time'
+    ])
+  })
+
+  it('exposes agent row field toggles under experimental new card style', () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+
+    renderMenu()
+
+    expect(container?.textContent).toContain('Agent row fields')
+    expect(container?.textContent).toContain('Model label')
   })
 })
