@@ -177,10 +177,15 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // left behind here it outlives the agent, and the next cold restore types
       // `--resume` into a pane the operator closed on purpose. The launch config
       // below is already dropped on this same evidence.
+      //
+      // Flagged rather than deleted: this evidence is a foreground-process read,
+      // which can name a shell while the agent is merely suspended or the scan is
+      // degraded. A misread must cost an automatic resume, never the record that
+      // makes the session recoverable at all.
       const stateOnShellReturn = useAppStore.getState()
       const sleepingRecordOnShellReturn = session.getSleepingRecordForPane(stateOnShellReturn)
       if (sleepingRecordOnShellReturn) {
-        session.clearSleepingRecordProviderDuplicates(
+        session.markSleepingRecordProviderDuplicatesAgentExited(
           stateOnShellReturn,
           sleepingRecordOnShellReturn
         )

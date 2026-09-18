@@ -26,6 +26,13 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const sleepingRecordEntry = session.getSleepingRecordForPane(state)
     const sleepingRecord = sleepingRecordEntry?.record
 
+    // Why: the operator closed this agent, so the anchor is history. It is kept
+    // for a manual resume, but a restore must not act on it by itself (#14228).
+    // A live entry still wins: if the pane is running an agent right now, that
+    // observation is fresher than the flag.
+    if (!entry && sleepingRecord?.agentExited === true) {
+      return null
+    }
     const useLiveEntry = entry && entry.state !== 'done'
     const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
     if (!agent || !isResumableTuiAgent(agent)) {

@@ -549,7 +549,7 @@ describe('connectPanePty', () => {
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
     })
 
-    it('drops the resume anchor once the agent exits to its shell', async () => {
+    it('retires the resume anchor once the agent exits to its shell', async () => {
       vi.useFakeTimers()
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
       const ptyId = 'pty-exit-clears-resume-anchor'
@@ -587,9 +587,13 @@ describe('connectPanePty', () => {
         agent: null,
         shellForeground: true
       })
-      // Why: the anchor is what a cold restore reads; leaving it behind re-enters
-      // an agent the operator exited every time the workspace is reopened.
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+      // Why: the anchor is what a cold restore reads, so it must stop authorizing
+      // a relaunch — but it is flagged rather than deleted, because this evidence
+      // is a foreground read and a misread must not destroy a recoverable session.
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        agentExited: true,
+        providerSession: { key: 'session_id', id: 'ses-exit-anchor' }
+      })
     })
 
     it('fails closed when a warm reattach has no persisted launch identity', async () => {
