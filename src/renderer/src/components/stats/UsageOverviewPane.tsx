@@ -8,16 +8,10 @@ import { StatCard } from './StatCard'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
+import { formatPercent } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RECENT_DAY_COUNT = 42
-
-function formatPercent(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return `${Math.round(value * 100)}%`
-}
 
 function formatUpdatedAt(timestamp: number | null): string {
   if (!timestamp) {

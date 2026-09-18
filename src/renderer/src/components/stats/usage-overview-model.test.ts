@@ -125,6 +125,7 @@ describe('usage overview model', () => {
       reasoningOutputTokens: 50,
       totalTokens: 800,
       estimatedCostUsd: null,
+      cacheShare: 0.2,
       topModel: 'devin-default',
       topProject: 'orca-devin',
       hasAnyDevinData: true

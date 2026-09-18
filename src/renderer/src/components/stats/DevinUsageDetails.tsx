@@ -39,7 +39,10 @@ export function DevinUsageDetails({
             tokens: row.totalTokens,
             sessions: row.sessions,
             eventsOrTurns: row.events,
-            estimatedCostUsd: row.estimatedCostUsd
+            estimatedCostUsd: row.estimatedCostUsd,
+            inputTokens: row.inputTokens,
+            cachedInputTokens: row.cachedInputTokens,
+            outputTokens: row.outputTokens
           }))}
           eventsOrTurns="events"
         />
@@ -52,7 +55,10 @@ export function DevinUsageDetails({
             label: row.label,
             tokens: row.totalTokens,
             sessions: row.sessions,
-            eventsOrTurns: row.events
+            eventsOrTurns: row.events,
+            inputTokens: row.inputTokens,
+            cachedInputTokens: row.cachedInputTokens,
+            outputTokens: row.outputTokens
           }))}
           eventsOrTurns="events"
         />

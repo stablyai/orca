@@ -1081,7 +1081,7 @@
         "94a5afe910": "SSH Hosts",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Remote Orca Servers",
-        "b351014180": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
+        "b351014180": "Orca stats plus Claude, Codex, OpenCode, Devin token analytics and Grok subscription usage.",
         "d72a58b5b9": "Stats & Usage",
         "dcd0d9b74f": "Keyboard shortcuts for common actions.",
         "94295ebfb3": "Shortcuts",
@@ -4372,7 +4372,10 @@
           "247c93ca92": "• inferred pricing",
           "32176e1d44": "turns",
           "79a69522a5": "events",
-          "02a046792e": "sessions •"
+          "02a046792e": "sessions •",
+          "input": "in",
+          "cached": "cached",
+          "out": "out"
         },
         "UsageSessionsTable": {
           "1afc25eb06": "Turns",
@@ -4434,7 +4437,8 @@
           "cachedInput": "Cached input",
           "reasoningOutput": "Reasoning output",
           "sessionsEvents": "Sessions / Events",
-          "totalTokens": "Total tokens"
+          "totalTokens": "Total tokens",
+          "cacheShareDetail": "{{value0}} of input"
         }
       },
       "sparse": {
@@ -8307,7 +8311,7 @@
           "b5ee17826b": "Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.",
           "7686cb5c36": "Connect this browser to a saved Orca server.",
           "bd0181eeca": "Remote Orca Servers",
-          "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
+          "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Devin token analytics and Grok subscription usage.",
           "954a8f5aef": "Stats & Usage",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",

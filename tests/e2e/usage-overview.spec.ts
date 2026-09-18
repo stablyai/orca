@@ -68,8 +68,30 @@ test.describe('usage overview', () => {
     await expect(orcaPage.getByRole('heading', { name: 'Devin Usage Tracking' })).toBeVisible()
 
     // After enable, the pane leaves the disabled gate: the on-switch renders
-    // checked and stats (or the empty state) appear once the scan settles.
+    // checked and the scan settles into stats or the empty state.
     const devinSwitch = orcaPage.getByRole('switch', { name: 'Enable Devin usage analytics' })
     await expect(devinSwitch).toBeChecked({ timeout: 15_000 })
+
+    // Wait for the scan to settle — success stamps lastScanCompletedAt, a
+    // failure stamps lastScanError; either way the pane must leave loading.
+    await expect
+      .poll(
+        async () =>
+          getStoreState<{
+            lastScanCompletedAt: number | null
+            lastScanError: string | null
+          }>(orcaPage, 'devinUsageScanState'),
+        { timeout: 15_000 }
+      )
+      .not.toEqual(
+        expect.objectContaining({
+          lastScanCompletedAt: null,
+          lastScanError: null
+        })
+      )
+
+    await expect(
+      orcaPage.getByText(/Input tokens|No local Devin usage found yet|Last scan error/).first()
+    ).toBeVisible()
   })
 })

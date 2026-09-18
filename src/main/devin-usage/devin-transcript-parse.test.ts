@@ -71,9 +71,39 @@ describe('parseDevinTranscriptForUsage', () => {
 
     expect(parsed?.events[0]).toMatchObject({
       inputTokens: 85,
-      cachedInputTokens: 35,
+      cachedInputTokens: 30,
       outputTokens: 10,
       totalTokens: 95
+    })
+  })
+
+  it('keeps ATIF cache creation out of both cached input and prompt tokens', () => {
+    // Real transcripts carry cached_tokens (read) alongside a separate,
+    // larger cache_creation_input_tokens; prompt_tokens already includes both.
+    const parsed = parseDevinTranscriptForUsage(
+      '/transcripts/s2b.json',
+      JSON.stringify({
+        session_id: 's2b',
+        steps: [
+          {
+            timestamp: '2026-09-01T10:00:00Z',
+            metrics: {
+              prompt_tokens: 25866,
+              completion_tokens: 174,
+              cached_tokens: 12018,
+              cache_creation_input_tokens: 13844
+            }
+          }
+        ]
+      }),
+      null
+    )
+
+    expect(parsed?.events[0]).toMatchObject({
+      inputTokens: 25866,
+      cachedInputTokens: 12018,
+      outputTokens: 174,
+      totalTokens: 26040
     })
   })
 

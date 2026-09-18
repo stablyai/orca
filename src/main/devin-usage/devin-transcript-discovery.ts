@@ -8,9 +8,7 @@ import type { DevinUsageProcessedFile } from './types'
 // Why gated: a DEVIN_HOME override can point the transcripts root at a
 // \\wsl$ UNC path, where a raw syscall on a stalled distro would hang the
 // whole scan (STA-4049).
-export async function listDevinTranscriptFiles(
-  onRefusal?: (path: string, error: WslTranscriptFsError) => void
-): Promise<string[]> {
+export async function listDevinTranscriptFiles(): Promise<string[]> {
   const transcriptsDir = resolveDevinTranscriptsDir()
   try {
     const entries = await wslGatedReaddir(transcriptsDir, 'scan')
@@ -19,10 +17,13 @@ export async function listDevinTranscriptFiles(
       .map((entry) => join(transcriptsDir, entry.name))
       .sort()
   } catch (error) {
-    if (error instanceof WslTranscriptFsError) {
-      onRefusal?.(transcriptsDir, error)
+    // Why: only a genuinely missing transcripts dir means "no data". A
+    // transient EACCES/EIO/WSL refusal must surface as a scan error so the
+    // store keeps the previous projection instead of caching an empty one.
+    if (isMissingFsError(error)) {
+      return []
     }
-    return []
+    throw error
   }
 }
 
@@ -54,7 +55,7 @@ export async function observeDevinSessionsDb(
       return { path: walPath, mtimeMs: walStat.mtimeMs, sizeBytes: walStat.size }
     }
   } catch (error) {
-    if (!isMissingDbError(error)) {
+    if (!isMissingFsError(error)) {
       return 'unknown'
     }
   }
@@ -64,11 +65,11 @@ export async function observeDevinSessionsDb(
       ? { path: dbPath, mtimeMs: dbStat.mtimeMs, sizeBytes: dbStat.size }
       : 'none'
   } catch (error) {
-    return isMissingDbError(error) ? 'none' : 'unknown'
+    return isMissingFsError(error) ? 'none' : 'unknown'
   }
 }
 
-function isMissingDbError(error: unknown): boolean {
+function isMissingFsError(error: unknown): boolean {
   if (error instanceof WslTranscriptFsError) {
     return false
   }

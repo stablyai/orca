@@ -1,4 +1,8 @@
 import { highestUsageKey } from '../usage/highest-usage-key'
+import {
+  getScopedDevinSessionModels,
+  getScopedDevinSessionPrimaryModel
+} from './scope-range-filter'
 import type {
   DevinUsageBreakdownKind,
   DevinUsageBreakdownRow,
@@ -31,7 +35,10 @@ export function buildDevinUsageSummary(
   let events = 0
   let estimatedCostUsd: number | null = null
   const byModel = new Map<string, number>()
+  // Why: projectLabel is not unique — two worktrees can share a display name
+  // like 'main'. Group by projectKey and keep the label for display.
   const byProject = new Map<string, number>()
+  const projectLabelByKey = new Map<string, string>()
 
   for (const row of filteredDaily) {
     inputTokens += row.inputTokens
@@ -45,11 +52,13 @@ export function buildDevinUsageSummary(
       row.model ?? 'Unknown model',
       (byModel.get(row.model ?? 'Unknown model') ?? 0) + row.totalTokens
     )
-    byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + row.totalTokens)
+    byProject.set(row.projectKey, (byProject.get(row.projectKey) ?? 0) + row.totalTokens)
+    projectLabelByKey.set(row.projectKey, row.projectLabel)
   }
 
   const topModel = highestUsageKey(byModel)
-  const topProject = highestUsageKey(byProject)
+  const topProjectKey = highestUsageKey(byProject)
+  const topProject = topProjectKey === null ? null : (projectLabelByKey.get(topProjectKey) ?? null)
 
   return {
     scope,
@@ -62,6 +71,7 @@ export function buildDevinUsageSummary(
     reasoningOutputTokens,
     totalTokens,
     estimatedCostUsd,
+    cacheShare: inputTokens > 0 ? cachedInputTokens / inputTokens : 0,
     topModel,
     topProject,
     hasAnyDevinData: filteredSessions.length > 0 || filteredDaily.length > 0
@@ -94,7 +104,8 @@ export function buildDevinUsageDailyPoints(
 export function buildDevinUsageBreakdownRows(
   kind: DevinUsageBreakdownKind,
   filteredDaily: DevinUsageDailyAggregate[],
-  filteredSessions: DevinUsageSession[]
+  filteredSessions: DevinUsageSession[],
+  scope: DevinUsageScope
 ): DevinUsageBreakdownRow[] {
   const rows = new Map<string, DevinUsageBreakdownRow>()
 
@@ -123,9 +134,16 @@ export function buildDevinUsageBreakdownRows(
     rows.set(key, existing)
   }
 
+  // Why: session counts respect the scope — under 'orca' a session counts
+  // toward a model/location only through its worktree-attributed share.
   if (kind === 'model') {
     for (const session of filteredSessions) {
-      for (const entry of session.modelBreakdown) {
+      const seen = new Set<string>()
+      for (const entry of getScopedDevinSessionModels(session, scope)) {
+        if (seen.has(entry.modelKey)) {
+          continue
+        }
+        seen.add(entry.modelKey)
         const row = rows.get(entry.modelKey)
         if (row) {
           row.sessions++
@@ -134,7 +152,15 @@ export function buildDevinUsageBreakdownRows(
     }
   } else {
     for (const session of filteredSessions) {
+      const seen = new Set<string>()
       for (const entry of session.locationBreakdown) {
+        if (scope === 'orca' && entry.worktreeId === null) {
+          continue
+        }
+        if (seen.has(entry.locationKey)) {
+          continue
+        }
+        seen.add(entry.locationKey)
         const row = rows.get(entry.locationKey)
         if (row) {
           row.sessions++
@@ -148,25 +174,57 @@ export function buildDevinUsageBreakdownRows(
 
 export function buildDevinUsageRecentSessions(
   filteredSessions: DevinUsageSession[],
+  scope: DevinUsageScope,
   limit = 10
 ): DevinUsageSessionRow[] {
-  return filteredSessions.slice(0, limit).map((session): DevinUsageSessionRow => ({
-    sessionId: session.sessionId,
-    lastActiveAt: session.lastTimestamp,
-    durationMinutes: Math.max(
-      0,
-      Math.round(
-        (new Date(session.lastTimestamp).getTime() - new Date(session.firstTimestamp).getTime()) /
-          60_000
-      )
-    ),
-    projectLabel: session.primaryProjectLabel,
-    model: session.primaryModel,
-    events: session.eventCount,
-    inputTokens: session.totalInputTokens,
-    cachedInputTokens: session.totalCachedInputTokens,
-    outputTokens: session.totalOutputTokens,
-    reasoningOutputTokens: session.totalReasoningOutputTokens,
-    totalTokens: session.totalTokens
-  }))
+  return filteredSessions.slice(0, limit).map((session): DevinUsageSessionRow => {
+    // Why: under 'orca' the row shows only the worktree-attributed share of a
+    // mixed-location session — same projection the Codex provider applies.
+    const matchingLocations = session.locationBreakdown.filter((entry) =>
+      scope === 'all' ? true : entry.worktreeId !== null
+    )
+    const scopedLocations =
+      matchingLocations.length > 0 ? matchingLocations : session.locationBreakdown
+    const totals = scopedLocations.reduce(
+      (acc, entry) => {
+        acc.events += entry.eventCount
+        acc.inputTokens += entry.inputTokens
+        acc.cachedInputTokens += entry.cachedInputTokens
+        acc.outputTokens += entry.outputTokens
+        acc.reasoningOutputTokens += entry.reasoningOutputTokens
+        acc.totalTokens += entry.totalTokens
+        return acc
+      },
+      {
+        events: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: 0
+      }
+    )
+    return {
+      sessionId: session.sessionId,
+      lastActiveAt: session.lastTimestamp,
+      durationMinutes: Math.max(
+        0,
+        Math.round(
+          (new Date(session.lastTimestamp).getTime() - new Date(session.firstTimestamp).getTime()) /
+            60_000
+        )
+      ),
+      projectLabel:
+        scopedLocations.length > 1
+          ? 'Multiple locations'
+          : (scopedLocations[0]?.projectLabel ?? session.primaryProjectLabel),
+      model: getScopedDevinSessionPrimaryModel(session, scope),
+      events: totals.events,
+      inputTokens: totals.inputTokens,
+      cachedInputTokens: totals.cachedInputTokens,
+      outputTokens: totals.outputTokens,
+      reasoningOutputTokens: totals.reasoningOutputTokens,
+      totalTokens: totals.totalTokens
+    }
+  })
 }

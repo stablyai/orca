@@ -186,6 +186,27 @@ describe('scanDevinUsageFiles', () => {
     expect(copy?.ownedSessionIds).toEqual(['s1'])
   })
 
+  it('lets a deferred copy reclaim its session when the owner stops parsing', async () => {
+    const dir = await makeTranscriptsDir()
+    const canonical = join(dir, 's1.json')
+    await writeFile(canonical, transcript())
+    await writeFile(join(dir, 's1-copy.json'), transcript())
+
+    const first = await scanDevinUsageFiles(WORKTREES)
+    expect(first.processedFiles.find((f) => f.path.endsWith('s1.json'))?.ownedSessionIds).toEqual([
+      's1'
+    ])
+
+    // The owner stays listed but turns unreadable — without a reclaim pass
+    // the copy would sit deferred with the session lost forever.
+    await writeFile(canonical, '{ torn write')
+    const second = await scanDevinUsageFiles(WORKTREES, first.processedFiles)
+
+    expect(second.sessions).toHaveLength(1)
+    const copy = second.processedFiles.find((file) => file.path.endsWith('s1-copy.json'))
+    expect(copy?.ownedSessionIds).toEqual(['s1'])
+  })
+
   it('skips a corrupt transcript without sinking the rest of the scan', async () => {
     const dir = await makeTranscriptsDir()
     await writeFile(join(dir, 'broken.json'), '{ not json')

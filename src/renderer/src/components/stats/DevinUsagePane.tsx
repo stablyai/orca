@@ -6,7 +6,7 @@ import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { DevinUsageDetails } from './DevinUsageDetails'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
-import { formatTokens, formatUpdatedAt } from './usage-formatters'
+import { formatPercent, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: DevinUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -85,7 +85,11 @@ export function DevinUsagePane(): React.JSX.Element {
     )
   }
 
-  if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
+  if (
+    !summary &&
+    !scanState.lastScanError &&
+    (scanState.isScanning || scanState.lastScanCompletedAt === null)
+  ) {
     return (
       <ClaudeUsageLoadingState
         title={title}
@@ -169,6 +173,15 @@ export function DevinUsagePane(): React.JSX.Element {
           <StatCard
             label={translate('auto.components.stats.DevinUsagePane.cachedInput', 'Cached input')}
             value={formatTokens(summary?.cachedInputTokens ?? 0)}
+            detail={
+              summary
+                ? translate(
+                    'auto.components.stats.DevinUsagePane.cacheShareDetail',
+                    '{{value0}} of input',
+                    { value0: formatPercent(summary.cacheShare) }
+                  )
+                : undefined
+            }
             icon={<DatabaseZap className="size-4" />}
           />
           <StatCard

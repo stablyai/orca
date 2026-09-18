@@ -9,6 +9,9 @@ export type UsageBreakdownRow = {
   eventsOrTurns: number
   hasInferredPricing?: boolean
   estimatedCostUsd?: number | null
+  inputTokens?: number
+  cachedInputTokens?: number
+  outputTokens?: number
 }
 
 type UsageBreakdownSectionProps = {
@@ -51,6 +54,15 @@ export function UsageBreakdownSection({
               {row.sessions}{' '}
               {translate('auto.components.stats.UsageBreakdownSection.02a046792e', 'sessions •')}{' '}
               {row.eventsOrTurns} {eventsOrTurnsLabel}
+              {row.inputTokens !== undefined
+                ? ` • ${translate('auto.components.stats.UsageBreakdownSection.input', 'in')} ${formatTokens(row.inputTokens)}`
+                : ''}
+              {row.cachedInputTokens !== undefined && row.cachedInputTokens > 0
+                ? ` • ${translate('auto.components.stats.UsageBreakdownSection.cached', 'cached')} ${formatTokens(row.cachedInputTokens)}`
+                : ''}
+              {row.outputTokens !== undefined
+                ? ` • ${translate('auto.components.stats.UsageBreakdownSection.out', 'out')} ${formatTokens(row.outputTokens)}`
+                : ''}
               {row.hasInferredPricing
                 ? ` ${translate('auto.components.stats.UsageBreakdownSection.247c93ca92', '• inferred pricing')}`
                 : ''}

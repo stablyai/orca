@@ -22,6 +22,9 @@ export type DevinUsageSummary = {
   reasoningOutputTokens: number
   totalTokens: number
   estimatedCostUsd: number | null
+  // Why: cachedInputTokens / inputTokens, with inputTokens inclusive of
+  // cache-read. Defined here so the renderer does not infer token semantics.
+  cacheShare: number
   topModel: string | null
   topProject: string | null
   hasAnyDevinData: boolean

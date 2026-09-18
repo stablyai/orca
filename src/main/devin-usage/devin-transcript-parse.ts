@@ -96,14 +96,19 @@ export function parseDevinTranscriptForUsage(
     const cacheRead = firstDevinMetric(sources, DEVIN_CACHE_READ_KEYS)
     const cacheWrite = firstDevinMetric(sources, DEVIN_CACHE_WRITE_KEYS)
     const reasoning = firstDevinMetric(sources, DEVIN_REASONING_KEYS)
-    const cachedTokens = cacheRead.value + cacheWrite.value
+    // cachedInputTokens is the cache-read bucket only, matching the shared
+    // contract (Claude/Codex count reads, not cache writes); creation still
+    // bills as input below. ATIF `cached_tokens` is the read subset, not the
+    // combined cached figure — real transcripts carry a separate, larger
+    // cache_creation_input_tokens alongside it.
+    const cachedTokens = cacheRead.value
     // prompt_tokens/total_input_tokens already include cache; the legacy
-    // input_tokens split does not, so additive cache buckets fold into input
-    // to keep cached ⊆ input.
+    // input_tokens split does not, so both cache buckets fold into input to
+    // keep cached ⊆ input.
     const inputTokens =
       input.key === 'prompt_tokens' || input.key === 'total_input_tokens'
         ? input.value
-        : input.value + cachedTokens
+        : input.value + cacheRead.value + cacheWrite.value
     const outputTokens = output.value
     const totalTokens = inputTokens + outputTokens
     if (totalTokens <= 0) {

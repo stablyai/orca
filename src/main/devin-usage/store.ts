@@ -112,7 +112,8 @@ export class DevinUsageStore extends UsageProviderStoreLifecycle<
     return buildDevinUsageBreakdownRows(
       kind,
       this.getFilteredDaily(scope, range),
-      this.getFilteredSessions(scope, range)
+      this.getFilteredSessions(scope, range),
+      scope
     )
   }
 
@@ -130,7 +131,7 @@ export class DevinUsageStore extends UsageProviderStoreLifecycle<
     range: DevinUsageRange,
     limit = 10
   ): DevinUsageSessionRow[] {
-    return buildDevinUsageRecentSessions(this.getFilteredSessions(scope, range), limit)
+    return buildDevinUsageRecentSessions(this.getFilteredSessions(scope, range), scope, limit)
   }
 
   private getFilteredDaily(

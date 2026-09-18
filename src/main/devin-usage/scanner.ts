@@ -164,6 +164,49 @@ export async function scanDevinUsageFiles(
     }
   }
 
+  // Why: when a file that owned sessions fails to stat or parse (a torn
+  // write) its claims vanish without triggering lostOwnerPath — the path is
+  // still listed. Deferred copies reused unchanged then hold the only
+  // surviving data, so reparse them to let one reclaim the orphaned sessions.
+  const previouslyOwnedSessionIds = new Set(
+    previousProcessedFiles.flatMap((file) => file.ownedSessionIds ?? [])
+  )
+  if (previouslyOwnedSessionIds.size > 0) {
+    const claimedSessionIds = new Set<string>()
+    for (const file of reusedByPath.values()) {
+      for (const sessionId of file.ownedSessionIds ?? []) {
+        claimedSessionIds.add(sessionId)
+      }
+    }
+    for (const raw of rawByPath.values()) {
+      claimedSessionIds.add(raw.sessionId)
+    }
+    const hasOrphanedSession = [...previouslyOwnedSessionIds].some(
+      (sessionId) => !claimedSessionIds.has(sessionId)
+    )
+    if (hasOrphanedSession) {
+      for (const filePath of filePaths) {
+        if (!reusedByPath.has(filePath)) {
+          continue
+        }
+        const previous = previousByPath.get(filePath)
+        if (previous?.hasDeferredClaims === false) {
+          continue
+        }
+        reusedByPath.delete(filePath)
+        try {
+          const raw = await readDevinUsageTranscript(filePath, sessionsIndex)
+          if (raw) {
+            rawByPath.set(filePath, raw)
+          }
+        } catch {
+          // Same rule as the first pass — retries next scan.
+        }
+        onFilesScanned?.(1)
+      }
+    }
+  }
+
   // Why: cached files keep the claims they persisted. Among fresh candidates
   // the canonical <session_id>.json wins; without that, a lexicographically
   // earlier copy ('s1-copy.json' < 's1.json') would claim first and defer the
