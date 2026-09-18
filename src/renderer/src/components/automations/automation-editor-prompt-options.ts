@@ -5,6 +5,7 @@ export function buildAutomationPromptEditorOptions(args: {
   ariaLabel: string
   fontFamily: string
   fontSize: number
+  fontWeight: string
   placeholder: string
 }): editor.IStandaloneEditorConstructionOptions {
   return {
@@ -14,6 +15,7 @@ export function buildAutomationPromptEditorOptions(args: {
     folding: false,
     fontFamily: args.fontFamily,
     fontSize: args.fontSize,
+    fontWeight: args.fontWeight,
     find: monacoFindOptions,
     glyphMargin: false,
     hover: { enabled: false },

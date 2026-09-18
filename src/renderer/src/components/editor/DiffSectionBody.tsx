@@ -43,6 +43,7 @@ type DiffSectionBodyProps = {
   diffWordWrap?: boolean
   diffShowWhitespace?: boolean
   editorFontFamily?: string
+  editorFontWeight?: string
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
@@ -70,6 +71,7 @@ export function DiffSectionBody({
   diffWordWrap,
   diffShowWhitespace,
   editorFontFamily,
+  editorFontWeight,
   onCancelComment,
   onSubmitComment,
   onRetrySection,
@@ -211,6 +213,7 @@ export function DiffSectionBody({
             scrollBeyondLastLine: false,
             fontSize: diffEditorFontSize,
             fontFamily: editorFontFamily || 'monospace',
+            fontWeight: editorFontWeight,
             lineNumbers: 'on',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
             ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),

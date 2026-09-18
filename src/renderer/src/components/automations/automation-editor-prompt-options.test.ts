@@ -8,6 +8,7 @@ describe('buildAutomationPromptEditorOptions', () => {
       ariaLabel: 'Prompt',
       fontFamily: 'Geist',
       fontSize: 14,
+      fontWeight: '500',
       placeholder: 'Run the weekly dependency audit'
     })
 
