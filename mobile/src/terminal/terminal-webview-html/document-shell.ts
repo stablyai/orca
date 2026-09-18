@@ -144,6 +144,22 @@ window.onerror = function(msg) {
   }
   #sel-menu button:active { background: #414868; }
   #sel-menu button + button { border-left: 1px solid #414868; }
+  /* Why: the touch loupe floats in unscaled viewport coords above the
+     transformed surface, like the selection overlay, so its on-screen size
+     never depends on getTotalScale(). */
+  #touch-loupe {
+    position: fixed;
+    display: none;
+    pointer-events: none;
+    z-index: 9;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #414868;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    background: ${colors.terminalBg};
+    will-change: left, top;
+  }
+  #touch-loupe canvas { display: block; }
 </style>
 </head>
 <body>
@@ -159,6 +175,7 @@ window.onerror = function(msg) {
     <button id="sel-menu-all">Select All</button>
   </div>
 </div>
+<div id="touch-loupe"><canvas id="touch-loupe-canvas"></canvas></div>
 <script>${XTERM_ENGINE_JS}</script>
 <script>
 (function() {
