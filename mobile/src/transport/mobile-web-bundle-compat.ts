@@ -1,15 +1,18 @@
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+import type { HostStatusReply } from './host-status-reply-schema'
 
 /** The manifest schemas this app shell can mount. Widening it is a shell release, so the list is
  *  stated here rather than read off the contract's current version: the contract names the schema
  *  the desktop writes, which is exactly the number this shell may not recognise. */
 export const SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS = [1] as const
 
-/** Only the two `status.get` fields `host-status-gates.ts` already feeds `evaluateCompat`. */
-export type MobileWebBundleHostStatus = {
-  protocolVersion?: number
-  minCompatibleMobileVersion?: number
-}
+/** Only the two `status.get` fields `host-status-gates.ts` already feeds `evaluateCompat`, taken
+ *  from the reply type rather than restated: both are absent-means-oldest here, so a rename that
+ *  left a hand-copied shape behind would block every host through `?? 0` without failing a build. */
+export type MobileWebBundleHostStatus = Pick<
+  HostStatusReply,
+  'protocolVersion' | 'minCompatibleMobileVersion'
+>
 
 /** The manifest fields the wall reads. Null means no manifest has been read yet, which is still
  *  enough to answer the capability question. */
@@ -20,7 +23,9 @@ export type MobileWebBundleCompatManifest = {
 }
 
 export type MobileWebBundleCompatVerdict =
-  | { kind: 'ok' }
+  /** `manifestChecked` false means only the capability was answered; no manifest had been read
+   *  yet, so this is permission to fetch one, not permission to open it. */
+  | { kind: 'ok'; manifestChecked: boolean }
   /** This desktop build ships no bundle at all. */
   | { kind: 'blocked'; reason: 'bundle-unavailable' }
   /** The bundle is written in a manifest schema this shell does not know. */
@@ -74,7 +79,7 @@ export function evaluateMobileWebBundleCompat(input: {
   }
   const { manifest } = input
   if (manifest === null) {
-    return { kind: 'ok' }
+    return { kind: 'ok', manifestChecked: false }
   }
   if (!knowsSchemaVersion(manifest.schemaVersion)) {
     return {
@@ -104,5 +109,5 @@ export function evaluateMobileWebBundleCompat(input: {
       requiredBundleRuntimeProtocolVersion
     }
   }
-  return { kind: 'ok' }
+  return { kind: 'ok', manifestChecked: true }
 }

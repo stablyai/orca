@@ -171,7 +171,7 @@ describe('mobile web bundle manifest reply reader', () => {
       manifest: parsed.manifest
     })
 
-    expect(verdict).toEqual({ kind: 'ok' })
+    expect(verdict).toEqual({ kind: 'ok', manifestChecked: true })
   })
 
   it('refuses a manifest with no protocol window, which only a host without the capability sends', () => {
