@@ -53,8 +53,8 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
 
 /**
  * The bytes of one asset in the range starting at `offset`, clamped to the asset's manifest length.
- * Throws on a short read rather than returning one: the file is shorter than the manifest promised,
- * which the caller answers as a changed asset instead of paging a client past a truncation.
+ * The window is always filled: a read that stops early only means the file really ended, which the
+ * caller answers as a changed asset instead of paging a client past a truncation.
  *
  * Measured through asar (Electron 43): `open` hands back a descriptor on a per-asset copy the asar
  * layer materialises once under the OS temp dir and then reuses for the life of the process, so a
@@ -75,14 +75,48 @@ export async function readMobileWebBundleAssetChunk(
   // manifest schema already rejects absolute paths, backslashes, and traversal segments.
   const handle = await open(join(root, asset.path), 'r')
   try {
-    const { bytesRead } = await handle.read(buffer, 0, wanted, offset)
-    if (bytesRead !== wanted) {
+    const filled = await fillMobileWebBundleReadWindow(handle, buffer, wanted, offset)
+    if (filled !== wanted) {
       throw new Error(
-        `short read of ${asset.path}: ${String(bytesRead)} of ${String(wanted)} bytes at ${String(offset)}`
+        `short read of ${asset.path}: ${String(filled)} of ${String(wanted)} bytes at ${String(offset)}`
       )
     }
     return buffer
   } finally {
     await handle.close()
   }
+}
+
+/** Just the member the window fill needs, so it can be driven by a stub, like the relay's
+ *  `readFullStreamChunk` it mirrors. That one is not imported: it sits behind the relay
+ *  dispatcher's module graph, which the runtime bundle has no business pulling in. */
+type PositionalReader = {
+  read(
+    buffer: Buffer,
+    offset: number,
+    length: number,
+    position: number
+  ): Promise<{ bytesRead: number }>
+}
+
+/**
+ * Bytes actually placed in `buffer`, reading until the window is full. `read` may answer short of
+ * what it was asked for before EOF, so a single call is not evidence of anything; only a read that
+ * returns nothing means the file ended early.
+ */
+export async function fillMobileWebBundleReadWindow(
+  reader: PositionalReader,
+  buffer: Buffer,
+  wanted: number,
+  offset: number
+): Promise<number> {
+  let filled = 0
+  while (filled < wanted) {
+    const { bytesRead } = await reader.read(buffer, filled, wanted - filled, offset + filled)
+    if (bytesRead === 0) {
+      break
+    }
+    filled += bytesRead
+  }
+  return filled
 }

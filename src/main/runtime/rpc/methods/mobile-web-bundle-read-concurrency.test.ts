@@ -77,7 +77,6 @@ import {
   resetMobileWebBundleReadAdmissionForTests
 } from './mobile-web-bundle-read-admission'
 import {
-  captureAppEnvironment,
   installMobileWebBundleAppPath,
   mobileWebBundleDispatcher,
   writeSyntheticMobileWebBundle,
@@ -85,7 +84,6 @@ import {
 } from './mobile-web-bundle.test-fixture'
 
 let scratch: string
-let restoreAppEnvironment: () => void
 let bundle: SyntheticMobileWebBundle
 let dispatcher: RpcDispatcher
 
@@ -116,7 +114,6 @@ async function settleMicrotasks(): Promise<void> {
 
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-reads-'))
-  restoreAppEnvironment = captureAppEnvironment()
   installMobileWebBundleAppPath(scratch)
   bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 7)
   gate.reset()
@@ -128,7 +125,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  restoreAppEnvironment()
   gate.reset()
   rmSync(scratch, { recursive: true, force: true })
   vi.restoreAllMocks()

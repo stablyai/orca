@@ -17,14 +17,16 @@ import {
   getBundledMobileWebBundleRoot,
   resetBundledMobileWebBundleCacheForTests
 } from '../../bundled-mobile-web-bundle'
-import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
+import {
+  fillMobileWebBundleReadWindow,
+  resetMobileWebBundleAssetVerdictsForTests
+} from './mobile-web-bundle-asset-reader'
 import {
   acquireMobileWebBundleReadSlot,
   MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS,
   resetMobileWebBundleReadAdmissionForTests
 } from './mobile-web-bundle-read-admission'
 import {
-  captureAppEnvironment,
   installMobileWebBundleAppPath,
   mobileWebBundleDispatcher,
   mobileWebBundleFiller,
@@ -34,7 +36,6 @@ import {
 } from './mobile-web-bundle.test-fixture'
 
 let scratch: string
-let restoreAppEnvironment: () => void
 let dispatcher: RpcDispatcher
 
 function request(method: string, params?: unknown): RpcRequest {
@@ -82,7 +83,6 @@ async function download(buildId: string, path: string): Promise<{ bytes: Buffer;
 
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-'))
-  restoreAppEnvironment = captureAppEnvironment()
   installMobileWebBundleAppPath(scratch)
   resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
@@ -92,7 +92,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  restoreAppEnvironment()
   rmSync(scratch, { recursive: true, force: true })
   vi.restoreAllMocks()
 })
@@ -466,5 +465,44 @@ describe('mobile authorization', () => {
   it('lets a paired phone call both bundle methods', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has(MOBILE_WEB_BUNDLE_MANIFEST_METHOD)).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has(MOBILE_WEB_BUNDLE_CHUNK_METHOD)).toBe(true)
+  })
+})
+
+// fs.read may answer short of the window before EOF, so one call proves nothing; every other
+// positional reader in the repo fills the window first, and a client must never be handed a short
+// chunk because the kernel felt like splitting one.
+describe('filling a read window', () => {
+  const source = mobileWebBundleFiller(64, 3)
+
+  /** Answers `pieces[n]` bytes to the nth read, so a split window can be driven exactly. */
+  function reader(pieces: number[]) {
+    const calls: number[] = []
+    let piece = 0
+    const read = async (buffer: Buffer, into: number, length: number, position: number) => {
+      calls.push(length)
+      const bytesRead = Math.min(pieces[piece++] ?? 0, length)
+      source.copy(buffer, into, position, position + bytesRead)
+      return { bytesRead }
+    }
+    return { calls, read }
+  }
+
+  it('reads again when a read answers short of the window', async () => {
+    const buffer = Buffer.alloc(64)
+    const stub = reader([24, 40])
+
+    const filled = await fillMobileWebBundleReadWindow(stub, buffer, 64, 0)
+
+    expect(filled).toBe(64)
+    expect(stub.calls).toEqual([64, 40])
+    expect(buffer.equals(source)).toBe(true)
+  })
+
+  it('stops at the read that returns nothing, which is the truncation the caller reports', async () => {
+    const stub = reader([24, 0])
+
+    const filled = await fillMobileWebBundleReadWindow(stub, Buffer.alloc(64), 64, 0)
+
+    expect(filled).toBe(24)
   })
 })

@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  getAppEnvironment,
-  hasAppEnvironment,
-  setAppEnvironment
-} from '../../../../shared/app-environment'
+import { installFakeAppEnvironment } from '../../../../../config/scripts/vitest-host-ports-setup'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-web-bundle'
@@ -103,25 +99,8 @@ export function mobileWebBundleDispatcher(): RpcDispatcher {
 }
 
 /** The install root the resolver probes. Installed through the port, not an electron mock: the
- *  resolver is reachable from the runtime's import graph and so must never import electron. */
+ *  resolver is reachable from the runtime's import graph and so must never import electron. The
+ *  shared setup reinstalls a default environment before every test, so nothing here needs undoing. */
 export function installMobileWebBundleAppPath(appPath: string): void {
-  setAppEnvironment({
-    getPath: () => appPath,
-    getAppPath: () => appPath,
-    getVersion: () => '1.4.200',
-    isPackaged: () => true,
-    onWillQuit: () => {},
-    exit: () => {},
-    getAppMetrics: () => []
-  })
-}
-
-/** Whatever environment the process already had, so one test file cannot strand another. */
-export function captureAppEnvironment(): () => void {
-  const previous = hasAppEnvironment() ? getAppEnvironment() : null
-  return () => {
-    if (previous) {
-      setAppEnvironment(previous)
-    }
-  }
+  installFakeAppEnvironment({ getAppPath: () => appPath, getPath: () => appPath })
 }
