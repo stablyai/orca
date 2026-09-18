@@ -51,7 +51,7 @@ function chunkResult(overrides: Record<string, unknown> = {}): Record<string, un
     buildId: BUILD_ID,
     path: 'assets/a.js',
     offset: 0,
-    byteLength: 1024,
+    assetByteLength: 1024,
     sha256: 'b'.repeat(64),
     dataBase64: 'AAAA',
     eof: true,
@@ -186,7 +186,15 @@ describe('mobileWeb.bundle.chunk result', () => {
     expect(
       MobileWebBundleChunkResultSchema.safeParse(chunkResult({ contentEncoding: 'gzip' })).success
     ).toBe(false)
-    for (const key of ['buildId', 'path', 'offset', 'byteLength', 'sha256', 'dataBase64', 'eof']) {
+    for (const key of [
+      'buildId',
+      'path',
+      'offset',
+      'assetByteLength',
+      'sha256',
+      'dataBase64',
+      'eof'
+    ]) {
       const partial = chunkResult()
       delete partial[key]
       expect(MobileWebBundleChunkResultSchema.safeParse(partial).success).toBe(false)

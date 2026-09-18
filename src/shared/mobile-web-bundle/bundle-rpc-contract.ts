@@ -64,8 +64,9 @@ export const MobileWebBundleChunkResultSchema = z
     buildId: z.string().regex(SHA256_PATTERN),
     path: MobileWebBundleAssetPathSchema,
     offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
-    /** The whole asset's length and hash, not this chunk's, so a reassembler needs no second index. */
-    byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
+    /** The whole asset, not this chunk: named for it so a reassembler cannot misread the two, and
+     *  paired with `sha256` it describes the asset without a second index. */
+    assetByteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
     sha256: z.string().regex(SHA256_PATTERN),
     dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH),
     eof: z.boolean()
