@@ -1,5 +1,9 @@
+import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+
 export type ShutdownBufferCaptureOptions = {
   includeLocalBuffers?: boolean
+  /** Park captures yield between panes so a 20-pane SSH hide cannot freeze a frame. */
+  yieldBetweenPanes?: boolean
 }
 
 /** Map of tabId → buffer-capture callback, one per mounted TerminalPane.
@@ -14,16 +18,33 @@ export type ShutdownBufferCaptureOptions = {
  *  TerminalPane.tsx (registration site) and the terminals store slice
  *  (sleep-time iteration). Importing it directly from TerminalPane would
  *  create a cycle (slice → TerminalPane → store → slice) that breaks the
- *  Zustand store at module-init time. A leaf module with zero imports
- *  has no cycle. */
+ *  Zustand store at module-init time. */
 export const shutdownBufferCaptures = new Map<
   string,
-  (options?: ShutdownBufferCaptureOptions) => void
+  (options?: ShutdownBufferCaptureOptions) => void | Promise<void>
 >()
 
 /** Capture every mounted tab without letting one layout failure abort retention.
  *  Reports coverage so a caller can decide whether the episode is retryable. */
 export function captureTerminalShutdownBuffersBestEffort(
+  tabIds: readonly string[],
+  options: ShutdownBufferCaptureOptions & { yieldBetweenPanes: true }
+): Promise<{ requested: number; captured: number }>
+export function captureTerminalShutdownBuffersBestEffort(
+  tabIds: readonly string[],
+  options?: ShutdownBufferCaptureOptions
+): { requested: number; captured: number }
+export function captureTerminalShutdownBuffersBestEffort(
+  tabIds: readonly string[],
+  options?: ShutdownBufferCaptureOptions
+): { requested: number; captured: number } | Promise<{ requested: number; captured: number }> {
+  if (options?.yieldBetweenPanes) {
+    return captureTerminalShutdownBuffersYielding(tabIds, options)
+  }
+  return captureTerminalShutdownBuffersSync(tabIds, options)
+}
+
+function captureTerminalShutdownBuffersSync(
   tabIds: readonly string[],
   options?: ShutdownBufferCaptureOptions
 ): { requested: number; captured: number } {
@@ -35,6 +56,30 @@ export function captureTerminalShutdownBuffersBestEffort(
     }
     try {
       capture(options)
+      captured += 1
+    } catch {
+      // Buffer capture is optional recovery evidence; parking must still commit.
+    }
+  }
+  return { requested: tabIds.length, captured }
+}
+
+async function captureTerminalShutdownBuffersYielding(
+  tabIds: readonly string[],
+  options: ShutdownBufferCaptureOptions
+): Promise<{ requested: number; captured: number }> {
+  let captured = 0
+  for (let index = 0; index < tabIds.length; index += 1) {
+    if (index > 0) {
+      await yieldToEventLoop()
+    }
+    const tabId = tabIds[index]
+    const capture = shutdownBufferCaptures.get(tabId)
+    if (!capture) {
+      continue
+    }
+    try {
+      await capture(options)
       captured += 1
     } catch {
       // Buffer capture is optional recovery evidence; parking must still commit.

@@ -26,7 +26,7 @@ import {
   selectColdParkedTerminalTabs
 } from './terminal-hidden-view-parking'
 import type { ParkVerdictFlipRecord } from './terminal-park-verdict-flip-telemetry'
-import { haveSameTerminalTabIds, useTerminalParkVerdictPin } from './use-terminal-park-verdict-pin'
+import { useTerminalParkVerdictPin } from './use-terminal-park-verdict-pin'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import {
@@ -36,6 +36,7 @@ import {
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import { usePendingStartupParkPresence } from './terminal-pending-startup-park-presence'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
+import { scheduleNewlyParkedTerminalTabCapture } from './parked-terminal-tab-capture-episodes'
 import { createTerminalTabActivationOrder } from './terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from './terminal-tab-park-candidates'
 import {
@@ -217,16 +218,21 @@ export function useTerminalTabColdParking(args: {
       parkVerdictRecords: parkVerdictRecordsRef.current,
       nowMs
     })
+    // Why before the commit: the panes are still mounted in this flush — the last moment the only
+    // client-side copy of a remote tab's scrollback can be serialized. A yielding capture returns
+    // a Promise; local/no-op captures stay synchronous so existing park-clock tests do not stall.
     // Why the ref and not the updater form: returning `current` still dispatches,
     // and React only bails eagerly while the fiber has no pending lanes. This
     // effect re-runs on every tab-model write (runtime titles, unread bumps),
     // so inside any commit cascade the no-op dispatch was what tripped React's
     // root-global nested-update counter — naming this hook in a #185 whose real
     // driver is elsewhere (see src/shared/react-update-depth-attribution.ts).
-    if (!haveSameTerminalTabIds(coldParkedTerminalTabIdsRef.current, parkedTabIds)) {
-      coldParkedTerminalTabIdsRef.current = parkedTabIds
-      setColdParkedTerminalTabIds(parkedTabIds)
-    }
+    scheduleNewlyParkedTerminalTabCapture(
+      worktreeId,
+      parkedTabIds,
+      coldParkedTerminalTabIdsRef,
+      setColdParkedTerminalTabIds
+    )
 
     const recheckDeadlineMsByTabId = new Map<string, number>()
     for (const candidate of candidates) {

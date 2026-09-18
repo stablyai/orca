@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
@@ -11,7 +11,12 @@ import {
 } from './terminal-pane/terminal-hidden-worktree-retention'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
-import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
+import {
+  beginParkedCapturePass,
+  captureParkedTerminalBuffers,
+  enqueueParkedTerminalCapture,
+  whenParkedCaptureSettles
+} from './terminal-pane/parked-terminal-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
 import { recordTerminalWorktreeParkingDebugVerdicts } from './terminal-pane/terminal-parking-e2e-overrides'
 import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/terminal-cold-park-recheck-deadlines'
@@ -27,7 +32,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     activeView,
     activityTerminalPortals,
     backgroundMountRevision,
-    forceParkedCaptureDoneRef,
+    parkedCaptureDoneRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
@@ -43,8 +48,12 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalSshParkingEnabled,
     workspaceSurfaceIds
   } = controller
+  const parkingPassGenerationRef = useRef(0)
 
   useEffect(() => {
+    // Why a pass token: a yielding capture can outlive this effect; an older settlement
+    // must not overwrite a newer park verdict or mark a worktree captured after a reveal.
+    const passGuard = beginParkedCapturePass(parkingPassGenerationRef)
     const pass = collectTerminalParkingPassCandidates(controller)
     const retentionBudgetCandidates: TerminalWorktreeRetentionCandidate[] =
       pass.retentionCandidates.map((candidate) => {
@@ -76,21 +85,42 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
         forceParked: forceParkedWorktreeIds.has(candidate.worktreeId)
       }))
     )
-    const capturedForceParked = forceParkedCaptureDoneRef.current
-    for (const id of Array.from(capturedForceParked)) {
-      if (!forceParkedWorktreeIds.has(id)) {
-        capturedForceParked.delete(id)
+    const capturedParked = parkedCaptureDoneRef.current
+    for (const id of Array.from(capturedParked)) {
+      if (!forceParkedWorktreeIds.has(id) && !pass.nextParkedTerminalWorktreeIds.has(id)) {
+        capturedParked.delete(id)
       }
     }
     const repos = useAppStore.getState().repos
     const nextEvictionExemptTabIds = new Set<string>()
+    const pendingCaptures: Promise<unknown>[] = []
+    // Why before the commit: the panes are still mounted in this flush, so this is the last moment
+    // a remote-runtime pane's xterm — the only client-side copy of its scrollback — can be
+    // serialized. Yielding captures return a Promise; local/no-op captures stay synchronous.
+    for (const worktreeId of pass.nextParkedTerminalWorktreeIds) {
+      if (capturedParked.has(worktreeId)) {
+        continue
+      }
+      enqueueParkedTerminalCapture(
+        captureParkedTerminalBuffers({
+          worktreeId,
+          tabIds: (tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id),
+          repos
+        }),
+        () => {
+          capturedParked.add(worktreeId)
+        },
+        pendingCaptures,
+        passGuard.isCurrent
+      )
+    }
     for (const worktreeId of forceParkedWorktreeIds) {
       const forceParkedTabs = tabsByWorktree[worktreeId] ?? []
       const exemptTabIds = selectEvictionExemptTerminalTabIds(worktreeId, forceParkedTabs)
       for (const tabId of exemptTabIds) {
         nextEvictionExemptTabIds.add(tabId)
       }
-      if (!capturedForceParked.has(worktreeId)) {
+      if (!capturedParked.has(worktreeId)) {
         const evictableTabIds = selectForceParkEvictableTabIds(forceParkedTabs, (tab) =>
           exemptTabIds.has(tab.id)
         )
@@ -108,28 +138,38 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
             ...exemptRouteCounts
           })
         }
-        if (
-          captureForceParkedWorktreeBuffers({
+        enqueueParkedTerminalCapture(
+          captureParkedTerminalBuffers({
             worktreeId,
             tabIds: evictableTabIds,
             repos
-          })
-        ) {
-          capturedForceParked.add(worktreeId)
-        }
+          }),
+          () => {
+            capturedParked.add(worktreeId)
+          },
+          pendingCaptures,
+          passGuard.isCurrent
+        )
       }
       pass.nextParkedTerminalWorktreeIds.add(worktreeId)
     }
-    setParkedTerminalWorktreeIds((current) =>
-      haveSameIdSet(current, pass.nextParkedTerminalWorktreeIds)
-        ? current
-        : pass.nextParkedTerminalWorktreeIds
-    )
-    setForceParkedTerminalWorktreeIds((current) =>
-      haveSameIdSet(current, forceParkedWorktreeIds) ? current : forceParkedWorktreeIds
-    )
-    setEvictionExemptTerminalTabIds((current) =>
-      haveSameIdSet(current, nextEvictionExemptTabIds) ? current : nextEvictionExemptTabIds
+    const commitParkedIds = (): void => {
+      setParkedTerminalWorktreeIds((current) =>
+        haveSameIdSet(current, pass.nextParkedTerminalWorktreeIds)
+          ? current
+          : pass.nextParkedTerminalWorktreeIds
+      )
+      setForceParkedTerminalWorktreeIds((current) =>
+        haveSameIdSet(current, forceParkedWorktreeIds) ? current : forceParkedWorktreeIds
+      )
+      setEvictionExemptTerminalTabIds((current) =>
+        haveSameIdSet(current, nextEvictionExemptTabIds) ? current : nextEvictionExemptTabIds
+      )
+    }
+    whenParkedCaptureSettles(
+      pendingCaptures.length > 0 ? Promise.all(pendingCaptures) : undefined,
+      commitParkedIds,
+      passGuard.isCurrent
     )
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
@@ -166,6 +206,11 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           setTerminalParkingRevision((revision) => revision + 1)
         }, delayMs)
         pass.parkingTimers.set(worktreeId, timer)
+      }
+    }
+    return () => {
+      if (passGuard.isCurrent()) {
+        parkingPassGenerationRef.current += 1
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.

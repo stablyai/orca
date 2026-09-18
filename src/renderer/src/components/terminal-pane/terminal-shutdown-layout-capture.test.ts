@@ -1,10 +1,11 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
+const LEAF_ID_3 = '33333333-3333-4333-8333-333333333333' as const
 
 // Why: capture now appends an absolute cursor restore (see
 // terminal-serialize-absolute-cursor.ts), so pane mocks must expose the
@@ -16,12 +17,16 @@ function mockTerminal(scrollback: number): {
   cols: number
   rows: number
   buffer: { active: { cursorX: number; cursorY: number } }
+  write: (data: string, callback?: () => void) => void
 } {
   return {
     options: { scrollback },
     cols: 80,
     rows: 24,
-    buffer: { active: { cursorX: 0, cursorY: 0 } }
+    buffer: { active: { cursorX: 0, cursorY: 0 } },
+    write(_data: string, callback?: () => void) {
+      callback?.()
+    }
   }
 }
 
@@ -568,5 +573,229 @@ describe('captureTerminalShutdownLayout', () => {
 
     expect(layout.activeLeafId).toBe(LEAF_ID_2)
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
+  })
+})
+
+describe('captureTerminalShutdownLayoutYielding', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('still returns scrollback for a remote pane', async () => {
+    const { captureTerminalShutdownLayoutYielding } =
+      await import('./terminal-shutdown-layout-capture')
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => 'remote-scrollback') }
+    }
+
+    const pending = captureTerminalShutdownLayoutYielding({
+      manager: { getPanes: () => [pane], getActivePane: () => pane },
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-remote') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: undefined
+    })
+    const layout = await pending
+
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID]: `remote-scrollback${CURSOR_HOME}`
+    })
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-remote' })
+  })
+
+  it('awaits between panes rather than serializing the whole split on one stack', async () => {
+    vi.useFakeTimers()
+    const { captureTerminalShutdownLayoutYielding } =
+      await import('./terminal-shutdown-layout-capture')
+    const firstSerialize = vi.fn(() => 'first-scrollback')
+    const secondSerialize = vi.fn(() => 'second-scrollback')
+    const firstPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: firstSerialize }
+    }
+    const secondPane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: secondSerialize }
+    }
+
+    const pending = captureTerminalShutdownLayoutYielding({
+      manager: {
+        getPanes: () => [firstPane, secondPane],
+        getActivePane: () => firstPane
+      },
+      container: mockRootForSplit(1, 2),
+      expandedPaneId: null,
+      paneTransports: new Map(),
+      paneTitlesByPaneId: {},
+      existingLayout: undefined
+    })
+
+    expect(firstSerialize).toHaveBeenCalled()
+    expect(secondSerialize).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(0)
+    const layout = await pending
+
+    expect(secondSerialize).toHaveBeenCalled()
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID]: `first-scrollback${CURSOR_HOME}`,
+      [LEAF_ID_2]: `second-scrollback${CURSOR_HOME}`
+    })
+  })
+
+  it('skips a pane that unmounts mid-loop and still serializes remaining mounted panes', async () => {
+    const { captureTerminalShutdownLayoutYielding } =
+      await import('./terminal-shutdown-layout-capture')
+    const firstSerialize = vi.fn(() => 'first-scrollback')
+    const secondSerialize = vi.fn(() => 'second-scrollback')
+    const thirdSerialize = vi.fn(() => 'third-scrollback')
+    const firstPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: firstSerialize }
+    }
+    const secondPane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: secondSerialize }
+    }
+    const thirdPane = {
+      id: 3,
+      leafId: LEAF_ID_3,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: thirdSerialize }
+    }
+    let panes = [firstPane, secondPane, thirdPane]
+    const manager = {
+      getPanes: () => panes,
+      getActivePane: () => panes[0] ?? null
+    }
+
+    const pending = captureTerminalShutdownLayoutYielding({
+      manager,
+      container: mockRootForSplit(1, 2),
+      expandedPaneId: null,
+      paneTransports: new Map(),
+      paneTitlesByPaneId: {},
+      existingLayout: undefined
+    })
+
+    expect(firstSerialize).toHaveBeenCalled()
+    expect(secondSerialize).not.toHaveBeenCalled()
+    expect(thirdSerialize).not.toHaveBeenCalled()
+
+    panes = [firstPane, thirdPane]
+    const layout = await pending
+
+    expect(thirdSerialize).toHaveBeenCalled()
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID]: `first-scrollback${CURSOR_HOME}`,
+      [LEAF_ID_3]: `third-scrollback${CURSOR_HOME}`
+    })
+  })
+
+  it('re-reads existingLayout after the yield so a concurrent pty-binding clear is not restored', async () => {
+    vi.useFakeTimers()
+    const { captureTerminalShutdownLayoutYielding } =
+      await import('./terminal-shutdown-layout-capture')
+    const firstPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => 'first-scrollback') }
+    }
+    const secondPane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => 'second-scrollback') }
+    }
+    let existingLayout: TerminalLayoutSnapshot = {
+      root: null,
+      activeLeafId: LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF_ID]: 'pty-stale', [LEAF_ID_2]: 'pty-2' },
+      buffersByLeafId: { [LEAF_ID]: 'old-first', [LEAF_ID_2]: 'old-second' }
+    }
+
+    const pending = captureTerminalShutdownLayoutYielding({
+      manager: {
+        getPanes: () => [firstPane, secondPane],
+        getActivePane: () => firstPane
+      },
+      container: mockRootForSplit(1, 2),
+      expandedPaneId: null,
+      paneTransports: new Map([
+        [1, { getPtyId: vi.fn(() => null) }],
+        [2, { getPtyId: vi.fn(() => 'pty-2') }]
+      ]),
+      paneTitlesByPaneId: {},
+      existingLayout,
+      readExistingLayout: () => existingLayout
+    })
+
+    existingLayout = {
+      ...existingLayout,
+      ptyIdsByLeafId: { [LEAF_ID_2]: 'pty-2' }
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    const layout = await pending
+
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
+  })
+
+  it('does not restore a leaf cleared during the yield from the pre-yield serialize', async () => {
+    vi.useFakeTimers()
+    const { captureTerminalShutdownLayoutYielding } =
+      await import('./terminal-shutdown-layout-capture')
+    const firstPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => 'first-scrollback') }
+    }
+    const secondPane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => 'second-scrollback') }
+    }
+    const clearedScrollbackLeafIds = new Set<string>()
+
+    const pending = captureTerminalShutdownLayoutYielding({
+      manager: {
+        getPanes: () => [firstPane, secondPane],
+        getActivePane: () => firstPane
+      },
+      container: mockRootForSplit(1, 2),
+      expandedPaneId: null,
+      paneTransports: new Map(),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        buffersByLeafId: { [LEAF_ID]: 'previous-first' }
+      },
+      clearedScrollbackLeafIds
+    })
+
+    clearedScrollbackLeafIds.add(LEAF_ID)
+    await vi.advanceTimersByTimeAsync(0)
+    const layout = await pending
+
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID_2]: `second-scrollback${CURSOR_HOME}`
+    })
   })
 })
