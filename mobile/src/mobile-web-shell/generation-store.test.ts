@@ -409,6 +409,26 @@ describe('generation store', () => {
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe('a'.repeat(64))
   })
 
+  it('keeps the host it just activated when the clock jumps backward', async () => {
+    const fs = createFakeFileSystem()
+    const times = [100, 200, 300, 400, 1]
+    let tick = 0
+    const store = createGenerationStore({ fileSystem: fs, now: () => times[tick++] ?? 0 })
+    const hosts = ['a', 'b', 'c', 'd', 'e'].map((name) => deriveHostCacheKey(name))
+
+    for (const host of hosts) {
+      await activate(store, host)
+    }
+
+    expect((await store.readActiveGeneration(hosts[4]))?.directory).toBe(
+      `${ROOT}/${hosts[4]}/generations/${'a'.repeat(64)}`
+    )
+    expect(await store.readActiveGeneration(hosts[0])).toBeNull()
+    for (const host of hosts.slice(1)) {
+      expect((await store.readActiveGeneration(host))?.buildId).toBe('a'.repeat(64))
+    }
+  })
+
   it('keeps the adapter aligned with the port', () => {
     expect(adapterSatisfiesPort).toBe(true)
   })

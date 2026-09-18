@@ -78,7 +78,7 @@ export function createGenerationStore(options: {
     await fs.delete(hostRoot(hostKey))
   }
 
-  async function enforceHostLimit(limit: number, index: Map<string, number>): Promise<void> {
+  async function enforceHostLimit(index: Map<string, number>, activated: string): Promise<void> {
     const hosts = await listHostDirectories()
     const present = new Set(hosts.map((host) => host.name))
     for (const key of Array.from(index.keys())) {
@@ -87,11 +87,13 @@ export function createGenerationStore(options: {
       }
     }
     // A host with no index entry sorts first: the index is recency, not truth, so a lost or
-    // truncated one costs eviction order rather than a generation.
-    const ordered = [...hosts].sort(
-      (left, right) => (index.get(left.name) ?? 0) - (index.get(right.name) ?? 0)
-    )
-    for (const host of ordered.slice(0, Math.max(0, ordered.length - limit))) {
+    // truncated one costs eviction order rather than a generation. The host just activated is
+    // never a candidate, because `now()` is a wall clock: one backward jump would otherwise make
+    // the newest entry the oldest and evict the tree the caller is about to open.
+    const candidates = hosts
+      .filter((host) => host.name !== activated)
+      .sort((left, right) => (index.get(left.name) ?? 0) - (index.get(right.name) ?? 0))
+    for (const host of candidates.slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))) {
       await dropHostTree(host.name)
       index.delete(host.name)
     }
@@ -184,7 +186,7 @@ export function createGenerationStore(options: {
     const index = await readHostIndex()
     index.set(staged.hostKey, now())
     // Enforced here rather than left to a caller: the four-host ceiling is this module's invariant.
-    await enforceHostLimit(MAX_CACHED_HOSTS, index)
+    await enforceHostLimit(index, staged.hostKey)
     return active
   }
 
