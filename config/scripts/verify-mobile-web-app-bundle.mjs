@@ -14,7 +14,8 @@ const defaultBundleDir = join(projectDir, 'out', 'mobile-web-app')
  * The document, the route chunks and the images the route tree imports. Was 64 while the bundle
  * was one script: splitting the 14 routes emits 53 chunks, because esbuild gives every distinct
  * set of importers its own shared chunk. Measured at 96, held under the native map's own 256
- * (MOBILE_WEB_SHELL_MAX_ASSETS) so the ceiling that trips first is this one.
+ * (MOBILE_WEB_SHELL_MAX_ASSETS) so the ceiling that trips first is this one, and above what
+ * mobileWebAppBundleMaxChunks allows so the chunk ceiling is the one that names the problem.
  */
 export const MOBILE_WEB_APP_BUNDLE_MAX_ASSETS = 128
 
@@ -27,12 +28,18 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_ASSETS = 128
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
 /**
- * How many scripts the page may be cut into. Not a per-route formula: a chunk is emitted per
- * distinct set of importers, not per route, so the count is combinatorial in what the routes
- * share and 14 routes measure at 53. This is the ceiling that catches a split running away, while
- * MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES below is the one that catches it collapsing.
+ * How many scripts the page may be cut into, for a given number of routes. A chunk is emitted per
+ * distinct set of importers rather than per route, so the count is combinatorial in what the
+ * routes share: 8 routes measure 23 chunks, 10 measure 40, 12 measure 47, 14 measure 53, about
+ * three more per route at the top. Four per route with a flat 16 leaves the next few routes room,
+ * so a route added in C2 fails on its own weight and not on a number measured before it existed.
+ *
+ * This is the ceiling that catches a split running away; MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES
+ * below is the one that catches it collapsing, and it is the real budget of the two.
  */
-export const MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS = 64
+export function mobileWebAppBundleMaxChunks(routeCount) {
+  return 4 * routeCount + 16
+}
 
 /**
  * What the browser must parse before the first route can paint: the entry plus every chunk it
@@ -104,10 +111,11 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
   // Read off the fresh build rather than the manifest: neither bound is a manifest field, and the
   // buildId just proved this build is the one on disk.
-  if (first.chunkCount > MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS) {
+  const maxChunks = mobileWebAppBundleMaxChunks(first.routeKeys.length)
+  if (first.chunkCount > maxChunks) {
     fail(
       `bundle is cut into ${String(first.chunkCount)} chunks, over the Phase C budget of ` +
-        `${String(MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS)}`
+        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s)`
     )
   }
   if (first.entryStaticBytes > MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES) {

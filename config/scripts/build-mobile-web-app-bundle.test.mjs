@@ -21,10 +21,10 @@ import {
 } from './mobile-web-app-route-manifest.mjs'
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ASSETS,
-  MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS,
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_APP_SOURCE_DIRS,
+  mobileWebAppBundleMaxChunks,
   verifyMobileWebAppBundle
 } from './verify-mobile-web-app-bundle.mjs'
 import {
@@ -429,12 +429,12 @@ describe('the Phase C budget', () => {
   itBundling(
     'is not already exceeded by the current bundle',
     async () => {
-      const { manifest, chunkCount, entryStaticBytes } = await withScratch((scratch) =>
+      const { manifest, chunkCount, entryStaticBytes, routeKeys } = await withScratch((scratch) =>
         buildMobileWebAppBundle({ outDir: join(scratch, 'd') })
       )
       expect(manifest.totalBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
       expect(manifest.assets.length).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
-      expect(chunkCount).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS)
+      expect(chunkCount).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(routeKeys.length))
       expect(entryStaticBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)
     },
     120_000
@@ -463,8 +463,31 @@ describe('the Phase C budget', () => {
     expect(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES).toBeLessThan(
       MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES
     )
-    // Every chunk is a manifest asset, so the chunk ceiling has to leave room for the images.
-    expect(MOBILE_WEB_APP_BUNDLE_MAX_CHUNKS).toBeLessThan(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
+  })
+
+  it('derives the chunk ceiling from the route count, not from a measured number', async () => {
+    // A chunk is emitted per distinct set of importers, so the count is combinatorial rather than
+    // one per route. Measured while building this: 8 routes emit 23 chunks, 10 emit 40, 12 emit
+    // 47, 14 emit 53 -- about 3 more per route at the top. The ceiling allows 4 and starts 16
+    // above zero, so the next few routes land under it instead of failing on a pinned number.
+    for (const [routes, measured] of [
+      [8, 23],
+      [10, 40],
+      [12, 47],
+      [14, 53]
+    ]) {
+      expect(mobileWebAppBundleMaxChunks(routes), `${String(routes)} routes`).toBeGreaterThan(
+        measured
+      )
+    }
+    expect(mobileWebAppBundleMaxChunks(14)).toBe(72)
+    expect(mobileWebAppBundleMaxChunks(15) - mobileWebAppBundleMaxChunks(14)).toBe(4)
+  })
+
+  itBundling('leaves room for the images under the asset ceiling', async () => {
+    // Every chunk is a manifest asset, so the ceiling the chunks may reach has to stay below it.
+    const routeCount = (await collectMobileWebAppRouteKeys(appDir)).length
+    expect(mobileWebAppBundleMaxChunks(routeCount)).toBeLessThan(MOBILE_WEB_APP_BUNDLE_MAX_ASSETS)
   })
 })
 
