@@ -80,6 +80,11 @@ export type Worktree = {
   /** Projection of persisted display-name provenance. */
   displayNameMode?: 'fixed' | 'automatic'
   comment: string
+  /** Free-form, provider-agnostic "needs attention" reason set by an external tool
+   *  via `orca worktree set --needs-attention`. Opaque caller-provided text, shown
+   *  verbatim in the sidebar tooltip; null/absent when nothing needs attention.
+   *  Optional for backward compatibility — see Worktree.linkedGitLabMR. */
+  needsAttention?: string | null
   linkedIssue: number | null
   linkedPR: number | null
   /** GitHub PR hidden from branch discovery after an explicit unlink. */
