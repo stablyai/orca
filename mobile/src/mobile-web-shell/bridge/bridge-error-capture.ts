@@ -15,7 +15,7 @@ export type BridgeErrorCapture = {
   category: string
   message: string
   isRpcDeliveryUnknown: boolean
-  code?: string | number
+  code?: unknown
   cause?: BridgeErrorCapture
 }
 
@@ -31,9 +31,9 @@ function errorCaptureSchema(remainingCauses: number): z.ZodType<BridgeErrorCaptu
     category: z.string(),
     message: z.string(),
     isRpcDeliveryUnknown: z.boolean(),
-    // Strings and numbers are the only code shapes the transport produces; anything else is
-    // dropped rather than smuggled across as an object the page would have to guess at.
-    code: z.union([z.string(), z.number()]).optional()
+    // Whatever shape the code has: the recorder records every present code, so narrowing here
+    // would drop a field from a rejection the goldens already hold.
+    code: z.unknown().optional()
   }
   return remainingCauses === 0
     ? z.object(fields)
@@ -60,7 +60,7 @@ export function captureBridgeError(error: unknown, depth = 0): BridgeErrorCaptur
     category: error.constructor.name,
     message: error.message,
     isRpcDeliveryUnknown: isRpcDeliveryUnknown(error),
-    ...(typeof code === 'string' || typeof code === 'number' ? { code } : {}),
+    ...(code === undefined ? {} : { code }),
     ...(cause !== undefined && depth < BRIDGE_MAX_CAUSE_DEPTH
       ? { cause: captureBridgeError(cause, depth + 1) }
       : {})
@@ -68,7 +68,7 @@ export function captureBridgeError(error: unknown, depth = 0): BridgeErrorCaptur
 }
 
 class BridgeReconstructedError extends Error {
-  code?: string | number
+  code?: unknown
 }
 
 type ReconstructedErrorClass = new (message: string) => BridgeReconstructedError

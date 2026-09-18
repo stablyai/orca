@@ -196,6 +196,16 @@ describe('host messages', () => {
         id: ID,
         error: { category: 'Error', message: 'x', isRpcDeliveryUnknown: true }
       }
+    ],
+    [
+      // The recorder records every code it finds, whatever its shape, so refusing one here would
+      // move a golden.
+      'an error whose code is an object',
+      {
+        type: 'error',
+        id: ID,
+        error: { category: 'Error', message: 'x', isRpcDeliveryUnknown: false, code: { n: 1 } }
+      }
     ]
   ] as const
 
@@ -264,14 +274,6 @@ describe('host messages', () => {
     [
       'an end for a reason that is not one of the three',
       client({ type: 'end', id: ID, reason: 'done' })
-    ],
-    [
-      'an error whose code is an object',
-      client({
-        type: 'error',
-        id: ID,
-        error: { category: 'Error', message: 'x', isRpcDeliveryUnknown: false, code: { n: 1 } }
-      })
     ]
   ] as const
 

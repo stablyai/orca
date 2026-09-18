@@ -60,9 +60,16 @@ describe('captureBridgeError', () => {
     expect(captureBridgeError(numbered).code).toBe(1006)
   })
 
-  it('drops a code that is neither a string nor a number', () => {
+  it('keeps a code the transport does not narrow, so the recorder sees the same field', () => {
     const structured = Object.assign(new Error('closed'), { code: { status: 500 } })
-    expect('code' in captureBridgeError(structured)).toBe(false)
+    expect(captureBridgeError(structured).code).toEqual({ status: 500 })
+  })
+
+  it('keeps an absent code absent rather than sending an undefined one', () => {
+    expect('code' in captureBridgeError(new Error('bare'))).toBe(false)
+    expect('code' in captureBridgeError(Object.assign(new Error('x'), { code: undefined }))).toBe(
+      false
+    )
   })
 
   it('reads a code defined as a getter', () => {
