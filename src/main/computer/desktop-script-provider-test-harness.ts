@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 8 desktop-script-provider specs, not shipped code, and it falls
+   outside the *.test / *.spec / tests glob set. The stubs replace node builtins (child_process, fs/promises) for a provider
+   that shells out; inlining them would duplicate the vi.hoisted fixture into all 8 specs. */
 import { expect, vi } from 'vitest'
 import type { DesktopScriptRuntimeHost } from './desktop-script-runtime-host'
 

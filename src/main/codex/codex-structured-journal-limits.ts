@@ -2,6 +2,8 @@ export const MAX_CODEX_GENERIC_ROWS_PER_TURN = 8
 export const MAX_CODEX_GENERIC_TURN_BUCKETS = 64
 export const MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES = 128
 export const MAX_CODEX_GENERIC_BOOKKEEPING_BYTES = 32 * 1024
+/** Goal duplicate-suppression state is LRU-bounded per live translator. */
+export const MAX_CODEX_GOAL_THREADS = 64
 export const MAX_CODEX_ACTIVE_ITEMS = 256
 export const MAX_CODEX_PENDING_PROMPTS = 128
 export const MAX_CODEX_IDENTITY_ENTRIES = 512

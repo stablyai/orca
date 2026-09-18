@@ -1,6 +1,15 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 
+async function pathExistsOnRuntime(path: string): Promise<boolean> {
+  try {
+    await resolveRuntimeFilePath(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
   const openResult = { ok: true } as const
   return {
@@ -12,14 +21,9 @@ export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),
-    pathExists: async (path) => {
-      try {
-        await resolveRuntimeFilePath(path)
-        return true
-      } catch {
-        return false
-      }
-    },
+    pathExists: async (path) => pathExistsOnRuntime(path),
+    // Without this the fallback proxy answers `undefined` and the caller's batch rejects.
+    pathsExist: (paths) => Promise.all(paths.map((path) => pathExistsOnRuntime(path))),
     pickAttachment: () => Promise.resolve(null),
     pickImage: () => Promise.resolve(null),
     pickRepoIconImage: () => Promise.resolve(null),

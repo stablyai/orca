@@ -53,7 +53,7 @@ const repairedEntries = [
 
 const catalogs = { es, ko, zh } as const
 
-function readValue(catalog: object, key: string): unknown {
+function readValue(catalog: Record<string, unknown>, key: string): unknown {
   return key.split('.').reduce<unknown>((value, part) => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return undefined

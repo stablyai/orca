@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-31",
+  "updatedAt": "2026-09-11",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,6 +10,617 @@
     }
   },
   "gates": [
+    {
+      "id": "agent-session.journal-streaming-replay",
+      "title": "Journal replay bounds obsolete revision memory without changing recovery",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "runtime-unit",
+      "surfaces": ["structured chat journal replay", "structured chat recovery"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Production SQLite and reducer tests on macOS. Execution-host-local storage behavior is shared by remote runtimes; no live SSH or Windows/Linux run. PTY, daemon, WSL process launch, transport framing and mobile rendering are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/native-chat/agent-session-journal/journal-open.ts"
+      ],
+      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, repair precedence, read-only schema latching and cursor cleanup while retaining live items rather than all historical bodies.",
+      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; preserve prefix and future-schema latching after a gap, malformed suffix repair precedence, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content and recovery.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+      ],
+      "testFiles": [
+        "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
+        "src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
+          "assertions": [
+            "releases superseded revision bodies while reducing a long journal",
+            "holds no read snapshot while reducing, so a checkpoint can pass mid-replay",
+            "keeps the prefix but latches read-only for a future row beyond a gap",
+            "keeps gap repair precedence when a later row is malformed",
+            "rejects an unanchored prefix before a later gap"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.71,
+          "summary": "245 tests passed across 22 files. Retained-heap oracle fails on baseline at 68.6 MB and passes under 8 MiB with streaming; gap/schema and cursor-cleanup assertions passed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Unit fixtures; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local candidate validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Production-function AB/BA benchmark samples 132.6 MB live heap in baseline vs 88-92 KB with streaming on a 66.7 MB revision-heavy journal. The retained-heap unit test fails against the original code and passes with streaming; value and cursor assertions pass in both implementations."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Paged SQLite reads (one completed statement per page) and immediate reduction retain reduced state plus one page of rows. No cursor or read snapshot outlives its statement, so a WAL checkpoint can pass mid-replay; no new polling, subprocess, provider call or wire change."
+      },
+      "knownGaps": [
+        "No Windows/Linux runtime execution or real remote-host validation.",
+        "Latest live message bodies still require memory proportional to their total size; this removes superseded-history retention, not live-history storage."
+      ],
+      "promotionCriteria": ["Retain red/green heap and value assertions and complete CI soak."],
+      "demotionRule": "Keep experimental until cross-platform and soak evidence; investigate failures without weakening content or memory assertions."
+    },
+    {
+      "id": "runtime.connection-owned-host-status",
+      "title": "Host status recovers with its owning connection",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime",
+      "layer": "service-integration-and-e2e",
+      "surfaces": [
+        "sidebar host status",
+        "desktop runtime connection",
+        "browser primary connection"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Real authenticated sockets plus isolated desktop and headless hosts with desktop and browser viewers; deterministic lifecycle tests cover stale results and reader deadlines.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19163"],
+      "invariant": "Failed bootstrap and authenticated reconnect converge without UI triggers; one connection owner publishes verified status, with no independent healthy status polling.",
+      "oracle": "Observe automatic recovery, retained runtime identity on failure, ordered publications, exact request counts, isolated viewer outages, and retirement on disconnect.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-host-status-owner.test.ts src/main/ipc/runtime-environment-status-recovery.test.ts src/main/ipc/runtime-environment-status-connection.test.ts src/renderer/src/store/slices/runtime-status-snapshot.test.ts src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/shared/runtime-host-status-owner.test.ts",
+        "src/main/ipc/runtime-environment-status-recovery.test.ts",
+        "src/main/ipc/runtime-environment-status-connection.test.ts",
+        "src/renderer/src/store/slices/runtime-status-snapshot.test.ts",
+        "src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "tests/e2e/runtime-host-status-recovery.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/runtime-environment-status-recovery.test.ts",
+          "assertions": [
+            "recovers a saved host after its first status check fails, without another UI request"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "summary": "Desktop-host and headless-host journeys passed with desktop and browser viewers.",
+          "durationSeconds": 31.3
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "Target excluding builds; measured p95 not established."
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Local candidate runs passed; no sustained CI history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "First-status-failure oracle failed on main 58ff95becb40 (one request instead of two) and passes on the candidate. E2E verifies candidate recovery, not a baseline comparison."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Deterministic tests assert one shared request and no healthy owner polling."
+      },
+      "promotionCriteria": ["Collect repeated CI runs without unexplained flakes."],
+      "knownGaps": [
+        "No live Linux, Windows, SSH, or mixed-version pair validation.",
+        "TCP interruption exercises reconnect, not a full real host process restart.",
+        "The outage begins on the first saved-host check, not by relaunching a preseeded desktop profile."
+      ],
+      "demotionRule": "Keep experimental until repeated runs establish reliability; preserve request-count and lifecycle assertions."
+    },
+    {
+      "id": "mobile-push.headless-startup-and-policy",
+      "title": "Headless push lifecycle and mobile delivery policy",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime",
+      "layer": "service-integration",
+      "surfaces": ["headless startup", "push registration", "native push delivery policy"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "Actual startOrcad entry with mocked daemon/RPC startup boundaries; real controller, push service, and persisted device registry. Gateway send is stubbed.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19204"],
+      "invariant": "Headless startup installs and disposes push delivery; desktop notification categories remain authoritative, the three-minute away policy is preserved, and host activity cannot extend the seven-day mobile lease.",
+      "oracle": "Require registration after RPC identity initialization and shutdown cleanup; idle 179/180/0 yields false/true/false in retained event metadata and exactly one gateway push. Legacy socket subscriptions preserve notification filtering, while opted-in push clients can request dismissal reconciliation. Desktop categories remain authoritative. Persisted lease expires exactly at seven days and only explicit registration renews it.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/mobile-notification-dismissal-store.test.ts src/renderer/src/hooks/useAutoAckViewedAgent.away.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/orcad/orcad-push-startup.test.ts src/main/runtime/push/push-policy-pipeline.integration.test.ts"
+      ],
+      "testFiles": [
+        "src/main/orcad/orcad-push-startup.test.ts",
+        "src/main/runtime/push/push-policy-pipeline.integration.test.ts",
+        "src/main/runtime/mobile-notification-dismissal-store.test.ts",
+        "src/renderer/src/hooks/useAutoAckViewedAgent.away.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/orcad/orcad-push-startup.test.ts",
+          "assertions": [
+            "starts push after RPC identity is available and stops dispatch on shutdown"
+          ]
+        },
+        {
+          "file": "src/main/runtime/push/push-policy-pipeline.integration.test.ts",
+          "assertions": [
+            "carries the native idle boundary through replay and push dispatch",
+            "expires persisted registration at seven days despite host activity and renews explicitly"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/orcad/orcad-push-startup.test.ts src/main/runtime/push/push-policy-pipeline.integration.test.ts",
+          "result": "passed",
+          "summary": "Four tests passed across two files.",
+          "durationSeconds": 0.407
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Target budget; measured p95 not established"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Focused local run passed; repeated CI history not established."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Headless startup oracle reproduced missing registrar before the startup fix and passed afterward. Policy tests cover candidate behavior."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Lifecycle and policy coverage; asserts exact gateway send counts and zero remaining dispatch listeners after shutdown."
+      },
+      "promotionCriteria": ["Collect repeated CI runs without unexplained failures."],
+      "knownGaps": [
+        "Does not prove APNs silent background wakeup or actual operating-system idle transitions.",
+        "Rendererless agent/bell event generation remains outside the documented feature contract.",
+        "No live Windows or Linux policy evidence.",
+        "Mobile native presentation and dismissal integration belongs to the subsequent mobile PR."
+      ],
+      "demotionRule": "Keep experimental if lifecycle or policy assertions fail; do not weaken them to bypass platform delivery gaps."
+    },
+    {
+      "id": "agent-session.structured-send-at-most-once",
+      "title": "Ambiguous structured sends never become a second provider delivery",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "shared-host-renderer-and-mobile-unit",
+      "surfaces": ["desktop native chat", "mobile native chat", "structured agent-session RPC"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime", "mobile"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "mobile"],
+      "coverageNotes": "Deterministic host, renderer, direct/Relay transport, and mobile hook tests cover durable identity, caller changes, journal loss, acknowledgement loss, expiry, and remount. The host code is execution-location neutral, but live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/20133"],
+      "invariant": "One structured-send operation id causes at most one provider dispatch. A recorded or transport-ambiguous send reuses that id across retry, caller reconnect, client remount, and journal recovery; only a terminal rejection may rotate to a first delivery.",
+      "oracle": "Inject adapter acknowledgement loss, RPC response loss, caller replacement, logical-client close after response, auth recovery with a written request, missing journal submissions, legacy pending rows, stale fences, operation expiry, mobile remount, and durable-journal capacity. Assert one provider dispatch or one operation id for every ambiguous retry, fresh identity only after rejection, and no eviction of ambiguous mobile ids.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/agent-session-operation-ledger.test.ts",
+        "src/shared/structured-agent-session-send-disposition.test.ts",
+        "src/main/runtime/agent-session-operation-admission.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
+        "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
+        "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
+        "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
+        "src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx",
+        "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
+        "src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx",
+        "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx",
+        "src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "mobile/src/session/mobile-native-chat-image-attachment.test.ts",
+        "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+        "mobile/src/session/mobile-structured-send-operation-journal.test.ts",
+        "mobile/src/session/mobile-structured-session-operation-retention.test.ts",
+        "mobile/src/session/mobile-structured-send-delivery.test.ts",
+        "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
+        "mobile/src/session/use-mobile-structured-agent-session.test.tsx",
+        "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+        "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
+          "assertions": [
+            "never redelivers after admission survives without its journal submission",
+            "fails closed when a legacy pending row survives without its submission",
+            "never reruns an admission-only send after the caller changes",
+            "reuses a pending send admission after the client refreshes its fence",
+            "settles a submission write failure as rejected before provider dispatch"
+          ]
+        },
+        {
+          "file": "src/main/runtime/agent-session-operation-admission.test.ts",
+          "assertions": ["replays the original row after the caller identity changes"]
+        },
+        {
+          "file": "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
+          "assertions": [
+            "keeps one id across acknowledgement loss and host unknown replays",
+            "reuses an ambiguous id after the session hook remounts",
+            "keeps an ambiguous id after the host replay window expires",
+            "reuses the original uploaded attachment identity after acknowledgement loss",
+            "keeps the send id after a pending-admission refusal",
+            "rotates after a %s pre-handler RPC refusal that proves the send did not run"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
+          "assertions": ["reuses an option operation after a pending admission refusal"]
+        },
+        {
+          "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
+          "assertions": ["retries a rejected nudge on the next journal edge"]
+        },
+        {
+          "file": "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
+          "assertions": ["never re-mints an ambiguous batch after the host replay window expires"]
+        },
+        {
+          "file": "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
+          "assertions": [
+            "marks a written request unknown when another request triggers auth recovery"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": ["preserves a committed response when logical close wins the callback race"]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+          "assertions": ["keeps a synchronous pre-write relay failure definite"]
+        },
+        {
+          "file": "src/shared/structured-agent-session-send-disposition.test.ts",
+          "assertions": ["never rotates $state operation after its host tombstone expires"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "result": "passed",
+          "durationSeconds": 22.1,
+          "summary": "Thirteen focused host, shared, renderer, and orchestration files passed 148 tests."
+        },
+        {
+          "date": "2026-09-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.37,
+          "summary": "Ten focused mobile session, attachment, and transport files passed 113 tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "Two deterministic unit commands; initial target pending CI soak."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Focused local runs pass; repeated CI history is not established."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Four targeted failures were observed: spending the mobile id after acknowledgement loss made three retries use two ids; settling cross-caller recovery under the new caller left the original ledger row pending; returning no synthetic result for a legacy or crash-left pending row dispatched it as a new accepted send; and a8d3de8d20's blanket settlement rotated a stale-fence option id and failed the renderer invariant. The focused tests pass with the production fixes restored; a byte-identical old-production run is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No polling, timers, subprocesses, or provider fanout were added. Each mobile journal mutation parses the bounded journal and performs at most one full AsyncStorage rewrite; entries retain hashes, ids, and original attachment paths, cap at 4,096, and fail closed at capacity. A first host send performs three serialized whole-store durable transactions: admission, the pre-effect unknown tombstone, and final settlement. Lease and fence admission now share one transaction with the operation row, so a transient pre-effect refusal leaves no row and, absent pruning, performs no store write. No capacity-scale host fsync or mobile AsyncStorage latency benchmark is recorded."
+      },
+      "promotionCriteria": [
+        "Soak both commands in CI with zero unexplained flakes.",
+        "Add live physical-mobile and remote-runtime interruption evidence before claiming full provider coverage."
+      ],
+      "knownGaps": [
+        "A payload-keyed mobile ambiguity cannot distinguish retrying the original send from an intentional later send with identical content. It fails closed until authoritative settlement, so the claim that retention costs no liveness is false without a durable composer-action identity.",
+        "Clearing or externally corrupting desktop localStorage or mobile AsyncStorage can erase a client-owned ambiguous identity.",
+        "An ambiguous id retained past host tombstone expiry remains safely blocked rather than becoming live again.",
+        "A host crash after premarking the operation unknown but before journal append or provider dispatch can conservatively suppress a message that never reached the provider.",
+        "A replay synthesized from an operation row whose journal submission is missing is not republished into the journal; desktop stops automatic polling but remains safely blocked on that FIFO head.",
+        "The changed send guarantee is not capability-negotiated. New mobile clients fail closed across caller-identity change, but old clients can rotate an ambiguous id against a new host, and an old mobile client can interpret an ok response carrying unknown as accepted.",
+        "An ambiguous attachment retry depends on the original host temp path remaining usable when the first request never reached the host; if it is gone, the retry rejects rather than rotating.",
+        "No live SSH, remote-runtime, physical iOS/Android, Linux, or Windows interruption run is recorded."
+      ],
+      "demotionRule": "Keep experimental or demote if any ambiguous retry changes operation id, provider dispatch count exceeds one, durable identity is evicted by age or capacity, or the focused commands flake without a diagnosed harness defect."
+    },
+    {
+      "id": "agent-session.completed-turn-duration",
+      "title": "Completed turn duration survives client recovery and history pagination",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "shared-and-renderer-unit",
+      "surfaces": ["native chat", "structured agent history", "structured agent subscriptions"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime", "mobile"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Deterministic provider, journal recovery, RPC projection and shared renderer tests run on macOS. Shared logic serves desktop and mobile; these tests do not prove native mobile or real SSH transport. Local/daemon PTY input, geometry and WSL process launch are unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19695"],
+      "invariant": "An observed completed turn retains the same host-recorded duration and initiating user-message attribution through client reload, settlement retry and loading older history; older clients receive the compatible item carrier, and a host-recorded unknown duration suppresses local estimates.",
+      "oracle": "Render a host-settled duration without observing completion locally; preserve an exit at 2000 through failed settlement at 60000 and later retry; retain a seven-second older turn beyond 256 submitted turns; prune aliases with removed user items and preserve alias identity during item-only streaming; render no completed duration for an unverifiable turn both before and after client reload.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx"
+      ],
+      "testFiles": [
+        "src/shared/native-chat-unverifiable-turn-status.test.ts",
+        "src/main/codex/codex-requested-close-turn-timing.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts",
+        "src/shared/structured-agent-session-turn-timing-retention.test.ts",
+        "src/shared/structured-agent-session-turn-timing.test.ts",
+        "src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts",
+        "src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts",
+        "src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/native-chat-unverifiable-turn-status.test.ts",
+          "assertions": [
+            "does not convert a running turn to local Worked for after unverifiable recovery (start %s)"
+          ]
+        },
+        {
+          "file": "src/main/codex/codex-requested-close-turn-timing.test.ts",
+          "assertions": ["keeps the first exit receipt when retry requestedClose=%s"]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts",
+          "assertions": ["keeps exit receipt %s on retry"]
+        },
+        {
+          "file": "src/shared/structured-agent-session-turn-timing-retention.test.ts",
+          "assertions": [
+            "keeps an older page duration after the recent submission budget fills",
+            "drops an old alias once rewind removes its user item"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx",
+          "assertions": ["renders a host-settled duration without ever clocking the turn locally"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx",
+          "result": "passed",
+          "durationSeconds": 4.65,
+          "summary": "58 tests passed across eight files at source commit 5acb404bf244cdc0bd3643c4e79beb189ce9a0cd; the following manifest-only commit records this run without changing tested source."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Deterministic focused tests without an app launch; initial target budget pending CI soak."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "No CI soak history for this combined gate."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before fixes, failed settlement stored 60000 instead of observed 2000 and older-page duration was undefined instead of seven seconds after 257 submissions. Mounted unverifiable recovery also displayed a local 59 seconds versus no duration after reload, including an older-host row without a start; the focused regressions pass after fixes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No polling, process fanout or new timer. Alias retention follows loaded user items plus 256 recent records; lookup uses a Set, removal/reset prunes aliases, and item-only stream batches retain the submission array identity."
+      },
+      "knownGaps": [
+        "This deterministic gate does not launch Electron or prove a full app restart; exact-head manual screenshots are separate PR evidence.",
+        "Native mobile, live SSH/relay transport and Windows/Linux execution are not exercised by this command.",
+        "Accumulated-history wall-clock profiling and CI soak remain unmeasured."
+      ],
+      "promotionCriteria": [
+        "Complete CI soak without unexplained flakes and retain the value-based retry, pagination and rendering oracles."
+      ],
+      "demotionRule": "Keep experimental until soak and platform evidence support promotion; do not relax value or identity assertions to hide failures."
+    },
+
+    {
+      "id": "workspace-session.ssh-host-partition-round-trip",
+      "title": "An SSH workspace round-trips through its own partition without losing tabs, editor files or browser state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-session-persistence",
+      "layer": "persistence-integration",
+      "surfaces": [
+        "workspace session partitions",
+        "direct SSH remote workspace sync",
+        "boot session hydration"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Drives the real Store against a temp profile, the real remoteWorkspace:setForConnectedTargets handler, the real session projection and the real pull-side merge. The relay transport is faked at the multiplexer boundary, so no live SSH host or relay is exercised; the partition routing and projection code under test is platform-independent. Runtime (orca environment) partitions, PTY lifecycle and mobile rendering are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/12721",
+        "https://github.com/stablyai/orca/issues/18173",
+        "https://github.com/stablyai/orca/blob/main/src/shared/workspace-session-partition-owner.ts"
+      ],
+      "invariant": "Every workspace the `ssh:<targetId>` partition names is hydrated at boot and published to the host, whatever kind of state it holds - terminal tabs, open editor files with unsaved hot-exit drafts, browser workspaces, tab groups, or host-qualified visit recency. An empty tab row is read as a gap, never as evidence the tabs were closed, so a replace-session upload can never delete a populated host list. A workspace the local partition already holds terminal tabs for is left untouched, and every workspace routes back to the partition that owns it. Adoption never destroys what it was not told about: a host row the partition holds nothing for cannot replace a populated base row, and a bare id the read found contested is gap-filled rather than replaced, because that is exactly the id where `local` and `ssh:<targetId>` are not one workspace written twice. Tab-, pane- and file-keyed rows are recovered through the same indexes the split routed them by. An explicit empty tab row written by this build survives the round trip as a present empty row and is declined by the shared seeding predicate. Boot enumerates the partitions persistence actually holds rather than inferring them from the repo catalog, so a target whose only workspace is a folder is read like any other; a folder workspace routes to the same partition main's RuntimeWorkspaceSessionController writes it to, so one workspace is never written into two stores; and a workspace adopted out of a partition routes back to that partition even on a boot whose repo catalog cannot name the host, so the write cannot re-strand what the read just reunited. `contested` means a repo id the catalog registers on more than one host, or two SSH partitions naming one id - never the mere co-presence of 'local' and `ssh:<targetId>`, which is the repair's own input.",
+      "oracle": "Assert the renderer routes an SSH folder workspace to `ssh:<targetId>`, that its save carries the folder row to that partition and leaves none behind in 'local' (main applies a patch field-wise, so a partition write that omits the row erases it), and that an SSH partition no repo names is still read. Assert a bare id whose repo the catalog registers on two hosts keeps the local workspace's unsaved dirtyDraftContent and never names the rival partition as its write target, while two SSH partitions naming one id resolve to the same winner on every boot. Seed a real Store the way shipping builds leave it: the local blob holds the worktree key with an empty list while `ssh:<targetId>` holds the real one, with a second populated SSH partition present. Publish through the IPC handler with no session argument (the path the debounced writer takes) and assert the host snapshot carries the runtime-authored tabs rather than []. Separately drive the shipping split (buildWorkspaceSessionHostSnapshots) and feed its own output back through the real boot read, pinning the write and read halves to each other rather than to a hand-built fixture: an SSH workspace with open editor files, an unsaved dirtyDraftContent and no terminal tabs must come back intact, as must one with no tabsByWorktree key at all. Export and re-import through the real projection and merge through mergeDirectSshRemoteWorkspaceSession, asserting tabs survive a publish, the next pull, and an older client publishing an empty list for them. Assert the reunited workspace routes to `ssh:<targetId>`, that a workspace the base holds tabs for is not modified, and that a contested id claimed by an SSH and a runtime host does not send the SSH rows into the rotating runtime partition.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-host-partition-session-export.test.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/ssh-host-partition-session-export.test.ts",
+        "src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts",
+        "src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts",
+        "src/renderer/src/lib/workspace-session-host-contention.test.ts",
+        "src/shared/workspace-session-partition-owner.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/ssh-host-partition-session-export.test.ts",
+          "assertions": [
+            "publishes tabs the runtime persisted into the target ssh partition",
+            "never replaces the host snapshot with an empty list for a worktree that has tabs"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts",
+          "assertions": [
+            "hydrates tabs the runtime persisted into the ssh partition",
+            "adopts the stranded workspace rows alongside its tabs",
+            "adopts a hibernated agent record the host partition alone holds",
+            "leaves a workspace the local partition already holds tabs for untouched",
+            "routes the reunited workspace back to the partition that owns it",
+            "does not delete the worktree tabs across a publish and the next pull",
+            "publishes the stranded tabs rather than an empty list",
+            "does not let an empty host row destroy an unsaved draft the base alone holds",
+            "still adopts a populated host row over the base leftovers",
+            "adopts the layout of a tab the host slice names only in unifiedTabs",
+            "does not overwrite a contested workspace's own rows with the ssh workspace's",
+            "still fills a gap on a contested id",
+            "does not let a legacy bare recency key move another host workspace of the same id",
+            "still adopts a host-qualified recency key, which names its own owner",
+            "writes an SSH workspace emptied by this build into the partition that owns it",
+            "restores that tombstone as an explicit empty row, not a deleted key",
+            "leaves the restored workspace un-seeded by the shared seeding predicate",
+            "does not adopt a stale populated ssh row over a tombstone in the owning partition",
+            "resurrects the legacy-transition shape exactly once and not again",
+            "publishes the tombstone rather than a row the host can read as unknown"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts",
+          "assertions": [
+            "routes a folder workspace to the partition main writes it to",
+            "keeps a folder row out of the local partition so a save cannot erase main\u2019s copy",
+            "reads an ssh partition that only a folder workspace owns",
+            "returns adopted rows to the partition they were read from with no repo catalog",
+            "gap-fills instead of replacing, so the local workspace keeps its unsaved draft",
+            "never names the rival partition as the write target for a contested id",
+            "gap-fills a contested id from the same partition on every boot",
+            "does not adopt a partition the catalog says does not own the workspace",
+            "does not adopt a contested id the assembled session holds no row for"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-host-contention.test.ts",
+          "assertions": [
+            "keeps an SSH claimant out of the rotating runtime partition",
+            "does not strand the runtime co-claimant when the SSH row is written"
+          ]
+        },
+        {
+          "file": "src/shared/workspace-session-partition-owner.test.ts",
+          "assertions": [
+            "gives an SSH host its own partition, matching what the runtime already writes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-host-partition-session-export.test.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.13,
+          "summary": "64 tests passed across 5 files: the real Store publish, the shipping write/read split round trip, the older-client empty-publish skew direction, the contested-bare-id and empty-host-row guards, the closed-last-terminal tombstone boundary, and the partition-ownership suite covering folder-workspace routing, the persistence-side partition census, read-source write-back, and the catalog attribution that keeps a residue partition from winning the read."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Real Store on a temp profile plus renderer partition units; no launched app and no relay."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Deterministic local validation only; no CI soak yet. The tests have no timers, network or real relay."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Against pristine main 12f53da542d, 9 of the 11 assertions that target the original defect fail: the boot read returns no tabs, the export publishes an empty tabsByWorktreePath row, the round trip ends with the tabs deleted, routing answers local instead of ssh:target-1, and an older client's empty publish deletes the tabs on pull. The remaining assertions guard the fix itself rather than main's bug: review found that gating adoption on terminal tabs stranded editor-only and browser-only SSH workspaces, destroying unsaved hot-exit drafts no other channel can recover. The gate now discovers a workspace through an exhaustive switch over the field-ownership table, and reintroducing the tabs-only gate fails 6 assertions including the write/read round trip."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Boot adds one session:get per SSH host that owns a repo, issued in parallel with the existing runtime partition reads and served from already-loaded main state. The publish fallback adds one partition read and a shallow keyed-record merge per target, which returns its input unchanged when nothing is stranded and stays the same order as the projection it feeds."
+      },
+      "knownGaps": [
+        "No live SSH host or relay is exercised; the multiplexer is faked at the request boundary.",
+        "The publish fallback reads only 'local' and the target's own partition, so it cannot see the local/runtime rivalry or a second SSH partition the renderer's read can. Bounded rather than closed: a key either side would judge differently is one whose repo id resolves ambiguously or to another host, and the export already publishes those to nobody.",
+        "A lingering `ssh:<targetId>` partition for a connection the user removed is now read by the census. Its rows stay in that partition rather than spilling into 'local', and the deregistered-repo residue sweep already clears repo-backed ones, but a folder workspace left behind by a removed connection is not swept.",
+        "Rows stranded beside a workspace the local partition already holds terminal tabs for are deliberately not recovered, and no assertion claims they are.",
+        "One-shot resurrection in the legacy-transition shape: where an older build left an empty local row while the runtime partition still holds that workspace's tabs, boot adopts them back once. Non-destructive, and non-recurrence is now asserted rather than argued - a workspace this build empties writes its empty row to the owning partition and leaves no local row behind, so there is nothing left to resurrect from.",
+        "A contested bare id is gap-filled rather than replaced, so rows stranded beside a contested workspace stay stranded. Separating them needs host-qualified keys through the tab store, which is the same open gap `workspace-session-host-contention.ts` records.",
+        "A `local` row left by a repo registration the user removed, whose repo id the catalog now resolves to the SSH host alone, is neither ambiguous nor foreign, so a populated host row still replaces it - including an unsaved `dirtyDraftContent`. Unchanged from main; closing it needs host-qualified keys, the same gap `workspace-session-host-contention.ts` records.",
+        "A bare `lastVisitedAtByWorktreeId` stamp left in 'local' for a workspace now owned by an SSH partition gap-fills rather than replaces, so the workspace can keep an older Cmd+J position for one boot after the migration.",
+        "`lastVisitedAtByWorktreeId` still discovers a workspace as adoptable from a recency entry alone. Harmless now that a recency row cannot replace another host's entry for the same bare id, but it means recency is a discovery trigger and no other field of its kind is."
+      ],
+      "promotionCriteria": [
+        "Complete the CI soak requirement with no unexplained flakes.",
+        "Add coverage for a live SSH target before claiming the ssh provider is exercised end to end."
+      ],
+      "demotionRule": "Keep experimental until CI soak completes. Investigate any failure without weakening the empty-row-is-a-gap oracle, which is the assertion the data-loss fix rests on."
+    },
     {
       "id": "agent-session.history-forward-read-budget",
       "title": "Journal catch-up reads only the next page and one lookahead row",
@@ -2681,6 +3292,78 @@
       ],
       "demotionRule": "Keep experimental or demote if assignment calls overlap, duplicate drain events bypass backoff, Retry-After is ignored, close resurrects work, or mixed-version request rate exceeds the reviewed director budget."
     },
+    {
+      "id": "desktop-relay.region-correction-idle-cutover",
+      "title": "Regional correction moves only an idle relay source",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "cell-desktop-real-websocket",
+      "surfaces": ["regional correction", "idle source cutover", "desktop relay reconnect"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["cloud-relay"],
+      "coverageNotes": "Real local WebSocket/control/proof/splice traffic and production SQLite store run with synthetic clock and synthetic token verification. Separate PostgreSQL16 suites validate SQL concurrency. This does not measure production network latency, physical phones, UI, or the production token issuer.",
+      "motivatingLinks": [
+        "docs/relay-region-correction/RELAY-REGION-CORRECTION-IDLE-CUTOVER-PLAN.md"
+      ],
+      "invariant": "Regional optimization never closes an established relay client. The source gates admissions only after actual work is idle, commits the exact assignment atomically, and releases its empty control. A failed target uses ordinary migration recovery; previously sent mutations are not replayed.",
+      "oracle": "Two real TCP WebSocket cells, the actual desktop origin pool, SQLite and an independent execution child verify busy phone/iPad deferral, idle movement, racing arrival rejection, definite-abort admission recovery and observed target-registration failure with ordinary rollback.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts"
+      ],
+      "testFiles": ["tests/e2e/relay-region-correction.unit.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/relay-region-correction.unit.test.ts",
+          "assertions": [
+            "releases the empty source and recovers normally when the target never registers",
+            "rejects an arrival during cutover and restores admissions after a definite failed commit",
+            "defers for either connected device, then moves after both disconnect without replaying work"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.44,
+          "summary": "Three real TCP WebSocket cases passed after removing store retention. Log: .tmp/idle-cutover-review/transport-without-retention.log. Does not validate packaged or physical clients."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "three local real-WebSocket scenarios with synthetic elapsed time for ordinary recovery"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local implementation validation; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Registry admission accounting negative control and five conflicting operation-identity regressions fail before their fixes and pass afterward. Locked database reconciliation has separate red/green evidence. Full cross-layer counterfactual remains unverified."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No retained source lease or new mobile timer. Candidate selection is read-only; busy sources immediately defer. Idle cutover reuses normal desktop reconnect and existing migration recovery."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak.",
+        "Complete mixed-version and packaged-client validation.",
+        "Validate bounded rollout latency and reliability against reviewed numerical limits."
+      ],
+      "knownGaps": [
+        "Production authentication verifier is mocked.",
+        "Synthetic elapsed time is not a wall-clock soak.",
+        "Physical phone lifecycle, packaged mixed versions, SSH execution and production network behavior require separate validation."
+      ],
+      "demotionRule": "Keep experimental or demote if optimization closes an established client, a gate reopens on ambiguous authority, a mutation is replayed, cleanup is lost, or eligible idle hosts starve."
+    },
+
     {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
@@ -15225,6 +15908,93 @@
         "Existing perf scripts are not registered with explicit budgets or flake history."
       ],
       "demotionRule": "Cannot promote without metric artifacts and stable p95 runtime history."
+    },
+    {
+      "id": "terminal-performance.daemon-ndjson-wire-parity-and-serialization",
+      "title": "Daemon NDJSON preserves wire bytes within a serialization count budget",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-performance",
+      "layer": "daemon-provider-contract",
+      "surfaces": ["daemon stream", "NDJSON framing", "stream data batching"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "Deterministic writer, batcher, droppability and NDJSON suites run locally on macOS with mocked socket/process boundaries. An SSH-shaped session ID is a string fixture, not SSH transport evidence. No live daemon, platform integration or mixed-version client/host pair is exercised; folder and git workspaces are not distinguished by these stream contracts.",
+      "motivatingLinks": ["src/main/daemon/daemon-stream-data-split.ts"],
+      "invariant": "Reusing an encoded unsplit metadata-free frame must preserve the previous writer's exact wire bytes and chunk boundaries while reducing that path to one encode; oversized and metadata-bearing writes retain existing semantics and transformed writes remain uncapped single frames.",
+      "oracle": "Compare emitted lines to the previous writer algorithm across byte caps, escaped and Unicode payloads, session IDs, raw lengths, sequence numbers and transformed spans; assert exact newline framing, reconstruct split payloads, check surrogate boundaries and sequence spans, and count encodeNdjson calls.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-stream-data-split.test.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-stream-droppable-membership.test.ts src/main/daemon/daemon-stream-droppability-lifecycle.test.ts src/main/daemon/ndjson.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-stream-data-split.test.ts",
+        "src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "src/main/daemon/daemon-stream-droppable-membership.test.ts",
+        "src/main/daemon/daemon-stream-droppability-lifecycle.test.ts",
+        "src/main/daemon/ndjson.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-stream-data-split.test.ts",
+          "assertions": [
+            "encodes an unsplit metadata-free frame once: %j",
+            "reuses the encoded frame exactly at the inclusive byte cap",
+            "does not add a duplicate full-data sizing probe to oversized writes",
+            "keeps transformed writes at one encode without applying the ordinary byte cap",
+            "preserves exact frames, chunk boundaries and metadata across payloads and caps",
+            "keeps JSON escaping, Unicode and newline framing byte-for-byte",
+            "keeps split frames within the byte cap and preserves code points and sequence spans"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-stream-data-batcher.test.ts",
+          "assertions": ["writes large stream data as parser-sized NDJSON events"]
+        },
+        {
+          "file": "src/main/daemon/ndjson.test.ts",
+          "assertions": ["measures multibyte payloads in UTF-8 bytes, not characters"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-stream-data-split.test.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-stream-droppable-membership.test.ts src/main/daemon/daemon-stream-droppability-lifecycle.test.ts src/main/daemon/ndjson.test.ts",
+          "result": "passed",
+          "summary": "Five daemon suites passed: 70 tests total, including the new 12-test splitter suite. Vitest reported 14.76 seconds; no app or live transport validation was performed.",
+          "durationSeconds": 14.76
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Target budget for the five deterministic suites; one local Vitest run took 14.76 seconds, not an established p95. Native-runtime setup is excluded from the reported Vitest duration."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fresh local five-suite run passed; no sustained CI soak history is established."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Historical report states serialization-count tests failed against the old writer. That baseline run was not repeated for this registration; the fresh candidate run passed all 70 tests. The previous-writer oracle checks byte parity, not live cross-version compatibility."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Unsplit metadata-free frames, including the inclusive byte-cap boundary, require exactly one encodeNdjson call; oversized writes must not exceed the previous writer's encode count; transformed writes require one encode. These are deterministic call-count budgets, not measured throughput, CPU, heap or input-latency improvements."
+      },
+      "promotionCriteria": [
+        "Capture reproducible old-writer red and candidate green artifacts for the serialization-count assertions.",
+        "Collect CI soak evidence before promotion and validate Linux/Windows runtimes and live SSH/remote and mixed-version pairs before claiming those integrations."
+      ],
+      "knownGaps": [
+        "No live daemon/Electron, Linux, Windows, WSL, SSH, remote-runtime or mixed-version client/host evidence.",
+        "The historical red run has not been independently reproduced for this registration; the parity oracle reuses current splitter/encoder helpers.",
+        "No sustained soak, measured p95, wall-clock performance benchmark or native socket backpressure guarantee.",
+        "Byte-cap assertions cover ordinary split frames at a viable cap; tiny caps and transformed frames retain legacy behavior rather than gaining a universal cap guarantee."
+      ],
+      "demotionRule": "Keep experimental until reproducible red/green and soak evidence exist; do not relax exact wire-byte, chunk-boundary or encode-count assertions to hide regressions."
     },
     {
       "id": "terminal-performance.daemon-stream-backpressure",

@@ -6,6 +6,8 @@
 // partial sequence at the ingest boundary lets snapshot producers append it
 // after the serialized screen so the continuation completes exactly as live.
 
+import { classifyTerminalEscapeIntroducer } from './terminal-escape-introducer'
+
 // Mirrors the VT500 parser states that can span a chunk boundary. C0 controls
 // (except ESC/CAN/SUB) execute mid-sequence without aborting it, matching
 // xterm's state machine.
@@ -32,23 +34,20 @@ export const MAX_PARTIAL_ESCAPE_TAIL_LENGTH = 4096
 
 /** ESC-state transition shared by the fresh-ESC and abort-reprocess paths. */
 function stateAfterEscByte(code: number): ScanState {
-  if (code === 0x5b) {
-    return 'csi' // [
+  switch (classifyTerminalEscapeIntroducer(code)) {
+    case 'csi':
+      return 'csi'
+    case 'osc':
+      return 'osc'
+    case 'string':
+      return 'string'
+    case 'intermediate':
+      return 'escIntermediate'
+    case 'execute':
+      return 'esc' // the ESC is still pending; a further ESC arrives via the callers
+    case 'final':
+      return 'ground'
   }
-  if (code === 0x5d) {
-    return 'osc' // ]
-  }
-  // P / X / ^ / _ open DCS / SOS / PM / APC — ST-terminated strings.
-  if (code === 0x50 || code === 0x58 || code === 0x5e || code === 0x5f) {
-    return 'string'
-  }
-  if (code >= 0x20 && code <= 0x2f) {
-    return 'escIntermediate'
-  }
-  if (code < 0x20 || code === 0x7f) {
-    return 'esc' // C0 executes / DEL is ignored mid-sequence; ESC via callers
-  }
-  return 'ground' // final byte — two-byte sequence (ESC 7, ESC 8, ESC c, …)
 }
 
 /** Returns the trailing incomplete escape sequence of `stream` ('' when the

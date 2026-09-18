@@ -280,9 +280,11 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
     expect(markAsDelivered).not.toHaveBeenCalled()
+    const first = send.mock.calls[0]![0].operationId
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1]![0].operationId).not.toBe(first)
   })
 
   it('reuses one operation id for the same batch and re-mints when it grows', async () => {

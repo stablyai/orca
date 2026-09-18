@@ -52,6 +52,7 @@ export class RepoUpdatePersistenceOperations {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -81,6 +82,13 @@ export class RepoUpdatePersistenceOperations {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (
+      'executionHostId' in updates &&
+      getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)
+    ) {
+      delete repo.folderUpgradeGitRootPath
+      delete sanitizedUpdates.folderUpgradeGitRootPath
+    }
     if (
       'agentWorktreeVisibility' in sanitizedUpdates &&
       !('worktreeVisibilitySourcePreferences' in sanitizedUpdates) &&

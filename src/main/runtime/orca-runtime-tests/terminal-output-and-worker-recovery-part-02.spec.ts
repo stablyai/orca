@@ -623,7 +623,7 @@ describe('OrcaRuntimeService', () => {
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 100 })
     ).resolves.toMatchObject({
       satisfied: false,
-      blockedReason: 'codex-trust-workspace'
+      blockedReason: 'agent-trust-workspace'
     })
     serializeProviderBuffer.mockImplementationOnce(() => new Promise(() => {}))
     await expect(

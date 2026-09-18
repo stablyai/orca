@@ -5,6 +5,9 @@ import type { ConnectionState } from './types'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
+const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
+vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
+
 const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
 
@@ -141,6 +144,8 @@ async function renderHarness(hostId: string): Promise<Harness> {
 }
 
 beforeEach(() => {
+  push.attach.mockReset().mockReturnValue(push.detach)
+  push.detach.mockReset()
   connectMock.mockReset()
   loadHostsMock.mockReset()
 })
@@ -706,4 +711,34 @@ describe('useAllHostClients', () => {
       act(() => renderer?.unmount())
     }
   })
+})
+
+it('owns push registration for a paired host without mounting the home screen', async () => {
+  const client = makeFakeClient('handshaking')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(push.attach).not.toHaveBeenCalled()
+  await act(async () => client.emitState('connected'))
+  expect(push.attach).toHaveBeenCalledExactlyOnceWith(HOST.id, client)
+  await act(async () => client.emitState('connected'))
+  expect(push.attach).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('disconnected'))
+  expect(push.detach).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('connected'))
+  expect(push.attach).toHaveBeenCalledTimes(2)
+  await act(async () => harness.unmount())
+  expect(push.detach).toHaveBeenCalledTimes(2)
+})
+
+it('registers an already authenticated host and detaches on explicit disconnect', async () => {
+  const client = makeFakeClient('connected')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(push.attach).toHaveBeenCalledExactlyOnceWith(HOST.id, client)
+  await act(async () => harness.disconnectHost(HOST.id))
+  expect(push.detach).toHaveBeenCalledOnce()
+  await act(async () => harness.unmount())
+  expect(push.detach).toHaveBeenCalledOnce()
 })

@@ -2,7 +2,7 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
+import { isRunnableAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { translate } from '@/i18n/i18n'
 
@@ -27,7 +27,7 @@ export function getExternalAutomationScheduleDisplay(
   ]
 
   for (const candidate of candidateSchedules) {
-    if (candidate && isValidAutomationCronSchedule(candidate)) {
+    if (candidate && isRunnableAutomationCronSchedule(candidate)) {
       return { label: formatUiAutomationSchedule(candidate) }
     }
   }

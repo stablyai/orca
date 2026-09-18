@@ -180,6 +180,7 @@
     }
   ],
   "ignorePatterns": [
+    "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
     "**/node_modules",
     "**/dist",
     "**/out",

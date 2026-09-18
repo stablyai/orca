@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { BackHandler, Keyboard } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
@@ -138,20 +138,13 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
       })
       try {
-        const response = await client.sendRequest('markdown.saveTab', {
+        const response = await markdownTabSave.request(client, {
           worktree: `id:${worktreeId}`,
           tabId: tab.id,
           baseVersion: current.baseVersion,
           content: current.localContent
         })
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message)
-        }
-        const result = (response as RpcSuccess).result as {
-          content: string
-          version: string
-          isDirty: false
-        }
+        const result = markdownTabSave.interpret(response)
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }

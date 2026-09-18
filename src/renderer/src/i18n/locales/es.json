@@ -714,7 +714,6 @@
       "useComposerState": {
         "7eb3f44ff7": "El agente seleccionado está deshabilitado. Elige un agente habilitado antes de crear.",
         "b2ead86962": "No se pudo resolver la base del PR.",
-        "a9ff236145": "Algunos archivos adjuntos no se pudieron cargar.",
         "3db83fc58a": "No hay ninguna ruta de proyecto remoto disponible para los archivos adjuntos.",
         "ba6cb77082": "No se pudo conectar al proyecto.",
         "chooseOrAddProjectBeforeWorkspace": "Elige o agrega un proyecto antes de crear un espacio de trabajo.",
@@ -1946,7 +1945,8 @@
         "0f3066256e": "Coincidencia anterior",
         "42e466b9f1": "Expresión regular",
         "90c61387d9": "Distingue mayúsculas y minúsculas",
-        "e07012f26e": "Buscar..."
+        "e07012f26e": "Buscar...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "Reiniciar para actualizar",
@@ -2219,6 +2219,10 @@
                 "7c302f8174": "Sin título"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Esta vista aún no tiene elementos.",
+            "7e4a2f80c6": "Los elementos añadidos recientemente pueden tardar un poco en aparecer."
           }
         },
         "GitHubMarkdownComposer": {
@@ -5816,7 +5820,12 @@
           "14444243ba": "¿Eliminar `{{value0}}` de PATH?",
           "5d432fe44d": "instalado",
           "8a9b784c60": "desactualizado",
-          "d363e5929b": "Comprobando registro de CLI..."
+          "d363e5929b": "Comprobando registro de CLI...",
+          "6f894ef9c2": "Mostrar en Finder",
+          "cbe55e4d48": "Mostrar en el Explorador",
+          "9fd4023db0": "Mostrar en el administrador de archivos",
+          "installFailureUnknownReason": "Orca no pudo completar el registro de CLI y no reportó ninguna razón.",
+          "installFailureConflictRemedy": "Elimina {{value0}} y regístrate nuevamente si ya no es necesario."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -14616,7 +14625,8 @@
         "chooseInAgentPicker": "Elegir en el selector del agente…",
         "toggleOption": "Alternar {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
+        "valueIsDefault": "Predeterminado",
+        "valueNotReported": "No informado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -14629,9 +14639,7 @@
           "high": "Alto",
           "xhigh": "Muy alto",
           "max": "Máximo",
-          "ultra": "Supremo",
-          "on": "Activado",
-          "off": "Desactivado"
+          "ultra": "Supremo"
         },
         "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
         "commands": "Comandos",
@@ -14768,27 +14776,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "Vista del panel",
-      "board": "Panel",
-      "map": "Mapa de agentes"
-    },
-    "map": {
-      "host": {
-        "local": "Local",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "Remoto"
-      },
-      "liveContainmentMap": "Mapa de contención en vivo",
-      "empty": "Ningún agente coincide con los filtros actuales.",
-      "canvasLabel": "Mapa anidado de proyectos, espacios de trabajo y agentes",
-      "zoomOut": "Alejar",
-      "zoomIn": "Acercar",
-      "fit": "Ajustar",
-      "projectCount": "{{agents}} agentes · {{workspaces}} espacios de trabajo",
-      "agentCount": "{{count}} agentes"
-    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14922,6 +14909,14 @@
       "hide": "Ocultar Agentes",
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "necesita información",
+      "working": "trabajando",
+      "stopped": "detenido",
+      "finished": "finalizado"
     }
   }
 }

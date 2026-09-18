@@ -606,7 +606,7 @@ describe('staged background worktree creation', () => {
     delete store.pendingWorktreeCreations['creation-1']
     store.activePendingCreationId = null
     resolveTrust()
-    await vi.waitFor(() => expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
 
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })

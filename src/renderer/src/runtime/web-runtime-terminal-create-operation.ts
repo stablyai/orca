@@ -88,7 +88,9 @@ export async function createWebRuntimeSessionTerminalResult(
       let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
       // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
-      const hostAuthority = args.afterTabId
+      // Why: rebuilding a prepared command through host authority can discard its embedded prompt and delivery flags.
+      const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
+      const hostAuthority = mustUseLegacyAgentCreate
         ? undefined
         : args.agentSessionKind === 'resume'
           ? args.providerSession

@@ -1,4 +1,5 @@
 import { type Mock, vi } from 'vitest'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
 export type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -7,7 +8,7 @@ type StoreMock = Mock<(...args: unknown[]) => unknown>
 /** Store lookups tests re-implement per id, so the first arg stays narrowed. */
 type KeyedStoreMock = Mock<(id: string, ...rest: unknown[]) => unknown>
 /** Store writers tests re-implement by merging the patch they receive. */
-type KeyedStoreWriteMock = Mock<(id: string, patch: object) => unknown>
+type KeyedStoreWriteMock = Mock<(id: string, patch: Partial<WorktreeMeta>) => unknown>
 
 export type TestMainWindow = {
   isDestroyed: () => boolean

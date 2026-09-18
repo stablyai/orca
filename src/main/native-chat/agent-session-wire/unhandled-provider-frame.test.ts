@@ -50,9 +50,6 @@ describe('unhandled provider frame journal fallback', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', 'notification:thread/tokenUsage/updated', {})
     ).toBeNull()
-    expect(
-      unhandledProviderFrameJournalItem('codex', 'notification:thread/goal/cleared', {})
-    ).toBeNull()
     expect(unhandledProviderFrameJournalItem('claude', 'message:system:init', {})).toBeNull()
     expect(
       unhandledProviderFrameJournalItem('claude', 'message:result', {

@@ -101,6 +101,7 @@ export function EditorEditFileSurface({
     return (
       <EditorFileLoadErrorView
         message={fileContent.loadError}
+        code={fileContent.loadErrorCode}
         onRetry={() => reloadContent(activeFile)}
       />
     )

@@ -1,0 +1,21 @@
+{
+  "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
+  "overrides": [
+    {
+      "file": "src/transport/client-context.web.tsx",
+      "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: BridgeRpcClient over the shell bridge, and a placeholder RpcClient for a page opened outside it, which is what lets the route tree mount in a plain browser."
+    },
+    {
+      "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
+      "reason": "Vendored with the module, not added for Route A. The dictation hook imports @orca/expo-two-way-audio, whose native module is a Swift/Kotlin JSI binding with no browser counterpart; the web file answers the same surface with denied microphone permission and no playback."
+    },
+    {
+      "file": "src/transport/host-device-token-store.web.ts",
+      "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
+    },
+    {
+      "file": "app/h/[hostId]/web.web.tsx",
+      "reason": "The hybrid shell route opens a WebView on this very page, so on web it redirects to the host instead of nesting the shell inside itself. Its native file pulls in OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    }
+  ]
+}

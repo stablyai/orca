@@ -9,6 +9,8 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetWorktreeTestSshHostHome } from '../../worktree-removal-test-ssh-host-home'
+
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -17,6 +19,10 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+
+// Why: these fixtures register an SSH provider, which models a connected relay session — and a
+// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+beforeEach(resetWorktreeTestSshHostHome)
 
 const REMOTE_REPO_PATH = '/remote/repo'
 
@@ -102,7 +108,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
 
     try {
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-a')
+      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-a'
+      })
 
       expect(provider.listWorktrees).toHaveBeenCalledWith(REMOTE_REPO_PATH)
       expect(provider.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, true)
@@ -127,7 +138,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
 
     try {
       await expect(
-        runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-a')
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+          force: true,
+          runHooks: false,
+          allowUnverifiedPtyStop: false,
+          hostId: 'ssh:target-a'
+        })
       ).resolves.toEqual({})
 
       expect(provider.listWorktrees).toHaveBeenCalledWith(REMOTE_REPO_PATH)
@@ -152,7 +168,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
 
     try {
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-b')
+      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-b'
+      })
 
       expect(providerB.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, true)
       expect(providerA.listWorktrees).not.toHaveBeenCalled()
@@ -168,7 +189,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-a')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-a'
+      })
     ).rejects.toThrow('Remote connection dropped')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
@@ -181,7 +207,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'runtime:env-1')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'runtime:env-1'
+      })
     ).rejects.toThrow('not dispatched by this process')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
@@ -201,7 +232,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
 
     try {
       await expect(
-        runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'runtime:env-1')
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+          force: true,
+          runHooks: false,
+          allowUnverifiedPtyStop: false,
+          hostId: 'runtime:env-1'
+        })
       ).rejects.toThrow('not dispatched by this process')
 
       // Selector resolution still lists through the raw field before removal begins — a read on

@@ -1,10 +1,15 @@
 import { readFileSync } from 'node:fs'
 
 import {
+  admitLegacyAgentStatus,
+  clearLegacyAgentStatuses
+} from '../../../shared/agent-hook-listener/listener-state'
+import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
 import type { LastStatusFile } from './server-types'
 import {
@@ -23,7 +28,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
       return
     }
     // Why: keep hydrate idempotent so a future re-start path can't merge prior-session state.
-    this.state.lastStatusByPaneKey.clear()
+    clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
     let raw: string
@@ -100,7 +105,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
           entry.restoredUnconfirmed = true
         }
-        this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-hydration',
+          entry,
+          AGENT_STATUS_PERSISTED_HYDRATION_MODE
+        )
         if (entry.connectionId) {
           // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
           const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)

@@ -243,7 +243,7 @@ export function getAutomationRunWorkspaceDisplayName(
 }
 
 export function installAutomationPersistenceContext(
-  target: object,
+  target: AutomationPersistence,
   source: AutomationPersistence
 ): void {
   Object.defineProperty(target, automationPersistenceContext, {

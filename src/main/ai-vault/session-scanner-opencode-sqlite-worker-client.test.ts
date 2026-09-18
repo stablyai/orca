@@ -133,7 +133,9 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
       const active = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
       const queued = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
-      const activeAssertion = expect(active).rejects.toThrow(/timed out/)
+      const activeAssertion = expect(active).rejects.toThrow(
+        `OpenCode SQLite worker timed out after ${PARSE_TIMEOUT_MS}ms`
+      )
 
       // The queued call's timer must not have started while it waited, so only
       // the active call fires at the parse timeout.
@@ -158,7 +160,9 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
     const active = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
     const queued = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
-    const activeAssertion = expect(active).rejects.toThrow(/exited with code/)
+    const activeAssertion = expect(active).rejects.toThrow(
+      'OpenCode SQLite worker exited with code 1'
+    )
 
     workers[0]!.emit('exit', 1)
     await activeAssertion
@@ -198,7 +202,9 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS + 2 }, (_, i) =>
       client.parse({ dbPath: `/db#${i}`, sessionId: `s${i}`, platform: 'darwin' })
     )
-    const settled = pending.map((promise) => expect(promise).rejects.toThrow())
+    // The last crash's text has to survive into the drain message, or a log
+    // cannot say what killed the run.
+    const settled = pending.map((promise) => expect(promise).rejects.toThrow(/crash \d/))
 
     // Crash every worker as it is spawned; the client respawns up to the cap.
     for (let i = 0; i < MAX_CONSECUTIVE_DEATHS; i++) {

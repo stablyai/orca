@@ -2,7 +2,12 @@
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from './orca-runtime-verify-orchestration-compatibility-caller'
 import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
@@ -33,6 +38,30 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     for (const leaf of this.getLeavesForPty(ptyId)) {
       if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
         paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
+      }
+    }
+    return paneKeys
+  }
+
+  /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
+  protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
+    const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
+    // The provider-session snapshot is the unfiltered store view, so certified exit can also
+    // retire a dismissed row's identity-only remnant after its pane binding moved.
+    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
+      if (row.terminalHandle && terminalHandles.has(row.terminalHandle)) {
+        paneKeys.add(row.paneKey)
+      }
+    }
+    const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
+    if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
+      paneKeys.add(ptyPaneKey)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const paneKey = this.makeRuntimePaneKey(leaf)
+      if (parseLegacyNumericPaneKey(paneKey)) {
+        paneKeys.add(paneKey)
       }
     }
     return paneKeys

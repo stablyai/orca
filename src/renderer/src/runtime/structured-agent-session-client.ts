@@ -4,12 +4,39 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import {
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability,
   type RuntimeClientTarget
 } from './runtime-rpc-client'
+import {
+  ensureLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilitiesOrUnknown
+} from './local-runtime-capabilities'
+/** Read the prompt-cancel capability through the runtime's existing status cache.
+ *  A failed/unknown probe is treated as legacy so strict prompt fields are never
+ *  sent before the host has proved it understands them. */
+export async function supportsStructuredAgentSessionPromptCancel(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  try {
+    if (target.kind === 'local') {
+      const known = readLocalRuntimeCapabilitiesOrUnknown()
+      const capabilities = known ?? (await ensureLocalRuntimeCapabilities())
+      return capabilities?.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY) === true
+    }
+    return await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
+    )
+  } catch {
+    return false
+  }
+}
 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,

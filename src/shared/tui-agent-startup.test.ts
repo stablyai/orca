@@ -45,6 +45,24 @@ describe('tui agent startup plans', () => {
     }
   )
 
+  // Structured native chat stopped reading the configured arguments; a terminal launch must
+  // still spell every token of them, in order, exactly as the user wrote them.
+  it('passes the whole configured argument string to a terminal launch', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      agentArgs: resolveTuiAgentLaunchArgs('claude', {
+        claude: '--dangerously-skip-permissions --model Opus'
+      }),
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    // Every token, in order, shell-quoted as the terminal path has always quoted them.
+    expect(plan?.launchCommand).toBe("claude '--dangerously-skip-permissions' '--model' 'Opus'")
+  })
+
   it('uses POSIX quoting when the target shell is Linux', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

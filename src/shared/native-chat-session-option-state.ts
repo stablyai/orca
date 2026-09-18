@@ -167,8 +167,14 @@ export function matchNativeChatCatalogModelId(
   if (byLabel) {
     return byLabel.id
   }
-  const containing = [...catalog.models]
-    .sort((left, right) => right.id.length - left.id.length)
-    .find((model) => normalized.includes(model.id.toLowerCase()))
-  return containing?.id ?? null
+  let containingId: string | null = null
+  for (const model of catalog.models) {
+    if (
+      (containingId === null || model.id.length > containingId.length) &&
+      normalized.includes(model.id.toLowerCase())
+    ) {
+      containingId = model.id
+    }
+  }
+  return containingId
 }

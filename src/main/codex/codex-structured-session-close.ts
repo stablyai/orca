@@ -24,13 +24,15 @@ export function handleCodexSessionExit(input: {
     input.prompts?.clear()
     return false
   }
+  session.exitObservedAt ??= Date.now()
   const event: StructuredAgentSessionLifecycleEvent = {
     type: 'ended',
     sessionId: input.sessionId,
     reason: input.error.message,
     cause: session.requestedClose ? 'requested-close' : 'unexpected-exit',
     fence: session.fence,
-    acquisitionGeneration: session.acquisitionGeneration
+    acquisitionGeneration: session.acquisitionGeneration,
+    observedAt: session.exitObservedAt
   } as const
   // A synchronous sink rejection (usually backpressure) is handed to host
   // recovery, which appends the bounded fallback before reacquisition.
@@ -45,6 +47,9 @@ export function handleCodexSessionExit(input: {
     event.settlementRetryRequired = true
   }
   session.ended = true
+  // Nothing can echo for this child any more; the journal's pending-submission
+  // recovery is what settles the sends these were armed for.
+  session.dispatchEchoes.clear()
   session.backgroundTasks.clear()
   input.onBackgroundTasksChanged?.(input.sessionId, null)
   session.unbindReadingControl?.()

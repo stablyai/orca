@@ -30,6 +30,8 @@ export function useLinearAgentSkillSetup(): {
   // Status surfaces (step badges, checklist pills) read this so a focus-triggered
   // rescan does not flip a known result back to "checking".
   skillChecking: boolean
+  /** The scan could not vouch for "not installed", so no surface may claim it. */
+  skillUnverifiable: boolean
   installDisabled: boolean
   error: string | null
   terminalShellOverride: string | undefined
@@ -44,6 +46,7 @@ export function useLinearAgentSkillSetup(): {
     installed: skillInstalled,
     loading: skillLoading,
     settled: skillSettled,
+    installedUnverifiable: skillUnverifiable,
     error: skillError,
     skills: linearSkills,
     refresh: refreshSkill
@@ -98,6 +101,7 @@ export function useLinearAgentSkillSetup(): {
     skillInstalled,
     skillLoading,
     skillChecking: skillLoading && !skillSettled,
+    skillUnverifiable,
     installDisabled,
     error: activeSkillRuntime.installDisabledReason ?? skillError,
     terminalShellOverride: activeSkillRuntime.terminalShellOverride,

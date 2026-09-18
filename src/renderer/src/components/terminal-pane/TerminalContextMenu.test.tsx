@@ -2,6 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TerminalContextMenu from './TerminalContextMenu'
+import { translate } from '@/i18n/i18n'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
@@ -13,9 +14,12 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
     React_.createElement(React_.Fragment, null, children)
+  const OpenContext = React_.createContext(false)
   return {
-    DropdownMenu: passthrough,
-    DropdownMenuContent: passthrough,
+    DropdownMenu: ({ open, children }: { open: boolean; children?: React.ReactNode }) =>
+      React_.createElement(OpenContext.Provider, { value: open }, children),
+    DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
+      React_.useContext(OpenContext) ? passthrough({ children }) : null,
     DropdownMenuLabel: passthrough,
     DropdownMenuSeparator: () => null,
     DropdownMenuShortcut: ({ children }: { children?: React.ReactNode }) => {
@@ -36,7 +40,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     }
   }
 })
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({ translate: vi.fn((_key: string, fallback: string) => fallback) }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
@@ -104,6 +108,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
 
 describe('TerminalContextMenu', () => {
   beforeEach(() => {
+    vi.mocked(translate).mockClear()
     items.list = []
     shortcuts.list = []
     vi.stubGlobal('navigator', { userAgent: 'Linux' })
@@ -111,6 +116,16 @@ describe('TerminalContextMenu', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('does no menu-copy work while closed, then builds the opened menu', () => {
+    renderMenu({ open: false })
+    expect(translate).not.toHaveBeenCalled()
+    expect(items.list).toHaveLength(0)
+
+    renderMenu()
+    expect(translate).toHaveBeenCalled()
+    expect(items.list.length).toBeGreaterThan(0)
   })
 
   it('renders a "Copy Context" item that triggers onCopyAgentSessionContext (issue #5020)', () => {
@@ -167,6 +182,7 @@ describe('TerminalContextMenu', () => {
     item?.onSelect?.()
     expect(onCopyAgentSessionId).toHaveBeenCalledTimes(1)
 
+    vi.mocked(translate).mockClear()
     items.list = []
     renderMenu({ canCopyAgentSessionId: false })
     expect(

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
 
 const execCommand = vi.fn()
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -19,6 +20,9 @@ import {
 } from './ssh-relay-endpoint-incumbent'
 import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never dereferences the connection; the Windows path returns before using it.
+const connection = {} as SshConnection
 
 const SOCK = '/home/u/.orca-remote/relay-0.1.0+aaaa/relay-deadbeef.sock'
 const POSIX_HOST = getRemoteHostPlatform('linux-x64')
@@ -128,26 +132,48 @@ describe('parseRelayEndpointIncumbentProbe', () => {
 })
 
 describe('probeRelayEndpointIncumbent', () => {
-  it('never asserts death when the probe itself could not run', async () => {
-    execCommand.mockRejectedValueOnce(new Error('channel closed'))
+  it('keeps the whole probe alive long enough to return a bounded lsof result', async () => {
+    execCommand.mockResolvedValueOnce(
+      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=unavailable'])
+    )
+
+    await probeRelayEndpointIncumbent(connection, POSIX_HOST, '/usr/bin/node', SOCK)
+
+    expect(execCommand).toHaveBeenCalledWith(expect.anything(), expect.any(String), {
+      wrapCommand: true,
+      signal: undefined
+    })
+  })
+
+  it('keeps a confirmed timeout or rejection unverifiable and unenumerable', async () => {
+    execCommand.mockRejectedValueOnce(
+      Object.assign(new Error('lsof timed out after 5s'), { sshChannelCloseConfirmed: true })
+    )
     const incumbent = await probeRelayEndpointIncumbent(
-      {} as SshConnection,
+      connection,
       POSIX_HOST,
       '/usr/bin/node',
       SOCK
     )
     expect(incumbent.verdict).toBe('unverifiable')
+    expect(incumbent.holdersEnumerable).toBe(false)
     expect(incumbent.holders).toEqual([])
+  })
+
+  it('rethrows an unconfirmed termination instead of masking it as unverifiable', async () => {
+    const unconfirmed = Object.assign(new Error('remote channel close was not confirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    execCommand.mockRejectedValueOnce(unconfirmed)
+
+    await expect(
+      probeRelayEndpointIncumbent(connection, POSIX_HOST, '/usr/bin/node', SOCK)
+    ).rejects.toBe(unconfirmed)
   })
 
   it('does not shell out on Windows hosts, where the endpoint is a named pipe', async () => {
     execCommand.mockClear()
-    const incumbent = await probeRelayEndpointIncumbent(
-      {} as SshConnection,
-      WINDOWS_HOST,
-      'node.exe',
-      SOCK
-    )
+    const incumbent = await probeRelayEndpointIncumbent(connection, WINDOWS_HOST, 'node.exe', SOCK)
     expect(execCommand).not.toHaveBeenCalled()
     expect(incumbent.verdict).toBe('unverifiable')
   })
@@ -155,15 +181,20 @@ describe('probeRelayEndpointIncumbent', () => {
 
 describe('relayEndpointIncumbentProbeCommand', () => {
   it('ANDs the lsof selectors so it cannot match unrelated unix-socket holders', () => {
-    expect(relayEndpointIncumbentProbeCommand('/usr/bin/node', SOCK)).toContain(
-      'lsof -t -a -U "$sock"'
-    )
+    expect(RELAY_LSOF_PROBE_JS).toContain("['-t', '-a', '-U', process.argv[1]]")
   })
 
-  it('never mutates the host: no unlink, no signal', () => {
+  it('never unlinks the relay endpoint', () => {
     const command = relayEndpointIncumbentProbeCommand('/usr/bin/node', SOCK)
     expect(command).not.toMatch(/\brm\b/)
-    expect(command).not.toMatch(/\bkill\b/)
+  })
+
+  it('bounds only lsof and keeps the connect-probe output available', () => {
+    const command = relayEndpointIncumbentProbeCommand('/usr/bin/node', SOCK)
+    expect(RELAY_LSOF_PROBE_JS).toContain("spawn('lsof'")
+    expect(command).toContain('}, 5000)')
+    expect(command).toContain("printf 'HOLDERS_SOURCE=unavailable\\n'")
+    expect(command.indexOf("printf 'LISTEN=%s\\n'")).toBeLessThan(command.indexOf('child = spawn('))
   })
 })
 

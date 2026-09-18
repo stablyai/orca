@@ -119,9 +119,7 @@ export function useTerminalTabColdParking(args: {
   // Why the worktree-scoped set, not the record map: the map is app-global, so
   // subscribing to it re-rendered this worktree on every other worktree's write.
   const sleepingRecordOwnedTabIds = useAppStore(
-    useShallow((state) =>
-      selectSleepingRecordParkExemptTabIds(state.sleepingAgentSessionsByPaneKey, worktreeId)
-    )
+    useShallow((state) => selectSleepingRecordParkExemptTabIds(state, worktreeId))
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why: view switches hide every tab at once, so the park clock cannot rank them.

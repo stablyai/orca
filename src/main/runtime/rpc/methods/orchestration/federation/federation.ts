@@ -1,7 +1,8 @@
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
 import {
   appendFederationSetupEffect,
@@ -24,7 +25,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 
-export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
     params: FederationAttachStartParams,
@@ -222,7 +223,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
+              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
               : `Agent did not become ready (${wait.status}).`
           )
         }

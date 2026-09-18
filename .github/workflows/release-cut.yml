@@ -871,8 +871,17 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      # Why: this install runs lifecycle scripts, so node-gyp rebuilds
+      # native/windows-registry and fetches that Node version's headers from
+      # nodejs.org. One `read ECONNRESET` there failed this blocking gate and the
+      # whole cut. Retry like the release build's install below.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Build Electron app for platform golden
         run: npx electron-vite build --mode e2e
@@ -1088,8 +1097,14 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      # Same node-gyp header fetch as the blocking golden gate above.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Build Electron app for terminal rendering evidence
         run: npx electron-vite build --mode e2e
@@ -1204,22 +1219,33 @@ jobs:
       # ref, so cutting from an older/off-main ref whose tree predates a composite
       # action would fail the step with "Can't find 'action.yml'". Restore the
       # actions directory from the commit this workflow file itself came from.
+      # Not Windows-only: every platform now consumes install-mobile-dependencies, so
+      # any of them can be the one whose cut ref predates the action.
       - name: Restore composite actions from the workflow ref
-        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: bash
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
-          action_path=".github/actions/install-signpath-module/action.yml"
-          if [ -f "$action_path" ]; then
+          required=(.github/actions/install-mobile-dependencies/action.yml)
+          if [ "$PLATFORM" = win ] && [ "$GITHUB_RUN_ATTEMPT" = 1 ]; then
+            required+=(.github/actions/install-signpath-module/action.yml)
+          fi
+          missing=()
+          for action_path in "${required[@]}"; do
+            [ -f "$action_path" ] || missing+=("$action_path")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
             echo "Composite actions already present at the cut ref."
             exit 0
           fi
-          echo "Cut ref predates $action_path; restoring it from $WORKFLOW_SHA."
+          echo "Cut ref predates ${missing[*]}; restoring from $WORKFLOW_SHA."
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- .github/actions
-          test -f "$action_path"
+          for action_path in "${required[@]}"; do
+            test -f "$action_path"
+          done
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
@@ -1232,6 +1258,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       # Why: release builds hit the same native-module postinstall path as
       # PR CI, so keep the pinned node-gyp override here too instead of
@@ -1262,6 +1291,8 @@ jobs:
       # Electron binary from GitHub release assets. GitHub's download CDN
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -1269,6 +1300,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why: `pnpm build:release` verifies the Linux computer-use provider by
       # importing AT-SPI bindings, which are runtime package deps but are not
@@ -1309,6 +1344,20 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
+      # Why here and not in build:relay: only a Windows runner can compile it, and
+      # arm64 cross-compiles from this same x64 agent. Mirrors dev-channel-win-build.yml,
+      # which had it while release-cut did not — so every stable installer through
+      # v1.4.203 shipped Windows relays with no windows-process-tree.node, silently
+      # falling back to the PowerShell scan on every Windows SSH host.
+      # Why no run_attempt guard, unlike the artifact steps below: Build app is ungated,
+      # so a rerun would reach the required-addon check with nothing staged and fail.
+      - name: Build Windows process-table addon for the relay
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+
       # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
       # produces a published binary, so this is the only place the secret
       # needs to be in scope. The key is a PostHog *project* API key, not
@@ -1331,6 +1380,9 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+          # Fail the release rather than ship a relay that silently falls back to
+          # the PowerShell scan on every Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.platform == 'win' && 'x64,arm64' || '' }}
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'

@@ -135,6 +135,83 @@ describe('command aliases dispatch to the canonical handler', () => {
     }
   })
 
+  // #19334: a failed archive hook blocks removal, so the CLI must exit non-zero rather than
+  // report a delete that did not happen — and the waiver must ride its own flag, never --force.
+  it('exits non-zero when worktree removal is refused by a failed archive hook', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
+    callMock.mockRejectedValueOnce(
+      Object.assign(new Error('Archive hook failed for worktree: /tmp/wt — exited 23.'), {
+        code: 'worktree_archive_hook_failed'
+      })
+    )
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(
+        ['worktree', 'rm', '--worktree', 'id:wt-1', '--force', '--run-hooks', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(1)
+      expect(callMock).toHaveBeenNthCalledWith(
+        2,
+        'worktree.rm',
+        expect.objectContaining({
+          runHooks: true,
+          allowFailedArchiveHook: false
+        })
+      )
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  // #19334 S4: the waiver only applies to a hook that ran, so alone it silently does nothing.
+  it('rejects the archive-hook waiver without --run-hooks instead of ignoring it', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(
+        ['worktree', 'rm', '--worktree', 'id:wt-1', '--allow-failed-archive-hook', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(1)
+      // The removal must never have been attempted.
+      expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  it('forwards the explicit archive-hook waiver on worktree rm', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true })
+    )
+
+    await main(
+      [
+        'worktree',
+        'rm',
+        '--worktree',
+        'id:wt-1',
+        '--run-hooks',
+        '--allow-failed-archive-hook',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.rm',
+      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true })
+    )
+  })
+
   it('still runs `terminal focus` after the handler de-duplication', async () => {
     queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
 
@@ -302,6 +379,38 @@ describe('unknown help command surfaces a suggestion', () => {
     logSpy.mockRestore()
     process.exitCode = 0
   })
+})
+
+describe('nested command group help', () => {
+  it.each([
+    ['browser', ['browser'], ['identity get', 'identity set']],
+    ['browser identity', ['browser', 'identity'], ['get', 'set']]
+  ])(
+    'prints successful help for %s without constructing a runtime client',
+    async (_, path, commands) => {
+      const previousExitCode = process.exitCode
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      runtimeClientConstructorMock.mockClear()
+      process.exitCode = 0
+
+      try {
+        await main([...path, '--help'], '/tmp/repo')
+
+        expect(process.exitCode).toBe(0)
+        const output = logSpy.mock.calls.flat().join('\n')
+        expect(output).toContain(`orca ${path.join(' ')}`)
+        for (const command of commands) {
+          expect(output).toContain(command)
+        }
+        expect(output).not.toContain('Unknown command')
+        expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+        expect(callMock).not.toHaveBeenCalled()
+      } finally {
+        process.exitCode = previousExitCode
+        logSpy.mockRestore()
+      }
+    }
+  )
 })
 
 describe('orca root help', () => {

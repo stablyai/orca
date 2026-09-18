@@ -54,7 +54,8 @@ function target(
     appendLifecycleBatch: vi.fn(async (input: { settlementId: string }) => {
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
       return { epoch: 'e', sequence: 0 }
-    })
+    }),
+    latestItemMatching: vi.fn(() => null)
   } as unknown as AgentSessionJournal
   return {
     journal,
@@ -113,6 +114,25 @@ describe('deferred structured agent-session event sink', () => {
     await deferred.drained()
 
     expect(log).toEqual([{ call: 'appendItem', fence: 2, ordinal: 0 }])
+  })
+
+  it('resolves a lifecycle transition after journal bind and skips an existing state', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+
+    expect(
+      deferred.sink.tryAppendLifecycleTransition?.(identity(0), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendLifecycleTransition?.(identity(0), BODY, () => null)).toEqual({
+      accepted: true
+    })
+    deferred.bind(target(2, log))
+    await deferred.drained()
+
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 2, ordinal: 1 },
+      { call: 'publish', fence: 2 }
+    ])
   })
 
   it('drops buffered and later writes once closed, and refuses to rebind', async () => {
@@ -202,6 +222,35 @@ describe('deferred structured agent-session event sink', () => {
     expect(readingControl.pauseReading).toHaveBeenCalledOnce()
     expect(readingControl.resumeReading).toHaveBeenCalledOnce()
     expect(log).toHaveLength(2)
+  })
+
+  it('admits a resolved append and publication as one bounded operation', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink({
+      watermarks: {
+        pauseQueuedOperations: 1,
+        maxQueuedOperations: 2,
+        lowQueuedOperations: 0,
+        maxQueuedBytes: 1_000_000
+      }
+    })
+
+    expect(deferred.sink.tryAppendItem?.(identity(0), BODY)).toEqual({ accepted: true })
+    expect(
+      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendItem?.(identity(2), BODY)).toEqual({
+      accepted: false,
+      reason: 'backpressure'
+    })
+
+    deferred.bind(target(5, log))
+    await deferred.drained()
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 5, ordinal: 0 },
+      { call: 'appendItem', fence: 5, ordinal: 1 },
+      { call: 'publish', fence: 5 }
+    ])
   })
 
   it('pauses provider reading at the soft byte watermark before rejecting writes', async () => {

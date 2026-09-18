@@ -21,7 +21,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     private readonly requireSession: (sessionId: string) => StructuredAgentSessionHostSession,
     private readonly handoffStatus: (
       sessionId: string
-    ) => Parameters<AgentSessionSubscribers['open']>[0]['handoff']
+    ) => Parameters<AgentSessionSubscribers['open']>[0]['handoff'],
+    /** Task edges change the status summary too; the feed's equality check
+     *  keeps a no-op re-projection from reaching subscribers. */
+    private readonly onPublished: (sessionId: string) => void
   ) {}
 
   history(request: AgentSessionHistoryRequest): AgentSessionHistoryResult {
@@ -31,9 +34,15 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       request
     })
     const backgroundTasks = this.state(request.sessionId)
-    return backgroundTasks === undefined
-      ? result
-      : { ...result, page: { ...result.page, backgroundTasks } }
+    const hostNow = this.deps.now?.() ?? Date.now()
+    return {
+      ...result,
+      page: {
+        ...result.page,
+        hostNow,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+      }
+    }
   }
 
   subscribe(input: AgentSessionSubscribeInput): () => void {
@@ -53,6 +62,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const state = publishedState !== undefined ? publishedState : this.state(sessionId)
     if (session && state !== undefined) {
       this.subscribers.backgroundTasks(sessionId, state, session.fence)
+      this.onPublished(sessionId)
     }
   }
 

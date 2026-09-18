@@ -1,4 +1,5 @@
 import { MAX_TAIL_PENDING_ANSI_CHARS } from './terminal-tail-limits'
+import { classifyTerminalEscapeIntroducer } from '../../shared/terminal-escape-introducer'
 import { ownRetainedString } from '../../shared/own-retained-string'
 
 export function parseAnsiControlSequence(
@@ -11,8 +12,9 @@ export function parseAnsiControlSequence(
       endIndex: number
     }
   | null {
-  const introducer = value[escapeIndex + 1]
-  if (introducer === '[') {
+  // charCodeAt, not value[i]: indexing mints a one-char string on every escape.
+  const introducer = classifyTerminalEscapeIntroducer(value.charCodeAt(escapeIndex + 1))
+  if (introducer === 'csi') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
       const code = value.charCodeAt(index)
       if (code < 0x40 || code > 0x7e) {
@@ -30,7 +32,7 @@ export function parseAnsiControlSequence(
     }
     return null
   }
-  if (introducer === ']') {
+  if (introducer === 'osc') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
       if (value[index] === '\u0007') {
         return { kind: 'other', endIndex: index }
@@ -41,7 +43,7 @@ export function parseAnsiControlSequence(
     }
     return null
   }
-  if (isStTerminatedStringControlIntroducer(introducer)) {
+  if (introducer === 'string') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
       if (value[index] === '\u001b' && value[index + 1] === '\\') {
         return { kind: 'other', endIndex: index + 1 }
@@ -50,10 +52,6 @@ export function parseAnsiControlSequence(
     return null
   }
   return { kind: 'other', endIndex: escapeIndex + 1 }
-}
-
-function isStTerminatedStringControlIntroducer(introducer: string | undefined): boolean {
-  return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
 }
 
 export function hasCanonicalNumericCsiParams(params: string): boolean {

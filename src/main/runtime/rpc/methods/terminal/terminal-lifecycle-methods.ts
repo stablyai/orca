@@ -1,4 +1,4 @@
-import { defineMethod, type RpcAnyMethod } from '../../core'
+import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
@@ -19,7 +19,7 @@ import {
 } from './unary-schemas'
 import { TerminalResizeForClient } from './stream-schemas'
 
-export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
+export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.wait',
     params: TerminalWait,
@@ -53,6 +53,7 @@ export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
           (canonicalWorktreeSelector, preAllocatedHandle) =>
             runtime.createTerminal(canonicalWorktreeSelector, {
               command: params.command,
+              ...(params.shell ? { shellOverride: params.shell } : {}),
               startupCommandDelivery: params.startupCommandDelivery,
               env: params.env,
               envToDelete: params.envToDelete,
@@ -188,7 +189,8 @@ export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       launch: await runtime.prepareClaudeAgentTeamsLeader({
         paneKey: params.paneKey,
-        baseEnv: params.env
+        baseEnv: params.env,
+        prepareAuth: params.prepareAuth
       })
     })
   })

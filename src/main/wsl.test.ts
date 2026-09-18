@@ -547,10 +547,10 @@ describe('WSL availability cache', () => {
   it.each([
     ['wsl.exe reports WSL unusable', { status: 1 }],
     ['wsl.exe is not installed', { code: 'ENOENT' }]
-  ])('holds a definitive failure far longer than a timeout when %s', (_label, errorShape) => {
+  ])('holds a definitive failure far longer than a timeout when %s', (_label, errorFields) => {
     vi.useFakeTimers()
     execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('definitive failure'), errorShape)
+      throw Object.assign(new Error('definitive failure'), errorFields)
     })
     execFileSyncMock.mockReturnValueOnce('')
 
@@ -621,10 +621,10 @@ describe('WSL availability cache', () => {
   it.each([
     ['a definitive failure', { status: 1 }],
     ['a timeout', { code: 'ETIMEDOUT', status: null, signal: 'SIGTERM' }]
-  ])('re-probes availability once a distro list succeeds after %s', (_label, errorShape) => {
+  ])('re-probes availability once a distro list succeeds after %s', (_label, errorFields) => {
     vi.useFakeTimers()
     execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('probe failed'), errorShape)
+      throw Object.assign(new Error('probe failed'), errorFields)
     })
 
     try {

@@ -14,7 +14,11 @@ function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTa
   const preserved = {
     ...remote,
     generation: local.generation,
-    ptyId: local.ptyId
+    ptyId: local.ptyId,
+    // Why: the recovery ledger is client-local and travels with generation —
+    // a remote snapshot that dropped it would hand the tab a fresh remount
+    // allowance on every republication, which is the storm again (b5cfc6ca).
+    ...(local.recovery ? { recovery: local.recovery } : {})
   }
   return local.pendingActivationSpawn
     ? { ...preserved, pendingActivationSpawn: local.pendingActivationSpawn }

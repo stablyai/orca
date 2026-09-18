@@ -5,7 +5,7 @@
  * refused before the first send, so the id is minted here instead. It is durable and reused across
  * retries, because the id IS the send's idempotency key: a fresh id for the same nudge would land
  * as a second turn. It is re-minted only when the send is genuinely a different call — a different
- * batch of mail, or a different session — or when the host would reject it as too old to admit.
+ * batch of mail, or a different session. Age cannot resolve delivery ambiguity.
  *
  * Reuse is keyed on the MESSAGE IDS in the batch, never on the pointer body: the body names only
  * how many messages are waiting, so two unrelated same-size batches share a fingerprint. Reusing a
@@ -16,7 +16,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import type { OrchestrationDb } from './db'
 
 export function mintAgentSessionOperationId(now: number): string {
@@ -60,8 +59,7 @@ export function resolveStructuredPointerOperation(args: {
   if (
     stored &&
     stored.session_id === args.sessionId &&
-    stored.batch_fingerprint === batchFingerprint &&
-    now - stored.minted_at_ms < AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
+    stored.batch_fingerprint === batchFingerprint
   ) {
     return { operationId: stored.operation_id, payloadFingerprint }
   }

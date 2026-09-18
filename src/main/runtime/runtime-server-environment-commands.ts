@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
+import { probeGitAvailability } from '../git/git-availability'
 import { gitExecFileAsync } from '../git/runner'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 
@@ -54,11 +55,6 @@ export class RuntimeServerEnvironmentCommands {
   }
 
   async isGitAvailable(): Promise<boolean> {
-    try {
-      await gitExecFileAsync(['--version'], { cwd: process.cwd(), timeout: 3000 })
-      return true
-    } catch {
-      return false
-    }
+    return probeGitAvailability(gitExecFileAsync, { cwd: process.cwd(), timeout: 3000 })
   }
 }

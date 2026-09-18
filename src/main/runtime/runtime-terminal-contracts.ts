@@ -22,6 +22,15 @@ import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-pr
 
 export type TerminalCreateOptions = {
   command?: string
+  /**
+   * Windows shell to spawn AS the PTY process, instead of the host default shell.
+   *
+   * Distinct from `command`, which is typed into whatever shell the host spawns: a caller asking
+   * for cmd or PowerShell through `command` gets it as a CHILD of the default shell, so the
+   * terminal's own process is still the default shell and leaving that child lands back on a
+   * prompt the caller never asked for.
+   */
+  shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>
@@ -96,12 +105,15 @@ export type RuntimeTerminalAgentStatusEvent = {
   tabId?: string
   worktreeId?: string
   connectionId?: string | null
+  /** The pane's terminal handle, when it is bound to one. Stamped on the stored row so a
+   *  reader can rejoin it to the terminal after the pane key moved. */
+  terminalHandle?: string
   payload: ParsedAgentStatusPayload
 }
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'stateStartedAt' | 'worktreeId'
+  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId'
 >
 
 export type RuntimePtyDataAdmission = Readonly<{

@@ -1,4 +1,5 @@
 import type { Repo } from '../../shared/repo-types'
+import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { getPRForBranch } from '../github/client'
 import {
@@ -57,7 +58,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   store?: RuntimeStore
   baseBranch: string
   localWorktreeGitOptions: { wslDistro?: string }
-  localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }]
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const sanitizedName = sanitizeWorktreeName(args.request.name)
@@ -115,7 +115,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         args.repo.path,
         branchName,
         args.baseBranch,
-        ...args.localWorktreeGitOptionArgs
+        args.localWorktreeGitOptions
       )
       return checkoutExistingBranch
     }
@@ -196,7 +196,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   }
   if (!worktreePathResolved) {
     if (branchConflictKind) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
       )
     }

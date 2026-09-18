@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
@@ -20,7 +20,7 @@ import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 
-export const ORCHESTRATION_SEND_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
     params: SendParams,
@@ -80,12 +80,15 @@ export const ORCHESTRATION_SEND_METHODS: RpcMethod[] = [
         })
       }
 
+      const runGroup =
+        params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
+      // Run groups validate their own audience; message scope cannot select a parent Dispatch.
       const routing = resolveMessageRun(runtime, {
         from,
         senderPaneKey,
         to: params.to,
-        runId: params.run,
-        payload: params.payload
+        runId: runGroup ? undefined : params.run,
+        payload: runGroup ? undefined : params.payload
       })
       if (
         params.type === 'worker_done' &&

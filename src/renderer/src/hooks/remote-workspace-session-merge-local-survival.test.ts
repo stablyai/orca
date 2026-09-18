@@ -379,4 +379,39 @@ describe('local rows the snapshot carries no answer for', () => {
 
     expect(merged.defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(true)
   })
+
+  // The recovery ledger is client-local: the host has never heard of it and its
+  // snapshot never carries one. Letting a reconnect erase it hands the tab a
+  // fresh remount allowance on every republication — which is the remount storm
+  // (b5cfc6ca) the ledger exists to end, restored on a timer.
+  describe('client-local recovery ledger', () => {
+    const ledger = {
+      attemptedAt: [1000],
+      generation: 1,
+      outcome: 'failed' as const,
+      startedAt: 1000,
+      reason: 'reattach-unverifiable' as const,
+      tabGeneration: 1
+    }
+
+    it('survives a reconnect the host snapshot knows nothing about', () => {
+      const local = terminalTab('agent', { generation: 1, recovery: ledger })
+      const current = sessionState({ tabsByWorktree: { [WORKTREE]: [local] } })
+      const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] } })
+
+      const merged = merge(current, remote, { [WORKTREE]: [local] })
+
+      expect(merged.tabsByWorktree[WORKTREE][0].recovery).toEqual(ledger)
+    })
+
+    it('leaves a tab that never recovered without one', () => {
+      const local = terminalTab('agent')
+      const current = sessionState({ tabsByWorktree: { [WORKTREE]: [local] } })
+      const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] } })
+
+      const merged = merge(current, remote, { [WORKTREE]: [local] })
+
+      expect(merged.tabsByWorktree[WORKTREE][0].recovery).toBeUndefined()
+    })
+  })
 })

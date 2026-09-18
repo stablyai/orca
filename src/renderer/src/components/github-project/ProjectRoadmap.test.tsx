@@ -64,7 +64,11 @@ function row(id: string, title: string, values: GitHubProjectFieldValue[]): GitH
   }
 }
 
-function table(fields: GitHubProjectField[], rows: GitHubProjectRow[]): GitHubProjectTable {
+function table(
+  fields: GitHubProjectField[],
+  rows: GitHubProjectRow[],
+  filter = ''
+): GitHubProjectTable {
   return {
     project: {
       id: 'PVT_1',
@@ -79,7 +83,7 @@ function table(fields: GitHubProjectField[], rows: GitHubProjectRow[]): GitHubPr
       number: 2,
       name: 'Roadmap',
       layout: 'ROADMAP_LAYOUT',
-      filter: '',
+      filter,
       fields,
       groupByFields: [],
       sortByFields: []
@@ -263,11 +267,22 @@ describe('ProjectRoadmap', () => {
   it('reports an empty filter result instead of drawing an empty grid', () => {
     render(
       <ProjectRoadmap
-        table={table([TITLE_FIELD, START_FIELD, TARGET_FIELD], [])}
+        table={table([TITLE_FIELD, START_FIELD, TARGET_FIELD], [], 'status:Todo')}
         fallback={<div>list</div>}
       />
     )
     expect(screen.getByText("No items match this view's filter.")).toBeTruthy()
     expect(screen.queryByText('list')).toBeNull()
+  })
+
+  it('does not blame a filter an unfiltered roadmap does not have', () => {
+    render(
+      <ProjectRoadmap
+        table={table([TITLE_FIELD, START_FIELD, TARGET_FIELD], [])}
+        fallback={<div>list</div>}
+      />
+    )
+    expect(screen.getByText('This view has no items yet.')).toBeTruthy()
+    expect(screen.queryByText("No items match this view's filter.")).toBeNull()
   })
 })

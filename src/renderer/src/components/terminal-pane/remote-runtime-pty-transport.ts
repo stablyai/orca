@@ -645,18 +645,21 @@ export function createRemoteRuntimePtyTransport(
       try {
         snapshot =
           request === 'list'
-            ? await listRemoteRuntimeSessionTabsDeduped({
-                environmentId: currentRuntimeEnvironmentId,
-                worktreeId,
-                load: () =>
-                  callRuntime<RuntimeMobileSessionTabsResult>(
-                    'session.tabs.list',
-                    {
-                      worktree
-                    },
-                    requestRemainingMs
-                  )
-              })
+            ? (
+                await listRemoteRuntimeSessionTabsDeduped({
+                  environmentId: currentRuntimeEnvironmentId,
+                  worktreeId,
+                  load: async () => ({
+                    snapshot: await callRuntime<RuntimeMobileSessionTabsResult>(
+                      'session.tabs.list',
+                      {
+                        worktree
+                      },
+                      requestRemainingMs
+                    )
+                  })
+                })
+              ).snapshot
             : await activateHostSessionSurface(hostTabId, worktree, 'user', requestRemainingMs)
       } catch (error) {
         if (request === 'list') {
@@ -806,18 +809,21 @@ export function createRemoteRuntimePtyTransport(
       try {
         const listed =
           request === 'list'
-            ? await listRemoteRuntimeSessionTabsDeduped({
-                environmentId: currentRuntimeEnvironmentId,
-                worktreeId,
-                load: () =>
-                  callRuntime<RuntimeMobileSessionTabsResult>(
-                    'session.tabs.list',
-                    {
-                      worktree
-                    },
-                    requestRemainingMs
-                  )
-              })
+            ? (
+                await listRemoteRuntimeSessionTabsDeduped({
+                  environmentId: currentRuntimeEnvironmentId,
+                  worktreeId,
+                  load: async () => ({
+                    snapshot: await callRuntime<RuntimeMobileSessionTabsResult>(
+                      'session.tabs.list',
+                      {
+                        worktree
+                      },
+                      requestRemainingMs
+                    )
+                  })
+                })
+              ).snapshot
             : // Why: reconnect recovery, not a user gesture — a pane the user slept
               // must stay slept even though it publishes the same pending status.
               await activateHostSessionSurface(hostTabId, worktree, 'automatic', requestRemainingMs)
@@ -1232,13 +1238,14 @@ export function createRemoteRuntimePtyTransport(
     }
     if (terminal.worktreeId === undefined) {
       const worktree = toRuntimeWorktreeSelector(worktreeId)
-      const listed = await listRemoteRuntimeSessionTabsDeduped({
+      const { snapshot: listed } = await listRemoteRuntimeSessionTabsDeduped({
         environmentId: currentRuntimeEnvironmentId,
         worktreeId,
-        load: () =>
-          callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        load: async () => ({
+          snapshot: await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
             worktree
           })
+        })
       })
       const exactLegacyOwner = getHostSessionTerminalSurfaces(listed, tabId, {
         matchRequestedLeaf: true

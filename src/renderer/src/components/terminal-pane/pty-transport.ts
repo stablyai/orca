@@ -44,6 +44,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   } = opts
   let connected = false
   let destroyed = false
+  let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
   let lifecycleGeneration = 0
   let lastExitGeneration: number | null = null
@@ -137,6 +138,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             lastExitGeneration === lifecycleGeneration &&
             lifecycleGeneration === connectGeneration + 1,
           ownsPtyId: (id) => !destroyed && connected && ptyId === id,
+          handleExplicitlyClosedConnect: (id) => destroyed && (onAbandonedConnect?.(id) ?? false),
           bind,
           isCurrent: (id) => lifecycleGeneration === connectGeneration && connected && ptyId === id,
           setCallbacks,
@@ -268,7 +270,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         : { ...(opts.cwd ? { cwd: opts.cwd } : {}), ...(shellOverride ? { shellOverride } : {}) },
     resetCrossChunkParserState: outputProcessor.resetAgentStatusCarry,
 
-    destroy() {
+    destroy(options) {
+      onAbandonedConnect ??= options?.onAbandonedConnect
       destroyed = true
       try {
         this.disconnect()

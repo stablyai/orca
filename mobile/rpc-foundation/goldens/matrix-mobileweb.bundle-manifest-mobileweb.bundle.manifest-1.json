@@ -1,0 +1,674 @@
+{
+  "operation": "mobileWeb.bundle-manifest",
+  "family": "mobileWeb.bundle-manifest",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "f24f38bd4105753adb0d8e24132c2fc57f80f5c6",
+  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
+  "scenarioSha256": "8f5211fd3de1d77d3ea139f22bd6fc6119c72c08aa016f252a0df14bedf23ab3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "12e970df3db8": {
+      "outcome": "failed: refused: outer refused"
+    },
+    "1f83ee5bcef4": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "23871e324a00": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "chunkBytes": 16,
+            "manifest": {
+              "assets": [
+                {
+                  "byteLength": 11,
+                  "contentType": "text/javascript; charset=utf-8",
+                  "path": "assets/app.js",
+                  "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d"
+                },
+                {
+                  "byteLength": 26,
+                  "contentType": "text/html; charset=utf-8",
+                  "path": "index.html",
+                  "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
+                }
+              ],
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "desktopVersion": "1.4.201",
+              "entrypoint": "index.html",
+              "minCompatibleRuntimeProtocolVersion": 2,
+              "runtimeProtocolVersion": 2,
+              "schemaVersion": 1,
+              "totalBytes": 37
+            }
+          }
+        }
+      }
+    },
+    "2f77c40dc9fb": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "37fa2b81fff0": {
+      "outcome": "failed: method_not_found: Unknown method"
+    },
+    "4e3b57d795cb": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "refused: outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "533d41ae6475": {
+      "outcome": "failed: "
+    },
+    "775bfa42070b": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    },
+    "849b557190c4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (mobileWeb.bundle.manifest)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "92180fc007fa": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "959e5b0d7569": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9bd7a475c5b3": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9ca9b2d0fc07": {
+      "outcome": {
+        "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+        "chunkBytes": 16,
+        "entrypoint": "index.html",
+        "paths": ["assets/app.js", "index.html"]
+      }
+    },
+    "9d87b3b6bd74": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "chunkBytes": 16,
+        "manifest": {
+          "assets": [
+            {
+              "byteLength": 11,
+              "contentType": "text/javascript; charset=utf-8",
+              "path": "assets/app.js",
+              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d"
+            },
+            {
+              "byteLength": 26,
+              "contentType": "text/html; charset=utf-8",
+              "path": "index.html",
+              "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
+            }
+          ],
+          "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+          "desktopVersion": "1.4.201",
+          "entrypoint": "index.html",
+          "minCompatibleRuntimeProtocolVersion": 2,
+          "runtimeProtocolVersion": 2,
+          "schemaVersion": 1,
+          "totalBytes": 37
+        }
+      }
+    },
+    "9f8f097c4318": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a0fb89567920": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ad5c054356d4": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "b539b28b8552": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ce45a7dbe0d4": {
+      "outcome": "failed: refused: "
+    },
+    "ce8ef76590e2": {
+      "outcome": "failed: The host sent a reply this app could not read (mobileWeb.bundle.manifest)"
+    },
+    "d54e9333d433": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "d56bfdbce702": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "refused: ",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "ded62b26901e": {
+      "outcome": "failed: transport failure"
+    },
+    "f624ac81d963": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "method_not_found: Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-mobileweb.bundle-manifest-mobileweb.bundle.manifest-1",
+    "checkpoints": [
+      {
+        "id": "mobile-web-bundle-manifest-read.normal:manifest-read",
+        "observation": {
+          "sender": ["23871e324a00"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "9d87b3b6bd74"
+          },
+          "state": "9ca9b2d0fc07",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.result-absent:manifest-read",
+        "observation": {
+          "sender": ["d54e9333d433"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "849b557190c4"
+          },
+          "state": "ce8ef76590e2",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.result-null:manifest-read",
+        "observation": {
+          "sender": ["1f83ee5bcef4"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "849b557190c4"
+          },
+          "state": "ce8ef76590e2",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.inner-ok-missing:manifest-read",
+        "observation": {
+          "sender": ["b539b28b8552"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "849b557190c4"
+          },
+          "state": "ce8ef76590e2",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.inner-false-string-error:manifest-read",
+        "observation": {
+          "sender": ["ad5c054356d4"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "849b557190c4"
+          },
+          "state": "ce8ef76590e2",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.inner-false-object-error:manifest-read",
+        "observation": {
+          "sender": ["2f77c40dc9fb"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "849b557190c4"
+          },
+          "state": "ce8ef76590e2",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.outer-refused:manifest-read",
+        "observation": {
+          "sender": ["9f8f097c4318"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "4e3b57d795cb"
+          },
+          "state": "12e970df3db8",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.outer-refused-no-message:manifest-read",
+        "observation": {
+          "sender": ["959e5b0d7569"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "d56bfdbce702"
+          },
+          "state": "ce45a7dbe0d4",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.method-not-found:manifest-read",
+        "observation": {
+          "sender": ["9bd7a475c5b3"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "f624ac81d963"
+          },
+          "state": "37fa2b81fff0",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.transport-rejection:manifest-read",
+        "observation": {
+          "sender": ["a0fb89567920"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "a947768bc0ed"
+          },
+          "state": "ded62b26901e",
+          "effects": []
+        }
+      },
+      {
+        "id": "mobile-web-bundle-manifest-read.transport-rejection-no-message:manifest-read",
+        "observation": {
+          "sender": ["92180fc007fa"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "c7584e82c72f"
+          },
+          "state": "533d41ae6475",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

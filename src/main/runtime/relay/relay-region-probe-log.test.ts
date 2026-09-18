@@ -48,7 +48,7 @@ function sampledProbe(samples: Record<string, number[]>) {
 function writeCache(path: string, region: string | null, expiresAt: number): void {
   writeFileSync(
     join(path, 'orca-relay-region-preference.json'),
-    JSON.stringify({ v: 1, directorUrl: DIRECTOR, region, expiresAt })
+    JSON.stringify({ v: 2, directorUrl: DIRECTOR, region, expiresAt })
   )
 }
 

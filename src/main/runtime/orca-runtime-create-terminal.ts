@@ -4,6 +4,7 @@ import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
+import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -146,6 +147,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             preAllocatedHandle,
             tabId,
             leafId,
+            ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
             ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
             ...(launchOpts.agentSessionClaim
               ? {
@@ -235,8 +237,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             pty.launchIncarnationId = launchToken ? pty.incarnationId : null
             pty.launchAgent = launchOpts.launchAgent ?? null
           }
-          pty.tabId = tabId
-          pty.paneKey = paneKey
+          recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {

@@ -232,7 +232,10 @@ export type PtyTransport = {
    *  it also drops the transport's output processor from the pty side-effect memory census,
    *  so a reattached one would run untracked. Create a new transport instead. */
   detach?: (options?: { preserveExitObserver?: boolean }) => void
-  destroy?: () => void | Promise<void>
+  destroy?: (options?: {
+    /** Explicit close can retain retirement intent until an unbound connect settles. */
+    onAbandonedConnect?: (ptyId: string) => boolean
+  }) => void | Promise<void>
 }
 
 export type IpcPtyTransportOptions = {

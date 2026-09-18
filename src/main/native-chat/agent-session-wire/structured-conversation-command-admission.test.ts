@@ -45,4 +45,26 @@ describe('conversationCommandBlocked background tasks', () => {
     )
     expect(blocked).toBe('Wait for background tasks to finish before using this command.')
   })
+
+  it('still refuses on the open turn, not on the work the strip now shows', () => {
+    // The strip reports subagents while a turn runs. That must not change which
+    // refusal the user sees: an open turn already refuses, and it refuses first,
+    // so a live fan-out never re-labels the reason or blocks anything new.
+    const ctx = contextWith({ state: 'monitoring', supportsTaskStop: true })
+    ctx.journal.snapshot = () =>
+      ({
+        items: [
+          {
+            id: 'turn-1',
+            body: {
+              kind: 'status',
+              turnLifecycle: { turnId: 'turn-1', state: 'running' }
+            }
+          }
+        ]
+      }) as unknown as ReturnType<typeof ctx.journal.snapshot>
+    expect(conversationCommandBlocked(ctx, RECORD)).toBe(
+      'Wait for the current turn to finish before using this command.'
+    )
+  })
 })

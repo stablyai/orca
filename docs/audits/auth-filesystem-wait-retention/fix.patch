@@ -1,0 +1,98 @@
+diff --git a/src/main/rate-limits/auth-filesystem-operation.ts b/src/main/rate-limits/auth-filesystem-operation.ts
+index 228234e92c..7d030ab01e 100644
+--- a/src/main/rate-limits/auth-filesystem-operation.ts
++++ b/src/main/rate-limits/auth-filesystem-operation.ts
+@@ -1,4 +1,5 @@
+ import { parseWslUncPath } from '../../shared/wsl-paths'
++import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
+ 
+ const MAX_CONCURRENT_WSL_AUTH_OPERATIONS = 2
+ const activeWslOperationDistros = new Set<string>()
+@@ -139,10 +140,9 @@ export function createAuthFilesystemOperation<T>(
+   const waiters = new Set<symbol>()
+   let settled = false
+   const result = scheduleAuthFilesystemOperation(authPath, neededController.signal, operation)
+-  const markSettled = (): void => {
++  const settlementWaiters = new PromiseSettlementWaiters(result, () => {
+     settled = true
+-  }
+-  void result.then(markSettled, markSettled)
++  })
+ 
+   return {
+     result,
+@@ -156,20 +156,18 @@ export function createAuthFilesystemOperation<T>(
+ 
+       const waiter = Symbol('auth-filesystem-waiter')
+       waiters.add(waiter)
+-      let onAbort: (() => void) | null = null
+-      const aborted = new Promise<never>((_resolve, reject) => {
+-        onAbort = () => reject(getAbortReason(signal))
+-        signal.addEventListener('abort', onAbort, { once: true })
+-      })
+-      return Promise.race([result, aborted]).finally(() => {
+-        if (onAbort) {
+-          signal.removeEventListener('abort', onAbort)
+-        }
+-        waiters.delete(waiter)
+-        if (!settled && waiters.size === 0) {
+-          neededController.abort(getAbortReason(signal))
+-        }
+-      })
++      return settlementWaiters
++        .wait({
++          signal,
++          abortInMicrotask: true,
++          createAbortError: () => getAbortReason(signal)
++        })
++        .finally(() => {
++          waiters.delete(waiter)
++          if (!settled && waiters.size === 0) {
++            neededController.abort(getAbortReason(signal))
++          }
++        })
+     }
+   }
+ }
+diff --git a/src/shared/promise-settlement-waiters.ts b/src/shared/promise-settlement-waiters.ts
+index 98ec24b25c..97230d54dd 100644
+--- a/src/shared/promise-settlement-waiters.ts
++++ b/src/shared/promise-settlement-waiters.ts
+@@ -13,8 +13,10 @@ type PromiseSettlementWaiter<T> = {
+ 
+ export type PromiseSettlementWaitOptions<T> = {
+   signal?: AbortSignal
++  /** Preserve Promise.race ordering when raw settlement and abort share a turn. */
++  abortInMicrotask?: boolean
+   timeoutMs?: number
+-  createAbortError?: () => Error
++  createAbortError?: () => unknown
+   createTimeoutError?: () => Error
+   onFulfilled?: (value: T) => void
+   onAbandon?: (reason: 'abort' | 'timeout') => void
+@@ -50,7 +52,7 @@ export class PromiseSettlementWaiters<T> {
+     }
+     return new Promise<T>((resolve, reject) => {
+       let waiter!: PromiseSettlementWaiter<T>
+-      const abandon = (reason: 'abort' | 'timeout', error: Error): void => {
++      const abandon = (reason: 'abort' | 'timeout', error: unknown): void => {
+         if (!this.waiters.delete(waiter)) {
+           return
+         }
+@@ -58,8 +60,14 @@ export class PromiseSettlementWaiters<T> {
+         options.onAbandon?.(reason)
+         reject(error)
+       }
+-      const onAbort = (): void =>
+-        abandon('abort', options.createAbortError?.() ?? createDefaultAbortError())
++      const onAbort = (): void => {
++        const error = options.createAbortError?.() ?? createDefaultAbortError()
++        if (options.abortInMicrotask) {
++          queueMicrotask(() => abandon('abort', error))
++        } else {
++          abandon('abort', error)
++        }
++      }
+       waiter = {
+         resolve,
+         reject,

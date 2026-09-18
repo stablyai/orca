@@ -131,3 +131,40 @@ test('approves the asia-east2 rehome sources and still rejects unlisted cells', 
     )
   }
 })
+
+test('retries one director-wrapped source 503 without relaxing the proof', async () => {
+  let calls = 0
+  const result = await probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
+    wait: async () => {},
+    fetch: async () => ++calls === 1
+      ? Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 })
+      : Response.json(provenProbe)
+  })
+  assert.equal(calls, 2)
+  assert.equal(result.proven, true)
+})
+
+test('reports safe trust reasons, keeps rejection final, and redacts arbitrary error text', async () => {
+  for (const reason of ['regional_rehome_trust_probe_source_403', 'secret-token-example']) {
+    let calls = 0
+    await assert.rejects(probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
+      wait: async () => { throw new Error('must not retry') },
+      fetch: async () => { calls++; return Response.json({ error: reason }, { status: 409 }) }
+    }), error => {
+      assert.match(error.message, /returned 409/)
+      assert.ok(!error.message.includes('secret-token-example'))
+      if (reason.endsWith('_403')) assert.match(error.message, /source_403/)
+      return true
+    })
+    assert.equal(calls, 1)
+  }
+})
+
+test('stops after the second wrapped transient failure', async () => {
+  let calls = 0
+  await assert.rejects(probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
+    wait: async () => {},
+    fetch: async () => { calls++; return Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 }) }
+  }), /returned 409.*source_503/)
+  assert.equal(calls, 2)
+})

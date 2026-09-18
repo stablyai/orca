@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
+import { AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS } from '../../../shared/agent-session-host-authority'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   mintAgentSessionOperationId,
@@ -71,7 +71,7 @@ describe('structured pointer operation id', () => {
     expect(grown.operationId).not.toBe(first.operationId)
   })
 
-  it('re-mints once the host would refuse the id as expired', () => {
+  it('never re-mints an ambiguous batch after the host replay window expires', () => {
     const db = fakeDb()
     const first = resolveStructuredPointerOperation({
       db,
@@ -87,9 +87,9 @@ describe('structured pointer operation id', () => {
       sessionId: 's1',
       body: body('2 messages'),
       messageIds: ['m1', 'm2'],
-      now: 1_000 + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
+      now: 1_000 + AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS + 1
     })
-    expect(aged.operationId).not.toBe(first.operationId)
+    expect(aged.operationId).toBe(first.operationId)
   })
 
   it('re-mints for a different batch of the same size', () => {

@@ -10,6 +10,7 @@ import type {
 } from '../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { placeCreatedSessionTab } from '../../shared/session-tab-placement'
 import {
   buildHeadlessMobileSessionTabGroups,
   buildMaterializedHeadlessParentLayout,
@@ -31,6 +32,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
+      supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     } = {}
@@ -103,21 +105,18 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentLayout,
       isActive: activate
     }
-    const tabs = (existing?.tabs ?? [])
-      .filter((candidate) => candidate.id !== tab.id)
-      .map((candidate) => ({
+    const tabs = placeCreatedSessionTab(
+      (existing?.tabs ?? []).map((candidate) => ({
         ...candidate,
         ...(candidate.type === 'terminal' && candidate.parentTabId === parentTabId
           ? { parentLayout }
           : {}),
         isActive: activate ? false : candidate.isActive
-      }))
-    const insertAfter = afterTabId ? tabs.findIndex((candidate) => candidate.id === afterTabId) : -1
-    if (insertAfter >= 0) {
-      tabs.splice(insertAfter + 1, 0, tab)
-    } else {
-      tabs.push(tab)
-    }
+      })),
+      tab,
+      afterTabId,
+      { afterParentGroup: opts.supportsSplitGroupPlacement !== false }
+    )
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
       // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.

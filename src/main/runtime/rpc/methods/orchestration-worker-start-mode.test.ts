@@ -97,7 +97,7 @@ describe('a structured default this dispatch cannot honour', () => {
       decide({
         settings: { ...STRUCTURED_DEFAULT, agentCmdOverrides: { claude: 'claude-wrapper' } }
       })
-    ).toMatchObject({ mode: 'terminal', reason: 'tui_launch_customization' })
+    ).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
   })
 
   // Neither provider is refused here on the client's platform: only the executing host knows

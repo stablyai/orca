@@ -106,7 +106,7 @@ jobs:
           set -euo pipefail
           docker run --rm --network none --entrypoint node "${IMAGE}" --input-type=module -e '
             import { loadPushConfig } from "./apps/push/dist/config.js";
-            const env = { ORCA_PUSH_PUBLIC_URL: "https://push.onorca.dev", ORCA_PUSH_MODE: "validation" };
+            const env = { ORCA_PUSH_PUBLIC_URL: "https://push.onorca.dev", ORCA_PUSH_MODE: "validation", ORCA_PUSH_FCM_PROJECT_ID: "onorca-cloud" };
             if (loadPushConfig(env).mode !== "validation") throw new Error("validation_mode_unsupported");
             let rejected = false;
             try { loadPushConfig({ ...env, ORCA_PUSH_MODE: "invalid" }); } catch { rejected = true; }

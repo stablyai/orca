@@ -203,6 +203,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       # Caches the Electron binary and electron-builder's tool downloads (nsis,
       # winCodeSign). Same key shape as release-cut's Windows leg.
@@ -219,6 +222,8 @@ jobs:
       # Why retried: pnpm install triggers electron's postinstall, which pulls the
       # Electron binary from GitHub release assets, and that CDN returns transient
       # 504s often enough to lose a build to it.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -226,6 +231,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why the packaging check runs before the 20-minute build: it only needs
       # node_modules, and a stale config should cost seconds rather than a build.

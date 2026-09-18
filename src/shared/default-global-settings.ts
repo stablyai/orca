@@ -89,6 +89,7 @@ export function buildDefaultSettings(args: {
     terminalRightClickToPaste: args.terminalRightClickToPaste,
     terminalRightClickToPasteDefaultedForPlatform: true,
     terminalWindowsShell: 'powershell.exe',
+    terminalDefaultShell: '',
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'auto',
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
@@ -105,6 +106,9 @@ export function buildDefaultSettings(args: {
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
     terminalClipboardOnSelect: false,
+    // Why: only the run of spaces shared by every selected line is dropped, so
+    // relative indentation survives and the clipboard loses only the gutter.
+    terminalCopyTrimsGutter: true,
     // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
     // replies stay disabled and payload size is capped in the OSC 52 handler.
     // This default only covers new profiles; existing ones persisted `false`
@@ -126,6 +130,7 @@ export function buildDefaultSettings(args: {
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     experimentalStructuredNativeChat: false,
+    nativeChatResumeWorkOnRestart: false,
     nativeChatSessionOptions: {},
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,

@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
+import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -26,7 +27,8 @@ export class FakeSession implements RpcClient {
 
   getState = () => this.state
   getReconnectAttempt = () => 0
-  getLastConnectedAt = () => null
+  // Nullable: the escalation suites replace this with a real timestamp.
+  getLastConnectedAt: () => number | null = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -215,8 +217,8 @@ export function dependencies(
     saveHost: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length) => new Uint8Array(length).fill(1),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: defaultScheduleTimer,
+    clearTimer: defaultCancelTimer,
     ...overrides
   }
 }

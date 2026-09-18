@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { selectFreshExplicitAgentStatus } from './runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './orca-runtime-controller-knows-pty-is-live'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
@@ -138,7 +139,11 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
             leaf.lastAgentStatus = restoredStatus
             if (restoredStatus === 'idle') {
               this.resolveTuiIdleWaiters(leaf)
-              this.deliverPendingMessagesForLeaf(leaf)
+              // Why gated like every other delivery edge: a neutral-title restoration can
+              // reinstate `idle` from a name-only title, which is not evidence a turn ended.
+              if (this.checkDeliverySettledAndArmRecheck(leaf)) {
+                this.deliverPendingMessagesForLeaf(leaf)
+              }
             }
           }
         }
@@ -181,7 +186,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     updatedAt: number
     stateStartedAt: number
   } | null {
-    return this.agentRows.getFreshExplicit({
+    return selectFreshExplicitAgentStatus({
       handle,
       paneKey: paneKeyOverride ?? this.getPaneKeyForTerminalHandle(handle),
       hookRows: this.getAgentStatusSnapshotFn?.() ?? []

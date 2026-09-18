@@ -1,3 +1,4 @@
+import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
@@ -21,6 +22,7 @@ import {
 } from './ai-vault-virtual-rows'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 
 const VAULT_ROW_OVERSCAN = 8
 const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
@@ -53,7 +55,8 @@ export function AiVaultSessionVirtualList({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
-  onRequestDelete
+  onRequestDelete,
+  searchHits
 }: {
   groups: readonly AiVaultSessionGroup[]
   collapsedGroups: ReadonlySet<string>
@@ -83,6 +86,7 @@ export function AiVaultSessionVirtualList({
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
+  searchHits?: ReadonlyMap<string, AiVaultSearchHit>
 }): React.JSX.Element {
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -157,75 +161,78 @@ export function AiVaultSessionVirtualList({
   })
 
   return (
-    <div
-      ref={listScrollRef}
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-sleek"
-    >
-      {loading && sessionsCount === 0 ? <SessionLoadingState /> : null}
+    <SubagentExpansionProvider>
+      <div
+        ref={listScrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-sleek"
+      >
+        {loading && sessionsCount === 0 ? <SessionLoadingState /> : null}
 
-      {!loading && sessionsCount === 0 && !error ? (
-        <EmptyState
-          title={translate(
-            'auto.components.right.sidebar.AiVaultPanel.noAgentSessionsFound',
-            'No agent sessions found'
-          )}
-        />
-      ) : null}
+        {!loading && sessionsCount === 0 && !error ? (
+          <EmptyState
+            title={translate(
+              'auto.components.right.sidebar.AiVaultPanel.noAgentSessionsFound',
+              'No agent sessions found'
+            )}
+          />
+        ) : null}
 
-      {sessionsCount > 0 && filteredSessionsCount === 0 ? (
-        <EmptyState
-          title={
-            noAgentsSelected
-              ? translate(
-                  'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
-                  'No agents selected'
-                )
-              : translate(
-                  'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
-                  'No sessions match the current filters'
-                )
-          }
-        />
-      ) : null}
+        {sessionsCount > 0 && filteredSessionsCount === 0 ? (
+          <EmptyState
+            title={
+              noAgentsSelected
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
+                    'No agents selected'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
+                    'No sessions match the current filters'
+                  )
+            }
+          />
+        ) : null}
 
-      {vaultRows.length > 0 ? (
-        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-          {virtualItems.map((virtualRow) => (
-            <AiVaultVirtualRow
-              key={virtualRow.key}
-              row={vaultRows[virtualRow.index]}
-              index={virtualRow.index}
-              start={virtualRow.start}
-              activeStickyHeaderIndex={activeStickyHeaderIndexRef.current}
-              measureElement={virtualizer.measureElement}
-              collapsedGroups={collapsedGroups}
-              expandedSessionIds={expandedSessionIds}
-              vaultScope={vaultScope}
-              buildResumeStartup={buildResumeStartup}
-              getOriginalPaneTarget={getOriginalPaneTarget}
-              getSessionLiveState={getSessionLiveState}
-              getWorktreeInfo={getWorktreeInfo}
-              getSessionResumeState={getSessionResumeState}
-              getSessionResumeActions={getSessionResumeActions}
-              getSessionResumeInChat={getSessionResumeInChat}
-              onToggleGroup={onToggleGroup}
-              onToggleSessionDetails={toggleSessionDetails}
-              onJumpToOriginalPane={onJumpToOriginalPane}
-              onJumpToWorktree={onJumpToWorktree}
-              onResume={onResume}
-              onContinueInNewSession={onContinueInNewSession}
-              onResumeInNewChat={onResumeInNewChat}
-              onCopyResume={onCopyResume}
-              onCopyId={onCopyId}
-              onCopyPath={onCopyPath}
-              onOpenLog={onOpenLog}
-              onRevealLog={onRevealLog}
-              onOpenCwd={onOpenCwd}
-              onRequestDelete={onRequestDelete}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+        {vaultRows.length > 0 ? (
+          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+            {virtualItems.map((virtualRow) => (
+              <AiVaultVirtualRow
+                key={virtualRow.key}
+                row={vaultRows[virtualRow.index]}
+                index={virtualRow.index}
+                start={virtualRow.start}
+                activeStickyHeaderIndex={activeStickyHeaderIndexRef.current}
+                measureElement={virtualizer.measureElement}
+                collapsedGroups={collapsedGroups}
+                expandedSessionIds={expandedSessionIds}
+                vaultScope={vaultScope}
+                searchHits={searchHits}
+                buildResumeStartup={buildResumeStartup}
+                getOriginalPaneTarget={getOriginalPaneTarget}
+                getSessionLiveState={getSessionLiveState}
+                getWorktreeInfo={getWorktreeInfo}
+                getSessionResumeState={getSessionResumeState}
+                getSessionResumeActions={getSessionResumeActions}
+                getSessionResumeInChat={getSessionResumeInChat}
+                onToggleGroup={onToggleGroup}
+                onToggleSessionDetails={toggleSessionDetails}
+                onJumpToOriginalPane={onJumpToOriginalPane}
+                onJumpToWorktree={onJumpToWorktree}
+                onResume={onResume}
+                onContinueInNewSession={onContinueInNewSession}
+                onResumeInNewChat={onResumeInNewChat}
+                onCopyResume={onCopyResume}
+                onCopyId={onCopyId}
+                onCopyPath={onCopyPath}
+                onOpenLog={onOpenLog}
+                onRevealLog={onRevealLog}
+                onOpenCwd={onOpenCwd}
+                onRequestDelete={onRequestDelete}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </SubagentExpansionProvider>
   )
 }

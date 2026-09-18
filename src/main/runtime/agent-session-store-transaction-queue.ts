@@ -9,7 +9,7 @@ import {
   type AgentSessionStoreState,
   type LoadedAgentSessionStore
 } from './agent-session-record-store-file'
-import { withAgentSessionStoreTransactionLock } from './agent-session-store-transaction-lock'
+import { withFileTransactionLock } from '../file-transaction-lock'
 
 function markLoadedLeasesUnreconciled(state: AgentSessionStoreState): void {
   for (const [sessionId, record] of state.records) {
@@ -90,7 +90,7 @@ export class AgentSessionStoreTransactionQueue {
 
   transact<T>(apply: () => T): Promise<T> {
     const run = this.queue.then(() =>
-      withAgentSessionStoreTransactionLock(this.filePath, async () => {
+      withFileTransactionLock(this.filePath, async () => {
         if (this.readOnly) {
           throw new Error('agent_session_legacy_required')
         }

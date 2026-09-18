@@ -1,3 +1,5 @@
+import { remoteSessionDocumentParsers } from './remote-session-document-parsers'
+import type { RemoteSessionContent } from './remote-session-content-lines'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
@@ -24,9 +26,9 @@ import type {
   RemoteSessionSource
 } from './remote-session-scanner-types'
 
-type RemoteContentParser = (
+type RemoteContentParser<T = string> = (
   file: FileWithMtime,
-  content: string,
+  content: T,
   platform: NodeJS.Platform,
   options: RemoteParserOptions,
   // Line-based parsers iterate cancellably; whole-document parsers ignore it.
@@ -134,22 +136,28 @@ function remoteAntigravitySource(
 ): RemoteSessionSource {
   const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', 'antigravity-cli')
   const historyPath = joinRemotePath(hostPlatform, cliRoot, 'history.jsonl')
+  const parse = async (
+    file: FileWithMtime,
+    content: RemoteSessionContent,
+    context: RemoteScannerContext
+  ) => {
+    const session = await parseAntigravitySessionContent(
+      file,
+      content,
+      context.hostPlatform.os,
+      parserOptions(context),
+      context.signal
+    )
+    return session ? context.antigravityWorkspaceResolver.enrich(session, historyPath) : null
+  }
   return {
     agent: 'antigravity',
     rootDir: joinRemotePath(hostPlatform, cliRoot, 'brain'),
     extensions: ['.jsonl'],
     filePredicate: isAntigravityTranscriptPath,
     fixedChildFileSegments: ['.system_generated', 'logs', 'transcript.jsonl'],
-    parse: async (file, content, context) => {
-      const session = await parseAntigravitySessionContent(
-        file,
-        content,
-        context.hostPlatform.os,
-        parserOptions(context),
-        context.signal
-      )
-      return session ? context.antigravityWorkspaceResolver.enrich(session, historyPath) : null
-    }
+    parse,
+    parseLines: parse
   }
 }
 
@@ -169,6 +177,7 @@ function source(
     extensions,
     filePredicate,
     directoryPredicate,
+    ...remoteSessionDocumentParsers(agent),
     parse: (file, content, context) =>
       Promise.resolve(
         parseContent(file, content, context.hostPlatform.os, parserOptions(context), context.signal)
@@ -181,10 +190,16 @@ function jsonlSource(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform,
   segments: readonly string[],
-  parseContent: RemoteContentParser,
+  parseContent: RemoteContentParser<RemoteSessionContent>,
   filePredicate?: (path: string) => boolean
 ): RemoteSessionSource {
-  return source(agent, remoteHome, hostPlatform, segments, ['.jsonl'], parseContent, filePredicate)
+  return {
+    ...source(agent, remoteHome, hostPlatform, segments, ['.jsonl'], parseContent, filePredicate),
+    parseLines: (file, lines, context) =>
+      Promise.resolve(
+        parseContent(file, lines, context.hostPlatform.os, parserOptions(context), context.signal)
+      )
+  }
 }
 
 function remoteCodexSources(
@@ -202,12 +217,12 @@ function remoteCodexSources(
       'codex-runtime-home',
       'home'
     )
-  ].map((codexHome) => ({
-    agent: 'codex',
-    rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
-    codexHome,
-    extensions: ['.jsonl'],
-    parse: (file, content, context) =>
+  ].map((codexHome) => {
+    const parse = (
+      file: FileWithMtime,
+      content: RemoteSessionContent,
+      context: RemoteScannerContext
+    ) =>
       parseCodexSessionContent({
         file,
         content,
@@ -218,7 +233,15 @@ function remoteCodexSources(
         signal: context.signal,
         readIndexedTitle: remoteCodexIndexedTitleReader(codexHome, context)
       })
-  }))
+    return {
+      agent: 'codex',
+      rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
+      codexHome,
+      extensions: ['.jsonl'],
+      parse,
+      parseLines: parse
+    }
+  })
 }
 
 function remoteOpenClawSources(
@@ -246,7 +269,7 @@ function parserOptions(context: RemoteScannerContext): RemoteParserOptions {
 
 function piParser(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform,
   options: RemoteParserOptions,
   signal?: AbortSignal
@@ -256,7 +279,7 @@ function piParser(
 
 function ompParser(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform,
   options: RemoteParserOptions,
   signal?: AbortSignal
@@ -266,7 +289,7 @@ function ompParser(
 
 function primeAgentParser(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform,
   options: RemoteParserOptions,
   signal?: AbortSignal
@@ -276,7 +299,7 @@ function primeAgentParser(
 
 function openClawParser(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform,
   options: RemoteParserOptions,
   signal?: AbortSignal

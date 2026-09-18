@@ -19,6 +19,7 @@ export function CombinedDiffFileTreeRows({
   rows,
   mode,
   worktreePath,
+  sourceWorkspaceId,
   activeSectionKey,
   sectionIndexByKey,
   collapsedDirectoryKeys,
@@ -30,6 +31,7 @@ export function CombinedDiffFileTreeRows({
   rows: readonly CombinedDiffTreeNode[]
   mode: CombinedDiffFileTreeMode
   worktreePath: string
+  sourceWorkspaceId?: string
   activeSectionKey: string | null
   sectionIndexByKey: ReadonlyMap<string, number>
   collapsedDirectoryKeys: ReadonlySet<string>
@@ -50,6 +52,7 @@ export function CombinedDiffFileTreeRows({
           node={node}
           mode={mode}
           worktreePath={worktreePath}
+          sourceWorkspaceId={sourceWorkspaceId}
           activeSectionKey={activeSectionKey}
           sectionIndexByKey={sectionIndexByKey}
           isCollapsed={collapsedDirectoryKeys.has(node.key)}

@@ -443,7 +443,7 @@ describe('NativeChatToolRun', () => {
     expect(container.querySelector('.animate-pulse')).toBeNull()
   })
 
-  it('keeps failed tool runs visually neutral while collapsed', () => {
+  it('refuses the completion mark to a collapsed run whose call failed', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'false' }, state: 'failed' },
       { type: 'tool-result', output: 'exit 1', isError: true }
@@ -451,9 +451,44 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
 
-    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
+    // The defect: nothing was running, so the header inherited a check and
+    // asserted success over a failure only expanding the run would reveal.
+    expect(container.querySelector('.lucide-check')).toBeNull()
+    expect(runHeader(container)).toHaveTextContent('1 failed')
+    expect(runHeader(container)).toHaveAccessibleName(/Failed tool calls: 1/)
+    // Quiet text, not a severity escalation: no destructive tint, no swapped glyph.
     expect(container.querySelector('.lucide-circle-alert')).toBeNull()
+    expect(container.querySelector('[class*="destructive"]')).toBeNull()
+    // The detail still belongs behind the disclosure.
     expect(screen.queryByText('exit 1')).toBeNull()
+  })
+
+  it('counts every failed call in a run, not just the last one', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'failed' },
+      { type: 'tool-result', output: 'exit 1', isError: true },
+      { type: 'tool-call', name: 'shell', input: { command: 'b' }, state: 'failed' },
+      { type: 'tool-result', output: 'exit 2', isError: true },
+      { type: 'tool-call', name: 'shell', input: { command: 'c' }, state: 'completed' },
+      { type: 'tool-result', output: 'ok' }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).toHaveTextContent('2 failed')
+    expect(container.querySelector('.lucide-check')).toBeNull()
+  })
+
+  it('says nothing and keeps the mark when every call in the run succeeded', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'completed' },
+      { type: 'tool-result', output: 'ok' }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).not.toHaveTextContent('failed')
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
   it('keeps settled tool activity behind the completed turn disclosure', () => {
@@ -552,7 +587,7 @@ describe('NativeChatToolRun', () => {
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
-        name: 'AskUserQuestion',
+        name: 'CreateWidget',
         input: { prompt: 'which?' },
         state: 'completed'
       }
@@ -569,7 +604,7 @@ describe('NativeChatToolRun', () => {
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
-        name: 'AskUserQuestion',
+        name: 'CreateWidget',
         input: { prompt: 'which?' },
         state: 'completed'
       }

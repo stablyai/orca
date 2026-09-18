@@ -142,7 +142,7 @@ export async function buildRuntimePtySpawnOptions(
   if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
     ctx.spawnOptions.tabId = args.tabId
   }
-  if (process.platform === 'win32' && !args.connectionId) {
+  if (!args.connectionId) {
     ctx.spawnOptions.shellOverride = ctx.terminalRuntimeOptions.shellOverride
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
     ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings

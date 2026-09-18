@@ -84,10 +84,12 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleSend() {',
       'async function handleAccessoryKey('
     )
-    const acceptedAt = slice.indexOf('const accepted = isTerminalSendRpcAccepted(response)')
+    const acceptedAt = slice.indexOf(
+      'const accepted = terminalInputSend.interpret(response) === true'
+    )
     const restoreAt = slice.indexOf('restoreRejectedDraft()', acceptedAt)
     const dismissAt = slice.indexOf('dismissKeyboardAfterAgentSend(')
-    const responseAt = slice.indexOf('const response = await client.sendRequest(')
+    const responseAt = slice.indexOf('const response = await terminalInputSend.request(')
     const catchAt = slice.indexOf('} catch {')
     expect(dismissAt).toBeGreaterThan(0)
     expect(responseAt).toBeGreaterThan(0)
@@ -121,7 +123,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleAccessoryKey('
     )
     const originAt = sendSlice.indexOf('handle: activeHandle')
-    const requestAt = sendSlice.indexOf('await client.sendRequest(')
+    const requestAt = sendSlice.indexOf('await terminalInputSend.request(')
     const restoreSlice = sourceSlice(
       sendActionsSource,
       'const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(',

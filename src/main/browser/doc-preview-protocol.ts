@@ -134,8 +134,7 @@ export function installDocPreviewProtocolHandler(): void {
       scope: 'isolated',
       partition: DOC_PREVIEW_PARTITION,
       label: 'Document preview',
-      source: null,
-      userAgentMode: 'clean'
+      source: null
     },
     // Why downloads are the one policy that does not carry over: the browser download flow needs a
     // page to attribute the file to, and a previewed document is not one. Routed here it would

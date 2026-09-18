@@ -279,17 +279,19 @@ describe('orchestration RPC methods', () => {
       }
     })
 
-    it('rejects group addresses with a dedicated error (no message persisted)', async () => {
-      setup()
-      await expect(
-        call('orchestration.ask', {
-          from: 'term_worker',
-          to: '@reviewers',
-          question: 'ok?'
+    it.each(['@all', '@idle', '@codex', '@reviewers'])(
+      'rejects %s with invalid_argument naming the Run mailbox (no message persisted)',
+      async (to) => {
+        setup()
+        await expect(
+          call('orchestration.ask', { from: 'term_worker', to, question: 'ok?' })
+        ).rejects.toMatchObject({
+          code: 'invalid_argument',
+          message: expect.stringMatching(/does not support group addresses.*run:<id>/)
         })
-      ).rejects.toThrow(/does not support group addresses/)
-      expect(db.getInbox(10)).toHaveLength(0)
-    })
+        expect(db.getInbox(10)).toHaveLength(0)
+      }
+    )
 
     it('ignores unrelated wakes until the durable question is answered', async () => {
       setup()

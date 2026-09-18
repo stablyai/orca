@@ -714,7 +714,6 @@
       "useComposerState": {
         "7eb3f44ff7": "選択した Agent は無効です。作成する前に、有効な Agent を選択してください。",
         "b2ead86962": "PR ベースを解決できませんでした。",
-        "a9ff236145": "一部の添付ファイルをアップロードできませんでした。",
         "3db83fc58a": "このホスト上に、添付に使用できるプロジェクトパスがありません。",
         "ba6cb77082": "プロジェクトへの接続に失敗しました。",
         "chooseOrAddProjectBeforeWorkspace": "ワークスペースを作成する前に、プロジェクトを選択または追加してください。",
@@ -1946,7 +1945,8 @@
         "0f3066256e": "前の一致",
         "42e466b9f1": "正規表現",
         "90c61387d9": "大文字と小文字を区別",
-        "e07012f26e": "検索…"
+        "e07012f26e": "検索…",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "再起動してアップデートする",
@@ -2219,6 +2219,10 @@
                 "7c302f8174": "無題"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "このビューにはまだ項目がありません。",
+            "7e4a2f80c6": "最近追加した項目は、表示されるまで少し時間がかかることがあります。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -5801,7 +5805,12 @@
           "14444243ba": "PATH から {{value0}} を削除しますか?",
           "5d432fe44d": "インストール済み",
           "8a9b784c60": "古い",
-          "d363e5929b": "CLI の登録を確認しています…"
+          "d363e5929b": "CLI の登録を確認しています…",
+          "6f894ef9c2": "Finderで表示",
+          "cbe55e4d48": "エクスプローラーで表示",
+          "9fd4023db0": "ファイルマネージャーで表示",
+          "installFailureUnknownReason": "Orca は CLI 登録を完了できず、理由を報告しませんでした。",
+          "installFailureConflictRemedy": "{{value0}} を削除して、不要になった場合は再度登録してください。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -14651,7 +14660,8 @@
         "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
         "toggleOption": "{{value0}}を切り替える",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "現在の値が不明です — オンまたはオフを選んでください",
+        "valueIsDefault": "既定",
+        "valueNotReported": "未報告",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
         "setWhenSessionStarts": "セッション開始時に設定してください。",
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
@@ -14664,9 +14674,7 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
-          "ultra": "ウルトラ",
-          "on": "オン",
-          "off": "オフ"
+          "ultra": "ウルトラ"
         },
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
@@ -14803,27 +14811,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "ダッシュボード表示",
-      "board": "ダッシュボード",
-      "map": "Agent マップ"
-    },
-    "map": {
-      "host": {
-        "local": "ローカル",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "リモート"
-      },
-      "liveContainmentMap": "ライブ包含マップ",
-      "empty": "現在のフィルターに一致する Agent はありません。",
-      "canvasLabel": "プロジェクト、ワークスペース、Agent の入れ子マップ",
-      "zoomOut": "ズームアウト",
-      "zoomIn": "ズームイン",
-      "fit": "全体表示",
-      "projectCount": "{{agents}}件の Agent · {{workspaces}}件のワークスペース",
-      "agentCount": "{{count}}件の Agent"
-    },
     "placeholder": {
       "title": "Agent ダッシュボード",
       "description": "ここに、すべての Agent が一覧で表示されます。ボードは近日公開です。"
@@ -14957,6 +14944,14 @@
       "hide": "Agent を隠す",
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "入力待ち",
+      "working": "処理中",
+      "stopped": "停止",
+      "finished": "完了"
     }
   }
 }

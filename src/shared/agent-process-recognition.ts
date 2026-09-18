@@ -292,7 +292,7 @@ export function recognizeAgentProcessFromCommandLine(
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  let direct = recognizeAgentProcess(tokens[0])
+  let direct = recognizedAgentForProcess(firstNormalized)
   // Why: `orca status` / bare `openzoo` are the wrapper's other modes, not the hosted agent.
   if (lacksWrapperSubcommand(direct?.agent, tokens[1])) {
     direct = null

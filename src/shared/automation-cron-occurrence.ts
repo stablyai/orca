@@ -30,6 +30,7 @@ export function cronDateMatches(rule: ParsedCron, timestamp: number): boolean {
   }
   const dayOfMonthMatches = rule.daysOfMonth.has(date.getDate())
   const dayOfWeekMatches = rule.daysOfWeek.has(date.getDay())
+  // Dialect rule; the flags are lexical (`isCronDayFieldRestricted`), not set sizes.
   if (rule.dayOfMonthRestricted && rule.dayOfWeekRestricted) {
     return dayOfMonthMatches || dayOfWeekMatches
   }

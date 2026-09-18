@@ -40,6 +40,9 @@ import {
 import { requestGitHubCheckDetails } from './checks-tab-request-details'
 import { ChecksTabActions, ChecksTabCompactHeader } from './checks-tab-header'
 
+/** Identity token for one checks context; compared by reference so a stale refresh is dropped. */
+type ChecksContextOwner = Record<string, never>
+
 export function ChecksTab({
   item,
   repoPath,
@@ -111,7 +114,7 @@ export function ChecksTab({
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
-    async (expectedContextOwner?: object): Promise<PRCheckDetail[] | null> =>
+    async (expectedContextOwner?: ChecksContextOwner): Promise<PRCheckDetail[] | null> =>
       refreshGitHubChecksTab(
         {
           canUseChecksRepoContext,

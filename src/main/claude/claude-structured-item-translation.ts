@@ -179,6 +179,7 @@ export function claudeToolBody(input: {
     kind: 'tool-call',
     name: input.tool.name,
     input: input.tool.input,
+    callId: input.tool.id,
     state: input.result ? (input.result.failed ? 'failed' : 'completed') : 'running',
     ...(input.result
       ? { output: boundInlineText(input.result.output, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded }

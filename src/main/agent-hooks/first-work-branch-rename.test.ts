@@ -100,10 +100,14 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         isPendingFirstAgentMessageRename: () => true
       })
       const items: AgentJournalRenderItem[] = []
+      // A real journal's sequence only ever advances, so the feed's projection
+      // cache must miss on every publish here: this test is about the rename.
+      let sequence = 0
       const journal = {
         snapshot: () => ({ items }),
         lastActivityAt: () => 1,
-        isReadOnly: false
+        isReadOnly: false,
+        cursor: () => ({ epoch: 1, sequence: (sequence += 1) })
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
       const observe = vi.fn((summary, options) => {
@@ -114,7 +118,21 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       })
       const feed = new StructuredAgentSessionStatusFeed({
         sessions: new Map([
-          ['session', { journal, params: { location: { workspaceId }, provider: agent } }]
+          [
+            'session',
+            {
+              journal,
+              params: {
+                location: {
+                  executionHostId: 'local',
+                  wslDistro: null,
+                  workspaceId,
+                  workspaceKind: 'git-worktree'
+                },
+                provider: agent
+              }
+            }
+          ]
         ]),
         getRecord: () => null,
         now: () => 1,
@@ -175,6 +193,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const journal = {
       isReadOnly: false,
       lastActivityAt: () => 1,
+      cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({
         items: [
           { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },
@@ -188,7 +207,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         ]
       })
     } as unknown as AgentSessionJournal
-    const location = { workspaceId, workspaceKind: 'git-worktree' as const }
+    const location = {
+      executionHostId: 'local' as const,
+      wslDistro: null,
+      workspaceId,
+      workspaceKind: 'git-worktree' as const
+    }
     const pending: Promise<void>[] = []
     const feed = new StructuredAgentSessionStatusFeed({
       sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),

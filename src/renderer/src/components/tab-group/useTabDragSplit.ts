@@ -209,6 +209,10 @@ export function useTabDragSplit({
 
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
+      // A missed-end cleanup can run before dnd-kit delivers its last move.
+      if (!tabDragActiveRef.current) {
+        return
+      }
       handleDragUpdate(event)
     },
     [handleDragUpdate]
@@ -221,6 +225,10 @@ export function useTabDragSplit({
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
+      if (!tabDragActiveRef.current) {
+        finishDrag(true)
+        return
+      }
       commitTabDragDrop({
         event,
         worktreeId,

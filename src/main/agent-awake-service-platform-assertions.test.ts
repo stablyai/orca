@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 function workingStatus(): AgentAwakeStatus {
   return {
+    paneKey: 'pane-1',
     state: 'working',
     receivedAt: 1_000,
     observedInCurrentRuntime: true

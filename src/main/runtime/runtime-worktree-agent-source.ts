@@ -1,3 +1,4 @@
+import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 
 export type RuntimeWorktreeAgentSource = {
@@ -16,6 +17,6 @@ export type RuntimeWorktreeAgentSource = {
   interrupted: boolean
   stateStartedAt: number
   updatedAt: number
-  /** Structured host projections remain authoritative after PTY freshness expiry. */
-  authority?: 'structured-host'
+  /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
+  structuredHost?: StructuredHostStatus
 }

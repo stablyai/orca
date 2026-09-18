@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -61,6 +63,12 @@ function sendParams(text: string): {
 function submissions(): unknown {
   const state = host.history({ sessionId: SESSION, direction: 'tail' })
   return state.ok ? state.page.submissions : null
+}
+
+function journal(): AgentSessionJournal {
+  return (
+    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+  ).sessions.get(SESSION)!.journal
 }
 
 beforeEach(async () => {
@@ -195,6 +203,57 @@ describe('settling a send the provider proves it received after the ack window',
     // The point of the fix: the client stops rendering Retry, and Retry is what
     // was delivering the message to the agent a second time.
     expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles a provider-cancelled queued send as rejected', async () => {
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const params = sendParams('queued behind the active turn')
+    await host.send(CALLER, params)
+
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: params.envelope.clientOperationId,
+      state: 'rejected',
+      reason: DISPATCH_REJECTED_CANCELLED
+    })
+
+    expect(submissions()).toMatchObject([
+      {
+        clientMessageId: params.envelope.clientOperationId,
+        dispatchState: 'rejected',
+        reason: DISPATCH_REJECTED_CANCELLED
+      }
+    ])
+  })
+
+  it('accepts from the durable echo row when the direct settlement write fails', async () => {
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const params = sendParams('settle from provider echo')
+    await host.send(CALLER, params)
+    vi.spyOn(journal(), 'resolveDispatch').mockRejectedValueOnce(
+      new Error('direct settlement write failed')
+    )
+
+    await expect(
+      host.settleLateDispatch({
+        sessionId: SESSION,
+        clientMessageId: params.envelope.clientOperationId,
+        providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'echo-row' }
+      })
+    ).rejects.toThrow('direct settlement write failed')
+    await journal().appendItem(
+      { provider: 'claude', sessionId: THREAD, uuid: 'echo-row' },
+      params.body,
+      { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1 }
+    )
+
+    expect(submissions()).toMatchObject([
+      {
+        clientMessageId: params.envelope.clientOperationId,
+        dispatchState: 'accepted',
+        providerItemId: `claude:${THREAD}:echo-row`
+      }
+    ])
   })
 
   it('leaves an already accepted send alone', async () => {

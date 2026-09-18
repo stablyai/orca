@@ -4,6 +4,8 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
   activeRevision,
+  correctionCohortPercent,
+  DIRECTOR_CORRECTION_COHORT_ENV,
   cloudRunTrafficTag,
   DIRECTOR_ADMISSION_ENVIRONMENT,
   DIRECTOR_REGIONAL_PLACEMENT_ENV,
@@ -811,4 +813,44 @@ test('waits for authenticated target readiness without hiding other capacity err
     }, 'source', 'target'),
     /forbidden/
   )
+})
+
+
+test('validates bounded correction cohorts and leaves unspecified values to serving inheritance', () => {
+  for (const value of ['0', '1', '100']) assert.equal(correctionCohortPercent(value), value)
+  for (const value of ['-1', '101', '1.5', '', '01', 'true', '1\n']) {
+    assert.throws(() => correctionCohortPercent(value), /integer from 0 to 100/)
+  }
+  assert.equal(directorDeploymentEnvironment({})[DIRECTOR_CORRECTION_COHORT_ENV], undefined)
+  assert.equal(directorDeploymentEnvironment({ 'region-correction-cohort-percent': 'preserve' })[DIRECTOR_CORRECTION_COHORT_ENV], undefined)
+  assert.equal(directorDeploymentEnvironment({ 'region-correction-cohort-percent': '1' })[DIRECTOR_CORRECTION_COHORT_ENV], '1')
+})
+
+test('inherits the cohort on candidate and rollback revisions without resetting an enabled cohort', async () => {
+  const harness = directorHarness()
+  harness.state.revisions.get('relay-00001-old').env[DIRECTOR_CORRECTION_COHORT_ENV] = '3'
+  await deployDirector({}, 'candidate-new', harness.operations)
+  for (const revision of ['relay-00002-new', 'relay-00003-new']) {
+    assert.equal(harness.state.revisions.get(revision).env[DIRECTOR_CORRECTION_COHORT_ENV], '3')
+  }
+})
+
+test('starts an unstamped cohort at zero and rejects a cohort change without disabled-control proof', async () => {
+  const harness = directorHarness()
+  await assert.rejects(deployDirector({ 'region-correction-cohort-percent': '1' },
+    'candidate-new', harness.operations), /exact disabled regional-rehome generation/)
+  assert.equal(harness.state.activeRevision, 'relay-00001-old')
+  assert.equal(harness.state.nextRevision, 2)
+  await deployDirector({}, 'candidate-new', harness.operations)
+  assert.equal(harness.state.revisions.get('relay-00003-new').env[DIRECTOR_CORRECTION_COHORT_ENV], '0')
+})
+
+test('sets a reviewed cohort only behind repeated disabled-control verification', async () => {
+  const harness = directorHarness()
+  let verified = 0
+  const config = { 'region-correction-cohort-percent': '1', 'expected-rehome-generation': '7' }
+  await deployDirector(config, 'candidate-new', { ...harness.operations,
+    assertRegionalRehomeDisabled: async () => { verified++ } })
+  assert.ok(verified >= 2)
+  assert.equal(harness.state.revisions.get('relay-00003-new').env[DIRECTOR_CORRECTION_COHORT_ENV], '1')
 })

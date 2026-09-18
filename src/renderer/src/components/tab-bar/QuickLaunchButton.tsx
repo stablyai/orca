@@ -153,17 +153,15 @@ function QuickLaunchAgentMenuItemsInner({
         )
         return
       }
-      if (!result.tabId) {
-        // Why: paired web clients create the tab on the host; focus follows the
-        // next session-tabs snapshot instead of a local tab id.
+      if (result.surface.kind !== 'local-terminal') {
         return
       }
-      onFocusTerminal(result.tabId)
+      onFocusTerminal(result.surface.tabId)
 
       // Why: launch success means the terminal session exists. Agent readiness
       // can lag behind on slow machines, and prompt paste flows already own
       // their own readiness timeout once a PTY exists.
-      const launchedTabId = result.tabId
+      const launchedTabId = result.surface.tabId
       void waitForTerminalPty(launchedTabId, 5000).then((hasPty) => {
         if (hasPty) {
           return
@@ -207,12 +205,6 @@ function QuickLaunchAgentMenuItemsInner({
         const label = entry?.label ?? agent
         const isStructuredLaunchPending =
           isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
-        const pendingLabel = translate(
-          'components.native-chat.structuredSessionLaunchPending',
-          'Starting {{value0}} chat…',
-          { value0: label }
-        )
-        const menuLabel = isStructuredLaunchPending ? pendingLabel : label
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
@@ -221,22 +213,18 @@ function QuickLaunchAgentMenuItemsInner({
             disabled={isStructuredLaunchPending}
             onSelect={() => runLaunch(agent)}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={
-              isStructuredLaunchPending
-                ? pendingLabel
-                : translate(
-                    'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-                    'Launch {{value0}} in a new terminal',
-                    { value0: label }
-                  )
-            }
+            title={translate(
+              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+              'Launch {{value0}} in a new terminal',
+              { value0: label }
+            )}
           >
             {isStructuredLaunchPending ? (
               <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
             ) : (
               <AgentIcon agent={agent} size={14} />
             )}
-            <span className="flex-1">{menuLabel}</span>
+            <span className="flex-1">{label}</span>
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
             ) : null}

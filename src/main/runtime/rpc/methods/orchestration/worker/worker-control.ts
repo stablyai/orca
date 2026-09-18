@@ -1,9 +1,6 @@
-import { z } from 'zod'
-import { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../../../shared/orchestration-worker-output'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { OptionalFiniteNumber, requiredString } from '../../../schemas'
+import { defineMethod } from '../../../core'
 import {
   exposeDispatchContext,
   exposeObservation,
@@ -20,14 +17,12 @@ import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-release-completion'
 import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
 import { showFederatedWorker } from '../federation/federated-worker-show'
-const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
-const WorkerReadParams = WorkerDispatchParams.extend({
-  cursor: z.union([z.number().int().nonnegative(), z.string().min(1).max(2_048)]).optional(),
-  limit: OptionalFiniteNumber,
-  source: z.enum(ORCHESTRATION_WORKER_READ_SOURCES).optional()
-})
+import {
+  WorkerDispatchParams,
+  WorkerReadParams
+} from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
 
-export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerShow',
     params: WorkerDispatchParams,

@@ -60,7 +60,7 @@ type Props = {
   onMicPress?: () => void
   micActive?: boolean
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
-  dictationMode?: 'toggle' | 'hold'
+  dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   disabled?: boolean
@@ -130,7 +130,7 @@ export function MobileNativeChatComposer({
     if (trigger.kind === 'slash') {
       const commands =
         structuredCommands !== undefined
-          ? structuredSlashCommands(structuredCommands)
+          ? structuredSlashCommands(structuredCommands, agent)
           : agent
             ? getVerifiedNativeChatCommands(agent)
             : []

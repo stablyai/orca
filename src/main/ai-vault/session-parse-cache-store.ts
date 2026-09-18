@@ -9,6 +9,8 @@ const MAX_CACHE_ENTRIES = 4096
 
 export type SessionParseResumePoint = {
   state: ResumableSessionParseState
+  mtimeMs: number
+  sizeBytes: number | undefined
   // Byte offset just past the last complete ('\n'-terminated) line consumed;
   // a trailing unterminated line is deliberately left before this point.
   byteOffset: number

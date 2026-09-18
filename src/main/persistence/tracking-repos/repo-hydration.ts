@@ -28,6 +28,7 @@ export function repoGitUsernameCacheKey(
 
 export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, string>): Repo {
   const {
+    folderUpgradeGitRootPath,
     repoIcon: rawRepoIcon,
     upstream: rawUpstream,
     gitRemoteIdentity: rawGitRemoteIdentity,
@@ -57,6 +58,9 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
 
   return {
     ...repoWithoutIcon,
+    ...(typeof folderUpgradeGitRootPath === 'string' && folderUpgradeGitRootPath
+      ? { folderUpgradeGitRootPath }
+      : {}),
     ...(repoIcon !== undefined ? { repoIcon } : {}),
     ...(upstream !== undefined ? { upstream } : {}),
     ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),

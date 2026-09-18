@@ -1,9 +1,9 @@
 import { useLayoutEffect, useState } from 'react'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
-  nativeChatTurnHasResponse,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
+  type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
 } from '../../../../shared/native-chat-turn-status'
@@ -14,17 +14,22 @@ export function useNativeChatTurnStatus({
   messages,
   latestUserIndex,
   isWorking,
-  workingStartedAt
+  workingStartedAt,
+  settledTurns,
+  thinking = false
 }: {
   messages: readonly NativeChatMessage[]
   latestUserIndex: number
   isWorking: boolean
   workingStartedAt?: number | null
+  /** Host-recorded durations; they outrank whatever this client observed. */
+  settledTurns?: NativeChatSettledTurns | null
+  /** Whether the turn is reasoning right now, derived from its journal content. */
+  thinking?: boolean
 }): {
   active: NativeChatTurnStatus | null
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
 } {
-  const hasCurrentTurnResponse = nativeChatTurnHasResponse(messages, latestUserIndex)
   const latestUserId = latestUserIndex !== -1 ? (messages[latestUserIndex]?.id ?? null) : null
   const activeTurnKey = latestUserId ?? '__unanchored__'
   const [timingByTurn, setTimingByTurn] = useState<NativeChatTurnTimingByTurn>({})
@@ -48,6 +53,7 @@ export function useNativeChatTurnStatus({
     activeTurnKey,
     isWorking,
     workingStartedAt,
-    hasCurrentTurnResponse
+    thinking,
+    settledByTurn: settledTurns ?? undefined
   })
 }

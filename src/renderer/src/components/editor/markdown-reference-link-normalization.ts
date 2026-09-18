@@ -151,11 +151,20 @@ function replaceReferenceLinks(
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let isLineStart = true
+  const nonWhitespace = /\S/g
+  const fencePrefix = /(`{3,}|~{3,})/y
+  let fenceProbe = -1
+  let fenceMatch: RegExpExecArray | null = null
 
   while (index < markdown.length) {
     if (isLineStart) {
-      const lineRest = markdown.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
+      if (index > fenceProbe) {
+        nonWhitespace.lastIndex = index
+        fenceProbe = nonWhitespace.exec(markdown)?.index ?? markdown.length
+        fencePrefix.lastIndex = fenceProbe
+        fenceMatch = fencePrefix.exec(markdown)
+      }
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length

@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { getCachedWorktrees } from '../cache/worktree-cache'
 import { createInitialHostRouteActionState } from '../host-route-action-state'
@@ -13,6 +12,7 @@ import type {
   MobileViewState
 } from '../worktree/workspace-view-settings'
 import type { FilterState, Worktree } from '../worktree/workspace-list-sections'
+import type { MobileHostRepoIcon } from './host-screen-reply-schema'
 
 export function useHostScreenState(hostId: string | undefined, action: string | undefined) {
   const [initialCache] = useState(() =>
@@ -38,7 +38,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     string | null
   >(null)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
-  const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
+  const [repoIconsByName, setRepoIconsByName] = useState<Map<string, MobileHostRepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])

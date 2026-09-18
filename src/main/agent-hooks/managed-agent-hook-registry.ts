@@ -18,7 +18,7 @@ import { openClaudeHookService } from '../openclaude/hook-service'
 // Why (#16441): Codex's installer awaits a codex app-server trust-grant session
 // instead of blocking the main thread on spawnSync. Widening the tuple keeps the
 // other thirteen agent services synchronous — the shared loop already awaits.
-export type ManagedAgentHookInstallOptions = { userInitiated?: boolean }
+export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
   (
@@ -37,7 +37,7 @@ export type ManagedAgentHookAsyncRemover = readonly [
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
-  ['claude', () => claudeHookService.install()],
+  ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.install()],
   ['gemini', () => geminiHookService.install()],

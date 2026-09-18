@@ -53,7 +53,7 @@ export function readRelayServingRegionalPlacementVersion(input, dependencies = {
   try {
     service = run(gcloudArguments('services', input))
   } catch (error) {
-    if (error?.code === 'NOT_FOUND') return { version: input.bootstrap_version }
+    if (error?.code === 'NOT_FOUND') return { version: input.bootstrap_version, cohort_percent: '0' }
     throw error
   }
   const serving = (service.status?.traffic ?? []).filter(
@@ -67,12 +67,22 @@ export function readRelayServingRegionalPlacementVersion(input, dependencies = {
     throw new Error('Relay director must have exactly one revision serving 100% traffic')
   }
   const revision = run(gcloudArguments('revisions', input, serving[0].revisionName))
+  const cohortSettings = (revision.spec?.containers ?? []).flatMap((container) =>
+    (container.env ?? []).filter((environment) =>
+      environment.name === 'ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT')
+  )
+  if (cohortSettings.length > 1 || (cohortSettings.length === 1 &&
+      (typeof cohortSettings[0].value !== 'string' ||
+       !/^(?:[0-9]|[1-9][0-9]|100)$/.test(cohortSettings[0].value)))) {
+    throw new Error('serving region correction cohort is invalid')
+  }
+  const cohort_percent = cohortSettings[0]?.value ?? '0'
   const references = (revision.spec?.containers ?? []).flatMap((container) =>
     (container.env ?? []).filter(
       (environment) => environment.name === 'ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED'
     )
   )
-  if (references.length === 0) return { version: input.bootstrap_version }
+  if (references.length === 0) return { version: input.bootstrap_version, cohort_percent }
   const reference = normalizeSecretReference(references[0])
   if (
     references.length !== 1 ||
@@ -81,7 +91,7 @@ export function readRelayServingRegionalPlacementVersion(input, dependencies = {
   ) {
     throw new Error('serving regional placement secret reference is invalid')
   }
-  return { version: reference.version }
+  return { version: reference.version, cohort_percent }
 }
 
 // Why: the v2 API reports `valueSource.secretKeyRef.{secret,version}`, but

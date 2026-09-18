@@ -4,6 +4,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 // The same delivery plumbing `check` already strips; a send/reply receipt is the same mailbox row.
 const INTERNAL_COLUMNS = [
@@ -62,20 +63,17 @@ describe('orchestration send and reply receipts', () => {
 
   it('keeps delivery plumbing out of a group send receipt', async () => {
     setup()
-    const terminals = [terminalSummary('term_a'), terminalSummary('term_b')]
+    const terminals = [terminalSummary('term_coord'), terminalSummary('term_worker')]
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals,
       totalCount: terminals.length,
       truncated: false
     })
-    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) => {
-      const terminal = terminals.find((candidate) => candidate.handle === handle)
-      return terminal ? `${terminal.tabId}:${terminal.leafId}` : null
-    })
+    createRootDispatch(db, db.createTask({ spec: 'work' }).id, 'term_worker')
 
     const result = (await h.call(
       'orchestration.send',
-      { from: 'term_a', to: '@all', subject: 'group plumbing' },
+      { from: 'term_coord', to: '@all', subject: 'group plumbing' },
       ctx
     )) as { messages: Record<string, unknown>[] }
 

@@ -30,7 +30,7 @@ export function createTerminalLayoutActions(
       set((s) => {
         const layout = s.terminalLayoutsByTabId[tabId]
         if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
-          return {}
+          return s
         }
         return {
           terminalLayoutsByTabId: {

@@ -2,6 +2,17 @@ import { closeSync, openSync } from 'node:fs'
 import { RelayDispatcher } from './dispatcher'
 import { RELAY_SENTINEL } from './protocol'
 
+/**
+ * Why the `\\.\` device prefix and not bare `NUL`: node's fs resolves a relative path
+ * through `toNamespacedPath`, which hands CreateFileW a `\\?\C:\…\NUL` — and that prefix
+ * disables DOS device-name mapping, so the open creates a real FILE named `NUL` in the
+ * relay's cwd and pins fds 0/1 to it. One shipped in the 1.4.203 Windows installer as
+ * `resources/relay/win32-x64/NUL`. A `\\.\` path is passed through verbatim.
+ */
+export function nullDevicePath(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? String.raw`\\.\NUL` : '/dev/null'
+}
+
 export class RelayPrimaryChannel {
   readonly dispatcher: RelayDispatcher
   private stdoutAlive = true
@@ -111,14 +122,13 @@ export class RelayPrimaryChannel {
         // Already closed by the peer.
       }
     }
-    const devNull = process.platform === 'win32' ? 'NUL' : '/dev/null'
     try {
-      openSync(devNull, 'r')
+      openSync(nullDevicePath(), 'r')
     } catch {
       // Best-effort pin of the lowest free descriptor.
     }
     try {
-      openSync(devNull, 'w')
+      openSync(nullDevicePath(), 'w')
     } catch {
       // Best-effort pin of the next free descriptor.
     }

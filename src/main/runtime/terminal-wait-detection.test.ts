@@ -98,12 +98,12 @@ const LIVE_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = 
       '2. Trust all and continue',
       'Press enter to confirm or esc to go back'
     ],
-    reason: 'codex-hooks-review-prompt'
+    reason: 'agent-hooks-review-prompt'
   },
   {
     name: 'trust workspace',
     lines: ['Do you trust this workspace directory?', '1. Yes', '2. No'],
-    reason: 'codex-trust-workspace'
+    reason: 'agent-trust-workspace'
   },
   {
     name: 'update',
@@ -113,7 +113,7 @@ const LIVE_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = 
       '2. Skip',
       'Press enter to continue'
     ],
-    reason: 'codex-update-prompt'
+    reason: 'agent-update-prompt'
   },
   {
     name: 'cwd selection',
@@ -123,7 +123,7 @@ const LIVE_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = 
       '  Current = your current working directory',
       '  Press enter to continue'
     ],
-    reason: 'codex-cwd-prompt'
+    reason: 'agent-cwd-prompt'
   },
   {
     name: 'model migration',
@@ -142,7 +142,7 @@ const LIVE_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = 
       '2. No, continue without permissions',
       'Press enter to confirm or esc to cancel'
     ],
-    reason: 'codex-interactive-prompt'
+    reason: 'agent-interactive-prompt'
   },
   {
     name: 'permission required',
@@ -153,7 +153,7 @@ const LIVE_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = 
       'Allow always',
       'Reject'
     ],
-    reason: 'codex-interactive-prompt'
+    reason: 'agent-interactive-prompt'
   }
 ]
 
@@ -195,6 +195,301 @@ describe('detectTerminalWaitBlockedReason live prompts', () => {
       'Press enter to confirm'
     ])
 
-    expect(detectTerminalWaitBlockedReason(waitText)).toBe('codex-hooks-review-prompt')
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-hooks-review-prompt')
   })
+})
+
+// Why: these matchers never inspect the pane's agent, so a Codex-named reason on a non-Codex screen
+// reaches the user verbatim through the CLI and the worker receipt's "Agent startup blocked:" line.
+describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
+  const NON_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = [
+    {
+      name: 'an Antigravity workspace trust dialog',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'Do you trust the files in this folder?',
+        '1. Yes, I trust this folder',
+        '2. No, exit'
+      ],
+      reason: 'agent-trust-workspace'
+    },
+    {
+      name: 'a Claude Code trusted-workspace dialog',
+      lines: [
+        'Claude Code',
+        'Trusted workspace?',
+        'This directory has not been opened before.',
+        '1. Yes, proceed',
+        '2. No, exit'
+      ],
+      reason: 'agent-trust-workspace'
+    },
+    {
+      name: 'a Gemini CLI update banner',
+      lines: [
+        'Gemini CLI',
+        'Update available! 1.4.0 -> 1.5.0',
+        '1. Update now',
+        '2. Skip',
+        'Press enter to continue'
+      ],
+      reason: 'agent-update-prompt'
+    },
+    {
+      name: 'a Gemini CLI permission dialog',
+      lines: [
+        'Gemini CLI',
+        'Permission required',
+        'Running this tool requires permission',
+        'Allow once',
+        'Allow always',
+        'Reject'
+      ],
+      reason: 'agent-interactive-prompt'
+    },
+    {
+      name: 'a Claude Code hooks review dialog',
+      lines: [
+        'Claude Code',
+        'Hooks need review',
+        'PreToolUse:Bash  .claude/hooks/guard.sh',
+        'Press enter to confirm'
+      ],
+      reason: 'agent-hooks-review-prompt'
+    },
+    {
+      name: 'an Antigravity sandbox confirmation',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'This action runs outside the sandbox.',
+        'Press enter to confirm or esc to go back'
+      ],
+      reason: 'agent-interactive-prompt'
+    }
+  ]
+
+  // Why: the reason was previously picked by looking for 'codex' in 600 chars of scrollback, so any
+  // agent that merely narrated about Codex handed its user a Codex label.
+  it('does not borrow a Codex label from scrollback that only mentions Codex', () => {
+    const waitText = waitTextFor([
+      'Antigravity CLI 1.0.3',
+      'I read src/codex-notes.md for you.',
+      'This action runs outside the sandbox.',
+      'Press enter to confirm or esc to go back'
+    ])
+
+    expect(waitText.toLowerCase()).toContain('codex')
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-interactive-prompt')
+  })
+
+  for (const prompt of NON_CODEX_PROMPTS) {
+    it(`reports an agent-neutral reason for ${prompt.name}`, () => {
+      const waitText = waitTextFor(prompt.lines)
+      const reason = detectTerminalWaitBlockedReason(waitText)
+
+      expect(waitText.toLowerCase()).not.toContain('codex')
+      expect(reason).toBe(prompt.reason)
+      expect(reason?.startsWith('codex-')).toBe(false)
+    })
+  }
+})
+
+// Antigravity readiness, and what this file does NOT claim about it.
+//
+// The detector recognizes a ready screen by header + a 'gemini'-prefixed model line + a lone '>'
+// caret. That is narrow: an Antigravity user on a non-Gemini model never reaches ready and the pane
+// wedges. Widening it was attempted and reverted -- every candidate rule was tuned against the
+// constructed fixtures below, and the last one let a live sign-in dialog read as ready (the
+// orchestrator then types the task prompt into an authentication dialog, which is strictly worse
+// than a timeout). No real Antigravity transcript exists in this repo; the cursor-agent rules are
+// derived from captures under src/main/runtime/__fixtures__ and Antigravity has no equivalent.
+// Widening the model rule needs one first. See the ratchet at the bottom of this block for the
+// shapes any replacement has to refuse.
+describe('Antigravity readiness does not absorb its own startup dialog', () => {
+  const TRUST_DIALOG_WITH_CARET = [
+    'Antigravity CLI 1.0.3',
+    'Do you trust the files in this folder?',
+    '1. Yes, I trust this folder',
+    '2. No, exit',
+    '>'
+  ]
+
+  const LIVE_DIALOGS_UNDER_THE_HEADER: { name: string; lines: string[]; reason: string | null }[] =
+    [
+      {
+        name: 'a bare trust dialog',
+        lines: TRUST_DIALOG_WITH_CARET,
+        reason: 'agent-trust-workspace'
+      },
+      {
+        name: 'a trust dialog with an ordinary sentence in it',
+        lines: [
+          'Antigravity CLI 1.0.3',
+          'This workspace has not been opened before.',
+          'Do you trust the files in this folder?',
+          '1. Yes, I trust this folder',
+          '2. No, exit',
+          '>'
+        ],
+        reason: 'agent-trust-workspace'
+      },
+      {
+        name: 'a trust dialog printing the folder on its own line',
+        lines: [
+          'Antigravity CLI 1.0.3',
+          'Do you trust the files in this folder?',
+          '~/orca/workspaces/orca/agy-dispatch-issue',
+          '1. Yes',
+          '2. No',
+          '>'
+        ],
+        reason: 'agent-trust-workspace'
+      }
+    ]
+
+  for (const dialog of LIVE_DIALOGS_UNDER_THE_HEADER) {
+    it(`reports ${dialog.name} drawn under the header and stays unready`, () => {
+      const waitText = waitTextFor(dialog.lines)
+
+      expect(detectTerminalWaitBlockedReason(waitText)).toBe(dialog.reason)
+      expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    })
+  }
+
+  // Discriminating: the Gemini model line and caret satisfy readiness, so only the dialog sitting
+  // *below* them keeps this unready. Drop the ordering rule and this goes green-to-red.
+  it('keeps reporting a dialog that opens after a Gemini ready screen', () => {
+    const waitText = waitTextFor([
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Gemini 3.5 Flash (High)',
+      '~/orca/workspaces/orca/agy-dispatch-issue',
+      '>',
+      'Permission required',
+      'Allow once',
+      'Reject'
+    ])
+
+    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-interactive-prompt')
+  })
+
+  // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
+  // which is the whole point of the dismissed-modal rule.
+  it('clears once a Gemini ready screen replaces the dialog', () => {
+    const waitText = waitTextFor([
+      ...TRUST_DIALOG_WITH_CARET,
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Gemini 3.5 Flash (High)',
+      '>'
+    ])
+
+    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+  })
+
+  // Characterization, not a guard: records the wedge this file has not fixed. An Antigravity user on
+  // a non-Gemini model has no 'gemini' line, so readiness never resolves and the wait times out.
+  // Flipping this to true is the goal of the follow-up, and needs a captured transcript first.
+  it('does not yet recognize a non-Gemini ready screen (known wedge)', () => {
+    const waitText = waitTextFor([
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Claude Sonnet 4.5 (High)',
+      '~/orca/workspaces/orca/agy-dispatch-issue',
+      '>'
+    ])
+
+    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+  })
+
+  // Ratchet, not a guard of today's code: these pass now only because none of them prints a 'gemini'
+  // model line. They exist so the next attempt to widen the model rule has to refuse them -- the
+  // reverted attempt accepted all five as ready on the strength of the account row alone (and an
+  // 'x@y.z' anywhere in the dialog body did just as well), and readiness is what gates typing the
+  // task prompt into the pane. A replacement must rest on positive evidence that the agent's input
+  // prompt is accepting input, not on absence-of-dialog plus an account row.
+  const SILENT_STARTUP_DIALOGS: { name: string; lines: string[] }[] = [
+    {
+      name: 'an update banner',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
+        'A new version is available',
+        '~/orca/workspaces/orca/agy-dispatch-issue',
+        'Press enter to continue',
+        '>'
+      ]
+    },
+    {
+      name: 'a sign-in dialog',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
+        'Sign in to continue',
+        '~/orca/workspaces/orca/agy-dispatch-issue',
+        '1. Open browser',
+        '2. Paste an API key',
+        '>'
+      ]
+    },
+    {
+      name: 'a model picker',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
+        'Select a model',
+        '~/orca/workspaces/orca/agy-dispatch-issue',
+        '1. Claude Sonnet 4.5',
+        '2. GPT-5.1',
+        '>'
+      ]
+    },
+    {
+      name: 'a privacy notice',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
+        'We collect usage data to improve the product',
+        '~/orca/workspaces/orca/agy-dispatch-issue',
+        '1. Accept',
+        '2. Decline',
+        '>'
+      ]
+    },
+    {
+      name: 'an onboarding theme picker',
+      lines: [
+        'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
+        'Welcome! Choose a theme',
+        '~/orca/workspaces/orca/agy-dispatch-issue',
+        '1. Dark',
+        '2. Light',
+        '>'
+      ]
+    }
+  ]
+
+  for (const dialog of SILENT_STARTUP_DIALOGS) {
+    it(`refuses ${dialog.name} whose wording names no blocked reason, account row and all`, () => {
+      const waitText = waitTextFor(dialog.lines)
+
+      // No blocked-signal rule matches, so the ordering defense cannot reach these: readiness has to
+      // refuse them on its own or the orchestrator types into a live dialog.
+      expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+      expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    })
+
+    it(`refuses ${dialog.name} that merely narrates an email address`, () => {
+      const waitText = waitTextFor([
+        ...dialog.lines.slice(0, -1),
+        'contact support@antigravity.dev for help',
+        '>'
+      ])
+
+      expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    })
+  }
 })

@@ -210,15 +210,14 @@ describe('connectPanePty', () => {
       paneKey
     })
     expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'agent-completion')
+    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey, 'agent-completion')
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
         worktreeId: 'wt-1',
         repoLabel: 'orca',
         worktreeLabel: 'feat/notis',
-        hasMultipleActiveRepos: true,
         terminalTitle: '* Claude done',
         agentType: 'claude',
         agentState: 'done',

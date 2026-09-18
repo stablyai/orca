@@ -166,7 +166,7 @@ export function NativeChatComposerField({
       {/* Extra bottom padding keeps the input box off the window rim. */}
       <div className="px-3 pt-2 pb-4 sm:px-4">
         <div className="relative mx-auto w-full max-w-4xl">
-          {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
+          {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
               activeIndex={activeSuggestion}
@@ -192,7 +192,15 @@ export function NativeChatComposerField({
               // no focus/click border flash. The box is a container, not a
               // focus target.
               'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40'
+              'bg-muted/50 dark:bg-input/40',
+              // Why (#10481): the native caret blink invalidates paint up to the
+              // nearest containment boundary; without this the whole transcript
+              // re-rasterizes twice a second. Pickers are siblings and every menu
+              // and tooltip in here is a Radix portal, so nothing floating clips.
+              // Tightest descendant is the attachment remove button, which
+              // overhangs its thumbnail by 6px and clears this box's padding by
+              // 4px — keep that slack if the padding below ever shrinks.
+              '[contain:paint]'
             )}
           >
             {imageAttachments.length > 0 ? (
@@ -239,15 +247,10 @@ export function NativeChatComposerField({
               }}
               onPasteCapture={onPaste}
               onSelect={onTextareaSelect}
-              aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
-              aria-controls={
-                autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
-                  ? pickerListboxId
-                  : undefined
-              }
+              aria-expanded={autocomplete.mode === 'slash'}
+              aria-controls={autocomplete.mode === 'slash' ? pickerListboxId : undefined}
               aria-activedescendant={
-                (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') &&
-                autocomplete.items.length > 0
+                autocomplete.mode === 'slash' && autocomplete.items.length > 0
                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
                   : undefined
               }

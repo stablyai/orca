@@ -70,7 +70,7 @@ export const SKILLS_CLI_UNIVERSAL_AGENT_KEY = 'universal'
  * emptiness. An unknown-but-plausible key is left to the CLI, which rejects it
  * loudly with its own valid list before writing anything.
  */
-export function isSkillsCliAgentKeyShaped(value: string): boolean {
+export function isUsableSkillsCliAgentKey(value: string): boolean {
   return /^(?:\*|[a-z0-9][a-z0-9.-]*)$/i.test(value)
 }
 

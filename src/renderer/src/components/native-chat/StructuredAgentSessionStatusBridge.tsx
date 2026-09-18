@@ -1,65 +1,106 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionStatusSummary
+} from '../../../../shared/agent-session-wire'
+import {
+  AGENT_STATUS_MAX_SUBAGENTS,
+  agentSubagentsEqual,
+  type AgentSubagentSnapshot,
+  type AgentSubagentState
+} from '../../../../shared/agent-status-types'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionStatusState
 } from '../../../../shared/structured-agent-session-projection'
-import type { Tab } from '../../../../shared/tab-types'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
-type StructuredTab = Tab & { contentType: 'agent-session' }
-
-function isStructuredTab(tab: Tab): tab is StructuredTab {
-  return tab.contentType === 'agent-session' && isAgentSessionHandleProvider(tab.agentSessionAgent)
-}
-
-const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
-  Record<string, Tab[]>,
-  readonly StructuredTab[]
->()
-
-/** Project structured-session tabs once per immutable tab-map snapshot. */
-export function getStructuredAgentSessionTabs(
-  unifiedTabsByWorktree: Record<string, Tab[]>
-): readonly StructuredTab[] {
-  const cached = structuredTabsByUnifiedTabsSnapshot.get(unifiedTabsByWorktree)
-  if (cached) {
-    return cached
-  }
-
-  const tabs: StructuredTab[] = []
-  for (const worktreeTabs of Object.values(unifiedTabsByWorktree)) {
-    for (const tab of worktreeTabs) {
-      if (isStructuredTab(tab)) {
-        tabs.push(tab)
-      }
-    }
-  }
-  structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
-  return tabs
-}
+// Re-exported so the bridge stays the one import site its consumers already know.
+export { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 
 /** The host's projected status for one session, live while the caller is mounted. */
 function useStructuredAgentSessionStatusSummary(
   sessionId: string,
   target: RuntimeClientTarget
-): AgentSessionStatusSummary | null {
+): { summary: AgentSessionStatusSummary | null; observation: 'live' | 'unverifiable' } {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
+  const summary = useSyncExternalStore(
     feed.subscribe,
     () => feed.getSnapshot().get(sessionId) ?? null,
     () => null
   )
+  const observation = useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSessionObservation(sessionId),
+    () => 'unverifiable' as const
+  )
+  return { summary, observation }
 }
 
-function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | null): void {
+/** Matches the wire-parse bound in `normalizeSubagentSnapshot`. */
+const SUBAGENT_ID_MAX_LENGTH = 64
+
+function subagentStateFromTask(task: AgentSessionBackgroundTask): AgentSubagentState {
+  switch (task.state) {
+    case 'waiting':
+      return 'waiting'
+    case 'blocked':
+      return 'blocked'
+    case 'done':
+    case 'idle':
+      return 'idle'
+    case 'unverifiable':
+      return 'unverifiable'
+    // Absent state is an old host's live task; live means working here.
+    case 'working':
+    case 'monitoring':
+    case undefined:
+      return 'working'
+  }
+}
+
+/** Sidebar children for a structured session: the agent-kind background tasks
+ *  the host publishes, mapped to the sidebar's own subagent vocabulary rather
+ *  than widening it. Kinds stay distinct — a backgrounded shell never counts
+ *  as a subagent. */
+function subagentSnapshotsFromTasks(
+  tasks: AgentSessionBackgroundTask[] | undefined
+): AgentSubagentSnapshot[] | undefined {
+  if (!tasks) {
+    return undefined
+  }
+  const snapshots: AgentSubagentSnapshot[] = []
+  for (const task of tasks) {
+    const id = task.id.trim()
+    if (task.kind !== 'agent' || id.length === 0 || id.length > SUBAGENT_ID_MAX_LENGTH) {
+      continue
+    }
+    snapshots.push({
+      id,
+      state: subagentStateFromTask(task),
+      startedAt: task.startedAt ?? 0,
+      ...(task.name ? { agentType: task.name } : {}),
+      ...(task.description ? { description: task.description } : {})
+    })
+    if (snapshots.length >= AGENT_STATUS_MAX_SUBAGENTS) {
+      break
+    }
+  }
+  return snapshots.length > 0 ? snapshots : undefined
+}
+
+function projectStatus(
+  tab: StructuredTab,
+  summary: AgentSessionStatusSummary | null,
+  observation: 'live' | 'unverifiable'
+): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const store = useAppStore.getState()
   // No persisted turn yet (or nothing known): the row shows no agent status at all.
@@ -69,6 +110,7 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     }
     return
   }
+  const subagents = subagentSnapshotsFromTasks(summary.backgroundTasks)
   const desired = {
     // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
     state: structuredAgentSessionStatusState(summary.status),
@@ -80,6 +122,7 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     ...(summary.toolName ? { toolName: summary.toolName } : {}),
     ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
     ...(summary.lastAssistantMessage ? { lastAssistantMessage: summary.lastAssistantMessage } : {}),
+    ...(subagents ? { subagents, subagentObservation: observation } : {}),
     sessionBoundary: false
   } as const
   const current = store.agentStatusByPaneKey?.[paneKey]
@@ -92,6 +135,8 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     current.toolName === summary.toolName &&
     current.toolInput === summary.toolInput &&
     current.lastAssistantMessage === summary.lastAssistantMessage &&
+    agentSubagentsEqual(current.subagents, subagents) &&
+    current.subagentObservation === desired.subagentObservation &&
     current.sessionBoundary === desired.sessionBoundary &&
     current.updatedAt === summary.updatedAt &&
     current.terminalTitle === tab.label &&
@@ -138,10 +183,10 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
     [environmentId]
   )
-  const summary = useStructuredAgentSessionStatusSummary(tab.entityId, target)
+  const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
   useEffect(() => {
-    projectStatus(tab, summary)
-  }, [summary, tab])
+    projectStatus(tab, summary, observation)
+  }, [summary, observation, tab])
   useEffect(
     () => () =>
       useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),

@@ -9,6 +9,10 @@ import {
   OrchestrationMailboxPointerState,
   type OrchestrationMailboxDeliveryFlight
 } from './mailbox-pointer-state'
+import {
+  MAILBOX_POINTER_RESERVED,
+  MAILBOX_POINTER_WRITE_ATTEMPTED
+} from './db/messages/mailbox-pointer-enter-state'
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
@@ -64,6 +68,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
+      return
+    }
+    // Why the gate lives HERE and not at each caller: this method is the single point at
+    // which this subsystem commits to typing the pointer into the pane, and it has four
+    // callers (handle delivery, post-probe redelivery, flight settle, and the notification
+    // coordinator's per-leaf path). Gating callers meant each new one silently bypassed the
+    // check; gating the commit point cannot be bypassed. Refusal parks and re-offers rather
+    // than dropping — `isAgentSettledForDelivery` arms the re-check.
+    if (!this.deps.isAgentSettledForDelivery(leaf)) {
+      this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }
     if (leaf.ptyId) {
@@ -163,7 +177,19 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       clearTimeout(flight.enterTimer)
     }
     if (flight?.stagedMessageIds.length) {
-      this.deps.getDb()?.markAsUndelivered(flight.stagedMessageIds)
+      const db = this.deps.getDb()
+      if (db && flight.processIncarnation) {
+        // Why: the Enter timer was just cleared, so a reserved or merely-written pointer provably
+        // never submitted and is released. An attempted Enter may already have landed, so it stays
+        // at its phase for the resume path to revalidate rather than being sent a second time.
+        db.releaseMailboxPointerEnter(
+          flight.stagedMessageIds,
+          { ptyId, processIncarnation: flight.processIncarnation },
+          [MAILBOX_POINTER_RESERVED, MAILBOX_POINTER_WRITE_ATTEMPTED]
+        )
+      } else {
+        db?.markAsUndelivered(flight.stagedMessageIds)
+      }
     }
     for (const mailboxHandle of releasedMailboxes) {
       this.redrive(mailboxHandle, true)

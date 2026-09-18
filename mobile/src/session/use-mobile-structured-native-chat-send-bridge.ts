@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
@@ -7,9 +8,11 @@ type StructuredNativeChatAttachment = {
   id?: string
   path: string
   previewUri: string
+  contentFingerprint?: string
 }
 
 export function useMobileStructuredNativeChatSendBridge(args: {
+  agent: AgentSessionHandleProvider
   sendStructured: (
     text: string,
     images?: string[],
@@ -37,6 +40,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
 } {
   const {
     acceptSend,
+    agent,
     captureSendOrigin,
     clearDraftForSend,
     holdUnconfirmedSend,
@@ -56,6 +60,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
+      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
       clearDraftForSend(origin, text)
       const outcome =
         attachments !== undefined
@@ -66,19 +71,13 @@ export function useMobileStructuredNativeChatSendBridge(args: {
               ? await sendStructured(text, images)
               : await sendStructured(text)
       if (outcome === 'accepted') {
-        if (
-          !isStructuredAgentSessionComposerCommand(text, 'codex') &&
-          !isStructuredAgentSessionComposerCommand(text, 'claude')
-        ) {
+        if (!isHostCommand) {
           acceptSend(origin, text.trimEnd(), images)
         }
         return 'accepted'
       }
       if (outcome === 'unknown') {
-        if (
-          isStructuredAgentSessionComposerCommand(text, 'codex') ||
-          isStructuredAgentSessionComposerCommand(text, 'claude')
-        ) {
+        if (isHostCommand) {
           restoreRejectedDraft(origin, text)
           return 'unknown'
         }
@@ -92,6 +91,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     },
     [
       acceptSend,
+      agent,
       captureSendOrigin,
       clearDraftForSend,
       holdUnconfirmedSend,

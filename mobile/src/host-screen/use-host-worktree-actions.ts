@@ -11,6 +11,7 @@ import { setHostRouteNewWorktreeVisible } from '../host-route-action-state'
 import { leaveHostRoute } from '../host-route-exit'
 import { getWorktreeRowIdentity, removeWorktreeRow } from '../worktree/worktree-host-row-identity'
 import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
+import { worktreeActivate, worktreePinWrite, worktreeRemove } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 
 export function useHostWorktreeActions(args: {
@@ -101,8 +102,8 @@ export function useHostWorktreeActions(args: {
       updateLocalPins(worktreeId, newPinned)
 
       if (client) {
-        client
-          .sendRequest('worktree.set', {
+        worktreePinWrite
+          .request(client, {
             worktree: `id:${worktreeId}`,
             isPinned: newPinned
           })
@@ -123,11 +124,11 @@ export function useHostWorktreeActions(args: {
       setLastKnownWorktrees(removeFromList)
 
       try {
-        const response = await client.sendRequest('worktree.rm', {
+        const reply = await worktreeRemove.request(client, {
           worktree: `id:${item.worktreeId}`,
           force: true
         })
-        if (!response.ok) {
+        if (!worktreeRemove.interpret(reply).accepted) {
           setWorktrees((prev) => [...prev, item])
           setLastKnownWorktrees((prev) => [...prev, item])
         }
@@ -176,8 +177,8 @@ export function useHostWorktreeActions(args: {
     (item: Worktree) => {
       setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
       if (client && connState === 'connected') {
-        void client
-          .sendRequest('worktree.activate', {
+        void worktreeActivate
+          .request(client, {
             worktree: `id:${item.worktreeId}`,
             notifyClients: false,
             navigation: 'caller'

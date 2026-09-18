@@ -113,12 +113,15 @@ function optionDescriptor(args: {
       ...(action ? { action } : {})
     }
   }
+  // Why display resolves here but `valueSource` above does not: a switch has no
+  // third position, so a descriptor that leaves the value unset renders as `false`
+  // and silently contradicts the catalog. Resolving to `defaultValue` is the same
+  // `values[id] ?? defaultValue` the composed dispatch already assumes
+  // (buildNativeChatSessionOptionCommand), so the row shows what a flip acts on.
+  // Provenance stays on its own track: an unpicked row keeps `unknown`/`default`,
+  // which is what every pill still reads before naming a value.
   const currentValue =
-    typeof tracked?.value === 'boolean'
-      ? tracked.value
-      : showDefault
-        ? option.kind.defaultValue
-        : undefined
+    typeof tracked?.value === 'boolean' ? tracked.value : option.kind.defaultValue
   return {
     id: option.id,
     label: option.label,
@@ -126,7 +129,7 @@ function optionDescriptor(args: {
     ...(option.category ? { category: option.category } : {}),
     kind: {
       type: 'boolean',
-      ...(currentValue === undefined ? {} : { currentValue })
+      currentValue
     },
     valueSource,
     transport: liveTransport,

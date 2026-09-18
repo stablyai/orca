@@ -196,11 +196,8 @@ function readForward(
   if (!projected.ok) {
     return historyReset(snapshot, projected.reset)
   }
-  while (
-    rows.length > 1 &&
-    pageContentBytes(projected.batch.items, projected.batch.removedItemIds) >
-      HISTORY_PAGE_CONTENT_BUDGET_BYTES
-  ) {
+  let contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
+  while (rows.length > 1 && contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     rows = rows.slice(0, Math.ceil(rows.length / 2))
     const shrunk = projectJournalBatch({
       rows,
@@ -212,19 +209,18 @@ function readForward(
       return historyReset(snapshot, shrunk.reset)
     }
     projected = shrunk
+    contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
   }
   // One row can still touch an over-budget item; degrade it visibly.
-  const items =
-    pageContentBytes(projected.batch.items, projected.batch.removedItemIds) >
-    HISTORY_PAGE_CONTENT_BUDGET_BYTES
-      ? projected.batch.items.map((item) => {
-          const bytes = historyEntryBytes(item, submissionBytes)
-          return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES
-            ? oversizedHistoryItem(item, bytes)
-            : item
-        })
-      : projected.batch.items
-  if (pageContentBytes(items, projected.batch.removedItemIds) > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
+  let items = projected.batch.items
+  if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
+    items = items.map((item) => {
+      const bytes = historyEntryBytes(item, submissionBytes)
+      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item, bytes) : item
+    })
+    contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
+  }
+  if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     // A single row's semantic payload — in practice a pre-bounding oversized
     // removal id — can never fit any page, and truncating a removal id would
     // break the client's keying. A bounded tail replaces the client's state

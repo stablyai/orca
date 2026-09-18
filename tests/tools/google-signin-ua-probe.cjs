@@ -10,10 +10,9 @@ const MODES = new Set([
   'electron-fixed',
   'firefox-auth',
   'firefox-fixed',
-  // Replicates the app as it shipped before the UA rewrite was removed
-  // (cleaned Chrome-shaped session UA + the Google auth Firefox switch): Firefox UA is written to the WebContents on auth
-  // navs and to the request header only for auth-host URLs; every other request
-  // keeps whatever UA the WebContents carries. Logs incoming vs outgoing
+  // Replicates the app before and after the cross-host fix. Firefox UA is written
+  // to the WebContents on auth navs and to the request header only for auth-host
+  // URLs; every other request keeps whatever UA the WebContents carries. Logs incoming vs outgoing
   // identity for ALL requests to expose cross-host mismatches during the flow.
   'app-current',
   // Same, but with the STA-3811 fix: the header layer strips client hints on any
@@ -171,7 +170,7 @@ app.whenReady().then(async () => {
     const incoming = relevantHeaders(headers)
 
     if (isAppMode) {
-      // Mirror setupClientHintsOverride: only auth-host URLs get the Firefox UA
+      // Mirror setupGoogleAuthUserAgentOverride: only auth-host URLs get the Firefox UA
       // header + hint strip; every other request keeps its incoming UA (which is
       // the WebContents UA — Firefox while the auth document is on screen).
       if (isGoogleAuthUrl(details.url)) {
@@ -184,10 +183,6 @@ app.whenReady().then(async () => {
         // instead of rewriting to Chrome — keeping UA and hints one story.
         if (mode === 'app-fixed' && currentUa === identities.firefox) {
           removeClientHints(headers)
-        } else {
-          // The retired client-hints rewrite built Chrome hints once from the
-          // session's cleaned UA (a closure), never from the per-request UA.
-          applyChromeClientHints(headers, identities.cleaned)
         }
       }
       const outgoing = relevantHeaders(headers)

@@ -160,7 +160,7 @@ export const createCommitMessageGenerationSlice: StateCreator<
     set((state) => {
       const nextRecord = updater(state.commitMessageGenerationRecords[key] ?? null)
       if (!nextRecord) {
-        return {}
+        return state
       }
       return {
         commitMessageGenerationRecords: {
@@ -184,6 +184,6 @@ export const createCommitMessageGenerationSlice: StateCreator<
           changed = true
         }
       }
-      return changed ? { commitMessageGenerationRecords: nextRecords } : {}
+      return changed ? { commitMessageGenerationRecords: nextRecords } : state
     })
 })

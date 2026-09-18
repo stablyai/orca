@@ -37,15 +37,19 @@ export function useTerminalWorkspaceFoundation() {
     parseWorkspaceKey(renderedActiveWorktreeId ?? '')?.type === 'folder'
       ? activeWorktreeDeferralHostId
       : null
+  // Why gate the id on the host: the projection reads `activeWorkspaceId` only behind a
+  // truthy resolved host, so without one every active id yields the same surfaces — and a
+  // worktree switch must not re-project (and re-identify) every surface to rediscover that.
+  const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
   const workspaceSurfaces = useMemo(
     () =>
       projectWorkspaceSurfaces({
         worktreesById,
         folderWorkspaces,
-        activeWorkspaceId: renderedActiveWorktreeId,
+        activeWorkspaceId: activeFolderSurfaceId,
         activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
       }),
-    [worktreesById, folderWorkspaces, renderedActiveWorktreeId, activeFolderSurfaceHostId]
+    [worktreesById, folderWorkspaces, activeFolderSurfaceId, activeFolderSurfaceHostId]
   )
   // Why split the ids out: every mount/park/activation pass reads only `.id`, but
   // the surface array is re-identified on any worktree write. Reusing the previous

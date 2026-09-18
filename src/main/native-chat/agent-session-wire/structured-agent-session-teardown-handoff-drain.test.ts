@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { structuredAgentSessionHostTeardownPhases } from './structured-agent-session-host-teardown'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -65,6 +66,7 @@ function gatedTransport(): StructuredAgentSessionHandoffTransport {
     recoverTuiOwner: async (record) =>
       tuiOwner(record.lease.runtimeFence, record.lease.reservedSpawnToken ?? 'recovered'),
     stopRecoveredOwner: async () => undefined,
+    stopFailedTuiLaunch: async () => undefined,
     closeTuiOwner: async (owner) => ({ transcriptPath: owner.transcriptPath }),
     waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
     waitForTuiIdleOrExit: async () => 'idle',
@@ -138,13 +140,72 @@ describe('structured agent-session host teardown', () => {
     launchGate.resolve()
     await teardown
 
-    // The new owner was proven while the session was still indexed, not after it vanished.
+    // Teardown stops the late TUI owner and fences the reservation before dropping the session.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      runtimeKind: 'tui',
-      claimStatus: 'live',
-      handoffStage: null
+      runtimeKind: 'native',
+      claimStatus: 'released',
+      handoffStage: 'old-owner-stopped'
     })
     expect(host.hasSession(SESSION)).toBe(false)
+  })
+
+  it('names every phase, so the quit-path order is pinned rather than incidental', () => {
+    const noop = async (): Promise<void> => undefined
+    const phases = structuredAgentSessionHostTeardownPhases({
+      holds: { dispose: noop },
+      runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
+      handoffs: { stopTuiHistoryCatchup: () => undefined, drain: noop },
+      tasks: { drainAttaches: noop },
+      evictOwnedSessions: noop,
+      captureResumeMarkers: () => {},
+      recordResumeMarkers: noop
+    })
+    expect(phases.map((phase) => phase.name)).toEqual([
+      'capture-resume-markers',
+      'dispose-holds',
+      'stop-lease-renewal',
+      'stop-tui-catchup',
+      'drain-handoffs',
+      'drain-attaches',
+      'evict-owned-sessions',
+      'record-resume-markers',
+      'flush-event-sinks'
+    ])
+  })
+
+  it('bounds stalled recovery publication without preventing later cleanup', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const pending = Promise.withResolvers<void>()
+    const cleaned = vi.fn(async () => {})
+    const flush = vi.fn(async () => cleaned())
+    const phases = structuredAgentSessionHostTeardownPhases({
+      holds: { dispose: cleaned },
+      runtimeState: { stopLeaseRenewal: () => {}, flushAllEventSinks: flush },
+      handoffs: { stopTuiHistoryCatchup: () => {}, drain: cleaned },
+      tasks: { drainAttaches: cleaned },
+      evictOwnedSessions: cleaned,
+      captureResumeMarkers: () => {},
+      recordResumeMarkers: () => pending.promise
+    })
+    try {
+      const teardown = (async () => {
+        for (const phase of phases) {
+          await phase.run()
+        }
+      })()
+      await vi.advanceTimersByTimeAsync(2000)
+      await teardown
+      expect(cleaned).toHaveBeenCalledTimes(5)
+      expect(warning).toHaveBeenCalledWith(
+        '[structured-agent-session] recording recovery capsule failed'
+      )
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      pending.resolve()
+      warning.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('gives up on a wedged handoff instead of holding the quit open', async () => {
@@ -156,7 +217,8 @@ describe('structured agent-session host teardown', () => {
     vi.useFakeTimers()
     try {
       const teardown = host.flushAllStreamedEvents()
-      await vi.advanceTimersByTimeAsync(5_000)
+      // Covers both bounded phases: the resume-marker write gives up first, then the handoff drain.
+      await vi.advanceTimersByTimeAsync(10_000)
       await expect(teardown).resolves.toBeUndefined()
     } finally {
       vi.useRealTimers()

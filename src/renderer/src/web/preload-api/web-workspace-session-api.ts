@@ -2,7 +2,8 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  normalizeExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type {
   WorkspaceSessionPatch,
@@ -18,6 +19,25 @@ export function sessionStorageKeyForHost(hostId?: string | null): string {
   return resolved === LOCAL_EXECUTION_HOST_ID
     ? SESSION_STORAGE_KEY
     : `${SESSION_STORAGE_KEY}.${resolved}`
+}
+
+/** The web client's own partition census: the host-suffixed keys it has written. Boot reads these
+ *  instead of inferring the set from the repo catalog, which cannot name a target whose only
+ *  workspace is a folder. */
+export function listStoredWorkspaceSessionHostIds(): ExecutionHostId[] {
+  const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+  const prefix = `${SESSION_STORAGE_KEY}.`
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index)
+    if (!key?.startsWith(prefix)) {
+      continue
+    }
+    const hostId = normalizeExecutionHostId(key.slice(prefix.length))
+    if (hostId) {
+      hostIds.add(hostId)
+    }
+  }
+  return [...hostIds]
 }
 
 export function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionState {
@@ -48,6 +68,7 @@ export function createWebWorkspaceSessionApi(): Partial<PreloadApi> {
     session: {
       // Mirrors desktop bridge: non-local hosts persist under a host-suffixed key so their sessions stay isolated from local.
       get: (hostId) => Promise.resolve(getStoredWorkspaceSession(hostId)),
+      listHostIds: () => Promise.resolve(listStoredWorkspaceSessionHostIds()),
       set: async (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
       },

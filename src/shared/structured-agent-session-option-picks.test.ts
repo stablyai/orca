@@ -5,14 +5,17 @@ import {
   resolveStructuredLaunchSeedOptions,
   updateNativeChatSessionOptionDefaults
 } from './native-chat-session-option-defaults'
-import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type {
+  PersistedNativeChatSessionOptions,
+  SessionOptionValue
+} from './native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks
 } from './structured-agent-session-options'
 
-function liveState(current: { model: string; effort?: string }) {
+function liveState(current: { model: string; effort?: string; fastMode?: boolean }) {
   return applyStructuredAgentSessionOptions(
     createStructuredAgentSessionOptionState('codex'),
     CODEX_SESSION_OPTION_CATALOG,
@@ -26,7 +29,8 @@ function liveState(current: { model: string; effort?: string }) {
           efforts: [
             { value: 'medium', label: 'Medium' },
             { value: 'high', label: 'High' }
-          ]
+          ],
+          supportsFastMode: true
         },
         {
           id: 'other-model',
@@ -36,16 +40,18 @@ function liveState(current: { model: string; effort?: string }) {
           efforts: [
             { value: 'low', label: 'Low' },
             { value: 'medium', label: 'Medium' }
-          ]
+          ],
+          supportsFastMode: true
         }
       ],
+      fastModeSupport: { supported: true },
       current
     }
   )
 }
 
 function persist(
-  picks: readonly { modelId: string; optionId: string; value: string }[]
+  picks: readonly { modelId: string; optionId: string; value: SessionOptionValue }[]
 ): PersistedNativeChatSessionOptions {
   return applyNativeChatSessionOptionPicks({ persisted: undefined, agent: 'codex', picks })
 }
@@ -124,6 +130,16 @@ describe('structuredAgentSessionOptionPicks', () => {
         permissionMode: 'plan'
       })
     ).toEqual([])
+  })
+
+  it('remembers explicit Fast on and off as booleans and re-encodes the launch seed', () => {
+    const state = liveState({ model: 'account-model', fastMode: true })
+    const picks = structuredAgentSessionOptionPicks(state, { fastMode: 'false' })
+    expect(picks).toEqual([{ modelId: 'account-model', optionId: 'fastMode', value: false }])
+    expect(resolveStructuredLaunchSeedOptions(persist(picks), 'codex')).toEqual({
+      model: 'account-model',
+      fastMode: 'false'
+    })
   })
 })
 

@@ -9,7 +9,7 @@
 // the hold is deliberate: re-registering an id runs the previous cleanup synchronously, so the
 // stale release lands before this hold rather than after it.
 
-import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled,
   requireStructuredCleanupHost,
@@ -28,7 +28,7 @@ function holdCleanupIdFor(sessionId: string, holderKey: string): string {
   return `${HOLD_CLEANUP_PREFIX}:${holderKey}:${sessionId}`
 }
 
-export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
   defineMethod({
     name: 'agentSession.hold',
     params: HoldParams,
@@ -36,7 +36,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredHost(ctx)
       const holderKey = holderKeyFor(ctx, params.holderId)
-      ctx.runtime.registerSubscriptionCleanup(
+      const registration = ctx.runtime.registerOwnedSubscriptionCleanup(
         holdCleanupIdFor(params.sessionId, holderKey),
         () => host.release(params.sessionId, holderKey),
         ctx.connectionId
@@ -44,7 +44,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
       try {
         await host.hold(params.sessionId, holderKey)
       } catch (error) {
-        ctx.runtime.cleanupSubscription(holdCleanupIdFor(params.sessionId, holderKey))
+        registration.releaseIfCurrent()
         throw error
       }
       return { held: true as const }

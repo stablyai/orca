@@ -56,12 +56,6 @@ describe('headless serve shutdown PR gate', () => {
     const packageStep = steps.find((step) => step.name === 'Package unpacked app')
     const markerStep = steps.find((step) => step.name === 'Verify root-package marker payloads')
     const shutdownStep = steps.find((step) => step.name === 'Verify headless serve signal shutdown')
-    const launcherShutdownStep = steps.find(
-      (step) => step.name === 'Verify extracted launcher serve signal shutdown'
-    )
-    const appImageShutdownStep = steps.find(
-      (step) => step.name === 'Verify AppImage CLI registration and serve signal shutdown'
-    )
 
     expect(workflow.jobs.package['timeout-minutes']).toBe(90)
     expect(packageStep.run).toContain('--linux AppImage deb rpm --x64 --publish never')
@@ -69,19 +63,13 @@ describe('headless serve shutdown PR gate', () => {
     expect(markerStep.run).toContain('rpm2cpio')
     expect(steps.indexOf(markerStep)).toBeGreaterThan(steps.indexOf(packageStep))
     expect(shutdownStep.run).toBe(
-      'node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage'
+      'node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --all-entrypoints'
     )
-    expect(launcherShutdownStep.run).toContain(
-      'node config/scripts/run-headless-serve-shutdown-docker.mjs'
-    )
-    expect(launcherShutdownStep.run).toContain('--entrypoint launcher')
-    expect(appImageShutdownStep.run).toContain('--entrypoint appimage')
-    expect(appImageShutdownStep.run).toContain('--signal-target serving-electron')
-    expect(appImageShutdownStep.run).toContain('--int-delivery pid')
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(packageStep))
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(markerStep))
-    expect(steps.indexOf(launcherShutdownStep)).toBeGreaterThan(steps.indexOf(shutdownStep))
-    expect(steps.indexOf(appImageShutdownStep)).toBeGreaterThan(steps.indexOf(launcherShutdownStep))
+    expect(
+      steps.filter((step) => step.run?.includes('run-headless-serve-shutdown-docker.mjs'))
+    ).toHaveLength(1)
   })
 
   it('keeps readiness polling finite and leak-free', () => {

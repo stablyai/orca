@@ -9,7 +9,6 @@ import type {
   BrowserPage,
   BrowserPageDocLocation,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
   BrowserWorkspace
 } from '../../../../../shared/browser-workspace-types'
@@ -215,8 +214,7 @@ export type BrowserSlice = {
   fetchBrowserSessionProfiles: () => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
-    label: string,
-    options?: BrowserSessionProfileCreateOptions
+    label: string
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
   importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>

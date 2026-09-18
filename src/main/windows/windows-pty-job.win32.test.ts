@@ -170,7 +170,7 @@ describeOnWindows('ConPTY job ownership', () => {
 
     await vi.waitFor(() => expect(existsSync(marker)).toBe(true), { timeout: 15_000 })
     expect(output).not.toMatch(/Access is denied/i)
-    rmSync(marker, { force: true })
+    await vi.waitFor(() => rmSync(marker, { force: true }))
   }, 60_000)
 
   it('stops answering once the tree is gone, rather than claiming it is empty', async () => {

@@ -3,9 +3,10 @@
 // so the stop-and-wait path is metadata-only, and drain the queue off the critical path.
 
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs'
+import { existsSync, readdirSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { removeHostTree } from '../host-tree-removal'
+import { ensurePrivateDir } from './daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
 import { getTerminalHistoryQuarantineOwnerDir } from './terminal-history-recovery-quarantine'
 
@@ -29,7 +30,7 @@ function getPendingDeleteRoot(basePath: string): string {
 function tombstoneSessionTree(basePath: string, dir: string): string | null {
   const pendingRoot = getPendingDeleteRoot(basePath)
   try {
-    mkdirSync(pendingRoot, { recursive: true })
+    ensurePrivateDir(pendingRoot)
     const tombstone = join(pendingRoot, randomUUID())
     renameSync(dir, tombstone)
     return tombstone

@@ -180,7 +180,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
    * describes could come straight back. This test owns that seam.
    */
   it('addresses a structured worker that only the call site can enumerate', async () => {
-    const handle = registerWorker()
+    const handle = registerWorker('wt_2')
     installHost({})
     const inserted: { to: string }[] = []
     const db = {
@@ -206,7 +206,9 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       runtime: runtime as never,
       db: db as never,
       from: 'term_sender',
-      groupAddress: '@all',
+      // `@worktree:` is the one group that still enumerates agents; the Run groups read
+      // Dispatch rows, where a structured worker's identity is looked up by this same handle.
+      groupAddress: '@worktree:wt_2',
       senderPaneKey: undefined,
       senderRunId: undefined,
       explicitRunId: undefined,
@@ -216,5 +218,64 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       withSendWarnings: (receipt) => receipt
     } as never)
     expect(inserted.map((row) => row.to)).toEqual([handle])
+  })
+
+  it('reads a structured worker identity for @codex off its Dispatch row handle', async () => {
+    const handle = registerWorker()
+    installHost({})
+    const inserted: { to: string }[] = []
+    const db = {
+      getLegacyAdoptedRunMailboxOwner: () => null,
+      getCurrentRunForPane: () => undefined,
+      getActiveDispatchForIdentity: () => ({ run_id: 'run_1' }),
+      getActiveDispatchMailboxOwners: () => [],
+      getRunMailboxOwnerIdsForHandle: () => [],
+      listWorkerTerminalResources: () => [
+        {
+          dispatchId: 'ctx_structured',
+          runId: 'run_1',
+          dispatchStatus: 'dispatched',
+          agentTerminalHandle: handle,
+          worktreeId: 'wt_1'
+        },
+        {
+          dispatchId: 'ctx_pty_claude',
+          runId: 'run_1',
+          dispatchStatus: 'dispatched',
+          agentTerminalHandle: 'term_claude',
+          worktreeId: 'wt_1'
+        }
+      ],
+      listFederatedDispatchesByIds: () => [],
+      getDispatchContextById: () => undefined,
+      insertMessages: (rows: { to: string }[]) => {
+        inserted.push(...rows)
+        return rows.map((row, index) => ({ id: `m${index}`, to_handle: row.to, type: 'status' }))
+      }
+    }
+    const runtime = {
+      listTerminals: async () => ({
+        terminals: [{ handle: 'term_claude', worktreeId: 'wt_1', agentIdentity: 'claude' }]
+      }),
+      getAgentStatusForHandle: () => 'idle',
+      getLiveTerminalPaneKey: () => null,
+      getOrchestrationDb: () => db,
+      notifyMessageArrived: () => {}
+    }
+    await sendGroupMessage({
+      params: { subject: 's', body: 'b', type: 'status', priority: 'normal' },
+      runtime: runtime as never,
+      db: db as never,
+      from: 'term_sender',
+      groupAddress: '@codex',
+      senderPaneKey: undefined,
+      senderRunId: 'run_1',
+      explicitRunId: undefined,
+      legacyCoordinatorRunId: undefined,
+      revalidateLegacyCoordinator: undefined,
+      recordMutationReceipt: undefined,
+      withSendWarnings: (receipt) => receipt
+    } as never)
+    expect(inserted.map((row) => row.to)).toEqual(['dispatch:ctx_structured'])
   })
 })

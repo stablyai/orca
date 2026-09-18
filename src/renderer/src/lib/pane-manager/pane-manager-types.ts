@@ -10,6 +10,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
+export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+
 // ---------------------------------------------------------------------------
 // Public interfaces
 // ---------------------------------------------------------------------------

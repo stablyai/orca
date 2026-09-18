@@ -18,7 +18,7 @@ type BrowserRouteSessionPolicyDependencies = {
     partition: string
     browserProfileId: string
     session: BrowserRouteElectronSession
-  }): void
+  }): void | Promise<void>
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
 }
 
@@ -36,7 +36,7 @@ export async function prepareBrowserRouteSessionPolicy(input: {
       proxyRules: `socks5://${input.proxyEndpoint.host}:${input.proxyEndpoint.port}`,
       proxyBypassRules: '<-loopback>'
     })
-    input.dependencies.setupPolicies({
+    await input.dependencies.setupPolicies({
       partition: input.partition,
       browserProfileId: input.browserProfileId,
       session

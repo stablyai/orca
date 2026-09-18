@@ -52,7 +52,8 @@ export async function startFixChecksFromDialog(args: {
   item: GitHubWorkItem
   agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
   commandInput: string
-  agentArgs: string
+  /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
+  agentArgs?: string
 }): Promise<boolean> {
   if (!args.targetRepoId) {
     return false

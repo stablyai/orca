@@ -1,3 +1,5 @@
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
+vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,14 +22,17 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: vi.fn(),
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
-  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
-  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
-  pauseRemoteRuntimeSharedControlRetry: vi.fn()
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: vi.fn(),
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
+    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+    ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+    pauseRemoteRuntimeSharedControlRetry: vi.fn()
+  })
+})
 
 import {
   callRuntimeEnvironment,
@@ -55,6 +60,7 @@ describe('federated read RPC transport routing', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 

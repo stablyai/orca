@@ -38,7 +38,7 @@ export function parseRehomeTrustProbeArguments(argv, environment = process.env) 
 
 export async function probeRehomeTrust(config, dependencies = {}) {
   const fetchImpl = dependencies.fetch ?? fetch
-  const response = await fetchAdminOnceMore(
+  const request = () => fetchAdminOnceMore(
     fetchImpl,
     `${config.directorOrigin}/v1/admin/regional-rehome-trust-probe`,
     {
@@ -55,9 +55,26 @@ export async function probeRehomeTrust(config, dependencies = {}) {
     },
     { wait: dependencies.wait }
   )
-  const body = await response.json().catch(() => ({}))
+  let response = await request()
+  let body = await response.json().catch(() => ({}))
+  // The director wraps source HTTP failures in 409; retry only explicit transient statuses.
+  if (response.status === 409 && /^regional_rehome_trust_probe_source_(500|502|503|504)$/.test(body?.error ?? '')) {
+    await (dependencies.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(2_000)
+    response = await request()
+    body = await response.json().catch(() => ({}))
+  }
   if (!response.ok) {
-    throw new Error(`application-mediated rehome trust probe returned ${response.status}`)
+    const safeReasons = new Set([
+      'invalid_token', 'director_only', 'invalid_request',
+      'regional_rehome_trust_not_configured',
+      'regional_rehome_trust_probe_source_unavailable',
+      'regional_rehome_trust_probe_source_invalid_response',
+      'regional_rehome_trust_probe_not_proven',
+      ...[400, 401, 403, 404, 409, 429, 500, 502, 503, 504]
+        .map((status) => `regional_rehome_trust_probe_source_${status}`)
+    ])
+    const reason = safeReasons.has(body?.error) ? body.error : 'unrecognized_error'
+    throw new Error(`application-mediated rehome trust probe returned ${response.status}: ${reason}`)
   }
   if (
     body.v !== 1 ||

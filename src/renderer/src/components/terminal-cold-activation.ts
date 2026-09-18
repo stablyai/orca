@@ -16,6 +16,7 @@ import type { TerminalParkingFoundation } from './use-terminal-parking-foundatio
 
 export function applyTerminalColdActivation(controller: TerminalParkingFoundation) {
   const {
+    activationDeferralPlanRevisionRef,
     activationDeferredMountTabIdsByWorktreeRef,
     activeGroupIdByWorktree,
     activeTabId,
@@ -96,7 +97,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
-      planColdActivationTabDeferral({
+      const installedDeferralPlan = planColdActivationTabDeferral({
         restrictions: backgroundMountTabIdsByWorktreeRef.current,
         deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
         worktreeId: renderedActiveWorktreeId,
@@ -118,6 +119,11 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
         },
         immediateTabIds
       })
+      // Why: the install mutates only refs, so without a returned revision the
+      // admission drain's effect deps never change and the plan strands.
+      if (installedDeferralPlan) {
+        activationDeferralPlanRevisionRef.current += 1
+      }
     } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
       backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
@@ -165,7 +171,10 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     groupsByWorktree,
     activeGroupIdByWorktree
   )
-  return { anyMountedWorktreeHasLayout }
+  return {
+    anyMountedWorktreeHasLayout,
+    activationDeferralPlanRevision: activationDeferralPlanRevisionRef.current
+  }
 }
 
 export type TerminalColdActivationController = TerminalParkingFoundation &

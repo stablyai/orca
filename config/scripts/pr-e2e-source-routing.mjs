@@ -179,6 +179,17 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
+    // Why: layout resolution is the only place a split direction can be invented, and the
+    // loss is one-way — the guess is published and written back over the real tree.
+    id: 'terminal-session.split-orientation-resolution',
+    specs: ['tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/runtime\/(?:remote-terminal-layout-resolution\.ts|sync-runtime-graph\/(?:graph-publication|mobile-session-terminal-tabs|mobile-session-surfaces)\.ts|web-session-tabs-sync\/terminal-surfaces\.ts)$/.test(
+        file
+      )
+  },
+  {
     id: 'terminal-session.remote-pane-layout-retry',
     specs: ['tests/e2e/paired-remote-pane-layout-retry.spec.ts'],
     matches: (file) =>

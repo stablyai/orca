@@ -11,9 +11,7 @@ export type ScrollGeometry = {
   clientHeight: number
 }
 
-/** Pixels from the bottom within which we treat the view as "at the bottom" and
- *  keep it pinned as content arrives. A small slack absorbs sub-pixel rounding
- *  and the height jitter of a streaming last message. */
+/** Hide the jump affordance while the latest output is still nearby. */
 export const NATIVE_CHAT_BOTTOM_THRESHOLD_PX = 48
 
 /** Distance in px from the bottom edge of the scroll range. */
@@ -21,8 +19,7 @@ export function distanceFromBottom(geometry: ScrollGeometry): number {
   return Math.max(0, geometry.scrollHeight - geometry.clientHeight - geometry.scrollTop)
 }
 
-/** True when the viewport is close enough to the bottom that new content should
- *  keep it pinned (auto-scroll "attached"). */
+/** Whether the viewport is inside the requested distance from the bottom. */
 export function isNearBottom(
   geometry: ScrollGeometry,
   threshold: number = NATIVE_CHAT_BOTTOM_THRESHOLD_PX
@@ -41,4 +38,61 @@ export function shouldShowJumpToLatest(
     return false
   }
   return distanceFromBottom(geometry) > threshold
+}
+
+/** Allow bottom rounding noise without following a reader who moved up a line. */
+export const NATIVE_CHAT_FOLLOW_REARM_PX = 4
+
+export type FollowIntent = {
+  following: boolean
+  /** Whether the scroll event matches an offset the application registered. */
+  programmatic: boolean
+  geometry: ScrollGeometry
+}
+
+/** Whether the transcript should still follow the end after this offset.
+ *
+ *  Application writes preserve intent even when their delayed events arrive
+ *  after the end moved. Reader events detach away from the end and reattach at
+ *  it — against the re-arm band, never the wider near-bottom one. */
+export function nextFollowingEnd(intent: FollowIntent): boolean {
+  if (intent.programmatic) {
+    return intent.following
+  }
+  return isNearBottom(intent.geometry, NATIVE_CHAT_FOLLOW_REARM_PX)
+}
+
+/** Distance from the top within which the transcript pages in older history. */
+export const NATIVE_CHAT_LOAD_EARLIER_THRESHOLD_PX = 80
+
+export type LoadEarlierIntent = {
+  geometry: ScrollGeometry
+  /** Offset at the previous scroll event; a prepend or a bottom pin moves down. */
+  previousScrollTop: number
+  hasMore: boolean
+  loadingEarlier: boolean
+  itemCount: number
+  /** Item count when the last page was asked for, or null if none has been. */
+  requestedAtItemCount: number | null
+}
+
+/** Whether reaching this offset should page in older history.
+ *
+ *  Windowing makes the naive "am I near the top?" test unsafe: every row that
+ *  resolves its real height changes the content height and re-fires the
+ *  observers that ask. So the answer also requires the view to have moved
+ *  *upwards* — measurement settling and the bottom pin both move it down — and
+ *  requires new items since the last request, which caps a stuck near-top view at
+ *  one request per page rather than one per measurement. */
+export function shouldLoadEarlier(intent: LoadEarlierIntent): boolean {
+  if (!intent.hasMore || intent.loadingEarlier) {
+    return false
+  }
+  if (intent.geometry.scrollTop >= NATIVE_CHAT_LOAD_EARLIER_THRESHOLD_PX) {
+    return false
+  }
+  if (intent.geometry.scrollTop > intent.previousScrollTop) {
+    return false
+  }
+  return intent.requestedAtItemCount !== intent.itemCount
 }

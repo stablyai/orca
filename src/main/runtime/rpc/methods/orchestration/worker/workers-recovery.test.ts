@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { eraseRpcMethods } from '../../../core'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -46,7 +47,9 @@ describe('orchestration worker recovery', () => {
   afterEach(() => db.close())
 
   async function call(name: string, params: Record<string, unknown>) {
-    const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }

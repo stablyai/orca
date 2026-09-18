@@ -16,6 +16,7 @@ import {
   resetWebSessionTabsSnapshotFreshnessForTests,
   type WebSessionTabsSyncState
 } from '../../src/renderer/src/runtime/web-session-tabs-sync'
+import { makeAgentStatusStoreWiring } from '../../src/main/runtime/agent-status-store-wiring.test-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: {
@@ -689,7 +690,9 @@ describe('real PTY decorative session-tabs fanout', () => {
   })
 
   it('renews retained hook status without resetting its state start', () => {
-    const runtime = new OrcaRuntimeService()
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(null, undefined, statusWiring.deps)
+    const uninstallStatusRepublish = statusWiring.attach(runtime)
     const ptyId = seedWorktree(runtime, 0)
     const internals = runtime as unknown as RuntimeInternals
     const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]
@@ -769,5 +772,7 @@ describe('real PTY decorative session-tabs fanout', () => {
       true
     )
     unsubscribe()
+    uninstallStatusRepublish()
+    statusWiring.statusStore.stop()
   })
 })

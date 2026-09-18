@@ -85,12 +85,22 @@ test.describe('SSH cold activation restore', () => {
           () =>
             orcaPage.evaluate(
               async ({ targetId, worktreeId, expectedTabIds }) => {
-                const session = await window.api.session.get()
+                // Why both partitions: an SSH worktree's session lives in `ssh:<targetId>`, and
+                // only globals like `activeConnectionIdsAtShutdown` stay in `local`. Reading
+                // `session.get()` alone asserts the partition layout rather than the invariant,
+                // which is that the state is persisted where the boot read will find it.
+                const [local, host] = await Promise.all([
+                  window.api.session.get(),
+                  window.api.session.get(`ssh:${targetId}`)
+                ])
                 const persistedTabIds = new Set(
-                  (session.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+                  [
+                    ...(local.tabsByWorktree[worktreeId] ?? []),
+                    ...(host.tabsByWorktree[worktreeId] ?? [])
+                  ].map((tab) => tab.id)
                 )
                 return (
-                  session.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
                   expectedTabIds.every((tabId) => persistedTabIds.has(tabId))
                 )
               },
@@ -251,10 +261,18 @@ test.describe('SSH cold activation restore', () => {
           () =>
             firstLaunch.page.evaluate(
               async ({ targetId, worktreeId, tabId }) => {
-                const persisted = await window.api.session.get()
+                // See the note above: the worktree's rows are in `ssh:<targetId>`, the globals in
+                // `local`.
+                const [local, host] = await Promise.all([
+                  window.api.session.get(),
+                  window.api.session.get(`ssh:${targetId}`)
+                ])
                 return (
-                  persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
-                  persisted.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true
+                  local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  [
+                    ...(local.tabsByWorktree[worktreeId] ?? []),
+                    ...(host.tabsByWorktree[worktreeId] ?? [])
+                  ].some((tab) => tab.id === tabId)
                 )
               },
               { targetId: remote.targetId, worktreeId: remote.worktreeId, tabId: restoredTabId }

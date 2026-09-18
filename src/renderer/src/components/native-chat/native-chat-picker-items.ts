@@ -18,13 +18,18 @@ export type NativeChatPickerItem =
       kind: 'command'
       id: string
       name: string
+      /** Exactly what a pick inserts — the form the agent invokes. */
+      token: string
       description?: string
+      /** How the provider says the command is invoked, e.g. `<objective>`. */
+      argumentHint?: string
       skillCollision: boolean
     }
   | {
       kind: 'skill'
       id: string
       name: string
+      token: string
       description: string | null
       sources: { sourceKind: SkillSourceKind; skillFilePath: string }[]
     }
@@ -47,16 +52,24 @@ export function buildNativeChatPickerItems(
   commands: readonly SlashCommandSuggestion[],
   skills: readonly DiscoveredSkill[],
   query: string,
-  prefix: '/' | '$',
+  skillSigil: '/' | '$',
   sessionSkillNames?: readonly string[]
 ): NativeChatPickerItem[] {
+  // A name can only collide when both kinds invoke through the same sigil;
+  // where skills carry their own, `/review` and `$review` are distinct entries.
+  const sharedSigil = skillSigil === '/'
   const unclassifiedNames = new Set(
     commands.filter((command) => command.kindUnspecified).map((command) => command.name)
   )
-  const mergedSkills = mergeNativeChatSkills(skills, sessionSkillNames, unclassifiedNames)
+  const mergedSkills = mergeNativeChatSkills(
+    skills,
+    sessionSkillNames,
+    unclassifiedNames,
+    skillSigil
+  )
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
   const resolvedCommands = commands.filter(
-    (command) => !(command.kindUnspecified && skillNames.has(command.name))
+    (command) => !(sharedSigil && command.kindUnspecified && skillNames.has(command.name))
   )
   const commandNames = new Set(resolvedCommands.map((command) => command.name))
   const commandItems = rankItems(
@@ -67,8 +80,12 @@ export function buildNativeChatPickerItems(
         // it is inserted verbatim; only untrusted skill text gets sanitized.
         id: `command:${command.name}`,
         name: command.name,
+        token: `/${command.name}`,
         description: command.description ? sanitizePickerText(command.description, 240) : undefined,
-        skillCollision: prefix === '/' && skillNames.has(command.name)
+        argumentHint: command.argumentHint
+          ? sanitizePickerText(command.argumentHint, 80)
+          : undefined,
+        skillCollision: sharedSigil && skillNames.has(command.name)
       },
       stableOrder: index
     })),
@@ -76,7 +93,7 @@ export function buildNativeChatPickerItems(
   )
   const skillItems = rankItems(
     mergedSkills
-      .filter((skill) => !(prefix === '/' && commandNames.has(skill.name)))
+      .filter((skill) => !(sharedSigil && commandNames.has(skill.name)))
       .map((item, index) => ({ item, stableOrder: index })),
     query
   )
@@ -89,7 +106,8 @@ export function buildNativeChatPickerItems(
 function mergeNativeChatSkills(
   skills: readonly DiscoveredSkill[],
   sessionSkillNames: readonly string[] | undefined,
-  unclassifiedNames: ReadonlySet<string>
+  unclassifiedNames: ReadonlySet<string>,
+  skillSigil: '/' | '$'
 ): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
   const exactPaths = new Map<string, DiscoveredSkill>()
   for (const skill of skills) {
@@ -106,7 +124,10 @@ function mergeNativeChatSkills(
     byName.set(safeName, [...(byName.get(safeName) ?? []), { ...skill, name: safeName }])
   }
   const discovered = new Map(
-    [...byName.entries()].map(([name, namedSkills]) => [name, pickerSkill(name, namedSkills)])
+    [...byName.entries()].map(([name, namedSkills]) => [
+      name,
+      pickerSkill(name, namedSkills, skillSigil)
+    ])
   )
   // Why: when the running session reports its own skills, that report is the
   // authority on which ones exist — a disk scan cannot see what the session
@@ -121,19 +142,21 @@ function mergeNativeChatSkills(
         ]
       : [...discovered.keys()]
   return [...new Set(names)]
-    .map((name) => discovered.get(name) ?? pickerSkill(name, []))
+    .map((name) => discovered.get(name) ?? pickerSkill(name, [], skillSigil))
     .sort(comparePickerSkills)
 }
 
 function pickerSkill(
   name: string,
-  namedSkills: readonly DiscoveredSkill[]
+  namedSkills: readonly DiscoveredSkill[],
+  skillSigil: '/' | '$'
 ): Extract<NativeChatPickerItem, { kind: 'skill' }> {
   const sorted = [...namedSkills].sort(compareDiscoveredSkills)
   return {
     kind: 'skill' as const,
     id: `skill:${name}`,
     name,
+    token: `${skillSigil}${name}`,
     description: sorted[0]?.description ? sanitizePickerText(sorted[0].description, 240) : null,
     sources: sorted.map((skill) => ({
       sourceKind: skill.sourceKind,
@@ -245,21 +268,27 @@ function comparePickerSkills(
   )
 }
 
+// `/` is the composer's only trigger, for every agent. A draft-leading slash is
+// the one that can dispatch; elsewhere the token starts after whitespace and its
+// query stops at the next `/` so file paths stay prose.
+export const LEADING_SLASH_TRIGGER = /^\/(\S*)$/
+export const MID_PROMPT_SLASH_TRIGGER = /\s\/([^\s/]*)$/
+
+/** Replaces the typed `/token` with the item's own token, which for a skill is
+ *  the agent-native form even though every agent is typed the same way. */
 export function applyPickerSuggestion(
   draft: string,
   caret: number,
-  item: NativeChatPickerItem,
-  prefix: '/' | '$'
+  item: NativeChatPickerItem
 ): { draft: string; caret: number; insertedToken: string } {
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)
-  const match = prefix === '/' ? before.match(/^\/(\S*)$/) : before.match(/(^|\s)\$(\S*)$/)
+  const match = before.match(LEADING_SLASH_TRIGGER) ?? before.match(MID_PROMPT_SLASH_TRIGGER)
   if (!match) {
     return { draft, caret, insertedToken: '' }
   }
   const query = match.at(-1) ?? ''
   const tokenStart = before.length - query.length - 1
-  const insertedToken = `${prefix}${item.name}`
-  const nextBefore = `${before.slice(0, tokenStart)}${insertedToken} `
-  return { draft: nextBefore + after, caret: nextBefore.length, insertedToken }
+  const nextBefore = `${before.slice(0, tokenStart)}${item.token} `
+  return { draft: nextBefore + after, caret: nextBefore.length, insertedToken: item.token }
 }

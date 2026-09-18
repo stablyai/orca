@@ -1,34 +1,23 @@
 import {
-  AGENT_STATUS_STALE_AFTER_MS,
   pickParsedAgentStatusPayload,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
-import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-status-equivalence'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
-export type RuntimeAgentRowSnapshot = {
-  paneKey: string
-  ptyId: string
-  worktreeId?: string
-  tabId?: string
-  connectionId: string | null
-  payload: ParsedAgentStatusPayload
-  stateStartedAt: number
-  updatedAt: number
-}
-
 export type ConnectedPtyEvidence = {
   tabIds: ReadonlySet<string>
   paneKeys: ReadonlySet<string>
-  ptyIds: ReadonlySet<string>
+  /** The connected PTY behind each issued terminal handle. A status row names a pane and the
+   *  handle it was observed under, never a process, so this is where it rejoins its terminal —
+   *  and it is the only rescue left for a row whose pane binding was cleared under it. */
+  ptyIdByTerminalHandle: ReadonlyMap<string, string>
 }
 
-/** Reconcile terminal status, then admit rows using their execution-host evidence. */
+/** Admit hook-server rows using their execution-host evidence. */
 export function collectRuntimeWorktreePtyAgentSources(args: {
-  retainedSnapshots: Iterable<RuntimeAgentRowSnapshot>
   hookSnapshots: readonly AgentStatusIpcPayload[]
   mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
   connectedPtyEvidence: ConnectedPtyEvidence
@@ -37,50 +26,16 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     string,
     RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
   >()
-  const now = Date.now()
-  for (const snapshot of args.retainedSnapshots) {
-    const { payload } = snapshot
-    rowSources.set(snapshot.paneKey, {
-      paneKey: snapshot.paneKey,
-      ptyId: snapshot.ptyId,
-      tabId: snapshot.tabId,
-      worktreeId: snapshot.worktreeId,
-      connectionId: snapshot.connectionId,
-      payload,
-      state: payload.state,
-      ...(payload.workingMode ? { workingMode: payload.workingMode } : {}),
-      agentType: payload.agentType ?? null,
-      prompt: payload.prompt,
-      lastAssistantMessage: payload.lastAssistantMessage ?? null,
-      toolName: payload.toolName ?? null,
-      toolInput: payload.toolInput ?? null,
-      interrupted: payload.interrupted ?? false,
-      stateStartedAt: snapshot.stateStartedAt,
-      updatedAt: snapshot.updatedAt
-    })
-  }
   for (const entry of args.hookSnapshots) {
-    if (entry.restoredUnconfirmed === true) {
+    if (entry.restoredUnconfirmed === true || entry.providerSessionOnly === true) {
       continue
     }
-    const existing = rowSources.get(entry.paneKey)
     const hookPayload = pickParsedAgentStatusPayload(entry)
-    if (existing && existing.updatedAt > entry.receivedAt) {
-      if (
-        entry.workingMode === 'monitoring' &&
-        now - entry.receivedAt <= AGENT_STATUS_STALE_AFTER_MS &&
-        terminalStatusPayloadMatchesHook(hookPayload, existing.payload)
-      ) {
-        existing.workingMode = 'monitoring'
-        if (existing.payload.workingMode === undefined) {
-          existing.payload = { ...existing.payload, workingMode: 'monitoring' }
-        }
-      }
-      continue
-    }
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
-      ptyId: existing?.ptyId,
+      ptyId: entry.terminalHandle
+        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
+        : undefined,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,
@@ -94,7 +49,9 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       toolInput: entry.toolInput ?? null,
       interrupted: entry.interrupted ?? false,
       stateStartedAt: entry.stateStartedAt,
-      updatedAt: entry.receivedAt
+      // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
+      updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
+      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }
   const sources: RuntimeWorktreeAgentSource[] = []
@@ -104,13 +61,17 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
+    // Why a structured row skips the connected-process gate: it has no PTY, and the host that
+    // holds the session drops the row itself on close, so its presence is the liveness evidence.
     if (
+      source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
       (source.connectionId === null || isWslHookRelayConnectionId(source.connectionId)) &&
       !args.connectedPtyEvidence.tabIds.has(tabId) &&
       !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
-      (source.ptyId === undefined || !args.connectedPtyEvidence.ptyIds.has(source.ptyId))
+      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
+      source.ptyId === undefined
     ) {
       continue
     }

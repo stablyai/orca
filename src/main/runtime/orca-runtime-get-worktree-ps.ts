@@ -10,9 +10,7 @@ import {
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
@@ -21,13 +19,9 @@ import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
-import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
+import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
+import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { hostname } from 'node:os'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
@@ -97,6 +91,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         missingIds: missingRuntimeWorktreeIds,
         ptysById: this.ptysById,
         tabs: this.tabs,
+        getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
           this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
       })
@@ -108,10 +103,8 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       rowSources: collectRuntimeWorktreeAgentSources({
         mirroredWorktreeIdByTabId,
         connectedPtyEvidence,
-        retainedSnapshots: this.agentRows.values(),
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
-        // Broadcast history outlives closed sessions; only the host roster is eligible.
-        structuredSummaries: getStructuredAgentSessionHost()?.liveSessionStatusSummaries() ?? []
+        // Structured sessions are in here too: the host publishes them into the same store.
+        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
       }),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
@@ -155,13 +148,18 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveLaunchArgs: (provider) => this.resolveConfiguredStructuredLaunchArgs(provider),
       resolveLaunchEnvOverlay: () =>
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeAuthPolicy: () =>
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
+      // Re-read per acquisition, like the auth policy above it: the Agent Permissions setting is
+      // the one copy of this fact, and the configured CLI arguments never reach a structured launch.
+      resolveClaudePermissionMode: () =>
+        claudeStructuredPermissionModeForSettings(this.requireStore().getSettings()),
+      resolveCodexPermissionPolicy: () =>
+        codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
       // Structured chat has no agent CLI hooks, so this projection is what the first-work
@@ -173,49 +171,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
           firstWorkRenameDeps(this.requireStore(), this)
         )
       },
+      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
-  }
-
-  // Why the provider is honoured rather than assumed: Codex app-server flags are not
-  // Claude CLI flags, and prepending them to `claude` makes it exit on an unknown option.
-  protected resolveConfiguredStructuredLaunchArgs(
-    provider: AgentSessionRecord['provider']
-  ): string[] {
-    if (provider === 'claude') {
-      return this.resolveConfiguredClaudeStructuredArgs()
-    }
-    return this.resolveConfiguredCodexStructuredArgs()
-  }
-
-  protected resolveConfiguredClaudeStructuredArgs(): string[] {
-    const settings = this.requireStore().getSettings()
-    const shell = resolveStartupShell(
-      process.platform,
-      resolveLocalWindowsAgentStartupShell({
-        platform: process.platform,
-        isRemote: false,
-        terminalWindowsShell: settings.terminalWindowsShell
-      })
-    )
-    const tokenized = tokenizeStartupCommand(
-      resolveTuiAgentLaunchArgs('claude', settings.agentDefaultArgs),
-      shell
-    )
-    return tokenized.ok ? tokenized.tokens : []
-  }
-
-  protected resolveConfiguredCodexStructuredArgs(): string[] {
-    const settings = this.requireStore().getSettings()
-    const shell = resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: false,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    return resolveCodexStructuredAppServerArgs(
-      resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
-      shell ?? 'posix'
-    )
   }
 
   protected createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport {

@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { CheckParams } from '../schemas'
 import { parseMessageTypes } from '../routing'
@@ -12,7 +12,7 @@ import {
   isSupersededDispatch
 } from './dispatch-mailbox-fence'
 
-export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_CHECK_METHODS = [
   defineMethod({
     name: 'orchestration.check',
     params: CheckParams,

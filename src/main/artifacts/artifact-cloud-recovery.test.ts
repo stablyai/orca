@@ -207,7 +207,10 @@ class ArtifactFaultServer {
   rejectNextDeleteCode: string | null = null
   rejectNextUpdateStatus: number | null = null
   private readonly artifacts = new Map<string, string>()
-  private readonly createsByKey = new Map<string, { body: string; response: object }>()
+  private readonly createsByKey = new Map<
+    string,
+    { body: string; response: ArtifactResponseBody }
+  >()
 
   artifactSlugs(): string[] {
     return [...this.artifacts.keys()].sort()
@@ -325,14 +328,17 @@ async function publishedLink(userDataPath: string): Promise<string | null> {
   return result.status === 'ok' ? (result.value?.shareUrl ?? null) : null
 }
 
-function jsonResponse(body: object, status: number): Response {
+/** JSON payload the fake artifact API serialises for a response. */
+type ArtifactResponseBody = Record<string, unknown>
+
+function jsonResponse(body: ArtifactResponseBody, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' }
   })
 }
 
-function createResponseBody(slug: string): object {
+function createResponseBody(slug: string): ArtifactResponseBody {
   return {
     artifact: {
       version: 1,

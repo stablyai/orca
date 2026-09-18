@@ -258,24 +258,27 @@ export function AutomationsDetailPane({
             />
           </TabsContent>
 
-          <TabsContent value="runs" className="scrollbar-sleek min-h-0 overflow-auto p-5">
-            {selected ? (
-              <AutomationRunHistory
-                runs={selectedRuns}
-                automationId={selected.id}
-                worktreeMap={worktreeMap}
-                notice={selectedRunsNotice}
-                onRecoverHistory={recoverSelectedRuns}
-                onOpenRun={openAutomationRunPage}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.automations.AutomationsPage.c3a28c9793',
-                  'Select an automation to view runs.'
-                )}
-              </div>
-            )}
+          <TabsContent value="runs" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {/* The history owns the scrolling, so the padding rides a wrapper it can size against. */}
+            <div className="flex min-h-0 flex-1 flex-col p-5">
+              {selected ? (
+                <AutomationRunHistory
+                  runs={selectedRuns}
+                  automationId={selected.id}
+                  worktreeMap={worktreeMap}
+                  notice={selectedRunsNotice}
+                  onRecoverHistory={recoverSelectedRuns}
+                  onOpenRun={openAutomationRunPage}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.automations.AutomationsPage.c3a28c9793',
+                    'Select an automation to view runs.'
+                  )}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       )}

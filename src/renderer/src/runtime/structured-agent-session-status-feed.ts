@@ -21,6 +21,7 @@ export type StructuredAgentSessionStatusSnapshot = ReadonlyMap<string, AgentSess
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
   subscribe: (listener: () => void) => () => void
 }
 
@@ -37,6 +38,7 @@ export function structuredAgentSessionStatusFeedKey(target: RuntimeClientTarget)
 
 function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let snapshot: StructuredAgentSessionStatusSnapshot = new Map()
+  const confirmedSessions = new Set<string>()
   const listeners = new Set<() => void>()
   const activations = new Set<symbol>()
   let generation = 0
@@ -60,12 +62,14 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       // the first snapshot can be empty and dropping those rows flickers every one to no-status.
       const next = new Map(snapshot)
       for (const session of event.sessions) {
+        confirmedSessions.add(session.sessionId)
         next.set(session.sessionId, session)
       }
       setSnapshot(next)
       return
     }
     if (event.type === 'status') {
+      confirmedSessions.add(event.session.sessionId)
       const next = new Map(snapshot)
       next.set(event.session.sessionId, event.session)
       setSnapshot(next)
@@ -99,15 +103,6 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       emit()
     }
   }
-  const fenceCandidateAndReconnect = (candidate: number): void => {
-    if (candidate !== generation) {
-      return
-    }
-    generation += 1
-    revokeSnapshotOwnership()
-    dropHandle()
-    scheduleReconnect(generation)
-  }
   let open = (): void => {}
   const scheduleReconnect = (candidate: number): void => {
     if (!active(candidate) || reconnectTimer) {
@@ -122,6 +117,19 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     }, delay)
   }
+  // Losing contact is never exit: the sessions go unverifiable and this client stops
+  // claiming host-owned execution, but nothing here settles them.
+  const loseConnection = (candidate: number): void => {
+    if (candidate !== generation) {
+      return
+    }
+    generation += 1
+    confirmedSessions.clear()
+    revokeSnapshotOwnership()
+    emit()
+    dropHandle()
+    scheduleReconnect(generation)
+  }
   const subscribeToHost = (candidate: number): void => {
     void subscribeStructuredAgentSessionStatus(
       target,
@@ -130,19 +138,19 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           return
         }
         if (event.type === 'end') {
-          fenceCandidateAndReconnect(candidate)
+          loseConnection(candidate)
           return
         }
         applyEvent(event)
       },
       () => {
         if (active(candidate)) {
-          fenceCandidateAndReconnect(candidate)
+          loseConnection(candidate)
         }
       },
       () => {
         if (active(candidate)) {
-          fenceCandidateAndReconnect(candidate)
+          loseConnection(candidate)
         }
       }
     )
@@ -153,13 +161,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           opened.unsubscribe()
         }
       })
-      .catch(() => {
-        if (active(candidate)) {
-          fenceCandidateAndReconnect(candidate)
-        } else {
-          scheduleReconnect(candidate)
-        }
-      })
+      .catch(() => loseConnection(candidate))
   }
   open = (): void => {
     const candidate = ++generation
@@ -186,7 +188,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
         }
         console.warn('[structured-session-status] host too old for the status feed', environmentId)
       })
-      .catch(() => scheduleReconnect(candidate))
+      .catch(() => loseConnection(candidate))
   }
   const stop = (): void => {
     generation += 1
@@ -194,6 +196,9 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     dropHandle()
     revokeSnapshotOwnership()
     reconnectAttempt = 0
+    // Teardown only runs once nothing is activated, so re-confirmation is the next
+    // subscribe's job and there is no mounted reader left to notify.
+    confirmedSessions.clear()
   }
 
   return {
@@ -211,6 +216,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     },
     getSnapshot: () => snapshot,
+    getSessionObservation: (sessionId) =>
+      confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',
     subscribe: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)

@@ -10,12 +10,15 @@ import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
   invalidateClaudeChildOnlyBoundary,
   shouldKeepClaudePermissionVisible
 } from './server-claude-status-rules'
+import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
 import { AgentHookServerStatusApplication } from './server-status-application'
 
@@ -23,8 +26,13 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
   protected applyNormalizedStatus(
     payload: AgentHookEventPayload,
     onAccepted?: () => void,
-    origin: AgentStatusObservationOrigin = 'hook'
-  ): EnrichedAgentHookEventPayload {
+    origin: AgentStatusObservationOrigin = 'hook',
+    observedAt?: number,
+    mutationBefore?: EnrichedAgentHookEventPayload
+  ): EnrichedAgentHookEventPayload | undefined {
+    if (!this.canWriteLegacyStatusRow(payload)) {
+      return undefined
+    }
     if (payload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
       this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
@@ -32,8 +40,21 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     let previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const connectionClearWatermark = payload.connectionId
-      ? this.connectionTimestampWatermarkById.get(payload.connectionId)
+    const rowBefore = mutationBefore ?? previous
+    const terminalHandle =
+      payload.terminalHandle ??
+      (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)
+        ? previous.terminalHandle
+        : undefined)
+    const terminalOwnedPayload =
+      terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle }
+    if (previous && isStaleGrokTurnEnd(previous, terminalOwnedPayload)) {
+      // Why: Grok turn-end hooks may arrive after the next prompt, including across relay restart.
+      this.commitStatusRowMutation(rowBefore, previous)
+      return previous
+    }
+    const connectionClearWatermark = terminalOwnedPayload.connectionId
+      ? this.connectionTimestampWatermarkById.get(terminalOwnedPayload.connectionId)
       : undefined
     // Why: renderer ordering rejects older rows; live evidence must sort after reconnect clears and restored rows across clock rollback.
     const restoredStatusWatermark = previous?.restoredUnconfirmed ? previous.receivedAt : undefined
@@ -42,38 +63,43 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       (connectionClearWatermark ?? -1) + 1,
       (restoredStatusWatermark ?? -1) + 1
     )
-    if (payload.connectionId) {
-      this.connectionTimestampWatermarkById.set(payload.connectionId, now)
+    if (terminalOwnedPayload.connectionId) {
+      this.connectionTimestampWatermarkById.set(terminalOwnedPayload.connectionId, now)
     }
-    if (payload.providerSessionOnly) {
+    if (terminalOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
       const enriched = {
-        ...this.attachStatusTiming(payload, now),
-        observation: this.stampObservation(payload, origin, now)
+        ...this.attachStatusTiming(terminalOwnedPayload, now),
+        observation: this.stampObservation(terminalOwnedPayload, origin, now)
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
-      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      if (!this.writeLegacyStatusRow(enriched)) {
+        return undefined
+      }
+      this.commitStatusRowMutation(rowBefore, enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       this.emitEnrichedStatus(enriched)
       return enriched
     }
     const stateReconciledPayload =
-      payload.connectionId && payload.payload.agentType === 'codex' && payload.hookEventName
+      terminalOwnedPayload.connectionId &&
+      terminalOwnedPayload.payload.agentType === 'codex' &&
+      terminalOwnedPayload.hookEventName
         ? {
-            ...payload,
+            ...terminalOwnedPayload,
             payload: reconcileRemoteCodexState(
               this.state,
-              payload.paneKey,
-              payload.hookEventName,
-              payload.toolAgentId,
-              payload.payload,
+              terminalOwnedPayload.paneKey,
+              terminalOwnedPayload.hookEventName,
+              terminalOwnedPayload.toolAgentId,
+              terminalOwnedPayload.payload,
               previous?.payload
             )
           }
-        : payload
+        : terminalOwnedPayload
     const previousCodexRoot =
       stateReconciledPayload.payload.agentType === 'codex' &&
       stateReconciledPayload.toolAgentId &&
@@ -104,7 +130,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (boundaryReconciledPrevious !== previous) {
       previous = boundaryReconciledPrevious
       if (previous) {
-        this.state.lastStatusByPaneKey.set(previous.paneKey, previous)
+        if (!this.writeLegacyStatusRow(previous)) {
+          return undefined
+        }
         this.scheduleStatusPersist()
       }
     }
@@ -127,6 +155,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         incomingState: rootContextPreservingPayload.payload.state
       })
     ) {
+      this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
     const identityResolvedPayload =
@@ -139,6 +168,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     const boundaryAwarePayload = attachClaudeChildOnlyBoundary(previous, effectivePayload)
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+      this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
     // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
@@ -150,6 +180,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       previous.payload.prompt === effectivePayload.payload.prompt &&
       Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS
     ) {
+      this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
     if (
@@ -166,6 +197,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       if (effectivePayload.payload.agentType === 'codex') {
         markCodexLeadTurnInterrupted(this.state, effectivePayload.paneKey)
       }
+      this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
     if (
@@ -178,9 +210,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
+    // Why carried forward only within one host: main's OSC parse resolves the handle, so a later
+    // hook must not erase its terminal join; a connection change must not inherit another host's.
     const enriched = {
-      ...this.attachStatusTiming(boundaryAwarePayload, now),
-      observation: this.stampObservation(boundaryAwarePayload, origin, now)
+      ...this.attachStatusTiming(boundaryAwarePayload, now, observedAt),
+      observation: this.stampObservation(boundaryAwarePayload, origin, observedAt ?? now)
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
@@ -197,23 +231,86 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     } else {
       this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     }
-    this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
-    this.scheduleStatusPersist()
+    if (!this.writeLegacyStatusRow(enriched)) {
+      return undefined
+    }
+    this.commitStatusRowMutation(rowBefore, enriched)
+    // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
+    // can only ever reproduce the last file — once per debounce window for a streaming chat.
+    if (!enriched.structuredHost) {
+      this.scheduleStatusPersist()
+    }
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(enriched)
     return enriched
   }
 
-  // Why: every status emit must reach plugins too, so a new early-return path
-  // upstream cannot silently leave the plugin tap behind the main-window fanout.
-  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
-    this.onAgentStatus?.(enriched)
-    for (const listener of this.enrichedStatusListeners) {
-      try {
-        listener(enriched)
-      } catch (err) {
-        console.error('[agent-hooks] enriched status listener threw', err)
-      }
+  protected refreshTerminalStatusEvidence(
+    previous: EnrichedAgentHookEventPayload,
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    emitEnrichedStatus = false
+  ): void {
+    if (!this.canWriteLegacyStatusRow(previous)) {
+      return
     }
+    const connectionClearWatermark = previous.connectionId
+      ? this.connectionTimestampWatermarkById.get(previous.connectionId)
+      : undefined
+    const now = Math.max(Date.now(), (connectionClearWatermark ?? -1) + 1)
+    if (previous.connectionId) {
+      this.connectionTimestampWatermarkById.set(previous.connectionId, now)
+    }
+    const {
+      receivedAt: _receivedAt,
+      evidenceObservedAt: _evidenceObservedAt,
+      stateStartedAt,
+      observation: _observation,
+      restoredUnconfirmed: _restoredUnconfirmed,
+      isReplay: _isReplay,
+      ...payload
+    } = previous
+    const refreshed: EnrichedAgentHookEventPayload = {
+      ...payload,
+      receivedAt: now,
+      evidenceObservedAt: now,
+      stateStartedAt,
+      observation: this.stampObservation(payload, 'osc', now)
+    }
+    const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
+    this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
+    if (!this.writeLegacyStatusRow(refreshed)) {
+      return
+    }
+    this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
+    this.scheduleStatusPersist()
+    // A dismissed row may retain only provider resume identity. Its preserved payload can still
+    // read `working`, but it is deliberately hidden from live readers and must not renew awake or
+    // mobile freshness leases.
+    if (refreshed.providerSessionOnly === true) {
+      return
+    }
+    if (firstRuntimeObservation) {
+      this.notifyStatusChangeListeners()
+    }
+    this.emitStatusFreshnessObservation({
+      paneKey: refreshed.paneKey,
+      state: refreshed.payload.state,
+      receivedAt: refreshed.receivedAt,
+      observedInCurrentRuntime: true,
+      ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),
+      ...(refreshed.terminalHandle ? { terminalHandle: refreshed.terminalHandle } : {})
+    })
+    if (emitEnrichedStatus) {
+      this.emitEnrichedStatus(refreshed)
+    }
+  }
+
+  private writeLegacyStatusRow(entry: EnrichedAgentHookEventPayload): boolean {
+    return admitLegacyAgentStatus(
+      this.state,
+      'main-status-update',
+      entry,
+      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+    )
   }
 }

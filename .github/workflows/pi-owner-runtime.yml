@@ -1,0 +1,29 @@
+name: Pi owner runtime verification
+on:
+  pull_request:
+    paths:
+      - 'src/main/pi/agent-status-handler-source.ts'
+      - 'tests/tools/pi-owner-runtime-smoke.mjs'
+      - '.github/workflows/pi-owner-runtime.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Install pinned extension loader
+        run: npm install --prefix .cache/pi-owner --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.83.0
+      - name: Verify real owner exit and hook delivery
+        run: node tests/tools/pi-owner-runtime-smoke.mjs .cache/pi-owner/node_modules/@earendil-works/pi-coding-agent

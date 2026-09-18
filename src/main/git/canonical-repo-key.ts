@@ -1,3 +1,4 @@
+import type { LocalGitExecOptions } from './repo-default-base-ref'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import { gitExecFileAsync } from './runner'
 import { resolveRevParsePath } from './worktree-path-comparison'
@@ -10,7 +11,7 @@ import { resolveRevParsePath } from './worktree-path-comparison'
  * same repo" means across every worktree that points at it.
  */
 
-export type CanonicalRepoKeyOptions = { wslDistro?: string }
+export type CanonicalRepoKeyOptions = LocalGitExecOptions
 
 const CACHE_MAX = 512
 const cache = new Map<string, string>()

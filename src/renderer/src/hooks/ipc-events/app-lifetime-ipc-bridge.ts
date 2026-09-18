@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
@@ -63,13 +64,23 @@ export function installAppLifetimeIpcEvents(
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
-  const onSharedControlDiagnostics = window.api.runtimeEnvironments?.onSharedControlDiagnostics
-  if (onSharedControlDiagnostics) {
-    unsubs.push(
-      onSharedControlDiagnostics((event) => {
-        useAppStore.getState().publishRuntimeEnvironmentDiagnostics(event)
+  const statusApi = window.api.runtimeEnvironments
+  if (statusApi?.onStatusChanged) {
+    const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
+      useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
+    }
+    let stopped = false
+    unsubs.push(statusApi.onStatusChanged(apply), () => {
+      stopped = true
+    })
+    void statusApi
+      .getStatusSnapshots()
+      .then((snapshots) => {
+        if (!stopped) {
+          snapshots.forEach(apply)
+        }
       })
-    )
+      .catch((error) => console.error('Failed to read runtime status snapshots:', error))
   }
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerProjectCatalogIpcBridge(

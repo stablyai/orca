@@ -19,6 +19,15 @@ import type { ReattachPayloadContext } from './reattach-payload-context'
 import { createReattachPayloadHandlers } from './apply-reattach-payload'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
+import {
+  classifyHiddenOutputSnapshotReject,
+  type HiddenOutputSnapshotResult
+} from './hidden-output-snapshot-serialize'
+import {
+  classifyParkRevealSnapshot,
+  type ParkRevealNoHostImageReason,
+  type ParkRevealRetryLedger
+} from './park-reveal-snapshot-verdict'
 
 type ReattachResultSession = ReattachPayloadSession &
   Pick<
@@ -42,9 +51,12 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'registerSideEffectFactConsumerForPty'
     | 'rejectObsoleteDirectSshReattach'
     | 'reportPanePtyVisibility'
+    | 'retryUnverifiableParkRevealSnapshot'
     | 'sampleVisiblePaneForegroundAgent'
+    | 'warnParkRevealNoHostImage'
     | 'scheduleReattachIdleAgentCursorReset'
     | 'serializeHiddenOutputSnapshot'
+    | 'settlePaneAttachAttempt'
     | 'setPanePtyFitBinding'
     | 'startFreshColdRestoreAgentResume'
     | 'structuralReplayCoordinator'
@@ -163,6 +175,14 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     if (!isCurrentReattachPayload()) {
       return false
     }
+    // The first authoritative attach of the pane a recovery remount produced:
+    // the observation the ledger was waiting for. Placed past the no-PTY-id and
+    // session-expired branches so a failure can never be reported as a success.
+    // Those branches do NOT all settle: only the no-PTY-id arm does, and only
+    // when `session.connectionId` is set (:120). The local arm and the
+    // sessionExpired arm fall through to startFreshColdRestoreAgentResume and
+    // leave the attempt pending, which the 31s bound then ages out.
+    session.settlePaneAttachAttempt?.(undefined, 'success')
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
@@ -271,19 +291,32 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     // host snapshot before releasing queued live bytes; null falls back to
     // the subscribe screen without keeping the old xterm mounted.
     let prefetchedParkModelSnapshot: PtyBufferSnapshot | null = null
+    // Why kept apart from null: null means "paint nothing", never "the pane is
+    // empty". A probe that proved nothing (timeout, host declined for now) must
+    // also re-ask the host, bounded, once the payload has settled.
+    let unverifiableParkRevealLedger: ParkRevealRetryLedger | undefined
+    let noHostImageReason: ParkRevealNoHostImageReason | undefined
     if (revealFollowsTerminalPark && (!hasStructuralReplay || isRemoteRuntimePtyId(ptyId))) {
       if (parseAppSshPtyId(ptyId)) {
         prefetchedParkModelSnapshot = await fetchSshMainModelReattachSnapshot()
       } else {
+        let result: HiddenOutputSnapshotResult
         try {
-          const result = await session.serializeHiddenOutputSnapshot(ptyId, {
+          result = await session.serializeHiddenOutputSnapshot(ptyId, {
             scrollbackRows: resolveHiddenRestoreScrollbackRows(
               session.pane.terminal.options.scrollback
             )
           })
-          prefetchedParkModelSnapshot = result.kind === 'snapshot' ? result.snapshot : null
         } catch {
-          prefetchedParkModelSnapshot = null
+          result = classifyHiddenOutputSnapshotReject(sessionBag, ptyId)
+        }
+        const verdict = classifyParkRevealSnapshot(result, ptyId)
+        if (verdict.kind === 'host-snapshot') {
+          prefetchedParkModelSnapshot = verdict.snapshot
+        } else if (verdict.kind === 'unverifiable') {
+          unverifiableParkRevealLedger = verdict.ledger
+        } else {
+          noHostImageReason = verdict.reason
         }
       }
       if (!isCurrentReattachPayload()) {
@@ -322,6 +355,12 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     }
     if (!isCurrentReattachPayload() || !reattachPayload.reattachPayloadApplied) {
       return false
+    }
+    if (unverifiableParkRevealLedger !== undefined) {
+      // After the payload, so the retry's own structural repaint queues behind this attempt instead of nesting in it.
+      session.retryUnverifiableParkRevealSnapshot(ptyId, unverifiableParkRevealLedger)
+    } else if (noHostImageReason !== undefined) {
+      session.warnParkRevealNoHostImage(ptyId, noHostImageReason)
     }
     session.scheduleReattachIdleAgentCursorReset()
 

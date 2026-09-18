@@ -51,7 +51,7 @@ export function useNativeChatComposerKeyDown({
         return
       }
 
-      if (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') {
+      if (autocomplete.mode === 'slash') {
         const items = autocomplete.items
         if (event.key === 'ArrowDown' && items.length > 0) {
           event.preventDefault()
@@ -66,7 +66,9 @@ export function useNativeChatComposerKeyDown({
         if ((event.key === 'Enter' || event.key === 'Tab') && items.length > 0) {
           event.preventDefault()
           const item = items[activeSuggestion] ?? items[0]
-          if (event.key === 'Enter' && item.kind === 'command') {
+          // A mid-prompt command is part of the sentence being written, so Enter
+          // completes the token instead of sending the command on its own.
+          if (event.key === 'Enter' && item.kind === 'command' && autocomplete.dispatchable) {
             dispatchPickerCommand(item)
           } else {
             completePickerItem(item)
