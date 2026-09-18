@@ -6,6 +6,7 @@ import Foundation
 //
 //   swiftc -O -o /tmp/mobile-web-shell-checks \
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
+//     ios/MobileWebShellLoadState.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -199,6 +200,30 @@ import Foundation
     precondition(!header.contains("\r") && !header.contains("\n"))
   }
 
+  static func checkLoadStateMachine() {
+    precondition(MobileWebShellFailureReason.generationUnreadable.rawValue == "generation-unreadable")
+    precondition(MobileWebShellFailureReason.isolationUnavailable.rawValue == "isolation-unavailable")
+    precondition(MobileWebShellFailureReason.documentLoadFailed.rawValue == "document-load-failed")
+    precondition(MobileWebShellFailureReason.renderProcessGone.rawValue == "render-process-gone")
+
+    let progress = MobileWebShellLoadStateMachine()
+    precondition(progress.started()?.state == "loading")
+    precondition(progress.started() == nil)
+    precondition(progress.finished()?.state == "ready")
+    precondition(progress.finished() == nil)
+
+    // A rule list compiles asynchronously, so it can fail after the generation was already refused.
+    let refused = MobileWebShellLoadStateMachine()
+    precondition(refused.failed(.generationUnreadable)?.reason == "generation-unreadable")
+    precondition(refused.failed(.isolationUnavailable) == nil)
+    precondition(refused.failed(.renderProcessGone) == nil)
+    precondition(refused.finished() == nil)
+    precondition(refused.started() == nil)
+
+    refused.reset()
+    precondition(refused.failed(.generationUnreadable)?.reason == "generation-unreadable")
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -206,6 +231,7 @@ import Foundation
     checkContentTypes()
     checkGenerationMap()
     checkCsp()
+    checkLoadStateMachine()
     print("mobile web shell checks OK")
   }
 }

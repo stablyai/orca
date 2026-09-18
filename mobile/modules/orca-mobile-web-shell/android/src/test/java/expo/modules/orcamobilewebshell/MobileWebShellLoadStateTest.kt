@@ -1,0 +1,76 @@
+package expo.modules.orcamobilewebshell
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+private fun failure(reason: String) = MobileWebShellLoadEmission("failed", reason)
+
+class MobileWebShellLoadStateTest {
+  @Test
+  fun `spells each reason the way the TypeScript parser reads it`() {
+    assertEquals(
+      listOf(
+        "generation-unreadable",
+        "isolation-unavailable",
+        "document-load-failed",
+        "render-process-gone"
+      ),
+      MobileWebShellFailureReason.entries.map { it.wireName }
+    )
+  }
+
+  @Test
+  fun `reports a load in progress and then a load that finished`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertEquals(MobileWebShellLoadEmission("loading", null), machine.started())
+    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
+  }
+
+  @Test
+  fun `says nothing twice in a row`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertNotNull(machine.started())
+    assertNull(machine.started())
+    assertNotNull(machine.finished())
+    assertNull(machine.finished())
+  }
+
+  // Chromium commits its error document after onReceivedError returns, so onPageFinished arrives
+  // after the failure; reporting `ready` there would also un-hide the error page.
+  @Test
+  fun `a load that finished after a failure reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    assertEquals(
+      failure("document-load-failed"),
+      machine.failed(MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED)
+    )
+    assertNull(machine.finished())
+    assertNull(machine.started())
+  }
+
+  @Test
+  fun `a second failure reports nothing, whatever its reason`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertEquals(
+      failure("generation-unreadable"),
+      machine.failed(MobileWebShellFailureReason.GENERATION_UNREADABLE)
+    )
+    assertNull(machine.failed(MobileWebShellFailureReason.GENERATION_UNREADABLE))
+    assertNull(machine.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
+    assertNull(machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+  }
+
+  @Test
+  fun `a new prop pair may report again, including the same failure`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE)
+    machine.reset()
+    assertEquals(
+      failure("render-process-gone"),
+      machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE)
+    )
+  }
+}

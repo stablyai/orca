@@ -1,0 +1,52 @@
+package expo.modules.orcamobilewebshell
+
+/** The wire names the TypeScript parser accepts; a swap here is a silent change of meaning. */
+internal enum class MobileWebShellFailureReason(val wireName: String) {
+  GENERATION_UNREADABLE("generation-unreadable"),
+  ISOLATION_UNAVAILABLE("isolation-unavailable"),
+  DOCUMENT_LOAD_FAILED("document-load-failed"),
+  RENDER_PROCESS_GONE("render-process-gone")
+}
+
+internal data class MobileWebShellLoadEmission(val state: String, val reason: String?) {
+  fun toPayload(): Map<String, Any> = if (reason == null) {
+    mapOf("state" to state)
+  } else {
+    mapOf("state" to state, "reason" to reason)
+  }
+}
+
+/**
+ * What a mount is still allowed to report. A failure is terminal: Chromium commits its own error
+ * document after `onReceivedError` returns, and a rule list can fail to compile long after the
+ * generation was already refused, so without this a `ready` or a second reason lands on top of a
+ * failure the caller has already acted on. Consecutive duplicates are dropped as well.
+ *
+ * Pure, and the same rule on both platforms, so a JVM test and a `swiftc` check can hold it.
+ */
+internal class MobileWebShellLoadStateMachine {
+  private var terminal = false
+  private var last: MobileWebShellLoadEmission? = null
+
+  /** A new prop pair. Nothing else reopens a terminal state: a retry is a remount. */
+  fun reset() {
+    terminal = false
+    last = null
+  }
+
+  fun started(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("loading", null))
+
+  fun finished(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("ready", null))
+
+  fun failed(reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? {
+    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName))
+    terminal = true
+    return emission
+  }
+
+  private fun emit(emission: MobileWebShellLoadEmission): MobileWebShellLoadEmission? {
+    if (terminal || emission == last) return null
+    last = emission
+    return emission
+  }
+}
