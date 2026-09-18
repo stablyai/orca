@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { SettingsSearchEntry } from './settings-search'
 import { translateSearchKeyword } from './settings-search-keywords'
 
+/** Returns searchable keywords for the Native Chat experimental settings. */
 export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
   return {
     title: translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI'),
@@ -49,6 +50,18 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
       ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.agent',
         'agent'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.send',
+        'send'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.enter',
+        'enter'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.shortcut',
+        'shortcut'
       )
     ]
   }

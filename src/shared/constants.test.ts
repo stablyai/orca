@@ -73,6 +73,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalLinkActionPopoverEnabled).toBe(true)
   })
 
+  it('uses Enter to send native chat messages by default', () => {
+    expect(getDefaultSettings('/tmp').nativeChatSendShortcut).toBe('enter')
+  })
+
   it('confirms before closing pinned tabs by default', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })

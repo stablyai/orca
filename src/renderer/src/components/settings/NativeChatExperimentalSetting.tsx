@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { normalizeNativeChatSendShortcut } from '../../../../shared/native-chat-send-shortcut'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -7,6 +8,7 @@ import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
 import { getExperimentalSearchEntry } from './experimental-search'
+import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
 
 type NativeChatDefaultView = 'terminal-chat' | 'native-chat'
 
@@ -15,6 +17,7 @@ type NativeChatExperimentalSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+/** Renders Native Chat experimental settings, including the send shortcut. */
 export function NativeChatExperimentalSetting({
   settings,
   updateSettings
@@ -26,6 +29,7 @@ export function NativeChatExperimentalSetting({
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
   // Structured-only settings; terminal-backed chat never reads them.
   const structuredChatActive = defaultView === 'native-chat' && structuredNativeChatEnabled
+  const nativeChatSendShortcut = normalizeNativeChatSendShortcut(settings.nativeChatSendShortcut)
 
   return (
     <SearchableSetting
@@ -112,6 +116,51 @@ export function NativeChatExperimentalSetting({
                     'Chat UI'
                   )}
                 </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.sendShortcutTitle',
+                  'Send messages with'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.sendShortcutCopy',
+                  'Choose whether Enter sends a message or inserts a newline.'
+                )}
+              </p>
+            </div>
+            <Select
+              value={nativeChatSendShortcut}
+              onValueChange={(value) => {
+                updateSettings({
+                  nativeChatSendShortcut: normalizeNativeChatSendShortcut(value)
+                })
+              }}
+            >
+              <SelectTrigger
+                aria-label={translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.sendShortcutLabel',
+                  'Native Chat send shortcut'
+                )}
+                className="w-40"
+                size="sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
+                <SelectItem value="enter">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.sendShortcutEnter',
+                    'Enter'
+                  )}
+                </SelectItem>
+                <SelectItem value="cmd-or-ctrl-enter">{getScreenSubmitShortcutLabel()}</SelectItem>
               </SelectContent>
             </Select>
           </div>
