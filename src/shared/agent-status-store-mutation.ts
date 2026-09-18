@@ -16,6 +16,7 @@ import { parseAgentStatusFactRecord } from './agent-status-store-fact-codec'
 import { parseAgentStatusParentRecord } from './agent-status-store-parent'
 import {
   agentStatusFactMapKey,
+  agentStatusTombstoneFences,
   agentStatusTombstoneMapKey,
   cloneAgentStatusStoreState,
   deepFreezeAgentStatusStoreValue,
@@ -141,8 +142,7 @@ function upsertParent(
   revision: number
 ): boolean {
   const key = serializeAgentStatusSubject(input.subject)
-  const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('parent', key))
-  if (tombstone && tombstone.revision >= revision) {
+  if (agentStatusTombstoneFences(state, 'parent', key, revision)) {
     return false
   }
   const previous = state.parents.get(key)
@@ -168,7 +168,7 @@ function upsertChildren(
   for (const input of children) {
     const previous = state.children.get(input.childWorkId)
     if (
-      state.tombstones.has(agentStatusTombstoneMapKey('child', input.childWorkId)) ||
+      agentStatusTombstoneFences(state, 'child', input.childWorkId, revision) ||
       !state.parents.has(serializeAgentStatusSubject(input.parent)) ||
       (previous !== undefined && previous.firstObservedAt !== input.firstObservedAt) ||
       (previous !== undefined && input.observedAt < previous.observedAt)
@@ -194,10 +194,11 @@ function upsertAliases(
     if (!record) {
       return false
     }
-    state.aliases.set(
-      serializeAgentChildWorkBindingKey(record),
-      deepFreezeAgentStatusStoreValue(record)
-    )
+    const key = serializeAgentChildWorkBindingKey(record)
+    if (agentStatusTombstoneFences(state, 'alias', key, revision)) {
+      return false
+    }
+    state.aliases.set(key, deepFreezeAgentStatusStoreValue(record))
   }
   return true
 }
@@ -212,7 +213,11 @@ function upsertFacts(
     if (!record || !state.parents.has(serializeAgentStatusSubject(record.subject))) {
       return false
     }
-    state.facts.set(agentStatusFactMapKey(record), deepFreezeAgentStatusStoreValue(record))
+    const key = agentStatusFactMapKey(record)
+    if (agentStatusTombstoneFences(state, 'fact', key, revision)) {
+      return false
+    }
+    state.facts.set(key, deepFreezeAgentStatusStoreValue(record))
   }
   return true
 }

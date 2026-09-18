@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import type { AgentChildWorkInput } from './agent-status-child-work'
+import {
+  createAgentChildWorkAdmission,
+  type AgentChildWorkAnnounceRequest
+} from './agent-status-child-work-admission'
 import { serializeAgentStatusProviderAliasKey } from './agent-status-run-alias-index'
 import { createAgentStatusStore } from './agent-status-store'
 import {
@@ -344,11 +348,112 @@ describe('AgentStatusStore', () => {
     expect(new Set(removed.tombstones.map((item) => item.revision))).toEqual(new Set([2]))
   })
 
-  it('never resurrects an exactly removed child id within tombstone retention', () => {
+  it('refuses a child torn down and re-added inside one mutation', () => {
     const { parent, store } = populatedStore()
+    expect(
+      store.applyMutation({
+        removeChildren: ['child-1'],
+        children: [child(parent, { observedAt: 30 })]
+      })
+    ).toBeNull()
+    expect(store.getChild('child-1')?.observedAt).toBe(20)
+  })
+
+  it('re-admits a torn-down child at a later revision while identity fences survive marker compaction', () => {
+    const parent = subject()
+    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
+    const seed = store.applyMutation({
+      parent: { subject: parent, firstObservedAt: 5 },
+      children: [child(parent)]
+    })
+    expect(seed).not.toBeNull()
+    const replica = createAgentStatusStore({ epoch: 'replica', mode: 'replica' })
+    expect(replica.applySnapshot(store.getSnapshot())).toBe(true)
+
     expect(store.applyMutation({ removeChildren: ['child-1'] })).not.toBeNull()
-    expect(store.applyMutation({ children: [child(parent, { observedAt: 30 })] })).toBeNull()
+    expect(
+      store
+        .getSnapshot()
+        .tombstones.some((item) => item.entity === 'child' && item.key === 'child-1')
+    ).toBe(true)
+    expect(store.applyMutation({ children: [child(parent, { observedAt: 40 })] })).not.toBeNull()
+    expect(store.getChild('child-1')?.observedAt).toBe(40)
+
+    // Ablate the marker: compaction evicts it, and the fences below must still hold.
+    expect(store.applyMutation({ removeChildren: ['child-1'] })).not.toBeNull()
+    expect(
+      store.applyMutation({
+        removeChildren: Array.from(
+          { length: AGENT_STATUS_STORE_LIMITS.tombstones + 1 },
+          (_, index) => `unused-child-${index}`
+        )
+      })
+    ).not.toBeNull()
+    expect(
+      store
+        .getSnapshot()
+        .tombstones.some((item) => item.entity === 'child' && item.key === 'child-1')
+    ).toBe(false)
+
+    expect(replica.applySnapshot(store.getSnapshot())).toBe(true)
+    expect(replica.applyTransportEnvelope(seed)).toBe(false)
+    expect(replica.getChild('child-1')).toBeNull()
+    expect(
+      createAgentChildWorkAdmission(store, { mintChildWorkId: () => 'minted-1' }).adopt({
+        parent,
+        provider: 'claude',
+        childWorkId: 'child-1',
+        expectedFence: { invocationId: 'invocation-1', generation: 1 },
+        aliases: [{ segmentId: 'segment-1', aliasKind: 'task_id', alias: 'provider-task-1' }],
+        kind: 'agent',
+        state: 'working',
+        membership: 'live',
+        observedAt: 90,
+        stoppable: true,
+        provenance: { source: 'structured-session', producerId: 'journal-1' }
+      })
+    ).toEqual({ accepted: false, reason: 'unknown-child' })
+  })
+
+  it('admits new child work announced under a reused alias after a parent drop and reopen', () => {
+    const parent = subject()
+    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
+    expect(store.applyMutation({ parent: { subject: parent, firstObservedAt: 5 } })).not.toBeNull()
+    let minted = 0
+    const admission = createAgentChildWorkAdmission(store, {
+      mintChildWorkId: () => `minted-${(minted += 1)}`
+    })
+    const announce = {
+      parent,
+      provider: 'claude',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      stoppable: true,
+      provenance: { source: 'structured-session', producerId: 'journal-1' },
+      aliases: [{ segmentId: 'segment-1', aliasKind: 'task_id', alias: 'provider-task-1' }],
+      lifetime: 'current'
+    } satisfies Omit<AgentChildWorkAnnounceRequest, 'observedAt' | 'fence'>
+
+    expect(
+      admission.announce({
+        ...announce,
+        observedAt: 20,
+        fence: { invocationId: 'invocation-1', generation: 1 }
+      })
+    ).toMatchObject({ accepted: true, childWorkId: 'minted-1' })
     expect(store.applyMutation({ removeParent: parent })).not.toBeNull()
+    expect(store.applyMutation({ parent: { subject: parent, firstObservedAt: 60 } })).not.toBeNull()
+
+    // A reusable provider name may not latch its slot: the next occupant gets a fresh identity.
+    expect(
+      admission.announce({
+        ...announce,
+        observedAt: 80,
+        fence: { invocationId: 'invocation-2', generation: 1 }
+      })
+    ).toMatchObject({ accepted: true, childWorkId: 'minted-2', created: true })
+    expect(store.getChildren(parent).map((entry) => entry.childWorkId)).toEqual(['minted-2'])
   })
 
   it('persists a bounded snapshot and restores child identity under a new epoch', () => {
