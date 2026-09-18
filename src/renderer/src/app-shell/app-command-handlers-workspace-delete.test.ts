@@ -51,7 +51,8 @@ function shortcutInput(): ShortcutDispatchInput {
   return {
     target: null,
     defaultPrevented: false,
-    preventDefault: vi.fn()
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
   }
 }
 

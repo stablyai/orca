@@ -78,6 +78,7 @@ vi.mock('@/store', async () => {
       toggleRightSidebar: vi.fn(),
       activeWorktreeId: mockAppState.activeWorktreeId,
       getKnownWorktreeById: getMockKnownWorktree,
+      worktreesByRepo: { 'repo-1': [getMockKnownWorktree()] },
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
