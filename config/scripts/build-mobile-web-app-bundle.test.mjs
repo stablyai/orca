@@ -329,6 +329,50 @@ describeBundling('the app bundle', () => {
     expect(entryStaticClosure(metafile, 'dist/entry.js').size).toBe(2)
   })
 
+  itBundling(
+    'refuses to build a route the lazy manifest would strip an export from',
+    async () => {
+      await withScratch(async (scratch) => {
+        const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
+        await mkdir(directory, { recursive: true })
+        await writeFile(
+          join(directory, 'index.tsx'),
+          'export default function Route() { return null }\n'
+        )
+        await expect(bundleMobileWebApp({ appDir: scratch })).resolves.toBeTruthy()
+        await writeFile(
+          join(directory, 'settings.tsx'),
+          'const anchor = { anchor: "index" }\nexport { anchor as unstable_settings }\nexport default function Route() { return null }\n'
+        )
+        // The build is where this has to fail: the page it would otherwise emit mounts with the
+        // export silently gone, which is a blank screen on a phone and nothing in any log.
+        await expect(bundleMobileWebApp({ appDir: scratch })).rejects.toThrow(
+          /settings\.tsx.*unstable_settings/s
+        )
+      })
+    },
+    240_000
+  )
+
+  itBundling(
+    'refuses a route whose star re-export it cannot read',
+    async () => {
+      await withScratch(async (scratch) => {
+        const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
+        await mkdir(directory, { recursive: true })
+        await writeFile(join(directory, 'boundary.ts'), 'export const value = 1\n')
+        await writeFile(
+          join(directory, 'index.tsx'),
+          'export * from "./boundary"\nexport default function Route() { return null }\n'
+        )
+        await expect(bundleMobileWebApp({ appDir: scratch })).rejects.toThrow(
+          /index\.tsx.*boundary/s
+        )
+      })
+    },
+    240_000
+  )
+
   it('bundles every route module', async () => {
     const { routeKeys } = await bundleMobileWebApp()
     expect(routeKeys).toEqual(await collectMobileWebAppRouteKeys(appDir))

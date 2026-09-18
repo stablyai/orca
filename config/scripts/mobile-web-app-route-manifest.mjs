@@ -88,7 +88,8 @@ routeContext.id = 'orca-mobile-web-app-routes'`
  *
  * `default` is the whole module: a lazy module cannot answer `unstable_settings` or
  * `ErrorBoundary`, which expo-router reads synchronously off the namespace. No route in the
- * mounted subtree exports either, and `routeModuleSynchronousExports` below is what holds that.
+ * mounted subtree exports either, and `assertRoutesCarryNoSynchronousExports` below fails the
+ * build rather than emitting a page that mounts with the export silently gone.
  */
 export function renderMobileWebAppRouteManifest(routes) {
   const entryLines = routes.map(
@@ -144,4 +145,32 @@ export async function routeModuleSynchronousExports(modulePath) {
     ),
     starExports: [...result.outputFiles[0].text.matchAll(STAR_REEXPORT)].map((match) => match[1])
   }
+}
+
+/**
+ * Fails the build on any route the lazy manifest would strip an export from. Runs in the build
+ * and not only in a test, because what it prevents is a page that mounts with `ErrorBoundary`
+ * gone: the throw escapes to the window, nothing paints, and no log says why.
+ *
+ * 14 parses of one module each, so it costs a fraction of the bundle it guards.
+ */
+export async function assertRoutesCarryNoSynchronousExports(routes) {
+  const read = await Promise.all(routes.map(({ module }) => routeModuleSynchronousExports(module)))
+  routes.forEach(({ key }, index) => {
+    const { named, starExports } = read[index]
+    if (named.length > 0) {
+      throw new Error(
+        `[mobile-web-app] ${key} exports ${named.join(', ')}, which expo-router reads off the ` +
+          'module namespace while it builds the route tree. A route behind import() cannot answer ' +
+          'it, so this route needs a static import or the export has to move to a layout.'
+      )
+    }
+    if (starExports.length > 0) {
+      throw new Error(
+        `[mobile-web-app] ${key} re-exports all of ${starExports.join(', ')}, so whether it ` +
+          `carries ${ROUTE_MODULE_SYNCHRONOUS_EXPORTS.join(' or ')} cannot be read without ` +
+          'bundling it. Name the exports instead of re-exporting the module whole.'
+      )
+    }
+  })
 }

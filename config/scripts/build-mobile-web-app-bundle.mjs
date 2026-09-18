@@ -13,6 +13,7 @@ import {
   contentTypeForExtension
 } from './build-mobile-web-bundle.mjs'
 import {
+  assertRoutesCarryNoSynchronousExports,
   collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest
 } from './mobile-web-app-route-manifest.mjs'
@@ -264,6 +265,7 @@ const isScriptOutput = (path) => path.endsWith('.js')
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
+  await assertRoutesCarryNoSynchronousExports(routes)
   const result = await esbuild.build(mobileWebAppBuildOptions(routes))
   const entryOutputPath = Object.keys(result.metafile.outputs).find(
     (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
