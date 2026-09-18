@@ -24,6 +24,9 @@ const GIT_CONFLICT_KIND = [
 ] as const
 const GIT_CONFLICT_OPERATION = ['merge', 'rebase', 'cherry-pick', 'unknown'] as const
 
+// Built once: readProjectedConflictOperation runs on every reply.
+const gitConflictOperationSchema = z.enum(GIT_CONFLICT_OPERATION)
+
 /**
  * One working-tree entry.
  *
@@ -70,7 +73,7 @@ const gitUpstreamStatusSchema = z.looseObject({
  */
 export const gitStatusHostPayloadSchema = z.looseObject({
   entries: salvagingArray(gitStatusEntrySchema),
-  conflictOperation: salvagedOptional('conflictOperation', z.enum(GIT_CONFLICT_OPERATION)),
+  conflictOperation: salvagedOptional('conflictOperation', gitConflictOperationSchema),
   branch: salvagedOptional('branch', z.string()),
   head: salvagedOptional('head', z.string()),
   upstreamStatus: salvagedOptional('upstreamStatus', gitUpstreamStatusSchema)
@@ -168,6 +171,6 @@ export const gitStatusProjectionSchema: z.ZodType<MobileGitStatusProjection | nu
 // Main coerced an unreadable operation to 'unknown' rather than dropping the reply; four screens
 // render off that value, so the coercion is the behaviour, not a defect.
 function readProjectedConflictOperation(value: unknown): GitConflictOperation {
-  const parsed = z.enum(GIT_CONFLICT_OPERATION).safeParse(value)
+  const parsed = gitConflictOperationSchema.safeParse(value)
   return parsed.success ? parsed.data : 'unknown'
 }

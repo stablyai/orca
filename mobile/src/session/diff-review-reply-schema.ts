@@ -27,6 +27,9 @@ const GIT_BRANCH_COMPARE_STATUS = [
 
 type GitBranchCompareStatus = (typeof GIT_BRANCH_COMPARE_STATUS)[number]
 
+// Built once: readProjectedCompareStatus runs on every reply.
+const gitBranchCompareStatusSchema = z.enum(GIT_BRANCH_COMPARE_STATUS)
+
 /**
  * One committed change.
  *
@@ -101,7 +104,7 @@ export const branchCompareProjectionSchema: z.ZodType<MobileGitBranchCompareResu
 // Main coerced an unreadable compare status to 'error' rather than dropping the reply, and the
 // summary line renders off that value, so the coercion is the behaviour rather than a defect.
 function readProjectedCompareStatus(value: unknown): GitBranchCompareStatus {
-  const parsed = z.enum(GIT_BRANCH_COMPARE_STATUS).safeParse(value)
+  const parsed = gitBranchCompareStatusSchema.safeParse(value)
   return parsed.success ? parsed.data : 'error'
 }
 
