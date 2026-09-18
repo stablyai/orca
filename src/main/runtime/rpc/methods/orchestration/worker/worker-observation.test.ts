@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { exposeDispatchContext, exposeWorker, inspectWorkerTerminal } from './worker-observation'
+import {
+  exposeDispatchContext,
+  exposeObservation,
+  exposeWorker,
+  inspectWorkerTerminal
+} from './worker-observation'
 import type { DispatchContextRow, WorkerDispatchRow } from '../../../../orchestration/types'
 
 const DISPATCH_ID = 'ctx-worker'
@@ -39,7 +44,10 @@ describe('inspectWorkerTerminal missing liveness verdict', () => {
     })
   })
 
-  it('keeps a disconnected local worker exited', async () => {
+  // O1: worker-observation.ts minted `exited` from a disconnected PTY plus an absent liveness
+  // verdict — that is contact loss, not a host vouching for the process's death. Was pinned
+  // 'exited'; loss of contact is never exited (AGENTS.md rule 7).
+  it('reports a disconnected local worker with no liveness verdict as unverifiable', async () => {
     const { runtime, db } = createHarness({
       connected: false,
       hostScope: { kind: 'local', hostId: 'local' }
@@ -47,7 +55,7 @@ describe('inspectWorkerTerminal missing liveness verdict', () => {
 
     await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
       exact: true,
-      status: 'exited'
+      status: 'unverifiable'
     })
   })
 
@@ -62,6 +70,121 @@ describe('inspectWorkerTerminal missing liveness verdict', () => {
       status: 'unverifiable',
       reason: 'missing_liveness_verdict'
     })
+  })
+})
+
+describe('inspectWorkerTerminal showTerminal failure classification', () => {
+  function createFailureHarness(showTerminal: () => Promise<never>) {
+    const runtime = {
+      showTerminal,
+      getTerminalPaneKey: vi.fn(() => 'tab-worker:leaf-worker'),
+      getTerminalProcessIncarnation: vi.fn(() => 'pty-worker:incarnation-1'),
+      getTerminalLivenessVerdict: vi.fn(() => null),
+      getOrchestrationDispatchAuthority: vi.fn(() => null)
+    } as unknown as OrcaRuntimeService
+    const db = {
+      getWorkerDispatch: vi.fn(() => ({ agent_terminal_handle: TERMINAL_HANDLE })),
+      getDispatchContextById: vi.fn(() => ({
+        host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
+      })),
+      isDispatchProcessCurrent: vi.fn(() => true)
+    } as unknown as OrchestrationDb
+    return { runtime, db }
+  }
+
+  // O1: every showTerminal exception collapsed to 'missing' — a transport timeout got the same
+  // owner-proven-absence verdict as the owner actually saying "not found".
+  it('classifies an unclassified showTerminal failure as unverifiable, not missing', async () => {
+    const { runtime, db } = createFailureHarness(() =>
+      Promise.reject(new Error('boom, nothing recognizable'))
+    )
+
+    await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
+      exact: false,
+      status: 'unverifiable'
+    })
+  })
+
+  it('classifies a request timeout as unverifiable, not missing', async () => {
+    const { runtime, db } = createFailureHarness(() =>
+      Promise.reject(Object.assign(new Error('deadline exceeded'), { code: 'request_timeout' }))
+    )
+
+    await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
+      exact: false,
+      status: 'unverifiable'
+    })
+  })
+
+  it('keeps missing when the owner proves the terminal is gone', async () => {
+    const { runtime, db } = createFailureHarness(() =>
+      Promise.reject(Object.assign(new Error('terminal_gone'), { code: 'terminal_gone' }))
+    )
+
+    await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
+      exact: false,
+      status: 'missing'
+    })
+  })
+
+  // O2: terminal_handle_stale and terminal_not_found describe a renderer graph-epoch mismatch or a
+  // missing/mismatched local leaf (orca-runtime-build-pty-terminal-summary.ts) -- the client-side
+  // handle graph, not the execution owner's process. Only a resolved null or a PTY-host
+  // terminal_gone is owner-proven missing; these two must not mint missing.
+  it('treats terminal_handle_stale as unverifiable, not owner-proven missing', async () => {
+    const { runtime, db } = createFailureHarness(() =>
+      Promise.reject(
+        Object.assign(new Error('terminal_handle_stale'), { code: 'terminal_handle_stale' })
+      )
+    )
+
+    await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
+      exact: false,
+      status: 'unverifiable'
+    })
+  })
+
+  it('treats terminal_not_found as unverifiable, not owner-proven missing', async () => {
+    const { runtime, db } = createFailureHarness(() =>
+      Promise.reject(new Error('terminal_not_found'))
+    )
+
+    await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
+      exact: false,
+      status: 'unverifiable'
+    })
+  })
+})
+
+describe('exposeObservation liveness verdict', () => {
+  // O1 deviation: a narrowing to `live | unverifiable | exited` was tried here and reverted —
+  // workers-recovery.test.ts pins `identity_changed` and `unattached` as their own exposed wire
+  // values, each with distinct operator/CLI meaning a plain `exited` would have erased. This just
+  // pins the passthrough those tests already rely on.
+  it('passes every status straight through, with its own reason', () => {
+    expect(exposeObservation({ terminal: null, exact: false, status: 'unattached' })).toEqual({
+      status: 'unattached',
+      exactWorker: false
+    })
+    expect(exposeObservation({ terminal: null, exact: false, status: 'missing' })).toEqual({
+      status: 'missing',
+      exactWorker: false
+    })
+    expect(exposeObservation({ terminal: null, exact: false, status: 'identity_changed' })).toEqual(
+      { status: 'identity_changed', exactWorker: false }
+    )
+    expect(exposeObservation({ terminal: null, exact: true, status: 'live' })).toEqual({
+      status: 'live',
+      exactWorker: true
+    })
+    expect(
+      exposeObservation({
+        terminal: null,
+        exact: true,
+        status: 'unverifiable',
+        reason: 'timeout'
+      })
+    ).toEqual({ status: 'unverifiable', exactWorker: true, reason: 'timeout' })
   })
 })
 

@@ -131,7 +131,23 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(retained)
     }
   }
-  if (observation.status === 'missing' || observation.status === 'unattached') {
+  // Why the PTY `unverifiable` case joins this branch (O2): inspectWorkerTerminal reports a
+  // stale/unresolved handle (terminal_handle_stale, terminal_not_found) as unverifiable rather
+  // than owner-proven missing, since neither is the execution owner confirming the process is
+  // gone -- but showTerminal still returned nothing to observe, exactly like missing/unattached.
+  // Gated on `kind === 'pty'` (O3), not `terminal === null`: a structured worker's
+  // observeStructuredWorker also returns `terminal: null` for a legitimate host-owned
+  // `unverifiable` (host not installed, no durable record, non-native lease, no attached child),
+  // and that answer must NOT be treated as absent -- it is real evidence from the worker's own
+  // owner, just not evidence of exit. This path never trusted "not found" alone anyway -- recovery
+  // mode re-verifies with an independent, exact incarnation-liveness check before ever settling
+  // released, and interactive mode reports release_unknown rather than guessing -- so it is
+  // exactly as safe here as it always was for missing/unattached.
+  if (
+    observation.status === 'missing' ||
+    observation.status === 'unattached' ||
+    (observation.status === 'unverifiable' && observation.kind === 'pty')
+  ) {
     if (args.mode === 'recovery') {
       // A close can succeed before the process crashes, leaving `releasing` durable state while
       // terminal inventory no longer resolves the handle. Only a positive host liveness verdict

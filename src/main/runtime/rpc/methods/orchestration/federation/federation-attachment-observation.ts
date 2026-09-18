@@ -1,4 +1,8 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
+import {
+  classifyTerminalProcessInspectionFailure,
+  isOwnerProvenTerminalAbsence
+} from '../../../../../../shared/terminal-process-inspection'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
@@ -36,9 +40,29 @@ export async function inspectRemoteAttachment(
   if (!attachment?.terminal_handle) {
     return { terminal: null, exact: false, status: 'unattached' }
   }
-  const terminal = await runtime.showTerminal(attachment.terminal_handle).catch(() => null)
+  let showTerminalFailure: unknown
+  const terminal = await runtime
+    .showTerminal(attachment.terminal_handle)
+    .catch((error: unknown) => {
+      showTerminalFailure = error
+      return null
+    })
   if (!terminal) {
-    return { terminal: null, exact: false, status: 'missing' }
+    // O4: every showTerminal rejection used to collapse to 'missing' here -- the owner-proven-absence
+    // word `federationShow` ships to the Run home -- so a transport timeout or a stale local handle
+    // read as this host certifying the terminal gone. Same gate as inspectWorkerTerminal (O1/O2):
+    // only a resolved null or the owner's own `terminal_gone` is absence; the rest is lost contact.
+    if (isOwnerProvenTerminalAbsence(showTerminalFailure)) {
+      return { terminal: null, exact: false, status: 'missing' }
+    }
+    return {
+      terminal: null,
+      exact: false,
+      status: 'unverifiable',
+      reason:
+        classifyTerminalProcessInspectionFailure(showTerminalFailure) ??
+        'unclassified_inspection_failure'
+    }
   }
   const exact = db.isRemoteAttachmentProcessCurrent({
     dispatchId,

@@ -23,6 +23,16 @@ export type {
 
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
+// O3: the client-side absence family classifyTerminalProcessInspectionFailure used to spell
+// 'terminal_gone' for every one of these, plus the host's own proven claim.
+const TERMINAL_ABSENCE_SEND_REASONS: ReadonlySet<string> = new Set([
+  'terminal_gone',
+  'terminal_handle_stale',
+  'terminal_exited',
+  'no_connected_pty',
+  'terminal_not_found'
+])
+
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 type TerminalLayoutsByTabId = ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
@@ -311,7 +321,13 @@ export async function sendRuntimePtyInputVerified(
     }
     return false
   } catch (error) {
-    if (classifyTerminalProcessInspectionFailure(error) === 'terminal_gone') {
+    // O3: a send that finds no terminal to write to reports "not accepted" the same way whether
+    // the client-side handle is stale, exited, disconnected, or genuinely not found, or the host
+    // itself says terminal_gone -- classifyTerminalProcessInspectionFailure now spells each of
+    // those distinctly (they are no longer all 'terminal_gone'), so this must match the whole
+    // absence family, not the one string that used to stand for it.
+    const reason = classifyTerminalProcessInspectionFailure(error)
+    if (reason && TERMINAL_ABSENCE_SEND_REASONS.has(reason)) {
       return false
     }
     throw error

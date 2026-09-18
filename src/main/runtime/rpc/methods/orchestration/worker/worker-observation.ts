@@ -3,6 +3,10 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import {
+  classifyTerminalProcessInspectionFailure,
+  isOwnerProvenTerminalAbsence
+} from '../../../../../../shared/terminal-process-inspection'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import {
@@ -25,6 +29,11 @@ export async function inspectWorkerTerminal(
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
+  /** Set on `terminal: null` observations to say which observer produced them (O3): 'pty' is a
+   *  `showTerminal` client-side failure (stale handle, no connected pty, ...); 'structured' is
+   *  `observeStructuredWorker`'s own host-owned verdict. The two are not interchangeable evidence
+   *  — a caller that treats every `terminal: null` the same conflates them. */
+  kind?: 'pty' | 'structured'
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
 }> {
@@ -53,12 +62,36 @@ export async function inspectWorkerTerminal(
       terminal: null,
       exact,
       status: exact ? observation.status : 'identity_changed',
+      kind: 'structured',
       ...(exact && observation.reason ? { reason: observation.reason } : {})
     }
   }
-  const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
+  let showTerminalFailure: unknown
+  const terminal = await runtime.showTerminal(terminalHandle).catch((error: unknown) => {
+    showTerminalFailure = error
+    return null
+  })
   if (!terminal) {
-    return { terminal: null, exact: false, status: 'missing' }
+    // O1: every showTerminal exception used to collapse to 'missing', so a transport timeout
+    // read the same owner-proven-absence verdict as the owner actually saying "not found".
+    // A resolved null is the owner saying "no such terminal"; a thrown PTY-host `terminal_gone`
+    // is the same claim from further down the stack. Both are owner-proven absence.
+    // O2: `terminal_not_found` and `terminal_handle_stale` describe the client-side handle graph
+    // (a renderer graph-epoch mismatch, or a missing/mismatched local leaf -- see
+    // orca-runtime-build-pty-terminal-summary.ts), not the execution owner's process, so they must
+    // not mint `missing` here even though `classifyTerminalProcessInspectionFailure` buckets them
+    // under the same client-facing 'terminal_gone' reason as a real owner-proven `terminal_gone`.
+    const failureReason = classifyTerminalProcessInspectionFailure(showTerminalFailure)
+    if (isOwnerProvenTerminalAbsence(showTerminalFailure)) {
+      return { terminal: null, exact: false, status: 'missing', kind: 'pty' }
+    }
+    return {
+      terminal: null,
+      exact: false,
+      status: 'unverifiable',
+      kind: 'pty',
+      reason: failureReason ?? 'unclassified_inspection_failure'
+    }
   }
   const exact = db.isDispatchProcessCurrent({
     dispatchId,
@@ -96,10 +129,13 @@ export async function inspectWorkerTerminal(
         agentWait
       }
     }
+    // O1: an absent liveness verdict plus `connected: false` is contact loss, not a host
+    // vouching for the process's death — silence is never proof (AGENTS.md rule 7).
     return {
       terminal,
       exact,
-      status: terminal.connected === false ? 'exited' : 'live',
+      status: terminal.connected === false ? 'unverifiable' : 'live',
+      ...(terminal.connected === false ? { reason: 'missing_liveness_verdict' } : {}),
       agentWait
     }
   }
@@ -113,7 +149,16 @@ export async function inspectWorkerTerminal(
 
 /** Why conditional: a present `agentWait: null` must mean "looked, nothing waiting"; an
  *  unattached, missing or identity-changed worker was never looked at, and a bare
- *  `unverifiable` is not actionable without naming what contact was lost. */
+ *  `unverifiable` is not actionable without naming what contact was lost.
+ *
+ * O1 deviation: the review asked this to narrow `unattached | missing | identity_changed` into
+ * the three-valued `live | unverifiable | exited` wire vocabulary. Reverted — `workers-recovery.
+ * test.ts` pins `identity_changed` and `unattached` as their own exposed values (a same-pane
+ * replaced-process read fails `workerRead` with `worker_identity_changed`, and an interrupted
+ * start reads `unattached`, both distinct operator guidance from a plain `exited`), so narrowing
+ * them would have been a real regression, not a fix. `inspectWorkerTerminal`'s two genuine O1
+ * bugs — minting `exited` from absent liveness evidence, and collapsing every `showTerminal`
+ * failure into `missing` — are fixed above instead, where the wrong values were actually computed. */
 export function exposeObservation(observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>) {
   return {
     status: observation.status,

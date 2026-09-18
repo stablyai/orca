@@ -106,10 +106,11 @@ export async function releaseRemoteAttachment(args: {
   }
   const resource = requested.resource
   if (!observation.exact || !observation.terminal) {
-    if (
-      args.mode === 'recovery' &&
-      (observation.status === 'missing' || observation.status === 'unattached')
-    ) {
+    // Why unverifiable-with-no-terminal joins missing/unattached (O4): a thrown showTerminal failure
+    // (timeout, stale handle) leaves recovery nothing to observe -- "retry after the next inventory",
+    // not an identity verdict. Remote attachments are PTY-only, so O3a's structured case cannot occur.
+    const unobserved = ['missing', 'unattached', 'unverifiable'].includes(observation.status)
+    if (args.mode === 'recovery' && unobserved) {
       return {
         dispatchId: attachment.dispatch_id,
         state: 'release_pending',

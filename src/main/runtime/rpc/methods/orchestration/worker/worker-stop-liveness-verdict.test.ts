@@ -236,6 +236,10 @@ describe('worker-stop against a terminal we lost contact with', () => {
   })
 
   it('still reports a locally observed exit as exited', async () => {
+    // O1: `connected: false` from the beforeEach's showTerminal mock is contact loss on its own,
+    // not proof — inspectWorkerTerminal now reports `unverifiable` for it unless a liveness
+    // verdict actually vouches for the exit, so "locally observed" needs one here too.
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'exited' })
     const dispatch = createWorker()
 
     await expect(
