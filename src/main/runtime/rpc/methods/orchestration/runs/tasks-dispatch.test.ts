@@ -26,6 +26,18 @@ describe('orchestration RPC methods', () => {
     return h.call(name, params, ctx)
   }
 
+  function preambleFrom(result: unknown): string {
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('preamble' in result) ||
+      typeof result.preamble !== 'string'
+    ) {
+      throw new Error('dispatch result did not include a preamble')
+    }
+    return result.preamble
+  }
+
   describe('orchestration.taskCreate', () => {
     it('creates a task', async () => {
       setup()
@@ -208,6 +220,53 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.dispatch', () => {
+    function resolvedWorktree(
+      path: string
+    ): Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>> {
+      return {
+        id: 'repo::dispatch-worktree',
+        repoId: 'repo',
+        path,
+        head: 'dispatch-head',
+        branch: 'dispatch-worker',
+        isBare: false,
+        isMainWorktree: false,
+        displayName: 'dispatch-worker',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        parentWorktreeId: null,
+        childWorktreeIds: [],
+        lineage: null,
+        git: {
+          path,
+          head: 'dispatch-head',
+          branch: 'dispatch-worker',
+          isBare: false,
+          isMainWorktree: false
+        }
+      }
+    }
+
+    function dispatchAuthority(worktreeId: string) {
+      return {
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_a',
+        ptyId: 'pty_a',
+        worktreeId,
+        processIncarnation: 'runtime_test:term_a:1',
+        paneKey: 'tab_worker:term_a',
+        launchTokenHash: null,
+        hostScope: { kind: 'local', hostId: 'local' as const }
+      } satisfies NonNullable<ReturnType<OrcaRuntimeService['getOrchestrationDispatchAuthority']>>
+    }
+
     function provideInjectIdentity(handle = 'term_a'): void {
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((candidate) =>
         candidate === handle ? `tab_worker:${handle}` : coordinatorPaneKey
@@ -265,6 +324,9 @@ describe('orchestration RPC methods', () => {
         launchTokenHash: 'launch-token-hash',
         hostScope: { kind: 'local', hostId: 'local' }
       })
+      vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue(
+        resolvedWorktree('/tmp/dispatch-worktree')
+      )
       const task = db.createTask({ spec: 'work' })
 
       const result = (await call('orchestration.dispatch', {
@@ -365,6 +427,52 @@ describe('orchestration RPC methods', () => {
       expect(runtime.getTerminalOrchestrationCliCommand).toHaveBeenCalledWith('term_wsl')
       expect(result.preamble).toContain('orca-ide orchestration send')
       expect(result.preamble).not.toMatch(/(^|\s)orca orchestration/m)
+    })
+
+    it('carries the target worktree path through dispatch and its previews', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+        handle === 'term_a' ? dispatchAuthority('repo::dispatch-worktree') : null
+      )
+      vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue(
+        resolvedWorktree('/tmp/dispatch-worktree')
+      )
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const dryRun = preambleFrom(
+        await call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true,
+          dryRun: true
+        })
+      )
+      expect(dryRun).toContain('Your worktree path is: /tmp/dispatch-worktree')
+
+      const dispatched = preambleFrom(
+        await call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true,
+          returnPreamble: true
+        })
+      )
+      const preview = preambleFrom(
+        await call('orchestration.dispatchShow', {
+          task: task.id,
+          preamble: true,
+          from: 'term_coord'
+        })
+      )
+
+      expect(dispatched).toContain('Your worktree path is: /tmp/dispatch-worktree')
+      expect(preview).toContain('Your worktree path is: /tmp/dispatch-worktree')
     })
 
     it('injects preamble through the agent prompt path instead of raw terminal send', async () => {
