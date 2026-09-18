@@ -48,6 +48,10 @@ export type MobileWebShellBlockedVerdict = Extract<
   { kind: 'blocked' }
 >
 
+/** Which side a bundle read failed on. `transport` is the link between phone and host, which says
+ *  nothing about the bundle; `bundle` is a verdict about it, from the host or from the bytes. */
+export type MobileWebShellReadFailure = 'transport' | 'bundle'
+
 /** The shell's own failures plus the one the view cannot report: a download or a cache write that
  *  never produced a generation to hand it. */
 export type MobileWebShellFailureCause =
@@ -142,7 +146,11 @@ export type MobileWebShellSessionEvent =
       readonly elapsedMs: number
     }
   | { readonly type: 'remounted'; readonly flow: number; readonly sessionId: string }
-  | { readonly type: 'download-failed'; readonly flow: number }
+  | {
+      readonly type: 'download-failed'
+      readonly flow: number
+      readonly failure: MobileWebShellReadFailure
+    }
   | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
   | { readonly type: 'retry-pressed' }
 

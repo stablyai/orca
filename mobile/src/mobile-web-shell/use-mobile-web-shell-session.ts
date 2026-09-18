@@ -5,7 +5,10 @@ import { useHostProtocolGates } from '../components/HostProtocolGate'
 import { useHostClient } from '../transport/client-context'
 import { encodeBase64Url } from '../transport/mobile-endpoint-supervisor-support'
 import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
-import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-operations'
+import {
+  isMobileWebBundleTransportFailure,
+  mobileWebBundleManifestRead
+} from '../transport/mobile-web-bundle-operations'
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
 import { createGenerationStore, type GenerationStore } from './generation-store'
@@ -20,6 +23,7 @@ import {
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
 import type {
+  MobileWebShellReadFailure,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellSessionState
@@ -239,13 +243,20 @@ async function openCache(
   }
 }
 
+/** A rejection the link caused says nothing about the bundle, and the reducer opens the cache on it
+ *  rather than telling a phone that already holds a workspace it could not be downloaded. */
+function readFailure(error: unknown): MobileWebShellReadFailure {
+  return isMobileWebBundleTransportFailure(error) ? 'transport' : 'bundle'
+}
+
 async function readManifest(
   client: RpcClient | null,
   flow: number,
   send: (event: MobileWebShellSessionEvent) => void
 ): Promise<void> {
   if (client === null) {
-    send({ type: 'download-failed', flow })
+    // No client is no link, and the gates are about to say so.
+    send({ type: 'download-failed', flow, failure: 'transport' })
     return
   }
   try {
@@ -263,8 +274,8 @@ async function readManifest(
         totalAssets: manifest.assets.length
       }
     })
-  } catch {
-    send({ type: 'download-failed', flow })
+  } catch (error) {
+    send({ type: 'download-failed', flow, failure: readFailure(error) })
   }
 }
 
@@ -280,7 +291,7 @@ async function download(args: {
 }): Promise<void> {
   const { client, store, hostKey, flow, runtime, send } = args
   if (client === null) {
-    send({ type: 'download-failed', flow })
+    send({ type: 'download-failed', flow, failure: 'transport' })
     return
   }
   const controller = new AbortController()
@@ -316,8 +327,8 @@ async function download(args: {
       totalBytes: committed.manifest.totalBytes,
       elapsedMs: runtime.now() - args.startedAt
     })
-  } catch {
-    send({ type: 'download-failed', flow })
+  } catch (error) {
+    send({ type: 'download-failed', flow, failure: readFailure(error) })
   } finally {
     args.downloads.delete(controller)
   }

@@ -7,6 +7,7 @@ import type {
   MobileWebShellGates,
   MobileWebShellManifestFacts,
   MobileWebShellReachability,
+  MobileWebShellReadFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
@@ -140,6 +141,22 @@ function startFlow(
   return step(session, { ...base, state: CHECKING }, [{ kind: 'open-cache' }])
 }
 
+/** Puts a generation that is already on disk on screen. The only producer of `open-generation`. */
+function openCached(
+  session: MobileWebShellSession,
+  generation: CachedGeneration,
+  patch: Partial<MobileWebShellSession> = {}
+): MobileWebShellStep {
+  return step(session, { ...patch, state: { kind: 'activating' } }, [
+    {
+      kind: 'open-generation',
+      directory: generation.directory,
+      buildId: generation.buildId,
+      totalBytes: generation.totalBytes
+    }
+  ])
+}
+
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
@@ -158,14 +175,7 @@ function onCacheRead(
     // a host nobody can reach cannot have changed since. The next entry while connected re-checks.
     return generation === null
       ? step(session, { cached: null, state: { kind: 'offline' } })
-      : step(session, { cached: generation, state: { kind: 'activating' } }, [
-          {
-            kind: 'open-generation',
-            directory: generation.directory,
-            buildId: generation.buildId,
-            totalBytes: generation.totalBytes
-          }
-        ])
+      : openCached(session, generation, { cached: generation })
   }
   return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
 }
@@ -188,14 +198,7 @@ function onManifestRead(
   }
   const cached = session.cached
   if (cached !== null && cached.buildId === manifest.buildId) {
-    return step(session, { state: { kind: 'activating' } }, [
-      {
-        kind: 'open-generation',
-        directory: cached.directory,
-        buildId: cached.buildId,
-        totalBytes: cached.totalBytes
-      }
-    ])
+    return openCached(session, cached)
   }
   return step(
     session,
@@ -252,6 +255,22 @@ function onShellFailed(
     { retriedOnce: true, cached: null, state: CHECKING, flow: session.flow + 1 },
     [{ kind: 'delete-cache' }, { kind: 'open-cache' }]
   )
+}
+
+function onDownloadFailed(
+  session: MobileWebShellSession,
+  failure: MobileWebShellReadFailure
+): MobileWebShellStep {
+  const cached = session.cached
+  if (failure === 'transport' && cached !== null) {
+    // The link went, not the bundle. A generation already on disk was compatible when it was
+    // written, and it is the same one the offline gate would have opened had the reachability
+    // change arrived before this rejection did; which of the two lands first is a race.
+    return openCached(session, cached)
+  }
+  return step(session, {
+    state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+  })
 }
 
 /**
@@ -311,9 +330,7 @@ export function reduceMobileWebShellSession(
         ? step(session, { state: { ...session.state, sessionId: event.sessionId } })
         : step(session, {})
     case 'download-failed':
-      return step(session, {
-        state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
-      })
+      return onDownloadFailed(session, event.failure)
     case 'shell-failed':
       return onShellFailed(session, event.reason)
     case 'retry-pressed':

@@ -6,6 +6,7 @@ import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
 /**
  * The runner, not the rules: what the reducer decides has table tests, and this covers the three
@@ -29,6 +30,7 @@ type Doubles = {
   }
   manifestReads: number
   manifestClients: unknown[]
+  manifestRejection: unknown
   fetches: { signal: AbortSignal; settle: Settle<MobileWebBundleFetchResult> }[]
   manifest: MobileWebBundleManifestRead
 }
@@ -56,6 +58,7 @@ const doubles = vi.hoisted((): Doubles => {
     },
     manifestReads: 0,
     manifestClients: [],
+    manifestRejection: null,
     fetches: [],
     manifest
   }
@@ -73,6 +76,9 @@ vi.mock('../transport/rpc-operation', () => ({
   runRpcOperation: async (client: unknown) => {
     doubles.manifestReads += 1
     doubles.manifestClients.push(client)
+    if (doubles.manifestRejection !== null) {
+      throw doubles.manifestRejection
+    }
     return { manifest: doubles.manifest }
   }
 }))
@@ -200,6 +206,7 @@ describe('the hybrid shell runner', () => {
   beforeEach(() => {
     doubles.manifestReads = 0
     doubles.manifestClients.length = 0
+    doubles.manifestRejection = null
     doubles.fetches.length = 0
     doubles.connection = { client: {}, state: 'connected' }
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
@@ -241,6 +248,23 @@ describe('the hybrid shell runner', () => {
     await flush()
     expect(fake.staged()).toBe(0)
     expect(fake.committed()).toBe(0)
+  })
+
+  it('shows the cached workspace when the socket drops the manifest read it was waiting on', async () => {
+    // The device repro: the rejection reaches the reducer before the reachability change does, so
+    // the offline gate never fires and only the error's own marks say the link was what went.
+    doubles.manifestRejection = markRpcDeliveryUnknown(new Error('Connection interrupted'))
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+
+    expect(doubles.manifestReads).toBe(1)
+    expect(doubles.fetches).toHaveLength(0)
+    expect(mounted.states().map((state) => state.kind)).toContain('ready')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
   })
 
   it('takes the staged tree back out when the unmount lands between staging and the commit', async () => {

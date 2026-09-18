@@ -303,12 +303,69 @@ describe('the connected flow', () => {
   })
 
   it('fails when the download or the cache write never produced a generation', () => {
-    const step = run(afterCacheRead(null).session, { type: 'download-failed' })
+    const step = run(afterCacheRead(null).session, {
+      type: 'download-failed',
+      failure: 'bundle'
+    })
     expect(step.session.state).toEqual({
       kind: 'failed',
       reason: 'download-failed',
       retriedOnce: false
     })
+  })
+})
+
+describe('a read the link cut short falls back to what is on disk', () => {
+  /** Connected, a generation cached, the manifest read in flight — where the drop is felt. */
+  function manifestInFlight() {
+    return afterCacheRead(CACHED)
+  }
+
+  it('opens the cached generation when the socket drops before the reachability change does', () => {
+    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'transport' })
+    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.effects).toEqual([
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      }
+    ])
+    const ready = run(step.session, {
+      type: 'activated',
+      generationDirectory: CACHED.directory,
+      sessionId: 'session-one',
+      buildId: CACHED.buildId,
+      totalBytes: CACHED.totalBytes,
+      elapsedMs: 12
+    })
+    expect(ready.session.state).toMatchObject({ kind: 'ready', buildId: CACHED.buildId })
+  })
+
+  it('still says the workspace could not be downloaded when nothing is on disk', () => {
+    const step = run(afterCacheRead(null).session, {
+      type: 'download-failed',
+      failure: 'transport'
+    })
+    expect(step.session.state).toEqual({
+      kind: 'failed',
+      reason: 'download-failed',
+      retriedOnce: false
+    })
+    expect(step.effects).toEqual([])
+  })
+
+  it('fails on a verdict about the bundle even with a generation cached', () => {
+    // A host that refuses the read, or bytes that do not hash, is an answer about the bundle. A
+    // cached generation is no reason to hide it behind a workspace that is merely older.
+    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'bundle' })
+    expect(step.session.state).toEqual({
+      kind: 'failed',
+      reason: 'download-failed',
+      retriedOnce: false
+    })
+    expect(step.effects).toEqual([])
   })
 })
 
@@ -326,7 +383,10 @@ describe('a displayed generation is not restarted by the gates', () => {
   it('keeps a wall and a terminal failure', () => {
     const wall = started({ hostCapabilities: [] })
     expect(run(wall.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
-    const failed = run(afterCacheRead(null).session, { type: 'download-failed' })
+    const failed = run(afterCacheRead(null).session, {
+      type: 'download-failed',
+      failure: 'bundle'
+    })
     expect(run(failed.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
   })
 })
@@ -502,7 +562,11 @@ describe('a result from a superseded flow reports into nothing', () => {
       }
     )
     expect(ready.session.state).toMatchObject({ kind: 'ready' })
-    const late = run(ready.session, { type: 'download-failed', flow: inFlight.session.flow })
+    const late = run(ready.session, {
+      type: 'download-failed',
+      failure: 'bundle',
+      flow: inFlight.session.flow
+    })
     expect(late.session.state).toEqual(ready.session.state)
   })
 
