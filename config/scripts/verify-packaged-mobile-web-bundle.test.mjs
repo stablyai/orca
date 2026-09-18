@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -43,6 +43,28 @@ describe('assertMobileWebBundleBuilt', () => {
       expect(
         new Set(manifest.assets.map((asset) => asset.contentType)).size
       ).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  it('fails on a file the manifest does not list, so no stale asset ships inside asar', async () => {
+    await withBundle(async ({ bundleDir }) => {
+      // An asset dropped from the manifest keeps its content-addressed name, so nothing ever
+      // overwrites it; without this check it packs unreachable and unverified.
+      await writeFile(join(bundleDir, 'assets', 'stale.js'), '// from an earlier build\n', 'utf8')
+      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(
+        /does not list: assets\/stale\.js/
+      )
+    })
+  })
+
+  it('accepts exactly the manifest, the entrypoint and the listed assets', async () => {
+    await withBundle(async ({ bundleDir, manifest }) => {
+      const onDisk = (await readdir(bundleDir, { recursive: true, withFileTypes: true }))
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name).slice(bundleDir.length + 1))
+      expect(onDisk.toSorted()).toEqual(
+        ['manifest.json', ...manifest.assets.map((asset) => asset.path)].toSorted()
+      )
     })
   })
 

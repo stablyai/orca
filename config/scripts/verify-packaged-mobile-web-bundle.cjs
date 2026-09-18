@@ -1,5 +1,5 @@
 const { createHash } = require('node:crypto')
-const { readFileSync, statSync } = require('node:fs')
+const { readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 
 const projectDir = resolve(__dirname, '..', '..')
@@ -121,6 +121,36 @@ function parseManifest(bundleDir) {
   return manifest
 }
 
+/** Every file under the bundle directory, as a manifest-shaped relative path. */
+function listBundleFiles(directory, prefix = '') {
+  const found = []
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const relativePath = prefix === '' ? entry.name : `${prefix}/${entry.name}`
+    if (entry.isDirectory()) {
+      found.push(...listBundleFiles(join(directory, entry.name), relativePath))
+    } else {
+      found.push(relativePath)
+    }
+  }
+  return found
+}
+
+/**
+ * Nothing in the bundle directory may be unaccounted for. An asset dropped from the manifest but
+ * left on disk by an interrupted build ships inside asar, unreachable and unverified, and grows
+ * the installer; content-addressed names mean stale copies never get overwritten.
+ */
+function assertNoUnlistedFiles(bundleDir, manifest) {
+  const listed = new Set(['manifest.json', ...manifest.assets.map((asset) => asset.path)])
+  const strays = listBundleFiles(bundleDir).filter((path) => !listed.has(path))
+  if (strays.length > 0) {
+    throw failure(
+      `${bundleDir} holds ${String(strays.length)} file(s) the manifest does not list: ` +
+        `${strays.sort().join(', ')}. ${REMEDY}`
+    )
+  }
+}
+
 /**
  * Packaging guard: electron-builder only warns about a missing input, so without this a release
  * would ship an app that advertises the bundle capability and then errors on every request. The
@@ -128,6 +158,7 @@ function parseManifest(bundleDir) {
  */
 function assertMobileWebBundleBuilt(bundleDir = defaultBundleDir) {
   const manifest = parseManifest(bundleDir)
+  assertNoUnlistedFiles(bundleDir, manifest)
   for (const asset of manifest.assets) {
     const assetPath = join(bundleDir, asset.path)
     let size
