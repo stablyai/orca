@@ -423,6 +423,24 @@ describe('generation store', () => {
     expect(fs.paths().some((path) => path.includes('generations/'))).toBe(false)
   })
 
+  it('replaces an entry named for the build id that is not a readable generation', async () => {
+    const build = 'a'.repeat(64)
+    // Exactly what a crash between the rename and the post-rename check can leave behind.
+    for (const seeded of [
+      { kind: 'directory' },
+      { kind: 'file', bytes: new Uint8Array(1) }
+    ] as const) {
+      const fs = createFakeFileSystem()
+      const store = createGenerationStore({ fileSystem: fs })
+      fs.seed(`${HOST}/generations/${build}`, seeded)
+
+      await activate(store, HOST)
+
+      expect((await store.readActiveGeneration(HOST))?.buildId).toBe(build)
+      expect(fs.text(`${HOST}/generations/${build}/index.html`)).not.toBeNull()
+    }
+  })
+
   it('drops an aborted staging without touching the activation', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })

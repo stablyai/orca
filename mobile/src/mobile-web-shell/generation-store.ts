@@ -166,9 +166,15 @@ export function createGenerationStore(options: {
       manifest: staged.manifest
     }
     const entries = await fs.list(generations)
-    // The build id is a content hash, so an existing directory of that name already is this
-    // activation and the staged copy is dropped instead of re-activated.
-    if (entries.some((entry) => entry.name === staged.buildId)) {
+    // The build id names an asset list, not evidence those bytes landed, so a directory of that name
+    // is this activation only once its manifest is on disk. An empty one — what a crash between the
+    // rename and the check below leaves on Android under API 26 — or a plain file of that name falls
+    // through and is replaced by the staged tree, which was verified byte for byte.
+    const existing = entries.find((entry) => entry.name === staged.buildId)
+    if (
+      existing?.isDirectory === true &&
+      (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
+    ) {
       await fs.delete(staged.directory)
       return active
     }
