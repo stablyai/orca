@@ -240,11 +240,6 @@ describe('assignUnassignedGitHubIssueOnStart', () => {
     )
 
     expect(addAssignees).toHaveBeenCalledWith(expect.objectContaining({ logins: ['@me'] }))
-    expect(patchWorkItem).toHaveBeenCalledWith(
-      'issue:21047',
-      { assignees: [{ login: '@me', name: null, avatarUrl: '' }] },
-      'repo-1',
-      { sourceContext: undefined }
-    )
+    expect(patchWorkItem).not.toHaveBeenCalled()
   })
 })
