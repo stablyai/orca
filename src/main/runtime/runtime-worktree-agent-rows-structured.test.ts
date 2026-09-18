@@ -103,8 +103,9 @@ describe('worktree ps reports structured sessions', () => {
     expect(row.hasHostSidebarActivity).toBe(false)
   })
 
-  it('reports the DERIVED pane key, never an orchestration credential', () => {
+  it('reports the exact structured session identity alongside its derived pane key', () => {
     const row = attach([summary()])
+    expect(row.agents[0]?.agentSessionId).toBe(SESSION)
     expect(row.agents[0]?.paneKey).toBe(
       structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION)
     )

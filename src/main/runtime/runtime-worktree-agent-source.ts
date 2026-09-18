@@ -3,6 +3,7 @@ import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 
 export type RuntimeWorktreeAgentSource = {
   paneKey: string
+  agentSessionId?: string
   ptyId?: string
   tabId?: string
   worktreeId?: string

@@ -30,6 +30,8 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  /** Stable Orca session identity projected only for structured-session rows. */
+  agentSessionId?: string
   /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
   runId?: AgentStatusRunId
   /** Host-owned process-incarnation attachment for the run-aware row. */

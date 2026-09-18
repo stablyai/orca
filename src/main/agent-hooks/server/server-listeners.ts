@@ -58,7 +58,10 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         continue
       }
       rows.push({
-        entry: structuredStatusLegacyEvent(parent.status),
+        entry: structuredStatusLegacyEvent(
+          parent.status,
+          parent.subject.kind === 'structured-session' ? parent.subject.sessionId : undefined
+        ),
         order:
           this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
           UNORDERED_STATUS_ROW
@@ -219,7 +222,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
       const status = this.canonicalStatusStore.getParent(subject)?.status
       if (status) {
-        rows.push(status)
+        rows.push({ ...status, agentSessionId: subject.sessionId })
       }
     }
     return rows

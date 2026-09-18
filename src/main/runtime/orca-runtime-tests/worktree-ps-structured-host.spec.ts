@@ -55,6 +55,7 @@ describe('worktree ps reads structured sessions from the agent-status store', ()
     expect(worktree).toBeDefined()
     expect(worktree?.agents).toHaveLength(1)
     expect(worktree?.agents[0]).toMatchObject({
+      agentSessionId: SESSION,
       state: 'working',
       agentType: 'claude',
       prompt: 'ship the thing',

@@ -33,6 +33,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     const hookPayload = pickParsedAgentStatusPayload(entry)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
+      ...(entry.agentSessionId ? { agentSessionId: entry.agentSessionId } : {}),
       ptyId: entry.terminalHandle
         ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
         : undefined,
