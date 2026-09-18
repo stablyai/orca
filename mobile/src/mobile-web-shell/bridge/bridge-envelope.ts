@@ -17,6 +17,12 @@ import {
  * additive field must not take a working pair offline. The rule, in one line: `v` gates
  * incompatible shape; additive fields never bump `v`.
  *
+ * A new member of a closed list is NOT an additive field. `end.reason`, `binary.format`,
+ * `connection.state` and the foreground reasons are enumerated here, so a value outside the list
+ * takes the whole frame down as `unrecognised-message` on the older side. Adding one is a
+ * compatibility change: it has to be negotiated, the way a new opcode is, not shipped on the
+ * strength of the reader dropping what it does not know.
+ *
  * The two readers differ in more than their schema: the page's traffic is held to the document
  * caps, the shell's answers are not. `parseBridgeMessage` documents why.
  */

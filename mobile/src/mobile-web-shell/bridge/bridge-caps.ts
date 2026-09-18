@@ -142,8 +142,8 @@ function inspectDocument(root: unknown): DocumentRefusal | null {
  * new call site has to say which bounds it is asking for.
  */
 export function parseBridgeMessage(raw: string, direction: BridgeDirection): BridgeRead<unknown> {
-  // A UTF-8 byte is never fewer than one code unit, so this refuses the hostile case without
-  // walking it.
+  // A code unit never encodes to fewer than one byte, so a string longer than the cap in units is
+  // over it in bytes too: the hostile case is refused without walking it.
   if (raw.length > BRIDGE_MAX_MESSAGE_BYTES || utf8ByteLength(raw) > BRIDGE_MAX_MESSAGE_BYTES) {
     return { ok: false, refusal: 'oversized' }
   }
