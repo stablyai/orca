@@ -74,7 +74,7 @@ export function useEditorPanelDiffContentLoader({
         const gitScope = getRuntimeGitScope(fileSettings, connectionId)
         const effectiveDiffSource: typeof file.diffSource =
           file.mode === 'edit' ? 'unstaged' : file.diffSource
-        const compareAgainstHead = file.mode === 'edit'
+        const compareAgainstHead = file.mode === 'edit' && file.changesAgainstIndex !== true
         const key = inFlightDiffKey(
           { ...file, diffSource: effectiveDiffSource },
           gitScope ?? undefined,

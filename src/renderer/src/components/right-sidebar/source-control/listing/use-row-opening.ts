@@ -101,19 +101,19 @@ export function useSourceControlRowOpening({
       }
       const language = detectLanguage(entry.path)
       const filePath = joinPath(worktreePath, entry.path)
-      // Why: unstaged markdown diffs open as an edit tab in Changes view (one tab per file); staged diffs still get a separate diff tab since that isn't what the editor edits.
       if (language === 'markdown' && entry.area === 'unstaged') {
-        openFile(
+        const fileId = openFile(
           {
             filePath,
             relativePath: entry.path,
             worktreeId: activeWorktreeId,
             language,
-            mode: 'edit'
+            mode: 'edit',
+            changesAgainstIndex: true
           },
           { targetGroupId, preview: openAsPreview }
         )
-        setEditorViewMode(filePath, 'changes')
+        setEditorViewMode(fileId, 'changes')
         return
       }
       openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
