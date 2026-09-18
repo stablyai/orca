@@ -23,7 +23,7 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']
   /** GitHub Start assignment only; stripped when persisting the linked task. */
-  assignees?: readonly { login: string }[]
+  assignees?: { login: string }[]
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
   linearBranchName?: string
