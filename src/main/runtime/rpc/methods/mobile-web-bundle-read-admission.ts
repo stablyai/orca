@@ -19,22 +19,14 @@ export function mobileWebBundleReadBucket(ctx: RpcContext): string {
   return ctx.connectionId ?? ctx.clientId ?? 'local'
 }
 
-/**
- * A slot in the bucket's budget, or null when it is already full. The returned release is
- * idempotent, so a caller that releases in a `finally` after an earlier throw cannot double-credit.
- */
+/** A slot in the bucket's budget, or null when it is already full. Release exactly once. */
 export function acquireMobileWebBundleReadSlot(bucket: string): (() => void) | null {
   const active = activeReads.get(bucket) ?? 0
   if (active >= MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS) {
     return null
   }
   activeReads.set(bucket, active + 1)
-  let released = false
   return () => {
-    if (released) {
-      return
-    }
-    released = true
     const remaining = (activeReads.get(bucket) ?? 1) - 1
     // Dropping the key at zero is what keeps this from growing one entry per connection forever.
     if (remaining > 0) {
