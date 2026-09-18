@@ -101,6 +101,45 @@ describe('fingerprintPluginConsent', () => {
       fingerprintPluginConsent(subject, 'b'.repeat(64))
     )
   })
+
+  describe('link routes', () => {
+    const routed = (routes: { hostname: string; destination: string; description?: string }[]) =>
+      fingerprintPluginConsent({
+        main: undefined,
+        capabilities: [],
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the linkRoutes slice the fingerprint reads.
+        contributes: { linkRoutes: routes } as never
+      })
+
+    const base = [
+      { hostname: 'app.example.com', destination: 'orca-browser' },
+      { hostname: '*.example.com', destination: 'system-browser' }
+    ]
+
+    it('is order independent', () => {
+      expect(routed(base)).toBe(routed(base.toReversed()))
+    })
+
+    it('changes when a route is added', () => {
+      expect(routed(base)).not.toBe(
+        routed([...base, { hostname: 'b.example.com', destination: 'orca-browser' }])
+      )
+    })
+
+    it('changes when a destination changes', () => {
+      expect(routed(base)).not.toBe(
+        routed([{ ...base[0], destination: 'system-browser' }, base[1]])
+      )
+    })
+
+    it('changes when only the description changes, because consent renders it', () => {
+      expect(routed(base)).not.toBe(routed([{ ...base[0], description: 'new' }, base[1]]))
+    })
+
+    it('leaves a route-free plugin identical to before the feature', () => {
+      expect(routed([])).toBe(fingerprintPluginConsent({ main: undefined, capabilities: [] }))
+    })
+  })
 })
 
 describe('plugin install lockfile consent fingerprints', () => {

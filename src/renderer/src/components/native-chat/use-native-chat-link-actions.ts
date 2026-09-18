@@ -68,7 +68,8 @@ export function useNativeChatLinkActions(
         destinations: httpLinkActionDestinationsFor(
           state.settings,
           sourceOwner,
-          canNativeChatOpenOwnedBrowser(state, context.worktreeId, sourceOwner)
+          canNativeChatOpenOwnedBrowser(state, context.worktreeId, sourceOwner),
+          route.url
         ),
         actionsEnabled: state.settings?.terminalLinkActionPopoverEnabled !== false,
         restoreFocus: () =>

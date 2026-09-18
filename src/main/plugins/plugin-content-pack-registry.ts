@@ -7,6 +7,7 @@ import {
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
 import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from './plugin-command-registry'
+import { PluginLinkRouteRegistry } from './plugin-link-route-registry'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 
@@ -14,6 +15,7 @@ export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
   readonly commands: PluginCommandRegistry
+  readonly linkRoutes: PluginLinkRouteRegistry
   private readonly activationErrors = new Map<string, string>()
 
   constructor(
@@ -25,6 +27,7 @@ export class PluginContentPackRegistry {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
     this.commands = new PluginCommandRegistry()
+    this.linkRoutes = new PluginLinkRouteRegistry()
   }
 
   async reconcile(
@@ -73,6 +76,9 @@ export class PluginContentPackRegistry {
       const languagePacks = this.languagePacks.reconcile(discovered, approveAtomically)
       const vmRecipes = this.vmRecipes.reconcile(discovered, approveAtomically)
       this.commands.reconcile(discovered, approveAtomically, keybindings)
+      // Deliberately absent from registryError(): a route conflict must not exclude the whole
+      // plugin, or a new install could disable an approved plugin's unrelated routes.
+      this.linkRoutes.reconcile(discovered, approveAtomically)
       await Promise.all([languagePacks, vmRecipes])
 
       let foundNewError = false

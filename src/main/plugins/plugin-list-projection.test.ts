@@ -26,6 +26,7 @@ function serviceWith(
     worker?: ReturnType<PluginService['workerState']>
     vmRecipes?: ReturnType<PluginService['contentPacks']['vmRecipes']['preview']>
     commands?: ReturnType<PluginService['contentPacks']['commands']['preview']>
+    linkRoutes?: ReturnType<PluginService['contentPacks']['linkRoutes']['declared']>
   } = {}
 ): PluginService {
   return {
@@ -39,7 +40,8 @@ function serviceWith(
     activationError: () => null,
     contentPacks: {
       vmRecipes: { preview: () => options.vmRecipes ?? [] },
-      commands: { preview: () => options.commands ?? [] }
+      commands: { preview: () => options.commands ?? [] },
+      linkRoutes: { declared: () => options.linkRoutes ?? [] }
     }
   } as unknown as PluginService
 }
@@ -218,6 +220,49 @@ describe('buildPluginList consent identity', () => {
         context: 'worktree',
         handler: { type: 'built-in', action: 'view.tasks' },
         keybindings: [{ key: 'Mod+Alt+T', when: 'worktree' }]
+      }
+    ])
+  })
+
+  it('projects declared link routes for a pending plugin, with conflicts annotated', async () => {
+    // Declared, not approved: the consent dialog must show what a pending plugin is asking for.
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'demo'),
+      manifest,
+      consentFingerprint: 'sha256-current',
+      consentContentHash: null,
+      contentHash: null,
+      isDev: false
+    }
+    const [entry] = await buildPluginList(
+      serviceWith(plugin, {
+        activation: 'pending',
+        linkRoutes: [
+          {
+            pluginKey: 'orca-samples.demo',
+            pluginName: 'Demo',
+            hostname: '*-devserver.test',
+            destination: 'orca-browser'
+          },
+          {
+            pluginKey: 'orca-samples.demo',
+            pluginName: 'Demo',
+            hostname: '*-contested.test',
+            destination: 'orca-browser',
+            conflict: true
+          }
+        ]
+      }),
+      { version: 1, plugins: {} }
+    )
+
+    expect(entry.linkRoutes).toEqual([
+      { hostname: '*-devserver.test', destination: 'orca-browser' },
+      {
+        hostname: '*-contested.test',
+        destination: 'orca-browser',
+        conflict: true
       }
     ])
   })

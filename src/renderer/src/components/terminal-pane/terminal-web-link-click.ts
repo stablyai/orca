@@ -19,7 +19,9 @@ type TerminalWebLinkClickDeps = Pick<
   sourceOwner?: HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
   linkActionContext?: TerminalLinkActionContext | null
-  actionDestinations?: TerminalHttpLinkActionDestinations
+  // Getter, not a value: `url` from WebLinksAddon is the physical-row match and can be
+  // truncated mid-authority, so routes must match the reconstructed completeUrl.
+  getActionDestinations?: (url: string) => TerminalHttpLinkActionDestinations
 }
 
 export function handleTerminalWebLinkClick(
@@ -43,7 +45,7 @@ export function handleTerminalWebLinkClick(
           : { kind: 'local' }),
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
       linkActionContext: deps.linkActionContext,
-      actionDestinations: deps.actionDestinations
+      actionDestinations: deps.getActionDestinations?.(completeUrl)
     })
     // Why: WebLinksAddon only knows the physical row; Orca's logical hit-test
     // preserves the complete URL rendered across hard-wrapped TUI rows.

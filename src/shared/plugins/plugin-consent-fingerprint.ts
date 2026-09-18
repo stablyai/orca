@@ -3,7 +3,9 @@ import { canonicalizeCapabilitySet } from './plugin-capabilities'
 import type { PluginManifest } from './plugin-manifest'
 
 type PluginConsentSubject = Pick<PluginManifest, 'capabilities' | 'main'> & {
-  contributes?: Partial<Pick<PluginManifest['contributes'], 'keybindings' | 'vmRecipes' | 'agents'>>
+  contributes?: Partial<
+    Pick<PluginManifest['contributes'], 'keybindings' | 'vmRecipes' | 'agents' | 'linkRoutes'>
+  >
 }
 
 export function hasInstructionalPluginContributions(manifest: PluginConsentSubject): boolean {
@@ -12,8 +14,26 @@ export function hasInstructionalPluginContributions(manifest: PluginConsentSubje
     contributions &&
     ((contributions.keybindings?.length ?? 0) > 0 ||
       (contributions.vmRecipes?.length ?? 0) > 0 ||
-      (contributions.agents?.length ?? 0) > 0)
+      (contributions.agents?.length ?? 0) > 0 ||
+      (contributions.linkRoutes?.length ?? 0) > 0)
   )
+}
+
+/**
+ * Link routes live in the manifest rather than an install tree, so they have no content hash to
+ * bind to. Sorting is required: two orderings of the same grant must not produce two fingerprints.
+ * `description` is included because it is rendered at consent time.
+ */
+function canonicalizeLinkRoutes(manifest: PluginConsentSubject): string {
+  const routes = manifest.contributes?.linkRoutes ?? []
+  if (routes.length === 0) {
+    return ''
+  }
+  const entries = routes
+    .map((route) => `${route.hostname}\0${route.destination}\0${route.description ?? ''}`)
+    .sort()
+    .join('\n')
+  return `\0link-routes:${entries}`
 }
 
 /**
@@ -32,7 +52,7 @@ export function canonicalizePluginConsent(
   const instructionalIdentity = hasInstructionalPluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${workerIdentity}${instructionalIdentity}`
+  return `${capabilities}${workerIdentity}${instructionalIdentity}${canonicalizeLinkRoutes(manifest)}`
 }
 
 export function fingerprintPluginConsent(

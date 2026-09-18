@@ -87,6 +87,19 @@ function contributionSummary(
       )
     },
     {
+      key: 'linkRoutes',
+      count: contributes.linkRoutes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.linkRoutesOne',
+        '1 link destination override'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.linkRoutes',
+        '{{value0}} link destination overrides',
+        { value0: contributes.linkRoutes.length }
+      )
+    },
+    {
       key: 'panels',
       count: contributes.panels.length,
       one: translate(

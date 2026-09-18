@@ -7,6 +7,7 @@ import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
+import type { NormalizedLinkRoute } from '../../shared/plugins/plugin-link-route-matching'
 
 /** Panel contribution as surfaced by the main-process plugin service. */
 export type PluginHostPanel = {
@@ -62,6 +63,13 @@ export type PluginHostListEntry = {
       phase: 'create' | 'suspend' | 'resume' | 'destroy'
       command: string
     }[]
+  }[]
+  /** Declared, not approved: the consent dialog must show what a pending plugin is asking for. */
+  linkRoutes?: {
+    hostname: string
+    destination: 'orca-browser' | 'system-browser'
+    description?: string
+    conflict?: true
   }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }
@@ -143,6 +151,8 @@ export type PluginMarketplaceHostInstallPreview = {
 export type PluginsApi = {
   list: () => Promise<PluginHostListEntry[]>
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
+  /** Approved, conflict-filtered, ranked. First match wins. Desktop IPC only. */
+  listLinkRoutes: () => Promise<NormalizedLinkRoute[]>
   /** Records the consent-dialog answer; approval is keyed to the plugin's
    *  current capability and trusted-worker fingerprint. */
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>

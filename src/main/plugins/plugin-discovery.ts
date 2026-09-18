@@ -14,6 +14,7 @@ import {
   fingerprintPluginConsent,
   hasInstructionalPluginContributions
 } from '../../shared/plugins/plugin-consent-fingerprint'
+import { validateManifestLinkRoutes } from './plugin-link-route-suffix-policy'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
@@ -114,6 +115,10 @@ async function readManifestDir(
       error: `requires Orca ${manifest.engines.orca} (this is ${hostVersion})`,
       isDev
     }
+  }
+  const routePolicy = validateManifestLinkRoutes(manifest.contributes.linkRoutes)
+  if (routePolicy) {
+    return { pluginKey, rootDir, error: `invalid link route: ${routePolicy}`, isDev }
   }
   const artifacts = await validateDeclaredPluginArtifacts(rootDir, manifest)
   if (!artifacts.ok) {

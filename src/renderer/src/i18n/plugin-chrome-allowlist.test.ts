@@ -15,6 +15,7 @@ const SECURITY_COPY_COMPONENTS = [
   'PluginConsentProvenance',
   'pluginError',
   'PluginKeybindingConsentPreview',
+  'PluginLinkRouteConsentPreview',
   'PluginMarketplaceListingRow',
   'PluginMarketplacePreviewDialog',
   'PluginMarketplaceSourceDialog',

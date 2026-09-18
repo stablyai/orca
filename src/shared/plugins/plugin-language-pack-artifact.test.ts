@@ -43,6 +43,7 @@ describe('plugin language-pack artifacts', () => {
     'PluginConsentProvenance',
     'pluginError',
     'PluginKeybindingConsentPreview',
+    'PluginLinkRouteConsentPreview',
     'PluginMarketplaceListingRow',
     'PluginMarketplacePreviewDialog',
     'PluginMarketplaceSourceDialog',

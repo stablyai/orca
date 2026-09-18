@@ -16,6 +16,8 @@ import type {
 export const pluginsApi = {
   list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
   listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+  // Name must start with `list`: the web fallback proxy resolves list* to [] rather than undefined.
+  listLinkRoutes: () => ipcRenderer.invoke('plugins:listLinkRoutes'),
   consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:consent', args),
   setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>

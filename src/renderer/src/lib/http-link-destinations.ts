@@ -1,5 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { getPluginLinkRoutes } from '@/store/plugin-link-routes'
+import { matchLinkRoute } from '../../../shared/plugins/plugin-link-route-matching'
 
 // Catalog keys keep their original terminal namespace: they are opaque ids with
 // shipped translations, and the popover is now shared with native chat.
@@ -32,10 +34,19 @@ export function canSourceOwnerOpenInOrca(
 export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
-  canOpenOwnedBrowser: boolean
+  canOpenOwnedBrowser: boolean,
+  url: string
 ): HttpLinkActionDestinations {
+  // Ownership first: a plugin route must never promote a link the source cannot reach.
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
+  }
+  const route = matchLinkRoute(url, getPluginLinkRoutes())
+  if (route) {
+    // Alternate is always the opposite: Shift stays an escape hatch out of the route.
+    return route.destination === 'orca-browser'
+      ? { primary: 'orca', alternate: 'system' }
+      : { primary: 'system', alternate: 'orca' }
   }
   return settings?.openLinksInApp === true
     ? { primary: 'orca', alternate: 'system' }

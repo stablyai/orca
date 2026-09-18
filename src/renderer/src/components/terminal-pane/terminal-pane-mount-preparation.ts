@@ -1,13 +1,9 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
-import {
-  canOpenWorkspaceBrowserTabOnRuntime,
-  canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-tab-open'
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
-import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
+import { createTerminalPaneHttpLinkDestinationResolvers } from './terminal-pane-http-link-destinations'
+import type { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 import {
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
@@ -54,7 +50,7 @@ export type TerminalPaneMountPreparation = {
     paneId: number
   ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
   canOpenOwnedBrowserForPane: (paneId: number) => boolean
-  getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
+  getHttpLinkActionDestinations: (paneId: number, url: string) => TerminalHttpLinkActionDestinations
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
   linkDeps: LinkHandlerDeps
   queueResizeAll: (focusActive: boolean) => void
@@ -101,34 +97,11 @@ export function prepareTerminalPaneMount(
     : resolvePaneWslDistro(useAppStore.getState(), deps.worktreeId, worktreePath)
   const getPaneLinkCwd = (paneId: number): string =>
     resolvePaneLinkCwd(deps.paneCwdRef.current, paneId, startupCwd)
-  const getHttpLinkSourceOwnerForPane = (
-    paneId: number
-  ): ReturnType<typeof resolveTerminalHttpLinkSourceOwner> =>
-    resolveTerminalHttpLinkSourceOwner(paneTransports.get(paneId))
-  const canOpenOwnedBrowserForPane = (paneId: number): boolean => {
-    const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-    if (sourceOwner.kind === 'runtime') {
-      return canOpenWorkspaceBrowserTabOnRuntime(
-        useAppStore.getState(),
-        deps.worktreeId,
-        sourceOwner.runtimeEnvironmentId
-      )
-    }
-    return (
-      sourceOwner.kind === 'ssh' &&
-      canOpenWorkspaceBrowserTabOnSsh(
-        useAppStore.getState(),
-        deps.worktreeId,
-        sourceOwner.connectionId
-      )
-    )
-  }
-  const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations =>
-    httpLinkActionDestinationsFor(
-      deps.settingsRef.current,
-      getHttpLinkSourceOwnerForPane(paneId),
-      canOpenOwnedBrowserForPane(paneId)
-    )
+  const {
+    getHttpLinkSourceOwnerForPane,
+    canOpenOwnedBrowserForPane,
+    getHttpLinkActionDestinations
+  } = createTerminalPaneHttpLinkDestinationResolvers(deps)
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     if (deps.settingsRef.current?.terminalLinkActionPopoverEnabled === false) {
       return null

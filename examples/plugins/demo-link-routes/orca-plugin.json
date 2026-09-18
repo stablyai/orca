@@ -1,0 +1,30 @@
+{
+  "manifestVersion": 1,
+  "id": "demo-link-routes",
+  "publisher": "orca-samples",
+  "name": "Demo Link Routes",
+  "version": "1.0.0",
+  "description": "Sample plugin showing contributes.linkRoutes: one exact host, one single-label wildcard, one reserved-TLD mid-label wildcard. Declarative only, no worker, no capabilities.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "linkRoutes": [
+      {
+        "hostname": "docs.example.com",
+        "destination": "orca-browser",
+        "description": "Project docs read best next to the terminal."
+      },
+      {
+        "hostname": "*.example.com",
+        "destination": "system-browser",
+        "description": "Everything else on the corporate domain goes to the real browser, where SSO already works."
+      },
+      {
+        "hostname": "*-devserver.test",
+        "destination": "orca-browser",
+        "description": "Per-worktree dev servers. Mid-label wildcards are reserved-TLD only."
+      }
+    ]
+  },
+  "capabilities": []
+}
