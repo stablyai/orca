@@ -107,14 +107,17 @@ describe('self-initiated tree kill breadcrumb', () => {
     expect(externallyKilled.selfInitiatedKills).toBeUndefined()
     expect(externallyKilled.selfInitiatedTreeKillCount).toBeUndefined()
     // Every other recorded field is identical — that is why the breadcrumb exists.
+    // The census age is wall-clock, so it is normalized rather than compared.
     expect({
       ...selfKilled,
       selfInitiatedKills: null,
-      selfInitiatedTreeKillCount: null
+      selfInitiatedTreeKillCount: null,
+      processMetricsSampleAfterGoneMs: null
     }).toEqual({
       ...externallyKilled,
       selfInitiatedKills: null,
-      selfInitiatedTreeKillCount: null
+      selfInitiatedTreeKillCount: null,
+      processMetricsSampleAfterGoneMs: null
     })
   })
 

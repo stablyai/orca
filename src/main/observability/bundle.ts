@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { MAX_BUNDLE_BYTES } from './diagnostic-bundle-limits'
 import { listRotatedFiles } from './local-file-sink'
+import { readLinesNewestFirst } from './ndjson-line-scan'
 import { redactValue } from './redactor'
 
 const DEFAULT_LOOKBACK_MINUTES = 30
@@ -48,22 +49,6 @@ type BundleHeader = {
   readonly orca_channel: 'stable' | 'rc' | 'dev'
   readonly collected_at: string
   readonly schema_version: 1
-}
-
-function* readLinesNewestFirst(text: string): Iterable<string> {
-  let end = text.length
-  while (end > 0) {
-    const start = text.lastIndexOf('\n', end - 1)
-    const rawLine = text.slice(start + 1, end)
-    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-    if (line.length > 0) {
-      yield line
-    }
-    if (start === -1) {
-      break
-    }
-    end = start
-  }
 }
 
 /**

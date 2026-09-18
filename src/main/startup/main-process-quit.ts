@@ -6,6 +6,8 @@ import { killAllPty } from '../ipc/pty'
 import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-init'
 import { beginSshShutdown } from '../ipc/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
+import { recordCommittedQuitBreadcrumb } from '../crash-reporting/committed-quit-breadcrumb'
+import { isSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
@@ -106,6 +108,16 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    // Why here and not before-quit: this is the first line past the point of no return —
+    // before-quit is still vetoable by a renderer beforeunload, so a crumb there would
+    // claim an exit that never happened. Why first inside it: the crumb only has to say
+    // "quit was committed", and every teardown step below can hang, time out or be
+    // force-quit through without changing that answer.
+    recordCommittedQuitBreadcrumb({
+      quittingForUpdate: isQuittingForUpdate(),
+      devParentShutdownRequested: isDevParentShutdownRequested(),
+      systemSessionEnding: isSystemSessionEnding()
+    })
     // A renderer can veto before-quit; push must survive until quit is committed.
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
