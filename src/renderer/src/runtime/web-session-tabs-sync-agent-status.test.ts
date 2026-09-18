@@ -282,10 +282,13 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
+    // Why: this fixture's "existing" row is never registered as a proven client
+    // writer, so under the host-authority contract it can never outrank the host
+    // by wall clock alone; the host's own updatedAt (NOW - 100) wins, not NOW.
     expect(fresherAttributionPatch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
       worktreeId: existing.worktreeId,
       tabId: existing.tabId,
-      updatedAt: NOW,
+      updatedAt: NOW - 100,
       providerSession: { key: 'session_id', id: 'session-1' }
     })
     expect(fresherAttributionPatch.agentStatusEpoch).toBe(8)
@@ -312,7 +315,8 @@ describe('applyWebSessionTabsSnapshot', () => {
       key: 'session_id',
       id: 'session-1'
     })
-    expect(identityPatch.agentStatusByPaneKey?.[mirroredPaneKey]?.updatedAt).toBe(NOW)
+    // Why: same unproven-writer contract as above — the host's clock wins.
+    expect(identityPatch.agentStatusByPaneKey?.[mirroredPaneKey]?.updatedAt).toBe(NOW - 100)
     expect(identityPatch.agentStatusEpoch).toBe(8)
     expect(identityPatch.sortEpoch).toBe(12)
 
@@ -351,13 +355,20 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
+    // Why: same unproven-writer contract — this fixture's "existing" row never
+    // registered ownership, so hostIdentityPredatesCurrentTurn's stale-turn
+    // guard (which only ever applied inside the merge branch) no longer
+    // engages; the host's own 'done' turn and its own providerSession win.
     expect(nextTurnPatch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
-      state: 'working',
-      stateStartedAt: NOW,
+      state: 'done',
+      stateStartedAt: NOW - 1_000,
       worktreeId: WT,
       tabId: existing.tabId
     })
-    expect(nextTurnPatch.agentStatusByPaneKey?.[mirroredPaneKey]?.providerSession).toBeUndefined()
+    expect(nextTurnPatch.agentStatusByPaneKey?.[mirroredPaneKey]?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'previous-session'
+    })
   })
 
   it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {
