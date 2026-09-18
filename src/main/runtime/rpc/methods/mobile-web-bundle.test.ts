@@ -4,9 +4,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+  MOBILE_WEB_BUNDLE_CHUNK_METHOD,
+  MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
   MobileWebBundleChunkResultSchema,
   MobileWebBundleManifestResultSchema
 } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcDispatcher } from '../dispatcher'
 
@@ -423,5 +426,15 @@ describe('an install with no mobile web bundle', () => {
     expect(errorMessage(await call('mobileWeb.bundle.manifest'))).toBe(
       'mobile_web_bundle_unavailable'
     )
+  })
+})
+
+// Registration in ALL_RPC_METHODS is pinned by the generated params catalog; authorization is not,
+// and the mobile scanner only checks used ⊆ allowlist, so no mobile caller exists to miss these
+// until A5 ships one.
+describe('mobile authorization', () => {
+  it('lets a paired phone call both bundle methods', () => {
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has(MOBILE_WEB_BUNDLE_MANIFEST_METHOD)).toBe(true)
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has(MOBILE_WEB_BUNDLE_CHUNK_METHOD)).toBe(true)
   })
 })
