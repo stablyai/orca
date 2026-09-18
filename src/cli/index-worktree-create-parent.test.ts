@@ -45,6 +45,24 @@ import { RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
+function lineageParentNotFoundError(id: string): RuntimeRpcFailureError {
+  return new RuntimeRpcFailureError({
+    id,
+    ok: false,
+    error: {
+      code: 'LINEAGE_PARENT_NOT_FOUND',
+      message: 'Parent selector was not found.',
+      data: {
+        nextSteps: [
+          'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+          'Retry with --no-parent to create without lineage.'
+        ]
+      }
+    },
+    _meta: { runtimeId: 'runtime-1' }
+  })
+}
+
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
@@ -488,24 +506,70 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
-  it('reports runtime parent selector failures without hidden flag guidance', async () => {
-    callMock.mockRejectedValueOnce(
-      new RuntimeRpcFailureError({
-        id: 'req_create',
-        ok: false,
-        error: {
-          code: 'LINEAGE_PARENT_NOT_FOUND',
-          message: 'Parent selector was not found.',
-          data: {
-            nextSteps: [
-              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-              'Retry with --no-parent to create without lineage.'
-            ]
-          }
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      })
+  it('fails worktree.create when an explicit worktree workspace parent cannot be resolved', async () => {
+    callMock.mockRejectedValueOnce(lineageParentNotFoundError('req_create'))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'demo',
+        '--base-branch',
+        'master',
+        '--parent-worktree',
+        'worktree:repo-1::/tmp/repo/missing-parent',
+        '--json'
+      ],
+      '/tmp/repo'
     )
+
+    const output = JSON.parse(String(logSpy.mock.calls[0]?.[0] ?? '{}'))
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      repo: 'id:repo-1',
+      name: 'demo',
+      displayName: 'demo',
+      displayNameKind: 'user',
+      baseBranch: 'master',
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      parentWorkspace: 'worktree:repo-1::/tmp/repo/missing-parent',
+      noParent: false,
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
+    })
+    expect(output).toMatchObject({
+      id: 'req_create',
+      ok: false,
+      error: {
+        code: 'LINEAGE_PARENT_NOT_FOUND',
+        message: 'Parent selector was not found.',
+        data: {
+          nextSteps: [
+            'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+            'Retry with --no-parent to create without lineage.'
+          ]
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    expect(errSpy).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('reports runtime parent selector failures without hidden flag guidance', async () => {
+    callMock.mockRejectedValueOnce(lineageParentNotFoundError('req_create'))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
