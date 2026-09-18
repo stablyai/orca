@@ -70,6 +70,9 @@ export function buildQuickCreationRequest(
     worktreeCreateProgressMode: input.indeterminateProgress ? 'indeterminate' : 'stepped',
     ...(input.taskSourceContext ? { taskSourceContext: input.taskSourceContext } : {}),
     linkedWorkItem: toFolderWorkspaceLinkedTask(input.linkedWorkItem),
+    ...(input.linkedWorkItem?.assignees != null
+      ? { githubStartAssignees: input.linkedWorkItem.assignees }
+      : {}),
     linkedTaskSourceContext: input.taskSourceContext,
     ...(input.workspaceRunContext ? { workspaceRunContext: input.workspaceRunContext } : {}),
     name: input.workspaceName,

@@ -32,7 +32,8 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
           ? {
               repoId: item.repoId
             }
-          : {})
+          : {}),
+        ...(item.type === 'issue' ? { assignees: item.assignees ?? [] } : {})
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,

@@ -35,6 +35,8 @@ export type WorktreeCreationRequest = {
   // Preserve linked-task source ownership separately from execution context so Retry never infers account from run host.
   taskSourceContext?: TaskSourceContext | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  /** GitHub Start assignment only; not stored on the persisted linked task. */
+  githubStartAssignees?: readonly { login?: string | null }[] | null
   linkedTaskSourceContext?: TaskSourceContext | null
   // Preserve project-first host intent for retry/diagnostics/metadata; repoId remains for older create APIs.
   workspaceRunContext?: WorkspaceRunContext | null

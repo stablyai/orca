@@ -162,6 +162,15 @@ describe('TasksPane', () => {
     expect(markup).toContain('API access, the agent skill, and Show in Tasks')
   })
 
+  it('offers an opt-in to assign unassigned GitHub issues when starting work', () => {
+    const markup = renderPane()
+
+    expect(markup).toContain('Assign unassigned GitHub issues to me when starting work')
+    expect(markup).toContain('Existing assignees are never changed')
+    expect(markup).toContain('data-slot="switch"')
+    expect(markup).toContain('data-state="unchecked"')
+  })
+
   it('does not warn on a fresh install where nothing is connected yet', () => {
     // Untouched visible providers are defaults, not stalled setup; their cards already explain connection requirements.
     mocks.readiness.github = { connected: false, checking: false, visible: true }

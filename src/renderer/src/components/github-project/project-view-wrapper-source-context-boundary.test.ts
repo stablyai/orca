@@ -32,6 +32,7 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
       // Why: the slug-matched row's host, so a twin id never reaches the other host's row.
       repoHostId: 'ssh:builder',
       type: 'pr',
+      assignees: [],
       prRepo: { owner: 'acme', repo: 'orca', host: 'ghe.example.com' }
     })
     expect(buildProjectWorkItem(row, { id: 'repo-1' })?.prRepo?.host).toBe('github.com')
