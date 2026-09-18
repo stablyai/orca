@@ -61,7 +61,27 @@ function readDetail<TDetail>(error: Error, schema: z.ZodType<TDetail>): TDetail 
   }
 }
 
+/** What crosses when the error cannot be read at all. The mark is a `WeakSet` lookup, so it holds. */
+export const BRIDGE_UNREADABLE_ERROR_MESSAGE = 'error could not be read'
+
+/**
+ * `message` and `constructor` can be getters too, and `String(value)` runs a `toString` the thrower
+ * wrote. Every read here is someone else's code, so the whole capture is guarded: a rejection that
+ * produced no envelope at all would leave the page with a promise that never settles.
+ */
 export function captureBridgeError(error: unknown, depth = 0): BridgeErrorCapture {
+  try {
+    return capture(error, depth)
+  } catch {
+    return {
+      category: 'Error',
+      message: BRIDGE_UNREADABLE_ERROR_MESSAGE,
+      isRpcDeliveryUnknown: isRpcDeliveryUnknown(error)
+    }
+  }
+}
+
+function capture(error: unknown, depth: number): BridgeErrorCapture {
   if (!(error instanceof Error)) {
     return { category: typeof error, message: String(error), isRpcDeliveryUnknown: false }
   }

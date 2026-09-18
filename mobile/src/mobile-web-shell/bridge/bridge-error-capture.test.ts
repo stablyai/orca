@@ -5,6 +5,7 @@ import {
 } from '../../transport/rpc-delivery-ambiguity'
 import {
   BRIDGE_MAX_CAUSE_DEPTH,
+  BRIDGE_UNREADABLE_ERROR_MESSAGE,
   BridgeErrorCaptureSchema,
   captureBridgeError,
   reconstructBridgeError,
@@ -98,6 +99,49 @@ describe('captureBridgeError', () => {
       message: 'outer',
       isRpcDeliveryUnknown: false,
       code: 'timeout'
+    })
+  })
+
+  it('captures something for an error whose message getter throws', () => {
+    const error = new Error('outer')
+    Object.defineProperty(error, 'message', {
+      get: () => {
+        throw new Error('message getter')
+      }
+    })
+    markRpcDeliveryUnknown(error)
+    expect(captureBridgeError(error)).toEqual({
+      category: 'Error',
+      message: BRIDGE_UNREADABLE_ERROR_MESSAGE,
+      isRpcDeliveryUnknown: true
+    })
+  })
+
+  it('captures something for a thrown value whose toString throws', () => {
+    const thrown = {
+      toString: () => {
+        throw new Error('toString')
+      }
+    }
+    expect(captureBridgeError(thrown)).toEqual({
+      category: 'Error',
+      message: BRIDGE_UNREADABLE_ERROR_MESSAGE,
+      isRpcDeliveryUnknown: false
+    })
+  })
+
+  it('captures something when the cause chain throws partway down', () => {
+    const inner = new Error('inner')
+    Object.defineProperty(inner, 'message', {
+      get: () => {
+        throw new Error('message getter')
+      }
+    })
+    const outer = new Error('outer', { cause: inner })
+    expect(captureBridgeError(outer).cause).toEqual({
+      category: 'Error',
+      message: BRIDGE_UNREADABLE_ERROR_MESSAGE,
+      isRpcDeliveryUnknown: false
     })
   })
 
