@@ -70,6 +70,23 @@ describe('splitBridgeReply', () => {
     }
   })
 
+  it('splits the worst reply the ceiling admits into fewer parts than the schema allows', () => {
+    // Every character re-escapes, which is the most a chunk can grow by, at the largest reply that
+    // can be sent at all. If this count ever reaches the part cap, the cap is the wrong number.
+    const empty = payloadOf('')
+    const backslashes = Math.floor((BRIDGE_MAX_REPLY_BYTES - JSON.stringify(empty).length) / 2)
+    const payload = payloadOf('\\'.repeat(backslashes))
+    expect(utf8ByteLength(JSON.stringify(payload))).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_BYTES)
+    expect(utf8ByteLength(JSON.stringify(payload))).toBeGreaterThan(BRIDGE_MAX_REPLY_BYTES - 4)
+    const frames = framesOf(splitBridgeReply(ID, payload))
+    expect(frames.length).toBe(26)
+    expect(BRIDGE_MAX_REPLY_PARTS).toBeGreaterThan(frames.length)
+    for (const frame of frames) {
+      expect(utf8ByteLength(JSON.stringify(frame))).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
+      expect(readBridgeHostMessage(JSON.stringify(frame)).ok).toBe(true)
+    }
+  })
+
   it('stays under the frame cap when every byte escapes to six', () => {
     const payload = payloadOf(WORST_ESCAPING_CHARACTER.repeat(1_300_000))
     const frames = framesOf(splitBridgeReply(ID, payload))

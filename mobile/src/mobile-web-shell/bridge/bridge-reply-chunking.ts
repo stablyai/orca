@@ -62,6 +62,11 @@ function chunkEnd(id: string, serialized: string, start: number): number {
   return end
 }
 
+/**
+ * A reply at the ceiling splits into fewer parts than the schema admits, because a chunk is JSON
+ * text re-escaped inside a JSON string and that at worst doubles it. The part cap is stated once,
+ * by `replyPartSchema`; the derivation is pinned by this module's test.
+ */
 export function splitBridgeReply(id: string, payload: BridgeReplyPayload): BridgeReplySplit {
   let serialized: string
   try {
@@ -81,9 +86,6 @@ export function splitBridgeReply(id: string, payload: BridgeReplyPayload): Bridg
     const end = chunkEnd(id, serialized, start)
     chunks.push(serialized.slice(start, end))
     start = end
-  }
-  if (chunks.length > BRIDGE_MAX_REPLY_PARTS) {
-    return { ok: false, refusal: 'reply-too-large' }
   }
   return {
     ok: true,
