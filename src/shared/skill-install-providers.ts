@@ -216,6 +216,12 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: null
   },
   {
+    id: 'gajae-code',
+    displayName: 'Gajae Code',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
     id: 'omp',
     displayName: 'OMP',
     globalSegments: null,

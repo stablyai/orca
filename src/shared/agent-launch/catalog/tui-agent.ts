@@ -8,6 +8,7 @@ export type TuiAgent =
   | 'opencode'
   | 'opencode2' // OpenCode 2 beta
   | 'mimo-code'
+  | 'gajae-code' // Gajae Code (`gjc`)
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
   | 'qoder'
