@@ -10,6 +10,7 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
@@ -502,5 +503,36 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('hybrid shell flag', () => {
+  const dev = globalThis as { __DEV__?: boolean }
+
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    delete dev.__DEV__
+  })
+
+  it('reads the developer toggle in a development build', async () => {
+    dev.__DEV__ = true
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+
+    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
+  })
+
+  it.each([
+    ['a release build', false],
+    ['a runtime with no __DEV__ at all', undefined]
+  ])('is off in %s even with the key left on, and never reads it', async (_label, isDev) => {
+    if (isDev !== undefined) {
+      dev.__DEV__ = isDev
+    }
+    // The value a development build left behind in a container the install-over kept.
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+
+    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
+    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
   })
 })

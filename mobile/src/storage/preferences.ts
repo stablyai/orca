@@ -123,6 +123,12 @@ const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
 // sweeps a bundle cache, and the only writer is the __DEV__ Troubleshoot toggle — anything but
 // `'true'`, including an unreadable store, is off.
 export async function loadMobileWebShellEnabled(): Promise<boolean> {
+  // A release build never reads the key at all: it shares its bundle id with the development build
+  // and the iOS data container survives an install-over, so a flag a developer left on would
+  // otherwise follow the store build in and mount the shell on a deep link.
+  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+    return false
+  }
   try {
     const raw = await AsyncStorage.getItem(MOBILE_WEB_SHELL_KEY)
     return raw === 'true'
