@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo } from 'react'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
 import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
 import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
 import { buildWorkspaceKanbanLaneViews } from './workspace-kanban-search'
@@ -11,9 +11,18 @@ import {
   getWorktreeHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { useRepoMap } from '@/store/selectors'
+
+function isFolderWorkspaceEntry(worktree: Worktree): boolean {
+  return parseWorkspaceKey(worktree.id)?.type === 'folder'
+}
 
 export function useWorkspaceKanbanBoardProjection(args: {
   activeWorktreeId: string | null
@@ -24,10 +33,39 @@ export function useWorkspaceKanbanBoardProjection(args: {
   sortBy: ReturnType<typeof useAppStore.getState>['sortBy']
   workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
 }) {
-  const visibleWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
-    allWorktrees: args.allWorktrees,
+  // Why: the visibility filters (default branch, detached HEAD, other devices…)
+  // describe git checkouts. A folder workspace entry has no branch or repo, so
+  // archiving — which the list builder already honours — and the host filter
+  // below are the only things that remove it.
+  const gitWorktrees = useMemo(
+    () => args.allWorktrees.filter((worktree) => !isFolderWorkspaceEntry(worktree)),
+    [args.allWorktrees]
+  )
+  const visibleGitWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
+    allWorktrees: gitWorktrees,
     repoMap: args.repoMap
   })
+  const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  // Why: a folder workspace does execute on one host, so it answers to the host
+  // filter exactly as computeVisibleWorktrees makes a git worktree answer to it.
+  const visibleFolderWorktreeIds = useMemo(() => {
+    const visibleHostIds =
+      visibleWorkspaceHostIds ??
+      (workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [workspaceHostScope])
+    const visibleHostIdSet = visibleHostIds ? new Set(visibleHostIds) : null
+    return args.allWorktrees
+      .filter(
+        (worktree) =>
+          isFolderWorkspaceEntry(worktree) &&
+          (!visibleHostIdSet || visibleHostIdSet.has(worktree.hostId ?? LOCAL_EXECUTION_HOST_ID))
+      )
+      .map(getWorktreeHostIdentity)
+  }, [args.allWorktrees, visibleWorkspaceHostIds, workspaceHostScope])
+  const visibleWorktreeIds = useMemo(
+    () => new Set([...visibleGitWorktreeIds, ...visibleFolderWorktreeIds]),
+    [visibleFolderWorktreeIds, visibleGitWorktreeIds]
+  )
   const worktreesByStatus = useMemo(
     () =>
       groupWorkspaceKanbanWorktrees({

@@ -163,6 +163,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+        resolveParent: (selector) => this.worktreeLineage.resolveParent(selector),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),

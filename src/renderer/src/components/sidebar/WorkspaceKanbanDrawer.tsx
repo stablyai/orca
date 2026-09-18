@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef } from 'react'
+import { buildWorkspaceBoardWorktrees } from './workspace-kanban-folder-workspaces'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
@@ -79,6 +80,16 @@ function WorkspaceKanbanDrawerContent({
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
+  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+  const boardSourceWorktrees = useMemo(
+    () =>
+      buildWorkspaceBoardWorktrees({
+        worktrees: allWorktrees,
+        folderWorkspaces,
+        workspaceLineageByChildKey
+      }),
+    [allWorktrees, folderWorkspaces, workspaceLineageByChildKey]
+  )
   const {
     activeWorktreeIdentity,
     boardDragGroups,
@@ -92,7 +103,7 @@ function WorkspaceKanbanDrawerContent({
   } = useWorkspaceKanbanBoardProjection({
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    allWorktrees: boardSourceWorktrees,
     open,
     repoMap,
     sortBy,
@@ -206,7 +217,7 @@ function WorkspaceKanbanDrawerContent({
     handleAddStatus,
     handleRemoveStatus
   } = useWorkspaceKanbanStatusActions({
-    allWorktrees,
+    allWorktrees: boardSourceWorktrees,
     workspaceStatuses,
     setWorkspaceStatuses,
     updateWorktreeMeta
