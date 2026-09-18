@@ -1,10 +1,19 @@
 import { expect, it, vi } from 'vitest'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
 
-const source = vi.hoisted(() => ({ chunks: [] as Buffer[] }))
+const source = vi.hoisted(() => {
+  const chunks: Buffer[] = []
+  return { chunks, closed: false }
+})
 vi.mock('../native-chat/wsl-transcript-fs-access', () => ({
   openTranscriptReadStream: async function* () {
-    yield* source.chunks
+    source.closed = false
+    try {
+      yield* source.chunks
+    } finally {
+      source.closed = true
+    }
   }
 }))
 
@@ -101,4 +110,55 @@ it('yields identical lines and resume offsets for every single-byte chunk split'
       bytesRead: buffer.length
     })
   }
+})
+
+it.each(['unterminated', 'terminated', 'carried', 'tail'] as const)(
+  'rejects an oversized %s record and closes its stream before decoding',
+  async (kind) => {
+    const full = Buffer.alloc(MAX_SESSION_TRANSCRIPT_RECORD_BYTES, 'x')
+    source.chunks =
+      kind === 'unterminated'
+        ? [full, Buffer.from('x')]
+        : kind === 'terminated'
+          ? [Buffer.concat([full, Buffer.from('x\n')])]
+          : kind === 'carried'
+            ? [full, Buffer.from('x\n')]
+            : [Buffer.concat([Buffer.from('ok\n'), full, Buffer.from('x')])]
+    const onLine = vi.fn()
+    const onLineBytes = vi.fn()
+    await expect(
+      consumeCompleteJsonlLines({ path: '/log', start: 41, onLine, onLineBytes })
+    ).rejects.toThrow(
+      `Session transcript record exceeds ${MAX_SESSION_TRANSCRIPT_RECORD_BYTES} byte limit`
+    )
+    expect(onLine).not.toHaveBeenCalled()
+    expect(onLineBytes).toHaveBeenCalledTimes(kind === 'tail' ? 1 : 0)
+    expect(source.closed).toBe(true)
+  }
+)
+
+it('accepts records exactly at the byte cap and a larger file of separate records', async () => {
+  const line = Buffer.alloc(MAX_SESSION_TRANSCRIPT_RECORD_BYTES, 'x')
+  source.chunks = [line, Buffer.from('\n'), line, Buffer.from('\n'), line]
+  const lengths: number[] = []
+  const result = await consumeCompleteJsonlLines({
+    path: '/log',
+    start: 41,
+    onLine: () => {},
+    onLineBytes: (bytes) => lengths.push(bytes.length)
+  })
+  expect(lengths).toEqual([line.length, line.length])
+  expect(result).toEqual({
+    consumedThrough: 41 + 2 * (line.length + 1),
+    trailingPartialLine: 'x'.repeat(line.length),
+    bytesRead: 3 * line.length + 2
+  })
+})
+
+it('counts UTF-8 bytes instead of decoded characters at the record cap', async () => {
+  const chars = Math.floor(MAX_SESSION_TRANSCRIPT_RECORD_BYTES / 3)
+  source.chunks = [Buffer.from('界'.repeat(chars)), Buffer.from('界\n')]
+  await expect(
+    consumeCompleteJsonlLines({ path: '/log', start: 0, onLine: () => {} })
+  ).rejects.toThrow('byte limit')
 })

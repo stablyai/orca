@@ -1,4 +1,5 @@
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { assertSessionTranscriptRecordBytes } from './session-transcript-record-budget'
 
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d
@@ -32,6 +33,7 @@ export async function consumeCompleteJsonlLines(args: {
   for await (const chunk of stream as AsyncIterable<Buffer>) {
     bytesRead += chunk.length
     if (!chunk.includes(NEWLINE_BYTE)) {
+      assertSessionTranscriptRecordBytes(remainderLength + chunk.length)
       remainderParts.push(chunk)
       remainderLength += chunk.length
       continue
@@ -42,6 +44,7 @@ export async function consumeCompleteJsonlLines(args: {
     let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
     while (newlineIndex !== -1) {
       let line = data.subarray(lineStart, newlineIndex)
+      assertSessionTranscriptRecordBytes(remainderLength + line.length)
       // Only the first line of a chunk can carry a prefix; resetting inside the
       // branch keeps the common per-line path allocation-free.
       if (remainderLength > 0) {
@@ -69,6 +72,7 @@ export async function consumeCompleteJsonlLines(args: {
       break
     }
     if (lineStart < data.length) {
+      assertSessionTranscriptRecordBytes(data.length - lineStart)
       // Copy the tail so retaining it does not pin the whole chunk buffer.
       remainderParts = [Buffer.from(data.subarray(lineStart))]
       remainderLength = data.length - lineStart
