@@ -170,21 +170,25 @@ function isHermesInlineBootstrap(tokens: readonly string[], firstNormalized: str
 // Muse's versioned binary needs a scoped prefix match; generic suffix matching would misclassify names such as ante-obsidian.
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
-  expectedProcess: string
+  expectedProcess: string,
+  aliases: readonly string[] = []
 ): boolean {
   const normalizedProcess = normalizeProcessName(processName)
-  const normalizedExpected = normalizeProcessName(expectedProcess)
-  if (!normalizedProcess || !normalizedExpected) {
+  if (!normalizedProcess) {
     return false
   }
-  return (
-    normalizedProcess === normalizedExpected ||
-    normalizedProcess.startsWith(`${normalizedExpected}.`) ||
-    (['qoderclicn', 'qodercn'].includes(normalizedExpected) &&
-      /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
-    (['qoder', 'qodercli'].includes(normalizedExpected) &&
-      /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
-    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+  const names = [expectedProcess, ...aliases]
+    .map((name) => normalizeProcessName(name))
+    .filter((name): name is string => Boolean(name))
+  return names.some(
+    (normalizedExpected) =>
+      normalizedProcess === normalizedExpected ||
+      normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+      (['qoderclicn', 'qodercn'].includes(normalizedExpected) &&
+        /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
+      (['qoder', 'qodercli'].includes(normalizedExpected) &&
+        /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
+      (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
   )
 }
 

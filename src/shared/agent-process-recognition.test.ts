@@ -316,6 +316,9 @@ describe('agent process recognition', () => {
       processName: 'gjc'
     })
     expect(isExpectedAgentProcess('/Users/dev/.local/bin/gjc', 'gjc')).toBe(true)
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/gajae-code', 'gjc', ['gajae-code'])).toBe(
+      true
+    )
     expect(isRecognizedAgentType('gjc')).toBe(true)
     expect(isRecognizedAgentType('gajae-code')).toBe(true)
     expect(recognizeAgentProcess('mimo')).toEqual({ agent: 'mimo-code', processName: 'mimo' })
