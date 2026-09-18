@@ -64,8 +64,25 @@ describe('route manifest', () => {
   })
 
   it('excludes test files and API routes', async () => {
-    const keys = await collectMobileWebAppRouteKeys(appDir)
-    expect(keys.some((key) => key.includes('.test.') || key.includes('+api.'))).toBe(false)
+    // mobile/app holds none of these today, so assert the rule against a tree that does.
+    await withScratch(async (scratch) => {
+      const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
+      await mkdir(directory, { recursive: true })
+      for (const name of [
+        'index.tsx',
+        'index.test.tsx',
+        'index.spec.tsx',
+        'shape.d.ts',
+        '+api.ts',
+        'tokens+api.ts',
+        '+middleware.ts',
+        'notes.md'
+      ]) {
+        await writeFile(join(directory, name), 'export default null\n', 'utf8')
+      }
+      expect(await collectMobileWebAppRouteKeys(scratch)).toEqual(['./h/index.tsx'])
+    })
+    expect(await collectMobileWebAppRouteKeys(appDir)).not.toContain('./h/_layout.test.tsx')
   })
 
   it('refuses an empty subtree rather than emitting a context with no routes', async () => {
