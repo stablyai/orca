@@ -20,6 +20,8 @@ import {
   hasChildProcessesFromRuntimeController,
   hasPtyFromRuntimeController,
   hasRendererSerializerFromRuntimeController,
+  inspectExitedIncarnationFromRuntimeController,
+  releaseExitedIncarnationFromRuntimeController,
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
@@ -63,6 +65,10 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
+    inspectExitedIncarnation: (ptyId, incarnationId) =>
+      inspectExitedIncarnationFromRuntimeController(ptyId, incarnationId),
+    releaseExitedIncarnation: (ptyId, incarnationId) =>
+      releaseExitedIncarnationFromRuntimeController(ptyId, incarnationId),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),

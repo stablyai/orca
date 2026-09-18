@@ -102,6 +102,9 @@ export async function runLegacyWorkerTerminalRecovery(
     }
     ports.notifyResolution(candidate, 'exited')
     exitedDispatchIds.push(candidate.dispatchId)
+    // Why after reconcileMissing: the host keeps the exit until its owner has acted on it, and a
+    // settlement that failed to persist must find the same evidence on the next sweep.
+    await ports.releaseProvenExit(candidate)
   }
   const result = {
     adoptedDispatchIds,

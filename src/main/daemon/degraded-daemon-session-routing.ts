@@ -1,6 +1,31 @@
 import type { IPtyProvider } from '../providers/types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { SessionNotFoundError } from './daemon-errors'
+import {
+  inspectPtyProviderProcess,
+  type PtyProcessInspection,
+  type PtyProcessInspectionOptions
+} from '../providers/pty-process-inspection'
+
+/**
+ * An id no route claims may only be asked about by a caller naming a remembered incarnation: that
+ * is exactly the session that died while this client was away, so no route survived it. A daemon
+ * that never held it answers not-found, so routing the question cannot manufacture an exit. An
+ * ordinary poll must not borrow a route it never owned. Mirrors DaemonPtyRouter.
+ */
+export function inspectRoutedDaemonProcess(
+  owner: IPtyProvider | null,
+  currentDaemon: DaemonPtyAdapter,
+  sessionId: string,
+  options?: PtyProcessInspectionOptions
+): Promise<PtyProcessInspection> {
+  if (owner) {
+    return inspectPtyProviderProcess(owner, sessionId, options)
+  }
+  return options?.expectedIncarnationId === undefined
+    ? Promise.reject(new Error('terminal_gone'))
+    : currentDaemon.inspectProcess(sessionId, options)
+}
 
 export function listProviderSessionIds(
   sessionProviders: ReadonlyMap<string, IPtyProvider>,

@@ -25,12 +25,15 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 const CONNECTION = 'conn-1'
 const SESSION = 'pty-1'
 
-function reattachAgainst(attach: () => Promise<unknown>): Promise<unknown> {
+function reattachAgainst(
+  attach: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+  options: Record<string, unknown> = {}
+): Promise<unknown> {
   return reattachSshPtySessionForSpawn({
     mux: { request: vi.fn(attach) } as unknown as SshChannelMultiplexer,
     connectionId: CONNECTION,
     sessionId: SESSION,
-    options: { cols: 80, rows: 24 },
+    options: { cols: 80, rows: 24, ...options },
     exitRaceTracker: {
       begin: () => 1,
       didMatchingExitArrive: () => false,
@@ -50,6 +53,23 @@ async function refusalFrom(attach: () => Promise<unknown>): Promise<Error> {
 }
 
 describe('an SSH reattach refusal says whether the host observed the PTY', () => {
+  it('names the incarnation the caller remembers so the relay can mark its refusal', async () => {
+    // Without it the relay cannot tell this reattach apart from one for an id it never minted, so
+    // its "not found" stays the ambiguous union and no caller may act on it.
+    const request = vi.fn(async () => {
+      throw new Error(`PTY "${SESSION}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
+    })
+    const incarnationId = '45454545-4545-4545-8545-454545454545'
+
+    await reattachAgainst(request, { expectedIncarnationId: incarnationId }).catch(() => {})
+
+    expect(request).toHaveBeenCalledWith(
+      'pty.attach',
+      expect.objectContaining({ id: SESSION, expectedIncarnationId: incarnationId }),
+      expect.anything()
+    )
+  })
+
   it('marks a relay that answered "not found" as positive evidence of absence', async () => {
     const error = await refusalFrom(async () => {
       throw new Error(`PTY "${SESSION}" not found`)

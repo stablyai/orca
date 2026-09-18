@@ -194,6 +194,9 @@ export async function reattachSshPtySession(args: {
     // Why: expected pane identity prevents a reused relay id from attaching the wrong shell.
     const expectedPaneKey = args.options.paneKey ?? args.options.env?.ORCA_PANE_KEY
     const expectedTabId = args.options.tabId ?? args.options.env?.ORCA_TAB_ID
+    // Additive: lets the relay mark its refusal as a death it observed for THIS incarnation rather
+    // than the ambiguous "no such id". Omitted when the caller remembers no incarnation.
+    const expectedIncarnationId = args.options.expectedIncarnationId
     const attachResult = await requestSshPtyAttach({
       mux: args.mux,
       relayPtyId: relaySessionId,
@@ -208,7 +211,8 @@ export async function reattachSshPtySession(args: {
         // answers "you already have this", and the pane stays blank until new output arrives.
         requireReplay: true,
         ...(expectedPaneKey ? { expectedPaneKey } : {}),
-        ...(expectedTabId ? { expectedTabId } : {})
+        ...(expectedTabId ? { expectedTabId } : {}),
+        ...(expectedIncarnationId ? { expectedIncarnationId } : {})
       },
       installSourceActivation: args.installSourceActivation,
       rememberPtyIncarnation: args.rememberPtyIncarnation

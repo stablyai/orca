@@ -269,6 +269,9 @@ export class SessionOutputPlane {
    *  which outlives fd teardown so an already-exited session can still be snapshotted. */
   markDisposed(): void {
     this.disposed = true
+    // A disposed plane refuses takePendingOutput, so anything still buffered is unreachable.
+    this.pendingOutputRecords = []
+    this.pendingOutputBytes = 0
   }
 
   disposeEmulator(): void {
