@@ -49,7 +49,7 @@ device.
 | List devices everywhere  | `ORCA emulator devices --json`                              | Every backend's devices with a platform column, booted and shutdown.                                                                                                  |
 | Attach / make active     | `ORCA emulator attach "iPhone 16 Pro" --json`               | Starts the helper if needed and makes the device active for the worktree. `--focus` switches the UI; it does not by default.                                          |
 | Single tap               | `ORCA emulator tap <x> <y> --json`                          | Normalized 0..1 coordinates.                                                                                                                                          |
-| Multi-step gesture       | `ORCA emulator gesture '<json>' --json`                     | Begin/move/end points. Use `tap` for a single tap.                                                                                                                    |
+| Multi-step gesture       | `ORCA emulator gesture '<json>' --json`                     | POSIX/PowerShell. On cmd.exe use double quotes with escaped inner quotes. Begin/move/end points. Use `tap` for a single tap.                                          |
 | Type text                | `ORCA emulator type "text" --json`                          | US-ASCII only.                                                                                                                                                        |
 | Hardware button          | `ORCA emulator button home --json`                          | `home` and `side_button` are documented by the CLI spec; other names such as `swipe_home`, `app_switcher`, `lock`, and `siri` are forwarded to serve-sim unvalidated. |
 | Rotate device            | `ORCA emulator rotate landscape_left --json`                | The orientation persists for subsequent gestures.                                                                                                                     |
@@ -81,6 +81,10 @@ and retry.
   element at its frame center: `x + width / 2`, `y + height / 2`.
 - Prefer `tap` over `gesture` for a single tap. A separate gesture begin/end pair can be
   interpreted as a long press because of WebSocket overhead; `tap` sends the quick sequence.
+- **cmd.exe and gesture JSON:** single quotes are not quoting in cmd.exe, so
+  `gesture '{"…"}'` arrives with the quotes and fails JSON parse. Use
+  `gesture "[{\"type\":\"begin\",…}]"` (double quotes, backslash-escape inner ones)
+  on cmd.exe.
 - `type` sends US-ASCII only, and unsupported characters error rather than degrading.
 - The pane and the CLI share one stream and one helper, so closing the pane can stop the
   stream.
