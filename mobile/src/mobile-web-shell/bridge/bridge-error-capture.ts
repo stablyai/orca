@@ -43,19 +43,30 @@ function errorCaptureSchema(remainingCauses: number): z.ZodType<BridgeErrorCaptu
 export const BridgeErrorCaptureSchema = errorCaptureSchema(BRIDGE_MAX_CAUSE_DEPTH)
 
 // Read through a schema rather than an assertion: `code` and `cause` are not on `Error`, and a
-// getter that defines one is still worth reading.
-const errorDetailSchema = z.object({
-  code: z.unknown().optional(),
-  cause: z.unknown().optional()
-})
+// getter that defines one is still worth reading. One schema each, because reading either property
+// runs whatever getter defined it, and a getter that throws must not cost the other field.
+const errorCodeSchema = z.object({ code: z.unknown().optional() })
+const errorCauseSchema = z.object({ cause: z.unknown().optional() })
+
+/**
+ * A rejection is the one thing that always has to produce a capture: an error thrown while reading
+ * an error leaves the page with no envelope at all, so a throwing getter costs its own field only.
+ */
+function readDetail<TDetail>(error: Error, schema: z.ZodType<TDetail>): TDetail | undefined {
+  try {
+    const parsed = schema.safeParse(error)
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export function captureBridgeError(error: unknown, depth = 0): BridgeErrorCapture {
   if (!(error instanceof Error)) {
     return { category: typeof error, message: String(error), isRpcDeliveryUnknown: false }
   }
-  const detail = errorDetailSchema.safeParse(error)
-  const code = detail.success ? detail.data.code : undefined
-  const cause = detail.success ? detail.data.cause : undefined
+  const code = readDetail(error, errorCodeSchema)?.code
+  const cause = readDetail(error, errorCauseSchema)?.cause
   return {
     category: error.constructor.name,
     message: error.message,

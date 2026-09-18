@@ -72,6 +72,35 @@ describe('captureBridgeError', () => {
     )
   })
 
+  it('still captures the rejection when a getter throws', () => {
+    const throwingCode = new Error('outer')
+    Object.defineProperty(throwingCode, 'code', {
+      get: () => {
+        throw new Error('code getter')
+      },
+      enumerable: true
+    })
+    Object.defineProperty(throwingCode, 'cause', { value: new Error('inner'), enumerable: true })
+    const captured = captureBridgeError(throwingCode)
+    expect('code' in captured).toBe(false)
+    expect(captured.cause?.message).toBe('inner')
+
+    const throwingCause = Object.assign(new Error('outer'), { code: 'timeout' })
+    Object.defineProperty(throwingCause, 'cause', {
+      get: () => {
+        throw new Error('cause getter')
+      },
+      enumerable: true
+    })
+    const second = captureBridgeError(throwingCause)
+    expect(second).toEqual({
+      category: 'Error',
+      message: 'outer',
+      isRpcDeliveryUnknown: false,
+      code: 'timeout'
+    })
+  })
+
   it('reads a code defined as a getter', () => {
     const error = new Error('closed')
     Object.defineProperty(error, 'code', { get: () => 'from-getter', enumerable: true })
