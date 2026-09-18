@@ -46,6 +46,21 @@ export function useWorktreeCardFoundation({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  // Why: a non-authoritative catalog is a metadata fallback (remote/SSH before its scan
+  // lands), so its rows are placeholders, not settled answers. A row with no git evidence
+  // at all is unscanned even when its repo-level entry reads authoritative, because appended
+  // fallback rows inherit the flag by design — while bare checkouts can never resolve a
+  // branch, so they are always settled. #20119
+  const provisionalWorktreeCatalog = useAppStore((s) => {
+    if (s.startupWorktreeRefreshCompleted === true) {
+      return false
+    }
+    const detected = s.detectedWorktreesByRepo?.[worktree.repoId]
+    if (detected?.authoritative === false) {
+      return true
+    }
+    return !worktree.branch && !worktree.head && !worktree.isBare
+  })
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -218,6 +233,7 @@ export function useWorktreeCardFoundation({
     agentActivityDisplayMode,
     projectGroups,
     newCardStyle,
+    provisionalWorktreeCatalog,
     compactCards,
     handleEditIssue,
     handleEditComment,

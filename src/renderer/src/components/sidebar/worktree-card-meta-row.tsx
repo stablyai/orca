@@ -36,6 +36,7 @@ export function WorktreeCardMetaRow({
     showRepoBadgeInMetaRow,
     showHostContextBadge,
     showIdentityInNewCard,
+    reserveProvisionalIdentityRow,
     hasHoverDetails,
     showBranch,
     showDetachedHeadInMetaRow,
@@ -58,7 +59,13 @@ export function WorktreeCardMetaRow({
 
         {showHostContextBadge && <WorktreeHostContextBadge label={hostContextLabel!} />}
 
-        {showIdentityInNewCard ? (
+        {reserveProvisionalIdentityRow ? (
+          <span
+            data-worktree-card-identity-placeholder=""
+            aria-hidden="true"
+            className="h-3 w-24 shrink-0 animate-pulse rounded-sm bg-muted-foreground/20 motion-reduce:animate-none"
+          />
+        ) : showIdentityInNewCard ? (
           <TruncatedSidebarLabel
             text={identityDisplay!}
             className="text-[11px] text-muted-foreground leading-none"
