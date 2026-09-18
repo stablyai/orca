@@ -466,6 +466,29 @@ describe('backpressure', () => {
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
+  it('reopens the byte window on ack, not just the frame window', () => {
+    const bridge = harness()
+    bridge.host.receive(subscribeFrame(ID))
+    const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
+    // What fits under the byte window, which leaves the next frame of this size to overflow it.
+    const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / (chunk.length + 128))
+    const events = (): BridgeHostMessage[] => bridge.frames().filter((f) => f.type === 'event')
+    const emit = (times: number): void => {
+      for (let index = 0; index < times; index += 1) {
+        bridge.client.streams[0]?.emit(chunk)
+      }
+    }
+    emit(fits)
+    expect(events()).toHaveLength(fits)
+    bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: fits }))
+    emit(fits)
+    // The frame window is nowhere near full, so releasing the acked bytes is the only thing that
+    // can let the second batch through.
+    expect(fits * 2).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
+    expect(events()).toHaveLength(fits * 2)
+    expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
+  })
+
   it('ends rather than posting an event the page would refuse as oversized', () => {
     const bridge = harness()
     bridge.host.receive(subscribeFrame(ID))
