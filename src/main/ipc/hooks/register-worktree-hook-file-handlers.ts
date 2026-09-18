@@ -5,7 +5,11 @@ import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { isENOENT } from '../filesystem-path-containment'
 import { parseOrcaYaml } from '../../hooks'
-import { readIssueCommand, writeIssueCommand } from '../../issue-command-file'
+import {
+  isOrcaDirIgnoredByGit,
+  readIssueCommand,
+  writeIssueCommand
+} from '../../issue-command-file'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
@@ -104,6 +108,10 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           return
         }
         await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
+        if (await isOrcaDirIgnoredByGit(repo.path, repo.connectionId)) {
+          await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
+          return
+        }
         const gitignorePath = joinWorktreeRelativePath(repo.path, '.gitignore')
         try {
           const result = await fsProvider.readFile(gitignorePath)
@@ -120,7 +128,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return
       }
-      writeIssueCommand(repo.path, args.content)
+      await writeIssueCommand(repo.path, args.content)
     }
   )
 }

@@ -1,6 +1,6 @@
 import type { Repo } from '../../shared/repo-types'
 import { parseOrcaYaml } from '../hooks'
-import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
+import { isOrcaDirIgnoredByGit, readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import { isENOENT } from '../ipc/filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from '../providers/types'
@@ -60,7 +60,7 @@ export class RuntimeRepositoryIssueCommand {
       return { ok: true }
     }
     if (!repo.connectionId) {
-      writeIssueCommand(repo.path, content)
+      await writeIssueCommand(repo.path, content)
       return { ok: true }
     }
     const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
@@ -78,7 +78,9 @@ export class RuntimeRepositoryIssueCommand {
       return { ok: true }
     }
     await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-    await ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
+    if (!(await isOrcaDirIgnoredByGit(repo.path, repo.connectionId))) {
+      await ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
+    }
     await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
     return { ok: true }
   }

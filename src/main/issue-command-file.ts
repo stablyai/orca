@@ -2,6 +2,8 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
+import { checkIgnoredPaths } from './git/check-ignored-paths'
+import { requireSshGitProvider } from './providers/ssh-git-dispatch'
 
 const ORCA_DIR = '.orca'
 const ISSUE_COMMAND_FILENAME = 'issue-command'
@@ -54,7 +56,7 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
  * Write the per-user issue command override to `{repoRoot}/.orca/issue-command`.
  * Empty content deletes the override so the shared `orca.yaml` command applies again.
  */
-export function writeIssueCommand(repoPath: string, content: string): void {
+export async function writeIssueCommand(repoPath: string, content: string): Promise<void> {
   const filePath = getIssueCommandFilePath(repoPath)
   const trimmed = content.trim()
 
@@ -68,12 +70,29 @@ export function writeIssueCommand(repoPath: string, content: string): void {
     if (!existsSync(orcaDir)) {
       mkdirSync(orcaDir, { recursive: true })
     }
-    ensureOrcaDirIgnored(repoPath)
+    if (!(await isOrcaDirIgnoredByGit(repoPath))) {
+      ensureOrcaDirIgnored(repoPath)
+    }
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
   } catch (err) {
     console.error('[hooks] Failed to write issue command:', err)
     // Why: re-throw so the IPC handler surfaces the write failure to the renderer's .catch().
     throw err
+  }
+}
+
+export async function isOrcaDirIgnoredByGit(
+  repoPath: string,
+  connectionId?: string
+): Promise<boolean> {
+  try {
+    const ignored = connectionId
+      ? await requireSshGitProvider(connectionId).checkIgnoredPaths(repoPath, [ORCA_DIR])
+      : await checkIgnoredPaths(repoPath, [ORCA_DIR])
+    return ignored.includes(ORCA_DIR)
+  } catch {
+    // Preserve the existing ignore-file fallback if Git cannot inspect the rules.
+    return false
   }
 }
 

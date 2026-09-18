@@ -37,6 +37,10 @@ vi.mock('./git/runner', async () => ({
   gitExecFileSync: gitExecFileSyncMock
 }))
 
+vi.mock('./git/check-ignored-paths', () => ({
+  checkIgnoredPaths: vi.fn().mockResolvedValue([])
+}))
+
 describe('readIssueCommand', () => {
   it('prefers the local override over the shared orca.yaml command', async () => {
     const fs = await import('node:fs')
@@ -98,7 +102,7 @@ describe('writeIssueCommand', () => {
     })
 
     const { writeIssueCommand } = await import('./issue-command-file')
-    writeIssueCommand(TEST_REPO_PATH, 'local command')
+    await writeIssueCommand(TEST_REPO_PATH, 'local command')
 
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       TEST_GITIGNORE_PATH,
@@ -115,7 +119,7 @@ describe('writeIssueCommand', () => {
   it('deletes the local override when the override is cleared', async () => {
     const { writeIssueCommand } = await import('./issue-command-file')
     const fs = await import('node:fs')
-    writeIssueCommand(TEST_REPO_PATH, '   ')
+    await writeIssueCommand(TEST_REPO_PATH, '   ')
 
     expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(TEST_ISSUE_COMMAND_PATH, {
       force: true

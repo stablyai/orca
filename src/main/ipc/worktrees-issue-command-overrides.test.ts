@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createIssueCommandRunnerScriptMock,
-  getSshFilesystemProviderMock
+  getSshFilesystemProviderMock,
+  getSshGitProviderMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 
@@ -270,5 +271,37 @@ describe('registerWorktreeHandlers', () => {
         content: 'orca issue command'
       })
     ).rejects.toThrow('Remote filesystem unavailable')
+  })
+
+  it('preserves .gitignore when the SSH host already ignores .orca', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    })
+    const checkIgnoredPaths = vi.fn().mockResolvedValue(['.orca'])
+    getSshGitProviderMock.mockReturnValue({ checkIgnoredPaths })
+    const fsProvider = {
+      createDir: vi.fn().mockResolvedValue(undefined),
+      readFile: vi.fn(),
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+
+    await handlers['hooks:writeIssueCommand'](null, {
+      repoId: 'repo-ssh',
+      content: 'local command'
+    })
+
+    expect(getSshGitProviderMock).toHaveBeenCalledWith('conn-1')
+    expect(checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['.orca'])
+    expect(fsProvider.readFile).not.toHaveBeenCalled()
+    expect(fsProvider.writeFile).toHaveBeenCalledExactlyOnceWith(
+      '/remote/repo/.orca/issue-command',
+      'local command\n'
+    )
   })
 })
