@@ -185,6 +185,7 @@ function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
     `[verify-packaged-mobile-web-bundle] OK — buildId ${manifest.buildId}, ` +
       `${String(manifest.assets.length)} asset(s), ${String(manifest.totalBytes)} bytes`
   )
+  return manifest
 }
 
 module.exports = { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt }

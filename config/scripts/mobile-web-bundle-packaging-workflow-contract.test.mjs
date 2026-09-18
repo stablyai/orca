@@ -31,6 +31,8 @@ const packageScripts = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')
 ).scripts
 
+const SCRIPT_INVOCATION = /pnpm (?:run )?([\w:-]+)(?=$|[\s'"&|;])/g
+
 /** Whether `pnpm run <name>` eventually runs build:mobile-web. */
 function reachesBundleBuild(name, seen = new Set()) {
   if (name === 'build:mobile-web') {
@@ -44,8 +46,40 @@ function reachesBundleBuild(name, seen = new Set()) {
   if (typeof body !== 'string') {
     return false
   }
-  return [...body.matchAll(/pnpm run ([\w:-]+)/g)].some((match) =>
-    reachesBundleBuild(match[1], seen)
+  return [...body.matchAll(SCRIPT_INVOCATION)].some((match) => reachesBundleBuild(match[1], seen))
+}
+
+/**
+ * Whether `pnpm run <name>` eventually runs electron-builder without --prepackaged, i.e. runs
+ * beforePack. A workflow job that packs through such a script is a packaging job even though the
+ * literal electron-builder line lives in package.json (daemon-relocation-spike's build:unpack).
+ */
+function reachesElectronBuilder(name, seen = new Set()) {
+  if (seen.has(name)) {
+    return false
+  }
+  seen.add(name)
+  const body = packageScripts[name]
+  if (typeof body !== 'string') {
+    return false
+  }
+  if (packsWithBeforePack(body)) {
+    return true
+  }
+  return [...body.matchAll(SCRIPT_INVOCATION)].some((match) =>
+    reachesElectronBuilder(match[1], seen)
+  )
+}
+
+/** Whether text invokes electron-builder in a way that reaches beforePack. */
+function packsWithBeforePack(text) {
+  const invocations = [...text.matchAll(/[^\n]*electron-builder --config[^\n]*/g)].map(
+    (match) => match[0]
+  )
+  // --prepackaged short-circuits doPack before emitBeforePack, so those jobs never run the guard.
+  return (
+    invocations.length > 0 &&
+    !invocations.every((invocation) => invocation.includes('--prepackaged'))
   )
 }
 
@@ -53,6 +87,7 @@ function reachesBundleBuild(name, seen = new Set()) {
 // workflow has to be added here deliberately, with its bundle step, rather than slipping in.
 const EXPECTED_PACKAGING_JOBS = [
   'adhoc-mac-build.yml build-adhoc-mac',
+  'daemon-relocation-spike.yml spike',
   'daily-mac-build.yml build-daily-mac',
   'dev-channel-win-build.yml build-win',
   'hourly-mac-build.yml build-hourly-mac',
@@ -79,14 +114,10 @@ function packagingJobs() {
     for (const [index, pair] of items.entries()) {
       const end = index + 1 < items.length ? items[index + 1].key.range[0] : jobsNode.range[2]
       const text = source.slice(pair.key.range[0], end)
-      const invocations = [...text.matchAll(/[^\n]*electron-builder --config[^\n]*/g)].map(
-        (match) => match[0]
+      const packsViaScript = [...text.matchAll(SCRIPT_INVOCATION)].some((match) =>
+        reachesElectronBuilder(match[1])
       )
-      if (invocations.length === 0) {
-        continue
-      }
-      // --prepackaged short-circuits doPack before emitBeforePack, so those jobs never run the guard.
-      if (invocations.every((invocation) => invocation.includes('--prepackaged'))) {
+      if (!packsWithBeforePack(text) && !packsViaScript) {
         continue
       }
       jobs.push({ label: `${file} ${String(pair.key.value)}`, text })

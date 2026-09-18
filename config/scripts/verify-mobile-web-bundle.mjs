@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildMobileWebBundle, isDirectInvocation } from './build-mobile-web-bundle.mjs'
+import { assertMobileWebBundleBuilt } from './verify-packaged-mobile-web-bundle.cjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const bundleDir = join(projectDir, 'out', 'mobile-web')
@@ -70,15 +70,9 @@ export async function assertNoCarriageReturnsInSource(directory = sourceDir) {
 export async function verifyMobileWebBundle() {
   await assertNoCarriageReturnsInSource()
 
-  let manifest
-  try {
-    manifest = JSON.parse(await readFile(join(bundleDir, 'manifest.json'), 'utf8'))
-  } catch (error) {
-    fail(
-      `cannot read ${join(bundleDir, 'manifest.json')} (${error instanceof Error ? error.message : String(error)}). ` +
-        'Run pnpm build:mobile-web.'
-    )
-  }
+  // The packaging guard owns manifest integrity (safe paths, recomputed buildId, totalBytes, hashes,
+  // no stray files); a manifest edited after the build fails here exactly as it would at beforePack.
+  const manifest = assertMobileWebBundleBuilt(bundleDir)
 
   if (manifest.assets.length > MOBILE_WEB_BUNDLE_PHASE_A_MAX_ASSETS) {
     fail(
@@ -91,24 +85,6 @@ export async function verifyMobileWebBundle() {
       `bundle is ${String(manifest.totalBytes)} bytes, over the Phase A budget of ` +
         `${String(MOBILE_WEB_BUNDLE_PHASE_A_MAX_TOTAL_BYTES)}`
     )
-  }
-
-  for (const asset of manifest.assets) {
-    let bytes
-    try {
-      bytes = await readFile(join(bundleDir, asset.path))
-    } catch {
-      fail(`manifest lists ${asset.path}, which is missing from ${bundleDir}`)
-    }
-    if (bytes.byteLength !== asset.byteLength) {
-      fail(
-        `${asset.path} is ${String(bytes.byteLength)} bytes, manifest says ${String(asset.byteLength)}`
-      )
-    }
-    const sha256 = createHash('sha256').update(bytes).digest('hex')
-    if (sha256 !== asset.sha256) {
-      fail(`${asset.path} hashes to ${sha256}, manifest says ${asset.sha256}`)
-    }
   }
 
   // Two fresh builds into scratch dirs: a timestamp, an absolute path, or an unstable ordering
