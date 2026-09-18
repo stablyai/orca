@@ -302,7 +302,16 @@ describe('FileExplorerToolbar', () => {
     const openInItems = findOpenInMenuItems(element)
     expect(openInItems.props.worktreePath).toBe('/tmp/orca')
     expect(openInItems.props.connectionId).toBe('ssh-1')
+    expect(openInItems.props.runtimeEnvironmentId).toBeUndefined()
     expect(openInItems.props.labelPrefix).toBe('Open in ')
+  })
+
+  it('forwards the worktree runtime owner to open-in launchers', () => {
+    const element = makeToolbar({ connectionId: null, runtimeEnvironmentId: null })
+
+    const openInItems = findOpenInMenuItems(element)
+    expect(openInItems.props.connectionId).toBeNull()
+    expect(openInItems.props.runtimeEnvironmentId).toBeNull()
   })
 
   it('keeps the overflow menu as the last toolbar button', () => {
