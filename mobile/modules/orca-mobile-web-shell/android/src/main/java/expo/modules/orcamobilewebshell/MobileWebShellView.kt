@@ -128,7 +128,15 @@ internal class OrcaMobileWebShellView(
     view.destroy()
   }
 
-  // databaseEnabled is deprecated and inert on new WebViews, but the floor here is Chromium 83.
+  // databaseEnabled and the two file-URL settings are deprecated and inert on new WebViews, but
+  // the floor here is Chromium 83, and an invariant left to a default is one nobody can read.
+  //
+  // device-checked in B4: no setting below can be proven from a JVM test, and neither can
+  // shouldOverrideUrlLoading dropping a navigation. Confirm on a device that a page cannot reach
+  // the network (blockNetworkLoads), cannot keep state across a remount (domStorageEnabled,
+  // databaseEnabled, cacheMode), cannot read a file or a content provider (allowFileAccess,
+  // allowContentAccess, the two file-URL settings), cannot load http (mixedContentMode), and
+  // cannot navigate away from the document.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
     val view = WebView(context)
@@ -138,6 +146,8 @@ internal class OrcaMobileWebShellView(
       domStorageEnabled = false
       databaseEnabled = false
       allowFileAccess = false
+      allowFileAccessFromFileURLs = false
+      allowUniversalAccessFromFileURLs = false
       allowContentAccess = false
       javaScriptCanOpenWindowsAutomatically = false
       setSupportMultipleWindows(false)
