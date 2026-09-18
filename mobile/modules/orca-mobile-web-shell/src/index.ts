@@ -34,10 +34,16 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
 /** What a ref on the view carries. Expo puts the view's functions on the component prototype. */
 export type OrcaMobileWebShellViewHandle = {
   /**
-   * Delivers one raw JSON envelope to the page, and resolves only once the page has run it.
-   * Rejects when the message is over the cap, when delivery fails, and when there is nowhere to
-   * post: no page has spoken since the last load, the load failed, or the renderer is gone. The
-   * caller is the host, so a drop or an optimistic resolve is a request that never settles.
+   * Delivers one raw JSON envelope to the page. Rejects when the message is over the cap, and when
+   * there is nowhere to post: no page has spoken since the last load, a navigation is in flight,
+   * the load failed, or the renderer is gone. The caller is the host, so a silent drop is a request
+   * that never settles.
+   *
+   * Delivery is never proven by resolve. iOS rejects the failures it is told about, because
+   * `callAsyncJavaScript` reports whether the page ran the delivery; Android cannot, because
+   * `JavaScriptReplyProxy.postMessage` is void and has no acknowledgement, so resolve there means
+   * enqueued rather than delivered. Anything that must know the page received a message has to
+   * hear that from the page.
    */
   postBridgeMessage: (json: string) => Promise<void>
 }
