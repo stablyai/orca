@@ -132,6 +132,16 @@ export function projectFleetNextAction(
   if (worker.resource?.autoReleaseAt) {
     return { kind: 'none', argv: [] }
   }
+  // Abandon fences the Dispatch without killing the process. worker-release then
+  // retains identity_unproven; point at interrupt so the still-running agent can stop.
+  if (worker.workerState === 'abandoned') {
+    return worker.agentTerminalHandle
+      ? {
+          kind: 'interrupt',
+          argv: ['terminal', 'send', '--terminal', worker.agentTerminalHandle, '--interrupt']
+        }
+      : { kind: 'none', argv: [] }
+  }
   if (worker.terminalState === 'reclaimable') {
     return {
       kind: 'release',
