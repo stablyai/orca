@@ -160,6 +160,25 @@ describe('useNativeChatComposerKeyDown', () => {
     expect(callbacks.send).not.toHaveBeenCalled()
   })
 
+  it('sends an unmatched mid-prompt slash token on the configured chord in modifier mode', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const profile = getNativeChatAgentProfile('codex')
+    const autocomplete = deriveComposerAutocomplete('inspect /unknown', 16, [], [], profile)
+    expect(autocomplete).toMatchObject({ mode: 'slash', items: [], dispatchable: false })
+    const { handler, callbacks } = setup(
+      autocomplete,
+      false,
+      'inspect /unknown',
+      'cmd-or-ctrl-enter'
+    )
+    const event = keyEvent('Enter', false, { ctrlKey: true })
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
   it.each([
     ['Macintosh', { metaKey: true }],
     ['Windows NT', { ctrlKey: true }],
