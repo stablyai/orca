@@ -25,6 +25,37 @@ private let networkApiBlocker = """
   })();
   """
 
+/// Installs `window.orcaBridge`, the whole page-facing surface: `postMessage(json)` and an
+/// `onmessage` assignment. Android needs no counterpart because `addWebMessageListener` injects an
+/// object of the same name and shape, so the contract is the intersection of the two.
+///
+/// CSP is untouched and the network blocker still runs: this is a second document-start script, not
+/// a replacement. The sink is captured at install time so a page that deletes `window.webkit`
+/// cannot take the channel with it, and every property is non-configurable and non-writable, the
+/// only shape the page cannot put back.
+private let bridgeInstaller = """
+  (function(){
+  var sink=window.webkit.messageHandlers.orcaBridge;
+  var handler=null;
+  var bridge={};
+  Object.defineProperty(bridge,'postMessage',{value:function(json){
+  if(typeof json!=='string'){throw new TypeError('orcaBridge.postMessage expects a string')}
+  sink.postMessage(json)},configurable:false,writable:false,enumerable:true});
+  Object.defineProperty(bridge,'onmessage',{get:function(){return handler},
+  set:function(value){handler=typeof value==='function'?value:null},configurable:false,enumerable:true});
+  Object.defineProperty(bridge,'__deliver',{value:function(json){if(handler){handler({data:json})}},
+  configurable:false,writable:false,enumerable:false});
+  Object.defineProperty(globalThis,'orcaBridge',{value:bridge,configurable:false,writable:false,enumerable:true});
+  })();
+  """
+
+/// The body of a `callAsyncJavaScript` call, with the payload bound to `m` as a real JS value, so no
+/// reply content is ever parsed as script text.
+private let bridgeDeliver = """
+  const bridge = globalThis.orcaBridge
+  if (bridge) { bridge.__deliver(m) }
+  """
+
 private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
   /// An asset is up to 10 MiB, and WebKit starts and stops scheme tasks on the main thread, so the
   /// read must not happen there.
@@ -102,10 +133,42 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
   }
 }
 
+/// `WKUserContentController` retains its message handlers, so the back-reference has to be weak or
+/// the view outlives the React element that owned it.
+private final class MobileWebShellBridgeReceiver: NSObject, WKScriptMessageHandler {
+  weak var view: OrcaMobileWebShellView?
+
+  func userContentController(
+    _ controller: WKUserContentController,
+    didReceive message: WKScriptMessage
+  ) {
+    view?.receiveBridgeMessage(message)
+  }
+}
+
+internal final class MobileWebShellBridgeUnavailableException: Exception {
+  override var reason: String {
+    "The mobile web shell bridge is not installed on this view"
+  }
+}
+
+/// Thrown rather than dropped: the only caller is the React Native host, and a silent drop would
+/// turn a chunking bug there into a request that never settles.
+internal final class MobileWebShellBridgeMessageTooLargeException: GenericException<Int> {
+  override var reason: String {
+    "A bridge message of \(param) bytes exceeds the \(MobileWebShellBridge.maxMessageByteCount) byte cap"
+  }
+}
+
 final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   let onLoadState = EventDispatcher()
+  let onBridgeMessage = EventDispatcher()
 
   private let schemeHandler = MobileWebShellSchemeHandler()
+  private let bridgeReceiver = MobileWebShellBridgeReceiver()
+  private let bridgeGate = MobileWebShellBridgeGate()
+  private var bridgeEnabled = false
+  private var bridgeInstalled = false
   private var webView: WKWebView!
   private var generationDirectory = ""
   private var sessionId = ""
@@ -125,13 +188,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     configuration.websiteDataStore = .nonPersistent()
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
     configuration.setURLSchemeHandler(schemeHandler, forURLScheme: MobileWebShellOrigin.scheme)
-    configuration.userContentController.addUserScript(
-      WKUserScript(
-        source: networkApiBlocker,
-        injectionTime: .atDocumentStart,
-        forMainFrameOnly: false
-      )
-    )
+    configuration.userContentController.addUserScript(Self.makeBlockerScript())
+    bridgeReceiver.view = self
     webView = WKWebView(frame: bounds, configuration: configuration)
     webView.navigationDelegate = self
     webView.uiDelegate = self
@@ -156,10 +214,20 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     sessionId = value
   }
 
+  func setBridgeEnabled(_ value: Bool) {
+    bridgeEnabled = value
+  }
+
   /// Props arrive in no defined order, so neither setter starts anything; this does, once both are
   /// in. A repeat of the same pair is not a retry: a retry is a remount under a new React key.
+  /// `bridgeEnabled` is in the guard because a document-start script only takes effect at the next
+  /// document start: toggling it has to reload, or the prop would silently do nothing.
   func propsDidUpdate() {
-    guard generationDirectory != appliedDirectory || sessionId != appliedSessionId else { return }
+    guard
+      generationDirectory != appliedDirectory
+        || sessionId != appliedSessionId
+        || bridgeEnabled != bridgeInstalled
+    else { return }
     appliedDirectory = generationDirectory
     appliedSessionId = sessionId
     loadState.reset()
@@ -183,6 +251,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     }
     schemeHandler.sessionId = sessionId
     schemeHandler.generation = generation
+    applyBridgeInstallation()
     if isolationFailed {
       failPropUpdate(.isolationUnavailable)
       return
@@ -200,6 +269,73 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.stopLoading()
     webView.isHidden = true
     emit(loadState.failed(reason))
+  }
+
+  /// Rebuilt per install rather than stored: `removeAllUserScripts` is the only removal WebKit has,
+  /// so uninstalling the bridge means re-adding the blocker.
+  private static func makeBlockerScript() -> WKUserScript {
+    WKUserScript(
+      source: networkApiBlocker,
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: false
+    )
+  }
+
+  /// Nothing here runs while the prop stays false, which is what keeps Phase B byte-identical.
+  private func applyBridgeInstallation() {
+    guard bridgeEnabled != bridgeInstalled else { return }
+    let controller = webView.configuration.userContentController
+    if bridgeEnabled {
+      controller.add(bridgeReceiver, name: MobileWebShellBridge.handlerName)
+      controller.addUserScript(
+        WKUserScript(
+          source: bridgeInstaller,
+          injectionTime: .atDocumentStart,
+          // The handler refuses a subframe anyway; not injecting into one means there is nothing
+          // there to refuse.
+          forMainFrameOnly: true
+        )
+      )
+    } else {
+      controller.removeScriptMessageHandler(forName: MobileWebShellBridge.handlerName)
+      controller.removeAllUserScripts()
+      controller.addUserScript(Self.makeBlockerScript())
+    }
+    bridgeInstalled = bridgeEnabled
+  }
+
+  /// The session the page was loaded under, not the latest prop: a document served under the
+  /// previous one is still alive until the next load commits, and it must not be heard.
+  fileprivate func receiveBridgeMessage(_ message: WKScriptMessage) {
+    guard bridgeInstalled, let json = message.body as? String else { return }
+    let origin = message.frameInfo.securityOrigin
+    let source = MobileWebShellBridgeSource(
+      isOurWebView: message.webView === webView,
+      isMainFrame: message.frameInfo.isMainFrame,
+      originProtocol: origin.`protocol`,
+      originHost: origin.host
+    )
+    guard
+      MobileWebShellBridge.accepts(source, sessionId: appliedSessionId ?? ""),
+      bridgeGate.accepts(byteCount: json.utf8.count)
+    else { return }
+    onBridgeMessage(["json": json])
+  }
+
+  func postBridgeMessage(_ json: String) throws {
+    guard bridgeInstalled else {
+      throw MobileWebShellBridgeUnavailableException()
+    }
+    let byteCount = json.utf8.count
+    guard MobileWebShellBridge.acceptsByteCount(byteCount) else {
+      throw MobileWebShellBridgeMessageTooLargeException(byteCount)
+    }
+    webView.callAsyncJavaScript(
+      bridgeDeliver,
+      arguments: ["m": json],
+      in: nil,
+      contentWorld: .page
+    ) { _ in }
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {

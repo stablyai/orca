@@ -7,6 +7,7 @@ import Foundation
 //   swiftc -O -o /tmp/mobile-web-shell-checks \
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
+//     ios/MobileWebShellBridge.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -273,6 +274,78 @@ import Foundation
     precondition(!ignorable("SomeOtherDomain", 102))
   }
 
+  static func bridgeSource(
+    isOurWebView: Bool = true,
+    isMainFrame: Bool = true,
+    originProtocol: String = MobileWebShellOrigin.scheme,
+    originHost: String = session
+  ) -> MobileWebShellBridgeSource {
+    MobileWebShellBridgeSource(
+      isOurWebView: isOurWebView,
+      isMainFrame: isMainFrame,
+      originProtocol: originProtocol,
+      originHost: originHost
+    )
+  }
+
+  static func acceptsBridge(_ source: MobileWebShellBridgeSource) -> Bool {
+    MobileWebShellBridge.accepts(source, sessionId: session)
+  }
+
+  static func checkBridgeAcceptance() {
+    precondition(acceptsBridge(bridgeSource()))
+    // Simulator-measured: WebKit reports the custom scheme's host ASCII-lowercased, so the session
+    // we minted never equals the host verbatim. Exact equality here refuses every message.
+    precondition(acceptsBridge(bridgeSource(originHost: "sess-01jn_az9")))
+    precondition(acceptsBridge(bridgeSource(originHost: "SESS-01JN_AZ9")))
+
+    // A frame we did not serve.
+    precondition(!acceptsBridge(bridgeSource(originHost: "sess-01JN_aZ8")))
+    precondition(!acceptsBridge(bridgeSource(originHost: "")))
+    precondition(!acceptsBridge(bridgeSource(originHost: "sess-01JN_aZ9.evil")))
+    // ASCII folding only: U+212A KELVIN SIGN lowercases to "k" under Unicode case folding, so a
+    // caseInsensitiveCompare would accept a host nobody minted.
+    precondition(!MobileWebShellBridge.accepts(
+      bridgeSource(originHost: "\u{212A}ey"),
+      sessionId: "key"
+    ))
+    precondition(MobileWebShellBridge.asciiLowercased("\u{212A}EY") == "\u{212A}ey")
+
+    // Another scheme reaching the same handler.
+    precondition(!acceptsBridge(bridgeSource(originProtocol: "https")))
+    precondition(!acceptsBridge(bridgeSource(originProtocol: "")))
+    precondition(!acceptsBridge(bridgeSource(originProtocol: "orca-mobile-web ")))
+
+    // A subframe, and a message routed to a WebView that is not ours.
+    precondition(!acceptsBridge(bridgeSource(isMainFrame: false)))
+    precondition(!acceptsBridge(bridgeSource(isOurWebView: false)))
+
+    // No applied session is not an empty one: nothing may be accepted before a load.
+    precondition(!MobileWebShellBridge.accepts(bridgeSource(originHost: ""), sessionId: ""))
+    precondition(!MobileWebShellBridge.accepts(bridgeSource(originHost: "a b"), sessionId: "a b"))
+  }
+
+  static func checkBridgeByteCap() {
+    let cap = MobileWebShellBridge.maxMessageByteCount
+    precondition(cap == 640 * 1024)
+    precondition(MobileWebShellBridge.acceptsByteCount(0))
+    precondition(MobileWebShellBridge.acceptsByteCount(cap - 1))
+    precondition(MobileWebShellBridge.acceptsByteCount(cap))
+    precondition(!MobileWebShellBridge.acceptsByteCount(cap + 1))
+
+    // The cap is on UTF-8 bytes, not characters: a multi-byte payload must not buy extra room.
+    let wide = String(repeating: "\u{1F600}", count: 4)
+    precondition(wide.count == 4 && wide.utf8.count == 16)
+
+    let gate = MobileWebShellBridgeGate()
+    precondition(gate.refusedCount == 0)
+    precondition(gate.accepts(byteCount: cap))
+    precondition(gate.refusedCount == 0)
+    precondition(!gate.accepts(byteCount: cap + 1))
+    precondition(!gate.accepts(byteCount: cap * 2))
+    precondition(gate.refusedCount == 2)
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -283,6 +356,8 @@ import Foundation
     checkLoadStateMachine()
     checkResponseHeaders()
     checkNavigationErrors()
+    checkBridgeAcceptance()
+    checkBridgeByteCap()
     print("mobile web shell checks OK")
   }
 }
