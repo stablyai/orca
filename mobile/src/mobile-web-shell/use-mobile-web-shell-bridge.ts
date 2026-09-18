@@ -36,6 +36,10 @@ function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnostic) =>
       console.warn('[web-shell-bridge] the page could not be posted to', diagnostic.error)
       return
     }
+    if (diagnostic.kind === 'notify-failed') {
+      console.warn('[web-shell-bridge] the client threw on a page notification', diagnostic.error)
+      return
+    }
     console.warn('[web-shell-bridge] a view outlived its host and is still posting')
   }
 }

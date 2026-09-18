@@ -19,6 +19,7 @@ import { splitBridgeReply } from './bridge/bridge-reply-chunking'
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 type SubscribeMessage = Extract<BridgeClientMessage, { type: 'subscribe' }>
+type NotifyMessage = Extract<BridgeClientMessage, { type: 'notify' }>
 
 /** Live until something settles it; the flag is what keeps a cancelled request's late answer from
  *  being posted under an id the page has moved on from. */
@@ -31,6 +32,9 @@ export type BridgeHostDiagnostic =
   /** A page posting into a host that has already been disposed, which its own view is the only
    *  thing that can do. Dropping it silently is what hides a leaked view. */
   | { kind: 'frame-after-dispose' }
+  /** A client that threw where the bridge only forwards. Nothing is owed to the page for a notify,
+   *  so the throw is reported rather than answered. */
+  | { kind: 'notify-failed'; error: unknown }
 
 export type BridgeHostOptions = {
   client: RpcClient
@@ -83,21 +87,30 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const pending = new Map<string, PendingRequest>()
   let closed = false
   let postFailureReported = false
+  let notifyFailureReported = false
+
+  // Once per session: a page that cannot be posted to fails every frame after the first, and a
+  // line per frame buries the one that says why.
+  function reportPostFailure(error: unknown): void {
+    if (postFailureReported) {
+      return
+    }
+    postFailureReported = true
+    options.onDiagnostic?.({ kind: 'post-failed', error })
+  }
 
   function sendJson(json: string): void {
     // Defensive: teardown already settles everything that could post; this fences callers added later.
     if (closed) {
       return
     }
-    void options.post(json).catch((error: unknown) => {
-      // Once per session: a page that cannot be posted to fails every frame after the first, and a
-      // line per frame buries the one that says why.
-      if (postFailureReported) {
-        return
-      }
-      postFailureReported = true
-      options.onDiagnostic?.({ kind: 'post-failed', error })
-    })
+    // A `post` that throws where it should reject would escape into the client's own state-change
+    // fan-out, which is what sends the `state` frame, and take the other listeners down with it.
+    try {
+      void options.post(json).catch(reportPostFailure)
+    } catch (error) {
+      reportPostFailure(error)
+    }
   }
 
   // Every value in a host frame has already been serialized by whoever produced it — a reply by
@@ -233,6 +246,33 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     }
   }
 
+  /** The client's own work runs inside these calls, and a throw from one would otherwise escape into
+   *  the native event handler that delivered the page's frame. Nothing is owed to the page here. */
+  function forwardNotify(message: NotifyMessage): void {
+    try {
+      if (message.name === 'foreground') {
+        if (message.reason === undefined) {
+          client.notifyForeground()
+        } else {
+          client.notifyForeground(message.reason)
+        }
+        return
+      }
+      client.updateTerminalSubscriptionViewport(message.terminal, {
+        cols: message.cols,
+        rows: message.rows
+      })
+    } catch (error) {
+      // Once per session, for the reason a failing post is: a page nudging a broken client nudges it
+      // again on every foreground.
+      if (notifyFailureReported) {
+        return
+      }
+      notifyFailureReported = true
+      options.onDiagnostic?.({ kind: 'notify-failed', error })
+    }
+  }
+
   /** Cancels everything the page had open. `notify` is false for the page's own `close`, which has
    *  already settled what it owned. */
   function settleAll(notify: boolean): void {
@@ -285,18 +325,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         subscriptions.ack(message.id, message.seq)
         return
       case 'notify':
-        if (message.name === 'foreground') {
-          if (message.reason === undefined) {
-            client.notifyForeground()
-          } else {
-            client.notifyForeground(message.reason)
-          }
-          return
-        }
-        client.updateTerminalSubscriptionViewport(message.terminal, {
-          cols: message.cols,
-          rows: message.rows
-        })
+        forwardNotify(message)
         return
       case 'close':
         // Not a latch. The document that loads next into this same view says `ready` over this same

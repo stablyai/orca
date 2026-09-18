@@ -582,6 +582,46 @@ describe('notifications, refusals and the fence', () => {
     expect(bridge.client.requests).toHaveLength(0)
   })
 
+  it('reports a client that throws on a notify once per session, and keeps reading', () => {
+    const client = createFakeRpcClient()
+    const failure = new Error('no client')
+    const bridge = harness({
+      client: {
+        ...client,
+        notifyForeground: () => {
+          throw failure
+        },
+        updateTerminalSubscriptionViewport: () => {
+          throw failure
+        }
+      }
+    })
+    // The page's frame arrives on a native event handler, and a throw that escapes this arm takes
+    // that handler down with it.
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 80, rows: 24 })
+    )
+    expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
+  })
+
+  it('reports a post that throws instead of rejecting, and does not take the sender down', () => {
+    const failure = new Error('the bridge module is gone')
+    const client = createFakeRpcClient()
+    const bridge = harness({
+      client,
+      post: () => {
+        throw failure
+      }
+    })
+    // The `state` frame is sent from inside the client's own fan-out, so a throw here would reach
+    // every other listener that client has.
+    expect(() => client.pushState('reconnecting')).not.toThrow()
+    expect(bridge.diagnostics).toEqual([{ kind: 'post-failed', error: failure }])
+  })
+
   it('reports a failing post once per session', async () => {
     const failure = new Error('nowhere to post')
     const bridge = harness({ post: () => Promise.reject(failure) })
