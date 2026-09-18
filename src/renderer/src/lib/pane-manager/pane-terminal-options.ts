@@ -1,6 +1,7 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
+import { isScreenReaderModeEnabled } from './pane-screen-reader-mode'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -33,6 +34,10 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
 
   return {
     allowProposedApi: true,
+    // Why: xterm only maintains the DOM a screen reader reads while this is on. Seeded from the
+    // flag applyScreenReaderMode last published so a pane split open under VoiceOver is readable
+    // from its first row rather than from the next apply.
+    screenReaderMode: isScreenReaderModeEnabled(),
     cursorBlink: true,
     cursorStyle,
     cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),

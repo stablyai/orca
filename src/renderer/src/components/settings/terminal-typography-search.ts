@@ -110,6 +110,47 @@ export const getTerminalAdvancedTypographySearchEntries = createLocalizedCatalog
 
 export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
   {
+    title: translate(
+      'auto.components.settings.terminal.search.screenReader.title',
+      'Screen Reader Support'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.screenReader.description',
+      'Keep a text copy of the visible rows so screen readers can read terminal output. Panes are drawn to a canvas, which exposes no text on its own.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.accessibility',
+        'accessibility'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.a11y',
+        'a11y'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.screenReader',
+        'screen reader'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.voiceover',
+        'voiceover'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.narrator',
+        'narrator'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.nvda',
+        'nvda'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.screenReader.assistive',
+        'assistive'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.13a2502dfc', 'GPU Acceleration'),
     description: translate(
       'auto.components.settings.terminal.search.8f9f953de7',
