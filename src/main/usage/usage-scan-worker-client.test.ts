@@ -6,7 +6,8 @@ import {
   MAX_CONSECUTIVE_DEATHS,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS,
   UsageScanWorkerClient,
-  scanCodexUsageOnWorker
+  scanCodexUsageOnWorker,
+  scanDevinUsageOnWorker
 } from './usage-scan-worker-client'
 import { USAGE_SCAN_WORKER_ENTRY_FILENAME } from './usage-scan-worker-spawn'
 import type {
@@ -199,6 +200,29 @@ describe('UsageScanWorkerClient', () => {
     const results = await settled
     expect(results.every((result) => result.status === 'rejected')).toBe(true)
     expect(workers.length).toBeLessThanOrEqual(MAX_CONSECUTIVE_DEATHS)
+  })
+
+  it('routes a devin scan and hands back the devin projection', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+
+    const pending = scanDevinUsageOnWorker((body) => client.scan(body), [], [])
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    expect(worker.postedRequests[0]?.providerId).toBe('devin')
+    worker.emit('message', {
+      id: worker.lastId(),
+      ok: true,
+      value: {
+        providerId: 'devin',
+        source: [{ path: 't.json', sessionsDb: 'none' }],
+        sessions: [],
+        dailyAggregates: []
+      }
+    })
+
+    await expect(pending).resolves.toMatchObject({
+      source: [{ path: 't.json', sessionsDb: 'none' }]
+    })
   })
 
   it('rejects a response that answers for a different provider', async () => {

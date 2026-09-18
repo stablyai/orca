@@ -92,6 +92,12 @@ describe('buildAiVaultServiceEnv', () => {
     expect(env.PATH).toBe('C:\\bin')
   })
 
+  it('passes a relocated AppData through so Devin resolves its Windows data root', () => {
+    const env = buildAiVaultServiceEnv({ AppData: 'D:\\Roaming' }, 'win32')
+
+    expect(env.APPDATA).toBe('D:\\Roaming')
+  })
+
   it('spells SystemRoot the way Windows Node expects', () => {
     expect(buildAiVaultServiceEnv({ SystemRoot: 'C:\\Windows' }, 'win32').SystemRoot).toBe(
       'C:\\Windows'

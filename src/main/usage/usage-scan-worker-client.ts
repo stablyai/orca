@@ -11,6 +11,11 @@ import type {
   CodexUsageSession
 } from '../codex-usage/types'
 import type {
+  DevinUsageDailyAggregate,
+  DevinUsagePersistedFile,
+  DevinUsageSession
+} from '../devin-usage/types'
+import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
@@ -172,6 +177,27 @@ export async function scanOpenCodeUsageOnWorker(
   const value = await scan({ providerId: 'opencode', worktrees, previous })
   if (value.providerId !== 'opencode') {
     throw wrongProvider('opencode', value.providerId)
+  }
+  return value
+}
+
+/**
+ * Scan Devin ATIF transcripts on the shared worker.
+ * @param scan - Dispatch function, injected so tests need no real thread.
+ * @param worktrees - Worktree refs used to attribute usage.
+ * @param previous - Last scan's per-file cache.
+ * @returns Processed files plus the session and daily projections.
+ */
+export async function scanDevinUsageOnWorker(
+  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  previous: DevinUsagePersistedFile[]
+): Promise<
+  ProviderScanResult<DevinUsagePersistedFile, DevinUsageSession, DevinUsageDailyAggregate>
+> {
+  const value = await scan({ providerId: 'devin', worktrees, previous })
+  if (value.providerId !== 'devin') {
+    throw wrongProvider('devin', value.providerId)
   }
   return value
 }

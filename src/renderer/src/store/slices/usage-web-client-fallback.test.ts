@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
+  createDevinUsageSlice,
   createOpenCodeUsageSlice
 } from './usage-provider-slices'
 
@@ -25,7 +26,8 @@ function stubWebClientFallback(): void {
     api: {
       claudeUsage: provider,
       codexUsage: provider,
-      openCodeUsage: provider
+      openCodeUsage: provider,
+      devinUsage: provider
     }
   })
 }
@@ -61,5 +63,15 @@ describe('usage slices in the web client (preload fallback -> undefined)', () =>
     await expect(store.getState().enableOpenCodeUsage()).resolves.toBeUndefined()
     expect(store.getState().openCodeUsageScanState).toBeNull()
     expect(store.getState().openCodeUsageSummary).toBeNull()
+  })
+
+  it('devin: fetch and enable no-op without throwing', async () => {
+    stubWebClientFallback()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice creator is declared against the whole AppState; this store holds only its own slice, which is all the code under test reads.
+    const store = create<AppState>()((...args) => createDevinUsageSlice(...args) as AppState)
+    await expect(store.getState().fetchDevinUsage()).resolves.toBeUndefined()
+    await expect(store.getState().enableDevinUsage()).resolves.toBeUndefined()
+    expect(store.getState().devinUsageScanState).toBeNull()
+    expect(store.getState().devinUsageSummary).toBeNull()
   })
 })

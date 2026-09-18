@@ -37,7 +37,7 @@ describe('large remote history through real relay filesystem', () => {
       expect(result.sessions.map((session) => session.sessionId)).toEqual(['good'])
       expect(result.issues).toEqual([
         expect.objectContaining({
-          path: badPath,
+          path: badPath.replace(/\\/g, '/'),
           message: 'Session transcript record exceeds 10485760 byte limit'
         })
       ])
@@ -128,7 +128,10 @@ describe('large remote history through real relay filesystem', () => {
           path = join(home, '.hermes', 'sessions', 'large.json')
           record = { session_id: 'large', cwd: '/repo', model: 'test-model', messages }
         } else if (agent === 'devin') {
-          path = join(home, '.local', 'share', 'devin', 'cli', 'transcripts', 'large.json')
+          path =
+            platform.os === 'win32'
+              ? join(home, 'AppData', 'Roaming', 'devin', 'cli', 'transcripts', 'large.json')
+              : join(home, '.local', 'share', 'devin', 'cli', 'transcripts', 'large.json')
           record = {
             session_id: 'large',
             working_directory: '/repo',
