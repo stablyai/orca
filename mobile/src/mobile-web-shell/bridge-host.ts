@@ -89,6 +89,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId } = options
   const pending = new Map<string, PendingRequest>()
   let closed = false
+  // Requests the client is still running. `pending` is the page's view and empties on a cancel or a
+  // `close`, but `sendRequest` has no cancel: the call keeps its slot on the wire until it settles,
+  // and a page that closed between batches would otherwise be handed the cap over again.
+  let inFlight = 0
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
   // between the two the view belongs to no document, so nothing is served and nothing is posted.
   let serving = true
@@ -210,7 +214,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       sendError(id, new BridgeCapExceededError('that id is already in flight'))
       return
     }
-    if (pending.size >= BRIDGE_MAX_PENDING_REQUESTS) {
+    if (inFlight >= BRIDGE_MAX_PENDING_REQUESTS) {
       sendError(id, new BridgeCapExceededError(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests`))
       return
     }
@@ -224,13 +228,16 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       sendError(id, error)
       return
     }
+    inFlight += 1
     void answer.then(
       (payload) => {
+        inFlight -= 1
         if (settle(id, record)) {
           sendReply(id, payload)
         }
       },
       (error: unknown) => {
+        inFlight -= 1
         if (settle(id, record)) {
           sendError(id, error)
         }

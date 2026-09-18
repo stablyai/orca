@@ -281,6 +281,33 @@ describe('requests', () => {
     expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS + 1)
   })
 
+  it('holds the cap against a page that closes between batches', async () => {
+    const bridge = harness()
+    const fill = (offset: number): void => {
+      for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+        bridge.host.receive(
+          clientFrame({ type: 'request', id: bridgeId(offset + index), method: 'status.get' })
+        )
+      }
+    }
+    fill(0)
+    // `close` empties the page's ledger, but the desktop is still running all 64 and `sendRequest`
+    // has no cancel: counting the ledger would hand the cap over again to the next document.
+    bridge.host.receive(clientFrame({ type: 'close' }))
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    fill(100)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.frames().filter((frame) => frame.type === 'error')).toHaveLength(
+      BRIDGE_MAX_PENDING_REQUESTS
+    )
+    for (const request of bridge.client.requests) {
+      request.resolve(rpcSuccess('wire-1', 'ok'))
+    }
+    await flushBridge()
+    fill(200)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS * 2)
+  })
+
   it('stops answering a cancelled request without pretending the desktop stopped running it', async () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
