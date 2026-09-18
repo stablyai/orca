@@ -63,6 +63,8 @@ function useSelectedSourceReset(
   )
   const source = useIssueSourceActions({
     baseBranch,
+    // Why: a PR/issue/branch source owns the base, so "create more" must still clear it.
+    baseBranchNamesWorkspace: true,
     branchAutoNameRef,
     isProjectGroupTarget,
     lastAutoNameRef,
