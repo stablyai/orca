@@ -345,7 +345,8 @@ describe('agent card actions', () => {
 
     it('closeAllAgentCards ends only the agents the tab hosts, not overflow agents', () => {
       enableAgentCards(store)
-      createAgentTabs(AGENT_CARDS_MAX + 2)
+      const agentIds = createAgentTabs(AGENT_CARDS_MAX + 2)
+      const overflowIds = agentIds.slice(AGENT_CARDS_MAX)
       store.getState().syncAgentCards(WT)
       const cardGroupIds = store.getState().agentCardGroupIdsByWorktree[WT] ?? []
       expect(cardGroupIds).toHaveLength(AGENT_CARDS_MAX)
@@ -355,10 +356,12 @@ describe('agent card actions', () => {
       // Why: past the cap the extra agents stay ordinary top-level tabs, and closing the tab
       // they are not in must not end them.
       expect(closed).toBe(AGENT_CARDS_MAX)
-      const remaining = (store.getState().unifiedTabsByWorktree[WT] ?? []).filter(
-        (tab) => tab.contentType === 'agent-session'
-      )
-      expect(remaining).toHaveLength(2)
+      const remaining = (store.getState().unifiedTabsByWorktree[WT] ?? [])
+        .filter((tab) => tab.contentType === 'agent-session')
+        .map((tab) => tab.id)
+      // Identity, not just count: closing the carded nine and leaving the overflow two is the
+      // whole point, and a count alone passes when exactly the wrong two survive.
+      expect(remaining).toEqual(overflowIds)
     })
 
     it('still clears a stale registry when the worktree has no cards to restore', () => {
