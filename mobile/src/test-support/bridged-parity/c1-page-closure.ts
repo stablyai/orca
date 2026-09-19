@@ -23,19 +23,9 @@
  * module is the shell's, not the page's.
  */
 
-import type { BridgedParityClass } from './divergence-classes'
+import type { PageClosurePins } from './page-closure'
 
-/** Byte-identical, or the class that named the divergence. */
-export type BridgedParityVerdict = BridgedParityClass | 'identical'
-
-export type C1PageClosureObservation = {
-  family: string
-  verdict: BridgedParityVerdict
-}
-
-export const C1_PAGE_CLOSURE: Readonly<
-  Record<string, Readonly<Record<string, BridgedParityVerdict>>>
-> = {
+export const C1_PAGE_CLOSURE: PageClosurePins = {
   'settings.repo-metadata': {
     'matrix-settings.repo-metadata-host.platform-1': 'result-absent-settlement',
     'matrix-settings.repo-metadata-repo.list-1': 'result-absent-settlement',
@@ -188,47 +178,4 @@ export const C1_PAGE_CLOSURE: Readonly<
     'matrix-worktree.retired-names-worktree.listretirednames-1': 'result-absent-settlement',
     'worktree-retired-names': 'identical'
   }
-}
-
-/** Every closure golden that did not replay byte-identically, which the suite prints beside why. */
-export function c1PageClosureExclusions(): readonly (readonly [string, BridgedParityClass])[] {
-  return Object.values(C1_PAGE_CLOSURE).flatMap((family) =>
-    Object.entries(family).flatMap(([id, verdict]) =>
-      verdict === 'identical' ? [] : [[id, verdict] as const]
-    )
-  )
-}
-
-/**
- * Each closure family whose goldens or verdicts are not the ones pinned above, said in one line.
- *
- * Membership is checked per family rather than against the flat id list, so a golden newly derived
- * into a family this domain owns arrives as a finding instead of going unnoticed for being absent
- * from a pin that never mentioned it.
- */
-export function c1PageClosureDrift(
-  observed: ReadonlyMap<string, C1PageClosureObservation>
-): readonly string[] {
-  const byFamily = new Map<string, string[]>()
-  for (const [id, { family }] of observed) {
-    byFamily.set(family, [...(byFamily.get(family) ?? []), id])
-  }
-  const drift: string[] = []
-  for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
-    const seen = byFamily.get(family) ?? []
-    const arrived = seen.filter((id) => !(id in pinned))
-    const left = Object.keys(pinned).filter((id) => !seen.includes(id))
-    if (arrived.length > 0 || left.length > 0) {
-      drift.push(
-        `${family}: arrived ${arrived.join(', ') || '(none)'}; left ${left.join(', ') || '(none)'}`
-      )
-    }
-    for (const [id, verdict] of Object.entries(pinned)) {
-      const ran = observed.get(id)?.verdict
-      if (ran !== undefined && ran !== verdict) {
-        drift.push(`${id}: pinned ${verdict}, ran ${ran}`)
-      }
-    }
-  }
-  return drift
 }

@@ -1,21 +1,21 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { C5_PAGE_CLOSURE } from './c5-page-closure'
 import {
-  c5PageClosureDrift,
-  c5PageClosureExclusions,
-  c5PageClosureTotals,
-  C5_PAGE_CLOSURE,
-  type C5PageClosureObservation
-} from './c5-page-closure'
+  pageClosureDrift,
+  pageClosureExclusions,
+  pageClosureTotals,
+  type PageClosureObservation
+} from './page-closure'
 import { C1_PAGE_CLOSURE } from './c1-page-closure'
 import { BRIDGED_PARITY_EXCLUSIONS } from './divergence-classes'
 
 const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
 
 /** The run a corpus that diverged exactly as the pin says would hand the rule. */
-function asPinned(): Map<string, C5PageClosureObservation> {
-  const run = new Map<string, C5PageClosureObservation>()
+function asPinned(): Map<string, PageClosureObservation> {
+  const run = new Map<string, PageClosureObservation>()
   for (const [family, goldens] of Object.entries(C5_PAGE_CLOSURE)) {
     for (const [id, verdict] of Object.entries(goldens)) {
       run.set(id, { family, verdict })
@@ -44,7 +44,7 @@ describe('the C5 page closure', () => {
    * become `result-absent-settlement`. The counts are what showed it.
    */
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
-    expect(c5PageClosureTotals()).toEqual({
+    expect(pageClosureTotals(C5_PAGE_CLOSURE)).toEqual({
       identical: 72,
       'result-absent-settlement': 50,
       'params-undefined': 7,
@@ -108,7 +108,7 @@ describe('the C5 page closure', () => {
   })
 
   it('excludes a closure golden only into a class that has a reason', () => {
-    const exclusions = c5PageClosureExclusions()
+    const exclusions = pageClosureExclusions(C5_PAGE_CLOSURE)
     expect(exclusions.length).toBe(62)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
@@ -118,7 +118,7 @@ describe('the C5 page closure', () => {
 
 describe('reading a run against the C5 pin', () => {
   it('says nothing when the run is the pin', () => {
-    expect(c5PageClosureDrift(asPinned())).toEqual([])
+    expect(pageClosureDrift(C5_PAGE_CLOSURE, asPinned())).toEqual([])
   })
 
   it('names a closure golden that changed verdict', () => {
@@ -129,7 +129,7 @@ describe('reading a run against the C5 pin', () => {
     }
     const [id, observation] = found
     run.set(id, { ...observation, verdict: 'params-undefined' })
-    const drift = c5PageClosureDrift(run)
+    const drift = pageClosureDrift(C5_PAGE_CLOSURE, run)
     expect(drift.length).toBe(1)
     expect(drift[0]).toContain(id)
     expect(drift[0]).toContain(`pinned ${observation.verdict}, ran params-undefined`)
@@ -142,7 +142,9 @@ describe('reading a run against the C5 pin', () => {
       throw new Error('the pin is empty')
     }
     run.set('matrix-arrived-1', { family, verdict: 'identical' })
-    expect(c5PageClosureDrift(run)).toEqual([`${family}: arrived matrix-arrived-1; left (none)`])
+    expect(pageClosureDrift(C5_PAGE_CLOSURE, run)).toEqual([
+      `${family}: arrived matrix-arrived-1; left (none)`
+    ])
   })
 
   it('names a closure golden the run stopped producing', () => {
@@ -153,7 +155,9 @@ describe('reading a run against the C5 pin', () => {
       throw new Error('the pin is empty')
     }
     run.delete(id)
-    expect(c5PageClosureDrift(run)).toEqual([`${family}: arrived (none); left ${id}`])
+    expect(pageClosureDrift(C5_PAGE_CLOSURE, run)).toEqual([
+      `${family}: arrived (none); left ${id}`
+    ])
   })
 
   it('ignores every golden outside the closure, which is most of the corpus', () => {
@@ -162,6 +166,6 @@ describe('reading a run against the C5 pin', () => {
       family: 'session.diff-review',
       verdict: 'result-absent-settlement'
     })
-    expect(c5PageClosureDrift(run)).toEqual([])
+    expect(pageClosureDrift(C5_PAGE_CLOSURE, run)).toEqual([])
   })
 })

@@ -38,19 +38,9 @@
  * excludes by name. Measured at this base: 3510 modules, 370 local, 16 under `src/agent-history`.
  */
 
-import type { BridgedParityClass } from './divergence-classes'
+import type { PageClosurePins } from './page-closure'
 
-/** Byte-identical, or the class that named the divergence. */
-export type BridgedParityVerdict = BridgedParityClass | 'identical'
-
-export type C5PageClosureObservation = {
-  family: string
-  verdict: BridgedParityVerdict
-}
-
-export const C5_PAGE_CLOSURE: Readonly<
-  Record<string, Readonly<Record<string, BridgedParityVerdict>>>
-> = {
+export const C5_PAGE_CLOSURE: PageClosurePins = {
   'aiVault.history': {
     'aivault-history-scan-fulfilled': 'identical',
     'aivault-history-scan-unsupported': 'identical',
@@ -244,58 +234,4 @@ export const C5_PAGE_CLOSURE: Readonly<
     'tw-setup-hook-trust-always': 'identical',
     'tw-setup-hook-trust-approved': 'identical'
   }
-}
-
-/** Every closure golden that did not replay byte-identically, which the suite prints beside why. */
-export function c5PageClosureExclusions(): readonly (readonly [string, BridgedParityClass])[] {
-  return Object.values(C5_PAGE_CLOSURE).flatMap((family) =>
-    Object.entries(family).flatMap(([id, verdict]) =>
-      verdict === 'identical' ? [] : [[id, verdict] as const]
-    )
-  )
-}
-
-/** How many goldens this closure pins in each class, which a per-id walk alone cannot see move. */
-export function c5PageClosureTotals(): Readonly<Record<string, number>> {
-  const totals: Record<string, number> = {}
-  for (const family of Object.values(C5_PAGE_CLOSURE)) {
-    for (const verdict of Object.values(family)) {
-      totals[verdict] = (totals[verdict] ?? 0) + 1
-    }
-  }
-  return totals
-}
-
-/**
- * Each closure family whose goldens or verdicts are not the ones pinned above, said in one line.
- *
- * Membership is checked per family rather than against the flat id list, so a golden newly derived
- * into a family this domain owns arrives as a finding instead of going unnoticed for being absent
- * from a pin that never mentioned it.
- */
-export function c5PageClosureDrift(
-  observed: ReadonlyMap<string, C5PageClosureObservation>
-): readonly string[] {
-  const byFamily = new Map<string, string[]>()
-  for (const [id, { family }] of observed) {
-    byFamily.set(family, [...(byFamily.get(family) ?? []), id])
-  }
-  const drift: string[] = []
-  for (const [family, pinned] of Object.entries(C5_PAGE_CLOSURE)) {
-    const seen = byFamily.get(family) ?? []
-    const arrived = seen.filter((id) => !(id in pinned))
-    const left = Object.keys(pinned).filter((id) => !seen.includes(id))
-    if (arrived.length > 0 || left.length > 0) {
-      drift.push(
-        `${family}: arrived ${arrived.join(', ') || '(none)'}; left ${left.join(', ') || '(none)'}`
-      )
-    }
-    for (const [id, verdict] of Object.entries(pinned)) {
-      const ran = observed.get(id)?.verdict
-      if (ran !== undefined && ran !== verdict) {
-        drift.push(`${id}: pinned ${verdict}, ran ${ran}`)
-      }
-    }
-  }
-  return drift
 }
