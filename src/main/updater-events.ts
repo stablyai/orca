@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import type { UpdateStatus } from '../shared/update-status-types'
 import {
   isMacInstallerReady,
   registerMacUpdaterEvents,
@@ -7,7 +6,7 @@ import {
 } from './updater-mac-install'
 import { compareVersions } from './updater-fallback'
 import { fetchChangelog } from './updater-changelog'
-import type { ElectronAutoUpdater } from './electron-updater-loader'
+import type { UpdaterHandlerContext } from './updater-handler-context'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   getRetainedLinuxPackageManualInstallStatus,
@@ -19,49 +18,6 @@ import * as linuxPackageRecovery from './linux-package-update-recovery'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
-
-type UpdaterHandlerContext = {
-  autoUpdater: ElectronAutoUpdater
-  clearBackgroundCheckLaunchPending: () => void
-  clearAvailableUpdateContext: () => void
-  consumeMissingManifestPrereleaseFallbackResult: () => { userInitiated: boolean } | null
-  getPublishingWindowLastGoodCheck: () => { lastGoodTag: string } | null
-  getMissingManifestPrereleaseFallbackUserInitiated: () => boolean | null
-  getCurrentStatus: () => UpdateStatus
-  getActiveUpdateCheckEventAttemptId: () => number | null
-  getKnownReleaseUrl: () => string | undefined
-  getPendingInstallVersion: () => string
-  getUserInitiatedCheck: () => boolean
-  handleQuitAndInstallFailure: (error?: unknown) => boolean
-  isQuitAndInstallHandoffActive: () => boolean
-  hasInstallableDownloadedVersion: () => boolean
-  isLocalBuildCheck: () => boolean
-  isPinnedBuildCheck: () => boolean
-  shouldHandleUpdaterErrorEvent: () => boolean
-  clearUpdateAvailableEventPending: (attemptId: number | null) => void
-  isActiveUpdateCheckAttempt: (attemptId: number) => boolean
-  markUpdateCheckEventAttempt: () => boolean
-  markUpdateAvailableEventPending: (attemptId: number | null) => void
-  markMissingManifestPrereleaseFallbackChecking: () => void
-  performQuitAndInstall: () => void | Promise<void>
-  shouldDeferMacQuitForInstall: () => boolean
-  recordCompletedUpdateCheck: () => void
-  restoreReleaseUpdateSource: () => void
-  sendCheckFailureStatus: (
-    message: string,
-    userInitiated?: boolean,
-    source?: 'event' | 'promise' | 'fallback-promise',
-    sourceError?: unknown
-  ) => Promise<void>
-  sendErrorStatus: (message: string, userInitiated?: boolean) => void
-  sendStatus: (status: UpdateStatus) => void
-  scheduleAutomaticUpdateCheck: (delayMs: number) => void
-  shouldSuppressMissingManifestPrereleaseFallbackEvent: (message: string, error: unknown) => boolean
-  suppressMissingManifestPrereleaseFallbackPromiseFailure: (message: string) => void
-  setAvailableReleaseUrl: (releaseUrl: string | null) => void
-  setAvailableVersion: (version: string | null) => void
-  setUserInitiatedCheck: (value: boolean) => void
-}
 
 export function registerAutoUpdaterHandlers({
   autoUpdater,
@@ -87,6 +43,10 @@ export function registerAutoUpdaterHandlers({
   markUpdateAvailableEventPending,
   markMissingManifestPrereleaseFallbackChecking,
   performQuitAndInstall,
+  commitStagedMacInstall,
+  failMacStaging,
+  isAwaitingMacStaging,
+  isMacStagingDeferredToInstall,
   shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
   restoreReleaseUpdateSource,
@@ -106,6 +66,8 @@ export function registerAutoUpdaterHandlers({
     getPendingInstallVersion,
     getKnownReleaseUrl,
     performQuitAndInstall,
+    commitStagedMacInstall,
+    failMacStaging,
     shouldDeferMacQuitForInstall,
     sendStatus
   })
@@ -293,7 +255,7 @@ export function registerAutoUpdaterHandlers({
       return
     }
     // On macOS, defer 'downloaded' until Squirrel.Mac finishes processing; other platforms are ready immediately.
-    if (process.platform === 'darwin' && !macInstallerReady) {
+    if (process.platform === 'darwin' && !macInstallerReady && !isMacStagingDeferredToInstall()) {
       // Keep the UI at 100% downloaded while Squirrel processes, to avoid a premature "ready to install".
       recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
@@ -304,6 +266,10 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('error', (err) => {
     const message = err?.message ?? 'Unknown error'
+    // Why: the native Squirrel listener owns failure while it stages; MacUpdater re-emits that error here too.
+    if (isAwaitingMacStaging()) {
+      return
+    }
     // Why: quitAndInstall reports "no staged update" via this error event (async on macOS); recover quit flags before suppression guards run.
     if (handleQuitAndInstallFailure(err)) {
       return
