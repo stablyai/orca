@@ -6,6 +6,7 @@ import { subscribeToTerminalUserInput } from '@/components/terminal-pane/termina
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalOscLinkRetirementAddon } from '../../../../shared/terminal-osc-link-retirement'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
@@ -273,6 +274,7 @@ export function AgentTerminalPreview({
             scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
           })
         )
+        terminal.loadAddon(new TerminalOscLinkRetirementAddon())
         try {
           terminal.open(container)
         } catch {

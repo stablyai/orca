@@ -30,6 +30,7 @@ async function buildEngineJs() {
         import { Terminal } from '@xterm/xterm'
         import { Unicode11Addon } from '@xterm/addon-unicode11'
         import { WebglAddon } from '@xterm/addon-webgl'
+        import { TerminalOscLinkRetirementAddon } from '../src/shared/terminal-osc-link-retirement'
 
         // Why: xterm reaches for these runtime APIs on the terminal-bringup path,
         // and esbuild lowers syntax but not runtime APIs. Guarded shims let the
@@ -60,6 +61,7 @@ async function buildEngineJs() {
         }
 
         window.Terminal = Terminal
+        window.TerminalOscLinkRetirementAddon = TerminalOscLinkRetirementAddon
         window.Unicode11Addon = { Unicode11Addon }
         window.WebglAddon = { WebglAddon }
       `,

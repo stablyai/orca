@@ -71,6 +71,7 @@ export const TERMINAL_HTML_INIT_AND_WRITE = `${TERMINAL_WEBGL_RECOVERY_JS}
       convertEol: false,
       allowProposedApi: true
     });
+    if (window.TerminalOscLinkRetirementAddon) term.loadAddon(new window.TerminalOscLinkRetirementAddon());
     var nextTerm = term;
     pendingTerm = nextTerm;
     term.open(surface);

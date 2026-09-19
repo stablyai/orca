@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { createTerminalOscLinkRetirement } from '../../shared/terminal-osc-link-retirement'
 import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
@@ -45,19 +46,14 @@ export type HeadlessEmulatorWriteOptions = {
 type TerminalWithSynchronousWrite = Terminal & {
   _core?: {
     writeSync?: (data: string) => void
-    // Why: kitty keyboard flags aren't on the public IModes; read the core service the CSI u handlers mutate.
-    coreService?: {
-      kittyKeyboard?: { flags?: number }
-    }
   }
 }
 
 const DEFAULT_SCROLLBACK = 5000
-// Keep in sync with the renderer twin terminal-capability-replies.ts (main must not import renderer modules).
-const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 export class HeadlessEmulator {
   private terminal: Terminal
+  private readonly oscLinkRetirement: () => number
   private serializer: SerializeAddon
   private oscText: TerminalOscCwdTitleScanner
   private mouseModes = new TerminalMouseModeMirror()
@@ -90,6 +86,7 @@ export class HeadlessEmulator {
       // Why: parse CSI =/>/< u pushes so CSI ? u answers with the flags the hidden app pushed (renderer parity).
       vtExtensions: { kittyKeyboard: true }
     })
+    this.oscLinkRetirement = createTerminalOscLinkRetirement(this.terminal)
 
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
@@ -114,7 +111,8 @@ export class HeadlessEmulator {
     this.conptyDa1OverrideInstalled = true
     installDeviceAttributesResponder({
       parser: this.terminal.parser,
-      response: CONPTY_DA1_RESPONSE,
+      // Keep in sync with renderer terminal-capability-replies.ts.
+      response: '\x1b[?61;4c',
       reply: (data) => this.emitQueryReply(data)
     })
   }
@@ -191,6 +189,7 @@ export class HeadlessEmulator {
         // Why: commit the mouse-mode mirror only after xterm has parsed the same bytes (snapshots combine both).
         this.mouseModes.scan(data)
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
+        this.oscLinkRetirement()
         resolve()
       })
     })
@@ -224,6 +223,7 @@ export class HeadlessEmulator {
     }
     this.mouseModes.scan(data)
     this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
+    this.oscLinkRetirement()
     return true
   }
 
