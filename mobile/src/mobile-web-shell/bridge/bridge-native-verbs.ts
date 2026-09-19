@@ -56,14 +56,17 @@ export type BridgeNativeVerbSpec = {
 export const clipboardWriteParamsSchema = z.object({ mime: mimeSchema, value: z.string() })
 export const clipboardReadParamsSchema = z.object({ mime: mimeSchema })
 
+export const clipboardWriteResultSchema = z.object({ written: z.boolean() })
+export const clipboardReadResultSchema = z.object({ value: z.string() })
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
-    result: z.object({ written: z.boolean() })
+    result: clipboardWriteResultSchema
   },
   'native.clipboard.read': {
     params: clipboardReadParamsSchema,
-    result: z.object({ value: z.string() })
+    result: clipboardReadResultSchema
   }
 }
 
