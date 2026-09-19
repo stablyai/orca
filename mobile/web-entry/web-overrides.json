@@ -26,6 +26,10 @@
       "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
     },
     {
+      "file": "app/h/[hostId]/agent-history/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    },
+    {
       "file": "app/h/[hostId]/web.web.tsx",
       "reason": "The hybrid shell route opens a WebView on this very page, so on web it redirects to the host instead of nesting the shell inside itself. Its native file pulls in OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
     },

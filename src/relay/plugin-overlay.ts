@@ -1,3 +1,4 @@
+import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
 // Why: relay-side equivalent of Orca's local agent integration installers.
 // OpenCode still needs a config overlay, while Pi/OMP now get Orca-managed
 // extension files installed into the remote agent homes. Host paths from the
@@ -273,6 +274,12 @@ export class PluginOverlayManager {
       )
       return null
     }
+  }
+
+  materializeOmpFreshConfig(): string {
+    return materializeOmpFreshConfig(
+      join(this.homeDir, RELAY_HOOKS_DIR, OMP_MANAGED_STATUS_EXTENSION_DIR)
+    )
   }
 
   /** Install the Pi/OMP status extension into the remote real agent dir.

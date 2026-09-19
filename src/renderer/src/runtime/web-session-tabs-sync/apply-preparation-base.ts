@@ -1,3 +1,5 @@
+import { collectUnhydratedMirroredTabRetractions } from './mirrored-status-tab-retractions'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
   WebSessionTabsBatchContext,
@@ -188,6 +190,18 @@ export function prepareWebSessionTabsSnapshotBase(
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
+  if (reconcilesNonAgentTabs && !isWebSessionTabsWorktreeRemovalFrame(snapshot)) {
+    for (const tabId of collectUnhydratedMirroredTabRetractions({
+      state,
+      environmentId,
+      worktreeId,
+      nextHostTerminalTabIds,
+      currentTerminalIds: new Set(existingTerminalById.keys()),
+      batchContext
+    })) {
+      removedTerminalIds.add(tabId)
+    }
+  }
   const removedTerminalResourceIds = [...removedTerminalIds].filter(
     (tabId) => !mirroredTerminalIds.has(tabId)
   )

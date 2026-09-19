@@ -189,7 +189,10 @@ export function useHostWorktreeActions(args: {
           })
           .catch(() => null)
       }
-      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
+      // `?? ''` and not a cast: the hook takes `hostId` optional and every other member guards it,
+      // so an absent one builds `/h//session/...` — a pathname the shell's segment rule refuses —
+      // rather than the string "undefined", which it would accept as a host named undefined.
+      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
       navigateFromHostList(target)
     },
     [client, connState, hostId, navigateFromHostList]

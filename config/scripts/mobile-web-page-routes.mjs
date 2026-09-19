@@ -16,5 +16,9 @@
 export const MOBILE_WEB_PAGE_ROUTES = [
   // The worktree list. `navigate` because every row opens a session screen that is still native.
   // `storage` because its pins and its last-visited repo are the app's, not the document's.
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
+  // Agent session history. `navigate` because a resumed session opens the session screen, which is
+  // native, and because the list above now reaches this one without leaving the page. `storage`
+  // because the host layout above every page route reads the app's own sidebar width.
+  { pathname: '/h/[hostId]/agent-history/[worktreeId]', grants: ['navigate', 'storage'] }
 ]

@@ -1,3 +1,4 @@
+import { materializeOmpFreshConfig } from '../../shared/omp-fresh-config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -174,16 +175,24 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  buildFreshOmpEnv(): Record<string, string> {
+    return {
+      ORCA_OMP_FRESH_CONFIG: materializeOmpFreshConfig(
+        join(getAppEnvironment().getPath('userData'), OMP_MANAGED_STATUS_EXTENSION_DIR)
+      )
+    }
+  }
+
   buildPtyEnv(
     ptyId: string,
     existingAgentDir: string | undefined,
     kind: PiAgentKind,
     options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): Record<string, string> {
-    // The caller resolves the effective launch environment. Reading the
-    // daemon's ambient PI_CONFIG_DIR here can select the host profile for a
-    // guest/WSL launch whose environment has not been hydrated yet.
-    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
+    const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
+    // The caller resolves the effective launch environment before this point.
+    const sourceAgentDir =
+      existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
     if (kind !== 'prime-agent') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
@@ -203,7 +212,9 @@ export class PiTitlebarExtensionService {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
         const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)
-        return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
+        return statusExtensionPath
+          ? { ...freshConfigEnv, ORCA_OMP_STATUS_EXTENSION: statusExtensionPath }
+          : freshConfigEnv
       }
       return {}
     }
@@ -213,7 +224,7 @@ export class PiTitlebarExtensionService {
     }
 
     const installed = this.installManagedExtensions(sourceAgentDir, kind)
-    const env: Record<string, string> = {}
+    const env: Record<string, string> = { ...freshConfigEnv }
     if (kind === 'omp') {
       env.ORCA_OMP_SOURCE_AGENT_DIR = installed.sourceAgentDir
       if (installed.statusExtensionPath) {

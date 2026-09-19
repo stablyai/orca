@@ -63,6 +63,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
       ORCA_CLI_COMMAND: 'orca-ide',
       ORCA_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      ORCA_OMP_FRESH_CONFIG: 'C:\\Orca\\fresh-session.yml',
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
       ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
@@ -87,6 +88,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
     expect(env.WSLENV).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT/p')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
+    expect(env.WSLENV).toContain('ORCA_OMP_FRESH_CONFIG/p')
     expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')

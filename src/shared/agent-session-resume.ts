@@ -278,7 +278,11 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
     case 'omp':
       return providerSession.key === 'session_id'
-        ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
+        ? [
+            'omp',
+            '--resume',
+            ompResumeFilePath?.trim() || providerSession.transcriptPath?.trim() || id
+          ]
         : null
     // Why: the joined form is the only one Copilot documents, and it matches the
     // flag spelling buildAgentResumeInvocation bakes into persisted AI Vault

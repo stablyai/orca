@@ -94,9 +94,6 @@ export class RelayAgentHookRuntime {
         }
       }
     }
-    if (!this.pluginOverlay.hasPiSource()) {
-      return env
-    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(context.env, context.command)
     const explicitKind = isPiCompatibleAgentType(context.launchAgent)
       ? context.launchAgent
@@ -106,6 +103,12 @@ export class RelayAgentHookRuntime {
     const kind = explicitKind ?? 'pi'
     const hasLaunchCommand =
       typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
+    if (kind === 'omp' || !hasLaunchCommand) {
+      env.ORCA_OMP_FRESH_CONFIG = this.pluginOverlay.materializeOmpFreshConfig()
+    }
+    if (!this.pluginOverlay.hasPiSource()) {
+      return env
+    }
     if (kind === 'pi') {
       const sourceDir = resolvePiSourceAgentDir(context.env, context.shell, 'pi')
       const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'pi', {
