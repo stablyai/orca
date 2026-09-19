@@ -117,10 +117,14 @@ export async function getProjectViewTable(
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
-  // Why: roadmaps read the same item stream as a table — only the renderer
-  // differs. Allowlist, not `=== 'BOARD_LAYOUT'`: raw.layout is cast unchecked,
-  // so a future GitHub layout must reject cleanly, not render as a table.
-  if (selectedView.layout !== 'TABLE_LAYOUT' && selectedView.layout !== 'ROADMAP_LAYOUT') {
+  // Why: boards and roadmaps read the same item stream as a table — only the
+  // renderer differs. Allowlist: raw.layout is cast unchecked, so a future
+  // GitHub layout must reject cleanly, not render as a table.
+  if (
+    selectedView.layout !== 'TABLE_LAYOUT' &&
+    selectedView.layout !== 'BOARD_LAYOUT' &&
+    selectedView.layout !== 'ROADMAP_LAYOUT'
+  ) {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
       ownerType: args.ownerType,
@@ -132,7 +136,9 @@ export async function getProjectViewTable(
       ok: false,
       error: {
         type: 'unsupported_layout',
-        message: `Orca renders table and roadmap views. This is a ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} view.`
+        // Why: the allowlist covers the whole declared union, but raw.layout is
+        // cast unchecked so an unknown future layout still lands here at runtime.
+        message: `Orca renders table, board, and roadmap views. This is a ${(selectedView.layout as string).replace('_LAYOUT', '').toLowerCase()} view.`
       },
       ...(typeof count === 'number' ? { totalCount: count } : {})
     }
