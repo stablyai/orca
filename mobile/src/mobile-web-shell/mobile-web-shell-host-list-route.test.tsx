@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type RouteDependencies = {
   storage: Map<string, string>
   pathnames: string[]
-  hostId: string
+  hostId: string | string[]
   nativeRenders: number
 }
 
@@ -38,6 +38,21 @@ vi.mock('../host-screen/HostScreen', () => ({
     dependencies.nativeRenders += 1
     return null
   }
+}))
+
+// `firstParam` lives beside the source-control screen state, which imports the lucide barrel, and
+// that barrel's `LucideProvider` re-export is the gap the web build patches with a plugin. Nine
+// icons, named as the other suites name theirs; none of them renders here.
+vi.mock('lucide-react-native', () => ({
+  ArrowDown: vi.fn(),
+  ArrowDownUp: vi.fn(),
+  ArrowUp: vi.fn(),
+  Check: vi.fn(),
+  CloudUpload: vi.fn(),
+  GitBranch: vi.fn(),
+  GitPullRequestArrow: vi.fn(),
+  History: vi.fn(),
+  RefreshCw: vi.fn()
 }))
 
 vi.mock('../layout/responsive-layout', () => ({
@@ -96,5 +111,21 @@ describe('the native worktree-list route that hands off to the shell', () => {
       expect(dependencies.pathnames, hostId).toEqual([])
       expect(dependencies.nativeRenders, hostId).toBeGreaterThan(0)
     }
+  })
+
+  it('opens the first of a repeated host id, never the pair joined into one', async () => {
+    // Expo Router answers a repeated key with an array. Interpolated, `String(['a','b'])` is
+    // `a,b` and `encodeURIComponent` makes that the single segment `a%2Cb`, which the bridge's
+    // segment rule accepts — so the shell would open a page for a host nobody has.
+    dependencies.hostId = ['host-1', 'host-2']
+    await renderRoute()
+    expect(dependencies.pathnames).toEqual(['/h/host-1'])
+  })
+
+  it('stays native for an empty repeated host id, which names no host at all', async () => {
+    dependencies.hostId = []
+    await renderRoute()
+    expect(dependencies.pathnames).toEqual([])
+    expect(dependencies.nativeRenders).toBeGreaterThan(0)
   })
 })

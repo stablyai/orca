@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'expo-router'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
+import { firstParam } from '../../../src/source-control/mobile-source-control-screen-state'
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
@@ -22,7 +23,13 @@ import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobi
  * screen rather than the native list this route already has.
  */
 function HostListScreen() {
-  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  // Through `firstParam`, as the other four switches do: expo-router answers a repeated key with
+  // an array, and a bare read puts it straight into the template, where `String(['a','b'])` is
+  // `a,b` and `encodeURIComponent` makes it the single segment `a%2Cb` — which the bridge's
+  // segment rule accepts, so the shell would open a page for a host nobody has. An empty array is
+  // truthy, so a bare read also builds `/h/` and hands that over; this answers `''` and stays.
+  const params = useLocalSearchParams<{ hostId?: string | string[] }>()
+  const hostId = firstParam(params.hostId)
   const enabled = useMobileWebShellEnabled()
 
   // Asked here as every switch asks it: encoding does not save a `.` or `..` host id, which fails

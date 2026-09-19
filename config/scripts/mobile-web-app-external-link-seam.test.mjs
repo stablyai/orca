@@ -41,6 +41,24 @@ describe('where the seam predicate says a module reaches Linking', () => {
     ).toEqual([2, 4])
   })
 
+  it('inspects every alias, not just the first namespace import', () => {
+    // Two namespace imports of react-native, the first unused. Reading only the first alias makes
+    // a module that calls `Linking.openURL` on the second report no site at all.
+    expect(
+      reactNativeLinkingSites(
+        "import * as Unused from 'react-native'\nimport * as RN from 'react-native'\nRN.Linking.openURL(u)\n"
+      )
+    ).toEqual([3])
+  })
+
+  it('counts a line once when two aliases meet on it', () => {
+    expect(
+      reactNativeLinkingSites(
+        "import * as A from 'react-native'\nimport * as B from 'react-native'\nA.Linking.openURL(B.Linking)\n"
+      )
+    ).toEqual([3])
+  })
+
   it('finds nothing in a module that only names the seam', () => {
     expect(
       reactNativeLinkingSites("import { openExternalLink } from '../platform/external-link'")

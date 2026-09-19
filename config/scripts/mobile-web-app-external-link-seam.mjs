@@ -34,15 +34,20 @@ export function reactNativeLinkingSites(source) {
   )) {
     sites.push(lineOf(source, match.index))
   }
-  const namespace = /import\s*\*\s*as\s*(\w+)\s*from\s*['"]react-native['"]/.exec(source)
-  if (namespace !== null) {
+  // Every alias, not the first: a module may import the namespace twice, and reading only the
+  // first binding makes a call on the second report no site at all.
+  const aliases = [
+    ...source.matchAll(/import\s*\*\s*as\s*(\w+)\s*from\s*['"]react-native['"]/g)
+  ].map((match) => match[1])
+  if (aliases.length > 0) {
     source.split('\n').forEach((line, index) => {
-      if (line.includes(`${namespace[1]}.Linking`)) {
+      // Once per line however many aliases meet on it: the line is the site, not the name.
+      if (aliases.some((alias) => line.includes(`${alias}.Linking`))) {
         sites.push(index + 1)
       }
     })
   }
-  return sites.sort((left, right) => left - right)
+  return [...new Set(sites)].sort((left, right) => left - right)
 }
 
 /** Whether a module reaches react-native's own `Linking`. */
