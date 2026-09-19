@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import {
-  BridgeInitRouteSchema,
-  type BridgeInitRoute
-} from '../mobile-web-shell/bridge/bridge-envelope'
-import { shellRouteHref } from '../mobile-web-shell/bridge/page-bootstrap'
-import { mobileFileShellRoute, mobileFileShellRouteKey } from './mobile-file-shell-route'
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from './bridge/bridge-caps'
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-envelope'
+import { shellRouteHref } from './bridge/page-bootstrap'
+import { shellScreenRoute, shellScreenRouteKey } from './shell-screen-route'
 import {
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
-} from './mobile-file-preview-route'
+} from '../files/mobile-file-preview-route'
 
 const PREVIEW_PATH = '/h/host-1/files/preview/wt-1'
 
@@ -31,7 +28,7 @@ describe('the route the files screens hand the shell', () => {
   it('is one the page could actually be given', () => {
     const route = previewRoute('/logs/run.txt')
     expect(BridgeInitRouteSchema.safeParse(route).success).toBe(true)
-    expect(mobileFileShellRoute(route)).toEqual(route)
+    expect(shellScreenRoute(route)).toEqual(route)
   })
 
   it('is nothing when a file path is longer than a param may be', () => {
@@ -41,7 +38,7 @@ describe('the route the files screens hand the shell', () => {
     // workspace" over a native screen that works.
     const route = previewRoute(`/logs/${'a'.repeat(BRIDGE_MAX_ROUTE_PARAM_CHARS)}.txt`)
     expect(BridgeInitRouteSchema.safeParse(route).success).toBe(false)
-    expect(mobileFileShellRoute(route)).toBeNull()
+    expect(shellScreenRoute(route)).toBeNull()
   })
 
   it('is nothing when a worktree id is not a segment the page will route', () => {
@@ -51,7 +48,7 @@ describe('the route the files screens hand the shell', () => {
     // The schema first, as the length case does: without it a `null` here would also be what a
     // guard that refused everything produces.
     expect(BridgeInitRouteSchema.safeParse(route).success).toBe(false)
-    expect(mobileFileShellRoute(route)).toBeNull()
+    expect(shellScreenRoute(route)).toBeNull()
   })
 
   it('keeps a path with a slash, a space and a dot segment, which are params and not segments', () => {
@@ -59,7 +56,7 @@ describe('the route the files screens hand the shell', () => {
       pathname: '/h/host-1/files/preview/wt-1',
       params: { relativePath: 'docs/../my notes/readme.md', source: 'worktree' }
     }
-    expect(mobileFileShellRoute(route)).toEqual(route)
+    expect(shellScreenRoute(route)).toEqual(route)
   })
 })
 
@@ -77,6 +74,6 @@ describe('the key a shell screen remounts on', () => {
       params: { relativePath: 'docs/my notes/readme.md', source: 'worktree', line: '12' }
     }
   ])('is the href the page would write into its history: %o', (route) => {
-    expect(mobileFileShellRouteKey(route)).toBe(shellRouteHref(route))
+    expect(shellScreenRouteKey(route)).toBe(shellRouteHref(route))
   })
 })

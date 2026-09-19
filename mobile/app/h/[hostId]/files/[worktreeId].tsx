@@ -2,9 +2,9 @@ import { useLocalSearchParams } from 'expo-router'
 import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplorerPanel'
 import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
 import {
-  mobileFileShellRoute,
-  mobileFileShellRouteKey
-} from '../../../../src/files/mobile-file-shell-route'
+  shellScreenRoute,
+  shellScreenRouteKey
+} from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
@@ -39,7 +39,7 @@ export default function MobileFileExplorerScreen() {
 
   const route =
     hostId && worktreeId
-      ? mobileFileShellRoute({
+      ? shellScreenRoute({
           pathname: `/h/${encodeURIComponent(hostId)}/files/${encodeURIComponent(worktreeId)}`,
           // Omitted rather than empty: the panel derives its own label from the worktree id when
           // the caller named none, where `name=` with nothing after it is a label.
@@ -55,7 +55,7 @@ export default function MobileFileExplorerScreen() {
   // left. The key is what makes the change a remount, which disposes that bridge in the commit.
   return (
     <MobileWebShellScreen
-      key={mobileFileShellRouteKey(route)}
+      key={shellScreenRouteKey(route)}
       hostId={hostId}
       route={route}
       fallback={native}

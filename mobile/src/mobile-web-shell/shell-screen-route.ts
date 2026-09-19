@@ -1,7 +1,4 @@
-import {
-  BridgeInitRouteSchema,
-  type BridgeInitRoute
-} from '../mobile-web-shell/bridge/bridge-envelope'
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-envelope'
 
 /**
  * The route to hand the shell, or nothing if the page could not be given it.
@@ -12,16 +9,17 @@ import {
  * native screen sitting right behind the switch. Deciding here instead means the route stays
  * native, which is where every route starts.
  *
- * A file path is the reason this domain needs it. Paths are params, not segments, so `/`, spaces
- * and `..` are all fine; length is not bounded by anything the user cannot exceed, and
- * `BRIDGE_MAX_ROUTE_PARAM_CHARS` is 1024 while a Windows long path is not. The same call also
- * catches a `worktreeId` the segment rule refuses, which is the C1.8 class.
+ * A file path is the reason the files routes needed it first. Paths are params, not segments, so
+ * `/`, spaces and `..` are all fine; length is not bounded by anything the user cannot exceed,
+ * and `BRIDGE_MAX_ROUTE_PARAM_CHARS` is 1024 while a Windows long path is not. The same call
+ * also catches a `worktreeId` the segment rule refuses, which is the C1.8 class, and a host id
+ * that encoding does not save — a `.` or `..` — which is why every switch asks it now.
  *
  * The schema itself is the predicate rather than a copy of its bounds: two spellings of one rule
- * drift, and the half that matters is the half the page reads. This belongs in the shell beside
- * that schema; it lives here while the contract files are the C2 lane's.
+ * drift, and the half that matters is the half the page reads. Here rather than in one domain
+ * because three routes had grown their own copy of the call.
  */
-export function mobileFileShellRoute(route: BridgeInitRoute): BridgeInitRoute | null {
+export function shellScreenRoute(route: BridgeInitRoute): BridgeInitRoute | null {
   return BridgeInitRouteSchema.safeParse(route).success ? route : null
 }
 
@@ -41,7 +39,7 @@ export function mobileFileShellRoute(route: BridgeInitRoute): BridgeInitRoute | 
  * document channel, and a native route file must not pull those into the app. The test pins the
  * two equal instead, which is the dependency this comment actually has.
  */
-export function mobileFileShellRouteKey(route: BridgeInitRoute): string {
+export function shellScreenRouteKey(route: BridgeInitRoute): string {
   const search = new URLSearchParams(route.params ?? {}).toString()
   return search === '' ? route.pathname : `${route.pathname}?${search}`
 }

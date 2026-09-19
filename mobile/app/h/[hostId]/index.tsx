@@ -3,6 +3,7 @@ import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDet
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
+import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
 import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
 /**
@@ -24,7 +25,12 @@ function HostListScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const enabled = useMobileWebShellEnabled()
 
-  if (enabled !== true || !hostId) {
+  // Asked here as every switch asks it: encoding does not save a `.` or `..` host id, which fails
+  // the bridge's segment rule, and handing that over paints the page's failure screen over the
+  // native list this route already has.
+  const route = shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}` })
+
+  if (enabled !== true || !hostId || route === null) {
     return <HostScreen />
   }
   return (
@@ -33,7 +39,7 @@ function HostListScreen() {
       // so a host id change must be a remount rather than a prop update.
       key={hostId}
       hostId={hostId}
-      route={{ pathname: `/h/${encodeURIComponent(hostId)}` }}
+      route={route}
       fallback={<HostScreen />}
     />
   )

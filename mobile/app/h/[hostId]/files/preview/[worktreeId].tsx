@@ -5,9 +5,9 @@ import {
   normalizeMobileFilePreviewRouteParams
 } from '../../../../../src/files/mobile-file-preview-route'
 import {
-  mobileFileShellRoute,
-  mobileFileShellRouteKey
-} from '../../../../../src/files/mobile-file-shell-route'
+  shellScreenRoute,
+  shellScreenRouteKey
+} from '../../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { useMobileWebShellEnabled } from '../../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
@@ -45,7 +45,7 @@ export default function MobileFilePreviewRoute() {
   const native = <MobileFilePreviewScreen route={route} />
 
   const shellRoute = route.ok
-    ? mobileFileShellRoute({
+    ? shellScreenRoute({
         pathname: `/h/${encodeURIComponent(route.params.hostId)}/files/preview/${encodeURIComponent(
           route.params.worktreeId
         )}`,
@@ -63,7 +63,7 @@ export default function MobileFilePreviewRoute() {
   // was opened on, with nothing to tell it otherwise.
   return (
     <MobileWebShellScreen
-      key={mobileFileShellRouteKey(shellRoute)}
+      key={shellScreenRouteKey(shellRoute)}
       hostId={route.params.hostId}
       route={shellRoute}
       fallback={native}

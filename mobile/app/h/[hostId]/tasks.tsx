@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router'
-import { BridgeInitRouteSchema } from '../../../src/mobile-web-shell/bridge/bridge-envelope'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
+import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
 import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 import { firstParam } from '../../../src/source-control/mobile-source-control-screen-state'
 import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
@@ -27,13 +27,13 @@ export default function MobileTasksRoute() {
   if (enabled !== true || !hostId) {
     return native
   }
-  const route = {
+  const route = shellScreenRoute({
     pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
     // Omitted rather than empty: an absent provider lets the page pick its own default, where
     // `taskSource=` is a provider named nothing.
     ...(taskSource === '' ? {} : { params: { taskSource } })
-  }
-  if (!BridgeInitRouteSchema.safeParse(route).success) {
+  })
+  if (route === null) {
     return native
   }
   return (

@@ -6,7 +6,7 @@ import {
 import { shellRouteHref } from '../mobile-web-shell/bridge/page-bootstrap'
 import { stringifyRouteHref } from '../navigation/route-href'
 import { createMobileFilePreviewHref } from './mobile-file-preview-route'
-import { mobileFileShellRoute } from './mobile-file-shell-route'
+import { shellScreenRoute } from '../mobile-web-shell/shell-screen-route'
 
 /**
  * Every shape of a real file path that the bridge's route vocabulary would refuse as a segment.
@@ -59,7 +59,7 @@ function relativePathFromHref(href: string): string | null {
 
 describe.each(HAZARD_PATHS)('a file path the route carries: %s', (relativePath) => {
   it('is a route the page can be given, and a pathname with no path in it', () => {
-    const route = mobileFileShellRoute({
+    const route = shellScreenRoute({
       pathname: '/h/host-1/files/preview/wt-1',
       params: { relativePath, source: 'worktree' }
     })

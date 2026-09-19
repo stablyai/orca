@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
-import { BridgeInitRouteSchema } from '../../../../src/mobile-web-shell/bridge/bridge-envelope'
 import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/MobileAgentSessionHistoryPanel'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
+import { shellScreenRoute } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
 
@@ -26,8 +26,8 @@ import { firstParam } from '../../../../src/source-control/mobile-source-control
  *
  * The schema is the predicate rather than a copy of its bounds: two spellings of one rule drift,
  * and the half that matters is the half the page reads. C3.1 made the same call for the files
- * routes in `mobile-file-shell-route.ts`; once both are on main the two belong in one module
- * beside the schema, which is a contract file the C2 lane owns today.
+ * routes first, and every switch now asks the one module beside the schema
+ * rather than carrying its own copy of the call.
  */
 export default function MobileAgentSessionHistoryScreen() {
   const params = useLocalSearchParams<{
@@ -46,13 +46,13 @@ export default function MobileAgentSessionHistoryScreen() {
   if (enabled !== true || !hostId || !worktreeId) {
     return panel
   }
-  const route = {
+  const route = shellScreenRoute({
     pathname: `/h/${encodeURIComponent(hostId)}/agent-history/${encodeURIComponent(worktreeId)}`,
     // Omitted rather than empty: the page reads the label off the search half, and a `name=`
     // with nothing after it is a label, where an absent one lets the panel derive its own.
     ...(name === '' ? {} : { params: { name } })
-  }
-  if (!BridgeInitRouteSchema.safeParse(route).success) {
+  })
+  if (route === null) {
     return panel
   }
   // Keyed on the route: a host captures the grants its session was opened with, so a screen
