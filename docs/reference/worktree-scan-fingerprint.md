@@ -5,8 +5,10 @@
 Adopted for the main-process worktree resolution cache
 (`OrcaRuntimeService.listRepoWorktreesForResolution`). It keeps the existing
 30-second freshness contract for externally created, removed, moved, locked, and
-re-checked-out worktrees while removing the `git worktree list` subprocess that
-previously ran for every registered repository every 30 seconds.
+re-checked-out worktrees — whenever the probe answers, with the reconciliation
+interval as the ceiling when it does not — while removing the
+`git worktree list` subprocess that previously ran for every registered
+repository every 30 seconds.
 
 ## Context
 
@@ -60,7 +62,10 @@ subprocess.
   converges.
 - Change nothing for SSH repos, WSL-routed repos, folder workspaces, bare repos,
   or hosts where the probe cannot resolve Git's admin layout.
-- Fail open: any probe error must behave exactly like today (run the real scan).
+- Fail open: any probe that answers something the fingerprint cannot vouch for —
+  a read error, an unresolvable Git layout — must behave exactly like today (run
+  the real scan). A probe that never answers is a separate case; see
+  "Probe expiry is not a mismatch".
 
 ## Non-goals
 
@@ -122,18 +127,51 @@ the caller treats as "cannot prove unchanged".
 
 ```text
 cached entry exists, same generation + runtimeKey, TTL expired
-  └─ probe eligible? (no connectionId, no wslDistro, fingerprint recorded)
-       ├─ no  → real scan (today's behaviour)
-       └─ yes → read fingerprint now
-            ├─ null or different              → real scan
-            ├─ equal, last real scan < 5 min  → extend TTL, no subprocess
-            └─ equal, last real scan ≥ 5 min  → real scan (bounded reconcile)
+  └─ successful scan less than 5 min old at refresh start?
+       ├─ no  → real scan (bounded reconcile)
+       └─ yes → local fingerprint probe available?
+            ├─ no  → real scan
+            └─ yes → await fingerprint, bounded by the probe deadline
+                 ├─ expired before answering → serve the cached scan unchanged
+                 ├─ null or different        → real scan
+                 └─ equal                    → extend TTL, no subprocess
 ```
 
 `WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS` is 5 min, matching the existing
 `WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS` precedent. A cached result whose scan
 failed (`ok: false`) is never extended, so a transient Git failure still retries
 on the 30 s TTL.
+
+### Probe expiry is not a mismatch
+
+The expiry branch above is the one place the two "cannot prove unchanged"
+outcomes have to be told apart. A mismatch proves the cache is stale. An expiry
+proves nothing at all: the entry was inside the reconcile interval when the
+refresh started, so expiry alone does not establish that it changed.
+
+Treating expiry as a mismatch could feed host overload. A slow filesystem probe
+would queue a full `git worktree list` behind the git-admission scheduler, adding
+load that could slow the next probe. Serving the cache removes that feedback path
+for the refresh whose probe expires.
+
+Nothing is stamped as confirmed on this branch. The entry keeps the `scannedAt`
+and `adminFingerprint` of the last *real* scan, so:
+
+- the reconcile interval keeps measuring from that scan. The next refresh that
+  starts at least 5 minutes after the scan runs a real scan. This is a refresh
+  threshold, not a wall-clock expiry: a refresh begun just before it may finish
+  after it, and the caller caches that result for another 30-second TTL;
+- the next probe compares against the last confirmed fingerprint, so a repo that
+  really did change is rescanned on the first probe that answers.
+
+The abandoned probe is deliberately **not** adopted when it finally settles: it
+was taken after the cached scan, so its value would stamp a later state onto an
+earlier result and mask any mutation in between until the reconcile deadline.
+
+A probe that is still outstanding from a previous refresh is a different case
+again — `startRepoWorktreeAdminFingerprintProbe` returns `null` rather than
+piling a second read onto a wedged mount, the awaited branch is never entered,
+and the refresh takes the real scan.
 
 ### Git version compatibility
 
@@ -164,19 +202,26 @@ the TTL alone would have refreshed.
 
 ## Freshness budget
 
-| Change                                                                | Before            | After             |
-| --------------------------------------------------------------------- | ----------------- | ----------------- |
-| Orca-initiated create/remove/rename/sparse/repo edit                  | immediate (event) | immediate (event) |
-| SSH reconnect / provider generation bump                              | immediate (event) | immediate (event) |
-| External `worktree add/remove/move/prune/lock`                        | ≤ 30 s            | ≤ 30 s            |
-| External `git checkout` / `commit` / `reset` in any worktree          | ≤ 30 s            | ≤ 30 s            |
-| External `rm -rf <worktree>`                                          | ≤ 30 s            | ≤ 30 s            |
-| External sparse-checkout pattern edit                                 | ≤ 30 s            | ≤ 5 min           |
-| Packed/reftable tip moved within one mtime tick at an equal file size | ≤ 30 s            | ≤ 5 min           |
-| SSH / WSL repos, folder workspaces                                    | unchanged         | unchanged         |
+| Change                                                                | Before            | After                     |
+| --------------------------------------------------------------------- | ----------------- | ------------------------- |
+| Orca-initiated create/remove/rename/sparse/repo edit                  | immediate (event) | immediate (event)         |
+| SSH reconnect / provider generation bump                              | immediate (event) | immediate (event)         |
+| External `worktree add/remove/move/prune/lock`                        | ≤ 30 s            | ≤ 30 s (see note)         |
+| External `git checkout` / `commit` / `reset` in any worktree          | ≤ 30 s            | ≤ 30 s (see note)         |
+| External `rm -rf <worktree>`                                          | ≤ 30 s            | ≤ 30 s (see note)         |
+| External sparse-checkout pattern edit                                 | ≤ 30 s            | ≤ 5 min                   |
+| Packed/reftable tip moved within one mtime tick at an equal file size | ≤ 30 s            | ≤ 5 min                   |
+| SSH / WSL repos, folder workspaces                                    | unchanged         | unchanged                 |
 
-The two regressions are bounded by the reconciliation interval and are both
-changes Orca does not make itself.
+The two unconditional regressions — sparse-checkout pattern edits and a tip
+moved within one mtime tick at an equal file size — are bounded by the
+reconciliation interval and are both changes Orca does not make itself.
+
+The "see note" rows are changes the probe *does* observe, so 30 s is their bound
+whenever it answers. Only a host slow enough to blow the probe deadline delays
+them, and then by the same ceiling: age is measured from the last real scan, so
+a run of expiries stretches detection toward 5 min and no further, and the first
+probe that answers restores the 30 s bound.
 
 ### Main-thread cost
 
@@ -268,6 +313,11 @@ gain no longer justifies the risk. Tracked as follow-up, not in this change.
 - the 5-minute reconciliation forces a rescan while the fingerprint is unchanged
 - `notifyBranchRenamed` (event invalidation) still forces an immediate rescan
 - a `null` fingerprint (probe failure) falls back to scanning
+- an expired probe serves the reusable cache within the caller's budget instead
+  of rescanning, and its late answer is never adopted as the confirmed
+  fingerprint
+- a run of expiries still reconciles on schedule, because age keeps being
+  measured from the last real scan
 - SSH repos never consult the probe
 - a failed scan is never extended
 - concurrent callers share one probe and one scan
