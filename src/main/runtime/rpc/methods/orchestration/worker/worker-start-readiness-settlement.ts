@@ -32,6 +32,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   terminalHandle: string
   coordinatorHandle: string
   dispatchCapability: string
+  worktreePath?: string
   devMode: boolean | undefined
   requestId: string
   agent: string | null
@@ -57,6 +58,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
     dispatchCapability: args.dispatchCapability,
+    ...(args.worktreePath ? { worktreePath: args.worktreePath } : {}),
     devMode: args.devMode,
     requestId: args.requestId
   })

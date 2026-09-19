@@ -29,6 +29,9 @@ function createRuntime(promptError: Error | null): CoordinatorRuntime & { prompt
     async probeWorktreeDrift() {
       return null
     },
+    async showManagedWorktree() {
+      return { path: '/tmp/coordinator-worktree' }
+    },
     getTerminalPaneKey() {
       return WORKER_PANE_KEY
     },
@@ -45,7 +48,8 @@ function createRuntime(promptError: Error | null): CoordinatorRuntime & { prompt
 async function dispatch(
   runtime: CoordinatorRuntime,
   taskId: string,
-  logs: string[]
+  logs: string[],
+  worktree?: string
 ): Promise<string> {
   return dispatchTaskToWorker({
     db,
@@ -55,7 +59,7 @@ async function dispatch(
     nestedWorkerMaxDepth: Number.MAX_SAFE_INTEGER,
     baseDrift: null,
     coordinatorHandle: 'coord',
-    worktree: undefined,
+    worktree,
     onLog: (message) => logs.push(message),
     onCircuitBroken: () => undefined
   })
@@ -84,6 +88,32 @@ describe('coordinator dispatch with an unobserved prompt', () => {
     })
     expect(db.listTasks({ status: 'ready' })).toEqual([])
     expect(logs.join('\n')).toContain('turn start was not observed')
+  })
+
+  it('includes the resolved worktree path in the worker preamble', async () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
+    const runtime = createRuntime(null)
+    const logs: string[] = []
+
+    await dispatch(runtime, task.id, logs, 'id:repo::worker')
+
+    expect(runtime.prompts[0]).toContain('Your worktree path is: /tmp/coordinator-worktree')
+  })
+
+  it('does not create a dispatch when the worktree selector cannot be resolved', async () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
+    const runtime = createRuntime(null)
+    runtime.showManagedWorktree = async () => {
+      throw new Error('selector_not_found')
+    }
+
+    await expect(dispatch(runtime, task.id, [], 'id:missing')).rejects.toThrow('selector_not_found')
+
+    expect(runtime.prompts).toEqual([])
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(db.getTask(task.id)?.status).toBe('ready')
   })
 
   it('lets a late worker report settle a dispatch whose prompt was unobserved', async () => {

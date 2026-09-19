@@ -110,8 +110,26 @@ describe('orchestration new-worktree workers', () => {
   }) {
     const hookFound = options?.hookFound ?? true
     const state = options?.state ?? (hookFound ? 'running' : 'not_configured')
-    vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-      worktree: { id: 'repo::created', repoId: 'repo' },
+    const result: CreateWorktreeResult = {
+      worktree: {
+        id: 'repo::created',
+        repoId: 'repo',
+        path: '/tmp/orca-created-worker',
+        head: 'created-head',
+        branch: 'created-worker',
+        isBare: false,
+        isMainWorktree: false,
+        displayName: 'created-worker',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0
+      },
       startupTerminal: { spawned: true, handle: 'term_worker' },
       setupReceipt: {
         requested: state === 'skipped' ? 'skip' : 'run',
@@ -122,7 +140,8 @@ describe('orchestration new-worktree workers', () => {
           options?.setupTerminalHandle ??
           options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle
       }
-    } as never)
+    }
+    vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue(result)
     if (options?.terminals) {
       vi.mocked(runtime.listTerminals).mockResolvedValue({
         terminals: options.terminals,
@@ -232,6 +251,7 @@ describe('orchestration new-worktree workers', () => {
     const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     expect(prompt).toContain('orca-ide orchestration send')
     expect(prompt).toMatch(/--dispatch-capability dcap_[A-Za-z0-9_-]+/)
+    expect(prompt).toContain('Your worktree path is: /tmp/orca-created-worker')
     expect(prompt).not.toMatch(/(^|\s)orca orchestration send/)
   })
 

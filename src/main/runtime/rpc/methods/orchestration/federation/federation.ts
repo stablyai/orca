@@ -256,6 +256,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             workerHandle: terminalHandle,
             dispatchCapability: capability,
             devMode: params.devMode,
+            ...(worktree.path ? { worktreePath: worktree.path } : {}),
             // Why the worker host's own setting: enforcement runs here, with this
             // host's code, against this host's cap.
             canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),

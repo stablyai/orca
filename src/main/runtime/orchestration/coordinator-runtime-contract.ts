@@ -32,6 +32,9 @@ export type CoordinatorRuntime = {
   ): Promise<{ handle: string; condition: string }>
   // Why (§3.1): lives on the runtime because it must resolve a worktree, load the repo, and fetch — the coordinator only knows handles + specs.
   probeWorktreeDrift(worktreeSelector: string): Promise<WorktreeDrift>
+  // Why optional: lightweight coordinator runtimes may only support terminal dispatch, but the
+  // desktop runtime resolves the exact path for the worker-facing preamble.
+  showManagedWorktree?(worktreeSelector: string): Promise<{ path: string }>
   // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
   getTerminalPaneKey?(handle: string): string | null
   // Why optional: lightweight fakes omit it and get the fail-closed default.

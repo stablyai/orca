@@ -216,6 +216,7 @@ export async function startLocalWorker(args: {
       terminalHandle,
       coordinatorHandle: params.from,
       dispatchCapability: capability,
+      worktreePath: resolvedWorktree.path,
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
