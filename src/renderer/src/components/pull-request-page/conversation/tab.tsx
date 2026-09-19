@@ -329,6 +329,8 @@ export function ConversationTab({
             commentCounts={commentCounts}
             repoPath={repoPath}
             repoId={item.repoId}
+            reviewTitle={item.title}
+            reviewUrl={item.url}
             sourceContext={sourceContext}
             prNumber={item.number}
             prRepo={prRepo}
