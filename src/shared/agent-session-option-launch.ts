@@ -1,5 +1,9 @@
 import type { AgentType } from './agent-status-types'
-import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import {
+  findCatalogModel,
+  getAgentSessionOptionCatalog,
+  resolveCatalogModelOptions
+} from './agent-session-option-catalog'
 import type { SessionOptionValue } from './native-chat-session-options'
 
 export type ResolvedSessionOptionLaunch = {
@@ -18,8 +22,7 @@ export function removeOverriddenAgentSessionArgs(
     return [...tokens]
   }
   let result = catalog.modelApply.removeAgentArgs?.(tokens) ?? [...tokens]
-  const model = findCatalogModel(catalog, modelId)
-  const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
+  const modelOptions = resolveCatalogModelOptions(catalog, modelId)
   for (const option of modelOptions) {
     if (values[option.id] !== undefined && option.apply.removeAgentArgs) {
       result = option.apply.removeAgentArgs(result)
@@ -43,7 +46,7 @@ export function resolveAgentSessionOptionLaunch(
   const model = findCatalogModel(catalog, modelId)
   const appliedValues: Record<string, SessionOptionValue> = {}
   const args: string[] = []
-  const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
+  const modelOptions = resolveCatalogModelOptions(catalog, modelId)
   const modelValues = Object.fromEntries(
     modelOptions.flatMap((option) => {
       const explicitValue = values[option.id]

@@ -27,6 +27,26 @@ describe('native chat session option enrichment', () => {
     mocks.discoverRuntimeCommitMessageModels.mockReset()
   })
 
+  it('preserves Antigravity effort restrictions on discovered model IDs', async () => {
+    ensureNativeChatModelEnrichment({
+      agent: 'antigravity',
+      hostKey: 'ssh:agy',
+      discover: async () => [
+        { id: 'gemini-3.7-flash-low', label: 'Gemini 3.7 Flash (Low)', options: [] },
+        { id: 'Gemini 3.5 Flash (High)', label: 'Legacy selector', options: [] }
+      ]
+    })
+    await vi.waitFor(() => {
+      expect(readNativeChatEnrichedModels('antigravity', 'ssh:agy')).not.toBeNull()
+    })
+    const models = readNativeChatEnrichedModels('antigravity', 'ssh:agy')
+    expect(models?.[0].options[0].kind).toMatchObject({
+      choices: [{ value: 'low', label: 'Low' }]
+    })
+    expect(models?.[1].options).toEqual([])
+    expect(readNativeChatEnrichedModels('antigravity', 'local')).toBeNull()
+  })
+
   it('keeps reads synchronous while one host-scoped probe is in flight', async () => {
     let resolveDiscovery: ((models: CatalogModel[]) => void) | undefined
     const discover = vi.fn(

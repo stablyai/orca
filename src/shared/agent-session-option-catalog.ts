@@ -1,4 +1,5 @@
 import type { AgentType } from './agent-status-types'
+import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG,
@@ -29,6 +30,7 @@ export type {
 export { createClaudeCatalogOptions }
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
+  antigravity: ANTIGRAVITY_SESSION_OPTION_CATALOG,
   claude: CLAUDE_SESSION_OPTION_CATALOG,
   codex: CODEX_SESSION_OPTION_CATALOG,
   gemini: GEMINI_SESSION_OPTION_CATALOG,
@@ -52,6 +54,18 @@ export function findCatalogOption(
   optionId: string
 ): CatalogOption | undefined {
   return model?.options.find((option) => option.id === optionId)
+}
+
+export function resolveCatalogModelOptions(
+  catalog: AgentSessionOptionCatalog,
+  modelId: string
+): CatalogOption[] {
+  return (
+    catalog.resolveModelOptions?.(modelId) ??
+    findCatalogModel(catalog, modelId)?.options ??
+    catalog.unknownModelOptions ??
+    []
+  )
 }
 
 /** Merge live rows over the static seed while retaining cataloged option mappings. */

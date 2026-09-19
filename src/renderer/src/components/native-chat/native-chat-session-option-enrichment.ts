@@ -107,6 +107,13 @@ export function ensureNativeChatModelEnrichment(args: {
           : catalog.discoveredModelsAreAuthoritative
             ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
             : mergeCatalogModels(catalog.models, discovered)
+      if (catalog.resolveModelOptions) {
+        const resolveOptions = catalog.resolveModelOptions
+        entry.models = entry.models.map((model) => ({
+          ...model,
+          options: resolveOptions(model.id)
+        }))
+      }
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }

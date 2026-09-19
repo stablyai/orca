@@ -1,8 +1,7 @@
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import {
-  findCatalogModel,
-  findCatalogOption,
-  getAgentSessionOptionCatalog
+  getAgentSessionOptionCatalog,
+  resolveCatalogModelOptions
 } from '../../../../../../shared/agent-session-option-catalog'
 import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-session-option-launch'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
@@ -75,12 +74,9 @@ export function resolveWorkerLaunchPreferences(args: {
   }
 
   if (args.effort) {
-    const model = findCatalogModel(catalog, args.model)
-    const option =
-      findCatalogOption(model, 'effort') ??
-      (!model
-        ? catalog.unknownModelOptions?.find((candidate) => candidate.id === 'effort')
-        : undefined)
+    const option = resolveCatalogModelOptions(catalog, args.model).find(
+      (candidate) => candidate.id === 'effort'
+    )
     if (
       option?.kind.type !== 'select' ||
       !option.kind.choices.some((choice) => choice.value === args.effort)
