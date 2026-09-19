@@ -120,7 +120,13 @@ describeDrawer('the bottom drawer on the page', () => {
     it(`slides the sheet onto the screen in ${engine.name}`, async () => {
       const browser = await engine.launch()
       try {
-        const page = await browser.newPage({ viewport: VIEWPORT })
+        // Motion on, stated rather than inherited. Under `prefers-reduced-motion: reduce`
+        // Reanimated finishes `withTiming` in one frame, so a mapper that only ever runs once
+        // still lands on the final translateY and this pin would pass on the broken build.
+        const page = await browser.newPage({
+          viewport: VIEWPORT,
+          reducedMotion: 'no-preference'
+        })
         const errors = []
         page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
         await page.addInitScript(installShellDouble, {
@@ -133,6 +139,10 @@ describeDrawer('the bottom drawer on the page', () => {
           faultGrant
         })
         await page.goto(`${origin}/`, { waitUntil: 'load' })
+        // The precondition the assertions below rest on, read off the page rather than assumed.
+        expect(
+          await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
+        ).toBe(false)
         await page.waitForFunction(
           () => document.documentElement.dataset.orcaWebEntry === 'mounted',
           { timeout: 30_000, polling: 250 }
