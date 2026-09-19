@@ -55,5 +55,11 @@ export default function MobileAgentSessionHistoryScreen() {
   if (!BridgeInitRouteSchema.safeParse(route).success) {
     return panel
   }
-  return <MobileWebShellScreen hostId={hostId} route={route} fallback={panel} />
+  // Keyed on the route: a host captures the grants its session was opened with, so a screen
+  // reused across a route change would keep authorising frames under the grants of the route the
+  // page has left. The key is what makes the change a remount, which disposes that bridge in the
+  // commit, and the new session starts with no grants until its own `init`.
+  return (
+    <MobileWebShellScreen key={route.pathname} hostId={hostId} route={route} fallback={panel} />
+  )
 }

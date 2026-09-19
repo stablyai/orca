@@ -29,6 +29,9 @@ function HostListScreen() {
   }
   return (
     <MobileWebShellScreen
+      // Same reason as the agent-history route: a host holds the grants its session opened with,
+      // so a host id change must be a remount rather than a prop update.
+      key={hostId}
       hostId={hostId}
       route={{ pathname: `/h/${encodeURIComponent(hostId)}` }}
       fallback={<HostScreen />}

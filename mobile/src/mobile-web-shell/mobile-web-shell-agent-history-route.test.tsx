@@ -6,6 +6,9 @@ type RouteDependencies = {
   storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
   panels: { hostId: string; worktreeId: string; name?: string }[]
+  /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
+   *  a prop update — and a remount is what drops the old session's bridge and its grants. */
+  lifecycle: string[]
   params: Record<string, string | string[] | undefined>
 }
 
@@ -13,6 +16,7 @@ const dependencies = vi.hoisted((): RouteDependencies => ({
   storage: new Map(),
   routes: [],
   panels: [],
+  lifecycle: [],
   params: {}
 }))
 
@@ -53,15 +57,28 @@ vi.mock('../agent-history/MobileAgentSessionHistoryPanel', () => ({
   }
 }))
 
-vi.mock('./MobileWebShellScreen', () => ({
-  MobileWebShellScreen: (props: {
-    hostId: string
-    route: { pathname: string; params?: Record<string, string> }
-  }) => {
-    dependencies.routes.push(props.route)
-    return null
+vi.mock('./MobileWebShellScreen', async () => {
+  const React = await import('react')
+  return {
+    MobileWebShellScreen: (props: {
+      hostId: string
+      route: { pathname: string; params?: Record<string, string> }
+    }) => {
+      dependencies.routes.push(props.route)
+      // Empty deps on purpose: keyed on the pathname this would re-fire on a prop update and read
+      // exactly like a remount, which is the one thing it exists to tell apart.
+      const mountedAs = React.useRef(props.route.pathname)
+      React.useEffect(() => {
+        const pathname = mountedAs.current
+        dependencies.lifecycle.push(`mount:${pathname}`)
+        return () => {
+          dependencies.lifecycle.push(`unmount:${pathname}`)
+        }
+      }, [])
+      return null
+    }
   }
-}))
+})
 
 import { BRIDGE_ROUTE_PATHNAME_PATTERN } from './bridge/bridge-caps'
 import MobileAgentSessionHistoryScreen from '../../app/h/[hostId]/agent-history/[worktreeId]'
@@ -77,6 +94,7 @@ describe('the native agent-history route that hands off to the shell', () => {
     dependencies.storage.clear()
     dependencies.routes.length = 0
     dependencies.panels.length = 0
+    dependencies.lifecycle.length = 0
     dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
     Object.assign(globalThis, { __DEV__: true })
     dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
@@ -171,5 +189,38 @@ describe('the native agent-history route that hands off to the shell', () => {
     await renderRoute()
     expect(dependencies.routes).toEqual([])
     expect(dependencies.panels.at(-1)).toEqual({ hostId: 'host-1', worktreeId: '', name: '' })
+  })
+
+  /**
+   * A route change is a new session, and the old one's bridge must not outlive it.
+   *
+   * The host captures the grants its session was opened with, so a screen reused across a route
+   * change keeps authorising frames under the grants of the route the page has left. Only a remount
+   * drops it, and only a key guarantees one.
+   */
+  describe('changing the route this screen stands for', () => {
+    it('remounts the shell, so the bridge opened for the old route is disposed', async () => {
+      const rendered: { tree: ReturnType<typeof create> | null } = { tree: null }
+      await act(async () => {
+        rendered.tree = create(createElement(MobileAgentSessionHistoryScreen))
+      })
+      // The flag read is async, so the shell is not on screen until it settles; the other cases here
+      // flush it the same way.
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(dependencies.lifecycle).toEqual(['mount:/h/host-1/agent-history/wt-1'])
+      dependencies.params = { hostId: 'host-1', worktreeId: 'wt-2', name: 'another worktree' }
+      await act(async () => {
+        rendered.tree?.update(createElement(MobileAgentSessionHistoryScreen))
+      })
+      // Unmount before mount: the old bridge is gone before the new session exists, rather than
+      // being updated in place with the new route's props.
+      expect(dependencies.lifecycle).toEqual([
+        'mount:/h/host-1/agent-history/wt-1',
+        'unmount:/h/host-1/agent-history/wt-1',
+        'mount:/h/host-1/agent-history/wt-2'
+      ])
+    })
   })
 })
