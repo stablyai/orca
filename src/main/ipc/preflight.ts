@@ -11,11 +11,25 @@ import type {
   PreflightStatus,
   RemoteWindowsTerminalCapabilities
 } from '../preflight/agent-detection'
+import type { AgentHealthProvider, AgentUpdateResult } from '../../shared/agent-health'
+import { probeAgentHealth, probeAgentProviderHealth, updateAgent } from './agent-health-probe'
 
 // Why this file is thin: everything above the handler layer moved to
 // ../preflight/agent-detection so the runtime can call it without ipcMain.
 // Re-exported here so existing importers of `ipc/preflight` keep working.
 export * from '../preflight/agent-detection'
+
+function parseAgentHealthRequest(
+  args: unknown
+): PreflightRuntimeContext & { provider: AgentHealthProvider } {
+  const provider =
+    typeof args === 'object' && args !== null && 'provider' in args ? args.provider : undefined
+  if (provider === 'claude' || provider === 'codex') {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typed preload owns this IPC payload; the only discriminator consumed here is validated above.
+    return args as PreflightRuntimeContext & { provider: AgentHealthProvider }
+  }
+  throw new TypeError('Unsupported agent health provider')
+}
 
 export function registerPreflightHandlers(): void {
   ipcMain.handle(
@@ -35,6 +49,23 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
     return refreshShellPathAndDetectAgents(args)
   })
+
+  ipcMain.handle('preflight:probeAgentHealth', async (_event, args?: PreflightRuntimeContext) => {
+    return probeAgentHealth(args)
+  })
+
+  ipcMain.handle('preflight:probeAgentHealthProvider', async (_event, args: unknown) => {
+    const request = parseAgentHealthRequest(args)
+    return probeAgentProviderHealth(request.provider, request)
+  })
+
+  ipcMain.handle(
+    'preflight:updateAgent',
+    async (_event, args: unknown): Promise<AgentUpdateResult> => {
+      const request = parseAgentHealthRequest(args)
+      return updateAgent(request.provider, request)
+    }
+  )
 
   // Why: remote worktrees need agent detection on the SSH host, not the local
   // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
