@@ -106,3 +106,23 @@ export function readPageClosure(
     ...diverged.map(([id, seen]) => `  ${id}: ${seen.verdict}\n`)
   ].join('')
 }
+
+/**
+ * The class counts a run produced over one closure, which the gate asserts against the pin's.
+ *
+ * Deliberately the run's own tally rather than the table's: `pageClosureTotals` reads the file, and
+ * a file that is wrong the same way twice agrees with itself. Comparing the two is what caught a
+ * derivation whose per-id walk came back clean.
+ */
+export function pageClosureRunTotals(
+  pinned: PageClosurePins,
+  observed: ReadonlyMap<string, PageClosureObservation>
+): Readonly<Record<string, number>> {
+  const ran: Record<string, number> = {}
+  for (const [, seen] of observed) {
+    if (seen.family in pinned) {
+      ran[seen.verdict] = (ran[seen.verdict] ?? 0) + 1
+    }
+  }
+  return ran
+}
