@@ -62,7 +62,10 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(touchMoveBlock).toContain('routeScrollLines(lines, x, y);')
 
-    const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
+    const momentumBlock = sliceBetween(
+      'function momentumStep(frameTime)',
+      'if (Math.abs(vel) > MIN_VEL)'
+    )
     expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
       momentumBlock.indexOf('if (!applyNormalBufferScrollDelta(delta))')
     )
@@ -87,7 +90,10 @@ describe('TerminalWebView scroll routing', () => {
     expect(touchMoveBlock).toContain('if (enqueueNormalBufferScrollDelta(deltaY))')
     expect(touchMoveBlock).toContain('ts.velY = 0;')
 
-    const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
+    const momentumBlock = sliceBetween(
+      'function momentumStep(frameTime)',
+      'if (Math.abs(vel) > MIN_VEL)'
+    )
     expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(delta))')
     expect(momentumBlock).toContain('ts.momentumId = null;')
   })
@@ -172,6 +178,12 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('ts.velY * 0.55 + instantVelocity * 0.45')
     expect(source).toContain('var FRICTION = 0.972;')
     expect(source).toContain('var MIN_VEL = 0.012;')
+    expect(source).toContain('var lastMomentumTime = performance.now();')
+    expect(source).toContain(
+      'var elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime));'
+    )
+    expect(source).toContain('vel *= Math.pow(FRICTION, elapsed / 16);')
+    expect(source).toContain('var delta = vel * elapsed;')
   })
 
   it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {

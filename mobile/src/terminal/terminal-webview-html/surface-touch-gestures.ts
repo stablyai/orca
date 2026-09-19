@@ -195,10 +195,13 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         var vel = ts.velY;
         var FRICTION = 0.972;
         var MIN_VEL = 0.012;
-        function momentumStep() {
-          vel *= FRICTION;
+        var lastMomentumTime = performance.now();
+        function momentumStep(frameTime) {
+          var elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime));
+          lastMomentumTime = frameTime;
+          vel *= Math.pow(FRICTION, elapsed / 16);
           if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
-          var delta = vel * 16;
+          var delta = vel * elapsed;
           if (shouldRouteScrollToTerminalInput()) {
             resetSmoothScrollOffset();
             var effectiveCellH = getCellHeight() * getTotalScale();
