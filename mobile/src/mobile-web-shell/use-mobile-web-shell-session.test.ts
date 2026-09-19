@@ -519,7 +519,9 @@ describe('the wait for the page to speak', () => {
       fake.settleCacheRead(null)
     })
     await flush()
-    expect(seen.at(-1)?.kind).not.toBe('checking')
+    // Pinned, not merely "moved on": `/h/host-1/tasks` is not the route the bundle lists, so a
+    // re-armed session settles on the native screen. A failure would also leave `checking`.
+    expect(seen.at(-1)?.kind).toBe('native-route')
     await act(async () => {
       tree.unmount()
     })

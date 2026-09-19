@@ -42,8 +42,7 @@ export const BRIDGE_MAX_METHOD_CHARS = 64
  * So: no empty segment, no dot segment, no backslash anywhere — none of which a route can produce.
  * A dot segment counts however it is spelled: a URL parser percent-decodes the path before it
  * resolves it, so `/h/%2e%2e/x` climbs out of the prefix exactly as `/h/../x` does. An escape
- * inside a segment that names something (`/h/a%20b`, `/h/%2ex`) is text and stays allowed. `?`
- * ends the last segment as a `/` does, so `/h/..?x` is the same climb as `/h/../x`.
+ * inside a segment that names something (`/h/a%20b`, `/h/%2ex`) is text and stays allowed.
  */
 export const BRIDGE_MAX_ROUTE_PATHNAME_CHARS = 1024
 export const BRIDGE_MAX_ROUTE_PARAMS = 32
@@ -55,6 +54,11 @@ export const BRIDGE_MAX_ROUTE_PARAM_CHARS = 1024
  * Exported as source rather than as a regex because it is embedded in more than one pattern: the
  * `init` pathname and the hrefs a page hands back to the shell are the same vocabulary, and two
  * spellings of it would be two rules that drift.
+ *
+ * Which is why the dot-segment lookahead ends a segment at `?` as well as at `/` and at the end of
+ * the string. A pathname carries no query, but an href does, so `/h/..?x` reaches the shared rule
+ * and is the same climb out of the prefix as `/h/../x`. Widening the boundary cannot loosen the
+ * pathname pattern, where a `?` fails the character class wherever it appears.
  */
 export const BRIDGE_ROUTE_SEGMENT_SOURCE = String.raw`(?!(?:\.|%2[eE]){1,2}(?:[/?]|$))[^/\\?#\s]+`
 
