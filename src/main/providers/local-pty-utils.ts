@@ -1,3 +1,5 @@
+import type { WindowsShellSpawnAttempt } from './windows-shell-fallback-chain'
+export type { WindowsShellSpawnAttempt } from './windows-shell-fallback-chain'
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
@@ -7,6 +9,7 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
 import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
+import { scrubCodexDefaultHomeMarkerForLaunch } from '../pty/codex-default-home-shell-startup'
 
 export {
   formatLocalPtyEnvironmentDiag,
@@ -110,17 +113,6 @@ export function ensureNodePtySpawnHelperExecutable(): void {
   }
 }
 
-/** A pre-resolved Windows shell attempt: an absolute executable plus the launch
- *  args + cwd computed for it. Used to walk the PowerShell -> Windows PowerShell
- *  -> cmd.exe fallback chain when ConPTY rejects the primary shell. */
-export type WindowsShellSpawnAttempt = {
-  shellPath: string
-  shellArgs: string[]
-  effectiveCwd: string
-  validationCwd: string
-  startupCommandDeliveredInShellArgs: boolean
-}
-
 export type ShellSpawnParams = {
   shellPath: string
   shellArgs: string[]
@@ -184,6 +176,7 @@ function spawnWindowsFallbackChain(
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
+      scrubCodexDefaultHomeMarkerForLaunch(env, attempt.supportsCodexDefaultHomeAfterProfile)
       const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
         name: termName,
         cols,

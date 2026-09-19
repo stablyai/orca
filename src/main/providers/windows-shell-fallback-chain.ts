@@ -9,6 +9,7 @@ import {
 /** A single attempt in the Windows shell-spawn fallback chain: the absolute
  *  executable plus the launch args + cwd computed for it. */
 export type WindowsShellSpawnAttempt = {
+  supportsCodexDefaultHomeAfterProfile?: boolean
   shellPath: string
   shellArgs: string[]
   effectiveCwd: string
@@ -32,6 +33,7 @@ function toAttempt(
   )
   return {
     shellPath,
+    supportsCodexDefaultHomeAfterProfile: resolved.supportsCodexDefaultHomeAfterProfile,
     shellArgs: resolved.shellArgs,
     effectiveCwd: resolved.effectiveCwd,
     validationCwd: resolved.validationCwd,

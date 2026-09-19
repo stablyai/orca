@@ -8,6 +8,10 @@ import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-co
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
 import { getBashStartupCommandPromptBlock } from '../pty/posix-shell-startup-command'
+import {
+  ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV,
+  ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE
+} from '../pty/codex-default-home-shell-startup'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
@@ -50,8 +54,18 @@ __orca_restore_agent_teams_path
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
-# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
-[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+# Why: real-home launches must ignore profile-only overrides; managed launches
+# still restore their selected runtime home after profile scripts.
+if [[ -n "\${${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV}:-}" ]]; then
+  if [[ "\${${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV}}" == "${ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE}" ]]; then
+    unset CODEX_HOME
+  else
+    export CODEX_HOME="\${${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV}}"
+  fi
+  unset ORCA_CODEX_HOME ${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV}
+elif [[ -n "\${ORCA_CODEX_HOME:-}" ]]; then
+  export CODEX_HOME="\${ORCA_CODEX_HOME}"
+fi
 ${getPosixCodexShellLaunchPreflight()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command (e.g. an interrupted Claude/Codex CLI)

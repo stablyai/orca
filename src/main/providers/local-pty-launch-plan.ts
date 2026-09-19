@@ -45,6 +45,7 @@ export type LocalPtyLaunchPlan = {
   shellArgs: string[]
   effectiveCwd: string
   validationCwd: string
+  supportsCodexDefaultHomeAfterProfile?: boolean
   startupCommandDeliveredInShellArgs: boolean
   windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
   shellReadyLaunch: ReturnType<typeof getShellLaunchConfig> | null
@@ -72,6 +73,7 @@ function finalizeLocalPtyLaunchPlan(
     shellArgs: string[]
     effectiveCwd: string
     validationCwd: string
+    supportsCodexDefaultHomeAfterProfile?: boolean
     startupCommandDeliveredInShellArgs?: boolean
     windowsFallbackAttempts?: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
   }
@@ -91,6 +93,7 @@ function finalizeLocalPtyLaunchPlan(
     preferredWslContext: seed.preferredWslContext,
     launchWslContext: seed.launchWslContext,
     shellPath: shell.shellPath,
+    supportsCodexDefaultHomeAfterProfile: shell.supportsCodexDefaultHomeAfterProfile,
     shellArgs: shell.shellArgs,
     effectiveCwd: shell.effectiveCwd,
     validationCwd: shell.validationCwd,
@@ -162,6 +165,7 @@ function createWindowsLocalPtyLaunchPlan(
     if (primaryAttempt) {
       return finalizeLocalPtyLaunchPlan(seed, {
         shellPath: primaryAttempt.shellPath,
+        supportsCodexDefaultHomeAfterProfile: primaryAttempt.supportsCodexDefaultHomeAfterProfile,
         shellArgs: primaryAttempt.shellArgs,
         effectiveCwd: primaryAttempt.effectiveCwd,
         validationCwd: primaryAttempt.validationCwd,
@@ -178,6 +182,7 @@ function createWindowsLocalPtyLaunchPlan(
     )
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
+      supportsCodexDefaultHomeAfterProfile: resolved.supportsCodexDefaultHomeAfterProfile,
       shellArgs: resolved.shellArgs,
       effectiveCwd: resolved.effectiveCwd,
       validationCwd: resolved.validationCwd,
@@ -229,6 +234,7 @@ export function createLocalPtyLaunchPlan(
     const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
+      supportsCodexDefaultHomeAfterProfile: resolved.supportsCodexDefaultHomeAfterProfile,
       shellArgs: resolved.shellArgs,
       effectiveCwd: resolved.effectiveCwd,
       validationCwd: resolved.validationCwd

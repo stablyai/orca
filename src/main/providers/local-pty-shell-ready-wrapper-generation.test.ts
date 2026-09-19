@@ -96,7 +96,8 @@ const itWithBash = hasBash ? it : it.skip
 function runInteractiveBashRcfile(
   rcfileContent: string,
   tempDir: string,
-  input = 'true\nfalse\nexit 0\n'
+  input = 'true\nfalse\nexit 0\n',
+  envOverride: Record<string, string> = {}
 ): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
   writeFileSync(rcfile, rcfileContent)
@@ -111,7 +112,8 @@ function runInteractiveBashRcfile(
         ...process.env,
         HOME: tempDir,
         ORCA_SHELL_FEATURES: 'ready',
-        TERM: process.env.TERM || 'xterm'
+        TERM: process.env.TERM || 'xterm',
+        ...envOverride
       },
       timeout: 5000
     }
@@ -338,6 +340,7 @@ describePosix('local PTY shell-ready launch config', () => {
       '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+    const bashCodexRestoreLine = 'elif [[ -n "${ORCA_CODEX_HOME:-}" ]]; then'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
@@ -354,7 +357,7 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(agentTeamsPathRestoreLine)
     expect(zlogin).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(agentTeamsPathRestoreLine)
-    expect(bashRc).toContain(codexRestoreLine)
+    expect(bashRc).toContain(bashCodexRestoreLine)
     expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
@@ -394,6 +397,36 @@ describePosix('local PTY shell-ready launch config', () => {
     const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath)
 
     expectBashOsc133Lifecycle(output)
+  })
+
+  itWithBash('removes a profile-only Codex home on a real-home launch', () => {
+    writeFileSync(join(userDataPath, '.bash_profile'), 'export CODEX_HOME=/profile/codex\n')
+    const output = runInteractiveBashRcfile(
+      getBashShellReadyRcfileContent(),
+      userDataPath,
+      'printf "CODEX_HOME=<%s> ORCA_HOME=<%s> RESET=<%s>\\n" "${CODEX_HOME-unset}" "${ORCA_CODEX_HOME-unset}" "${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE-unset}"\nexit 0\n',
+      {
+        ORCA_CODEX_HOME: '/managed/codex',
+        ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE: '1'
+      }
+    )
+
+    expect(output).toContain('CODEX_HOME=<unset> ORCA_HOME=<unset> RESET=<unset>')
+  })
+
+  itWithBash('restores an explicitly named default Codex home after the profile', () => {
+    writeFileSync(join(userDataPath, '.bash_profile'), 'export CODEX_HOME=/profile/codex\n')
+    const output = runInteractiveBashRcfile(
+      getBashShellReadyRcfileContent(),
+      userDataPath,
+      'printf "CODEX_HOME=<%s> ORCA_HOME=<%s> RESET=<%s>\\n" "${CODEX_HOME-unset}" "${ORCA_CODEX_HOME-unset}" "${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE-unset}"\nexit 0\n',
+      {
+        ORCA_CODEX_HOME: '/managed/codex',
+        ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE: '/home/me/.codex'
+      }
+    )
+
+    expect(output).toContain('CODEX_HOME=</home/me/.codex> ORCA_HOME=<unset> RESET=<unset>')
   })
 
   itWithBash('emits lifecycle for foreground text ending like an internal hook', () => {

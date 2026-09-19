@@ -22,6 +22,7 @@ import {
 } from '../../../shared/windows-environment-expansion'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
+import { reconcileDaemonCodexDefaultHomeMarker } from '../../pty/codex-default-home-shell-startup'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -148,6 +149,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   stripLegacyTerminalShimEnv(env, process.platform)
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
+  reconcileDaemonCodexDefaultHomeMarker(env, opts.env)
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
   }
@@ -174,6 +176,7 @@ export function rescrubDaemonPtyEnvironment(
   opts: PtySubprocessOptions
 ): void {
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
+  reconcileDaemonCodexDefaultHomeMarker(env, opts.env)
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
   }

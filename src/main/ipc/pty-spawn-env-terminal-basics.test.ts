@@ -8,6 +8,8 @@ import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environ
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from '../pty/codex-default-home-shell-startup'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -58,6 +60,95 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('marks only native Windows real-home launches for a post-profile reset', () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const previousCodexHome = process.env.CODEX_HOME
+      const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      __resetPersistedWindowsPathCacheForTests()
+      delete process.env.CODEX_HOME
+      delete process.env.ORCA_CODEX_HOME
+
+      try {
+        const realHomeEnv = buildPtyHostEnv(
+          'pty-windows-real-home',
+          {
+            CODEX_HOME: 'C:\\Orca\\managed-home',
+            ORCA_CODEX_HOME: 'C:\\Orca\\managed-home'
+          },
+          {
+            isPackaged: true,
+            userDataPath: 'C:\\Orca',
+            selectedCodexHomePath: null,
+            stripInheritedOrcaCodexHome: true,
+            agentStatusHooksEnabled: false
+          }
+        )
+        const customHomeEnv = buildPtyHostEnv(
+          'pty-windows-custom-home',
+          {
+            CODEX_HOME: 'C:\\Users\\me\\custom-codex',
+            ORCA_CODEX_HOME: 'C:\\Orca\\stale-home'
+          },
+          {
+            isPackaged: true,
+            userDataPath: 'C:\\Orca',
+            selectedCodexHomePath: null,
+            stripInheritedOrcaCodexHome: true,
+            agentStatusHooksEnabled: false
+          }
+        )
+        const wslEnv = buildPtyHostEnv(
+          'pty-wsl-real-home',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: 'C:\\Orca',
+            selectedCodexHomePath: null,
+            stripInheritedOrcaCodexHome: true,
+            isWsl: true,
+            agentStatusHooksEnabled: false
+          }
+        )
+        const explicitDefaultHomeEnv = buildPtyHostEnv(
+          'pty-windows-explicit-default-home',
+          { CODEX_HOME: getSystemCodexHomePath() },
+          {
+            isPackaged: true,
+            userDataPath: 'C:\\Orca',
+            selectedCodexHomePath: null,
+            stripInheritedOrcaCodexHome: true,
+            agentStatusHooksEnabled: false
+          }
+        )
+
+        expect(realHomeEnv.CODEX_HOME).toBeUndefined()
+        expect(realHomeEnv.ORCA_CODEX_HOME).toBeUndefined()
+        expect(realHomeEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBe('1')
+        expect(customHomeEnv.CODEX_HOME).toBe('C:\\Users\\me\\custom-codex')
+        expect(customHomeEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBeUndefined()
+        expect(wslEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBeUndefined()
+        expect(explicitDefaultHomeEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBe(
+          getSystemCodexHomePath()
+        )
+      } finally {
+        __resetPersistedWindowsPathCacheForTests()
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+        if (previousCodexHome === undefined) {
+          delete process.env.CODEX_HOME
+        } else {
+          process.env.CODEX_HOME = previousCodexHome
+        }
+        if (previousOrcaCodexHome === undefined) {
+          delete process.env.ORCA_CODEX_HOME
+        } else {
+          process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+        }
+      }
+    })
+
     it('routes headless browser launches through the owning Orca workspace', () => {
       const inheritedBrowser = process.env.BROWSER
       delete process.env.BROWSER

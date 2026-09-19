@@ -3,7 +3,7 @@ import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 
 describe('foreground-confirmation daemon protocol', () => {
   it('rejects daemons from before the fresh-confirmation RPC', () => {
-    expect(PROTOCOL_VERSION).toBe(36)
+    expect(PROTOCOL_VERSION).toBe(37)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(19)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(23)
@@ -19,5 +19,6 @@ describe('foreground-confirmation daemon protocol', () => {
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(33)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(34)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(35)
+    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(36)
   })
 })

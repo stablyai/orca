@@ -99,8 +99,18 @@ if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
   function omp { __orca_omp "$@"; }
 fi
 
-# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
-[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
+# Why: real-home launches must ignore profile-only overrides; managed launches
+# still restore their selected runtime home after profile scripts.
+if [[ -n "${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE:-}" ]]; then
+  if [[ "${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE}" == "1" ]]; then
+    unset CODEX_HOME
+  else
+    export CODEX_HOME="${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE}"
+  fi
+  unset ORCA_CODEX_HOME ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE
+elif [[ -n "${ORCA_CODEX_HOME:-}" ]]; then
+  export CODEX_HOME="${ORCA_CODEX_HOME}"
+fi
 # Why: a typed alias expands inside the shell, after pane launch prep.
 # Why unalias inside the substitution: an alias named codex makes command -v
 # report the alias text, and the subshell leaves the user's own alias intact.

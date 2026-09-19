@@ -29,20 +29,26 @@ const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call 
 // `&&`) keeps startup working even if chcp.com is missing.
 const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
-function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
-  if (!codexLaunchPreflightCommand) {
-    return GIT_BASH_UTF8_LOGIN_COMMAND
+function getGitBashLaunchCommand(
+  codexLaunchPreflightCommand?: string,
+  useGitBashShellReadyWrapper = false
+): { command: string; supportsCodexDefaultHomeAfterProfile: boolean } {
+  if (!codexLaunchPreflightCommand && !useGitBashShellReadyWrapper) {
+    return { command: GIT_BASH_UTF8_LOGIN_COMMAND, supportsCodexDefaultHomeAfterProfile: false }
   }
 
   ensureShellReadyWrappersAt()
   const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
-    return GIT_BASH_UTF8_LOGIN_COMMAND
+    return { command: GIT_BASH_UTF8_LOGIN_COMMAND, supportsCodexDefaultHomeAfterProfile: false }
   }
   const bashArgs = [...wrapperArgs, '-i']
     .map((arg) => (arg.startsWith('-') ? arg : quotePosixShell(arg.replace(/\\/g, '/'))))
     .join(' ')
-  return `chcp.com 65001 >/dev/null 2>&1; exec "$BASH" ${bashArgs}`
+  return {
+    command: `chcp.com 65001 >/dev/null 2>&1; exec "$BASH" ${bashArgs}`,
+    supportsCodexDefaultHomeAfterProfile: true
+  }
 }
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
@@ -54,6 +60,8 @@ function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
  *  shellOverride never reached the daemon's shell-args branches. Sharing the
  *  decision here keeps both paths honest. */
 export type WindowsShellLaunchArgs = {
+  /** Set only when the resolved launch actually installs the post-profile consumer. */
+  supportsCodexDefaultHomeAfterProfile?: boolean
   shellArgs: string[]
   /** True when the startup command was embedded in shellArgs and must not be
    *  written again through stdin. */
@@ -179,7 +187,8 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  useGitBashShellReadyWrapper = false
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeWindowsTerminalCwd(cwd)
@@ -206,6 +215,7 @@ export function resolveWindowsShellLaunchArgs(
     // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
     return {
       shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
+      supportsCodexDefaultHomeAfterProfile: true,
       ...(powerShellCommand.startupCommandDeliveredInShellArgs
         ? { startupCommandDeliveredInShellArgs: true }
         : {}),
@@ -215,8 +225,10 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (isWindowsGitBashShellPath(shellPath)) {
+    const launch = getGitBashLaunchCommand(codexLaunchPreflightCommand, useGitBashShellReadyWrapper)
     return {
-      shellArgs: ['-c', getGitBashLaunchCommand(codexLaunchPreflightCommand)],
+      shellArgs: ['-c', launch.command],
+      supportsCodexDefaultHomeAfterProfile: launch.supportsCodexDefaultHomeAfterProfile,
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

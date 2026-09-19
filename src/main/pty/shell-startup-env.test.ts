@@ -16,7 +16,8 @@ import {
   __resetShellStartupEnvCache,
   isShellStartupEnvProbeSupported,
   readSessionShellStartupEnvVar,
-  readShellStartupEnvVar
+  readShellStartupEnvVar,
+  isLaunchEnvOverrideVisible
 } from './shell-startup-env'
 
 describe('readShellStartupEnvVar', () => {
@@ -115,6 +116,25 @@ describe('readShellStartupEnvVar', () => {
       expect(isShellStartupEnvProbeSupported()).toBe(true)
       Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
       expect(isShellStartupEnvProbeSupported()).toBe(true)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('treats the launch env as authoritative on Windows despite no probe', () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    try {
+      // Why both: Windows inherits the persisted environment block at process
+      // creation, so an absent override is evidence even though the rc parser
+      // never runs there.
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      expect(isShellStartupEnvProbeSupported()).toBe(false)
+      expect(isLaunchEnvOverrideVisible()).toBe(true)
+
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      expect(isLaunchEnvOverrideVisible()).toBe(true)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
