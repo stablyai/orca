@@ -20,7 +20,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
-import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../shared/browser-family-labels'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
