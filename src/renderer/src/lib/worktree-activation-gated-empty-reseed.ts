@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   gateWorktreeAgentActivation,
   type WorktreeAgentActivationOutcome
@@ -8,6 +9,7 @@ import { reseedGatedEmptyWorkspace } from './worktree-initial-terminal-seeding'
 type GatedEmptyWorkspaceReseedIntent = {
   callerProvidesSurface: boolean
   executionHostId?: ExecutionHostId
+  seedStartupIfEmpty?: WorktreeStartupPayload
 }
 
 const latestReseedIntentByGate = new WeakMap<
@@ -18,12 +20,14 @@ const latestReseedIntentByGate = new WeakMap<
 export function gateAndReseedEmptyWorkspace(
   workspaceKey: string,
   callerProvidesSurface: boolean,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  seedStartupIfEmpty?: WorktreeStartupPayload
 ): void {
   const gate = gateWorktreeAgentActivation(workspaceKey)
   const intent: GatedEmptyWorkspaceReseedIntent = {
     callerProvidesSurface,
-    ...(executionHostId ? { executionHostId } : {})
+    ...(executionHostId ? { executionHostId } : {}),
+    ...(seedStartupIfEmpty ? { seedStartupIfEmpty } : {})
   }
   latestReseedIntentByGate.set(gate, intent)
   void gate.then((outcome) => {
@@ -32,7 +36,12 @@ export function gateAndReseedEmptyWorkspace(
     }
     latestReseedIntentByGate.delete(gate)
     if (outcome === 'empty') {
-      reseedGatedEmptyWorkspace(workspaceKey, intent.callerProvidesSurface, intent.executionHostId)
+      reseedGatedEmptyWorkspace(
+        workspaceKey,
+        intent.callerProvidesSurface,
+        intent.executionHostId,
+        intent.seedStartupIfEmpty
+      )
     }
   })
 }

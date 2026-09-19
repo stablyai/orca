@@ -225,4 +225,66 @@ describe('workspace terminal seeding authority', () => {
     expect(ensureWorktreeHasInitialTerminal(store.getState(), PAIRED_WORKTREE_ID)).toBeNull()
     expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
   })
+
+  it('does not treat seed-if-empty as explicit launch work while SSH is unverifiable', () => {
+    const store = createTestStore()
+    seedDirectSsh(store)
+
+    expect(
+      ensureWorktreeHasInitialTerminal(
+        store.getState(),
+        SSH_WORKTREE_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { seedStartupIfEmpty: { command: 'codex', launchAgent: 'codex' } }
+      )
+    ).toBeNull()
+    expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(0)
+  })
+
+  it('does not treat seed-if-empty as explicit launch work on a live runtime host', () => {
+    const store = createTestStore()
+    store.setState({
+      repos: [repo('repoPaired', '/srv/proj')],
+      worktreesByRepo: {
+        repoPaired: [
+          makeWorktree({
+            id: PAIRED_WORKTREE_ID,
+            repoId: 'repoPaired',
+            path: '/srv/proj/paired',
+            hostId: `runtime:${ENVIRONMENT_ID}`,
+            runtimeOwnerEnvironmentId: ENVIRONMENT_ID
+          } as never)
+        ]
+      }
+    })
+
+    expect(
+      ensureWorktreeHasInitialTerminal(
+        store.getState(),
+        PAIRED_WORKTREE_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { seedStartupIfEmpty: { command: 'codex', launchAgent: 'codex' } }
+      )
+    ).toBeNull()
+    expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
+  })
+
+  it('still seeds explicit startup on an unverifiable SSH host', () => {
+    const store = createTestStore()
+    seedDirectSsh(store)
+
+    expect(
+      ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID, {
+        command: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBeTruthy()
+    expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(1)
+  })
 })

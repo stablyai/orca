@@ -83,7 +83,8 @@ export function useWorktreeCardActivationActions({
       onImmediateActivate?.(worktree.id, activationRowKey)
       void activateWorktreeFromSidebar(
         worktree.id,
-        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined),
+        { launchDefaultAgent: true }
       )
       onActivate?.()
     },
