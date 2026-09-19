@@ -35,4 +35,12 @@ describe('buildMarkdownExportHtml', () => {
     expect(html).toContain('[data-orca-export-hide')
     expect(html).toContain('display: none')
   })
+
+  // #21310: a diagram taller than the page box fits nowhere, so the layout pushes it — and the
+  // heading bound to it by page-break-after — onto a new page, blanking the one they left.
+  it('caps printed diagram height so a tall one cannot blank the page it leaves', () => {
+    const html = buildMarkdownExportHtml({ title: 'Notes', renderedHtml: '<p>x</p>' })
+    expect(html).toContain('max-height: 90vh')
+    expect(html.indexOf('max-height: 90vh')).toBeGreaterThan(html.indexOf('@media print'))
+  })
 })
