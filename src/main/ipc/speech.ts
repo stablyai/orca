@@ -169,7 +169,11 @@ export function registerSpeechHandlers(store: Store): void {
                 window.webContents.send('speech:stopped', { sessionId })
                 break
               case 'error':
-                window.webContents.send('speech:error', { error: msg.error ?? '', sessionId })
+                window.webContents.send('speech:error', {
+                  error: msg.error ?? '',
+                  sessionId,
+                  ...(msg.recoverable ? { recoverable: true } : {})
+                })
                 void getSpeechSttService(store)
                   .stopDictation(owner)
                   .catch(() => undefined)

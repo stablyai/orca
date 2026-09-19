@@ -386,35 +386,42 @@ describe('SttService', () => {
     )
   })
 
-  it('times out startup when the worker never reports ready', async () => {
-    vi.useFakeTimers()
-    try {
-      const service = new SttService({
-        getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
-        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never)
+  it.each([false, true])(
+    'times out startup when ready never arrives (termination rejects: %s)',
+    async (rejectTermination) => {
+      vi.useFakeTimers()
+      try {
+        const service = new SttService({
+          getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+          getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+        } as never)
 
-      MockWorker.emitReadyOnInit = false
-      const startPromise = service.startDictation('model-a', vi.fn(), undefined, 'desktop').then(
-        () => 'resolved',
-        (error) => (error instanceof Error ? error.message : String(error))
-      )
-      await Promise.resolve()
-      const worker = getLastWorker()
-      expect(worker).toBeDefined()
+        MockWorker.emitReadyOnInit = false
+        const startPromise = service.startDictation('model-a', vi.fn(), undefined, 'desktop').then(
+          () => 'resolved',
+          (error) => (error instanceof Error ? error.message : String(error))
+        )
+        await Promise.resolve()
+        const worker = getLastWorker()
+        expect(worker).toBeDefined()
 
-      await vi.advanceTimersByTimeAsync(START_DICTATION_TIMEOUT_MS)
-      const outcome = await Promise.race([startPromise, Promise.resolve('pending')])
+        if (rejectTermination && worker) {
+          vi.spyOn(worker, 'terminate').mockRejectedValueOnce(new Error('termination failed'))
+        }
 
-      expect(outcome).toBe('Speech worker timed out while starting.')
-      expect(worker!.terminated).toBe(true)
-      expect(worker!.listenerCount('message')).toBe(0)
-      expect(worker!.listenerCount('error')).toBe(0)
-      expect(worker!.listenerCount('exit')).toBe(0)
-    } finally {
-      vi.useRealTimers()
+        await vi.advanceTimersByTimeAsync(START_DICTATION_TIMEOUT_MS)
+        const outcome = await Promise.race([startPromise, Promise.resolve('pending')])
+
+        expect(outcome).toBe('Speech worker timed out while starting.')
+        expect(worker!.terminated).toBe(!rejectTermination)
+        expect(worker!.listenerCount('message')).toBe(0)
+        expect(worker!.listenerCount('error')).toBe(0)
+        expect(worker!.listenerCount('exit')).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
   it('does not treat internal warm-worker replacement as startup cancellation', async () => {
     const service = new SttService({

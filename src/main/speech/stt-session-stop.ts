@@ -98,7 +98,7 @@ function finishSttWorkerStop(
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
   if (outcome !== 'exit') {
-    void worker.terminate().catch(() => undefined)
+    void state.audioPending.terminateWorker(worker).catch(() => undefined)
   }
   if (state.worker === worker) {
     clearSttWorkerState(state)
@@ -163,7 +163,7 @@ export async function teardownSttWorker(
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
   try {
-    await worker.terminate()
+    await state.audioPending.terminateWorker(worker)
   } catch (error) {
     if (!options.ignoreTerminateErrors) {
       throw error
