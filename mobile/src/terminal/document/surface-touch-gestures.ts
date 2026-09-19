@@ -232,13 +232,16 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
         let vel = scope.touchGesture.velY
         const FRICTION = 0.972
         const MIN_VEL = 0.012
-        function momentumStep() {
-          vel *= FRICTION
+        let lastMomentumTime = performance.now()
+        function momentumStep(frameTime: number) {
+          const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime))
+          lastMomentumTime = frameTime
+          vel *= FRICTION ** (elapsed / 16)
           if (Math.abs(vel) < MIN_VEL) {
             scope.touchGesture.momentumId = null
             return
           }
-          const delta = vel * 16
+          const delta = vel * elapsed
           if (shouldRouteScrollToTerminalInput()) {
             resetSmoothScrollOffset()
             const effectiveCellH = getCellHeight() * getTotalScale()
