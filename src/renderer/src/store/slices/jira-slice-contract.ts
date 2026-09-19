@@ -14,6 +14,7 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 export type JiraReadOptions = {
   sourceContext?: TaskSourceContext | null
   siteId?: JiraSiteSelection | null
+  force?: boolean
 }
 
 export type JiraSearchOptions = JiraReadOptions & { signal?: AbortSignal }

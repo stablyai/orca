@@ -74,13 +74,14 @@ export function createJiraCollectionReadActions(
         options && 'siteId' in options ? options.siteId : getSelectedJiraSiteId(get().jiraStatus)
       const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::${jql}::${limit}`)
       const cached = get().jiraSearchCache[cacheKey]
-      if (isFreshJiraCacheEntry(cached)) {
+      if (!options?.force && isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
       }
       const inflight = inflightSearchRequests.get(cacheKey)
       const abortable = options?.signal !== undefined
       const requestMutationGeneration = currentJiraMutationGeneration()
       if (
+        !options?.force &&
         !abortable &&
         inflight &&
         inflight.contextKey === scope.contextKey &&
@@ -153,12 +154,13 @@ export function createJiraCollectionReadActions(
         `${siteId ?? 'default'}::list::${filter}::${limit}`
       )
       const cached = get().jiraSearchCache[cacheKey]
-      if (isFreshJiraCacheEntry(cached)) {
+      if (!options?.force && isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
       }
       const inflight = inflightListRequests.get(cacheKey)
       const requestMutationGeneration = currentJiraMutationGeneration()
       if (
+        !options?.force &&
         inflight &&
         inflight.contextKey === scope.contextKey &&
         inflight.mutationGeneration === requestMutationGeneration

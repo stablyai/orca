@@ -212,6 +212,33 @@ describe('createJiraSlice runtime context', () => {
     expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
   })
 
+  it('bypasses a fresh cache entry and refetches when listJiraIssues is called with force', async () => {
+    const store = createTestStore()
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' },
+      jiraSearchCache: {
+        'site-1::list::assigned::30': {
+          data: [issue('ALP-1')],
+          fetchedAt: Date.now()
+        }
+      }
+    })
+    jiraListIssues.mockResolvedValueOnce([issue('ALP-2')])
+
+    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
+      { key: 'ALP-1' }
+    ])
+    expect(jiraListIssues).not.toHaveBeenCalled()
+
+    await expect(
+      store.getState().listJiraIssues('assigned', 30, { force: true })
+    ).resolves.toMatchObject([{ key: 'ALP-2' }])
+    expect(jiraListIssues).toHaveBeenCalledTimes(1)
+    expect(store.getState().jiraSearchCache['site-1::list::assigned::30']?.data).toMatchObject([
+      { key: 'ALP-2' }
+    ])
+  })
+
   it('keeps isolated status failures from mutating the focused Jira Settings state', async () => {
     const store = createTestStore()
     const focusedStatus = {
