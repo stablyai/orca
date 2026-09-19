@@ -8,6 +8,7 @@ import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data
 import { app } from 'electron'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider, getSshPtyProvider, clearProviderPtyState } from '../ipc/pty'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { agentHookServer } from '../agent-hooks/server'
 import { browserManager } from '../browser/browser-manager'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
@@ -153,6 +154,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   })
   app.once('will-quit', () => sessionSearch?.dispose())
   state.runtime = runtime
+  agentHookServer.setTerminalInputSourceResolver((paneKey) => {
+    const ptyId = getPtyIdForPaneKey(paneKey)
+    return ptyId ? runtime.getTerminalInputSource(ptyId) : null
+  })
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )

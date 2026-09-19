@@ -76,9 +76,11 @@ export function installMultiplexSlotFrames(
         }
         const outcome = await sendTerminalStreamInput(runtime, {
           terminal: stream.terminal,
+          ptyId: stream.ptyId,
           text,
           client: stream.client,
-          isMobile: stream.isMobile
+          isMobile: stream.isMobile,
+          caller: { pairedDeviceId: state.pairedDeviceId, clientKind: state.clientKind }
         })
         state.notifyStreamWriteUnavailable(stream, outcome)
       })

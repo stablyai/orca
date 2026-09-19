@@ -20,6 +20,7 @@ import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import type { TerminalInputSource } from '../../../shared/terminal-input-source'
 
 // Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
@@ -90,6 +91,13 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         console.error('[agent-hooks] replay listener threw', err)
       }
     }
+  }
+
+  /** Answers `GET /pane/<paneKey>/last-input`; the host resolves the pane to the PTY it owns. */
+  setTerminalInputSourceResolver(
+    resolver: ((paneKey: string) => TerminalInputSource | null) | null
+  ): void {
+    this.onResolveTerminalInputSource = resolver
   }
 
   // Why: statusline posts carry live Claude usage windows, not agent status; they feed RateLimitService directly.

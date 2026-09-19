@@ -89,9 +89,14 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
     client: { id: 'phone', type: 'mobile' as const }
   }
   if (lane === 'stream') {
-    await expect(sendTerminalStreamInput(runtime, { ...params, isMobile: true })).resolves.toBe(
-      'delivered'
-    )
+    await expect(
+      sendTerminalStreamInput(runtime, {
+        ...params,
+        ptyId: 'pty_worker',
+        isMobile: true,
+        caller: {}
+      })
+    ).resolves.toBe('delivered')
   } else {
     const method = eraseRpcMethods(TERMINAL_SEND_METHODS).find(
       (m): m is RpcMethod => m.name === 'terminal.send' && !isStreamingMethod(m)
