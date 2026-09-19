@@ -189,7 +189,7 @@ export function MobileWebShellScreen({
     // rethrown, because this runs on the native frame handler.
     onExternalLink: (url: string) => {
       void Linking.openURL(url).catch((error: unknown) => {
-        console.warn('[web-shell] could not open a URL for the page', url, error)
+        console.warn('[web-shell] could not open a URL for the page', { url, error })
       })
     },
     // The page's own Back goes nowhere: it holds the one history entry the entry wrote, so the only

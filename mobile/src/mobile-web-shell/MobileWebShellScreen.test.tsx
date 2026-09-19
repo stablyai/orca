@@ -434,8 +434,7 @@ describe('the hybrid shell screen', () => {
     // rule out: the page was told the frame left and the phone opened nothing.
     expect(warned.mock.calls).toContainEqual([
       '[web-shell] could not open a URL for the page',
-      'mailto:someone@example.com',
-      failure
+      { url: 'mailto:someone@example.com', error: failure }
     ])
     warned.mockRestore()
   })
