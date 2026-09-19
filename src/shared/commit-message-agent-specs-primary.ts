@@ -188,6 +188,29 @@ export function buildPrimaryCommitMessageAgentSpecs({
       ],
       defaultModelId: 'opencode/deepseek-v4-flash-free'
     },
+    opencode2: {
+      id: 'opencode2',
+      label: 'OpenCode 2',
+      binary: 'opencode2',
+      promptDelivery: 'stdin',
+      buildArgs: ({ model, thinkingLevel }) => [
+        'run',
+        '--model',
+        thinkingLevel ? `${model}#${thinkingLevel}` : model,
+        '--agent',
+        'build',
+        '--format',
+        'default'
+      ],
+      singletonOptions: [['--model', '-m'], ['--agent'], ['--format']],
+      modelSource: 'dynamic',
+      modelDiscovery: { binary: 'opencode2', args: ['models'], parse: parseLineModels },
+      models: [
+        { id: 'opencode/deepseek-v4-flash-free', label: 'OpenCode DeepSeek V4 Flash Free' },
+        { id: 'opencode/gpt-5.4-mini', label: 'OpenCode GPT 5.4 Mini', ...withOpenAiThinking('gpt-5.4-mini') }
+      ],
+      defaultModelId: 'opencode/deepseek-v4-flash-free'
+    },
     pi: {
       id: 'pi',
       label: 'Pi',

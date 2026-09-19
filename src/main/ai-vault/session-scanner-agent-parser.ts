@@ -9,6 +9,8 @@ import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import {
   captureOpenCodeSqliteSessionViaWorker,
+  captureOpenCode2SqliteSessionViaWorker,
+  parseOpenCode2SqliteSessionViaWorker,
   parseOpenCodeSqliteSessionViaWorker
 } from './session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
@@ -88,6 +90,31 @@ export async function parseAgentSessionFile(
         return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages)
       }
       return parseOpenCodeSessionFile(candidate.file, platform, messages)
+    }
+    case 'opencode2': {
+      // Why: opencode2 (beta) sessions are read from the channel-scoped SQLite
+      // DB (session_v2 schema) via the same synthetic <dbPath>#<sessionId>
+      // candidate path; there is no legacy file store.
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
+      if (sqliteCandidate) {
+        if (messages?.active) {
+          const capture = await captureOpenCode2SqliteSessionViaWorker({
+            dbPath: sqliteCandidate.dbPath,
+            sessionId: sqliteCandidate.sessionId,
+            platform
+          })
+          for (const message of capture.messages) {
+            messages.push(message)
+          }
+          return capture.session
+        }
+        return parseOpenCode2SqliteSessionViaWorker({
+          dbPath: sqliteCandidate.dbPath,
+          sessionId: sqliteCandidate.sessionId,
+          platform
+        })
+      }
+      return null
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)

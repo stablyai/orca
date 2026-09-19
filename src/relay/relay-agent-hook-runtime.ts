@@ -19,6 +19,7 @@ import {
   isPiCompatibleAgentType
 } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
+import { isOpenCode2LaunchCommand } from '../shared/opencode-launch-command'
 import { relayLogLine } from './relay-diagnostic-log'
 import { registerManagedHookInstaller } from './managed-hook-installer'
 
@@ -83,9 +84,14 @@ export class RelayAgentHookRuntime {
   ): Promise<Record<string, string>> {
     const env: Record<string, string> = {}
     const overlayId = context.paneKey ?? context.id
-    if (this.pluginOverlay.hasOpenCodeSource()) {
+    const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(context.env, context.command)
+    const opencodeAgent =
+      context.launchAgent === 'opencode2' || isOpenCode2LaunchCommand(launchCommandHint)
+        ? 'opencode2'
+        : 'opencode'
+    if (this.pluginOverlay.hasOpenCodeSource(opencodeAgent)) {
       const sourceDir = resolveOpenCodeSourceConfigDir(context.env, context.shell)
-      const dir = this.pluginOverlay.materializeOpenCode(overlayId, sourceDir)
+      const dir = this.pluginOverlay.materializeOpenCode(overlayId, sourceDir, opencodeAgent)
       if (dir) {
         env.OPENCODE_CONFIG_DIR = dir
         env.ORCA_OPENCODE_CONFIG_DIR = dir
@@ -94,7 +100,9 @@ export class RelayAgentHookRuntime {
         }
       }
     }
-    const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(context.env, context.command)
+    if (!this.pluginOverlay.hasPiSource()) {
+      return env
+    }
     const explicitKind = isPiCompatibleAgentType(context.launchAgent)
       ? context.launchAgent
       : context.launchAgent === undefined
@@ -103,12 +111,6 @@ export class RelayAgentHookRuntime {
     const kind = explicitKind ?? 'pi'
     const hasLaunchCommand =
       typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
-    if (kind === 'omp' || !hasLaunchCommand) {
-      env.ORCA_OMP_FRESH_CONFIG = this.pluginOverlay.materializeOmpFreshConfig()
-    }
-    if (!this.pluginOverlay.hasPiSource()) {
-      return env
-    }
     if (kind === 'pi') {
       const sourceDir = resolvePiSourceAgentDir(context.env, context.shell, 'pi')
       const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'pi', {
@@ -157,15 +159,18 @@ export class RelayAgentHookRuntime {
     registerManagedHookInstaller(this.dispatcher)
     this.dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
       const opencode = params.opencodePluginSource
+      const opencode2 = params.opencode2PluginSource
       const pi = params.piExtensionSource
       const omp = params.ompExtensionSource
       const primeAgent = params.primeAgentExtensionSource
       assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+      assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
       assertPluginSourceUnderByteCap('piExtensionSource', pi)
       assertPluginSourceUnderByteCap('ompExtensionSource', omp)
       assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
       this.pluginOverlay.setSources({
         opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+        opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
         piExtensionSource: typeof pi === 'string' ? pi : undefined,
         ompExtensionSource: typeof omp === 'string' ? omp : undefined,
         primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
@@ -173,6 +178,7 @@ export class RelayAgentHookRuntime {
       return {
         installed: {
           opencode: this.pluginOverlay.hasOpenCodeSource(),
+          opencode2: this.pluginOverlay.hasOpenCode2Source(),
           pi: this.pluginOverlay.hasPiSource('pi'),
           omp: this.pluginOverlay.hasPiSource('omp'),
           primeAgent: this.pluginOverlay.hasPiSource('prime-agent')

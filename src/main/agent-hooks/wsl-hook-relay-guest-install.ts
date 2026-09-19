@@ -26,6 +26,7 @@ type GuestInstallState = {
   guestHome?: string
   codexHomePath?: string
   opencodeOverlayDir?: string
+  opencode2OverlayDir?: string
   lastInstallAt?: number
 }
 
@@ -53,6 +54,7 @@ export async function runWslRelayGuestInstall(
     // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
     // present but plugin-less, and advertising it would hide the user's own config.
     state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
+    state.opencode2OverlayDir = overlay.kind === 'dir' ? overlay.dir2 : undefined
   }
 }
 

@@ -23,7 +23,8 @@ import {
   OpenCodeHookService,
   _internals,
   getOpenCodeFamilyPluginSource,
-  getOpenCodePluginSource
+  getOpenCodePluginSource,
+  getOpenCode2PluginSource
 } from './hook-service'
 
 beforeEach(() => {
@@ -47,11 +48,14 @@ describe('OpenCode hook plugin source', () => {
     expect(Object.keys(module).sort()).toEqual([
       'OpenCodeHookService',
       '_internals',
+      'getOpenCode2PluginSource',
       'getOpenCodeFamilyPluginSource',
       'getOpenCodePluginSource',
+      'openCode2HookService',
       'openCodeHookService'
     ])
     expect(Object.keys(module._internals).sort()).toEqual([
+      'getOpenCode2PluginSource',
       'getOpenCodePluginSource',
       'isUsableId',
       'toSafeDirName'
@@ -69,6 +73,17 @@ describe('OpenCode hook plugin source', () => {
     expect(familySource).toContain('http://127.0.0.1:${coords.port}/hook/mimo-code')
     expect(familySource).not.toContain('post("SessionStart", { sessionID: info.id })')
     expect(familySource).toContain('export const OrcaOpenCodeStatusPlugin')
+  })
+
+  it('generates the OpenCode 2 plugin with its dedicated hook and event family', () => {
+    const source = getOpenCode2PluginSource()
+    expect(source).toContain('/hook/opencode2')
+    expect(source).toContain('session.next.text.delta')
+    expect(source).toContain('permission.v2.asked')
+    expect(source).toContain('event.type === "session.next.prompt.admitted"')
+    expect(source).not.toContain(
+      'event.type === "session.next.prompted" || event.type === "session.next.prompt.admitted"'
+    )
   })
 
   it('keeps generated plugin bytes stable across the module split', () => {

@@ -150,6 +150,7 @@ describe('WslHookRelayManager', () => {
   const codexHome =
     '\\\\wsl.localhost\\Ubuntu\\home\\wsl-test-user\\.local\\share\\orca\\codex-runtime-home\\home'
   const opencodeOverlayDir = `${home}/.orca-relay/opencode-overlays/deadbeefcafe`
+  const opencode2OverlayDir = `${home}/.orca-relay/opencode2-overlays/deadbeefcafe`
   let harnesses: GuestHarness[]
 
   beforeEach(() => {
@@ -200,8 +201,8 @@ describe('WslHookRelayManager', () => {
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
       harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
-        installed: { opencode: true, pi: false, omp: false },
-        overlayDirs: { opencode: opencodeOverlayDir }
+      installed: { opencode: true, opencode2: true, pi: false, omp: false },
+      overlayDirs: { opencode: opencodeOverlayDir, opencode2: opencode2OverlayDir }
       }))
     }
     return harness.transport
@@ -320,6 +321,16 @@ describe('WslHookRelayManager', () => {
     const { manager } = createManager({})
     manager.ensureForDistro('Ubuntu', codexHome)
     await vi.waitFor(() => expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBe(opencodeOverlayDir))
+    manager.disposeAll()
+  })
+
+  it('keeps the OpenCode 2 guest overlay separate', async () => {
+    const { manager } = createManager({})
+    manager.ensureForDistro('Ubuntu', codexHome)
+    await vi.waitFor(() =>
+      expect(manager.getOpenCodeOverlayDir('Ubuntu', 'opencode2')).toBe(opencode2OverlayDir)
+    )
+    expect(manager.getOpenCodeOverlayDir('Ubuntu', 'opencode')).toBe(opencodeOverlayDir)
     manager.disposeAll()
   })
 

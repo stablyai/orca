@@ -73,10 +73,11 @@ export function normalizeProviderEvent(input: {
       payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'opencode':
+    case 'opencode2':
     case 'mimo-code': {
       if (extractedPrompt.source === 'role_user_text') {
         const messageId = readFirstString(hookPayload, ['messageID', 'messageId', 'message_id'])
-        const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
+        const prefix = source === 'mimo-code' ? 'mimo-code-message' : `${source}-message`
         promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
       }
       payload = normalizeOpenCodeFamilyEvent(

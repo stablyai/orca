@@ -9,7 +9,7 @@ import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared
 import { agentHookServer } from './server'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
-import { getOpenCodePluginSource } from '../opencode/hook-service'
+import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { PluginSources } from '../../relay/plugin-overlay'
@@ -119,7 +119,10 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     }),
   managedHookSettings: () => null,
   // Why: only OpenCode is in scope for WSL now; the payload shape stays identical to SSH so Pi/OMP are additive later.
-  pluginSources: () => ({ opencodePluginSource: getOpenCodePluginSource() }),
+  pluginSources: () => ({
+    opencodePluginSource: getOpenCodePluginSource(),
+    opencode2PluginSource: getOpenCode2PluginSource()
+  }),
   warn: (message) => console.warn(message),
   transientRetryDelayMs: WSL_RELAY_TRANSIENT_RETRY_DELAY_MS
 }

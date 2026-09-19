@@ -38,6 +38,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   hermes: 'pre_llm_call',
   devin: 'UserPromptSubmit',
   opencode: 'SessionStart',
+  opencode2: 'SessionStart',
   'mimo-code': null,
   'command-code': null
 }
