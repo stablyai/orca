@@ -34,6 +34,46 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 beforeEach(resetWorktreeSliceModuleMemory)
 
 describe('removeWorktree state cleanup', () => {
+  it('refuses cancellation cleanup after another instance replaces the worktree', async () => {
+    const store = createTestStore()
+    const replacement = makeWorktree({
+      id: 'repo1::/path/reused',
+      repoId: 'repo1',
+      instanceId: 'new-instance'
+    })
+    store.setState({ worktreesByRepo: { repo1: [replacement] } })
+    const result = await store
+      .getState()
+      .removeWorktree({ id: replacement.id, executionHostId: 'local' }, true, {
+        skipArchiveHooks: true,
+        expectedInstanceId: 'original-instance'
+      })
+    expect(result).toEqual({
+      ok: false,
+      error: 'Workspace instance changed before cancellation cleanup.'
+    })
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toEqual([replacement])
+    // The refused rollback must leave no trace on the live replacement's delete state.
+    expect(store.getState().deleteStateByWorktreeId).toEqual({})
+  })
+
+  it('does not read an absent row as a replacement during cancellation cleanup', async () => {
+    const store = createTestStore()
+    store.setState({ worktreesByRepo: { repo1: [] } })
+    const result = await store
+      .getState()
+      .removeWorktree({ id: 'repo1::/path/gone', executionHostId: 'local' }, true, {
+        skipArchiveHooks: true,
+        expectedInstanceId: 'original-instance'
+      })
+    // Absent locally is not proof the checkout is gone, so this must not report
+    // the benign "replaced" verdict that tells cleanup there is nothing to do.
+    if (!result.ok) {
+      expect(result.error).not.toBe('Workspace instance changed before cancellation cleanup.')
+    }
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()

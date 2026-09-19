@@ -1,3 +1,7 @@
+import {
+  cancelActiveWorktreeCreation,
+  completeActiveWorktreeCreation
+} from '@/lib/worktree-creation-attempt'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { AppState } from '../../../types'
@@ -61,13 +65,20 @@ export function createRemovePendingWorktreeCreation(
         ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
       }
     })
+    if (options?.cleanupVm === false) {
+      completeActiveWorktreeCreation(creationId)
+    }
     if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
       return
     }
+    const cleanupOwnedByAttempt = cancelActiveWorktreeCreation(creationId)
     if (removedEntry.phase === 'provisioning-vm' && window.api?.ephemeralVm?.cancelProvision) {
       void window.api.ephemeralVm
         .cancelProvision({ provisionId: creationId })
         .catch(() => undefined)
+    }
+    if (cleanupOwnedByAttempt) {
+      return
     }
     if (!removedEntry.request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
       return
