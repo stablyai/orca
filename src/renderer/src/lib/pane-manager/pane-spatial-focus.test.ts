@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   applySpatialPaneFocusKey,
+  claimSpatialPaneFocusOrWorktreeHistory,
   collectPaneRectsInTreeOrder,
   findAdjacentPaneId,
   findSpatiallyAdjacentPaneId,
@@ -254,6 +255,89 @@ describe('applySpatialPaneFocusKey', () => {
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(event.stopImmediatePropagation).not.toHaveBeenCalled()
     expect(setActivePane).not.toHaveBeenCalled()
+    root.remove()
+  })
+})
+
+describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
+  function splitPair(): {
+    root: HTMLDivElement
+    event: { preventDefault: ReturnType<typeof vi.fn>; stopImmediatePropagation: ReturnType<typeof vi.fn> }
+    manager: {
+      getPanes: () => { id: number; container: HTMLElement }[]
+      getActivePane: () => { id: number }
+      setActivePane: ReturnType<typeof vi.fn>
+    }
+  } {
+    const root = document.createElement('div')
+    root.className = 'pane-split is-vertical'
+    const paneA = document.createElement('div')
+    paneA.className = 'pane'
+    const divider = document.createElement('div')
+    divider.className = 'pane-divider is-vertical'
+    const paneB = document.createElement('div')
+    paneB.className = 'pane'
+    root.append(paneA, divider, paneB)
+    document.body.append(root)
+    paneA.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 100 }) as DOMRect
+    paneB.getBoundingClientRect = () => ({ x: 110, y: 0, width: 100, height: 100 }) as DOMRect
+    return {
+      root,
+      event: { preventDefault: vi.fn(), stopImmediatePropagation: vi.fn() },
+      manager: {
+        getPanes: () => [
+          { id: 1, container: paneA },
+          { id: 2, container: paneB }
+        ],
+        getActivePane: () => ({ id: 1 }),
+        setActivePane: vi.fn()
+      }
+    }
+  }
+
+  it('moves to a neighbor without navigating worktree history', () => {
+    const { root, event, manager } = splitPair()
+    const navigateWorktreeHistory = vi.fn()
+
+    expect(claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'right', navigateWorktreeHistory)).toBe(
+      true
+    )
+    expect(manager.setActivePane).toHaveBeenCalledWith(2, { focus: true })
+    expect(navigateWorktreeHistory).not.toHaveBeenCalled()
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    root.remove()
+  })
+
+  it('dispatches worktree history at a layout edge for left/right', () => {
+    const { root, event, manager } = splitPair()
+    const navigateWorktreeHistory = vi.fn()
+
+    expect(claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'left', navigateWorktreeHistory)).toBe(
+      true
+    )
+    expect(manager.setActivePane).not.toHaveBeenCalled()
+    expect(navigateWorktreeHistory).toHaveBeenCalledWith('back')
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1)
+
+    navigateWorktreeHistory.mockClear()
+    manager.getActivePane = () => ({ id: 2 })
+    expect(
+      claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'right', navigateWorktreeHistory)
+    ).toBe(true)
+    expect(navigateWorktreeHistory).toHaveBeenCalledWith('forward')
+    root.remove()
+  })
+
+  it('does not dispatch worktree history for up/down at an edge', () => {
+    const { root, event, manager } = splitPair()
+    const navigateWorktreeHistory = vi.fn()
+
+    expect(claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'up', navigateWorktreeHistory)).toBe(
+      false
+    )
+    expect(navigateWorktreeHistory).not.toHaveBeenCalled()
+    expect(event.preventDefault).not.toHaveBeenCalled()
     root.remove()
   })
 })
