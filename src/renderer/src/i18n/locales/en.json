@@ -295,6 +295,12 @@
     "taskUrl": {
       "loadingHint": "Loading {{value0}}…",
       "createHint": "Create worktree from {{value0}}"
+    },
+    "pin": {
+      "unpinTab": "Unpin tab",
+      "pinTab": "Pin tab",
+      "unpinWorktree": "Unpin worktree",
+      "pinWorktree": "Pin worktree"
     }
   },
   "auto": {

@@ -204,6 +204,27 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
   })
 })
 
+describe('searchWorkspaceTabs isPinned', () => {
+  it('propagates the tab pinned flag onto the result row', () => {
+    const entry = makeEntry({ id: 'pinned-tab' })
+    entry.tab.isPinned = true
+    const [result] = searchWorkspaceTabs([entry], '')
+    expect(result.isPinned).toBe(true)
+  })
+
+  it('defaults to unpinned when the tab carries no isPinned flag', () => {
+    const [result] = searchWorkspaceTabs([makeEntry({ id: 'plain-tab' })], '')
+    expect(result.isPinned).toBe(false)
+  })
+
+  it('propagates the pinned flag through the matched (non-empty query) path too', () => {
+    const entry = makeEntry({ id: 'pinned-tab' })
+    entry.tab.isPinned = true
+    const [result] = searchWorkspaceTabs([entry], 'tab')
+    expect(result.isPinned).toBe(true)
+  })
+})
+
 describe('searchWorkspaceTabs ranking', () => {
   it.each(['atl', 'atlas'])('keeps the Atlas reference fixture order for %s', (query) => {
     const now = 100 * 24 * 60 * 60 * 1000
