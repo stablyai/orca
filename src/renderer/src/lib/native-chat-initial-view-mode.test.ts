@@ -47,6 +47,17 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBeUndefined()
   })
 
+  it('keeps the terminal-only floating workspace out of chat view', () => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'codex',
+        workspaceKind: 'floating'
+      })
+    ).toBeUndefined()
+  })
+
   it.each(['gemini', 'opencode'] as const)(
     'keeps unsupported agent %s in terminal view',
     (agent) => {

@@ -8,6 +8,9 @@ const CENSUS_FILE = 'src/renderer/src/lib/agent-launch-routing-caller-census.tes
 
 const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
   'src/renderer/src/components/dashboard/launch-dashboard-agent.ts',
+  // Joined the funnel rather than appearing beside it: this button used to hand-roll the helper's
+  // terminal arm against `queueTabStartupCommand`. A line going up here is a converged bypass.
+  'src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx',
   'src/renderer/src/components/right-sidebar/runSourceControlAgentActionStart.ts',
   'src/renderer/src/components/right-sidebar/source-control/ai/recovery-launch.ts',
   'src/renderer/src/components/right-sidebar/source-control/sync/use-git-history-commit-actions.ts',

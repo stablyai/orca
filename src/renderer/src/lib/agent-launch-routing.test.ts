@@ -112,8 +112,8 @@ describe('resolveAgentLaunchRoute', () => {
   )
 
   it('keeps floating, WSL, and repair-required launches terminal-backed', () => {
-    expect(route({ workspaceKind: 'floating' })).toBe('legacy-native-chat')
-    expect(route({ agent: 'claude', workspaceKind: 'floating' })).toBe('legacy-native-chat')
+    expect(route({ workspaceKind: 'floating' })).toBe('terminal-tui')
+    expect(route({ agent: 'claude', workspaceKind: 'floating' })).toBe('terminal-tui')
     expect(
       route({
         projectRuntime: {

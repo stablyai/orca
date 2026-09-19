@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { WorkspaceLaunchKind } from '../../../../shared/workspace-launch-kind'
 import {
   decideInitialAgentTabViewMode,
   type NativeChatLaunchPromptDelivery
@@ -17,6 +18,7 @@ export type InitialNativeChatSessionOptionsArgs = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
+  workspaceKind?: WorkspaceLaunchKind
 }
 
 export function resolveInitialNativeChatSessionOptions(

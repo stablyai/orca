@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { agentTabsDefaultToNativeChat } from '../../../shared/structured-native-chat-launch-route'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceLaunchKind } from '../../../shared/workspace-launch-kind'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
 import {
   isNativeChatSupportedAgent,
@@ -14,10 +15,10 @@ export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-a
  * Decide the initial `viewMode` for a newly launched agent tab from the
  * opt-in `openAgentTabsInChatByDefault` setting.
  *
- * Returns `'chat'` only when the setting is explicitly on and the launched
- * agent has a native-chat renderer. A draft launch opens in chat only when its
- * unsent context can be mirrored into the composer — gated on the same
- * predicate as seeding so the view never opens empty beside a filled TUI input.
+ * Returns `'chat'` only when the target workspace can render it, the setting is explicitly on,
+ * and the launched agent has a native-chat renderer. A draft launch opens in chat only when its
+ * unsent context can be mirrored into the composer — gated on the same predicate as seeding so
+ * the view never opens empty beside a filled TUI input.
  */
 export function decideInitialAgentTabViewMode(args: {
   experimentalNativeChat?: boolean
@@ -27,7 +28,11 @@ export function decideInitialAgentTabViewMode(args: {
   /** The unsent launch context, when `promptDelivery` is `'draft'`. */
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
+  workspaceKind?: WorkspaceLaunchKind
 }): Tab['viewMode'] {
+  if (args.workspaceKind === 'floating') {
+    return undefined
+  }
   if (!agentTabsDefaultToNativeChat(args)) {
     return undefined
   }
@@ -59,6 +64,7 @@ export function initialAgentTabViewModeProps(
     promptDelivery?: NativeChatLaunchPromptDelivery
     launchDraftText?: string
     nativeChatTranscriptIsLocalReadable?: boolean
+    workspaceKind?: WorkspaceLaunchKind
   } = {}
 ): { viewMode?: Tab['viewMode'] } {
   const viewMode = decideInitialAgentTabViewMode({
@@ -67,7 +73,8 @@ export function initialAgentTabViewModeProps(
     agent: options.agent,
     promptDelivery: options.promptDelivery,
     launchDraftText: options.launchDraftText,
-    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable,
+    workspaceKind: options.workspaceKind
   })
   return viewMode ? { viewMode } : {}
 }

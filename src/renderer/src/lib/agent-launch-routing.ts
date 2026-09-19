@@ -57,7 +57,8 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     agent: input.agent,
     promptDelivery: input.promptDelivery,
     launchDraftText: input.launchText,
-    nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable,
+    workspaceKind: input.workspaceKind
   })
   return initialViewMode === 'chat' ? 'legacy-native-chat' : 'terminal-tui'
 }

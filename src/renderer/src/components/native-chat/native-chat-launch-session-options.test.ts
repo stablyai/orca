@@ -29,6 +29,15 @@ describe('resolveInitialNativeChatSessionOptions', () => {
     })
   })
 
+  it('omits native-chat preferences from the terminal-only floating workspace', () => {
+    expect(
+      resolveInitialNativeChatSessionOptions(settings, {
+        agent: 'codex',
+        workspaceKind: 'floating'
+      })
+    ).toBeUndefined()
+  })
+
   it('omits preferences when a draft forces the initial view back to terminal', () => {
     expect(
       resolveInitialNativeChatSessionOptions(settings, {
