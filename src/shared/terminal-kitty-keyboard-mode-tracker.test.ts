@@ -82,6 +82,14 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(7)
   })
 
+  it('leaves negotiated state unchanged for plain output chunks', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    tracker.scan('\x1b[>1u')
+    tracker.scan('shell output '.repeat(100))
+    expect(tracker.flags).toBe(1)
+    expect(tracker.snapshotFlags).toBe(1)
+  })
+
   it('caps the mirrored stack without losing the current flags', () => {
     const tracker = new TerminalKittyKeyboardModeTracker()
     for (let i = 0; i < 40; i++) {

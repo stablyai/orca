@@ -156,6 +156,9 @@ export class TerminalKittyKeyboardModeTracker {
   }
 
   private scanInternal(data: string, replay: boolean): void {
+    if (this.scanTail.length === 0 && !data.includes('\x1b') && !data.includes('\x9b')) {
+      return
+    }
     const input = this.scanTail + data
     this.scanTail = this.extractScanTail(input)
     // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
