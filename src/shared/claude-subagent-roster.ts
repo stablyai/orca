@@ -22,6 +22,12 @@ export type TrackedClaudeSubagent = {
   agentType?: string
   description?: string
   startedAt: number
+  /** When the row last entered 'working'. startedAt is first-spawn display
+   *  data and never refreshes, so a teammate cycling idle→working for hours
+   *  would read as permanently stale without this. Absent on restored rows,
+   *  which expire by startedAt — the right basis for a claim that may be a
+   *  phantom anyway. */
+  workingSince?: number
   /** 'idle' = teammate between mailbox turns: alive/resumable, row stays
    *  visible but must not gate the pane 'working'. */
   state: 'working' | 'idle'
@@ -60,6 +66,17 @@ export function isClaudeTeammateLifecycleId(id: string): boolean {
   return separator > 1 && id.startsWith('a') && /^[0-9a-f]+$/i.test(id.slice(separator + 1))
 }
 
+/** A 'working' row silent for this long is a lost child whose SubagentStop
+ *  never arrived, not a slow one — the same bound the awake lease uses
+ *  (AGENT_AWAKE_STATUS_STALE_AFTER_MS). It stops gating the pane but stays in
+ *  snapshots so a late Stop or complete inventory still retires it cleanly. */
+export const CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS = 2 * 60 * 60 * 1000
+
+/** Whether a working row is recent enough to count as live child evidence. */
+function claudeSubagentWorkingIsLive(tracked: TrackedClaudeSubagent, now: number): boolean {
+  return now - (tracked.workingSince ?? tracked.startedAt) < CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS
+}
+
 export function upsertWorkingClaudeSubagent(
   roster: ClaudeSubagentRoster,
   id: string,
@@ -72,6 +89,7 @@ export function upsertWorkingClaudeSubagent(
   const existing = roster.get(id)
   if (existing) {
     existing.state = 'working'
+    existing.workingSince = now
     existing.agentType = fields.agentType ?? existing.agentType
     existing.description = fields.description ?? existing.description
     // Why: live activity proves the lifecycle stream owns this id again;
@@ -84,13 +102,19 @@ export function upsertWorkingClaudeSubagent(
     return
   }
   // Why: beyond the wire cap extra rows would be invisible anyway; idle
-  // teammates are the only safe eviction — never displace a working child.
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS && !evictOldestIdleClaudeSubagent(roster)) {
+  // teammates evict first, then stale working rows — a stale row can't gate
+  // the pane, so it yields its slot before a live child is refused (#21327).
+  if (
+    roster.size >= AGENT_STATUS_MAX_SUBAGENTS &&
+    !evictOldestIdleClaudeSubagent(roster) &&
+    !evictOldestStaleWorkingClaudeSubagent(roster, now)
+  ) {
     return
   }
   roster.set(id, {
     state: 'working',
     startedAt: now,
+    workingSince: now,
     agentType: fields.agentType,
     description: fields.description
   })
@@ -103,6 +127,27 @@ function evictOldestIdleClaudeSubagent(roster: ClaudeSubagentRoster): boolean {
     if (tracked.state === 'idle' && tracked.startedAt < oldestStartedAt) {
       oldestId = id
       oldestStartedAt = tracked.startedAt
+    }
+  }
+  if (oldestId === null) {
+    return false
+  }
+  roster.delete(oldestId)
+  return true
+}
+
+/** Never displaces a live working child — only rows already too old to gate. */
+function evictOldestStaleWorkingClaudeSubagent(roster: ClaudeSubagentRoster, now: number): boolean {
+  let oldestId: string | null = null
+  let oldestBasis = Infinity
+  for (const [id, tracked] of roster) {
+    if (tracked.state !== 'working' || claudeSubagentWorkingIsLive(tracked, now)) {
+      continue
+    }
+    const basis = tracked.workingSince ?? tracked.startedAt
+    if (basis < oldestBasis) {
+      oldestId = id
+      oldestBasis = basis
     }
   }
   if (oldestId === null) {
@@ -181,6 +226,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
       // Why: a Stop can park the row before the lead inventory confirms the
       // same workflow lane is still running; the authoritative task wins.
       existing.state = 'working'
+      existing.workingSince = now
       existing.agentType = task.agentType ?? existing.agentType
       existing.description = task.description ?? existing.description
       existing.listedAsSubagentTask = true
@@ -304,13 +350,18 @@ export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: str
 }
 
 /** Only WORKING children gate the pane 'working' — idle teammates are
- *  alive-but-parked and must not pin a finished pane's spinner (#8825). */
-export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | undefined): boolean {
+ *  alive-but-parked and must not pin a finished pane's spinner (#8825) — and a
+ *  working row silent past CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS is a lost
+ *  child whose Stop never arrived, not a slow one (#21327). */
+export function claudeRosterHasWorkingSubagent(
+  roster: ClaudeSubagentRoster | undefined,
+  now: number
+): boolean {
   if (!roster) {
     return false
   }
   for (const tracked of roster.values()) {
-    if (tracked.state === 'working') {
+    if (tracked.state === 'working' && claudeSubagentWorkingIsLive(tracked, now)) {
       return true
     }
   }
@@ -319,13 +370,18 @@ export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | un
 
 /** A working child observed in this listener runtime, not merely restored from disk. */
 export function claudeRosterHasRuntimeWorkingSubagent(
-  roster: ClaudeSubagentRoster | undefined
+  roster: ClaudeSubagentRoster | undefined,
+  now: number
 ): boolean {
   if (!roster) {
     return false
   }
   for (const tracked of roster.values()) {
-    if (tracked.state === 'working' && tracked.restoredFromSnapshot !== true) {
+    if (
+      tracked.state === 'working' &&
+      tracked.restoredFromSnapshot !== true &&
+      claudeSubagentWorkingIsLive(tracked, now)
+    ) {
       return true
     }
   }

@@ -80,7 +80,7 @@ export function normalizeClaudeSubagentLifecycleEvent(
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
-  const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)
+  const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster, Date.now())
   const hasUnconfirmedChild = claudeRosterHasRestoredSnapshotSubagent(roster)
   const hasConfirmedDoneGate =
     cachedLead?.state === 'done' &&
@@ -132,10 +132,15 @@ export function buildClaudeCachedLeadStatusPayload(
     }
   }
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
-    ...resolveClaudePaneStatus(state, paneKey, {
-      state: leadState,
-      interrupted: lead?.interrupted
-    }),
+    ...resolveClaudePaneStatus(
+      state,
+      paneKey,
+      {
+        state: leadState,
+        interrupted: lead?.interrupted
+      },
+      Date.now()
+    ),
     updateToolSnapshot: false,
     interrupted: lead?.interrupted,
     // Why: draining the last background child is this turn's all-clear; the stamp lets a consumer pair it with the announcement already sent.

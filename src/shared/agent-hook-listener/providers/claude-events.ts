@@ -188,7 +188,7 @@ export function normalizeClaudeEvent(
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-      ...resolveClaudePaneStatus(state, paneKey, restored),
+      ...resolveClaudePaneStatus(state, paneKey, restored, Date.now()),
       updateToolSnapshot: true,
       interrupted: restored.interrupted,
       turnCompletedAt: restored.turnCompletedAt
@@ -199,7 +199,8 @@ export function normalizeClaudeEvent(
   if (eventAgentId && !isWaitingInducing) {
     return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
       workingChildEvidence: claudeRosterHasRuntimeWorkingSubagent(
-        state.claudeSubagentRosterByPaneKey.get(paneKey)
+        state.claudeSubagentRosterByPaneKey.get(paneKey),
+        Date.now()
       )
     })
   }
@@ -253,10 +254,15 @@ export function normalizeClaudeEvent(
     }
   }
 
-  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
-    state: reportedStateName,
-    interrupted
-  })
+  const resolvedStatus = resolveClaudePaneStatus(
+    state,
+    paneKey,
+    {
+      state: reportedStateName,
+      interrupted
+    },
+    Date.now()
+  )
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName
@@ -285,7 +291,7 @@ export function normalizeClaudeEvent(
     eventAgentId === undefined &&
     resolvedStatus.stateName === 'working' &&
     claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
-    !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
+    !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster, Date.now()) &&
     !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
     !state.claudeActiveSessionCronPaneKeys.has(paneKey)
   ) {

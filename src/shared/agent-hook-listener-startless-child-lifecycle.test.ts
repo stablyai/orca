@@ -263,7 +263,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-child-legacy-stop', LEAF_ID)
     seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
-      { id: 'a0000000000000012', state: 'working', startedAt: 100 }
+      { id: 'a0000000000000012', state: 'working', startedAt: Date.now() }
     ])
 
     const stopped = claudeEvent(state, paneKey, { hook_event_name: 'Stop' })
@@ -281,7 +281,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-child-truncated-inventory', LEAF_ID)
     seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
-      { id: 'arestored', state: 'working', startedAt: 100 }
+      { id: 'arestored', state: 'working', startedAt: Date.now() }
     ])
 
     const stopped = claudeEvent(state, paneKey, {
