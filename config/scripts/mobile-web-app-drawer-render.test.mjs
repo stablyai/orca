@@ -127,6 +127,9 @@ describeDrawer('the bottom drawer on the page', () => {
         // Motion on, stated rather than inherited. Under `prefers-reduced-motion: reduce`
         // Reanimated finishes `withTiming` in one frame, so a mapper that only ever runs once
         // still lands on the final translateY and this pin would pass on the broken build.
+        // Context-level and before navigation, both load-bearing: Reanimated latches the query
+        // into a module-level const at import (ReducedMotion.js:8-10), so an `emulateMedia` call
+        // after `goto` would leave the assertion below passing over an already-latched `true`.
         const page = await browser.newPage({
           viewport: VIEWPORT,
           reducedMotion: 'no-preference'
