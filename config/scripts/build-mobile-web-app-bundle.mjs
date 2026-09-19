@@ -463,9 +463,11 @@ export async function buildMobileWebAppBundle({
   // 404s. A <base> tag would be the other fix, but the shell's CSP sets base-uri 'none'.
   // type="module", because the entry is esm and reaches its routes through import(). Same-origin
   // module and chunk both load under the shell's script-src 'self'; the policy is unchanged.
+  // maximum-scale=1 stops the iOS focus auto-zoom on this app's 14px inputs, which the keyboard
+  // seam would otherwise read as a pinch and answer 0 for; iOS still allows a deliberate pinch.
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />\n' +
     `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')

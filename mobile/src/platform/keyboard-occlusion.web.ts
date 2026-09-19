@@ -20,7 +20,10 @@ import { useEffect, useState } from 'react'
  *
  * A pinch zoom is not a keyboard, and geometry alone cannot tell them apart: a 2x zoom shrinks the
  * visual viewport by exactly as much as a half-screen keyboard. So a `scale` other than 1 answers
- * 0. A keyboard raised while the page is zoomed is the case that costs, and it is the rare one.
+ * 0. That is only affordable because the page sets `maximum-scale=1`: iOS auto-zooms on focus of
+ * any input under 16px and this app's are 14px, so without it every focus would arrive zoomed and
+ * this guard would answer 0 for the one flow the seam exists for. With it, a scale other than 1 is
+ * a deliberate pinch, and a keyboard raised during one is the rare case that costs.
  * `scale` is read defensively because older WebViews do not implement it, and treating its absence
  * as zoomed would answer 0 for every keyboard on them.
  *
@@ -38,8 +41,9 @@ export function useKeyboardOcclusion(): number {
   const [keyboardLift, setKeyboardLift] = useState(0)
 
   useEffect(() => {
-    const viewport = window.visualViewport ?? undefined
-    if (viewport === undefined) {
+    // Both shapes: `null` is what the DOM declares, `undefined` is a WebView without the property.
+    const viewport = window.visualViewport
+    if (viewport === null || viewport === undefined) {
       return
     }
     const read = (): void => setKeyboardLift(occlusion(viewport))

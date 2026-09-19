@@ -150,6 +150,18 @@ describe('the keyboard the browser reports', () => {
     expect(lift).toBe(336)
   })
 
+  it('answers 0 for a keyboard raised while the page is zoomed, which is the accepted loss', async () => {
+    // The ruling's own case: scale 2 *and* a viewport shrunk well past what the zoom alone
+    // explains. Nothing in the geometry separates the keyboard's share from the zoom's, so the
+    // seam declines rather than guessing, and the page's `maximum-scale=1` is what keeps this off
+    // the ordinary focus path.
+    await mount()
+    await act(async () => viewport?.zoomTo(2))
+    await act(async () => viewport?.resizeTo(232))
+    expect(viewport?.scale).toBe(2)
+    expect(lift).toBe(0)
+  })
+
   it('takes a viewport that reports no scale as unzoomed', async () => {
     // `scale` is absent on older WebViews; treating that as zoomed would answer 0 for every
     // keyboard on them.
