@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
-import { selectAgentTabs } from './slices/tabs/agent-card-tabs'
+import { countHostedAgentTabs } from './slices/tabs/agent-cards-teardown'
 import type { AppState } from './types'
 
 /** Resolves the displayed tab-strip label for the destructive confirmation. */
@@ -41,7 +41,10 @@ export function resolveAgentsTabClose(
   if (tab?.contentType !== 'agents') {
     return null
   }
-  const agentCount = selectAgentTabs(tabs, state.tabsByWorktree?.[worktreeId] ?? []).length
+  // Why the shared hosted selector: overflow agents past the card cap stay ordinary tabs, so
+  // counting every agent would overstate the prompt and closing them would end sessions the
+  // user never saw inside this tab.
+  const agentCount = countHostedAgentTabs(state, worktreeId)
   // With no agents left the reconciler is already retiring the tab, so the ordinary path applies.
   return agentCount > 0 ? { agentCount } : null
 }

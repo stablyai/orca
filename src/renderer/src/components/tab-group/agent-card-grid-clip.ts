@@ -55,7 +55,7 @@ export function useAgentCardGridClip(
   /** Token that changes whenever the caller repositions the pane itself. */
   paneRevision?: unknown
 ): void {
-  const [retryTick, setRetryTick] = useState(0)
+  const [retriedForGroupId, setRetriedForGroupId] = useState<string | null>(null)
   useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay || !groupId || !isVisible) {
@@ -63,15 +63,15 @@ export function useAgentCardGridClip(
     }
     const anchor = findAgentCardGridAnchor(groupId)
     if (!anchor) {
-      // Why retry once: the card body and its grid can commit a frame after this pane becomes
+      // Why retry: the card body and its grid can commit a frame after this pane becomes
       // visible, and giving up permanently would leave it painting over the tab strip until the
-      // next visibility flip. Strictly once, or an ordinary split pane (which never has a grid)
-      // would re-arm every frame forever.
-      if (retryTick > 0) {
+      // next visibility flip. Once per placement, so an ordinary split pane (which never has a
+      // grid) cannot re-arm every frame, while a later move into a card still gets its retry.
+      if (retriedForGroupId === groupId) {
         return
       }
       const retry = requestAnimationFrame(() => {
-        setRetryTick(1)
+        setRetriedForGroupId(groupId)
       })
       return () => {
         cancelAnimationFrame(retry)
@@ -108,5 +108,5 @@ export function useAgentCardGridClip(
       resizeObserver.disconnect()
       overlay.style.clipPath = ''
     }
-  }, [groupId, isVisible, overlayRef, paneRevision, retryTick])
+  }, [groupId, isVisible, overlayRef, paneRevision, retriedForGroupId])
 }

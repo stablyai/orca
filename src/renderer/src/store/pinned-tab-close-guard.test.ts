@@ -257,11 +257,12 @@ describe('guardPinnedTabClose for the Agents tab', () => {
       unifiedTabsByWorktree: {
         [WT]: [
           makeTabDouble('agents-tab', 'agents', { entityId: 'agents:wt-1', isPinned: true }),
-          makeTabDouble('a0', 'agent-session'),
-          makeTabDouble('a1', 'agent-session')
+          makeTabDouble('a0', 'agent-session', { groupId: 'g-card-0' }),
+          makeTabDouble('a1', 'agent-session', { groupId: 'g-card-1' })
         ]
       },
       tabsByWorktree: { [WT]: [] },
+      agentCardGroupIdsByWorktree: { [WT]: ['g-card-0', 'g-card-1'] },
       settings: makeSettings(confirmClosePinnedTab),
       ...overrides
     })
@@ -325,6 +326,39 @@ describe('guardPinnedTabClose for the Agents tab', () => {
 
     // That preference answers "this tab is pinned", never "end these agent sessions".
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts only the agents the Agents tab hosts, not overflow agents left as tabs', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    getStateMock.mockReturnValue(
+      makeState({
+        requestPinnedTabCloseConfirm,
+        settings: makeSettings(true),
+        unifiedTabsByWorktree: {
+          [WT]: [
+            makeTabDouble('agents-tab', 'agents', { entityId: 'agents:wt-1', isPinned: true }),
+            makeTabDouble('a0', 'agent-session', { groupId: 'g-card-0' }),
+            makeTabDouble('a1', 'agent-session', { groupId: 'g-card-1' }),
+            // Past the card cap this agent stays an ordinary top-level tab.
+            makeTabDouble('overflow', 'agent-session', { groupId: 'g-home' })
+          ]
+        },
+        tabsByWorktree: { [WT]: [] },
+        agentCardGroupIdsByWorktree: { [WT]: ['g-card-0', 'g-card-1'] }
+      })
+    )
+
+    guardPinnedTabClose({
+      isPinned: true,
+      tabLabel: 'Agents',
+      onClose: vi.fn(),
+      worktreeId: WT,
+      tabId: 'agents-tab'
+    })
+
+    // Why this matters: the overflow agent is not inside the tab being closed, so neither the
+    // count nor the close may reach it.
+    expect(requestPinnedTabCloseConfirm.mock.calls[0][0].agentCount).toBe(2)
   })
 
   it('falls back to the ordinary pinned prompt once no agents are left', () => {

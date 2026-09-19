@@ -143,12 +143,11 @@ export function sameGroups(
   return left.every((group, index) => groupEqual(group, right[index]!))
 }
 
-export function toVisibleTabType(
-  tab: Tab,
-  previous?: WebSessionTabsSyncState['activeTabType']
-): WebSessionTabsSyncState['activeTabType'] {
+export function toVisibleTabType(tab: Tab): WebSessionTabsSyncState['activeTabType'] {
   if (tab.contentType === 'agents') {
-    return previous ?? 'terminal'
+    // The Agents tab has no visible-type of its own; the web client treats it as a terminal
+    // surface, and its only caller is reached after no prior surface survived the sync.
+    return 'terminal'
   }
   if (tab.contentType === 'agent-session') {
     return 'agent-session'
