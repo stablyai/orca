@@ -441,6 +441,8 @@
      descriptions read at the same weight. */
   color: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
   line-height: 1.45;
+  /* Why: grouped upload failures use one description with one item per line. */
+  white-space: pre-line;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {

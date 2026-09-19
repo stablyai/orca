@@ -20,6 +20,7 @@ import {
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { formatDropUploadFailureDescription } from '@/lib/drop-upload-failure-description'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -133,13 +134,17 @@ export function useGlobalFileDrop(): void {
                 { suppressActiveRuntimeFallback: runtimeEnvironmentId === null }
               )
             }
+            const failed = results.filter((result) => result.status === 'failed')
             if (results.some((result) => result.status !== 'imported')) {
-              toast.error(
-                translate(
-                  'auto.hooks.useGlobalFileDrop.d720e2f855',
-                  'Some dropped files could not be uploaded.'
-                )
+              const message = translate(
+                'auto.hooks.useGlobalFileDrop.d720e2f855',
+                'Some dropped files could not be uploaded.'
               )
+              if (failed.length > 0) {
+                toast.error(message, { description: formatDropUploadFailureDescription(failed) })
+              } else {
+                toast.error(message)
+              }
             }
           } catch {
             toast.error(

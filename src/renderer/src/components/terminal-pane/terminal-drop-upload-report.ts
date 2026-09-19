@@ -1,9 +1,13 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import {
+  formatDropUploadFailureDescription,
+  type DropUploadFailure
+} from '@/lib/drop-upload-failure-description'
 
 export function reportTerminalDropUploadSkipsAndFailures(
   skipped: { reason: string }[],
-  failed: { reason: string }[]
+  failed: DropUploadFailure[]
 ): void {
   if (skipped.length > 0) {
     // Why: symlink rejection is policy, not error. Mixed skips collapse to one
@@ -31,7 +35,8 @@ export function reportTerminalDropUploadSkipsAndFailures(
         'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
         'Failed to upload {{value0}} {{value1}}.',
         { value0: failed.length, value1: noun }
-      )
+      ),
+      { description: formatDropUploadFailureDescription(failed) }
     )
   }
 }

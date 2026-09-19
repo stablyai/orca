@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
 
 const mocks = vi.hoisted(() => ({
-  translate: vi.fn((key: string, fallback: string) => `${key}:${fallback}`)
+  translate: vi.fn((_key: string, fallback: string) => fallback)
 }))
 
 vi.mock('sonner', () => ({
@@ -38,16 +38,19 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     expect(toast.message).toHaveBeenCalledTimes(2)
   })
 
-  it('reports upload failures without leaking individual paths', () => {
-    reportTerminalDropUploadSkipsAndFailures([], [{ reason: '/secret/project/file.txt' }])
+  it('reports upload failures with filenames and reasons without leaking source paths', () => {
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ sourcePath: '/secret/project/file.txt', reason: 'File is too large' }]
+    )
 
     expect(mocks.translate).toHaveBeenCalledWith(
       'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
       'Failed to upload {{value0}} {{value1}}.',
       { value0: 1, value1: 'file' }
     )
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.not.stringContaining('/secret/project/file.txt')
-    )
+    expect(toast.error).toHaveBeenCalledWith(expect.any(String), {
+      description: 'file.txt: File is too large'
+    })
   })
 })
