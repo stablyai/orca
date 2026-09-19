@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createAutoSaveDelayDraftState,
   getDesktopPlatformFromUserAgent,
+  getAutoHideSingleTabStripSearchKeywords,
   getGeneralPaneSearchEntries,
   getTabOrderControlSearchKeywords,
   shouldCommitOpenInApplicationsDraft,
@@ -83,6 +84,18 @@ describe('GeneralPane navigation search keywords', () => {
     expect(keywords).not.toContain('pinned')
     expect(keywords).not.toContain('confirm')
     expect(keywords).not.toContain('close')
+  })
+
+  it('binds the auto-hide row to its own catalog entry, not a neighbour', () => {
+    // A rebase that inserted a sibling setting above this one silently rebound the row to the
+    // neighbour's keywords, so the row filtered itself out of a query that matched the section.
+    const keywords = getAutoHideSingleTabStripSearchKeywords()
+
+    expect(keywords).toContain('single')
+    expect(keywords).toContain('strip')
+    expect(keywords).toContain('auto hide')
+    expect(keywords).not.toContain('running')
+    expect(keywords).not.toContain('OMP')
   })
 })
 
