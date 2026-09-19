@@ -4,7 +4,7 @@ import type { RpcResponse } from '../transport/types'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
-import { isBridgeNativeMethod, type BridgeHostAuthoredReply } from './bridge/bridge-native-verbs'
+import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 

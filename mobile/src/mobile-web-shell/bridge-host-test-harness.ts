@@ -8,7 +8,11 @@ import {
 } from './bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
-import { BRIDGE_NATIVE_VERBS, clipboardWriteParamsSchema } from './bridge/bridge-native-verbs'
+import {
+  BRIDGE_NATIVE_VERBS,
+  clipboardWriteParamsSchema,
+  type BridgeNativeVerb
+} from './bridge/bridge-native-verbs'
 import {
   readBridgeHostMessage,
   type BridgeHostMessage,
