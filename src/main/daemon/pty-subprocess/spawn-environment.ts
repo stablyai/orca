@@ -3,6 +3,7 @@ import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
+import { repairDisabledSessionBusEnv } from '../../pty/dbus-session-bus-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/terminal-color-env'
 import { resolvePathEnvKey } from '../../pty/windows-environment-path'
@@ -164,6 +165,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   delete env.ELECTRON_RUN_AS_NODE
   removeAppImageRuntimeEnv(env)
+  repairDisabledSessionBusEnv(env)
   removeInheritedNoColor(env)
   env.LANG ??= 'en_US.UTF-8'
   return env

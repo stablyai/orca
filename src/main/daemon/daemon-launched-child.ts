@@ -1,5 +1,6 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { repairDisabledSessionBusEnv } from '../pty/dbus-session-bus-env'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import { daemonLogArgs } from './daemon-launch-paths'
@@ -34,6 +35,19 @@ type LaunchDaemonChildOptions = {
   pidPath: string
   launchNonce: string
   macosLoginSessionWatch: boolean
+}
+
+function daemonForkEnv(userDataPath: string): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    ELECTRON_RUN_AS_NODE: '1',
+    // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
+    ORCA_USER_DATA_PATH: userDataPath
+  }
+  // Why: headless serve inherits Chromium's disabled session-bus marker, which would
+  // otherwise flow into the daemon and every shell it spawns.
+  repairDisabledSessionBusEnv(env)
+  return env
 }
 
 export async function launchDaemonChild(
@@ -79,12 +93,7 @@ export async function launchDaemonChild(
       // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
       ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
       // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
-        ORCA_USER_DATA_PATH: userDataPath
-      }
+      env: daemonForkEnv(userDataPath)
     }
   )
 
