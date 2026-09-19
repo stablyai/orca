@@ -24,7 +24,7 @@ function previewRoute(absolutePath: string) {
   return { pathname: PREVIEW_PATH, params: mobileFilePreviewShellParams(route.params) }
 }
 
-describe('the route the files screens hand the shell', () => {
+describe('the route a switch hands the shell', () => {
   it('is one the page could actually be given', () => {
     const route = previewRoute('/logs/run.txt')
     expect(BridgeInitRouteSchema.safeParse(route).success).toBe(true)

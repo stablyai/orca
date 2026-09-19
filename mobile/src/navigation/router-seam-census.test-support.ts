@@ -21,7 +21,6 @@ export function productFiles(root: string): string[] {
   return readdirSync(root, { recursive: true, encoding: 'utf8' })
     .map((entry) => entry.replaceAll('\\', '/'))
     .filter((entry) => /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
-    .filter((entry) => !entry.endsWith('.test-support.ts'))
 }
 
 export function parse(root: string, name: string): ts.SourceFile {

@@ -51,7 +51,12 @@ export function reachesReactNativeLinking(source) {
 }
 
 /**
- * Every call site in a route's closure that opens a URL without the seam, as `path:line`.
+ * Every module in a route's closure that can reach a URL without the seam, as `path:line`.
+ *
+ * The line is where the name enters the module, not where it is used: a named import is reported
+ * once however many times the module calls `Linking.openURL`, because the import is what the rule
+ * is about and what has to go. Only a namespace import reports its uses, there being no single
+ * line to name — `import * as RN from 'react-native'` is not itself an offence.
  *
  * Here rather than beside each census: three copies of this walk existed before the source-control
  * routes wanted a fourth, and the seam's own module is where the rule they share belongs. A file
@@ -59,16 +64,23 @@ export function reachesReactNativeLinking(source) {
  * relative to `mobile/`, and one outside it is read by its caller, not guessed at here.
  */
 export function externalLinkOffenders(mobileDir, closure) {
-  return closure.local
-    .filter((file) => file !== EXTERNAL_LINK_SEAM)
-    .flatMap((file) => {
-      let source
-      try {
-        source = readFileSync(join(mobileDir, file), 'utf8')
-      } catch {
-        return []
-      }
-      return reactNativeLinkingSites(source).map((line) => `${file}:${line}`)
-    })
-    .sort()
+  return (
+    closure.local
+      .filter((file) => file !== EXTERNAL_LINK_SEAM)
+      .flatMap((file) => {
+        let source
+        try {
+          source = readFileSync(join(mobileDir, file), 'utf8')
+        } catch {
+          return []
+        }
+        return reactNativeLinkingSites(source).map((line) => [file, line])
+      })
+      // By path, then by line as a number: sorting the rendered strings puts `:10` before `:2`, and
+      // a red list is read top to bottom against the file it names.
+      .sort(([leftFile, leftLine], [rightFile, rightLine]) =>
+        leftFile === rightFile ? leftLine - rightLine : leftFile < rightFile ? -1 : 1
+      )
+      .map(([file, line]) => `${file}:${line}`)
+  )
 }

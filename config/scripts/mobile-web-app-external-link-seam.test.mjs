@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
@@ -56,5 +59,32 @@ describe('the offenders in a closure', () => {
 
   it('ignores a path this checkout cannot read rather than calling it an offender', () => {
     expect(externalLinkOffenders(mobileDir, { local: ['src/not/a/file.ts'] })).toEqual([])
+  })
+})
+
+describe('the order a red list is read in', () => {
+  // Against a written fixture rather than the tree: the ordering this pins needs one module with
+  // sites on lines 2 and 10, the pair that sorts one way as numbers and the other as text, and no
+  // module in the closure has to keep having one.
+  const root = mkdtempSync(join(tmpdir(), 'orca-seam-census-'))
+  const lines = ["import * as RN from 'react-native'", 'RN.Linking.openURL(a)']
+  while (lines.length < 9) {
+    lines.push('')
+  }
+  lines.push('RN.Linking.openURL(b)')
+  writeFileSync(join(root, 'wide.ts'), `${lines.join('\n')}\n`)
+  writeFileSync(join(root, 'above.ts'), "import { Linking } from 'react-native'\n")
+
+  it('puts line 2 before line 10, which sorting the rendered strings does not', () => {
+    // `:10` sorts before `:2` as text. The namespace import on line 1 is not itself an offence.
+    expect(externalLinkOffenders(root, { local: ['wide.ts'] })).toEqual(['wide.ts:2', 'wide.ts:10'])
+  })
+
+  it('orders by path first, so two modules never interleave', () => {
+    expect(externalLinkOffenders(root, { local: ['wide.ts', 'above.ts'] })).toEqual([
+      'above.ts:1',
+      'wide.ts:2',
+      'wide.ts:10'
+    ])
   })
 })

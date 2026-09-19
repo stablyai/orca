@@ -34,12 +34,14 @@ const read = (name: string): string => readFileSync(join(HOST_ROUTES, name), 'ut
 /**
  * The one switch that hands over a route the rule refuses, on purpose.
  *
- * `web.tsx` is the development-only way to open the page deliberately, and its fallback is a
- * redirect to the route the user came from rather than a native screen. A `..` host id there is
- * meant to reach the bridge and come back as the host's own verdict — a failure screen rather
- * than a redirect that looks like nothing happened — which
- * `mobile-web-shell-route.test.tsx` pins by name. Exempted here rather than silently unwalked, so
- * the exception is read when it changes.
+ * `web.tsx` is `__DEV__`-only and its fallback is `Redirect href="/h/<hostId>"`, not a native
+ * screen. Adopting the guard there sends a `..` deep link through that redirect to the host route,
+ * which this PR keeps native, so the developer lands on the host list with nothing said about why
+ * the page did not open. Handed over instead, the same id reaches the bridge and comes back as the
+ * host's own failure screen, which is the better verdict for a route whose whole purpose is to
+ * open the page deliberately; `mobile-web-shell-route.test.tsx` pins that by name.
+ *
+ * Exempted here rather than silently unwalked, so the exception is read when it changes.
  */
 const HANDS_OVER_UNJUDGED = ['web.tsx']
 
