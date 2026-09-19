@@ -105,7 +105,12 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.agentStatus',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
-      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
+      agentStatus: {
+        ...(await runtime.getTerminalAgentStatus(params.terminal)),
+        supportsGuardedAgentPrompt: await runtime.isTerminalRunningSettledPromptAgent(
+          params.terminal
+        )
+      }
     })
   }),
   defineMethod({

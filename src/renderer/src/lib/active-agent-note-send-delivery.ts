@@ -67,6 +67,36 @@ export async function sendPromptWithGuardedPasteAndEnter(
     }
   }
 
+  if (initialAgentStatus.supportsGuardedAgentPrompt) {
+    try {
+      const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
+        runtimeTarget,
+        'terminal.send',
+        {
+          terminal: terminalHandle,
+          text: prompt,
+          enter: true,
+          agentPrompt: true,
+          requireAgentStatus: 'sendable',
+          client: ORCA_DESKTOP_TERMINAL_CLIENT
+        },
+        { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
+      )
+      if (send.refusedReason === 'permission') {
+        return { status: 'permission', code: 'terminal-send-permission' }
+      }
+      if (send.refusedReason === 'no-agent') {
+        return { status: 'no-agent', code: 'no-agent' }
+      }
+      return send.accepted
+        ? { status: 'sent' }
+        : { status: 'partial-submit-failed', code: 'submit-send-refused' }
+    } catch {
+      // A failed observation may follow a paste; never replay it through the legacy path.
+      return { status: 'partial-submit-failed', code: 'submit-send-error' }
+    }
+  }
+
   const pastePayload = `${BRACKETED_PASTE_BEGIN}${sanitizeTerminalPasteText(prompt)}${BRACKETED_PASTE_END}`
   try {
     const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
