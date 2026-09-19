@@ -14,7 +14,15 @@ const APP_CONSUMERS_CONTRACT = new URL(
   import.meta.url
 )
 
-const APP_CONSUMER_FIELDS = ['authInstances', 'authPoolMax', 'apiInstances', 'apiPoolMax', 'maxConnections']
+const APP_CONSUMER_FIELDS = [
+  'authInstances',
+  'authPoolMax',
+  'authCandidateMinInstances',
+  'apiInstances',
+  'apiPoolMax',
+  'apiCandidateMinInstances',
+  'maxConnections'
+]
 
 export function readProductionCloudSqlAppConsumers(contract) {
   const parsed = contract ?? JSON.parse(readFileSync(APP_CONSUMERS_CONTRACT, 'utf8'))
@@ -60,10 +68,14 @@ export function calculateRelayCloudSqlConnectionBudget(inputs) {
   }
   const configuredMaximum = Object.values(consumers).reduce((total, value) => total + value, 0)
   const retainedDirectorRollback = inputs.directorInstances * inputs.directorPoolMax
+  // A candidate revision costs what it actually runs before the traffic flip, not its ceiling.
+  // Auth and API tag a --no-traffic candidate and never pass --min, so each holds its service
+  // floor. The director candidate inherits the Terraform-owned floor of directorInstances and
+  // genuinely dual-serves, so it keeps the full term.
   const candidateOverlap = {
     relayDirectorCandidate: retainedDirectorRollback * 2,
-    apiCandidate: retainedDirectorRollback + inputs.apiInstances * inputs.apiPoolMax,
-    authCandidate: retainedDirectorRollback + inputs.authInstances * inputs.authPoolMax,
+    apiCandidate: retainedDirectorRollback + inputs.apiCandidateMinInstances * inputs.apiPoolMax,
+    authCandidate: retainedDirectorRollback + inputs.authCandidateMinInstances * inputs.authPoolMax,
     relayCells: retainedDirectorRollback
   }
   const rolloutOverlap = Math.max(...Object.values(candidateOverlap))
@@ -79,7 +91,7 @@ export function calculateRelayCloudSqlConnectionBudget(inputs) {
       ...candidateOverlap,
       retainedDirectorRollback,
       maximum: rolloutOverlap,
-      reason: 'serialized rollouts include directly addressable tagged revisions outside service-level caps'
+      reason: 'a serialized rollout adds the retained director rollback plus the candidate revision at its pre-flip instance floor'
     },
     maintenanceAdminAllowance: inputs.maintenanceAdminAllowance,
     maintenanceAdminAllowanceReason: 'covers bounded work outside configured services',
@@ -133,8 +145,10 @@ export function readRelayCloudSqlConnectionBudget({
     ),
     authInstances: apps.authInstances,
     authPoolMax: apps.authPoolMax,
+    authCandidateMinInstances: apps.authCandidateMinInstances,
     apiInstances: apps.apiInstances,
     apiPoolMax: apps.apiPoolMax,
+    apiCandidateMinInstances: apps.apiCandidateMinInstances,
     maxConnections: maxConnections ?? apps.maxConnections,
     maintenanceAdminAllowance,
     explicitReserve

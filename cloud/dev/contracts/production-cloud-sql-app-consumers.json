@@ -1,15 +1,19 @@
 {
-  "comment": "Production Cloud SQL consumers owned by the private orca-cloud application tree (auth and API services). The relay ships without them, so the values the connection budget needs are published here; the private repository binds every field back to its source in its own CI.",
-  "authInstances": 2,
+  "comment": "Production Cloud SQL consumers owned by the private orca-cloud application tree (auth and API services). The relay ships without them, so the values the connection budget needs are published here; the private repository binds every field back to its source in its own CI. The mobile push gateway is deliberately absent: it runs on its own orca-cloud-push-db instance and consumes none of this ceiling.",
+  "authInstances": 20,
   "authPoolMax": 10,
+  "authCandidateMinInstances": 1,
   "apiInstances": 10,
   "apiPoolMax": 5,
+  "apiCandidateMinInstances": 1,
   "maxConnections": 500,
   "sources": {
-    "authInstances": "private apps tfvars: auth service max instances",
-    "authPoolMax": "private auth service: pg.Pool max",
-    "apiInstances": "private apps tfvars: API service max instances",
+    "authInstances": "private apps tfvars: auth_max_instances. Raised 2 -> 20 in orca-cloud PR #474 on 2026-09-04 after a cap of 2 starved desktop token refresh for hours. Production has used it: a 14-day Monitoring pull shows instance maxima of 21 (09-04), 16 (09-13) and 18 (09-17)",
+    "authPoolMax": "private auth service: pg.Pool max on the request pool. Per-database num_backends on those three days was 205, 165 and 114, i.e. 9.2-9.8 connections per instance, so the pool does fill",
+    "authCandidateMinInstances": "the auth deploy script builds its candidate with --tag and --no-traffic and never passes --min, so the candidate inherits auth_min_instances = 1 until the atomic --to-tags=<tag>=100 flip; observed 2026-09-17, four revisions with live instances totalled 165 backends",
+    "apiInstances": "private apps tfvars: max_instances for the artifact API service",
     "apiPoolMax": "private API service: pg.Pool max",
+    "apiCandidateMinInstances": "the API deploy script also uses --tag and --no-traffic with no --min, and the service min_instances is 0; the candidate is driven above zero only by the serial smoke run against its tag origin before promotion, so one instance is the honest pre-flip figure",
     "maxConnections": "measured SHOW max_connections = 500 on the live instance 2026-09-16; no max_connections flag is set, so this is the tier default and the previous 400 was an unverified assumption about it"
   }
 }
