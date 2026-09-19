@@ -7,6 +7,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { formatNonGitRepoRejection } from '../../shared/non-git-repo-rejection'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
@@ -54,7 +55,7 @@ export class RuntimeRepositoryRegistrationController {
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
         (await describeWslUncAccessDenied(path, store.getSettings())) ??
-          `Not a valid git repository: ${path}`
+          formatNonGitRepoRejection(path)
       )
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
