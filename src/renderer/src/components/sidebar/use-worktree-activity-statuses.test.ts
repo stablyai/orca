@@ -4,6 +4,7 @@ import { selectWorktreeActivityStatuses } from './use-worktree-activity-statuses
 
 type StatusState = Parameters<typeof selectWorktreeActivityStatuses>[0]
 
+/** Build the minimal store projection used by multi-worktree status tests. */
 function makeStatusState(): StatusState {
   return {
     tabsByWorktree: {},
@@ -13,6 +14,7 @@ function makeStatusState(): StatusState {
     terminalLayoutsByTabId: {},
     agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
+    acknowledgedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     retainedAgentsByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {}

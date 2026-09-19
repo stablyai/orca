@@ -71,6 +71,7 @@ let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockPromptCacheTimerEnabled = true
 let mockPromptCacheTtlMs = 60_000
 let mockCacheTimerByKey: Record<string, number | null> = {}
+let mockAcknowledgedAgentsByPaneKey: Record<string, number> = {}
 let capturedRowActivations: {
   paneKey: string
   onActivate: (tabId: string, paneKey: string) => void
@@ -85,7 +86,7 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
       agentActivityDisplayMode: mockAgentActivityDisplayMode,
-      acknowledgedAgentsByPaneKey: {},
+      acknowledgedAgentsByPaneKey: mockAcknowledgedAgentsByPaneKey,
       cacheTimerByKey: mockCacheTimerByKey,
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
@@ -133,6 +134,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     childAgentsExpanded,
     onToggleChildAgents,
     reserveDisclosureGutter,
+    displayState,
     onActivate
   }: {
     agent: { paneKey: string }
@@ -144,6 +146,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     childAgentsExpanded?: boolean
     onToggleChildAgents?: () => void
     reserveDisclosureGutter?: boolean
+    displayState?: string
     onActivate: (tabId: string, paneKey: string) => void
   }) => {
     capturedRowActivations.push({ paneKey: agent.paneKey, onActivate })
@@ -156,6 +159,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
         data-has-send-handler={typeof onSendTargetClick === 'function' ? 'true' : 'false'}
         data-pane-key={agent.paneKey}
         data-reserve-disclosure-gutter={reserveDisclosureGutter ? 'true' : 'false'}
+        data-display-state={displayState}
       >
         {agent.paneKey}
         {typeof childAgentCount === 'number' && childAgentCount > 0 ? (
@@ -194,6 +198,7 @@ describe('WorktreeCardAgents', () => {
     mockPromptCacheTimerEnabled = true
     mockPromptCacheTtlMs = 60_000
     mockCacheTimerByKey = {}
+    mockAcknowledgedAgentsByPaneKey = {}
     capturedRowActivations = []
   })
 
@@ -209,6 +214,38 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('<button')
     expect(markup).not.toContain('aria-expanded')
   }, 30_000)
+
+  it('passes acknowledgement-aware display state to full rows', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    mockAgents = [
+      mockAgent({ paneKey: 'tab-1:1', state: 'done', stateStartedAt: 1_000 }),
+      mockAgent({ paneKey: 'tab-1:2', state: 'done', stateStartedAt: 1_500 })
+    ]
+    mockAcknowledgedAgentsByPaneKey = {
+      'tab-1:1': 1_000,
+      'tab-1:2': 1_499
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toMatch(/data-pane-key="tab-1:1"[^>]*data-display-state="idle"/)
+    expect(markup).toMatch(/data-pane-key="tab-1:2"[^>]*data-display-state="done"/)
+  })
+
+  it('renders an acknowledged compact completion as idle', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({ paneKey: 'tab-1:1', state: 'done', stateStartedAt: 1_000, prompt: '' })
+    ]
+    mockAcknowledgedAgentsByPaneKey = { 'tab-1:1': 1_000 }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('aria-label="Idle"')
+    expect(markup).not.toContain('aria-label="Done"')
+  })
 
   it('uses compact mode when the display preference is absent', async () => {
     mockAgents = [mockAgent({ agentType: 'codex', startedAt: 1000, prompt: 'Run tests' })]
@@ -562,6 +599,24 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('First agent')
     expect(markup).not.toContain('Second agent')
     expect(markup).not.toContain('data-testid="agent-row"')
+  })
+
+  it('summarizes acknowledged compact completions as idle', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({ paneKey: 'tab-1:1', agentType: 'codex', state: 'done', stateStartedAt: 1_000 }),
+      mockAgent({ paneKey: 'tab-1:2', agentType: 'claude', state: 'done', stateStartedAt: 1_500 })
+    ]
+    mockAcknowledgedAgentsByPaneKey = {
+      'tab-1:1': 1_000,
+      'tab-1:2': 1_500
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('All 2 agents idle')
+    expect(markup).not.toContain('All 2 agents done')
   })
 
   it('does not show a prompt-cache timer on a collapsed compact summary row', async () => {

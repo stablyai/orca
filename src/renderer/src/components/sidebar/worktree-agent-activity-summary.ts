@@ -18,7 +18,9 @@ export type WorktreeAgentActivitySummary = {
   hasLiveMonitoring: boolean
   /** Fresh interrupted completion, kept separate from clean done outcomes. */
   hasInterrupted: boolean
+  /** At least one fresh completion has not yet been acknowledged. */
   hasLiveDone: boolean
+  /** At least one retained completion has not yet been acknowledged. */
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   /** Stale rows suppress generated permission labels while preserving native title fallback. */
@@ -48,6 +50,7 @@ export type AgentActivityInput = Pick<
   | 'retainedAgentsByPaneKey'
 > & {
   tabsByWorktree: AgentActivityTabsByWorktree
+  acknowledgedAgentsByPaneKey?: AppState['acknowledgedAgentsByPaneKey']
   runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
 }
 
@@ -56,6 +59,7 @@ type AgentActivityCache = {
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
+  acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'] | undefined
   runtimeAgentOrchestrationByPaneKey: AppState['runtimeAgentOrchestrationByPaneKey'] | undefined
   summaries: Map<string, WorktreeAgentActivitySummary>
 }
@@ -69,6 +73,7 @@ export function selectWorktreeAgentActivitySummary(
   return getWorktreeAgentActivitySummaries(state).get(worktreeId) ?? EMPTY_SUMMARY
 }
 
+/** Build or reuse acknowledgement-aware activity summaries for every worktree. */
 function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
@@ -79,6 +84,7 @@ function getWorktreeAgentActivitySummaries(
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
     agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
+    agentActivityCache.acknowledgedAgentsByPaneKey === state.acknowledgedAgentsByPaneKey &&
     agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
   ) {
     return agentActivityCache.summaries
@@ -95,7 +101,8 @@ function getWorktreeAgentActivitySummaries(
   }
 
   const summaries = new Map<string, WorktreeAgentActivitySummary>()
-  const summaryForWorktree = (worktreeId: string): WorktreeAgentActivitySummary => {
+  /** Return the mutable accumulator for one worktree, creating it on first use. */
+  function summaryForWorktree(worktreeId: string): WorktreeAgentActivitySummary {
     let summary = summaries.get(worktreeId)
     if (!summary) {
       summary = { ...EMPTY_SUMMARY }
@@ -134,7 +141,7 @@ function getWorktreeAgentActivitySummaries(
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
-    applyLiveAgentState(summary, entry)
+    applyLiveAgentState(summary, entry, state.acknowledgedAgentsByPaneKey?.[paneKey] ?? 0)
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -147,7 +154,10 @@ function getWorktreeAgentActivitySummaries(
 
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
-    summary.hasRetainedDone = true
+    const acknowledgedAt = state.acknowledgedAgentsByPaneKey?.[retained.entry.paneKey] ?? 0
+    if (acknowledgedAt < retained.entry.stateStartedAt) {
+      summary.hasRetainedDone = true
+    }
     const paneIdentity = parseAgentStatusPaneIdentity(retained.entry?.paneKey)
     if (paneIdentity) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
@@ -176,6 +186,7 @@ function getWorktreeAgentActivitySummaries(
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey,
     runtimeAgentOrchestrationByPaneKey,
     summaries
   }
@@ -227,9 +238,11 @@ function agentStatusPaneIdsByTabIdEqual(
   return true
 }
 
+/** Fold one fresh live entry into its worktree summary. */
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>
+  entry: Pick<AgentStatusEntry, 'state' | 'stateStartedAt' | 'workingMode' | 'interrupted'>,
+  acknowledgedAt: number
 ): void {
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
@@ -242,7 +255,7 @@ function applyLiveAgentState(
     } else {
       summary.hasLiveWorking = true
     }
-  } else if (entry.state === 'done') {
+  } else if (entry.state === 'done' && acknowledgedAt < entry.stateStartedAt) {
     summary.hasLiveDone = true
   }
 }

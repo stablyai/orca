@@ -28,6 +28,7 @@ import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
+import { worktreeAgentDisplayState } from './worktree-card-agent-display-state'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -73,6 +74,7 @@ type BodyProps = {
   className?: string
 }
 
+/** Render non-empty full or compact agent rows for a single worktree card. */
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
   agents,
@@ -104,6 +106,16 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     return out
   }, [agents, acknowledgedAgentTimes])
+  const displayStateByPaneKey = useMemo(
+    () =>
+      Object.fromEntries(
+        agents.map((agent) => [
+          agent.paneKey,
+          worktreeAgentDisplayState(agent, unvisitedByPaneKey[agent.paneKey] ?? false)
+        ])
+      ),
+    [agents, unvisitedByPaneKey]
+  )
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
@@ -272,6 +284,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           now={now}
           // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
+          displayState={displayStateByPaneKey[agent.paneKey]}
           // Why: inline rows are tight; 'md' reads as a second glyph users confuse with the adjacent identity icon, so use 'sm'.
           stateDotSize="sm"
           // Why: clicking the row jumps straight to the agent, so the expand chevron is redundant (keep the identity glyph).
@@ -341,6 +354,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           cacheTimerActive={cacheTimerActive}
+          displayState={displayStateByPaneKey[agent.paneKey]}
         />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>
@@ -393,6 +407,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
                 dispatchSuppressScrollAdjustment()
                 toggleCompactRootList()
               }}
+              displayStateByPaneKey={displayStateByPaneKey}
             />
             <CompactAgentExpansion expanded={compactRootListExpanded}>
               {rootAgents.map((rootAgent) =>
