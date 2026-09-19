@@ -32,7 +32,12 @@ describe('SSH claimed PTY incarnation validation', () => {
               generation: 'generation-invalid-incarnation',
               phase: 'live',
               ptyId: 'pty-invalid-incarnation',
-              surface
+              surface,
+              statusBinding: {
+                runId: 'run-invalid-incarnation',
+                attachment: { executionId: 'execution-invalid-incarnation' },
+                role: 'root'
+              }
             }
           }
         }

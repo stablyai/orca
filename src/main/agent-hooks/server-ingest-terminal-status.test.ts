@@ -27,6 +27,78 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  it('retains a verified subject while accepting a mixed-version event without a claim', () => {
+    const server = new AgentHookServer()
+    server.setExecutionBindingResolver((candidate) =>
+      candidate.reported.runId === 'run-a' && candidate.reported.executionId === 'execution-a'
+        ? { runId: 'run-a', attachment: { executionId: 'execution-a' }, role: 'root' }
+        : null
+    )
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        reportedExecutionBinding: { runId: 'run-a', executionId: 'execution-a' },
+        payload: { state: 'working', prompt: 'mixed versions', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    // An unresolvable claim costs the claim, never the state transition. The owner registry is
+    // empty for every pane this process did not launch — after a restart, once the PTY exits, and
+    // for every spooled event replayed from a window when Orca was down. Withholding the
+    // transition there would latch the row on whatever it last said, with nothing re-deriving it.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        reportedExecutionBinding: { runId: 'run-old', executionId: 'execution-old' },
+        payload: { state: 'done', prompt: 'stale owner', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    const afterStaleClaim = server.getStatusSnapshot()[0]
+    expect(afterStaleClaim).toMatchObject({ state: 'done', prompt: 'stale owner' })
+    expect(afterStaleClaim.runId).toBeUndefined()
+    expect(afterStaleClaim.executionId).toBeUndefined()
+
+    // Re-establish the verified subject so the mixed-version carry-forward below has one.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        reportedExecutionBinding: { runId: 'run-a', executionId: 'execution-a' },
+        payload: { state: 'working', prompt: 'mixed versions', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      runId: 'run-a',
+      executionId: 'execution-a',
+      state: 'working',
+      prompt: 'mixed versions'
+    })
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        worktreeId: 'repo::/tmp/worktree',
+        payload: { state: 'done', prompt: 'mixed versions', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      runId: 'run-a',
+      executionId: 'execution-a',
+      state: 'done'
+    })
+  })
+
   it('keeps hook monitoring mode across an equivalent OSC ping until a hook clears it', () => {
     const server = new AgentHookServer()
 

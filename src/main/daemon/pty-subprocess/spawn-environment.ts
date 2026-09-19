@@ -22,13 +22,8 @@ import {
 } from '../../../shared/windows-environment-expansion'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
+import { PANE_IDENTITY_ENV_KEYS } from '../../../shared/pane-identity-env'
 
-const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
-] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
 function composeGuardedDaemonGitConfigEnv(

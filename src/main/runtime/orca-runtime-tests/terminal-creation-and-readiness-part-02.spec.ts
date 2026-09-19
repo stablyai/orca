@@ -16,6 +16,7 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../orca-runtime-test-mocks.spec'
+import type { AgentStatusExecutionBinding } from '../../../shared/agent-status-run'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,
@@ -249,6 +250,7 @@ describe('OrcaRuntimeService', () => {
           phase: 'live'
           ptyId: string
           surface: AgentSessionSurfaceBinding
+          statusBinding: AgentStatusExecutionBinding
         }
       | undefined
     const spawn = vi.fn(async (options) => {
@@ -259,7 +261,12 @@ describe('OrcaRuntimeService', () => {
         generation: 'generation-1',
         phase: 'live',
         ptyId: 'pty-claimed',
-        surface: ensure!.surface
+        surface: ensure!.surface,
+        statusBinding: {
+          runId: 'run-claimed',
+          attachment: { executionId: 'execution-claimed' },
+          role: 'root'
+        }
       }
       return {
         id: 'pty-claimed',

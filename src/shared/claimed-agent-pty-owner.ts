@@ -8,16 +8,18 @@ import type {
 import {
   agentSessionClaimKey,
   agentSessionClaimsEqual,
-  agentSessionSurfacesEqual,
   buildClaimedAgentPtyOwnerIndex,
   cloneAgentSessionClaim,
   cloneAgentSessionOwner,
   cloneAgentSessionSurface,
+  countClaimedAgentPtyOwners,
   prepareRegisteredAgentSessionOwner,
   reconcileClaimedAgentPtyOwnerSnapshot,
   scopedAgentSessionClaimsEqual,
   type LiveAgentSessionOwner
 } from './claimed-agent-pty-owner-snapshot'
+import type { AgentStatusExecutionBinding } from './agent-status-execution-binding'
+import { promoteSpawnedAgentSessionOwner } from './claimed-agent-pty-owner-promotion'
 
 export { agentSessionOwnerBindingsEqual } from './claimed-agent-pty-owner-snapshot'
 
@@ -28,6 +30,7 @@ type ReservedOwner = {
   worktreeScopeDigest: string
   generation: string
   phase: 'reserved'
+  statusBinding: AgentStatusExecutionBinding
   promise: Promise<AgentSessionClaimedSpawnResult>
 }
 
@@ -54,9 +57,12 @@ export class ClaimedAgentPtyOwnerRegistry {
   async ensure(args: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
-    spawn: (reservation: { generation: string }) => Promise<{
+    spawn: (reservation: {
+      generation: string
+      statusBinding: AgentStatusExecutionBinding
+    }) => Promise<{
       ptyId: string
-      owner?: AgentSessionOwnerBinding
+      owner?: unknown
       disposition?: AgentSessionClaimedSpawnResult['disposition']
     }>
     isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
@@ -70,6 +76,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       throw new Error('agent_session_conflict')
     }
     const live = this.live.get(key)
+    let continuityOf: string | undefined
     if (live) {
       if (!agentSessionClaimsEqual(live.claim, requestedClaim)) {
         throw new Error('agent_session_ownership_unknown')
@@ -84,6 +91,14 @@ export class ClaimedAgentPtyOwnerRegistry {
         }
         return await this.ensure(args)
       }
+      // Why re-read: `live` was captured before the awaited liveness probe. A concurrent ensure
+      // can have promoted a replacement in between, and chaining from the stale run would fork
+      // the lineage instead of continuing it.
+      const supersededBy = this.live.get(key)
+      continuityOf =
+        supersededBy?.ptyId === live.ptyId && supersededBy.generation === live.generation
+          ? live.statusBinding?.runId
+          : supersededBy?.statusBinding?.runId
       this.release(live.ptyId, live.generation)
     }
 
@@ -98,6 +113,12 @@ export class ClaimedAgentPtyOwnerRegistry {
 
     this.assertCapacityForNewOwner()
     const generation = randomUUID()
+    const statusBinding: AgentStatusExecutionBinding = {
+      runId: randomUUID(),
+      attachment: { executionId: randomUUID() },
+      role: 'root',
+      ...(continuityOf ? { continuityOf } : {})
+    }
     let resolveReservation!: (result: AgentSessionClaimedSpawnResult) => void
     let rejectReservation!: (error: unknown) => void
     const promise = new Promise<AgentSessionClaimedSpawnResult>((resolve, reject) => {
@@ -112,41 +133,20 @@ export class ClaimedAgentPtyOwnerRegistry {
       worktreeScopeDigest: requestedClaim.worktreeScopeDigest,
       generation,
       phase: 'reserved',
+      statusBinding,
       promise
     })
 
     let promotedOwner: LiveOwner | null = null
     try {
-      const spawned = await args.spawn({ generation })
-      const owner: LiveOwner = spawned.owner
-        ? {
-            claim: cloneClaim(spawned.owner.claim),
-            generation: spawned.owner.generation,
-            phase: 'live',
-            ptyId: spawned.owner.ptyId,
-            surface: cloneSurface(spawned.owner.surface)
-          }
-        : {
-            claim: requestedClaim,
-            generation,
-            phase: 'live',
-            ptyId: spawned.ptyId,
-            surface: requestedSurface
-          }
-      if (
-        owner.ptyId !== spawned.ptyId ||
-        !scopedAgentSessionClaimsEqual(owner.claim, requestedClaim)
-      ) {
-        throw new Error('agent_session_ownership_unknown')
-      }
-      if (
-        spawned.disposition !== 'adopted' &&
-        !agentSessionSurfacesEqual(owner.surface, requestedSurface)
-      ) {
-        // Why: only an already-reconciled owner may override placement; a fresh
-        // owner returning another surface would let a lower layer forge authority.
-        throw new Error('agent_session_ownership_unknown')
-      }
+      const spawned = await args.spawn({ generation, statusBinding })
+      const owner = promoteSpawnedAgentSessionOwner({
+        spawned,
+        requestedClaim,
+        requestedSurface,
+        generation,
+        statusBinding
+      })
       const reservation = this.reserved.get(key)
       if (reservation?.generation !== generation) {
         throw new Error('agent_session_ownership_unknown')
@@ -303,10 +303,6 @@ export class ClaimedAgentPtyOwnerRegistry {
     live: ReadonlyMap<string, LiveOwner>,
     conflicts: ReadonlyMap<string, readonly LiveOwner[]>
   ): number {
-    let count = live.size
-    for (const owners of conflicts.values()) {
-      count += owners.length
-    }
-    return count
+    return countClaimedAgentPtyOwners(live, conflicts)
   }
 }

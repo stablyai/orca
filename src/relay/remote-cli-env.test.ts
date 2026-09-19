@@ -9,6 +9,8 @@ describe('pickRemoteCliEnv', () => {
         ORCA_WORKTREE_ID: 'repo::remote',
         ORCA_PANE_KEY: 'pane-1',
         ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
+        ORCA_AGENT_STATUS_RUN_ID: 'run-1',
+        ORCA_AGENT_STATUS_EXECUTION_ID: 'exec-1',
         ORCA_WORKSPACE_ID: 'workspace-1',
         ORCA_USER_DATA_PATH: '/tmp/orca',
         PATH: '/usr/bin',
@@ -19,6 +21,8 @@ describe('pickRemoteCliEnv', () => {
       ORCA_WORKTREE_ID: 'repo::remote',
       ORCA_PANE_KEY: 'pane-1',
       ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      ORCA_AGENT_STATUS_RUN_ID: 'run-1',
+      ORCA_AGENT_STATUS_EXECUTION_ID: 'exec-1',
       ORCA_WORKSPACE_ID: 'workspace-1',
       ORCA_USER_DATA_PATH: '/tmp/orca',
       PATH: '/usr/bin'

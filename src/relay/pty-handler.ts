@@ -93,6 +93,7 @@ import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
+import { agentStatusExecutionBindingEnv } from '../shared/agent-status-execution-binding'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
 import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
@@ -1760,9 +1761,12 @@ export class PtyHandler {
       const result = await this.agentSessionOwners.ensure({
         claim,
         surface,
-        spawn: async ({ generation }) => {
+        spawn: async ({ generation, statusBinding }) => {
           const created = await this.spawnAfterAdmission(
-            params,
+            {
+              ...params,
+              env: { ...env, ...agentStatusExecutionBindingEnv(statusBinding) }
+            },
             context,
             markPhysicalSpawnCommitted
           )
@@ -1774,7 +1778,8 @@ export class PtyHandler {
                 generation,
                 phase: 'live',
                 ptyId: created.id,
-                surface
+                surface,
+                statusBinding
               }
             ]
           }

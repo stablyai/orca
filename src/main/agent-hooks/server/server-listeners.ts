@@ -18,6 +18,7 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
+import type { AgentStatusExecutionBindingResolver } from '../agent-status-execution-binding-resolver'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 
@@ -25,6 +26,10 @@ import { structuredStatusLegacyEvent } from './server-structured-status-row'
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  setExecutionBindingResolver(resolver: AgentStatusExecutionBindingResolver | null): void {
+    this.executionBindingResolver = resolver
+  }
+
   protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {

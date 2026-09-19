@@ -189,7 +189,7 @@ describe('PtyHandler', () => {
   it('replays an operation-owned spawn after its first response becomes stale', async () => {
     const operationId = 'a'.repeat(43)
 
-    await dispatcher.callRequest(
+    const first = await dispatcher.callRequest(
       'pty.spawn',
       { cols: 80, rows: 24, agentSessionCreateOperationId: operationId },
       { isStale: () => mockPtySpawn.mock.calls.length > 0 }
@@ -205,6 +205,10 @@ describe('PtyHandler', () => {
       incarnationId: expect.any(String),
       shellReadyArmed: false
     })
+    // Create-operation replay proves one PTY, not an attributable agent run;
+    // membership must wait for an owner binding instead of seeding this pane.
+    expect(first).not.toHaveProperty('agentSessionEnsure')
+    expect(replayed).not.toHaveProperty('agentSessionEnsure')
     expect(mockPtySpawn).toHaveBeenCalledOnce()
     expect(mockPtyInstance.kill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)

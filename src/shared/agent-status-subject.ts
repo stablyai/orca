@@ -1,5 +1,5 @@
 import { isAgentSessionId, type AgentSessionExecutionLocation } from './agent-session-record'
-import { isAgentStatusRunId, type AgentStatusRunId } from './agent-status-run'
+import { isAgentStatusRunId, type AgentStatusRunId } from './agent-status-execution-binding'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,

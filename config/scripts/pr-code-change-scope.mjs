@@ -140,6 +140,11 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-wire',
   'src/shared/agent-session-mutation-envelope',
   'src/shared/agent-session-journal-',
+  // The claimed execution owner and its run binding cross the daemon, SSH and relay
+  // boundaries, and both protocol constants that gate them live in these files.
+  'src/shared/agent-session-host-authority',
+  'src/shared/agent-status-execution-binding',
+  'src/main/daemon/daemon-protocol-version',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',

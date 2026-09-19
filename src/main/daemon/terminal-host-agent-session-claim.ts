@@ -1,6 +1,7 @@
 import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+import { agentStatusExecutionBindingEnv } from '../../shared/agent-status-execution-binding'
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   agentSessionGeneration?: string
@@ -22,10 +23,11 @@ export async function createOrAttachClaimedAgentSession(args: {
   const ensured = await args.owners.ensure({
     claim: ensureRequest.claim,
     surface: ensureRequest.surface,
-    spawn: async ({ generation }) => {
+    spawn: async ({ generation, statusBinding }) => {
       created = await args.createOrAttach({
         ...args.options,
-        agentSessionGeneration: generation
+        agentSessionGeneration: generation,
+        env: { ...args.options.env, ...agentStatusExecutionBindingEnv(statusBinding) }
       })
       return { ptyId: args.options.sessionId }
     },

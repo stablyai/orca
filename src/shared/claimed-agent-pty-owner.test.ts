@@ -3,10 +3,12 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from './agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from './agent-status-run'
 import {
   ClaimedAgentPtyOwnerRegistry,
   MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
 } from './claimed-agent-pty-owner'
+import type { LiveAgentSessionOwner } from './claimed-agent-pty-owner-snapshot'
 
 function claim(
   identityDigest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -28,6 +30,14 @@ const surface: AgentSessionSurfaceBinding = {
   terminalHandle: 'term_handle'
 }
 
+function statusBinding(suffix: string): AgentStatusExecutionBinding {
+  return {
+    runId: `run-${suffix}`,
+    attachment: { executionId: `execution-${suffix}` },
+    role: 'root'
+  }
+}
+
 describe('ClaimedAgentPtyOwnerRegistry', () => {
   it('joins concurrent exact ensures and spawns once', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
@@ -46,6 +56,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     await expect(first).resolves.toMatchObject({ disposition: 'created' })
     await expect(second).resolves.toMatchObject({ disposition: 'adopted' })
     expect(spawn).toHaveBeenCalledTimes(1)
+    expect((await first).owner.statusBinding).toEqual((await second).owner.statusBinding)
   })
 
   it('conflicts when the same identity is claimed by another worktree', async () => {
@@ -103,25 +114,134 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('does not retain an owner when the spawned PTY already exited', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+    let failedBinding: AgentStatusExecutionBinding | undefined
 
     await expect(
       registry.ensure({
         claim: claim(),
         surface,
-        spawn: async () => ({ ptyId: 'pty-dead' }),
+        spawn: async ({ statusBinding: binding }) => {
+          failedBinding = binding
+          return { ptyId: 'pty-dead' }
+        },
         isLive: () => false
       })
     ).rejects.toThrow('agent_session_exited_during_start')
 
     expect(registry.find(claim())).toBeNull()
-    await expect(
-      registry.ensure({
-        claim: claim(),
-        surface,
-        spawn: async () => ({ ptyId: 'pty-retry' }),
-        isLive: () => true
+    const retried = await registry.ensure({
+      claim: claim(),
+      surface,
+      spawn: async () => ({ ptyId: 'pty-retry' }),
+      isLive: () => true
+    })
+    expect(retried.owner.ptyId).toBe('pty-retry')
+    expect(retried.owner.statusBinding).not.toEqual(failedBinding)
+  })
+
+  it('mints a replacement binding with explicit run continuity', async () => {
+    const registry = new ClaimedAgentPtyOwnerRegistry()
+    const first = await registry.ensure({
+      claim: claim(),
+      surface,
+      spawn: async () => ({ ptyId: 'pty-old' })
+    })
+
+    const replacement = await registry.ensure({
+      claim: claim(),
+      surface,
+      spawn: async () => ({ ptyId: 'pty-new' }),
+      isLive: (owner) => owner.ptyId !== 'pty-old'
+    })
+
+    const firstBinding = first.owner.statusBinding
+    const replacementBinding = replacement.owner.statusBinding
+    expect(firstBinding).toBeDefined()
+    expect(replacementBinding).toBeDefined()
+    expect(replacementBinding?.runId).not.toBe(firstBinding?.runId)
+    expect(replacementBinding?.attachment.executionId).not.toBe(
+      firstBinding?.attachment.executionId
+    )
+    expect(replacementBinding?.continuityOf).toBe(firstBinding?.runId)
+  })
+
+  it('uses the lower execution host binding when it adopts an owner', async () => {
+    const registry = new ClaimedAgentPtyOwnerRegistry()
+    const canonicalBinding = statusBinding('host')
+    let provisionalBinding: AgentStatusExecutionBinding | undefined
+
+    const result = await registry.ensure({
+      claim: claim(),
+      surface,
+      spawn: async ({ statusBinding: binding }) => {
+        provisionalBinding = binding
+        return {
+          ptyId: 'pty-host',
+          disposition: 'adopted',
+          owner: {
+            claim: claim(),
+            generation: 'generation-host',
+            phase: 'live',
+            ptyId: 'pty-host',
+            surface,
+            statusBinding: canonicalBinding
+          }
+        }
+      }
+    })
+
+    expect(result.owner.statusBinding).toEqual(canonicalBinding)
+    expect(result.owner.statusBinding).not.toEqual(provisionalBinding)
+  })
+
+  it('keeps its own binding when a lower host returns an owner without one', async () => {
+    const registry = new ClaimedAgentPtyOwnerRegistry()
+
+    // A host that predates run identity is still a valid owner. For a fresh create this host
+    // already stamped its binding into the spawn env, so that binding stays authoritative.
+    const created = await registry.ensure({
+      claim: claim(),
+      surface,
+      spawn: async () => ({
+        ptyId: 'pty-unbound',
+        owner: {
+          claim: claim(),
+          generation: 'generation-unbound',
+          phase: 'live',
+          ptyId: 'pty-unbound',
+          surface
+        }
       })
-    ).resolves.toMatchObject({ owner: { ptyId: 'pty-retry' } })
+    })
+
+    expect(created.disposition).toBe('created')
+    expect(created.owner.statusBinding?.runId).toEqual(expect.any(String))
+    expect(registry.find(claim())).not.toBeNull()
+  })
+
+  it('leaves identity absent when it adopts a lower owner that has none', async () => {
+    const registry = new ClaimedAgentPtyOwnerRegistry()
+
+    // Adoption must report what the lower host actually holds. Inventing a binding here would
+    // name a run whose process never received it, which reads as identity the host cannot prove.
+    const adopted = await registry.ensure({
+      claim: claim(),
+      surface,
+      spawn: async () => ({
+        ptyId: 'pty-adopted',
+        disposition: 'adopted',
+        owner: {
+          claim: claim(),
+          generation: 'generation-adopted',
+          phase: 'live',
+          ptyId: 'pty-adopted',
+          surface
+        }
+      })
+    })
+
+    expect(adopted.disposition).toBe('adopted')
+    expect(adopted.owner.statusBinding).toBeUndefined()
   })
 
   it('does not let a late liveness result adopt a released generation', async () => {
@@ -160,7 +280,8 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       generation: 'generation-1',
       phase: 'live' as const,
       ptyId: 'pty-1',
-      surface
+      surface,
+      statusBinding: statusBinding('one')
     }
     registry.register(owner)
 
@@ -168,6 +289,9 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     expect(() => registry.register({ ...owner, generation: 'generation-2' })).toThrow(
       'agent_session_conflict'
     )
+    expect(() =>
+      registry.register({ ...owner, statusBinding: statusBinding('different') })
+    ).toThrow('agent_session_ownership_unknown')
   })
 
   it('retains only allowlisted owner fields', () => {
@@ -178,6 +302,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       phase: 'live' as const,
       ptyId: 'pty-1',
       surface: { ...surface, unknownPayload: 'surface payload' },
+      statusBinding: { ...statusBinding('one'), unknownPayload: 'status payload' },
       unknownPayload: 'owner payload'
     }
 
@@ -189,7 +314,8 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
         generation: 'generation-1',
         phase: 'live',
         ptyId: 'pty-1',
-        surface
+        surface,
+        statusBinding: statusBinding('one')
       }
     ])
   })
@@ -201,7 +327,8 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       generation: `generation-${index}`,
       phase: 'live' as const,
       ptyId: `pty-${index}`,
-      surface
+      surface,
+      statusBinding: statusBinding(String(index))
     }))
     registry.reconcileAuthoritative(owners)
 
@@ -211,7 +338,8 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
         generation: 'one-more-generation',
         phase: 'live',
         ptyId: 'one-more-pty',
-        surface
+        surface,
+        statusBinding: statusBinding('one-more')
       })
     ).toThrow('execution_owner_unavailable')
     expect(registry.list()).toHaveLength(MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES)
@@ -224,7 +352,8 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       generation: 'generation-a',
       phase: 'live' as const,
       ptyId: 'pty-a',
-      surface
+      surface,
+      statusBinding: statusBinding('a')
     }
     const ownerB = {
       ...ownerA,
@@ -255,7 +384,8 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       generation: 'generation-old',
       phase: 'live' as const,
       ptyId: 'pty-reused',
-      surface
+      surface,
+      statusBinding: statusBinding('old')
     }
     registry.reconcileAuthoritative([recovered])
     registry.reconcileAuthoritative([])
@@ -275,12 +405,13 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       generation: 'generation-old',
       phase: 'live' as const,
       ptyId: 'pty-reused',
-      surface
+      surface,
+      statusBinding: statusBinding('old')
     }
     const newOwner = { ...oldOwner, generation: 'generation-new' }
     registry.reconcileAuthoritative([oldOwner])
     registry.reconcileAuthoritative([newOwner])
-    const isLive = vi.fn((owner: typeof newOwner) => owner.generation === 'generation-new')
+    const isLive = vi.fn((owner: LiveAgentSessionOwner) => owner.generation === 'generation-new')
 
     await expect(
       registry.ensure({

@@ -45,6 +45,14 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // A terminal handle belongs to the runtime that issued it; a hydrated one could only
         // rejoin a row to somebody else's terminal.
         terminalHandle: _terminalHandle,
+        // Run identity is issued by the owner registry, which is empty for every pane this
+        // process did not launch. A hydrated copy would read as host-verified with nothing left
+        // to verify it against, so it is re-earned from a live owner or not held at all.
+        runId: _runId,
+        executionId: _executionId,
+        providerAlias: _providerAlias,
+        // An emitter's untrusted claim is evidence for one ingest, never state.
+        reportedExecutionBinding: _reportedExecutionBinding,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

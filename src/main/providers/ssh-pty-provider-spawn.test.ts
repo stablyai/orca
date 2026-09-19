@@ -55,7 +55,12 @@ describe('spawn', () => {
               generation: 'generation-1',
               phase: 'live',
               ptyId: 'pty-1',
-              surface
+              surface,
+              statusBinding: {
+                runId: 'run-1',
+                attachment: { executionId: 'execution-1' },
+                role: 'root'
+              }
             }
           }
         }
@@ -141,7 +146,12 @@ describe('spawn', () => {
               generation: 'generation-malformed',
               phase: 'live',
               ptyId: 'pty-malformed',
-              surface
+              surface,
+              statusBinding: {
+                runId: 'run-malformed',
+                attachment: { executionId: 'execution-malformed' },
+                role: 'root'
+              }
             })
           }
         }
@@ -176,7 +186,12 @@ describe('spawn', () => {
               generation: 'generation-canonical',
               phase: 'live',
               ptyId: 'pty-canonical',
-              surface
+              surface,
+              statusBinding: {
+                runId: 'run-canonical',
+                attachment: { executionId: 'execution-canonical' },
+                role: 'root'
+              }
             }
           }
         }
@@ -208,7 +223,12 @@ describe('spawn', () => {
               generation: 'generation-malformed',
               phase: 'live',
               ptyId: 'other-pty',
-              surface
+              surface,
+              statusBinding: {
+                runId: 'run-malformed',
+                attachment: { executionId: 'execution-malformed' },
+                role: 'root'
+              }
             }
           }
         }

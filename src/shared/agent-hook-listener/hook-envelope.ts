@@ -6,6 +6,7 @@ import { parsePaneKey } from '../stable-pane-id'
 import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import { parseAgentHookJson } from './request-body'
+import { parseAgentStatusReportedExecutionBinding } from '../agent-status-execution-binding'
 
 function readHookHeader(headers: IncomingHttpHeaders, name: string): string | undefined {
   const value = headers[name]
@@ -41,6 +42,8 @@ type HookMetadata = {
   worktreeId?: string
   env?: string
   version?: string
+  runId?: string
+  executionId?: string
 }
 
 function readPackedHookMetadata(
@@ -57,11 +60,11 @@ function readPackedHookMetadata(
   }
   // POSIX command substitution strips NUL bytes, so use the shell-safe unit separator.
   const fields = decoded.split('\x1f')
-  if (fields.length !== 6 || !fields[0]) {
+  if ((fields.length !== 6 && fields.length !== 8) || !fields[0]) {
     return null
   }
-  const [paneKey, tabId, launchToken, worktreeId, env, version] = fields
-  return { paneKey, tabId, launchToken, worktreeId, env, version }
+  const [paneKey, tabId, launchToken, worktreeId, env, version, runId, executionId] = fields
+  return { paneKey, tabId, launchToken, worktreeId, env, version, runId, executionId }
 }
 
 /** Rebuilds the canonical envelope for POSIX hooks that carry raw JSON bodies. */
@@ -70,14 +73,29 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
     readHookHeader(headers, 'x-orca-agent-hook-meta-encoding')?.trim().toLowerCase() === 'base64'
       ? 'base64'
       : undefined
-  const metadata = readPackedHookMetadata(headers, metadataEncoding) ?? {
-    paneKey: readHookMetadataHeader(headers, 'x-orca-pane-key', metadataEncoding) ?? '',
-    tabId: readHookMetadataHeader(headers, 'x-orca-tab-id', metadataEncoding),
-    launchToken: readHookMetadataHeader(headers, 'x-orca-launch-token', metadataEncoding),
-    worktreeId: readHookMetadataHeader(headers, 'x-orca-worktree-id', metadataEncoding),
-    env: readHookMetadataHeader(headers, 'x-orca-agent-hook-env', metadataEncoding),
-    version: readHookMetadataHeader(headers, 'x-orca-agent-hook-version', metadataEncoding)
-  }
+  const packedMetadata = readPackedHookMetadata(headers, metadataEncoding)
+  const runId = readHookMetadataHeader(headers, 'x-orca-agent-status-run-id', metadataEncoding)
+  const executionId = readHookMetadataHeader(
+    headers,
+    'x-orca-agent-status-execution-id',
+    metadataEncoding
+  )
+  const metadata = packedMetadata
+    ? {
+        ...packedMetadata,
+        runId: runId ?? packedMetadata.runId,
+        executionId: executionId ?? packedMetadata.executionId
+      }
+    : {
+        paneKey: readHookMetadataHeader(headers, 'x-orca-pane-key', metadataEncoding) ?? '',
+        tabId: readHookMetadataHeader(headers, 'x-orca-tab-id', metadataEncoding),
+        launchToken: readHookMetadataHeader(headers, 'x-orca-launch-token', metadataEncoding),
+        worktreeId: readHookMetadataHeader(headers, 'x-orca-worktree-id', metadataEncoding),
+        env: readHookMetadataHeader(headers, 'x-orca-agent-hook-env', metadataEncoding),
+        version: readHookMetadataHeader(headers, 'x-orca-agent-hook-version', metadataEncoding),
+        runId,
+        executionId
+      }
   if (!metadata.paneKey) {
     return body
   }
@@ -102,6 +120,9 @@ export type ParsedHookEnvelope = {
   tabId?: string
   worktreeId?: string
   launchToken?: string
+  reportedExecutionBinding?: NonNullable<
+    ReturnType<typeof parseAgentStatusReportedExecutionBinding>
+  >
 }
 
 /** Validates the transport envelope while preserving warning-before-tab-rejection order. */
@@ -157,6 +178,11 @@ export function parseHookEnvelope(
     hookPayloadRecord: hookPayload as Record<string, unknown>,
     tabId,
     worktreeId: readEnvelopeString(record, 'worktreeId'),
-    launchToken: readEnvelopeString(record, 'launchToken')
+    launchToken: readEnvelopeString(record, 'launchToken'),
+    reportedExecutionBinding:
+      parseAgentStatusReportedExecutionBinding({
+        runId: readEnvelopeString(record, 'runId'),
+        executionId: readEnvelopeString(record, 'executionId')
+      }) ?? undefined
   }
 }

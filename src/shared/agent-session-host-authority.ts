@@ -8,6 +8,10 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import {
+  parseAgentStatusExecutionBinding,
+  type AgentStatusExecutionBinding
+} from './agent-status-execution-binding'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -84,6 +88,8 @@ export type AgentSessionOwnerBinding = {
   phase: 'reserved' | 'live'
   ptyId: string
   surface: AgentSessionSurfaceBinding
+  /** Absent from a host that predates run identity; absence means unknown, never 'no agent'. */
+  statusBinding?: AgentStatusExecutionBinding
 }
 
 export type AgentSessionClaimedSpawnResult = {
@@ -195,7 +201,11 @@ export function isAgentSessionOwnerBinding(value: unknown): value is AgentSessio
     isBoundedWireString(owner.generation, 128) &&
     (owner.phase === 'reserved' || owner.phase === 'live') &&
     isBoundedWireString(owner.ptyId, 4096) &&
-    isAgentSessionSurfaceBinding(owner.surface)
+    isAgentSessionSurfaceBinding(owner.surface) &&
+    // Why optional: an owner from a host that predates run identity is still a valid owner.
+    // Requiring the field here would make every preserved older daemon's listing fatal.
+    (owner.statusBinding === undefined ||
+      parseAgentStatusExecutionBinding(owner.statusBinding) !== null)
   )
 }
 

@@ -36,6 +36,7 @@ import {
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
+import { parseAgentStatusReportedExecutionBinding } from '../../shared/agent-status-execution-binding'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
@@ -1612,6 +1613,12 @@ export class SshRelaySession {
             typeof envelope.claudeRunningNonAgentTask === 'boolean'
               ? envelope.claudeRunningNonAgentTask
               : undefined,
+          // Parsed here because this allowlist is the SSH trust boundary: the claim arrives as
+          // untrusted remote JSON and is only ever evidence, which the host resolves against the
+          // committed owner before it becomes identity.
+          reportedExecutionBinding:
+            parseAgentStatusReportedExecutionBinding(envelope.reportedExecutionBinding) ??
+            undefined,
           // Why: the SSH relay protocol advertises no run-serving capability.
           advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
           payload: envelope.payload

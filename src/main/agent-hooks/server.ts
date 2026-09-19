@@ -6,6 +6,8 @@ import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/lis
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { AgentHookServerLifecycle } from './server/server-lifecycle'
 import { isValidPaneKey } from './server/server-status-identity'
+import { agentSessionOwners } from '../ipc/pty/pane/agent-session-owners'
+import { createAgentStatusExecutionBindingResolver } from './agent-status-execution-binding-resolver'
 
 export type {
   AgentHookAuthorityAttestation,
@@ -29,6 +31,9 @@ export { isValidPaneKey }
 export class AgentHookServer extends AgentHookServerLifecycle {}
 
 export const agentHookServer = new AgentHookServer()
+agentHookServer.setExecutionBindingResolver(
+  createAgentStatusExecutionBindingResolver(agentSessionOwners)
+)
 
 // Why: exported for test coverage of the per-agent field extractors.
 export const _internals = {

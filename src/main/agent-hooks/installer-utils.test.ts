@@ -901,6 +901,8 @@ describe('buildPosixAgentHookPostCommand', () => {
     expect(command).toContain('X-Orca-Agent-Hook-Meta-Encoding: base64')
     expect(command).toContain('X-Orca-Agent-Hook-Meta: ${orca_hook_metadata}')
     expect(command).toContain("printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s'")
+    expect(command).toContain('X-Orca-Agent-Status-Run-Id: ${orca_hook_run_id}')
+    expect(command).toContain('X-Orca-Agent-Status-Execution-Id: ${orca_hook_execution_id}')
     expect(command).toContain('$ORCA_PANE_KEY')
     expect(command).toContain('$ORCA_WORKTREE_ID')
     expect(command).toContain('--data-binary @-')

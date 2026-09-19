@@ -1,6 +1,12 @@
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { AgentStatusProviderAlias } from '../agent-status-run'
+import type {
+  AgentStatusExecutionId,
+  AgentStatusReportedExecutionBinding,
+  AgentStatusRunId
+} from '../agent-status-execution-binding'
 
 export type AgentHookEventPayload = {
   paneKey: string
@@ -8,6 +14,14 @@ export type AgentHookEventPayload = {
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Untrusted emitter claim. Main resolves it against the committed execution owner. */
+  reportedExecutionBinding?: AgentStatusReportedExecutionBinding
+  /** Host-verified run identity; never copied directly from an emitter. */
+  runId?: AgentStatusRunId
+  /** Host-verified attachment identity; never copied directly from an emitter. */
+  executionId?: AgentStatusExecutionId
+  /** Provider identity attached only after execution binding verification. */
+  providerAlias?: AgentStatusProviderAlias
   tabId?: string
   worktreeId?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
