@@ -32,7 +32,8 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { ClaudeHookService } from '../claude/hook-service'
-import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
+import { AntigravityHookService } from '../antigravity/hook-service'
+import { WINDOWS_CMD_SAFE_PATH, wrapWindowsCmdHookCommand } from './installer-utils'
 import { getConfigPath, getWindowsManagedLifecycleHook } from '../claude/hook-settings'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 
@@ -164,6 +165,39 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
       home = ''
     }
   })
+
+  it.each(['orca-agy-hook-', 'orca agy hook-'])(
+    'delivers Antigravity payload and permission response with profile prefix %s',
+    async (prefix) => {
+      home = mkdtempSync(join(tmpdir(), prefix))
+      homedirMock.mockReturnValue(home)
+      seedCmdAutoRunTarget(home)
+      expect(new AntigravityHookService().install().state).toBe('installed')
+      const command = wrapWindowsCmdHookCommand(
+        join(home, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd')
+      )
+      if (prefix.includes(' ')) {
+        expect(command).toContain('-EncodedCommand')
+      }
+      const listener = await startHookListener()
+      server = listener.server
+      const env = hookEnvironment({
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_AGENT_HOOK_PORT: String(listener.port),
+        ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+        ORCA_PANE_KEY: PANE_KEY
+      })
+
+      const result = await runHookCommand('cmd.exe', ['/d', '/c', command], env)
+
+      expect(result.timedOut).toBe(false)
+      expect(result.exitCode).toBe(0)
+      expect(listener.posts).toEqual([{ payload: PAYLOAD, paneKey: PANE_KEY, token: HOOK_TOKEN }])
+      expect(result.stdout.trim()).toBe('{"decision":"ask"}')
+      expect(result.stderr).toBe('')
+    },
+    30_000
+  )
 
   it('delivers the piped payload to the hook listener through cmd.exe and Git Bash', async () => {
     home = mkdtempSync(join(tmpdir(), 'orca-hook-payload-'))

@@ -935,6 +935,8 @@ jobs:
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows-specific boundaries
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
