@@ -64,6 +64,11 @@ describe('code span padding round trip', () => {
     ['**bold** and `code` and *it*'],
     ['`a` and `b`'],
     ['[`label`](https://example.com)'],
+    ['**`B93934206`**'],
+    ['`**B93934206**`'],
+    ['a **`x`** b'],
+    ['**bold `code` tail**'],
+    ['`**a**` and **`b`**'],
     ['Read `\tcode\u00a0` and write up.']
   ])('preserves %j', (source) => {
     expect(roundTrip(source)).toBe(source)
@@ -86,5 +91,13 @@ describe('code span padding round trip', () => {
     expect(roundTrip('Read ` Anexo v2.docx ` and write up.')).toBe(
       'Read `Anexo v2.docx` and write up.'
     )
+  })
+
+  it('keeps code and emphasis nesting stable across repeated saves', () => {
+    let current = '**`B93934206`** and `**literal**`'
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      current = roundTrip(current)
+    }
+    expect(current).toBe('**`B93934206`** and `**literal**`')
   })
 })

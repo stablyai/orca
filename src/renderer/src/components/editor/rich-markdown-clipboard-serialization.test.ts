@@ -1,9 +1,13 @@
+// @vitest-environment happy-dom
 import { Editor } from '@tiptap/core'
 import { Slice } from '@tiptap/pm/model'
 import { describe, expect, it, vi } from 'vitest'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { serializeRichMarkdownSliceAsMarkdown } from './rich-markdown-clipboard-serialization'
+import {
+  serializeRichMarkdownSliceAsMarkdown,
+  serializeRichMarkdownSliceForClipboard
+} from './rich-markdown-clipboard-serialization'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 describe('rich Markdown clipboard serialization', () => {
@@ -34,6 +38,55 @@ describe('rich Markdown clipboard serialization', () => {
         contentType: 'markdown'
       })
       expect(editor.state.doc.eq(original)).toBe(true)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('serializes mounted partial selections without flattening structure', () => {
+    const codec = createRichMarkdownEditorCodec()
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: createRichMarkdownExtensions({ codec }),
+      content: encodeRawMarkdownHtmlForRichEditor(
+        '- first item\n- second item\n\n```ts\nconst value = 1\n```\n',
+        codec
+      ),
+      contentType: 'markdown',
+      editorProps: {
+        clipboardTextSerializer: (slice) => {
+          const markdown = editor.markdown
+          return markdown
+            ? serializeRichMarkdownSliceAsMarkdown(slice, (content) => markdown.serialize(content))
+            : ''
+        }
+      }
+    })
+    try {
+      const { doc } = editor.state
+      const list = doc.firstChild
+      expect(list?.type.name).toBe('bulletList')
+      if (!list?.firstChild) {
+        throw new Error('expected a list item')
+      }
+      const firstItemStart = 2
+      const firstItemEnd = firstItemStart + list.firstChild.nodeSize
+      const listSlice = doc.slice(firstItemStart, firstItemEnd)
+      const markdown = editor.view.someProp('clipboardTextSerializer', (serializer) =>
+        serializer(listSlice, editor.view)
+      )
+      expect(markdown).toContain('- first item')
+      expect(markdown).not.toContain('second item')
+
+      const codeBlock = doc.lastChild
+      if (!codeBlock) {
+        throw new Error('expected a code block')
+      }
+      const codeStart = doc.content.size - codeBlock.nodeSize
+      const codeSlice = doc.slice(codeStart, doc.content.size)
+      const codeClipboard = serializeRichMarkdownSliceForClipboard(editor.view, codeSlice)
+      expect(codeClipboard.html).toContain('<pre')
+      expect(codeClipboard.html).toContain('const value = 1')
     } finally {
       editor.destroy()
     }

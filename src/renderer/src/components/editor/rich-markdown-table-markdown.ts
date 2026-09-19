@@ -8,6 +8,7 @@ const MIN_COLUMN_WIDTH = 3
 const OUTLIER_MEDIAN_FACTOR = 2.5
 const MAX_COLUMN_WIDTH = 60
 const MAX_ALIGNED_TABLE_WIDTH = 160
+const CELL_LINE_SEPARATOR = '\u001F'
 
 function collapseWhitespace(value: string): string {
   let offset = 0
@@ -70,11 +71,23 @@ function separatorCell(width: number, align: TableCellAlign): string {
 
 function extractRows(node: JSONContent, helpers: MarkdownRendererHelpers): TableCell[][] {
   return (node.content ?? []).map((rowNode) =>
-    (rowNode.content ?? []).map((cellNode) => ({
-      text: collapseWhitespace(cellNode.content ? helpers.renderChildren(cellNode.content) : ''),
-      isHeader: cellNode.type === 'tableHeader',
-      align: normalizeAlign(cellNode.attrs)
-    }))
+    (rowNode.content ?? []).map((cellNode) => {
+      const content = cellNode.content ?? []
+      const rendered =
+        content.length > 1
+          ? content
+              .map((child) => helpers.renderChildren(child))
+              .join(CELL_LINE_SEPARATOR)
+              .split(CELL_LINE_SEPARATOR)
+              .join('\n')
+              .replace(/[ \t]*\r?\n[ \t]*/g, '<br>')
+          : helpers.renderChildren(content)
+      return {
+        text: collapseWhitespace(rendered),
+        isHeader: cellNode.type === 'tableHeader',
+        align: normalizeAlign(cellNode.attrs)
+      }
+    })
   )
 }
 

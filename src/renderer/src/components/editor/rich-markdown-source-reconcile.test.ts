@@ -410,6 +410,28 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     expect(serialize(once!)?.trimEnd()).toBe(once!.trimEnd())
   })
 
+  it('keeps wrapped task states and list prose stable from the corruption repro', () => {
+    const source = [
+      '# Markdown corruption repro',
+      '',
+      '9. **Single digit item.** This continuation line is indented three spaces',
+      '   and must stay inside item 9.',
+      '10. **Two digit item.** This continuation line is indented four spaces',
+      '    and must stay inside item 10.',
+      '',
+      '- [ ] An item that is not done.',
+      '- [ ] Another item that is not done.',
+      ''
+    ].join('\n')
+    const once = serialize(source)
+    expect(once).not.toBeNull()
+    expect(once).toContain('- [ ] An item that is not done.')
+    expect(once).toContain('- [ ] Another item that is not done.')
+    expect(once).toContain('9. **Single digit item.**')
+    expect(once).toContain('10. **Two digit item.**')
+    expect(serialize(once ?? '')).toBe(once)
+  })
+
   it('reconciles a non-canonical doc end-to-end with the real serializer, preserving style', () => {
     const originalSource = '# Title\n\n_emphasis_ text\n'
     const baseCanonical = serialize(originalSource)!
@@ -620,7 +642,11 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
 
   it('patches an EOF edit before the serializer-omitted final newline', () => {
     const originalSource =
-      'Cost was \\$1,200 for Nell & Mary.\n\n| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\nTrailing paragraph.\n'
+      '(deficit −$509,542 by end-2020), so stock basis entered 2021 at $0.\n\n' +
+      'Escaped: cost was \\$1,200 and the fee was \\$35 per filing. **Total: \\$1,235** due.\n\n' +
+      'R&D credits for Nell & Mary, 2018 & 2020.\n\n' +
+      '| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\n' +
+      'Trailing paragraph.\n'
     const baseCanonical = serialize(originalSource)!
     expect(baseCanonical.endsWith('\n')).toBe(false)
     const edited = `${baseCanonical} Added word.`
@@ -633,7 +659,11 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     })
 
     expect(reconciled).toBe(
-      'Cost was \\$1,200 for Nell & Mary.\n\n| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\nTrailing paragraph. Added word.\n'
+      '(deficit −$509,542 by end-2020), so stock basis entered 2021 at $0.\n\n' +
+        'Escaped: cost was \\$1,200 and the fee was \\$35 per filing. **Total: \\$1,235** due.\n\n' +
+        'R&D credits for Nell & Mary, 2018 & 2020.\n\n' +
+        '| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\n' +
+        'Trailing paragraph. Added word.\n'
     )
     expect(serialize(reconciled)).toBe(edited)
   })

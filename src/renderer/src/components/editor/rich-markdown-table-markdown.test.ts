@@ -88,8 +88,50 @@ describe('compact Markdown table serialization', () => {
 
   it('counts alignment markers inside the separator width', () => {
     const node = table(['left', 'center', 'right'], [['a', 'b', '42']])
+    for (const [index, align] of ['left', 'center', 'right'].entries()) {
+      const header = node.content?.[0]?.content?.[index]
+      if (header) {
+        header.attrs = { align }
+      }
+    }
     const header = lines(renderTableToCompactMarkdown(node, helpers))[0]
     const rows = lines(renderTableToCompactMarkdown(node, helpers))
     expect(rows[1]?.length).toBe(header?.length)
+    expect(rows[1]).toContain(':---')
+    expect(rows[1]).toContain(':----:')
+    expect(rows[1]).toContain('---:')
+  })
+
+  it('keeps multiple blocks in a cell on one Markdown table row', () => {
+    const node: JSONContent = {
+      type: 'table',
+      content: [
+        {
+          type: 'tableRow',
+          content: [
+            {
+              type: 'tableHeader',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Name' }] }]
+            }
+          ]
+        },
+        {
+          type: 'tableRow',
+          content: [
+            {
+              type: 'tableCell',
+              content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'first' }] },
+                { type: 'paragraph', content: [{ type: 'text', text: 'second' }] }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+
+    const output = renderTableToCompactMarkdown(node, helpers)
+    expect(output).toContain('first<br>second')
+    expect(lines(output).every((line) => !line.includes('\n'))).toBe(true)
   })
 })

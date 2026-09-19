@@ -1003,6 +1003,8 @@
   padding: 14px 18px;
   border-radius: 8px;
   overflow-x: auto;
+  /* Keep source lines intact; the code block itself is the scroll viewport. */
+  white-space: pre !important;
   line-height: 1.55;
   background: transparent;
 }

@@ -147,6 +147,51 @@ function emptyTopLevelOrderedList(): JSONContent {
 }
 
 describe('rich markdown key handler', () => {
+  it('turns the trailing part of a mid-heading Enter into a paragraph', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section Two' }] }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(9)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [
+          { type: 'heading', content: [{ type: 'text', text: 'Section ' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Two' }] }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('leaves modified Enter to the platform keymap', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section Two' }] }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(9)
+      const event = keyEvent('Enter', { shiftKey: true })
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(editor.state.doc.firstChild?.type.name).toBe('heading')
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('opens the review-note composer on the add-review-note shortcut', () => {
     const editor = createEditor(emptyTopLevelOrderedList())
 

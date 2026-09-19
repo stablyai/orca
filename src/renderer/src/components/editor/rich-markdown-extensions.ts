@@ -45,6 +45,7 @@ import { RichMarkdownInlineMath } from './rich-markdown-inline-math'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
+import { renderRichMarkdownCodeBlock } from './rich-markdown-code-block-markdown'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -83,6 +84,7 @@ export function createRichMarkdownExtensions({
     RichMarkdownParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
+      renderMarkdown: renderRichMarkdownCodeBlock,
       addNodeView() {
         // Why: RichMarkdownCodeBlock never reads getPos, so it must not re-render
         // just because earlier edits shifted this block's document position.

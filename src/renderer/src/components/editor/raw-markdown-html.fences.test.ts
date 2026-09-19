@@ -38,6 +38,40 @@ describe('HTML source encoding across fenced code blocks', () => {
     }
   )
 
+  it('keeps JSX-like placeholders in the second consecutive block unencoded', () => {
+    const codec = createRichMarkdownEditorCodec(key)
+    const source = [
+      '```python',
+      'message = "hello"',
+      '```',
+      '',
+      '```bash',
+      'run_tool <input.json> <start> <end>',
+      '```'
+    ].join('\n')
+
+    expect(encodeRawMarkdownHtmlForRichEditor(source, codec)).toBe(source)
+  })
+
+  it('still encodes real HTML between consecutive fenced blocks', () => {
+    const codec = createRichMarkdownEditorCodec(key)
+    const source = [
+      '```ts',
+      'const value = 1',
+      '```',
+      '',
+      'A real <br> tag.',
+      '',
+      '```sh',
+      'echo hi',
+      '```'
+    ].join('\n')
+    const encoded = encodeRawMarkdownHtmlForRichEditor(source, codec)
+
+    expect(encoded).toContain(codec.transport.create('inline-html', '<br>'))
+    expect(encoded).not.toContain('A real <br> tag.')
+  })
+
   it('keeps shorter fences and fence-like code lines inside an open block', () => {
     const content =
       '````\n```\n<Widget />\n```` trailing text\n<!-- example -->\n````\n<!-- outside -->'

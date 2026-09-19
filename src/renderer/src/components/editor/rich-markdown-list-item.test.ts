@@ -60,4 +60,16 @@ describe('ordered list continuation serialization', () => {
     }
     expect(current).toBe('1. one\n   ```ts\n   const value = 1\n   ```\n2. two')
   })
+
+  it('preserves meaningful indentation inside an ordered-item fence', () => {
+    const source = '1. one\n\n   ```\n     indented\n   ```\n2. two'
+    expect(roundTrip(source)).toBe('1. one\n   ```\n     indented\n   ```\n2. two')
+  })
+
+  it('chooses a non-colliding fence for fence-shaped code content', () => {
+    const source = '~~~\n```\n~~~'
+    const canonical = roundTrip(source)
+    expect(canonical).toBe(source)
+    expect(roundTrip(canonical)).toBe(canonical)
+  })
 })
