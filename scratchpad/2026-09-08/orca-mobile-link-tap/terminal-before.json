@@ -1,0 +1,140 @@
+[
+  {
+    "mobile": true,
+    "result": "",
+    "events": [
+      {
+        "type": "pointerdown",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "pointerdown",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "touchstart",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "touchstart",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": true,
+        "isTrusted": true
+      },
+      {
+        "type": "pointerup",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "pointerup",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "touchend",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "touchend",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": true,
+        "isTrusted": true
+      }
+    ]
+  },
+  {
+    "mobile": false,
+    "result": "https://example.com/markdown",
+    "events": [
+      {
+        "type": "pointerdown",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "pointerdown",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "mousedown",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "mousedown",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": true,
+        "isTrusted": true
+      },
+      {
+        "type": "pointerup",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "pointerup",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "mouseup",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "mouseup",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": true,
+        "isTrusted": true
+      },
+      {
+        "type": "click",
+        "capture": true,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      },
+      {
+        "type": "click",
+        "capture": false,
+        "target": "xterm-screen",
+        "defaultPrevented": false,
+        "isTrusted": true
+      }
+    ]
+  }
+]

@@ -1,4 +1,5 @@
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
+import { browserScreencastPageScale } from '../../../src/shared/browser-screencast-input-scale'
 
 export type BrowserTouchLayout = {
   width: number
@@ -56,6 +57,13 @@ export function computeBrowserFrameGeometry(
   }
 }
 
+/**
+ * Maps a point on the streamed frame to the page coordinate to send as browser input.
+ *
+ * Returns null when the point falls outside the rendered frame. Why page scale divides in:
+ * frame dimensions are device-independent pixels while browser input is read as viewport
+ * CSS pixels, so below a page scale of 1 the untouched value lands beside the target.
+ */
 export function mapScreenToBrowserPoint(
   x: number,
   y: number,
@@ -79,20 +87,19 @@ export function mapScreenToBrowserPoint(
   ) {
     return null
   }
+  const pageScale = browserScreencastPageScale(metadata)
+  // Frame dimensions are device-independent pixels; browser input uses viewport CSS pixels.
   return {
-    x: clamp(
-      Math.round((localX / geometry.renderedWidth) * geometry.sourceWidth),
-      0,
-      geometry.sourceWidth
-    ),
-    y: clamp(
-      Math.round((localY / geometry.renderedHeight) * geometry.sourceHeight),
-      0,
-      geometry.sourceHeight
-    )
+    x: clamp(Math.round(localX / geometry.scale / pageScale), 0, geometry.sourceWidth / pageScale),
+    y: clamp(Math.round(localY / geometry.scale / pageScale), 0, geometry.sourceHeight / pageScale)
   }
 }
 
+/**
+ * Converts a finger-sized touch radius into the page CSS pixels used for link hit testing.
+ *
+ * Falls back to 10 CSS pixels when frame geometry, client zoom or page scale is unusable.
+ */
 export function computeBrowserTouchClickRadiusCss(
   layout: BrowserTouchLayout | null,
   metadata: BrowserScreencastFrameMetadata | null,
@@ -100,7 +107,7 @@ export function computeBrowserTouchClickRadiusCss(
   touchRadiusDip: number
 ): number {
   const geometry = computeBrowserFrameGeometry(layout, metadata)
-  const scale = geometry ? geometry.scale * zoom.scale : 1
+  const scale = (geometry?.scale ?? 1) * zoom.scale * browserScreencastPageScale(metadata)
   if (!Number.isFinite(scale) || scale <= 0) {
     return 10
   }

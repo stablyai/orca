@@ -67,6 +67,25 @@ describe('remote browser page input model', () => {
   describe('resolveRemoteBrowserCssViewport', () => {
     const naturalSize = { width: 2800, height: 1800 }
 
+    it.each([390 / 980, 1, 1.25])(
+      'uses live page scale %s rather than a stale CSS cache',
+      (pageScaleFactor) => {
+        for (const requestedViewportSize of [
+          { width: 390, height: 664 },
+          { width: 1400, height: 900 }
+        ]) {
+          expect(
+            resolveRemoteBrowserCssViewport({
+              cssViewportSize: { width: 980, height: 1669 },
+              requestedViewportSize,
+              frameMetadata: { deviceWidth: 390, deviceHeight: 664, pageScaleFactor },
+              naturalSize
+            })
+          ).toEqual({ width: 390 / pageScaleFactor, height: 664 / pageScaleFactor })
+        }
+      }
+    )
+
     it('keeps the cached CSS viewport while frames report the size this pane requested', () => {
       expect(
         resolveRemoteBrowserCssViewport({

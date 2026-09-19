@@ -25,8 +25,15 @@ type FileLinkHitTestDeps = {
   wslDistro?: string | null
   pathExistsCache?: Map<string, boolean>
   openWithSystemDefault?: boolean
+  activate?: (filePath: string, line: number | null, column: number | null) => boolean
 }
 
+/**
+ * Hit-tests a buffer position for a file-path link and opens the best match.
+ *
+ * Returns whether a link was matched. `deps.activate` lets a caller — the touch path, for
+ * one — route the match through its own handler instead of the default open.
+ */
 export function openFilePathLinkAtBufferPosition(
   buffer: { getLine(y: number): IBufferLine | undefined },
   position: { x: number; y: number },
@@ -97,6 +104,9 @@ export function openFilePathLinkAtBufferPosition(
     const uncachedMatch = matches.find((match) => match.cachedExists !== false)
     const match = cachedMatch ?? knownWorktreeRootMatch ?? uncachedMatch
     if (match) {
+      if (deps.activate) {
+        return deps.activate(match.absolutePath, match.line, match.column)
+      }
       openDetectedFilePath(match.absolutePath, match.line, match.column, {
         ...deps,
         openWithSystemDefault: deps.openWithSystemDefault === true
