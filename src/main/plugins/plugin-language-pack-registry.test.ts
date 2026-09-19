@@ -10,7 +10,10 @@ import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
 
 const roots: string[] = []
 
-async function pluginWithCatalog(catalog: unknown): Promise<ValidDiscoveredPlugin> {
+async function pluginWithCatalog(
+  catalog: unknown,
+  options: { displayName?: string } = {}
+): Promise<ValidDiscoveredPlugin> {
   const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-language-registry-'))
   roots.push(rootDir)
   await mkdir(join(rootDir, 'locales'))
@@ -24,7 +27,13 @@ async function pluginWithCatalog(catalog: unknown): Promise<ValidDiscoveredPlugi
     engines: { orca: '>=1.0.0' },
     pluginApi: 1,
     contributes: {
-      languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }]
+      languagePacks: [
+        {
+          locale: 'pt-BR',
+          path: 'locales/pt-BR.json',
+          ...(options.displayName ? { displayName: options.displayName } : {})
+        }
+      ]
     },
     capabilities: []
   })
@@ -74,5 +83,23 @@ describe('PluginLanguagePackRegistry', () => {
 
     await registry.reconcile([plugin], () => false)
     expect(registry.error(plugin.pluginKey)).toBeNull()
+  })
+
+  it('forwards an optional contribution displayName onto the registration', async () => {
+    const plugin = await pluginWithCatalog(
+      { common: { save: 'Salvar' } },
+      { displayName: 'Português (Brasil)' }
+    )
+    const registry = new PluginLanguagePackRegistry(new PluginContentVerifier())
+
+    await registry.reconcile([plugin], () => true)
+
+    expect(registry.list()).toEqual([
+      expect.objectContaining({
+        locale: 'pt-BR',
+        pluginKey: 'orca-samples.portuguese',
+        displayName: 'Português (Brasil)'
+      })
+    ])
   })
 })
