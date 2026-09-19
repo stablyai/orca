@@ -1,0 +1,108 @@
+{
+  "observedAt": "2026-09-18T07:07:01.601938+00:00",
+  "candidate": null,
+  "externalWrites": false,
+  "sourceOrPrimaryIndexEdits": false,
+  "scope": "Independent review of exact named PR heads; all experiments and reports remain in ignored notes.",
+  "decision": "hold: remaining performance tradeoff requires explicit review",
+  "pureWin": false,
+  "number": 20965,
+  "title": "WebGL empty-glyph cache",
+  "head": "2a48cae631b81b4b58c8dfd7f8379cfad7b6365f",
+  "finding": "Both numeric and combined-string empty-glyph maps share 4,096 entries. Ordinary visible glyph atlas entries are unaffected. A fixed empty-result rasterizer isolates the actual cache methods; it does not measure GPU/rasterization latency.",
+  "freshEvidence": {
+    "file": "notes/tradeoff-removal/xterm/cache-revisit-results.json",
+    "script": "notes/tradeoff-removal/xterm/cache-revisit-proof.cjs",
+    "exactSourceBlob": "ccf57dbcfff85eeb4c383fa987bcc07aa28e5d14",
+    "sourceHashes": {
+      "baseline": "4af6e55b14dc91e3eecf9f22a3ba9803b1fe6776d132ddf64e79d496d5566e5c",
+      "published": "7132d0a7aedcc0922bcb7b1a47b9c10454f8f668168bc6d0864e9caab4836237"
+    },
+    "at4097DistinctKeys": [
+      {
+        "variant": "baseline",
+        "keyCount": 4097,
+        "firstPassMisses": 4097,
+        "revisitMisses": 0
+      },
+      {
+        "variant": "published",
+        "keyCount": 4097,
+        "firstPassMisses": 4097,
+        "revisitMisses": 4097
+      }
+    ],
+    "limitation": "Exact published cache methods bundled from maintained source; a fixed empty-glyph rasterizer and null contrast result isolate hit/miss policy. This proves repeated-work possibility, not measured rasterization/contrast latency or GPU behavior. No app/browser is launched."
+  },
+  "alternatives": [
+    {
+      "alternative": "Tie empty entries to texture-page eviction",
+      "result": "Empty glyphs occupy no atlas pixels, so normal page pressure cannot retire these entries."
+    },
+    {
+      "alternative": "Canonicalize all invisible results to a space or omit colors",
+      "result": "Ink depends on character/combined text, foreground/background, style and decorations. Equal-color invisibility can differ at another color. No safe general canonical key identified."
+    },
+    {
+      "alternative": "Bypass rasterization for explicit invisible attributes",
+      "result": "May improve one subset, but does not solve the demonstrated colored-space and combined-space key growth."
+    },
+    {
+      "alternative": "Use LRU or generations",
+      "result": "Can improve some locality but capacity+1 cycling still recomputes. Hit bookkeeping adds work; not a no-tradeoff solution."
+    }
+  ],
+  "proven": "At 4,097 distinct keys, exact published methods produce 4,097 cache misses on the second pass; unbounded baseline produces zero. Returned results match.",
+  "notProven": "No claim that these misses cause a perceptible app-wide slowdown on ordinary usage, or that a larger architectural redesign cannot improve ownership.",
+  "remainingTradeoff": "Bounded derived-cache memory versus possible repeated computation after eviction.",
+  "generatedPatchCoherence": "No maintained patch, generated bundle, source map, generator or lockfile changed.",
+  "originalPrLineAccounting": {
+    "head": "2a48cae631b81b4b58c8dfd7f8379cfad7b6365f",
+    "base": "9c921360090667e02363fe6e4dee98410665427a",
+    "mergeBase": "feb04ec254585ba69587699d41f80a72dda2cb27",
+    "production": {
+      "files": 3,
+      "additions": 192,
+      "deletions": 24,
+      "changed": 216,
+      "binaryFiles": []
+    },
+    "total": {
+      "files": 6,
+      "additions": 1021,
+      "deletions": 24,
+      "changed": 1045,
+      "binaryFiles": []
+    },
+    "categories": {
+      "production-generated-patch": {
+        "files": 1,
+        "additions": 102,
+        "deletions": 17,
+        "changed": 119,
+        "binaryFiles": []
+      },
+      "production-source-patch": {
+        "files": 1,
+        "additions": 87,
+        "deletions": 4,
+        "changed": 91,
+        "binaryFiles": []
+      },
+      "documentation": {
+        "files": 3,
+        "additions": 829,
+        "deletions": 0,
+        "changed": 829,
+        "binaryFiles": []
+      },
+      "production-lockfile": {
+        "files": 1,
+        "additions": 3,
+        "deletions": 3,
+        "changed": 6,
+        "binaryFiles": []
+      }
+    }
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "observedAt": "2026-09-18T07:07:01.601938+00:00",
+  "candidate": null,
+  "externalWrites": false,
+  "sourceOrPrimaryIndexEdits": false,
+  "scope": "Independent review of exact named PR heads; all experiments and reports remain in ignored notes.",
+  "decision": "hold: remaining performance tradeoff requires explicit review",
+  "pureWin": false,
+  "number": 20992,
+  "title": "Release erased BufferLine backing strings",
+  "head": "565cbd6c6d1991410268d9d036dcd6876490bca0",
+  "finding": "Cleanup preserves terminal content but adds work in hot BufferLine mutation paths. No tested representation reliably recovered baseline speed.",
+  "alternatives": [
+    {
+      "alternative": "Use undefined, false or null as invalid cache sentinel instead of a separate valid flag",
+      "result": "All preserved tested semantics; timing was workload/JIT sensitive and none reliably beat baseline."
+    },
+    {
+      "alternative": "Only clear the string cache when marked valid",
+      "result": "Preserved semantics but was slower than baseline; a branch does not eliminate hot-path bookkeeping cost."
+    },
+    {
+      "alternative": "Group metadata ownership checks",
+      "result": "Unimplemented hypothesis only; no performance or correctness claim."
+    }
+  ],
+  "freshEvidence": {
+    "file": "notes/tradeoff-removal/xterm/bufferline-source-results.json",
+    "script": "notes/tradeoff-removal/xterm/bufferline-source-experiment.cjs",
+    "sourceHashes": {
+      "baseline": "26551bd2db8ddd5cdb4f77b0f62f3b5f1ae4d14fd76ac4d5b5eae70eab10ea12",
+      "published": "435b6bccb646071deda696d8e5ffccb5396524570a0d6f345093a1e0aebead1a",
+      "optionalCache": "1bc91c6e7eda4e8e8c028a2a427320f80642be53c5b24ef63816a6c0e18aab93",
+      "falseCache": "800627a54a7827d3ccf0320a9e1c2a502d0a89a51d9c910a6e6493acfd6f06bc",
+      "nullCache": "c5997045cd4ccdf8ecd7307f313906c5ed3b6c1eac3da1f21461fbb957a9a05a",
+      "validGuard": "53621b2c90a45c77372812735d462a1a40578431518bb008c2f1fb554ab9fa4c"
+    },
+    "baselineMapHash": "593c3d75f22146a34afad73aa8b8295084116796e82b46721ea5ce4f14a1307a",
+    "semantic": {
+      "published": {
+        "matchedMutations": 25000,
+        "translationModesPerMutation": 4,
+        "erasedCacheChars": 0,
+        "erasedCombinedChars": 0,
+        "scratchCharsAfterInsertAndDelete": 0,
+        "liveCombinedChars": 100001
+      },
+      "optionalCache": {
+        "matchedMutations": 25000,
+        "translationModesPerMutation": 4,
+        "erasedCacheChars": 0,
+        "erasedCombinedChars": 0,
+        "scratchCharsAfterInsertAndDelete": 0,
+        "liveCombinedChars": 100001
+      },
+      "falseCache": {
+        "matchedMutations": 25000,
+        "translationModesPerMutation": 4,
+        "erasedCacheChars": 0,
+        "erasedCombinedChars": 0,
+        "scratchCharsAfterInsertAndDelete": 0,
+        "liveCombinedChars": 100001
+      },
+      "nullCache": {
+        "matchedMutations": 25000,
+        "translationModesPerMutation": 4,
+        "erasedCacheChars": 0,
+        "erasedCombinedChars": 0,
+        "scratchCharsAfterInsertAndDelete": 0,
+        "liveCombinedChars": 100001
+      },
+      "validGuard": {
+        "matchedMutations": 25000,
+        "translationModesPerMutation": 4,
+        "erasedCacheChars": 0,
+        "erasedCombinedChars": 0,
+        "scratchCharsAfterInsertAndDelete": 0,
+        "liveCombinedChars": 100001
+      }
+    },
+    "mediansMs": {
+      "baseline": 9.974072937499955,
+      "published": 11.017651062499908,
+      "optionalCache": 10.672986999999978,
+      "falseCache": 10.970770812500007,
+      "nullCache": 10.690830687499954,
+      "validGuard": 10.82650000000001
+    },
+    "bytesPerWrite": 1200000,
+    "writesPerRound": 8,
+    "discardedWarmupRounds": 6,
+    "limitation": "Source experiment using actual pinned headless sourcemap and identical esbuild settings. Not release webpack bundles; installed source used only for missing enum modules. No app/native all-platform timing or zero-cost claim."
+  },
+  "proven": "Each fixed variant matched 25,000 seeded mutations with four translation modes, released erased cached/combined strings and shift scratch storage, and retained a live 100,001-character combining cell.",
+  "notProven": "The alternative sentinels are not a reliable speed win; no production patch proposed from noisy microbenchmarks.",
+  "remainingTradeoff": "Original emitted-parser benchmark records approximately 5% slowdown; fresh source-compiled test also leaves all cleanup variants slower than leaking baseline. This is not an app-wide latency estimate.",
+  "generatedPatchCoherence": "No changes. A real change would require synchronized headless, desktop and mobile maintained patches, generated bundles/source maps and lock hashes.",
+  "dependencies": {
+    "parent": 20981,
+    "child": 21112,
+    "action": "Leave existing dependency chain unchanged; #21112's reflow correctness fix does not remove these cache/parser tradeoffs."
+  },
+  "originalPrLineAccounting": {
+    "head": "565cbd6c6d1991410268d9d036dcd6876490bca0",
+    "base": "47bb299d4d5e0a3d5e1e53a88fe5c5a68012519e",
+    "mergeBase": "47bb299d4d5e0a3d5e1e53a88fe5c5a68012519e",
+    "production": {
+      "files": 13,
+      "additions": 989,
+      "deletions": 77,
+      "changed": 1066,
+      "binaryFiles": []
+    },
+    "total": {
+      "files": 29,
+      "additions": 2780,
+      "deletions": 95,
+      "changed": 2875,
+      "binaryFiles": []
+    },
+    "categories": {
+      "production-generated-patch": {
+        "files": 3,
+        "additions": 388,
+        "deletions": 28,
+        "changed": 416,
+        "binaryFiles": []
+      },
+      "production-source-patch": {
+        "files": 3,
+        "additions": 459,
+        "deletions": 0,
+        "changed": 459,
+        "binaryFiles": []
+      },
+      "production": {
+        "files": 2,
+        "additions": 19,
+        "deletions": 0,
+        "changed": 19,
+        "binaryFiles": []
+      },
+      "production-tooling": {
+        "files": 3,
+        "additions": 87,
+        "deletions": 14,
+        "changed": 101,
+        "binaryFiles": []
+      },
+      "test": {
+        "files": 6,
+        "additions": 421,
+        "deletions": 8,
+        "changed": 429,
+        "binaryFiles": []
+      },
+      "documentation": {
+        "files": 10,
+        "additions": 1370,
+        "deletions": 10,
+        "changed": 1380,
+        "binaryFiles": []
+      },
+      "production-lockfile": {
+        "files": 2,
+        "additions": 36,
+        "deletions": 35,
+        "changed": 71,
+        "binaryFiles": []
+      }
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "pr": 21178,
+  "url": "https://github.com/stablyai/orca/pull/21178",
+  "publishedHead": "29820ed587cab4f2ab31a9306ca2180355b3e745",
+  "classification": "partial_tradeoff_removal_proven_residual_undo_cost",
+  "verdict": "Candidate preserves existing bounded reopen view state while still disposing closed Monaco models. Undo retention is better than the earlier warning suggested, but it is not unlimited or uniform across URI forms.",
+  "candidateCommit": "48d4af652e5a24758077bc9eaa81e05be1f1a08e",
+  "candidateParent": "29820ed587cab4f2ab31a9306ca2180355b3e745",
+  "candidateTree": "ef080c6b56e810e1895b2378bfc775407783ca9a",
+  "productionChangedLoc": 23,
+  "totalChangedLoc": 165,
+  "filesChanged": 5,
+  "removedTradeoff": "Closing the final owner no longer discards the existing bounded scroll, selection, PDF position, or diff-view caches merely to dispose the model. The existing 20-entry-per-cache LRU still applies.",
+  "implementation": "Reuse the existing disposal implementation via disposeClosedEditorModels; the app-shell controller uses model-only cleanup. Keep the original full disposal wrapper for direct callers. Cold-registry cleanup no longer erases view caches.",
+  "existingMechanisms": [
+    "All checked production writes to the four view caches already use setWithLRU with the existing 20-entry limit.",
+    "Installed Monaco ModelService retains eligible closed-file undo outside the disposed model, with its existing 20 MiB closed-history budget and 10 MiB SHA/file eligibility limit.",
+    "Real Monaco controls preserve small POSIX/file-URI undo across dispose/recreate when content and URI match."
+  ],
+  "residualTradeoffs": [
+    "Raw Windows drive paths passed to URI.parse use a drive-letter scheme and fail Monaco closed-file undo eligibility. The cross-platform parser behavior was measured; native Windows was not run.",
+    "The measured file above 10 MiB loses undo on disposal. Monaco also has an existing 20 MiB aggregate closed-file undo budget and content/URI matching conditions.",
+    "The cache retains only its existing 20 entries per cache; closing more files does not create unlimited reopen-state retention.",
+    "No promise is made that every prior live-model undo history survives. Keeping unlimited old histories would reintroduce retained data or require a new product retention policy."
+  ],
+  "alternatives": [
+    {
+      "approach": "Preserve existing bounded view caches",
+      "result": "Implemented and proved against the published PR control."
+    },
+    {
+      "approach": "Depend on Monaco existing closed-file undo restoration",
+      "result": "Verified for supported URI/content cases, explicitly bounded and not sufficient to erase all undo tradeoffs."
+    },
+    {
+      "approach": "Globally migrate raw Windows model paths to file URIs",
+      "rejectedBecause": "Changes model identity across multiple owners, diff variants, and reuse lookups. This needs coordinated cross-platform identity migration, not a safe one-line change inside cleanup."
+    },
+    {
+      "approach": "Keep models or archive all undo data after close",
+      "rejectedBecause": "Retains the original unbounded data or moves it to new unbounded storage."
+    }
+  ],
+  "tests": [
+    {
+      "head": "29820ed587cab4f2ab31a9306ca2180355b3e745",
+      "passed": 3,
+      "expectedFailures": 2,
+      "log": "21178-published-tests.log",
+      "graph": "21178-published-graph.json",
+      "coverage": "Published PR control fails view-state retention and existing-LRU preservation; three small URI undo measurements pass."
+    },
+    {
+      "head": "48d4af652e5a24758077bc9eaa81e05be1f1a08e",
+      "passed": 43,
+      "suites": 8,
+      "log": "21178-final-tests.log",
+      "graph": "21178-final-graph.json",
+      "coverage": "Real Monaco lifecycle, detach/reopen races, shared/live ownership, registry fencing, cache sweeps, retained bounded view state, 40 model closures with only 20 cached positions, and undo URI/large-file limits."
+    }
+  ],
+  "validation": {
+    "ordinaryLint": {
+      "result": "pass",
+      "paths": 5,
+      "log": "21178-final-lint.log"
+    },
+    "antiSlop": {
+      "result": "pass",
+      "paths": 5,
+      "log": "21178-anti-slop.log"
+    },
+    "scopedTypecheck": {
+      "result": "pass",
+      "log": "21178-scoped-typecheck.log",
+      "config": "21178-typecheck-tree/config/tsconfig.lifecycle-review.json",
+      "scope": "All five changed paths and transitive imports, exact candidate sources, original web compiler settings with explicit Node/Electron ambient types needed when narrowing entry files."
+    },
+    "fullWebTypecheck": {
+      "result": "one unrelated pre-existing diagnostic",
+      "log": "21178-typecheck.log",
+      "diagnostic": "NativeChatMessageList.windowing.test.tsx:12 TS6196 unused NativeChatMessage import; this entire file is unchanged from published head."
+    },
+    "diffCheck": "pass",
+    "sourceVerification": "source-verification.json"
+  },
+  "publicationStatus": "Unpublished candidate for root review. Primary source/index untouched; no push or merge.",
+  "executionBoundary": "Renderer ownership remains independent of Git versus folder workspaces and does not infer remote process state. Real Monaco ran headlessly under happy-dom; no native Windows or live SSH session was exercised."
+}

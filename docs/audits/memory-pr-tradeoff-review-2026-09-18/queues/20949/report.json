@@ -1,0 +1,45 @@
+{
+  "decision": "Keep original PR held: complete live-overload protection requires a user-visible or resource tradeoff.",
+  "conservationConstraint": "With an indefinitely stalled consumer and continued arbitrary new input, undelivered information grows as produced minus consumed. Finite memory cannot retain every byte while leaving producer progress unchanged. Existing lossless bounded replay could change ownership, but no such complete replay owner exists in these three paths.",
+  "notZeroTradeoff": [
+    "Spooling introduces disk I/O, capacity, retention and privacy costs; finite disk eventually fills.",
+    "Raising/removing limits delays or restores unbounded memory growth.",
+    "Compression improves some inputs but consumes CPU and cannot bound arbitrary incompressible input.",
+    "Pull/ACK protocols move the wait to the producer; they do not make live input disappear."
+  ],
+  "compatibilityReview": [
+    "docs/reference/ssh-execution-boundary.md",
+    "docs/reference/remote-wire-compatibility.md"
+  ],
+  "validationLimits": "Exact-head repository source loader; locally installed packages. Unit/socket/worker tests ran with ORCA_BACKGROUND_LAUNCH=1. No visible application, SSH mixed-version integration, native speech recognition or cross-platform matrix was run.",
+  "number": 20949,
+  "head": "d12d1e0a06f3ced9425e98f3593e0864ef16830b",
+  "base": "e6a41081a3cc723ade11e719286ca6bd67c68884",
+  "risk": "Medium: overwhelmed CDP client loses its connection and queued replies/events.",
+  "originalProductionChangedLines": 39,
+  "mechanism": "CdpClientResponseWriter queues both replies and unsolicited debugger events through the shared outbound queue. Defaults: 8 MiB native soft cap, 64 MiB retained queue, 4096 frames, 128 sends per turn; overflow terminates the client.",
+  "tradeoff": "Termination drops pending command results and debugger events; CDP has no general event replay/ack cursor in this implementation. Reconnection cannot reconstruct arbitrary already-generated events or results.",
+  "existingRecoveryExamined": [
+    "cdp-debugger-channel.ts forwards unsolicited Electron debugger messages and asynchronous sendCommand replies; inbound request flow control alone does not stop those producers.",
+    "Page.printToPDF supports explicitly requested ReturnAsStream and IO.read/IO.close. This is one opt-in PDF result format backed by the complete PDF buffer, not a general durable CDP event owner. Changing default response shape breaks clients.",
+    "maxFrameBytes is deliberately Infinity so a draining connection still accepts one large screenshot/PDF reply; therefore the PR is not a strict cap on one-frame serialization/transient allocation."
+  ],
+  "rejectedAlternatives": [
+    "Remove only client.terminate(): shared failOverflow already drops the backlog and permanently latches overflowed; this silently loses frames while leaving a dead-but-open connection.",
+    "Pause inbound requests: does not bound unsolicited Network/Runtime/Debugger events or already-issued command results.",
+    "Pause the page/debugger or suppress domains: changes application progress or event visibility.",
+    "Coalesce arbitrary events/responses: no equivalent state snapshot preserves arbitrary event sequence and command results.",
+    "Set queue limits to Infinity: restores unbounded retention."
+  ],
+  "safeScopeReduction": {
+    "status": "No independent cleanup-only patch identified in the original writer change. Close/dispose cleanup is needed for the new queue itself; removing the queue/cap removes the live-backlog fix. Keep original held."
+  },
+  "exactHeadTests": {
+    "passed": 6,
+    "files": 1,
+    "log": "20949/exact-head-tests.log",
+    "coverage": "Includes a real localhost WebSocket stalled-reader overflow and complete 192-frame/12 MiB delivery to a draining client."
+  },
+  "sourceProvenance": "notes/tradeoff-removal/queues/20949/sources.json",
+  "testGraph": "notes/tradeoff-removal/queues/20949/tested-source-graph.json"
+}

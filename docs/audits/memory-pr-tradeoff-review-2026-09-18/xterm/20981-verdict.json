@@ -1,0 +1,129 @@
+{
+  "observedAt": "2026-09-18T07:07:01.601938+00:00",
+  "candidate": null,
+  "externalWrites": false,
+  "sourceOrPrimaryIndexEdits": false,
+  "scope": "Independent review of exact named PR heads; all experiments and reports remain in ignored notes.",
+  "decision": "hold: remaining performance tradeoff requires explicit review",
+  "pureWin": false,
+  "number": 20981,
+  "title": "Terminal contrast-color cache",
+  "head": "47bb299d4d5e0a3d5e1e53a88fe5c5a68012519e",
+  "finding": "The color and CSS maps share 4,096 entries per cache; normal and dim caches are separate. Results are unchanged but eviction permits repeat contrast calculation.",
+  "freshEvidence": {
+    "file": "notes/tradeoff-removal/xterm/cache-revisit-results.json",
+    "script": "notes/tradeoff-removal/xterm/cache-revisit-proof.cjs",
+    "exactSourceBlob": "0558a8873f680e8fb2a27cc833c49c5ba658e1dd",
+    "sourceHashes": {
+      "baseline": "c0956daf17b82fa4557149608eae3aac343e69a81521998544a4b1cf39e19fb8",
+      "published": "b0a5e7e2044d2b6980aca266ea2c23d9749e6aacd5524fb90a6e780f42fe44f7"
+    },
+    "at4097DistinctKeys": [
+      {
+        "variant": "baseline",
+        "keyCount": 4097,
+        "firstPassMisses": 4097,
+        "revisitMisses": 0
+      },
+      {
+        "variant": "published",
+        "keyCount": 4097,
+        "firstPassMisses": 4097,
+        "revisitMisses": 4097
+      }
+    ],
+    "limitation": "Exact published cache methods bundled from maintained source; a fixed empty-glyph rasterizer and null contrast result isolate hit/miss policy. This proves repeated-work possibility, not measured rasterization/contrast latency or GPU behavior. No app/browser is launched."
+  },
+  "alternatives": [
+    {
+      "alternative": "Use LRU or two generations",
+      "result": "Can retain hot subsets longer but does not retain every arbitrary future color pair within fixed memory. Adds hit bookkeeping and still misses on capacity+1 cycles."
+    },
+    {
+      "alternative": "Tie contrast lifetime to atlas pages",
+      "result": "Contrast is also used outside the WebGL atlas and may be requested again for visible colors after page eviction; no shared ownership invariant removes recomputation."
+    },
+    {
+      "alternative": "Use weak retention",
+      "result": "Color keys are primitives, and weakly retaining values does not guarantee a future hit. Key metadata still requires ownership."
+    },
+    {
+      "alternative": "Disable contrast correction",
+      "result": "Changes intended rendering/readability. Orca normally enables correction (dark 3, light 4.5), so the xterm upstream default ratio of 1 does not avoid the tradeoff."
+    }
+  ],
+  "proven": "At 4,097 distinct keys, exact published methods produce 4,097 cache misses on the second pass; unbounded baseline produces zero. Returned results match.",
+  "notProven": "No claim that these misses cause a perceptible app-wide slowdown on ordinary usage, or that a larger architectural redesign cannot improve ownership.",
+  "remainingTradeoff": "Bounded derived-cache memory versus possible repeated computation after eviction.",
+  "generatedPatchCoherence": "No maintained patch, generated bundle, source map, generator or lockfile changed.",
+  "originalPrLineAccounting": {
+    "head": "47bb299d4d5e0a3d5e1e53a88fe5c5a68012519e",
+    "base": "9c921360090667e02363fe6e4dee98410665427a",
+    "mergeBase": "96eb97aad641f3d8324bd5488d51c06a3eba59ad",
+    "production": {
+      "files": 11,
+      "additions": 398,
+      "deletions": 56,
+      "changed": 454,
+      "binaryFiles": []
+    },
+    "total": {
+      "files": 23,
+      "additions": 3711,
+      "deletions": 62,
+      "changed": 3773,
+      "binaryFiles": []
+    },
+    "categories": {
+      "production-tooling": {
+        "files": 4,
+        "additions": 111,
+        "deletions": 3,
+        "changed": 114,
+        "binaryFiles": []
+      },
+      "production-generated-patch": {
+        "files": 2,
+        "additions": 156,
+        "deletions": 12,
+        "changed": 168,
+        "binaryFiles": []
+      },
+      "production-source-patch": {
+        "files": 2,
+        "additions": 94,
+        "deletions": 0,
+        "changed": 94,
+        "binaryFiles": []
+      },
+      "test": {
+        "files": 5,
+        "additions": 294,
+        "deletions": 2,
+        "changed": 296,
+        "binaryFiles": []
+      },
+      "documentation": {
+        "files": 7,
+        "additions": 3019,
+        "deletions": 4,
+        "changed": 3023,
+        "binaryFiles": []
+      },
+      "production-lockfile": {
+        "files": 2,
+        "additions": 36,
+        "deletions": 41,
+        "changed": 77,
+        "binaryFiles": []
+      },
+      "production": {
+        "files": 1,
+        "additions": 1,
+        "deletions": 0,
+        "changed": 1,
+        "binaryFiles": []
+      }
+    }
+  }
+}

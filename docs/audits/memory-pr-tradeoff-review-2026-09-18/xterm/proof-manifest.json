@@ -1,0 +1,175 @@
+{
+  "observedAt": "2026-09-18T07:13:26.073370+00:00",
+  "completedPrs": [20955, 20965, 20981, 20992],
+  "publicationCandidates": [],
+  "decision": "No tested change removes its existing tradeoff reliably.",
+  "artifactRoot": "notes/tradeoff-removal/xterm",
+  "artifacts": [
+    {
+      "path": "notes/tradeoff-removal/xterm/20955-verdict.json",
+      "sha256": "ea0c5fbf99c7c860abeec9d6fadc42668b4a22976511f2246453dfda8b5beb81",
+      "bytes": 13086
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/20965-verdict.json",
+      "sha256": "e3d2304cab90f51173ba7f7a222bd562440ca6241b7d8a3ee3d9ff1e6d8b8663",
+      "bytes": 4379
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/20981-verdict.json",
+      "sha256": "35e338f0abb3363fac9a07e6b1ba6d3fbe477e6dc1f1a4963b38927eddd8a783",
+      "bytes": 4819
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/20992-verdict.json",
+      "sha256": "07473c72b01fa148f1b2d12ec8c0ed2ba4c431eb5de40a23977298e8de71315d",
+      "bytes": 6562
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/summary.md",
+      "sha256": "b7e3a608964581d983d1811219d56b0ca7eaa59044dc3102bdcb148ea34069d5",
+      "bytes": 1809
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/20955-independent-review-queues.json",
+      "sha256": "5601ba9b008290fb1dc70be56be1abaa6df8903084a9b21cb6fc6c4417718928",
+      "bytes": 3792
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-sweep-benchmark.mjs",
+      "sha256": "aadda4262daa44f0b578e44cdf2ec3d73e1beb15aaf377086609fed3ee8d100e",
+      "bytes": 4430
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-sweep-repeat-1.json",
+      "sha256": "a8997945dca137076f660b13a95838829440d2e3364358d7e9c1bacd7c1b11c6",
+      "bytes": 14627
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-sweep-repeat-2.json",
+      "sha256": "1989eb65cf04a04f0a00b3f2c869da1f2b599133c929827c4fa8d6d652e825c8",
+      "bytes": 14661
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-sweep-repeat-3.json",
+      "sha256": "791031302c0fcb2f0683c2734e6e6eaadcfe12430214b097f5d6c96082dc9dff",
+      "bytes": 14599
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-sweep-prefix-initial.json",
+      "sha256": "02d5ae5016e0db13794e0375e2190c760e289a11cf26d5d2c2cca37cd3586b8c",
+      "bytes": 9341
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-exploratory-observations.json",
+      "sha256": "4579414714f47ae9aa54bd8b7aa665a15a76a4f1003de71e2a75d14767771f85",
+      "bytes": 1301
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement-benchmarked.ts",
+      "sha256": "6609eb53c0bf79d9330f1051e870924da8f8e8663f5a90bff3a9f437311744a4",
+      "bytes": 4403
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement.ts",
+      "sha256": "9be36d6c51fb830cbe01aff6bcdf961c596d788af20ec5fe75ca956f9e21ba3a",
+      "bytes": 4484
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement.test.ts",
+      "sha256": "e62728645721142b2d3cc9d0ead45b3f772e91678a5edf6a6066f561155842c6",
+      "bytes": 10967
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc-validation-final.log",
+      "sha256": "f58f7474e96872a78312e54f6b17731370e0eb32770d9a0aa2f4e99599d2e050",
+      "bytes": 7114
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/osc.config.mjs",
+      "sha256": "28af3ad86bf30fc5534f2f24cf0d4f83edb60b7572f90e4d86b899286a6df9a5",
+      "bytes": 378
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/terminal-webview-osc-link-retirement.test.ts",
+      "sha256": "b40cc43f3c608248da9016c5445fce04db4b1c2d367cde48cee9dac6b6da9947",
+      "bytes": 1716
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/build-mobile-candidate.mjs",
+      "sha256": "57dd346e2ca3ab0348ff550c10e4a87e15e9d05cfd71cb573701910cc44fe9cf",
+      "bytes": 4688
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/terminal-webview-engine.generated.ts",
+      "sha256": "30ff3e80c5f75f870324d2e3c0627cc0882ff00152e598b33a70f320a551a90c",
+      "bytes": 627186
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/source-formatted.ts",
+      "sha256": "f4b92bb99580beec0a35ba6dba04e56dc035a9998cd8efde814b34ffeb785d54",
+      "bytes": 4185
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/cache-revisit-proof.cjs",
+      "sha256": "52b676ed2058a2ae603bc254ab8e047752aee2e9bb697f2138f53607a4db100b",
+      "bytes": 4962
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/cache-revisit-results.json",
+      "sha256": "98f96f928e624dcd3f964738298d14ed23431f6658b286d891678214b7ad0d59",
+      "bytes": 3682
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/cache-revisit.log",
+      "sha256": "93197943b3a47b52c1674edb8965b7677ed8ef7c6a2894cd02f3cba857f06f7e",
+      "bytes": 2265
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/bufferline-source-experiment.cjs",
+      "sha256": "d6aa881c4d7562ab42951df648712de275de78f55efd8974e5284481c508aed9",
+      "bytes": 8999
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/bufferline-source-results.json",
+      "sha256": "27acaa73c54d66fb1fec3873e01e65994f51f982d9a8667fd2b97dd2840bd8bf",
+      "bytes": 6412
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/bufferline-source.log",
+      "sha256": "33ceecbf1a60f37e71e45bc13daa66a9b79abc6d7636c105baadffe44b726345",
+      "bytes": 1470
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/baseline-BufferLine.ts",
+      "sha256": "26551bd2db8ddd5cdb4f77b0f62f3b5f1ae4d14fd76ac4d5b5eae70eab10ea12",
+      "bytes": 22760
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/published-BufferLine.ts",
+      "sha256": "435b6bccb646071deda696d8e5ffccb5396524570a0d6f345093a1e0aebead1a",
+      "bytes": 24042
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/optionalCache-BufferLine.ts",
+      "sha256": "1bc91c6e7eda4e8e8c028a2a427320f80642be53c5b24ef63816a6c0e18aab93",
+      "bytes": 23741
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/falseCache-BufferLine.ts",
+      "sha256": "800627a54a7827d3ccf0320a9e1c2a502d0a89a51d9c910a6e6493acfd6f06bc",
+      "bytes": 23697
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/nullCache-BufferLine.ts",
+      "sha256": "c5997045cd4ccdf8ecd7307f313906c5ed3b6c1eac3da1f21461fbb957a9a05a",
+      "bytes": 23683
+    },
+    {
+      "path": "notes/tradeoff-removal/xterm/validGuard-BufferLine.ts",
+      "sha256": "53621b2c90a45c77372812735d462a1a40578431518bb008c2f1fb554ab9fa4c",
+      "bytes": 24284
+    }
+  ],
+  "primaryWorktreeGitStatus": ""
+}

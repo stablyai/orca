@@ -1,0 +1,40 @@
+{
+  "reviewer": "/root/merge_ci_dependencies",
+  "base": "5e984fd09326c41a596863a3dee6607d3a1024ad",
+  "path": "src/shared/terminal-osc-link-retirement.ts",
+  "candidatePath": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement.ts",
+  "candidateSha256": "9be36d6c51fb830cbe01aff6bcdf961c596d788af20ec5fe75ca956f9e21ba3a",
+  "status": "Rejected experiment; do not publish or replace the original #20955. Root reported repeatable timing regressions from author controls.",
+  "evidence": [
+    "Everything outside collectBufferLinks is byte-identical to the published head, including normal and alternate buffers, parser attributes, both saved cursor holders, sweep scheduling and marker-only retirement.",
+    "Pinned BufferLine stores every cell with HAS_EXTENDED in its numeric _extendedAttrs dictionary. Any live urlId therefore has a corresponding candidate column.",
+    "Sparse dictionary entries are not treated as live evidence by themselves: the candidate rereads each valid column through public getCell, which checks actual cell flags. Stale metadata on an erased cell cannot preserve a dead URL.",
+    "Wide/combined characters carry attributes through BufferLine set/copy operations; the sparse scan does not interpret codepoint width or text, so live columns continue to be collected after reflow.",
+    "The dense heuristic and midpoint probe select a full scan; false positives only affect performance, not the collected live set.",
+    "The final scratch guard accepts only the known plain Object.prototype dictionary shape. Missing/private Map/array/class/cross-realm/null-prototype shapes fall back to the unchanged public-cell scan. This addresses the earlier generic-isRecord concern."
+  ],
+  "requestedGuard": "Addressed in final scratch variant; no further change requested.",
+  "installedVersions": {
+    "@xterm/xterm": "6.1.0-beta.303",
+    "@xterm/headless": "6.1.0-beta.302"
+  },
+  "validation": "Reviewed source and author test fixtures; no independent test execution or timing run. Author owns final timing and candidate validation.",
+  "limitations": [
+    "The optimization reduces common-case scanning; it is not zero CPU and still traverses buffer rows and uses dense fallback.",
+    "Private xterm field compatibility remains a pinned-version contract; public API fallback must be conservative."
+  ],
+  "publicationDecision": {
+    "decision": "Do not publish this optimization. Keep original #20955 held.",
+    "reportedTimingEvidence": "Parent reported repeated author measurements showing 1\u20131.3% dense-midpoint-hole regression and one 5.9% prefix-density regression. Timing validation was delegated to the author; this reviewer did not rerun it.",
+    "correctnessConclusion": "No loss of live OSC8 links found for the pinned implementation. Private-holder shape fallback concern was addressed in the final scratch variant. The optimization is still rejected for measured workload regressions; timings apply to the saved benchmarked bytes, not a separately measured final guard."
+  },
+  "benchmarkedCandidate": {
+    "path": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement-benchmarked.ts",
+    "sha256": "6609eb53c0bf79d9330f1051e870924da8f8e8663f5a90bff3a9f437311744a4"
+  },
+  "privateShapeFollowup": {
+    "status": "Correctness caveat addressed in final rejected scratch variant.",
+    "change": "Fast path now requires Object.getPrototypeOf(_extendedAttrs) === Object.prototype; Map, array, custom/null prototypes and absent private fields use public-cell fallback.",
+    "testsReviewed": "Author added missing/Map/array private-holder cases that preserve functional public getCell, require all 80\u00d724 normal cells scanned and retain the live URL. Author was running final validation; this reviewer did not run tests."
+  }
+}

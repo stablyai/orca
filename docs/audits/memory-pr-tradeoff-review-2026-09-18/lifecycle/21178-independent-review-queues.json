@@ -1,0 +1,52 @@
+{
+  "reviewer": "/root/merge_ci_dependencies",
+  "base": "29820ed587cab4f2ab31a9306ca2180355b3e745",
+  "head": "48d4af652e5a24758077bc9eaa81e05be1f1a08e",
+  "decision": "No blocking correctness or ownership regression found in the final follow-up. Preserving the existing bounded view caches does not weaken model retirement.",
+  "scope": "Independent read-only review of final delta, controller lifecycle, disposal helpers, cache writer sites, installed Monaco view-state representation and saved final validation. No test reruns or source/ref mutations.",
+  "productionChangedLines": 23,
+  "findings": [
+    "The extracted disposeClosedEditorModels body is byte-for-byte identical to the published disposeClosedEditorTabs model-retirement body. The original disposeClosedEditorTabs export remains as a compatibility wrapper that still performs both model disposal and cache cleanup.",
+    "The lifecycle controller now invokes only model retirement. Registry generation fences, exact captured-model identity, shared/reopened URI ownership checks, attached-model defer/detach callbacks, stale callback invalidation and subscription teardown are unchanged.",
+    "The cold-registry path previously only removed cache entries; returning early now preserves those values without importing Monaco, acquiring model ownership or leaving any model-retirement operation undone.",
+    "Production writers use the existing setWithLRU with its default 20-entry cap for scroll, selection, PDF and diff state. Restoring those entries introduces no new quota, producer backlog or model registry owner.",
+    "Scroll/PDF state consists of numerical positions and selections are coordinate objects. Installed Monaco diff saveViewState serializes both editor view states plus collapsed-region ranges; the cached modelState is not the live diff model.",
+    "Existing cache bounds are by entry count, not a strict byte ceiling: a view state can contain multiple selections or collapsed regions. This follow-up preserves that pre-existing behavior and should not be described as a hard memory byte bound."
+  ],
+  "validationReviewed": {
+    "finalLog": "notes/tradeoff-removal/lifecycle/21178-final-tests.log",
+    "finalTestCount": "43 tests / 8 files pass",
+    "sourceGraph": "notes/tradeoff-removal/lifecycle/21178-final-graph.json",
+    "sourceGraphHead": "48d4af652e5a24758077bc9eaa81e05be1f1a08e",
+    "candidateRegressionTest": "The notes copy of closed-editor-view-state-retention.test.ts is byte-identical to the final commit; its tests demonstrate model disposal, preserved views, 20-entry LRU across 40 retired models and existing Monaco undo limits.",
+    "lint": "Saved final lint log is empty; parent/lifecycle agent owns exit-code record.",
+    "typecheck": "Saved full renderer typecheck reports only NativeChatMessageList.windowing.test.ts TS6196 unused NativeChatMessage. Do not call this a clean full typecheck without separately accounting for that inherited failure.",
+    "changedSourceHashes": [
+      {
+        "path": "src/renderer/src/components/editor/closed-editor-model-lifetime.test.ts",
+        "sha256": "068e3671310904a246e25195b33442f4136cc8e460f704f7e96d8833701fea81"
+      },
+      {
+        "path": "src/renderer/src/components/editor/closed-editor-model-registry.test.ts",
+        "sha256": "03cb972d8453968224654146734a52e396c7e9ddf518cfa1af95cccf9f20d2ff"
+      },
+      {
+        "path": "src/renderer/src/components/editor/closed-editor-tab-controller.ts",
+        "sha256": "2c173f4c3fc44c4e7f65bccaaaf44411ad0c01e4dd2558718cc7cceda264c180"
+      },
+      {
+        "path": "src/renderer/src/components/editor/closed-editor-tab-disposal.ts",
+        "sha256": "320b609399a770ba373bada4592ca19793e2dc376acac68a2cce5d14328c49fd"
+      },
+      {
+        "path": "src/renderer/src/components/editor/closed-editor-view-state-retention.test.ts",
+        "sha256": "22d36aadf8b759be33d42b8ad0e48a1cce6a368a8773307d7f12978ef7dc78f3"
+      }
+    ]
+  },
+  "nonBlockingNotes": [
+    "The comment above the newly extracted disposeClosedEditorModels still says it releases view-state cache entries; update wording if convenient because that function now only retires models.",
+    "The registry callback local name pendingCaches now denotes pending closed-file descriptors only; a naming cleanup is optional and has no correctness effect."
+  ],
+  "remainingUserTradeoff": "This improves close/reopen scroll, selection, PDF and diff-view continuity. It does not remove Monaco undo-history limitations: saved undo beyond Monaco's retention size or unsupported URI forms can still disappear after model disposal. Keep that caveat when judging the whole original #21178, rather than describing this follow-up as eliminating every tradeoff."
+}

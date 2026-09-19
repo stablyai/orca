@@ -1,0 +1,47 @@
+{
+  "pr": 21185,
+  "url": "https://github.com/stablyai/orca/pull/21185",
+  "publishedHead": "7ac04b01a2c97451fd5e2df3af79745bac36a1cc",
+  "classification": "residual_retention_policy_cost_alternative_tested_and_rejected",
+  "verdict": "Successful uninstall must release obsolete plugin log rings to fix this retention. Preserving every old plugin-key history keeps the retained data; no zero-cost replacement was demonstrated.",
+  "tradeoff": "Old worker-log rows disappear after successful uninstall and are unavailable if the same plugin key is later reinstalled. Failed uninstall keeps the history. Late callbacks from retired producers are fenced.",
+  "existingMechanisms": [
+    "The buffer caps each plugin ring at 200 rows but has no global bound across removed plugin keys.",
+    "The ordinary renderer log hook already drops uninstalled plugin keys; direct getLogs and later same-key reinstall are where old history can matter.",
+    "PluginAuditLog already rotates at 10 MiB, but records security/mutation events rather than the worker-output log rows. It is not an existing lossless archive of this data."
+  ],
+  "rejectedCandidateCommit": "7c9ba477a654a49a18576075139a3221eecf5f97",
+  "rejectedCandidatePurpose": "Feasibility control only: rotate the producer token on clear, retaining the lines. It preserves old history and fences late writers, but all eight removed rings remain reachable.",
+  "alternatives": [
+    {
+      "approach": "Rotate producer token but keep historical lines",
+      "rejectedBecause": "Actual GC control retains 8/8 removed 200-row rings, compared with 0/8 for the published fix."
+    },
+    {
+      "approach": "Write all history to a new archive",
+      "rejectedBecause": "Adds unbounded disk retention unless a new eviction policy is chosen; persistence is not free lossless removal of the tradeoff."
+    },
+    {
+      "approach": "Global LRU, weak references, or audit-log reuse",
+      "rejectedBecause": "Introduces observable eviction or nondeterministic loss, or changes the existing audit stream content/retention policy."
+    }
+  ],
+  "tests": [
+    {
+      "head": "7ac04b01a2c97451fd5e2df3af79745bac36a1cc",
+      "passed": 2,
+      "log": "21185-published-tests.log",
+      "graph": "21185-published-graph.json",
+      "coverage": "Old producer callbacks fenced, new capture works, retired history removed, 0/8 removed rings survive forced GC."
+    },
+    {
+      "head": "7c9ba477a654a49a18576075139a3221eecf5f97",
+      "passed": 2,
+      "log": "21185-alternative-tests.log",
+      "graph": "21185-alternative-graph.json",
+      "coverage": "Old producer callbacks fenced and old history retained, but all 8/8 removed rings with 200 rows each survive forced GC."
+    }
+  ],
+  "candidateCommit": null,
+  "executionBoundary": "No remote execution state is inferred. The rejected alternative was isolated in Git objects; it must not be published as a memory fix."
+}

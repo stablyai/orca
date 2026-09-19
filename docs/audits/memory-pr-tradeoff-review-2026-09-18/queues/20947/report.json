@@ -1,0 +1,51 @@
+{
+  "decision": "Keep original PR held: complete live-overload protection requires a user-visible or resource tradeoff.",
+  "conservationConstraint": "With an indefinitely stalled consumer and continued arbitrary new input, undelivered information grows as produced minus consumed. Finite memory cannot retain every byte while leaving producer progress unchanged. Existing lossless bounded replay could change ownership, but no such complete replay owner exists in these three paths.",
+  "notZeroTradeoff": [
+    "Spooling introduces disk I/O, capacity, retention and privacy costs; finite disk eventually fills.",
+    "Raising/removing limits delays or restores unbounded memory growth.",
+    "Compression improves some inputs but consumes CPU and cannot bound arbitrary incompressible input.",
+    "Pull/ACK protocols move the wait to the producer; they do not make live input disappear."
+  ],
+  "compatibilityReview": [
+    "docs/reference/ssh-execution-boundary.md",
+    "docs/reference/remote-wire-compatibility.md"
+  ],
+  "validationLimits": "Exact-head repository source loader; locally installed packages. Unit/socket/worker tests ran with ORCA_BACKGROUND_LAUNCH=1. No visible application, SSH mixed-version integration, native speech recognition or cross-platform matrix was run.",
+  "number": 20947,
+  "head": "ca5aea1a056bcf38ff989907071e6beea003c5de",
+  "base": "07c7606feebc850d8b82c8c85a6a7fda71f29f14",
+  "risk": "Medium: producer progress may stall under a slow visible terminal subscriber.",
+  "originalProductionChangedLines": 568,
+  "mechanism": "Aggregates held data/control metadata and native socket writes; at 4 MiB aggregate high water pauses sessions contributing at least 64 KiB. Aggregate low water is 1 MiB and per-session low water 32 KiB. The separate stream-backpressure owner persists beyond the 5-second lost-resume failsafe.",
+  "tradeoff": "A paused PTY read can fill its OS pipe and block the child process. This may remain until stream pressure falls or the connection/session releases ownership. The execution host must own this decision; a remote disconnect does not establish process death.",
+  "existingRecoveryExamined": [
+    "session-output-plane.ts stores only 2,097,152 UTF-16 code units of pending delta before falling back to an emulator snapshot. It is not an unlimited byte journal.",
+    "terminal-history-session-writer.ts rotates its 5 MiB incremental log into checkpoints. Checkpoints are capped at 200,000,000 bytes and can trim old rows; emulator scrollback does not reconstruct every transient event.",
+    "dataGap and keep-tail dropping are existing policies for explicitly backgrounded sessions. Extending them to visible output changes which bytes/events clients receive, including old clients. Query salvage is not general event replay."
+  ],
+  "rejectedAlternatives": [
+    "Resume automatically after the existing 5-second client pause failsafe: reopens the unbounded live stream growth this PR fixes.",
+    "Disconnect/resnapshot a visible subscriber: keeps the child running but drops intermediate output/transient events and changes recovery semantics.",
+    "Move the queue into history/spool: current history is bounded state, and a new lossless spool carries disk/retention/latency costs."
+  ],
+  "safeScopeReduction": {
+    "status": "Implemented as a separate cleanup-only candidate, not a replacement for the original PR.",
+    "base": "99071175698dead2566d613bc52393b5e3c373a0",
+    "patch": "notes/tradeoff-removal/queues/20947/cleanup-only.patch",
+    "manifest": "notes/tradeoff-removal/queues/20947/candidate-manifest.json",
+    "productionChangedLines": 64,
+    "behavior": "Retires per-client refill owner tokens in clear(client)/clear() and makes late completions from retired sockets no-ops. Reuses the original PR's DaemonStreamHeldRefill implementation. No new quota, producer pause, frame shape or live output retention policy.",
+    "beforeControl": "3 expected failures and 1 pass on exact main: 200 retired IDs remain; old callback flushes successor; shutdown callbacks flush retired owners.",
+    "fixedControl": "31 tests in 3 files pass, including all 4 lifecycle controls and existing byte-order/droppability batcher controls. Ordinary lint and anti-slop lint pass.",
+    "limit": "Releases this metadata owner and prevents stale actions. Socket implementation may still retain its own pending callback until completion. Live payload overload remains unresolved by this narrow fix.",
+    "fullTypecheck": "Not run by this agent; parent central validation before publication."
+  },
+  "exactHeadTests": {
+    "passed": 35,
+    "files": 3,
+    "log": "20947/exact-head-tests.log"
+  },
+  "sourceProvenance": "notes/tradeoff-removal/queues/20947/sources.json",
+  "testGraph": "notes/tradeoff-removal/queues/20947/tested-source-graph.json"
+}

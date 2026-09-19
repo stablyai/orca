@@ -1,0 +1,225 @@
+--- a/src/main/daemon/daemon-stream-data-batcher.ts
++++ b/src/main/daemon/daemon-stream-data-batcher.ts
+@@ -1,11 +1,8 @@
+ import type { Socket } from 'node:net'
+ import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
+ import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
+-import {
+-  clampToSafeSplitIndex,
+-  encodeStreamDataEvent,
+-  writeStreamDataEvents
+-} from './daemon-stream-data-split'
++import { clampToSafeSplitIndex, writeStreamDataEvents } from './daemon-stream-data-split'
++import { DaemonStreamHeldRefill } from './daemon-stream-held-refill'
+ import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
+ import type { DaemonEvent } from './types'
+ import { appendDaemonStreamData, type DaemonStreamEnqueueOptions } from './daemon-stream-data-entry'
+@@ -44,6 +41,7 @@
+ 
+ export class DaemonStreamDataBatcher {
+   private pendingByClient = new Map<string, PendingStreamDataBatch>()
++  private readonly heldRefill = new DaemonStreamHeldRefill((clientId) => this.flush(clientId))
+   private getClient: (clientId: string) => StreamDataClient | undefined
+   private maxLineBytes: number
+   private onAfterSocketWrite: (() => void) | undefined
+@@ -229,24 +227,14 @@
+     if (retained.length > 0) {
+       batch.queue = retained
+       // 'drain' only fires when the buffer fully empties (one gate-depth/turn = seconds for multi-MB backlogs); arm a no-op data event whose flush callback re-flushes while bytes are still in flight.
+-      this.armHeldQueueRefill(socket, clientId, retained[0].sessionId)
++      if (!socket.destroyed) {
++        this.heldRefill.arm(clientId, retained[0].sessionId, (line, complete) =>
++          socket.write(line, complete)
++        )
++      }
+       return
+     }
+     this.pendingByClient.delete(clientId)
+-  }
+-
+-  private refillArmedClients = new Set<string>()
+-
+-  private armHeldQueueRefill(socket: Socket, clientId: string, sessionId: string): void {
+-    if (this.refillArmedClients.has(clientId) || socket.destroyed) {
+-      return
+-    }
+-    this.refillArmedClients.add(clientId)
+-    // Must be a real protocol no-op line, not an empty write: an empty write's callback fires immediately, defeating the in-flight re-flush.
+-    socket.write(encodeStreamDataEvent(sessionId, ''), () => {
+-      this.refillArmedClients.delete(clientId)
+-      this.flush(clientId)
+-    })
+   }
+ 
+   private queuedCharsForSession(
+@@ -324,6 +312,7 @@
+   }
+ 
+   clear(clientId?: string): void {
++    this.heldRefill.clear(clientId)
+     const batches =
+       clientId === undefined
+         ? Array.from(this.pendingByClient.entries())
+--- /dev/null
++++ b/src/main/daemon/daemon-stream-held-refill.ts
+@@ -0,0 +1,35 @@
++import { encodeStreamDataEvent } from './daemon-stream-data-split'
++
++export class DaemonStreamHeldRefill {
++  private readonly armed = new Map<string, symbol>()
++
++  constructor(private readonly flush: (clientId: string) => void) {}
++
++  arm(
++    clientId: string,
++    sessionId: string,
++    write: (line: string, complete: () => void) => void
++  ): void {
++    if (this.armed.has(clientId)) {
++      return
++    }
++    const refill = Symbol()
++    this.armed.set(clientId, refill)
++    // A real no-op frame waits for preceding writes; an empty write can complete immediately.
++    write(encodeStreamDataEvent(sessionId, ''), () => {
++      if (this.armed.get(clientId) !== refill) {
++        return
++      }
++      this.armed.delete(clientId)
++      this.flush(clientId)
++    })
++  }
++
++  clear(clientId?: string): void {
++    if (clientId === undefined) {
++      this.armed.clear()
++    } else {
++      this.armed.delete(clientId)
++    }
++  }
++}
+--- /dev/null
++++ b/src/main/daemon/daemon-stream-refill-retirement.test.ts
+@@ -0,0 +1,122 @@
++import { Socket } from 'node:net'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
++
++function makeSocket() {
++  const socket = new Socket()
++  const completions: (() => void)[] = []
++  const writes: string[] = []
++  const buffered = vi.spyOn(socket, 'writableLength', 'get').mockReturnValue(128 * 1024)
++  vi.spyOn(socket, 'write').mockImplementation((...args) => {
++    writes.push(String(args[0]))
++    const complete = args.at(-1)
++    if (typeof complete === 'function') {
++      completions.push(() => complete())
++    }
++    return false
++  })
++  return { socket, completions, writes, buffered }
++}
++
++function refillOwnerCount(batcher: DaemonStreamDataBatcher): number {
++  const instance: unknown = batcher
++  if (typeof instance !== 'object' || instance === null) {
++    throw new Error('Missing batcher instance')
++  }
++  const owner = 'heldRefill' in instance ? instance.heldRefill : instance
++  if (typeof owner !== 'object' || owner === null) {
++    throw new Error('Missing refill owner')
++  }
++  const entries =
++    'armed' in owner
++      ? owner.armed
++      : 'refillArmedClients' in owner
++        ? owner.refillArmedClients
++        : undefined
++  if (entries instanceof Map || entries instanceof Set) {
++    return entries.size
++  }
++  throw new Error('Missing refill ownership collection')
++}
++
++describe('retired daemon stream refill owners', () => {
++  beforeEach(() => vi.useFakeTimers())
++  afterEach(() => {
++    vi.clearAllTimers()
++    vi.useRealTimers()
++    vi.restoreAllMocks()
++  })
++
++  it('releases every disconnected client id before socket callbacks settle', () => {
++    const transport = makeSocket()
++    const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket: transport.socket }))
++    for (let index = 0; index < 200; index += 1) {
++      const clientId = `retired-client-${index}`
++      batcher.enqueue(clientId, 'session', 'x'.repeat(8192))
++      batcher.flush(clientId)
++      batcher.clear(clientId)
++      expect(batcher.queuedCharsForClient(clientId)).toBe(0)
++    }
++    expect(transport.completions).toHaveLength(200)
++    expect(refillOwnerCount(batcher)).toBe(0)
++  })
++
++  it('prevents a retired completion from flushing or disarming a replacement client', () => {
++    const old = makeSocket()
++    const replacement = makeSocket()
++    let current = old
++    const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket: current.socket }))
++    batcher.enqueue('client', 'session', 'old'.repeat(4096))
++    batcher.flush('client')
++    batcher.clear('client')
++    current = replacement
++    batcher.enqueue('client', 'session', 'new'.repeat(4096))
++    batcher.flush('client')
++    const flush = vi.spyOn(batcher, 'flush')
++    old.completions[0]()
++    expect(flush).not.toHaveBeenCalled()
++    expect(replacement.completions).toHaveLength(1)
++    expect(refillOwnerCount(batcher)).toBe(1)
++    replacement.buffered.mockReturnValue(0)
++    replacement.completions[0]()
++    expect(flush).toHaveBeenCalledOnce()
++    expect(batcher.queuedCharsForClient('client')).toBe(0)
++    expect(refillOwnerCount(batcher)).toBe(0)
++  })
++
++  it('preserves complete live output and releases its owner when writes drain', () => {
++    const transport = makeSocket()
++    const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket: transport.socket }))
++    const output = 'ordinary-live-output\n'.repeat(1024)
++    batcher.enqueue('client', 'session', output)
++    batcher.flush('client')
++    expect(batcher.queuedCharsForClient('client')).toBe(output.length)
++    transport.buffered.mockReturnValue(0)
++    transport.completions[0]()
++    const delivered = transport.writes
++      .map((line) => JSON.parse(line))
++      .filter((event) => event.event === 'data')
++      .map((event) => event.payload.data)
++      .join('')
++    expect(delivered).toBe(output)
++    expect(batcher.queuedCharsForClient('client')).toBe(0)
++    expect(refillOwnerCount(batcher)).toBe(0)
++  })
++
++  it('clears all owner metadata and ignores all late completions at shutdown', () => {
++    const transport = makeSocket()
++    const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket: transport.socket }))
++    for (const client of ['one', 'two']) {
++      batcher.enqueue(client, 'session', 'x'.repeat(8192))
++      batcher.flush(client)
++    }
++    batcher.clear()
++    const flush = vi.spyOn(batcher, 'flush')
++    for (const complete of transport.completions) {
++      complete()
++    }
++    expect(flush).not.toHaveBeenCalled()
++    expect(refillOwnerCount(batcher)).toBe(0)
++    expect(vi.getTimerCount()).toBe(0)
++  })
++})

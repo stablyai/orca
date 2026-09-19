@@ -1,0 +1,18 @@
+{
+  "node": "v26.6.0",
+  "purpose": "Path projection and partial-token emission do not discard an ignored giant scalar; this does not rule out a deeper parser redesign.",
+  "rows": [
+    {
+      "emitPartialTokens": false,
+      "scalarBytes": 12582912,
+      "retainedScalarBytes": 12582912,
+      "selectedValues": [7]
+    },
+    {
+      "emitPartialTokens": true,
+      "scalarBytes": 12582912,
+      "retainedScalarBytes": 12582912,
+      "selectedValues": [7]
+    }
+  ]
+}

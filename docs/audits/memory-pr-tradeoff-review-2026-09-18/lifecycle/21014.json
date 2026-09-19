@@ -1,0 +1,43 @@
+{
+  "pr": 21014,
+  "url": "https://github.com/stablyai/orca/pull/21014",
+  "publishedHead": "099f3396524554fc6725a7f0b727434dc7369527",
+  "classification": "residual_cost_no_low_risk_behavior_preserving_replacement",
+  "verdict": "Keep the lifecycle generation fence. A continuously changing PTY inventory can still require retry or return unavailable.",
+  "tradeoff": "A lifecycle change on the target execution host invalidates an in-flight census. One retry shares the original deadline; further churn or missing fresh evidence can produce terminal_liveness_unavailable.",
+  "existingMechanisms": [
+    "Aggregate and provider-specific generations already avoid invalidation by unrelated known execution hosts.",
+    "Captured physical incarnations distinguish predecessor exits from successor processes.",
+    "The bounded retry already admits a refreshed census when it fits the original deadline."
+  ],
+  "alternatives": [
+    {
+      "approach": "Accept the earlier inventory",
+      "rejectedBecause": "Can restore a retired predecessor or remove newly admitted successor PTYs; stale evidence does not prove exited."
+    },
+    {
+      "approach": "Retry until a stable inventory arrives",
+      "rejectedBecause": "Introduces potentially unbounded latency and repeated host RPC work."
+    },
+    {
+      "approach": "Serialize lifecycle changes behind the census",
+      "rejectedBecause": "Delays spawn/exit processing; changes ownership timing and does not establish unreachable-host freshness."
+    },
+    {
+      "approach": "Overlay every concurrent per-PTY lifecycle event onto the old response",
+      "rejectedBecause": "Could reduce some same-host retries, but requires additional observation custody and complete event/incarnation coverage. Legacy or unavailable hosts still cannot provide missing facts. This is a larger protocol/ownership design, not a demonstrated zero-cost replacement."
+    }
+  ],
+  "tests": [
+    {
+      "head": "099f3396524554fc6725a7f0b727434dc7369527",
+      "passed": 18,
+      "suites": 2,
+      "log": "21014-tests.log",
+      "graph": "21014-graph.json",
+      "coverage": "Predecessor/successor identity, legacy unstamped IDs, unknown-start spawn, ignored predecessor exit, host scoping, aggregate/target order, and one retry deadline."
+    }
+  ],
+  "candidateCommit": null,
+  "executionBoundary": "Local/SSH host-scoped fixtures passed. Unavailable contact stays unverifiable; it is never converted to exited. No live SSH host was exercised."
+}

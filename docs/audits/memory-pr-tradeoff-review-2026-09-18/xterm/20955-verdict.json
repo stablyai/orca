@@ -1,0 +1,352 @@
+{
+  "number": 20955,
+  "title": "Retire overwritten OSC 8 metadata",
+  "observedAt": "2026-09-18T07:13:26.073370+00:00",
+  "head": "5e984fd09326c41a596863a3dee6607d3a1024ad",
+  "decision": "reject optimization experiment; hold existing PR for sweep-cost review",
+  "pureWin": false,
+  "candidate": null,
+  "candidateCommit": null,
+  "externalWrites": false,
+  "sourceOrPrimaryIndexEdits": false,
+  "finding": "Sparse attribute-map enumeration reduces plain/sparse buffer sweep work, but enumeration and density selection add work for some dense layouts. No robust improvement across the tested representative layouts.",
+  "proposedAlgorithm": "Check known plain-object private extended-attribute dictionary; enumerate sparse columns and reread public cells to filter stale metadata. Fall back to all public cells for absent/unsupported metadata or estimated dense rows.",
+  "rejectionEvidence": "A 158-linked-column row with an unlinked midpoint regressed about 1.0%, 1.3%, 1.2% in three independent paired runs. A 40-linked-column row regressed 5.9% in one of three runs. The initial sparse-only attempt regressed fully linked rows much more.",
+  "benchmarks": {
+    "script": "notes/tradeoff-removal/xterm/osc-sweep-benchmark.mjs",
+    "rawResultFiles": [
+      "notes/tradeoff-removal/xterm/osc-sweep-repeat-1.json",
+      "notes/tradeoff-removal/xterm/osc-sweep-repeat-2.json",
+      "notes/tradeoff-removal/xterm/osc-sweep-repeat-3.json"
+    ],
+    "initialPrefixRun": "notes/tradeoff-removal/xterm/osc-sweep-prefix-initial.json",
+    "preliminaryObservations": "notes/tradeoff-removal/xterm/osc-exploratory-observations.json",
+    "benchmarkedSource": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement-benchmarked.ts",
+    "benchmarkedSourceSha256": "6609eb53c0bf79d9330f1051e870924da8f8e8663f5a90bff3a9f437311744a4",
+    "finalGuardedSource": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement.ts",
+    "finalGuardedSourceSha256": "9be36d6c51fb830cbe01aff6bcdf961c596d788af20ec5fe75ca956f9e21ba3a",
+    "guardedSourceTimingStatus": "Not benchmarked. The subsequent plain-object prototype guard fixes unsupported-private-metadata fallback only; it cannot be credited with improving the adverse timings.",
+    "method": "Actual installed headless xterm; 16 paired alternating-order sweeps per layout, discard 4 warmups, three separate process runs, 11 layouts per run. Measures sweep after writes, not end-to-end app latency.",
+    "comparison": [
+      {
+        "rows": 5000,
+        "linkedColumns": 0,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 4.736354000000006,
+            "sparse": 2.433562500000022
+          },
+          {
+            "published": 4.0603334999999845,
+            "sparse": 1.573875000000001
+          },
+          {
+            "published": 5.216833500000007,
+            "sparse": 1.5433129999999977
+          }
+        ],
+        "relativeChangesPercent": [-48.61949719129907, -61.237789950012555, -70.41667133904129]
+      },
+      {
+        "rows": 50000,
+        "linkedColumns": 0,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 30.144125500000087,
+            "sparse": 3.5825625000000514
+          },
+          {
+            "published": 28.928229499999986,
+            "sparse": 2.899000000000001
+          },
+          {
+            "published": 28.70852100000002,
+            "sparse": 2.6603545000000395
+          }
+        ],
+        "relativeChangesPercent": [-88.11522165404983, -89.97864698218049, -90.73322342171497]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 1,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 19.453979000000004,
+            "sparse": 8.515416999999957
+          },
+          {
+            "published": 11.225812500000075,
+            "sparse": 8.761353999999983
+          },
+          {
+            "published": 10.93489599999998,
+            "sparse": 8.732457999999951
+          }
+        ],
+        "relativeChangesPercent": [-56.22789044853007, -21.953497798044243, -20.141371257669327]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 16,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 20.295395999999982,
+            "sparse": 9.475916999999754
+          },
+          {
+            "published": 10.814646000000039,
+            "sparse": 9.921041500000001
+          },
+          {
+            "published": 11.155416999999943,
+            "sparse": 9.777437499999905
+          }
+        ],
+        "relativeChangesPercent": [-53.310016715122174, -8.262910316251082, -12.35255929921799]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 40,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 19.64545850000013,
+            "sparse": 12.14291699999967
+          },
+          {
+            "published": 11.597999999999502,
+            "sparse": 12.278062500000033
+          },
+          {
+            "published": 19.266625500000373,
+            "sparse": 12.47072900000012
+          }
+        ],
+        "relativeChangesPercent": [-38.18969916126117, 5.863618727371622, -35.27289457097778]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 80,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 20.849957999999788,
+            "sparse": 13.64612550000038
+          },
+          {
+            "published": 21.400020999999924,
+            "sparse": 14.10897900000009
+          },
+          {
+            "published": 21.357104499999878,
+            "sparse": 13.866167000000132
+          }
+        ],
+        "relativeChangesPercent": [-34.550824994465124, -34.07025628619644, -35.07468673948656]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 159,
+        "layout": "prefix",
+        "pairedRunMediansMs": [
+          {
+            "published": 17.135478999999577,
+            "sparse": 13.60162500000024
+          },
+          {
+            "published": 25.404708500001107,
+            "sparse": 14.146999999999935
+          },
+          {
+            "published": 25.08789650000017,
+            "sparse": 14.383083499998975
+          }
+        ],
+        "relativeChangesPercent": [-20.62302431113495, -44.31347244153847, -42.669232950642645]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 1,
+        "layout": "middle",
+        "pairedRunMediansMs": [
+          {
+            "published": 15.92725000000064,
+            "sparse": 11.677666999999929
+          },
+          {
+            "published": 19.391916499999752,
+            "sparse": 11.813041999999768
+          },
+          {
+            "published": 19.29156250000142,
+            "sparse": 11.916186999999809
+          }
+        ],
+        "relativeChangesPercent": [-26.68120987615904, -39.08264817456325, -38.23109455235193]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 159,
+        "layout": "mixed",
+        "pairedRunMediansMs": [
+          {
+            "published": 13.101020999999491,
+            "sparse": 7.854833500000495
+          },
+          {
+            "published": 17.883396000000175,
+            "sparse": 8.158916999999747
+          },
+          {
+            "published": 13.326583500000197,
+            "sparse": 8.17102100000011
+          }
+        ],
+        "relativeChangesPercent": [-40.04411182914064, -54.3771384361244, -38.686303207420046]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 80,
+        "layout": "scattered",
+        "pairedRunMediansMs": [
+          {
+            "published": 16.994416500001535,
+            "sparse": 13.142520499999591
+          },
+          {
+            "published": 16.953457999999955,
+            "sparse": 13.00110400000085
+          },
+          {
+            "published": 16.76606250000077,
+            "sparse": 13.085667000001195
+          }
+        ],
+        "relativeChangesPercent": [-22.665656099470056, -23.31296659359474, -21.951459980537514]
+      },
+      {
+        "rows": 5000,
+        "linkedColumns": 158,
+        "layout": "middle-hole",
+        "pairedRunMediansMs": [
+          {
+            "published": 17.908125000001746,
+            "sparse": 18.089208999997936
+          },
+          {
+            "published": 16.994103999999425,
+            "sparse": 17.217062499999884
+          },
+          {
+            "published": 17.187791999998808,
+            "sparse": 17.39979200000016
+          }
+        ],
+        "relativeChangesPercent": [1.0111834711683754, 1.3119756122503823, 1.233433590547106]
+      }
+    ]
+  },
+  "validation": {
+    "log": "notes/tradeoff-removal/xterm/osc-validation-final.log",
+    "tests": {
+      "passed": 21,
+      "suites": 2
+    },
+    "coverage": [
+      "Existing headless and renderer link retirement controls",
+      "Stale extended metadata behind erased cells",
+      "Wide and combined linked cells",
+      "Normal and alternate saved-attribute holders",
+      "Plain scrollback sparse-cell visit count",
+      "Missing, Map and array private-view fallbacks",
+      "Freshly built Chrome74-target mobile engine retirement"
+    ],
+    "savedCursorLimitation": "The saved-holder tests populate the real holder directly. They do not assert that upstream DEC save/restore clones URL attributes.",
+    "focusedStrictTypecheck": "passed",
+    "oxlint": "passed after test-only style fixes",
+    "antiSlopLint": "passed after naming fix",
+    "independentReview": "notes/tradeoff-removal/xterm/20955-independent-review-queues.json",
+    "fullProjectOrAllPlatformTests": "Not run for rejected experiment.",
+    "backgroundPolicy": "Every test and generator launched with ORCA_BACKGROUND_LAUNCH=1; no windows or focus calls."
+  },
+  "remainingTradeoff": "Existing PR's sweep still visits every retained row/cell periodically, causing CPU work and possible pauses on large terminal buffers. No content/history/link limit was introduced.",
+  "alternatives": [
+    {
+      "alternative": "Use only original link marker rows",
+      "result": "Unsafe: wrapping/reflow can move live linked cells beyond the original marker row."
+    },
+    {
+      "alternative": "Trust sparse extended-attribute values directly",
+      "result": "Unsafe: stale entries may outlive erased cell flags. Public-cell reread is required."
+    },
+    {
+      "alternative": "Scan sparse keys with a density fallback",
+      "result": "Implemented and semantically tested, but rejected after adverse repeated timings."
+    },
+    {
+      "alternative": "Per-mutation hyperlink reference ownership in xterm",
+      "result": "Possible larger design, not implemented/proven here; adds mutation bookkeeping and must cover every reflow/copy/resize path."
+    }
+  ],
+  "generatedPatchCoherence": {
+    "description": "This is an application addon change, not a dependency-engine patch. No maintained dependency patch, generated runtime patch or lockfile changed.",
+    "mobileGenerator": "notes/tradeoff-removal/xterm/build-mobile-candidate.mjs",
+    "mobileGeneratorAdaptation": "Exact PR generator settings preserved; redirects source to ignored experiment and output to ignored notes, using mobile dependency resolution.",
+    "mobileGeneratedOutput": "notes/tradeoff-removal/xterm/terminal-webview-engine.generated.ts",
+    "mobileGeneratedOutputSha256": "30ff3e80c5f75f870324d2e3c0627cc0882ff00152e598b33a70f320a551a90c",
+    "trackedGeneratedAsset": false
+  },
+  "originalPrLineAccounting": {
+    "head": "5e984fd09326c41a596863a3dee6607d3a1024ad",
+    "base": "9c921360090667e02363fe6e4dee98410665427a",
+    "mergeBase": "357c9780f8bffa10a21d004449d8d6d9846a9310",
+    "production": {
+      "files": 6,
+      "additions": 129,
+      "deletions": 7,
+      "changed": 136,
+      "binaryFiles": []
+    },
+    "total": {
+      "files": 14,
+      "additions": 979,
+      "deletions": 9,
+      "changed": 988,
+      "binaryFiles": []
+    },
+    "categories": {
+      "documentation": {
+        "files": 3,
+        "additions": 613,
+        "deletions": 0,
+        "changed": 613,
+        "binaryFiles": []
+      },
+      "production-tooling": {
+        "files": 1,
+        "additions": 2,
+        "deletions": 0,
+        "changed": 2,
+        "binaryFiles": []
+      },
+      "test": {
+        "files": 5,
+        "additions": 237,
+        "deletions": 2,
+        "changed": 239,
+        "binaryFiles": []
+      },
+      "production": {
+        "files": 5,
+        "additions": 127,
+        "deletions": 7,
+        "changed": 134,
+        "binaryFiles": []
+      }
+    }
+  }
+}

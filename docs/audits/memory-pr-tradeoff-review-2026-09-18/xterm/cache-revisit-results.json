@@ -1,0 +1,126 @@
+{
+  "node": "v26.6.0",
+  "results": [
+    {
+      "number": 20965,
+      "head": "2a48cae631b81b4b58c8dfd7f8379cfad7b6365f",
+      "maintainedPatch": "config/patches/xterm-src/@xterm__addon-webgl@0.20.0-beta.299.src.patch",
+      "verifiedPublishedBlob": "ccf57dbcfff85eeb4c383fa987bcc07aa28e5d14",
+      "sourceHashes": {
+        "baseline": "4af6e55b14dc91e3eecf9f22a3ba9803b1fe6776d132ddf64e79d496d5566e5c",
+        "published": "7132d0a7aedcc0922bcb7b1a47b9c10454f8f668168bc6d0864e9caab4836237"
+      },
+      "samples": [
+        {
+          "variant": "baseline",
+          "keyCount": 64,
+          "firstPassMisses": 64,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 64,
+          "firstPassMisses": 64,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "baseline",
+          "keyCount": 4096,
+          "firstPassMisses": 4096,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 4096,
+          "firstPassMisses": 4096,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "baseline",
+          "keyCount": 4097,
+          "firstPassMisses": 4097,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 4097,
+          "firstPassMisses": 4097,
+          "revisitMisses": 4097
+        },
+        {
+          "variant": "baseline",
+          "keyCount": 10000,
+          "firstPassMisses": 10000,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 10000,
+          "firstPassMisses": 10000,
+          "revisitMisses": 10000
+        }
+      ]
+    },
+    {
+      "number": 20981,
+      "head": "47bb299d4d5e0a3d5e1e53a88fe5c5a68012519e",
+      "maintainedPatch": "config/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch",
+      "verifiedPublishedBlob": "0558a8873f680e8fb2a27cc833c49c5ba658e1dd",
+      "sourceHashes": {
+        "baseline": "c0956daf17b82fa4557149608eae3aac343e69a81521998544a4b1cf39e19fb8",
+        "published": "b0a5e7e2044d2b6980aca266ea2c23d9749e6aacd5524fb90a6e780f42fe44f7"
+      },
+      "samples": [
+        {
+          "variant": "baseline",
+          "keyCount": 64,
+          "firstPassMisses": 64,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 64,
+          "firstPassMisses": 64,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "baseline",
+          "keyCount": 4096,
+          "firstPassMisses": 4096,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 4096,
+          "firstPassMisses": 4096,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "baseline",
+          "keyCount": 4097,
+          "firstPassMisses": 4097,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 4097,
+          "firstPassMisses": 4097,
+          "revisitMisses": 4097
+        },
+        {
+          "variant": "baseline",
+          "keyCount": 10000,
+          "firstPassMisses": 10000,
+          "revisitMisses": 0
+        },
+        {
+          "variant": "published",
+          "keyCount": 10000,
+          "firstPassMisses": 10000,
+          "revisitMisses": 10000
+        }
+      ]
+    }
+  ],
+  "limitation": "Exact published cache methods bundled from maintained source; a fixed empty-glyph rasterizer and null contrast result isolate hit/miss policy. This proves repeated-work possibility, not measured rasterization/contrast latency or GPU behavior. No app/browser is launched."
+}

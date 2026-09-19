@@ -1,0 +1,76 @@
+{
+  "scope": "Five file-reader PRs; source audit plus focused controls, not affected-host attribution.",
+  "rows": [
+    {
+      "number": 20963,
+      "verdict": "No verified zero-tradeoff replacement",
+      "residual": "Complete JSONL records over 10 MiB remain rejected; the containing session may be incomplete.",
+      "investigated": [
+        "Reuse of session-document-stream.ts and existing @streamparser/json projection",
+        "Existing Codex timeline-only prefix classifier",
+        "Disk spill and prefix-only success"
+      ],
+      "finding": "The current callback contracts require a complete record/string or Buffer. Existing JSON projection retains even ignored scalar tokens: two 12 MiB controls retained all 12 MiB with and without partial tokens. Codex prefix classification only covers a subset and runs after record assembly. A parser/consumer redesign may preserve more records, but deleting the guard or moving the same full assembly to another layer reintroduces the allocation. No new parser was published without provider/consumer parity proof.",
+      "paths": [
+        "src/main/ai-vault/session-scanner-jsonl-reader.ts",
+        "src/main/ai-vault/session-document-stream.ts",
+        "src/main/ai-vault/session-scanner-codex-record-fast-path.ts",
+        "src/main/ai-vault/session-transcript-consumers.ts",
+        "src/main/ai-vault/session-transcript-message-content.ts"
+      ]
+    },
+    {
+      "number": 20976,
+      "verdict": "No verified zero-tradeoff replacement",
+      "residual": "An initially admissible legacy import that grows beyond 16 MiB is rejected.",
+      "investigated": [
+        "Read only the original prefix",
+        "Retry until stable",
+        "Streaming decoder plus atomic journal replacement"
+      ],
+      "finding": "The decoder retains full NativeChatMessage and identity arrays, then constructs the complete replacement epoch. Prefix success can silently publish an incomplete import; retrying a growing writer adds delay and may never settle. A transactional streaming decoder/journal redesign could change the memory model but is not a safe local substitute proven in this pass.",
+      "paths": [
+        "src/main/native-chat/agent-session-journal/journal-legacy-import.ts",
+        "src/main/native-chat/transcript-stream-lines.ts"
+      ]
+    },
+    {
+      "number": 21021,
+      "verdict": "No verified zero-tradeoff replacement",
+      "residual": "History growing beyond the existing 16 MiB quota can fail reconciliation.",
+      "investigated": [
+        "Stream ancestry and fingerprint generation",
+        "Accept a bounded prefix",
+        "Discard parsed text after indexing"
+      ],
+      "finding": "The history window indexes records and reconstructs exact raw prompt text and fingerprints. Incomplete evidence cannot establish absence of a pending message. A streaming graph/fingerprint redesign needs identity, duplicate, reordered-record and EOF parity; truncation or unconditional success weakens reconciliation.",
+      "paths": ["src/main/claude/claude-structured-history-window.ts"]
+    },
+    {
+      "number": 21024,
+      "verdict": "No verified zero-tradeoff replacement",
+      "residual": "Markers appended beyond the initial read extent can require retry.",
+      "investigated": [
+        "Native readFile extent on installed Node and Electron",
+        "Stream until EOF rather than initial size",
+        "Treat incomplete prefix as complete proof"
+      ],
+      "finding": "Real runtime controls show nonempty Buffer reads stop at the initial size, but large UTF-8 reads can include later appends. Thus the prior UTF-8 ancestry reader could include a marker that the fixed-prefix stream misses. Following a continuously growing file adds work/latency and can grow the proof graph. The safe retry is retained.",
+      "paths": ["src/main/claude/claude-transcript-branch-proof.ts"]
+    },
+    {
+      "number": 21128,
+      "verdict": "Partial improvement implemented",
+      "residual": "A dump already over 64 MiB at opened-descriptor stat is still rejected, including growth/replacement before that stat.",
+      "investigated": [
+        "Native Buffer readFile extent",
+        "Explicit followGrowth:false in existing bounded reader",
+        "Shrink, zero-size, oversize, descriptor/reservation and next-candidate controls"
+      ],
+      "finding": "Preserve the original opened prefix for positive-size regular files. Growth after descriptor stat no longer unnecessarily rejects that dump or allocates growth copies. Other callers retain default behavior; zero-size sources retain bounded EOF reads.",
+      "candidateCommit": "09dbe227547fadaec8d9163f35fd127b0dc1c3ed",
+      "testedCommit": "e1141803f475a7de8d790d593668238bd4285d04",
+      "validation": "56 tests / 5 suites pass; test-only old-production control has 2 expected failures; 4-file ordinary/anti-slop lint and focused TS7 pass; independent review found no blocker. Final delta is one explanatory comment."
+    }
+  ]
+}

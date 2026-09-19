@@ -1,0 +1,47 @@
+{
+  "decision": "Keep original PR held: complete live-overload protection requires a user-visible or resource tradeoff.",
+  "conservationConstraint": "With an indefinitely stalled consumer and continued arbitrary new input, undelivered information grows as produced minus consumed. Finite memory cannot retain every byte while leaving producer progress unchanged. Existing lossless bounded replay could change ownership, but no such complete replay owner exists in these three paths.",
+  "notZeroTradeoff": [
+    "Spooling introduces disk I/O, capacity, retention and privacy costs; finite disk eventually fills.",
+    "Raising/removing limits delays or restores unbounded memory growth.",
+    "Compression improves some inputs but consumes CPU and cannot bound arbitrary incompressible input.",
+    "Pull/ACK protocols move the wait to the producer; they do not make live input disappear."
+  ],
+  "compatibilityReview": [
+    "docs/reference/ssh-execution-boundary.md",
+    "docs/reference/remote-wire-compatibility.md"
+  ],
+  "validationLimits": "Exact-head repository source loader; locally installed packages. Unit/socket/worker tests ran with ORCA_BACKGROUND_LAUNCH=1. No visible application, SSH mixed-version integration, native speech recognition or cross-platform matrix was run.",
+  "number": 21129,
+  "head": "1f231d6147852a729fcbe4d2b5ad7262391fee27",
+  "base": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+  "risk": "Medium: overload stops dictation and can discard accepted but not yet finalized transcript.",
+  "originalProductionChangedLines": 169,
+  "mechanism": "Counts actual transferred backing-buffer bytes and frames across active and predecessor workers until consumption acknowledgement or real worker exit. At 8 MiB or 1024 pending frames it stops the session and emits an error.",
+  "tradeoff": "The human microphone producer cannot be slowed losslessly. The rejected frame and subsequent speech are lost. Desktop error handling clears activeSessionId, so later final events are ignored; mobile finish rejects recorded errors even if final text arrives later. Already-inserted text remains.",
+  "existingRecoveryExamined": [
+    "The worker acknowledges after processing feedAudio; raw samples are transferred to its queue. There is no file-backed audio journal in this path.",
+    "Desktop capture sends 4096 Float32 samples per frame (16 KiB): 8 MiB holds 512 such frames, approximately 43.7 seconds at 48 kHz or 47.6 seconds at 44.1 kHz.",
+    "stop is ordered after admitted audio, but existing stop teardown has a 60-second deadline and can terminate an unresponsive worker. Drain completion cannot be guaranteed for a permanently stuck decoder.",
+    "Desktop DictationController error path invalidates final ownership; runtime-mobile-dictation-controller records the error and rejects completion."
+  ],
+  "rejectedAlternatives": [
+    "Wait for ACK before capture sends: moves samples into another queue or pauses microphone capture and loses speech unless a separate recorder stores it.",
+    "Delay only the error until the worker drains: current feedAudio ignores audio once stopping, while the UI would still appear to listen, creating silent loss.",
+    "Spool audio: introduces storage/privacy/I/O/capacity costs and cannot provide finite-resource protection against permanent decoder failure.",
+    "Compress/resample: carries CPU or quality costs and does not remove the sustained producer/consumer imbalance.",
+    "Keep only ACK accounting without cap: observes but does not fix retained audio backlog."
+  ],
+  "safeScopeReduction": {
+    "status": "No zero-tradeoff localized replacement. Keep original held.",
+    "possibleReducedTradeoffFollowup": "Stop capture explicitly while preserving the accepted session owner long enough to drain and deliver already-admitted final transcript, then report recoverable overload. This can reduce avoidable accepted-transcript loss, but future capture still stops and the 60-second stuck-worker bound still applies.",
+    "requiredScope": "Requires distinct capture-stop/final-delivery semantics across desktop and mobile readers, mixed-version compatibility review, owner fencing and stale-final isolation tests. It is a feature behavior change, not a zero-tradeoff queue cleanup."
+  },
+  "exactHeadTests": {
+    "passed": 15,
+    "files": 2,
+    "log": "21129/exact-head-tests.log"
+  },
+  "sourceProvenance": "notes/tradeoff-removal/queues/21129/sources.json",
+  "testGraph": "notes/tradeoff-removal/queues/21129/tested-source-graph.json"
+}

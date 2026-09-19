@@ -1,0 +1,454 @@
+{
+  "scope": "All17 tradeoff holds; source controls and rejected experiments. Large evaluated-source graphs remain local, hashed here. Source code/permanent tests are retrievable through named PR commits.",
+  "published": {
+    "21401": "d01363acb769306788de24b97154919e7531ef03",
+    "21128": "09dbe227547fadaec8d9163f35fd127b0dc1c3ed",
+    "21178": "44fe1887bbbf2aae8957fff988a9a673f63a3b8c"
+  },
+  "records": [
+    {
+      "source": "notes/tradeoff-removal/readers/report.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/report.json",
+      "sourceSha256": "9bb6b131ac37c9ec9f85e65d6a4598620cfa63007b92c24e8ae7d5b4a5f661b2",
+      "sourceBytes": 5040,
+      "archivedSha256": "9090d0b9b6c47f61d807bf989ef4428445e7dee58aea6c77a360c3905c9c9c62",
+      "archivedBytes": 5008
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/readfile-growth-control.cjs",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/readfile-growth-control.cjs",
+      "sourceSha256": "398e4d24261b8bbc4784a9c47f852b73e9deaf5efecf5296b057732c287854a9",
+      "sourceBytes": 2137,
+      "archivedSha256": "5819f4824370ce09bfc21b0ed9e47ad705503ed19bd0b74779d0296b6242b62d",
+      "archivedBytes": 2383
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/readfile-growth-node.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/readfile-growth-node.json",
+      "sourceSha256": "00822175101999ee86227a7a2c2395b94aee1c8baaf9fd4ab1431a694c70c828",
+      "sourceBytes": 1779,
+      "archivedSha256": "00822175101999ee86227a7a2c2395b94aee1c8baaf9fd4ab1431a694c70c828",
+      "archivedBytes": 1779
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/readfile-growth-electron.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/readfile-growth-electron.json",
+      "sourceSha256": "159f2c4d5caa481ca95c5bf5d01104f2ad332cfa6d4a7220f966462725738167",
+      "sourceBytes": 1827,
+      "archivedSha256": "159f2c4d5caa481ca95c5bf5d01104f2ad332cfa6d4a7220f966462725738167",
+      "archivedBytes": 1827
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/stream-projection-control.cjs",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/stream-projection-control.cjs",
+      "sourceSha256": "8c07a51e82beb092fa8ee3ab89c74892fed01f8773bb9ed59c555e23376c494e",
+      "sourceBytes": 1110,
+      "archivedSha256": "db66c80bfa300761d25a3c8f25c98fd1d375b3ffff664715a6b0b995e948c53e",
+      "archivedBytes": 1178
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/stream-projection-control.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/stream-projection-control.json",
+      "sourceSha256": "1c0e2d30868f01db6782d5ffa4e4d6ffe29d53f60f28b98647907ebe9c6cfd2d",
+      "sourceBytes": 509,
+      "archivedSha256": "46904d16611ce66d531b518537bbcfa39383a5af71a20e8b28413da31559f25a",
+      "archivedBytes": 477
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/independent-review-queues.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/21128/independent-review-queues.json",
+      "sourceSha256": "4c35e2a4f682e29f79e55263ceb6c1b5404bc486e357756816161dae13e24709",
+      "sourceBytes": 3714,
+      "archivedSha256": "4c35e2a4f682e29f79e55263ceb6c1b5404bc486e357756816161dae13e24709",
+      "archivedBytes": 3714
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/summary.md",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/summary.md",
+      "sourceSha256": "59d94b46c463d000580388da6cd617791bbf2e6c22d79b868b5be6f3a32fc548",
+      "sourceBytes": 3385,
+      "archivedSha256": "1e22c4e9453013245cc2a4a29e4bb171a1608c7cb62219b14564deb7fac1c62a",
+      "archivedBytes": 4077
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/report.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/20947/report.json",
+      "sourceSha256": "16a2e80bf57cae47e42eba9e90408ab35eb026b744e6667fb003a0a317d88ddc",
+      "sourceBytes": 4828,
+      "archivedSha256": "16a2e80bf57cae47e42eba9e90408ab35eb026b744e6667fb003a0a317d88ddc",
+      "archivedBytes": 4828
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20949/report.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/20949/report.json",
+      "sourceSha256": "253d6392fd0f7ba3b8be1a85101172d3c1ec595386f5f8b2af6917fe6b2053f8",
+      "sourceBytes": 3990,
+      "archivedSha256": "253d6392fd0f7ba3b8be1a85101172d3c1ec595386f5f8b2af6917fe6b2053f8",
+      "archivedBytes": 3990
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/21129/report.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/21129/report.json",
+      "sourceSha256": "e62e643ccc1740694859ab5650cb51b1138d1a560638e94adad4cfd95528d09d",
+      "sourceBytes": 4526,
+      "archivedSha256": "e62e643ccc1740694859ab5650cb51b1138d1a560638e94adad4cfd95528d09d",
+      "archivedBytes": 4526
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/root-provenance.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/20947/root-provenance.json",
+      "sourceSha256": "d541072a0aef7b10db42802bb592196187e803525344e35b7efe516ee81eb31c",
+      "sourceBytes": 239,
+      "archivedSha256": "d541072a0aef7b10db42802bb592196187e803525344e35b7efe516ee81eb31c",
+      "archivedBytes": 239
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/summary.md",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/summary.md",
+      "sourceSha256": "7adbd4e0a6eed360a18daca1d15d328f32c579d12bb49dfca67f9fb57793efee",
+      "sourceBytes": 2252,
+      "archivedSha256": "78604dab157b6017c33f35e849450abcd664b9dd8cae70f1f0d05510b978d505",
+      "archivedBytes": 2978
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21014.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/21014.json",
+      "sourceSha256": "43ce897b9b230868dcf91a64a43d9f4655bad7de2197218e4bc5a0cda6eea768",
+      "sourceBytes": 2497,
+      "archivedSha256": "43ce897b9b230868dcf91a64a43d9f4655bad7de2197218e4bc5a0cda6eea768",
+      "archivedBytes": 2497
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21020.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/21020.json",
+      "sourceSha256": "957e211f1a222b8282e3feda0f5773c5366d3145e14c7cd7c4d5b318494a2bb8",
+      "sourceBytes": 2053,
+      "archivedSha256": "957e211f1a222b8282e3feda0f5773c5366d3145e14c7cd7c4d5b318494a2bb8",
+      "archivedBytes": 2053
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21175.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/21175.json",
+      "sourceSha256": "9b3aeec149fb865bad188b554c9471ad2bbd35a1850479fc21f45716bfeb2725",
+      "sourceBytes": 3942,
+      "archivedSha256": "9b3aeec149fb865bad188b554c9471ad2bbd35a1850479fc21f45716bfeb2725",
+      "archivedBytes": 3942
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21178.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/21178.json",
+      "sourceSha256": "d68e7d3b36849954b1df3f6ecd08b824bce2b6b6fb3a6f2f6c7932ae9336da27",
+      "sourceBytes": 5318,
+      "archivedSha256": "d68e7d3b36849954b1df3f6ecd08b824bce2b6b6fb3a6f2f6c7932ae9336da27",
+      "archivedBytes": 5318
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21185.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/21185.json",
+      "sourceSha256": "c4dc64ed1f6fdf13bf093095086f67833c69dbcbfa68be44837bbbb02948b237",
+      "sourceBytes": 2923,
+      "archivedSha256": "c4dc64ed1f6fdf13bf093095086f67833c69dbcbfa68be44837bbbb02948b237",
+      "archivedBytes": 2923
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21178-independent-review-queues.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/lifecycle/21178-independent-review-queues.json",
+      "sourceSha256": "81c57554e42d23176ce7be5632d0423ad9a931fb66e18c14923011ebc9522048",
+      "sourceBytes": 4753,
+      "archivedSha256": "81c57554e42d23176ce7be5632d0423ad9a931fb66e18c14923011ebc9522048",
+      "archivedBytes": 4753
+    },
+    {
+      "source": "notes/tradeoff-removal/current.json",
+      "archived": null,
+      "sourceSha256": "6df0889b3348b8d3cb857201d5c10403d539ef826c01f6df942aa0264f9e5b4c",
+      "sourceBytes": 13283
+    },
+    {
+      "source": "notes/tradeoff-removal/publication-before.json",
+      "archived": null,
+      "sourceSha256": "839c205b7b6f426efb1b285c2d21d96f32da660c3bc30941601f08d6b6180b90",
+      "sourceBytes": 7495
+    },
+    {
+      "source": "notes/tradeoff-removal/publication-checkpoint.json",
+      "archived": null,
+      "sourceSha256": "c8f098052fb4c7bc2dbc8f968405fbb50f099ae88897ab8d9375b3398fd60462",
+      "sourceBytes": 1605
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/root-candidate.json",
+      "archived": null,
+      "sourceSha256": "23986fdd16a2c622578b9662979f909e71b0b74f1a06f40e4aa1fab546319a70",
+      "sourceBytes": 1505
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/root-candidate-graph.json",
+      "archived": null,
+      "sourceSha256": "c15edc81113861b83db86f0b82fe65d474fc3d257b41936d2864a1cacf413aed",
+      "sourceBytes": 47163
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/root-candidate-tests.log",
+      "archived": null,
+      "sourceSha256": "15538b068b20ede903c7e79cae934da158afa6752407b219c9ea1ccd12bddcf3",
+      "sourceBytes": 236
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/typecheck-graph.json",
+      "archived": null,
+      "sourceSha256": "9319326e2bb07beb967ee24404ab6d7686d78b2dd28acb77cb034c8c1415266a",
+      "sourceBytes": 37774
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/typecheck-ts7.log",
+      "archived": null,
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceBytes": 0
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/candidate.json",
+      "archived": null,
+      "sourceSha256": "14b37a4295e36d74a0c7260ebffcc1df8b50e337b58db7574e0484bc0eda932e",
+      "sourceBytes": 796
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/loaded-graph.json",
+      "archived": null,
+      "sourceSha256": "19d50edb596d01c0097565914451d36b1907377ff23db6efaaaccacb5fdab777",
+      "sourceBytes": 2478
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/tests.log",
+      "archived": null,
+      "sourceSha256": "3c80efda9f237230f952f321b490e9cb69b229c67c0aed17371bc2181cbfb18f",
+      "sourceBytes": 233
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/control-tests.log",
+      "archived": null,
+      "sourceSha256": "00d9da4465b174440f4c8e48fb46452e1be9a6ca2ac28aff6aeb2b3220f436bb",
+      "sourceBytes": 2286
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/control-graph.json",
+      "archived": null,
+      "sourceSha256": "9ff0de553cdd83c71198c2e78a1c28bb3ae1080b2a747c31ce68ac00b98aa280",
+      "sourceBytes": 1982
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/lint.json",
+      "archived": null,
+      "sourceSha256": "e75f44f9fe88320cfa775af0233a601fa04191365e92fa7eee160e23aa2b5dc9",
+      "sourceBytes": 196
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/anti-slop.json",
+      "archived": null,
+      "sourceSha256": "7e6703d61964dd85c408624160614e00d4e21e0aa24bd4c5127972a24c35cbae",
+      "sourceBytes": 194
+    },
+    {
+      "source": "notes/tradeoff-removal/readers/21128/typecheck.log",
+      "archived": null,
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceBytes": 0
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/evidence-manifest.json",
+      "archived": null,
+      "sourceSha256": "639bade6bf8f2c293b8b50ee981b9e81560b45fb168a8db177d694a753bd0cbe",
+      "sourceBytes": 11729
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21178-final-graph.json",
+      "archived": null,
+      "sourceSha256": "6c5d1ebcfba01e768dbc3e8274389e88aef37dc897a7c0f7695150afa3a19cc9",
+      "sourceBytes": 171167
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21178-final-tests.log",
+      "archived": null,
+      "sourceSha256": "43496c8c6e45e27dc2671d57448cfdaa1d84780c0f934f664fc689a2e95eb8dd",
+      "sourceBytes": 239
+    },
+    {
+      "source": "notes/tradeoff-removal/lifecycle/21178-publish.json",
+      "archived": null,
+      "sourceSha256": "96da215c4273f859d628563844ca4acb511906bc308568d6e5e304b9063b7f5e",
+      "sourceBytes": 259
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/provenance-check.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/provenance-check.json",
+      "sourceSha256": "f5193d45d04ebabd5738e96b0033e8d137e302d9bce0f7029523a5bcd8722bbe",
+      "sourceBytes": 640,
+      "archivedSha256": "f5193d45d04ebabd5738e96b0033e8d137e302d9bce0f7029523a5bcd8722bbe",
+      "archivedBytes": 640
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/candidate-manifest.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/20947/candidate-manifest.json",
+      "sourceSha256": "9b6e3034f25284b4a6f713a6a97505c73c9f1c1aed11085661ec7048c9c03168",
+      "sourceBytes": 1377,
+      "archivedSha256": "9b6e3034f25284b4a6f713a6a97505c73c9f1c1aed11085661ec7048c9c03168",
+      "archivedBytes": 1377
+    },
+    {
+      "source": "notes/tradeoff-removal/queues/20947/cleanup-only.patch",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/queues/20947/cleanup-only.patch",
+      "sourceSha256": "d350e666ab9da15f35a5bf911c1a5f8414b394dc31583649686166bb4e539618",
+      "sourceBytes": 8434,
+      "archivedSha256": "d350e666ab9da15f35a5bf911c1a5f8414b394dc31583649686166bb4e539618",
+      "archivedBytes": 8434
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/20955-independent-review-queues.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/20955-independent-review-queues.json",
+      "sourceSha256": "5601ba9b008290fb1dc70be56be1abaa6df8903084a9b21cb6fc6c4417718928",
+      "sourceBytes": 3792,
+      "archivedSha256": "5601ba9b008290fb1dc70be56be1abaa6df8903084a9b21cb6fc6c4417718928",
+      "archivedBytes": 3792
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/20965-verdict.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/20965-verdict.json",
+      "sourceSha256": "e3d2304cab90f51173ba7f7a222bd562440ca6241b7d8a3ee3d9ff1e6d8b8663",
+      "sourceBytes": 4379,
+      "archivedSha256": "e3d2304cab90f51173ba7f7a222bd562440ca6241b7d8a3ee3d9ff1e6d8b8663",
+      "archivedBytes": 4379
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/20981-verdict.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/20981-verdict.json",
+      "sourceSha256": "35e338f0abb3363fac9a07e6b1ba6d3fbe477e6dc1f1a4963b38927eddd8a783",
+      "sourceBytes": 4819,
+      "archivedSha256": "35e338f0abb3363fac9a07e6b1ba6d3fbe477e6dc1f1a4963b38927eddd8a783",
+      "archivedBytes": 4819
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/20992-verdict.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/20992-verdict.json",
+      "sourceSha256": "07473c72b01fa148f1b2d12ec8c0ed2ba4c431eb5de40a23977298e8de71315d",
+      "sourceBytes": 6562,
+      "archivedSha256": "07473c72b01fa148f1b2d12ec8c0ed2ba4c431eb5de40a23977298e8de71315d",
+      "archivedBytes": 6562
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/cache-revisit-results.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/cache-revisit-results.json",
+      "sourceSha256": "98f96f928e624dcd3f964738298d14ed23431f6658b286d891678214b7ad0d59",
+      "sourceBytes": 3682,
+      "archivedSha256": "98f96f928e624dcd3f964738298d14ed23431f6658b286d891678214b7ad0d59",
+      "archivedBytes": 3682
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/bufferline-source-results.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/bufferline-source-results.json",
+      "sourceSha256": "27acaa73c54d66fb1fec3873e01e65994f51f982d9a8667fd2b97dd2840bd8bf",
+      "sourceBytes": 6412,
+      "archivedSha256": "cd101949ee1ff5fbe858b6fd4232602da2efa93a8f4bdde7e560cb7a4fb4c801",
+      "archivedBytes": 5764
+    },
+    {
+      "source": "notes/tradeoff-removal/publication-final.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/publication-final.json",
+      "sourceSha256": "008c2f9ccb41f76a9b582e7d9e884e72481f982b4a725fa86445f45864714b9f",
+      "sourceBytes": 2284,
+      "archivedSha256": "008c2f9ccb41f76a9b582e7d9e884e72481f982b4a725fa86445f45864714b9f",
+      "archivedBytes": 2284
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-sweep-prefix-initial.json",
+      "archived": null,
+      "sourceSha256": "02d5ae5016e0db13794e0375e2190c760e289a11cf26d5d2c2cca37cd3586b8c",
+      "sourceBytes": 9341
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-sweep-repeat-1.json",
+      "archived": null,
+      "sourceSha256": "a8997945dca137076f660b13a95838829440d2e3364358d7e9c1bacd7c1b11c6",
+      "sourceBytes": 14627
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-sweep-repeat-2.json",
+      "archived": null,
+      "sourceSha256": "1989eb65cf04a04f0a00b3f2c869da1f2b599133c929827c4fa8d6d652e825c8",
+      "sourceBytes": 14661
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-sweep-repeat-3.json",
+      "archived": null,
+      "sourceSha256": "791031302c0fcb2f0683c2734e6e6eaadcfe12430214b097f5d6c96082dc9dff",
+      "sourceBytes": 14599
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement-benchmarked.ts",
+      "archived": null,
+      "sourceSha256": "6609eb53c0bf79d9330f1051e870924da8f8e8663f5a90bff3a9f437311744a4",
+      "sourceBytes": 4403
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/terminal-osc-link-retirement.ts",
+      "archived": null,
+      "sourceSha256": "9be36d6c51fb830cbe01aff6bcdf961c596d788af20ec5fe75ca956f9e21ba3a",
+      "sourceBytes": 4484
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-validation-final.log",
+      "archived": null,
+      "sourceSha256": "f58f7474e96872a78312e54f6b17731370e0eb32770d9a0aa2f4e99599d2e050",
+      "sourceBytes": 7114
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-sweep-benchmark.mjs",
+      "archived": null,
+      "sourceSha256": "aadda4262daa44f0b578e44cdf2ec3d73e1beb15aaf377086609fed3ee8d100e",
+      "sourceBytes": 4430
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/bufferline-source-experiment.cjs",
+      "archived": null,
+      "sourceSha256": "d6aa881c4d7562ab42951df648712de275de78f55efd8974e5284481c508aed9",
+      "sourceBytes": 8999
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/cache-revisit-proof.cjs",
+      "archived": null,
+      "sourceSha256": "52b676ed2058a2ae603bc254ab8e047752aee2e9bb697f2138f53607a4db100b",
+      "sourceBytes": 4962
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/20955-verdict.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/20955-verdict.json",
+      "sourceSha256": "ea0c5fbf99c7c860abeec9d6fadc42668b4a22976511f2246453dfda8b5beb81",
+      "sourceBytes": 13086,
+      "archivedSha256": "dbde45f0f11a10301803ec4852f8f657bf000119075dc1b79538484dde44e1b2",
+      "archivedBytes": 12646
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/summary.md",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/summary.md",
+      "sourceSha256": "b7e3a608964581d983d1811219d56b0ca7eaa59044dc3102bdcb148ea34069d5",
+      "sourceBytes": 1809,
+      "archivedSha256": "4fb63ccdb4bb84d740b80b15649b9f959bd8d17f45d4dc61731de1f79592a4ee",
+      "archivedBytes": 3067
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/proof-manifest.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/proof-manifest.json",
+      "sourceSha256": "58ece455cc1d1199ef14b631b0d75fe2a3066cd3222b5629cc7c41f5031f2ca8",
+      "sourceBytes": 6594,
+      "archivedSha256": "c79eed8014a2f59cc4fd7bd0b072613070535c6d52e6adf2c3e692c983cdf20f",
+      "archivedBytes": 6574
+    },
+    {
+      "source": "notes/tradeoff-removal/xterm/osc-exploratory-observations.json",
+      "archived": "docs/audits/memory-pr-tradeoff-review-2026-09-18/xterm/osc-exploratory-observations.json",
+      "sourceSha256": "4579414714f47ae9aa54bd8b7aa665a15a76a4f1003de71e2a75d14767771f85",
+      "sourceBytes": 1301,
+      "archivedSha256": "4579414714f47ae9aa54bd8b7aa665a15a76a4f1003de71e2a75d14767771f85",
+      "archivedBytes": 1301
+    }
+  ]
+}

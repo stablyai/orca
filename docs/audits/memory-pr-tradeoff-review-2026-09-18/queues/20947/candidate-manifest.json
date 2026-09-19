@@ -1,0 +1,38 @@
+{
+  "base": "99071175698dead2566d613bc52393b5e3c373a0",
+  "scope": "Separate cleanup-only fix; does not replace #20947 live-backlog backpressure policy",
+  "files": [
+    {
+      "path": "src/main/daemon/daemon-stream-data-batcher.ts",
+      "added": 9,
+      "deleted": 20,
+      "changed": 29,
+      "test": false,
+      "sha256": "fccd4796f511a959f76c2d2b29985457da2a946766f673caa15da4d87ae0f3b9",
+      "baseSha256": "958a01e69c8e24f6eeebe44d0ba0e4e3fe50cb27e7c2302ee8582827633ee26f"
+    },
+    {
+      "path": "src/main/daemon/daemon-stream-held-refill.ts",
+      "added": 35,
+      "deleted": 0,
+      "changed": 35,
+      "test": false,
+      "sha256": "9af9434c1e2d11576fe4f4fcb315dd857078c9c27f717f36b60f367ac3ccd5e5",
+      "baseSha256": null
+    },
+    {
+      "path": "src/main/daemon/daemon-stream-refill-retirement.test.ts",
+      "added": 122,
+      "deleted": 0,
+      "changed": 122,
+      "test": true,
+      "sha256": "e5fa9a6482b1e98e6095b27a0c530a4f3fa9bea38246e0da743c291814b161eb",
+      "baseSha256": null
+    }
+  ],
+  "productionChangedLines": 64,
+  "testChangedLines": 122,
+  "candidateTestProjection": "Published test copy changes only relative source import from the tested notes fixture",
+  "typecheck": "Not yet run; parent should run candidate validation before publication",
+  "patch": "notes/tradeoff-removal/queues/20947/cleanup-only.patch"
+}

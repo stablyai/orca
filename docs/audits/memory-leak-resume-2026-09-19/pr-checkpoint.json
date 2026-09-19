@@ -1,0 +1,438 @@
+{
+  "queriedAtUtc": "2026-09-19T07:33:26.644328+00:00",
+  "repository": "stablyai/orca",
+  "baseline": "6a7d86ef50dd699c23353b2e64ba261a9fb3344c",
+  "priorHeldPrsAndLaterCleanup": [
+    {
+      "number": 20908,
+      "title": "fix(renderer): dispose global listeners during HMR",
+      "url": "https://github.com/stablyai/orca/pull/20908",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-renderer-hmr",
+      "headRefOid": "0848c34790482d9cebdfc66b83caa15d79113d3c",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T06:40:00Z",
+      "updatedAt": "2026-09-18T06:40:00Z"
+    },
+    {
+      "number": 20909,
+      "title": "fix(main,preload): tear down renderer relay and preload listeners",
+      "url": "https://github.com/stablyai/orca/pull/20909",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-relay-preload",
+      "headRefOid": "c8f4d66de45e79660a2bfc38f06a2d0828161ede",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T07:18:20Z",
+      "updatedAt": "2026-09-18T07:18:20Z"
+    },
+    {
+      "number": 20947,
+      "title": "fix(daemon): pause producers when stream backlogs grow",
+      "url": "https://github.com/stablyai/orca/pull/20947",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-daemon-stream-backpressure",
+      "headRefOid": "ba4fbe5cf42a66a5da69b4797f62af9bc6ad1ed7",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T04:41:56Z"
+    },
+    {
+      "number": 20949,
+      "title": "fix(browser): bound CDP output for stalled clients",
+      "url": "https://github.com/stablyai/orca/pull/20949",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-cdp-backpressure",
+      "headRefOid": "d12d1e0a06f3ced9425e98f3593e0864ef16830b",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T03:18:23Z"
+    },
+    {
+      "number": 20955,
+      "title": "Fix terminal hyperlink metadata retention during redraws",
+      "url": "https://github.com/stablyai/orca/pull/20955",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-osc-link-retirement",
+      "headRefOid": "fb724f630cbaecdf359a36c702c19361637b9160",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T05:35:08Z"
+    },
+    {
+      "number": 20963,
+      "title": "Bound AI Vault transcript record assembly before allocation",
+      "url": "https://github.com/stablyai/orca/pull/20963",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-transcript-record-budget",
+      "headRefOid": "4beab0c60cdb9c80c124b37d4b43c3863b1a38c8",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T03:18:26Z"
+    },
+    {
+      "number": 20965,
+      "title": "Bound invisible WebGL glyph cache entries",
+      "url": "https://github.com/stablyai/orca/pull/20965",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-webgl-empty-glyph-cache",
+      "headRefOid": "678e34cb553324a0cf1ef0825ec570e13cb1e5b2",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T04:21:15Z"
+    },
+    {
+      "number": 20976,
+      "title": "Enforce the legacy transcript import budget while reading",
+      "url": "https://github.com/stablyai/orca/pull/20976",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-legacy-import-source-budget",
+      "headRefOid": "8138b484eaf2e3efa656d1066eb24be63e40435c",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T03:18:28Z"
+    },
+    {
+      "number": 20981,
+      "title": "Bound terminal contrast-color caches",
+      "url": "https://github.com/stablyai/orca/pull/20981",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-contrast-cache",
+      "headRefOid": "00ed3625f818cb54526556569038f0d5ad8ed8bc",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T04:21:15Z"
+    },
+    {
+      "number": 20992,
+      "title": "fix(terminal): release erased cell backing strings",
+      "url": "https://github.com/stablyai/orca/pull/20992",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-terminal-cell-retention",
+      "headRefOid": "ef527dbf73a66a84b005a63e6778ba21f93320c5",
+      "baseRefName": "np-oom-scan-contrast-cache",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T05:58:32Z"
+    },
+    {
+      "number": 21001,
+      "title": "fix(terminal): retire explicitly closed pending split connections",
+      "url": "https://github.com/stablyai/orca/pull/21001",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-pending-split-close",
+      "headRefOid": "7df25d10810e6915346782005cee0efe9c89b5a6",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T06:52:01Z",
+      "updatedAt": "2026-09-18T06:52:02Z"
+    },
+    {
+      "number": 21005,
+      "title": "fix(terminal): retire captured remote handles when pending panes close",
+      "url": "https://github.com/stablyai/orca/pull/21005",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-pending-runtime-close",
+      "headRefOid": "b28fec317801b4b7086207db64cb0f41e30140db",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T09:13:11Z",
+      "updatedAt": "2026-09-18T09:13:12Z"
+    },
+    {
+      "number": 21006,
+      "title": "fix(sessions): cancel transcript acquisition during host teardown",
+      "url": "https://github.com/stablyai/orca/pull/21006",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-tui-transcript-acquisition",
+      "headRefOid": "746baae52bb51acbdcf0e3a7a0f7134ef3274a15",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T08:10:32Z",
+      "updatedAt": "2026-09-18T08:10:33Z"
+    },
+    {
+      "number": 21009,
+      "title": "fix(log-tail): retire watches with their renderer lifetime",
+      "url": "https://github.com/stablyai/orca/pull/21009",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-local-log-tail",
+      "headRefOid": "d251ec248f1ebbaa78b7bdae84469920e2ef05e7",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T07:02:03Z",
+      "updatedAt": "2026-09-18T07:02:04Z"
+    },
+    {
+      "number": 21014,
+      "title": "fix(runtime): reject stale inventory after PTY lifecycle changes",
+      "url": "https://github.com/stablyai/orca/pull/21014",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-stale-pty-inventory",
+      "headRefOid": "f940d76335473d7d2c91abf124b4092d233e53b2",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T06:41:24Z"
+    },
+    {
+      "number": 21020,
+      "title": "fix(runtime): persist acknowledged terminal tab retirement",
+      "url": "https://github.com/stablyai/orca/pull/21020",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-acknowledged-tab-retirement",
+      "headRefOid": "c5c2b6d745226f778584dc9c8b4a89bce3d8e6c0",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T06:41:24Z"
+    },
+    {
+      "number": 21021,
+      "title": "fix(claude): enforce history window quota while reading",
+      "url": "https://github.com/stablyai/orca/pull/21021",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-claude-history-window-budget",
+      "headRefOid": "f59ada2703e064024afb7dc493a8428cf78b0130",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T05:31:50Z"
+    },
+    {
+      "number": 21024,
+      "title": "fix(claude): stream transcript ancestry proofs",
+      "url": "https://github.com/stablyai/orca/pull/21024",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-claude-branch-streaming",
+      "headRefOid": "3d50ef26ac76933fc094b7a9ea25837e14860c05",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-19T06:39:16Z",
+      "updatedAt": "2026-09-19T06:39:18Z"
+    },
+    {
+      "number": 21112,
+      "title": "fix: stop xterm reflow retaining and overwriting trimmed rows",
+      "url": "https://github.com/stablyai/orca/pull/21112",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-xterm-reflow-retention",
+      "headRefOid": "061913804c35af189d00f8a9574dcb226b971ba6",
+      "baseRefName": "np-oom-scan-terminal-cell-retention",
+      "mergedAt": null,
+      "updatedAt": "2026-09-17T09:31:15Z"
+    },
+    {
+      "number": 21113,
+      "title": "fix: persist closing never-started local terminal tabs",
+      "url": "https://github.com/stablyai/orca/pull/21113",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-local-empty-tab-retirement",
+      "headRefOid": "718ead7ea9f6296d69ceb7d1460a3579116fe85f",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-17T02:35:46Z"
+    },
+    {
+      "number": 21128,
+      "title": "fix: read crash diagnostics without loading whole dumps into memory",
+      "url": "https://github.com/stablyai/orca/pull/21128",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-crashpad-read-limit",
+      "headRefOid": "01b4001ad077b81582e1b93ac41cc74610fffde4",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-19T06:39:52Z",
+      "updatedAt": "2026-09-19T06:39:54Z"
+    },
+    {
+      "number": 21129,
+      "title": "fix: bound audio queued behind local speech recognition",
+      "url": "https://github.com/stablyai/orca/pull/21129",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-speech-audio-budget",
+      "headRefOid": "7f0e6846d08918e85b642014f3264a81bfb76d9a",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T04:26:02Z"
+    },
+    {
+      "number": 21167,
+      "title": "fix: avoid retaining foreign SSH file frames before metadata",
+      "url": "https://github.com/stablyai/orca/pull/21167",
+      "state": "MERGED",
+      "headRefName": "np-oom-scan-ssh-file-metadata",
+      "headRefOid": "5e9614cd847f8ff4b6857e7e96b85da76bc06822",
+      "baseRefName": "main",
+      "mergedAt": "2026-09-18T06:59:42Z",
+      "updatedAt": "2026-09-18T06:59:43Z"
+    },
+    {
+      "number": 21175,
+      "title": "fix: retire unowned paired-host session partitions on GUI removal",
+      "url": "https://github.com/stablyai/orca/pull/21175",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-paired-host-session-retirement",
+      "headRefOid": "231edf2deab38bbf859edc2efea7deab845107db",
+      "baseRefName": "np-oom-scan-local-empty-tab-retirement",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T05:46:27Z"
+    },
+    {
+      "number": 21178,
+      "title": "fix: retire closed editor models from the app shell",
+      "url": "https://github.com/stablyai/orca/pull/21178",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-closed-editor-models",
+      "headRefOid": "e9ee5f595b40ca987875197d1faaf1781624b2a4",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T04:33:56Z"
+    },
+    {
+      "number": 21185,
+      "title": "fix(plugins): release diagnostic logs after successful uninstall",
+      "url": "https://github.com/stablyai/orca/pull/21185",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-plugin-log-retirement",
+      "headRefOid": "9a1686f4ed83d140868a7998bc36f266631bf2ba",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-19T04:36:34Z"
+    },
+    {
+      "number": 21401,
+      "title": "fix(daemon): retire disconnected stream refill owners",
+      "url": "https://github.com/stablyai/orca/pull/21401",
+      "state": "OPEN",
+      "headRefName": "np-oom-scan-daemon-refill-retirement",
+      "headRefOid": "d01363acb769306788de24b97154919e7531ef03",
+      "baseRefName": "main",
+      "mergedAt": null,
+      "updatedAt": "2026-09-18T07:48:30Z"
+    }
+  ],
+  "overlappingPrs": [
+    {
+      "number": 10548,
+      "title": "feat(memory-safety): bound OOM-prone ingress across transports, parsers and scans",
+      "url": "https://github.com/stablyai/orca/pull/10548",
+      "state": "OPEN",
+      "headRefName": "oom-rescoped",
+      "headRefOid": "4be5bcd756219607ec13685ee1f81eeb3da27e98",
+      "updatedAt": "2026-07-30T20:07:52Z",
+      "overlappingPaths": [
+        "src/main/emulator/android/scrcpy-stream-session.ts",
+        "src/main/emulator/android/scrcpy-stream-session.test.ts",
+        "src/main/emulator/scrcpy-video-registry.ts",
+        "src/main/emulator/scrcpy-video-registry-memory.test.ts",
+        "src/relay/workspace-session-handler.ts",
+        "src/relay/workspace-session-handler.test.ts"
+      ],
+      "verification": "REST pull files pages 5 and 11, per_page 100"
+    },
+    {
+      "number": 11061,
+      "title": "fix(memory): bound relay protocol accumulation",
+      "url": "https://github.com/stablyai/orca/pull/11061",
+      "state": "OPEN",
+      "headRefName": "oom-slice-11-relay-protocol",
+      "headRefOid": "c37e2355fd1005fce591a30872b12e04d0a86040",
+      "updatedAt": "2026-07-28T05:02:41Z",
+      "overlappingPaths": [
+        "src/relay/git-response-stream.ts",
+        "src/relay/git-response-stream-ownership.test.ts"
+      ],
+      "verification": "GraphQL pullRequest.files; complete connection"
+    },
+    {
+      "number": 20764,
+      "title": "fix(browser-pane): guard webview.remove() against a dead guest",
+      "url": "https://github.com/stablyai/orca/pull/20764",
+      "state": "OPEN",
+      "headRefName": "fix/webview-remove-dead-guest-freeze",
+      "headRefOid": "2ca8295e5da86eb5741581b5c16c551dc8be1d55",
+      "updatedAt": "2026-09-17T14:52:30Z",
+      "overlappingPaths": [
+        "src/renderer/src/components/browser-pane/host-guest/webview-registry.ts"
+      ],
+      "verification": "GraphQL pullRequest.files; complete connection"
+    },
+    {
+      "number": 18205,
+      "title": "fix(quit): reap owned helpers before app exit",
+      "url": "https://github.com/stablyai/orca/pull/18205",
+      "state": "OPEN",
+      "headRefName": "fix/quit-orphaned-processes",
+      "headRefOid": "90dcad0c63f96b88f7f15e380603c088e8c91a9d",
+      "updatedAt": "2026-09-07T14:53:49Z",
+      "overlappingPaths": ["src/main/startup/main-process-quit.ts"],
+      "verification": "GraphQL pullRequest.files; complete connection"
+    },
+    {
+      "number": 21483,
+      "title": "feat: attach explorer files as native-chat context",
+      "url": "https://github.com/stablyai/orca/pull/21483",
+      "state": "OPEN",
+      "headRefName": "fix/explorer-attach-as-context",
+      "headRefOid": "26028cc65e669ecec6b2a93b054ce14dd0de11ef",
+      "updatedAt": "2026-09-18T17:29:01Z",
+      "overlappingPaths": [
+        "src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts"
+      ],
+      "verification": "GraphQL pullRequest.files; complete connection"
+    },
+    {
+      "number": 17797,
+      "title": "feat(native-chat): local attachments in the composer on Remote Orca Server panes",
+      "url": "https://github.com/stablyai/orca/pull/17797",
+      "state": "OPEN",
+      "headRefName": "cmer/Allow-local-attachment-with-remote-server-and-or-ssh-session",
+      "headRefOid": "48ece5fee69cd7aba593f4b7085461b7c2661829",
+      "updatedAt": "2026-09-01T04:03:45Z",
+      "overlappingPaths": [
+        "src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts"
+      ],
+      "verification": "GraphQL pullRequest.files; complete connection"
+    }
+  ],
+  "sourceFingerprints": [
+    {
+      "path": "src/main/emulator/android/scrcpy-stream-session.test.ts",
+      "sha256": "2e48eaee949129347d2379f54bbf996af98cda4bb0f621dcf2adfc8de8abb88c"
+    },
+    {
+      "path": "src/main/emulator/android/scrcpy-stream-session.ts",
+      "sha256": "b3159cb9e6c852441932c3ab8da034ac49fb87a51cdd7d1190363c2adefe6cd7"
+    },
+    {
+      "path": "src/main/emulator/scrcpy-video-registry.ts",
+      "sha256": "6548a16d2d8f4d4a90eede0b0eef039d8f045622238c1111b6b1083cc0120294"
+    },
+    {
+      "path": "src/main/startup/main-process-quit.ts",
+      "sha256": "2489de89112102db092d8e5fec7fc11805a9aed0a06833671659622bf06b15c8"
+    },
+    {
+      "path": "src/relay/git-response-stream-ownership.test.ts",
+      "sha256": "5d9821f0b6ed9fae5afe10b5323de84865d204077b2a2ba597f0757b0cf555c9"
+    },
+    {
+      "path": "src/relay/git-response-stream.ts",
+      "sha256": "953495aa5255d262e4cd4c6417d4b2d1f1391bb1b9a86f020e866ad8d6b58bbc"
+    },
+    {
+      "path": "src/renderer/src/components/browser-pane/host-guest/browser-page-viewport.ts",
+      "sha256": "3f3c9cc1f9eb9f1075442321a661a4b08b95bee4cdd03185d6f1d86d19d3196b"
+    },
+    {
+      "path": "src/renderer/src/components/browser-pane/host-guest/webview-registry.ts",
+      "sha256": "d8bfe19423725fcbd1da765d2b161211b90f82211a4f28c2b1f0726f834ef5eb"
+    },
+    {
+      "path": "src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts",
+      "sha256": "834694d55d72785c921099a00f83d5904c7e0ca27876b4baecaa0d099992abb1"
+    },
+    {
+      "path": "src/renderer/src/components/native-chat/use-native-chat-composer-paste.ts",
+      "sha256": "0e0ba9317407acd29d8be7488ba63638d5382f1793db213032927061582de891"
+    },
+    {
+      "path": "src/relay/workspace-session-handler.ts",
+      "sha256": "88f467ba21522f9c00531433a020b9d718e8f6c93773d960cc44e9d95b2ef408"
+    },
+    {
+      "path": "src/relay/workspace-session-handler.test.ts",
+      "sha256": "82aea25097d58a7946ffffedede9e27675158728621104ea6caef729f76e8172"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "number": 20947,
+    "head": "ca5aea1a056bcf38ff989907071e6beea003c5de",
+    "verifiedSourceCount": 125
+  },
+  {
+    "number": 20949,
+    "head": "d12d1e0a06f3ced9425e98f3593e0864ef16830b",
+    "verifiedSourceCount": 8
+  },
+  {
+    "number": 21129,
+    "head": "1f231d6147852a729fcbe4d2b5ad7262391fee27",
+    "verifiedSourceCount": 17
+  },
+  {
+    "candidateGraph": "before-graph.json",
+    "head": "99071175698dead2566d613bc52393b5e3c373a0",
+    "verifiedSourceCount": 13
+  },
+  {
+    "candidateGraph": "expanded-candidate-graph.json",
+    "head": "99071175698dead2566d613bc52393b5e3c373a0",
+    "verifiedSourceCount": 300
+  }
+]

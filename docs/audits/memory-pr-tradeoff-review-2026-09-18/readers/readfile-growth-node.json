@@ -1,0 +1,77 @@
+{
+  "versions": {
+    "node": "26.6.0",
+    "acorn": "8.17.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.7.1",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.6.3",
+    "simdjson": "4.6.6",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026a",
+    "undici": "8.9.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.26",
+    "zlib": "1.2.12",
+    "zstd": "1.5.7"
+  },
+  "cases": [
+    {
+      "initialBytes": 131,
+      "appendedBytes": 1048576,
+      "encoding": "buffer",
+      "observedSize": 131,
+      "returnedBytes": 131,
+      "hookCalls": 1
+    },
+    {
+      "initialBytes": 1048707,
+      "appendedBytes": 1048576,
+      "encoding": "buffer",
+      "observedSize": 1048707,
+      "returnedBytes": 1048707,
+      "hookCalls": 1
+    },
+    {
+      "initialBytes": 131,
+      "appendedBytes": 1048576,
+      "encoding": "utf8",
+      "observedSize": 131,
+      "returnedBytes": 131,
+      "hookCalls": 1
+    },
+    {
+      "initialBytes": 1048707,
+      "appendedBytes": 1048576,
+      "encoding": "utf8",
+      "observedSize": 1048707,
+      "returnedBytes": 2097283,
+      "hookCalls": 1
+    },
+    {
+      "initialBytes": 0,
+      "appendedBytes": 1048576,
+      "encoding": "buffer",
+      "observedSize": 0,
+      "returnedBytes": 1048576,
+      "hookCalls": 1
+    }
+  ],
+  "meaning": "Native readFile fstat intercepted once to append before the first read; Buffer and large encoded reads differ. Test-only internal binding interception."
+}

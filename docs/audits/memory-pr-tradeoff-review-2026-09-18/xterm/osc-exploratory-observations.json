@@ -1,0 +1,46 @@
+{
+  "status": "Observed exploratory medians retained from session tool outputs; raw samples were overwritten during exploratory iteration. Do not treat these as independently rerunnable archived benchmark files.",
+  "sparseOnlySource": "source-formatted.ts",
+  "sparseOnlySourceSha256": "f4b92bb99580beec0a35ba6dba04e56dc035a9998cd8efde814b34ffeb785d54",
+  "sparseOnlyObservedMediansMs": [
+    {
+      "rows": 5000,
+      "linkedColumns": 0,
+      "published": 3.864,
+      "sparse": 1.457
+    },
+    {
+      "rows": 50000,
+      "linkedColumns": 0,
+      "published": 29.393,
+      "sparse": 2.836
+    },
+    {
+      "rows": 5000,
+      "linkedColumns": 159,
+      "published": 14.309,
+      "sparse": 20.151
+    }
+  ],
+  "densityFallbackObservedMediansMs": [
+    {
+      "rows": 5000,
+      "linkedColumns": 0,
+      "published": 5.13,
+      "sparse": 2.784
+    },
+    {
+      "rows": 50000,
+      "linkedColumns": 0,
+      "published": 31.1,
+      "sparse": 4.161
+    },
+    {
+      "rows": 5000,
+      "linkedColumns": 159,
+      "published": 26.83,
+      "sparse": 17.945
+    }
+  ],
+  "interpretation": "The initial sparse-only algorithm materially regressed dense links; the density fallback and midpoint heuristic improved common cases but repeated expanded tests still found adverse cases."
+}

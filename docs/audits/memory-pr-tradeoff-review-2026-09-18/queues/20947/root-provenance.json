@@ -1,0 +1,8 @@
+{
+  "head": "d01363acb769306788de24b97154919e7531ef03",
+  "verifiedSources": 303,
+  "tests": 31,
+  "testSuites": 3,
+  "focusedTypecheck": "TypeScript7.0.2: candidate roots+247 exact-source imports; pass",
+  "fullProjectTypecheck": false
+}

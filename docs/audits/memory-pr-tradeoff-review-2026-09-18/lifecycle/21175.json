@@ -1,0 +1,57 @@
+{
+  "pr": 21175,
+  "url": "https://github.com/stablyai/orca/pull/21175",
+  "publishedHead": "c86d273251cad3c9bc4a731651443659dab7e6d1",
+  "classification": "earlier_normal_flow_warning_withdrawn_with_explicit_scope",
+  "verdict": "The earlier warning that normal remove/re-pair loses a previously reusable cache is unsupported by the checked flows. No source change is needed to remove that warning.",
+  "tradeoff": "The PR does delete an unowned retired environment-ID mirror. Direct stale-ID session reads and manual restoration of an old catalog UUID can observe that deletion. Those cases are outside the demonstrated normal catalog-driven re-pair flow.",
+  "provenFacts": [
+    "Before and after the PR, addEnvironmentFromPairingCode mints randomUUID even when name and pairing offer are identical. The removed environment namespace is not reused.",
+    "updateEnvironmentFromPairingCode preserves the UUID only for a currently existing environment. Disconnect and in-place pairing update do not invoke this removal path.",
+    "Searched supported store, IPC, CLI, and VM resume paths. No supported import/restore API accepting a removed environment UUID was found. This does not promise manual backup compatibility.",
+    "Profile moves carry workspace sessions with their owning repository; copies omit those sessions. The main-owned repository/folder namespace guard preserves those partitions.",
+    "Main IPC and renderer removal actions refuse removing the active server. After successful removal, the catalog reload already purges removed-host repos, tabs, and session ownership from mounted renderer state.",
+    "The renderer mutation, catalog, runtime-status, and purge paths were unchanged by this PR. A stale in-flight request or direct session:get for the retired host ID remains an observable boundary."
+  ],
+  "checkedPaths": [
+    "src/shared/runtime-environment-store.ts",
+    "src/main/ipc/runtime-environment-session-retirement.test.ts",
+    "src/main/orca-profiles/profile-project-transfer.ts",
+    "src/main/orca-profiles/profile-project-transfer-payload.ts",
+    "src/renderer/src/components/settings/use-runtime-environment-mutation-actions.ts",
+    "src/renderer/src/components/settings/use-runtime-environment-catalog.ts",
+    "src/renderer/src/store/slices/runtime-status.ts",
+    "src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts"
+  ],
+  "alternatives": [
+    {
+      "approach": "Retain every removed namespace for possible future reuse",
+      "rejectedBecause": "Retains the orphaned mirrors while ordinary supported re-pair does not consume them. A manual restore/archive feature would require an explicit retention and migration policy."
+    }
+  ],
+  "tests": [
+    {
+      "head": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+      "passed": 1,
+      "log": "21175-before-pairing-tests.log",
+      "graph": "21175-before-pairing-graph.json",
+      "coverage": "Actual file store: identical remove/re-add gets a new host UUID; in-place update preserves UUID."
+    },
+    {
+      "head": "c86d273251cad3c9bc4a731651443659dab7e6d1",
+      "passed": 1,
+      "log": "21175-pairing-tests.log",
+      "graph": "21175-pairing-graph.json",
+      "coverage": "Same baseline control at the published PR head."
+    },
+    {
+      "head": "c86d273251cad3c9bc4a731651443659dab7e6d1",
+      "passed": 16,
+      "log": "21175-retirement-tests.log",
+      "graph": "21175-retirement-graph.json",
+      "coverage": "Actual published retirement tests: local/SSH writes, disconnect/same-ID update preservation, new-ID isolation, legacy partitions, late writers, repeated remove/reload, and failure handling."
+    }
+  ],
+  "candidateCommit": null,
+  "executionBoundary": "Unpair is explicit catalog ownership removal, not evidence that remote processes exited. Main-owned Git and folder namespace guards remain. Mounted-view behavior was traced in source, not exercised in a visible app."
+}

@@ -1,0 +1,39 @@
+{
+  "pr": 21020,
+  "url": "https://github.com/stablyai/orca/pull/21020",
+  "publishedHead": "ee8d1c0c4a4fd87e09d24895c0525497006dc5a9",
+  "classification": "residual_cost_no_low_risk_behavior_preserving_replacement",
+  "verdict": "Keep the post-acknowledgement identity check. A close racing a replacement or new leaf can still require a fresh user action.",
+  "tradeoff": "The original close can be refused as stale-terminal if the acknowledged tab now names a new creation/generation, successor physical incarnation, or new leaf. The current snapshot is republished.",
+  "existingMechanisms": [
+    "The acknowledgement captures host, tab creation/generation, leaves, PTYs, physical incarnations, and observed snapshot identity.",
+    "Removal of original exited leaves is already tolerated; not every harmless mutation is rejected.",
+    "Commit rechecks pin policy and preserves newer successor state."
+  ],
+  "alternatives": [
+    {
+      "approach": "Blindly retry close on the same tab ID",
+      "rejectedBecause": "May close a newly created tab or newly running leaf that the original action did not authorize."
+    },
+    {
+      "approach": "Return closed=true while retaining a replacement",
+      "rejectedBecause": "Misreports retirement and can make callers remove current mirrored state."
+    },
+    {
+      "approach": "Keep retrying until identity stabilizes",
+      "rejectedBecause": "Adds latency or hangs under churn; any finite retry still has the same race."
+    }
+  ],
+  "tests": [
+    {
+      "head": "ee8d1c0c4a4fd87e09d24895c0525497006dc5a9",
+      "passed": 11,
+      "suites": 1,
+      "log": "21020-tests.log",
+      "graph": "21020-graph.json",
+      "coverage": "Reused IDs/generations, physical split exits and promotion, persisted successors, pin races, dormant SSH kill IDs, and partial snapshots with a new sibling."
+    }
+  ],
+  "candidateCommit": null,
+  "executionBoundary": "Host and physical identity are preserved. A stop request is not proof of exited. SSH fixtures passed; no live SSH host was exercised."
+}

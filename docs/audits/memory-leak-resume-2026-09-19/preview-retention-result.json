@@ -1,0 +1,61 @@
+{
+  "kind": "Current production behavior reproduced; no fix retained",
+  "testedAtUtc": "2026-09-19T07:46:22.231674+00:00",
+  "baselineCommit": "6a7d86ef50dd699c23353b2e64ba261a9fb3344c",
+  "node": "v26.6.0",
+  "environment": {
+    "ORCA_BACKGROUND_LAUNCH": "1",
+    "DOM": "happy-dom",
+    "blobRegistry": "node:url URL and node:buffer Blob / resolveObjectURL"
+  },
+  "command": "ORCA_BACKGROUND_LAUNCH=1 ./node_modules/.bin/vitest run --config docs/audits/memory-leak-resume-2026-09-19/vitest.config.ts --reporter=verbose",
+  "testFilesPassed": 1,
+  "testsPassed": 1,
+  "measurements": {
+    "cycleCount": 10,
+    "blobBytesPerCycle": 1024,
+    "settledUnmountRetainedBytes": 10240,
+    "pendingUnmountRetainedBytes": 11264,
+    "remountedCachePreviewUrls": [null],
+    "removeControlRevokedBytes": 1024,
+    "clearControlRevokedBytes": 2048
+  },
+  "sourceFingerprints": [
+    {
+      "path": "docs/audits/memory-leak-resume-2026-09-19/native-chat-preview-retention.test.tsx",
+      "sha256": "ba296c6c15637755608beddc4e9c97a776581d76a95833c140100f0cd5cbb45a"
+    },
+    {
+      "path": "docs/audits/memory-leak-resume-2026-09-19/vitest.config.ts",
+      "sha256": "aa764369711d5014aa9d495f45586509ff4c235640384a7b15830cc10a302460"
+    },
+    {
+      "path": "src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts",
+      "sha256": "834694d55d72785c921099a00f83d5904c7e0ca27876b4baecaa0d099992abb1"
+    },
+    {
+      "path": "src/renderer/src/components/native-chat/use-native-chat-resolved-path-attachments.ts",
+      "sha256": "41fe633a12d78f826d22171f18174a05ea52c1f843429119522e9cf4516dd9db"
+    },
+    {
+      "path": "src/renderer/src/components/native-chat/native-chat-composer-scope-cache.ts",
+      "sha256": "f9b63a9e6e8d55d483406c13573d6db95223052e60a61515e96a084aa94a5e93"
+    }
+  ],
+  "limits": [
+    "The actual production attachment hook is exercised; the paste event and IPC save are not.",
+    "The browser URL methods delegate to the Node URL registry, so these sizes are not Chromium heap/RSS measurements.",
+    "No StrictMode, late-save fix, user-facing UI, or affected-host incident attribution is claimed.",
+    "Assertions describe the existing leak and are isolated from the ordinary test suite.",
+    "The harness revokes its remaining registrations at teardown."
+  ],
+  "codeQuality": {
+    "newArtifactFindings": 0,
+    "gatePassed": false,
+    "preExistingStagedEvidenceFindings": 4,
+    "files": [
+      "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/readfile-growth-control.cjs",
+      "docs/audits/memory-pr-tradeoff-review-2026-09-18/readers/stream-projection-control.cjs"
+    ]
+  }
+}
