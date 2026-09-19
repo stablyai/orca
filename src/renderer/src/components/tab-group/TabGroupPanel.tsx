@@ -179,7 +179,15 @@ export default function TabGroupPanel({
                 : 'editor'
       }
       onActivateFile={commands.activateEditor}
-      onCloseFile={commands.closeItem}
+      onCloseFile={(fileId) => {
+        // Why: TabBar emits the file entityId for the file-explorer/palette close paths but
+        // the unifiedTabId for a tab-strip close; match both like every sibling close handler
+        // above, else a document tab's X/Close/Cmd+W silently no-ops when it emits entityId.
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, fileId)
+        if (item) {
+          commands.closeItem(item.id)
+        }
+      }}
       onActivateBrowserTab={commands.activateBrowser}
       onActivateAgentSession={commands.activateAgentSession}
       onCloseBrowserTab={(browserTabId) => {
