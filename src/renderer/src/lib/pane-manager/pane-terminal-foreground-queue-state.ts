@@ -11,6 +11,8 @@ export const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
 export const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 16
 export const LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS = 32
 
+const recentForegroundSafetyFlushAt = new WeakMap<TerminalOutputTarget, number>()
+
 export function createQueueEntry(
   terminal: TerminalOutputTarget,
   options: WriteTerminalOutputOptions
@@ -67,6 +69,22 @@ export function clearForegroundRelease(entry: QueueEntry): void {
   resetForegroundReleaseGate(entry)
 }
 
+// Why: a close chunk arriving just after safety flush belongs to the same frame episode, even though the flushed queue entry was removed.
+export function inheritRecentForegroundSafetyFlush(entry: QueueEntry): void {
+  const flushedAt = recentForegroundSafetyFlushAt.get(entry.terminal)
+  if (flushedAt === undefined) {
+    return
+  }
+  const elapsedMs = getDrainNow() - flushedAt
+  if (elapsedMs > FOREGROUND_HOLD_SAFETY_DELAY_MS) {
+    recentForegroundSafetyFlushAt.delete(entry.terminal)
+    return
+  }
+  entry.foregroundReleaseDeadlineAt = flushedAt
+  entry.foregroundReleaseDeadlineFixed = true
+  recentForegroundSafetyFlushAt.delete(entry.terminal)
+}
+
 export function clearForegroundHoldSafety(entry: QueueEntry): void {
   if (entry.foregroundHoldSafetyTimer === null) {
     return
@@ -99,6 +117,9 @@ export function scheduleForegroundHoldSafety(entry: QueueEntry): void {
     entry.foregroundHoldSafetyTimer = null
     entry.foregroundHold = false
     clearForegroundCoalesce(entry)
+    if (entry.foregroundHoldSafetyDelayMs <= LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS) {
+      recentForegroundSafetyFlushAt.set(entry.terminal, getDrainNow())
+    }
     resetForegroundReleaseGate(entry)
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)

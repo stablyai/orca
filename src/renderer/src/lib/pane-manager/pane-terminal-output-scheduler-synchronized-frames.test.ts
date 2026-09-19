@@ -453,6 +453,41 @@ describe('pane terminal output scheduler', () => {
     )
   })
 
+  it('keeps a frame close bounded after a safety flush removes the held queue', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    const writeHold = (index: number): void => {
+      writeTerminalOutput(terminal, `\x1b[?2026hchunk-${index}`, {
+        foreground: true,
+        holdForeground: true,
+        latencySensitive: true
+      })
+    }
+
+    writeHold(0)
+    vi.advanceTimersByTime(20)
+    writeHold(1)
+    vi.advanceTimersByTime(20)
+    writeHold(2)
+    vi.advanceTimersByTime(11)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledOnce()
+
+    writeTerminalOutput(terminal, '\x1b[?2026l', {
+      foreground: true,
+      coalesceForeground: true
+    })
+    vi.advanceTimersByTime(0)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write).toHaveBeenLastCalledWith('\x1b[?2026l', expect.any(Function))
+  })
+
   it('drains a synchronized foreground ending after the restore coalescing window', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
