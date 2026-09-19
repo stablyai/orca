@@ -553,6 +553,59 @@ describe('connectPanePty', () => {
     })
   })
 
+  // Why: OpenCode OSC titles are `OC | <task>` with no status glyph; pre-fix
+  // reattach treated them as shells and ran RESET_MOUSE_REPORTING so wheel
+  // scrolled prompt history instead of session scrollback (#11123).
+  it('preserves OpenCode mouse and focus modes after reattach with OC | title', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        // Why: rehydrate re-arms mouse from the live TUI; the post-replay reset
+        // must not disarm it for an OpenCode-owned pane.
+        return {
+          id: sessionId,
+          snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?25hopencode mouse snapshot'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('OC | Native Stable Session')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([data]) => data as string
+      )
+      // Why: shell reattach disarms every mouse protocol; OpenCode needs them.
+      expect(writes.some((data) => data.includes('\x1b[?1000l'))).toBe(false)
+      expect(writes.some((data) => data.includes('\x1b[?1003l'))).toBe(false)
+      expect(writes.some((data) => data.includes('\x1b[?1006l'))).toBe(false)
+      expect(writes.some((data) => data.includes('\x1b[?1004l'))).toBe(false)
+    })
+  })
+
   it('does not inject focus-in after reattach when the terminal does not own DOM focus', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
