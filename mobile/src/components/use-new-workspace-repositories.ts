@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc-client'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
@@ -25,6 +25,7 @@ export function useNewWorkspaceRepositories(args: {
   allRepos: MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
+  upsertRepo: (repo: MobileWorkspaceRepo) => void
   loading: boolean
   /** Set when the project list failed to load and nothing is cached to show. */
   loadError: string | null
@@ -55,6 +56,27 @@ export function useNewWorkspaceRepositories(args: {
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
     [pickedRepo, repos]
+  )
+
+  // Why: a repo the phone just added must join the list and win the selection before the
+  // sheet's own fetch lands, or the last-visited default would grab the form first. The
+  // fetch keeps the row because the host registered it before answering.
+  const upsertRepo = useCallback(
+    (repo: MobileWorkspaceRepo) => {
+      setDesktopRepos((current) => {
+        const next = current.some((existing) => existing.id === repo.id)
+          ? current.map((existing) =>
+              existing.id === repo.id ? { ...existing, ...repo } : existing
+            )
+          : [...current, repo]
+        if (hostId) {
+          setCachedRepos(hostId, next)
+        }
+        return next
+      })
+      setSelectedRepo(repo)
+    },
+    [hostId]
   )
 
   useEffect(() => {
@@ -112,6 +134,7 @@ export function useNewWorkspaceRepositories(args: {
     allRepos,
     selectedRepo,
     setSelectedRepo,
+    upsertRepo,
     loading: loading && repos.length === 0,
     // Cached rows stay usable, so a failed refresh only matters when there is nothing to pick.
     loadError: repos.length === 0 ? loadError : null,

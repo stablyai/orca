@@ -28,6 +28,8 @@ export type NewWorktreeModalProps = {
   hostLabelById?: ReadonlyMap<ExecutionHostId, string>
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
+  /** A repo added from the phone moments ago; upserted and selected when the form opens. */
+  preselectedRepo?: MobileWorkspaceRepo | null
   openExternalUrl: (url: string) => void
   /** `executionHost` names the server the workspace was created on; absent for the desktop's own. */
   onCreated: (
