@@ -86,11 +86,17 @@ describe('runOpenCodeBinderRound', () => {
         { ...pane(PANE_A, 100), directory: '/elsewhere' },
         { ...pane(PANE_A, 101), directory: DIR }
       ],
-      processes: [proc(100, 1, ['zsh']), proc(101, 1, ['zsh']), proc(102, 101, ['opencode'], NOW - 90_000)],
+      processes: [
+        proc(100, 1, ['zsh']),
+        proc(101, 1, ['zsh']),
+        proc(102, 101, ['opencode'], NOW - 90_000)
+      ],
       knownOwners: new Map(),
       parentBySessionId: new Map()
     })
-    expect(ownerships).toEqual([{ sessionId: 'ses_1', paneKey: PANE_A, basis: 'single-pane-directory' }])
+    expect(ownerships).toEqual([
+      { sessionId: 'ses_1', paneKey: PANE_A, basis: 'single-pane-directory' }
+    ])
   })
 
   it('advances the watermark past seen sessions', () => {
@@ -116,6 +122,27 @@ describe('applyBinderOwnerships', () => {
     const applied = applyBinderOwnerships(
       state,
       [pane(PANE_A, 100)],
+      [{ sessionId: 'ses_1', paneKey: PANE_A, basis: 'argv' }],
+      NOW
+    )
+    expect(applied).toBe(1)
+    expect(lookupOpenCodeSessionPane(state, 'ses_1')).toMatchObject({
+      paneKey: PANE_A,
+      worktreeId: 'repo::/Users/jin/work/mocitec'
+    })
+  })
+
+  it('takes the newest row worktree when a pane remints', () => {
+    const state = createHookListenerState()
+    // Registry insertion order puts the stale row first; the live remint row
+    // carries a different worktree and must win, matching the round's
+    // newest-wins pane dedupe.
+    const applied = applyBinderOwnerships(
+      state,
+      [
+        { paneKey: PANE_A, directory: '/elsewhere', worktreeId: 'repo::/elsewhere', shellPid: 100 },
+        { ...pane(PANE_A, 101) }
+      ],
       [{ sessionId: 'ses_1', paneKey: PANE_A, basis: 'argv' }],
       NOW
     )

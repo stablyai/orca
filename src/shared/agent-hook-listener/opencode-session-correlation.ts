@@ -45,8 +45,6 @@ export type SessionOwnership = {
   basis: 'argv' | 'creation-correlation' | 'single-pane-directory'
 }
 
-/** Client started more than this before the session cannot have created it. */
-export const OPENCODE_CLIENT_PRE_CREATE_WINDOW_MS = 15 * 60 * 1000
 /** Allow for stamp skew between the process table and the session store. */
 export const OPENCODE_CREATE_SKEW_MS = 2 * 60 * 1000
 
@@ -83,8 +81,7 @@ export function sessionIdFromArgv(argv: readonly string[]): string | null {
   return null
 }
 
-function clientCouldCreate(client: CorrelatedClient, createdAtMs: number, nowMs: number): boolean {
-  void nowMs
+function clientCouldCreate(client: CorrelatedClient, createdAtMs: number): boolean {
   // Why lifetime-overlap instead of a start window: a TUI opened days ago
   // creates today's session from the same process. Started-before plus
   // seen-alive-after brackets the creation; a start window alone would miss
@@ -108,9 +105,8 @@ export function correlateOpenCodeSessionOwners(args: {
   clients: readonly CorrelatedClient[]
   /** Owners already known (registry + earlier binds this round). */
   knownOwners: ReadonlyMap<string, string>
-  nowMs: number
 }): SessionOwnership[] {
-  const { sessions, panes, clients, knownOwners, nowMs } = args
+  const { sessions, panes, clients, knownOwners } = args
   const owners = new Map(knownOwners)
   const results: SessionOwnership[] = []
 
@@ -186,7 +182,7 @@ export function correlateOpenCodeSessionOwners(args: {
     const evidencing = candidates.filter((pane) =>
       clients.some(
         (client) =>
-          client.paneKey === pane.paneKey && clientCouldCreate(client, session.createdAtMs, nowMs)
+          client.paneKey === pane.paneKey && clientCouldCreate(client, session.createdAtMs)
       )
     )
     const [only] = evidencing

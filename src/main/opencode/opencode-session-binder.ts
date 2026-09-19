@@ -165,8 +165,7 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
       sessions,
       panes,
       clients,
-      knownOwners,
-      nowMs: deps.nowMs
+      knownOwners
     })
   ]
   let watermarkMs = 0
@@ -276,9 +275,9 @@ export function applyBinderOwnerships(
 ): number {
   const worktreeByPane = new Map<string, string | null>()
   for (const pane of panes) {
-    if (!worktreeByPane.has(pane.paneKey)) {
-      worktreeByPane.set(pane.paneKey, pane.worktreeId)
-    }
+    // Why overwrite: matching the round's newest-wins pane dedupe, so a
+    // remint's live row wins over a stale row with a different worktree.
+    worktreeByPane.set(pane.paneKey, pane.worktreeId)
   }
   let applied = 0
   for (const ownership of ownerships) {

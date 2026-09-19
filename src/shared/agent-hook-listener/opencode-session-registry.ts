@@ -25,6 +25,9 @@ export type OpenCodeSessionBinding = {
 /** Upper bound; sessions are cheap rows but the map must not grow forever. */
 export const OPENCODE_SESSION_BINDINGS_MAX = 1000
 
+/** Per-pane launch-token cache; keyed differently from bindings but shares the same bound. */
+export const OPENCODE_PANE_LAUNCH_TOKENS_MAX = 1000
+
 function bindings(state: HookListenerState): Map<string, OpenCodeSessionBinding> {
   return state.opencodeSessionPaneBySessionId
 }
@@ -118,7 +121,7 @@ export function trackOpenCodePaneLaunchToken(
   const map = state.lastLaunchTokenByPaneKey
   map.delete(paneKey)
   map.set(paneKey, token)
-  while (map.size > OPENCODE_SESSION_BINDINGS_MAX) {
+  while (map.size > OPENCODE_PANE_LAUNCH_TOKENS_MAX) {
     const oldest = map.keys().next().value
     if (oldest === undefined) {
       break

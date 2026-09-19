@@ -40,8 +40,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
@@ -60,8 +59,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       ],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(sub).toEqual([
       { sessionId: 'ses_sub', paneKey: 'pane-a', basis: 'single-pane-directory' }
@@ -75,8 +73,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       ],
       panes: [{ paneKey: 'pane-a', directory: '/private/tmp/binder-e2e' }],
       clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
@@ -88,8 +85,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([])
   })
@@ -102,8 +98,7 @@ describe('correlateOpenCodeSessionOwners', () => {
         { paneKey: 'pane-b', directory: DIR }
       ],
       clients: [client('pane-b', NOW - 120_000)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
@@ -118,8 +113,7 @@ describe('correlateOpenCodeSessionOwners', () => {
         { paneKey: 'pane-b', directory: DIR }
       ],
       clients: [client('pane-a', NOW - 120_000), client('pane-b', NOW - 90_000)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([])
   })
@@ -129,8 +123,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       sessions: [session('ses_1', NOW - 3_600_000)],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [client('pane-a', NOW - 60_000, NOW)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([])
   })
@@ -140,8 +133,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [client('pane-a', NOW - 86_400_000)],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toHaveLength(1)
   })
@@ -157,8 +149,7 @@ describe('correlateOpenCodeSessionOwners', () => {
         client('pane-a', NOW - 120_000),
         client('pane-b', NOW - 110_000, NOW, ['opencode', '--session', 'ses_9'])
       ],
-      knownOwners: new Map(),
-      nowMs: NOW
+      knownOwners: new Map()
     })
     expect(results).toEqual([{ sessionId: 'ses_9', paneKey: 'pane-b', basis: 'argv' }])
   })
@@ -168,8 +159,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       sessions: [session('ses_child', NOW - 30_000, 'ses_root')],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map([['ses_root', 'pane-a']]),
-      nowMs: NOW
+      knownOwners: new Map([['ses_root', 'pane-a']])
     })
     expect(results).toEqual([
       { sessionId: 'ses_child', paneKey: 'pane-a', basis: 'creation-correlation' }
@@ -181,8 +171,7 @@ describe('correlateOpenCodeSessionOwners', () => {
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [{ paneKey: 'pane-a', directory: DIR }],
       clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map([['ses_1', 'pane-a']]),
-      nowMs: NOW
+      knownOwners: new Map([['ses_1', 'pane-a']])
     })
     expect(results).toEqual([])
   })
