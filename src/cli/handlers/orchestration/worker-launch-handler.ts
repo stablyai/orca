@@ -13,6 +13,7 @@ import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
+    const agent = getOptionalStringFlag(flags, 'agent')
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
     if (model || effort) {
@@ -59,7 +60,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       displayName: getOptionalStringFlag(flags, 'display-name'),
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
-      agent: getOptionalStringFlag(flags, 'agent'),
+      agent: agent === 'agy' ? 'antigravity' : agent,
       model,
       effort,
       terminal: getOptionalStringFlag(flags, 'terminal'),
