@@ -216,7 +216,7 @@ describe('Back controls in the screens the page serves', () => {
  * This describe is what the rows replace: once they are in `PAGE_SERVED_SCREENS`, `CONTROLS`
  * covers these trees and the cases below become a second reading of the same thing.
  */
-const ARRIVING_TREES = ['src/components']
+const ARRIVING_TREES = ['src/components', 'src/source-control']
 const ARRIVING = ARRIVING_TREES.flatMap((tree) => backControlsUnder(tree))
 
 describe('Back controls in the trees a registered route will add', () => {
