@@ -1,13 +1,18 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
-  antigravityPromptBeforeModelReadyScreen,
-  antigravityReadyScreen,
   store,
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
+
+const antigravityCapturedReady = readFileSync(
+  join(__dirname, '..', '__fixtures__', 'antigravity-ready-default-127.txt'),
+  'utf8'
+)
 
 describe('OrcaRuntimeService', () => {
   it('waits for exit on background terminal handles', async () => {
@@ -532,10 +537,11 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    runtime.onPtyData('pty-bg', antigravityReadyScreen('Gemini 4 Experimental (High)'), Date.now())
+    runtime.seedHeadlessTerminal('pty-bg', '\x1b[0m', { cols: 120, rows: 40 })
+    runtime.onPtyData('pty-bg', antigravityCapturedReady, Date.now())
 
     await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 3_500 })
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
@@ -558,21 +564,11 @@ describe('OrcaRuntimeService', () => {
     }
     const splitSpy = vi.spyOn(String.prototype, 'split')
 
-    runtime.onPtyData(
-      'pty-bg',
-      [
-        'Antigravity CLI 1.0.3\n',
-        'user@example.com (Antigravity Business)\n',
-        pastedTail,
-        'Gemini 4 Experimental (High)\n',
-        '~/orca/workspaces/orca/agy-dispatch-issue\n',
-        '>'
-      ].join(''),
-      Date.now()
-    )
+    runtime.seedHeadlessTerminal('pty-bg', '\x1b[0m', { cols: 120, rows: 40 })
+    runtime.onPtyData('pty-bg', [pastedTail, antigravityCapturedReady].join(''), Date.now())
 
     await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 3_500 })
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
@@ -581,12 +577,14 @@ describe('OrcaRuntimeService', () => {
     })
     const splitReadyTail = splitSpy.mock.contexts.some((context) => {
       const value = typeof context === 'string' ? context : String(context)
-      return value.includes('antigravity cli') && value.includes('pasted text pasted text')
+      return (
+        value.toLowerCase().includes('antigravity cli') && value.includes('pasted text pasted text')
+      )
     })
     expect(splitReadyTail).toBe(false)
   })
 
-  it('resolves tui-idle from an Antigravity prompt before the model line', async () => {
+  it('resolves tui-idle after retained trust text is replaced by a captured Antigravity screen', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -595,18 +593,19 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.seedHeadlessTerminal('pty-bg', '\x1b[0m', { cols: 120, rows: 40 })
     runtime.onPtyData(
       'pty-bg',
       [
         'Do you trust this workspace directory?\n',
         'Press t to trust\n',
-        antigravityPromptBeforeModelReadyScreen('Gemini 3.5 Flash (High)')
+        antigravityCapturedReady
       ].join(''),
       Date.now()
     )
 
     await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 3_500 })
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',
@@ -639,11 +638,12 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    runtime.onPtyData('pty-1', antigravityReadyScreen(), Date.now())
+    runtime.seedHeadlessTerminal('pty-1', '\x1b[0m', { cols: 120, rows: 40 })
+    runtime.onPtyData('pty-1', antigravityCapturedReady, Date.now())
     const [terminal] = (await runtime.listTerminals()).terminals
 
     await expect(
-      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 3_500 })
     ).resolves.toMatchObject({
       handle: terminal.handle,
       condition: 'tui-idle',

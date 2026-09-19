@@ -1,5 +1,93 @@
 # Antigravity readiness: what the transcripts show
 
+## 2026-09-19: CI replay corrections
+
+The full runtime suite still expected the old hand-written bare-caret screens to
+be ready. It now replays the recorded 1.2.7 screen at 120×40, including the
+background-handle, live-leaf, retained-trust-text and large retained-tail paths.
+The waits allow 3.5 seconds so the 2-second idle poll can observe the asynchronous
+screen projection. The no-whole-tail-split performance assertion remains.
+
+The older API-key, hidden-account and dismissed-dialog captures include shutdown.
+Their unique `ESC[>4m ESC[=0;1u` trailer resets keyboard modes, moves down and clears
+the shortcut footer with `ESC[J`; the dismissed dialog also prints a resume
+command. Their live-phase tests stop before that recorded trailer. Full-file
+screen checks require **not ready** after the footer is erased. No capture bytes
+were edited and no production readiness condition was relaxed.
+
+The transcript suite now asserts the intended verdict directly, including rejecting
+the model picker, instead of preserving historical defects as inverted expectations.
+
+
+## 2026-09-19: host contact and live prompt submission
+
+A regression marked an SSH terminal `unverifiable` after caching a ready screen.
+The wait incorrectly returned ready. Readiness now refuses that cached verdict
+while host contact is unverifiable, and the adopted-screen fallback rechecks
+liveness when an outstanding snapshot completes. Both cases pass runtime tests;
+this is simulated host loss, not a claim of real SSH validation. Reconnection
+snapshot freshness remains a separate validation task.
+
+In the hidden app, a real `terminal.send` with text plus Enter submitted a harmless
+prompt to installed agy. The rendered request failed with HTTP 401 and
+`ACCESS_TOKEN_TYPE_UNSUPPORTED`; the subsequent empty composer satisfied the
+readiness wait. The public RPC's guarded prompt route is limited to Claude/Codex,
+so this agy check proves ordinary input delivery, not guarded worker submission.
+
+## 2026-09-19: ordinary wait and delivery integration
+
+The ordinary wait paths now consult the same current-screen classifier for
+Antigravity, including immediate checks, polling, title callbacks and the queued
+message delivery gate. Snapshot reads reuse the execution host's existing terminal
+model/provider path and pending-read deduplication. Cached screens are rejected
+after output, process generation changes or queued headless reflow/writes.
+
+A hidden rebuilt Orca with installed agy reproduced the previous failure: an empty
+composer reported the dismissed trust prompt, then timed out after an app restart.
+With this integration, the same daemon terminal returns ready. Typing the exact
+Plan placeholder makes the wait time out; clearing it returns ready again. Screenshots
+and wait results were inspected together. No model generation was needed for this
+check; successful authenticated worker turns remain unverified.
+
+Runtime tests replay recorded output through the normal wait path, exercise a
+trust dialog before its recorded alternate-screen teardown, then replay the ready
+screen. They also cover drafts, working output, cache invalidation on new output
+and reflow, and queued delivery retry after a draft becomes empty. Narrow/wrapped
+layouts and absent banners remain unrecognized rather than claimed ready. Real
+SSH/Windows execution and disconnect freshness still require validation.
+
+## 2026-09-19: live 1.2.7 mode captures and visible-screen fallback
+
+New recordings under `src/main/runtime/__fixtures__/`:
+
+- `antigravity-ready-default-127.txt`: empty default-mode composer.
+- `antigravity-ready-plan-127.txt`: empty composer displaying
+  `> Plan mode: research & plan only (shift+tab to cycle)`.
+- `antigravity-ready-accept-edits-127.txt`: empty composer displaying
+  `> Accept-edits mode: file edits auto-approved (shift+tab to cycle)`.
+- `antigravity-plan-hint-as-draft-127.txt`: the exact plan placeholder text typed
+  as a real, unsubmitted draft.
+
+The ready and typed plan rows have identical text and styling. Their footers differ:
+the empty composer shows `? for shortcuts`; a typed draft removes it. The captured
+working screen instead shows `esc to cancel`. A bare-caret requirement alone would
+reject both empty mode composers. Matching the placeholder text alone would accept
+the user's draft. The installed binary reports version `1.2.1`, but its banner is
+`1.2.7`; these recordings identify the banner version.
+
+`terminal-screen-readiness.ts` now checks the complete visible composer frame and
+shortcut footer, and rejects separately projected draft text. The adopted-terminal
+visible-screen fallback uses it. Captured-screen tests and runtime fallback tests
+cover ready, working, dialog, and draft cases, including mocked SSH snapshots.
+
+**This was initially a fallback-only fix.** The ordinary integration above now
+bypasses the defective retained-output matcher for recognized Antigravity panes. Narrow wrapping, a scrolled-away banner, and older layouts
+without the shortcut footer require further evidence and integration. The older
+`antigravity-composer-multiline-unsent.txt` recording was reused from PR #20027 with
+its original metadata; it was not recaptured on 1.2.7.
+
+## Earlier investigation (1.2.0)
+
 `findAntigravityReadyPromptIndex` in `src/main/runtime/terminal-wait-detection.ts` decides whether
 an Antigravity pane is ready for a prompt. It has been written five times, each version tuned
 against a five-line screen typed from memory into a `.spec.ts` fixture. Three of the first four

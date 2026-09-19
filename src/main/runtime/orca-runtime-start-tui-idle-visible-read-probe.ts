@@ -9,10 +9,8 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
 import { withTimeout } from './runtime-async-boundaries'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import { isKnownReadyTerminalScreen } from './terminal-screen-readiness'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -66,9 +64,15 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         ) {
           return
         }
+        const ptyId =
+          this.getLivePtyForHandle(waiter.handle)?.pty.ptyId ??
+          this.getLiveLeafForHandle(waiter.handle).leaf.ptyId
+        if (ptyId && this.getPtyLivenessVerdict(ptyId)?.status === 'unverifiable') {
+          return
+        }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        if (!blockedReason && !isKnownReadyPromptPreview(snapshotText)) {
+        if (!blockedReason && !isKnownReadyTerminalScreen(projection)) {
           return
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)

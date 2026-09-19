@@ -1,0 +1,22 @@
+_Ga=q,f=32,s=1,v=1,i=31;AAAAAA==\[c[?2026$p[?2027$p[>4m[?1049h[?25l[?5W[?2004h[>4;2m[>1u[?u[H[2J
+[6G▄▀▀▄
+[5G▀▀▀▀▀▀
+[4G▀▀▀▀▀▀▀▀
+  ▄▀▀    ▀▀▄
+ ▄▀▀      ▀▀▄
+
+ Welcome to the Antigravity CLI. You are currently not signed in.
+
+ No authentication methods available.
+
+ Press ctrl+c or ctrl+d twice to exit.[>4m[<1u[?1049l[>4;2m[>1u[?u[0 q[J
+[6C▄▀▀▄        [1mAntigravity CLI 1.2.7[m
+[34D▀▀▀▀▀▀       Gemini API key
+[28D▀▀▀▀▀▀▀▀      Gemini 3.7 Flash (Low)
+   ▄▀▀    ▀▀▄     ~/orca/workspaces/orca/agy-gemini-issues
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Accept-edits mode: file edits auto-approved (shift+tab to cycle)
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts[68X[68Caccept-edits · Gemini 3.7 Flash · low[2A[2C[?25h

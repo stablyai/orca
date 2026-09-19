@@ -11,6 +11,7 @@ export type TranscriptPaneOptions = {
   paneTitle: string
   foregroundProcess: string | null
   data: string
+  size?: { cols: number; rows: number }
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
   /** Simulates a PTY controller whose foreground probe never settles. */
@@ -71,6 +72,9 @@ export async function createTranscriptPane(
       }
     ]
   })
+  if (options.size) {
+    runtime.seedHeadlessTerminal(TRANSCRIPT_PANE_PTY_ID, '\x1b[0m', options.size)
+  }
   // Why the guard: a restore seed is only applied to a never-written record, so the restore
   // cases must not write an empty chunk first.
   if (options.data.length > 0) {

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-19T07:31:16.912Z",
+  "platform": "darwin",
+  "command": ["agy", "--mode", "accept-edits"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Live installed CLI banner 1.2.7; accept-edits mode startup; no prompt submitted",
+  "exitCode": 0
+}

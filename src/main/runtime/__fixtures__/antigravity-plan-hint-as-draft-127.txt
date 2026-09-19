@@ -1,0 +1,13 @@
+_Ga=q,f=32,s=1,v=1,i=31;AAAAAA==\[c[?2026$p[?2027$p[?5W[?2004h[>4;2m[>1u[?u[0 q[J
+[6C▄▀▀▄        [1mAntigravity CLI 1.2.7[m
+[34D▀▀▀▀▀▀       Gemini API key
+[28D▀▀▀▀▀▀▀▀      Gemini 3.7 Flash (Low)
+   ▄▀▀    ▀▀▄     ~/orca/workspaces/orca/agy-gemini-issues
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Plan mode: research & plan only (shift+tab to cycle)
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts[76X[76Cplan · Gemini 3.7 Flash · low[2A[2C[?25h[?25lPlan[K
+
+[84C[1K p[2A[85D[?25h[?25lmode: re[?25h[?25lsearch[C[?25h[?25l& plan[?25h[?25l only (s[?25h[?25lhift+ta[?25h[?25lb to cy[?25h[?25lcle)[?25h

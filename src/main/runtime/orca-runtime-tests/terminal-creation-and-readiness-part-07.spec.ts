@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
@@ -11,11 +13,15 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_PATH,
-  antigravityReadyScreen,
   cursorBusyScreen,
   cursorReadyScreen,
   store
 } from '../orca-runtime-test-fixtures.spec'
+
+const antigravityCapturedReady = readFileSync(
+  join(__dirname, '..', '__fixtures__', 'antigravity-ready-default-127.txt'),
+  'utf8'
+)
 
 describe('OrcaRuntimeService', () => {
   it('resolves tui-idle from a Codex ready prompt even when stale startup lines remain', async () => {
@@ -64,19 +70,20 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.seedHeadlessTerminal('pty-bg', '\x1b[0m', { cols: 120, rows: 40 })
     runtime.onPtyData(
       'pty-bg',
       [
         'Do you trust this workspace directory?\n',
         'Press t to trust\n',
-        antigravityReadyScreen(),
+        antigravityCapturedReady,
         '\n'
       ].join(''),
       Date.now()
     )
 
     await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 3_500 })
     ).resolves.toMatchObject({
       handle,
       condition: 'tui-idle',

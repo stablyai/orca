@@ -103,6 +103,13 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
   protected isTuiIdleSatisfiedForLeaf(leaf: RuntimeLeafRecord): boolean {
+    const screen = this.getTerminalScreenReadiness(
+      leaf.ptyId,
+      buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    )
+    if (screen) {
+      return screen.ready
+    }
     return isTuiIdleSatisfied({
       record: leaf,
       rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
@@ -188,6 +195,13 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
   }
 
   protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {
+    const screen = this.getTerminalScreenReadiness(
+      pty.ptyId,
+      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    )
+    if (screen) {
+      return screen.ready
+    }
     return isTuiIdleSatisfied({
       record: pty,
       readPositiveBodyEvidence: () =>
