@@ -167,6 +167,17 @@ export default function AiVaultPanel(): React.JSX.Element {
   const search = useAiVaultPanelSearch(query, agents, searchWithin, executionHostScope)
   const { searching, searchHits } = search
   const sessions = searching ? search.sessions : history
+  // While searching, `sessions` is only the main-process hit set. History-only
+  // overlay matches still need project/worktree map entries for project-scope
+  // filtering and resume-in-own-worktree (Pullfrog on #21280).
+  const sessionsForAttributionMaps = useMemo(
+    () =>
+      sessionsForAiVaultProjectMap(sessions, {
+        searching,
+        historySessions: history
+      }),
+    [history, searching, sessions]
+  )
   // Deliberately blind to the active repo/worktree: rebuilding these session
   // maps on every worktree switch is what made switching visibly slow (#10841 era).
   const sessionProjectById = useMemo(
@@ -175,15 +186,12 @@ export default function AiVaultPanel(): React.JSX.Element {
         repos,
         worktrees: allWorktrees,
         projectHostSetupProjection,
-        sessions: sessionsForAiVaultProjectMap(sessions, {
-          searching,
-          historySessions: history
-        })
+        sessions: sessionsForAttributionMaps
       }),
-    [allWorktrees, history, projectHostSetupProjection, repos, searching, sessions]
+    [allWorktrees, projectHostSetupProjection, repos, sessionsForAttributionMaps]
   )
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
-    sessions,
+    sessions: sessionsForAttributionMaps,
     repos,
     worktrees: allWorktrees
   })

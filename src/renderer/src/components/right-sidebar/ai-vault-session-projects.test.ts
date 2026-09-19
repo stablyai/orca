@@ -492,7 +492,7 @@ describe('sessionsForAiVaultProjectMap', () => {
     ).toEqual([searchHit])
   })
 
-  it('unions history with search hits while searching so project maps cover overlay matches', () => {
+  it('unions history with search hits while searching so project/worktree maps cover overlay matches', () => {
     const searchHit = { ...baseSession, id: 'search:1', title: 'index hit' }
     const historyOnly = { ...baseSession, id: 'history:1', title: 'scanner title' }
     const historyOverlap = { ...baseSession, id: 'search:1', title: 'stale history' }

@@ -75,9 +75,9 @@ export function buildAiVaultProjectContext({
 
 
 /**
- * Session lists used to build session→project attribution.
+ * Session lists used to build session→project and session→worktree attribution.
  * During desktop search, `sessions` is only the main-process hit set; history-only
- * overlay matches still need map entries for project-scope filtering.
+ * overlay matches still need map entries for project-scope filtering and resume.
  */
 export function sessionsForAiVaultProjectMap(
   sessions: readonly AiVaultSession[],
