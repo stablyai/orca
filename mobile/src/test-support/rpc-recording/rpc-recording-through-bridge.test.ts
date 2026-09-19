@@ -20,6 +20,7 @@ import {
 import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
 import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
 import { C1_PAGE_CLOSURE } from '../bridged-parity/c1-page-closure'
+import { C3_PAGE_CLOSURE } from '../bridged-parity/c3-page-closure'
 import {
   pageClosureDrift,
   pageClosureRunTotals,
@@ -397,6 +398,17 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       expect({ closure: pageClosureDrift(C2_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
       expect(pageClosureRunTotals(C2_PAGE_CLOSURE, observed)).toEqual(
         pageClosureTotals(C2_PAGE_CLOSURE)
+      )
+    })
+
+    it('gives every golden the C3 page closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C3', C3_PAGE_CLOSURE, observed))
+      // 28 families and 125 goldens, C1's 22 among them and inherited rather than re-derived, so
+      // this repeats their check too. One family it inherits has no byte-identical golden at all;
+      // all six it adds have at least one, so for those the pin holds bytes and not only a name.
+      expect({ closure: pageClosureDrift(C3_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
+      expect(pageClosureRunTotals(C3_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C3_PAGE_CLOSURE)
       )
     })
   }

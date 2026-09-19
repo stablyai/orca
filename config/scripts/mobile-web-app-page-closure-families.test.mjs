@@ -1,5 +1,5 @@
 /**
- * The tasks page closure reaches exactly the families the C1 and C2 pin tables commit.
+ * Each page closure reaches exactly the families its pin tables commit.
  *
  * The pins are the oracle for what each of those goldens does at the bridge, and this is the
  * precondition they cannot state for themselves: that the set of families is still the derived one.
@@ -17,11 +17,25 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 const read = (path) =>
   readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), 'utf8')
 
-/** C1's table and the two halves C2 splits its own across; the composed module only spreads them. */
+const C1_TABLE = 'mobile/src/test-support/bridged-parity/c1-page-closure.ts'
+
+/** Per domain: C1's table, which every page closure inherits, and the halves that domain adds.
+ *  The composed `cN-page-closure.ts` modules only spread these, so the halves are the evidence. */
 const PIN_TABLES = [
-  'mobile/src/test-support/bridged-parity/c1-page-closure.ts',
+  C1_TABLE,
   'mobile/src/test-support/bridged-parity/c2-work-item-closure-families.ts',
   'mobile/src/test-support/bridged-parity/c2-task-source-closure-families.ts'
+]
+const FILES_PIN_TABLES = [
+  C1_TABLE,
+  'mobile/src/test-support/bridged-parity/c3-explorer-closure-families.ts',
+  'mobile/src/test-support/bridged-parity/c3-preview-closure-families.ts'
+]
+
+/** Both files routes, because the C3 closure is their union and either alone pins fewer families. */
+const FILES_ROUTES = [
+  'app/h/[hostId]/files/[worktreeId].tsx',
+  'app/h/[hostId]/files/preview/[worktreeId].tsx'
 ]
 
 const SITE = 'mobile/src/tasks/MobileTasksScreen.tsx'
@@ -68,17 +82,47 @@ describe('the families a page closure reaches', () => {
   })
 })
 
+/** The families a route's own closure reaches, checked against the tables that pin them. */
+async function expectClosureFamilies(localModules, tables) {
+  const scenarios = JSON.parse(read('mobile/rpc-foundation/pilot-scenarios.json')).scenarios
+  const perTable = tables.map((path) => pinnedFamilyNames(read(path)))
+  // That every table was read rather than none, which an empty expectation would satisfy. A lower
+  // bound and not the exact count, deliberately: the comparison below is the one to make, and a
+  // guard on the number fires first and reports a number where the set reports the family's name.
+  expect(perTable.filter((names) => names.length === 0)).toEqual([])
+  const pinned = perTable.flat().sort()
+  expect(new Set(pinned).size).toBe(pinned.length)
+  expect(pageClosureFamilies(localModules, scenarios)).toEqual(pinned)
+}
+
 describeClosure('the tasks page closure', () => {
   it('reaches exactly the golden families the pin tables commit', async () => {
     const closure = await mobileWebAppRouteClosure('app/h/[hostId]/tasks.tsx')
-    const scenarios = JSON.parse(read('mobile/rpc-foundation/pilot-scenarios.json')).scenarios
-    const perTable = PIN_TABLES.map((path) => pinnedFamilyNames(read(path)))
-    // That every table was read rather than none, which an empty expectation would satisfy. A
-    // lower bound and not the exact 70, deliberately: the count below is the comparison's to make,
-    // and a guard on it fires first and reports a number where the set reports the family's name.
-    expect(perTable.filter((names) => names.length === 0)).toEqual([])
-    const pinned = perTable.flat().sort()
-    expect(new Set(pinned).size).toBe(pinned.length)
-    expect(pageClosureFamilies(closure.local, scenarios)).toEqual(pinned)
+    await expectClosureFamilies(closure.local, PIN_TABLES)
   }, 60_000)
+})
+
+describeClosure('the files page closures', () => {
+  it('reach exactly the golden families the pin tables commit, as a union', async () => {
+    // The union, because C3 is one pin table over two routes: the explorer alone reaches neither
+    // preview family, and the preview alone reaches no explorer family, so either route on its own
+    // would report a set the table legitimately exceeds.
+    const closures = await Promise.all(FILES_ROUTES.map((route) => mobileWebAppRouteClosure(route)))
+    const union = [...new Set(closures.flatMap((closure) => closure.local))]
+    await expectClosureFamilies(union, FILES_PIN_TABLES)
+  }, 120_000)
+
+  it('each reach a strict part of it, which is what makes the union the oracle', async () => {
+    // Without this the union above would also pass with one route contributing nothing at all.
+    const scenarios = JSON.parse(read('mobile/rpc-foundation/pilot-scenarios.json')).scenarios
+    const [explorer, preview] = await Promise.all(
+      FILES_ROUTES.map((route) => mobileWebAppRouteClosure(route))
+    )
+    const explorerFamilies = pageClosureFamilies(explorer.local, scenarios)
+    const previewFamilies = pageClosureFamilies(preview.local, scenarios)
+    expect(explorerFamilies).toContain('files.explorer-screen')
+    expect(explorerFamilies).not.toContain('files.preview-load')
+    expect(previewFamilies).toContain('files.preview-load')
+    expect(previewFamilies).not.toContain('files.explorer-screen')
+  }, 120_000)
 })
