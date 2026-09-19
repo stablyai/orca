@@ -41,6 +41,11 @@ import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
+import {
+  blockMathStartIndex,
+  matchPandocBlockMath,
+  matchPandocInlineMath
+} from './markdown-pandoc-math'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -48,6 +53,36 @@ const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
   // mark even though it should still stay exclusive with emphasis marks.
   excludes: 'code bold italic strike underline'
+})
+
+const RichMarkdownInlineMath = InlineMath.extend({
+  markdownTokenizer: {
+    name: 'inlineMath',
+    level: 'inline',
+    start: (src: string) => src.indexOf('$'),
+    tokenize: (src: string) => {
+      const match = matchPandocInlineMath(src)
+      if (!match) {
+        return undefined
+      }
+      return { type: 'inlineMath', raw: match.raw, latex: match.latex }
+    }
+  }
+})
+
+const RichMarkdownBlockMath = BlockMath.extend({
+  markdownTokenizer: {
+    name: 'blockMath',
+    level: 'block',
+    start: (src: string) => blockMathStartIndex(src),
+    tokenize: (src: string) => {
+      const match = matchPandocBlockMath(src)
+      if (!match) {
+        return undefined
+      }
+      return { type: 'blockMath', raw: match.raw, latex: match.latex }
+    }
+  }
 })
 
 export function createRichMarkdownExtensions({
@@ -224,12 +259,12 @@ export function createRichMarkdownExtensions({
     TableRow,
     TableHeader,
     TableCell,
-    InlineMath.configure({
+    RichMarkdownInlineMath.configure({
       katexOptions: {
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    RichMarkdownBlockMath.configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false
