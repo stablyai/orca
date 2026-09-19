@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { useMemo, useRef, useState } from 'react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
@@ -48,6 +49,7 @@ export function NativeChatStructuredSession(
     // phases, that empty list must not become the draft's turn baseline.
     transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
   })
+  const [verifying, setVerifying] = useState(false)
   const [composerError, setComposerError] = useState<string | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
@@ -300,6 +302,38 @@ export function NativeChatStructuredSession(
           onCancel={cancelPrompt}
         />
       ) : null}
+      {controller.executionUnverifiable && controller.status === 'ready' ? (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-muted-foreground"
+        >
+          <span>Execution could not be verified. History remains available.</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={verifying}
+            onClick={async () => {
+              setVerifying(true)
+              try {
+                await controller.retryVerification()
+              } catch {
+                setComposerError(
+                  'Execution is still unverifiable. Try again when the host is available.'
+                )
+              } finally {
+                setVerifying(false)
+              }
+            }}
+          >
+            Retry verification
+          </Button>
+        </div>
+      ) : !controller.executionVerificationAvailable && controller.status === 'ready' ? (
+        <div role="status" className="px-4 py-2 text-sm text-muted-foreground">
+          This host does not provide execution verification.
+        </div>
+      ) : null}
       <NativeChatDeliveryRetry
         outbox={controller.outbox}
         blockedClientMessageId={controller.blockedClientMessageId}
@@ -324,7 +358,10 @@ export function NativeChatStructuredSession(
           paneKey={paneKey}
           targetPtyId={null}
           agent={props.agent}
-          canSend={!prompt}
+          canSend={!prompt && !controller.executionUnverifiable}
+          disabledReason={
+            controller.executionUnverifiable ? 'Execution could not be verified.' : undefined
+          }
           // Stop, not status: only a provider-minted turn can be interrupted, so the button
           // must not flip while a dispatch is still unanswered.
           isWorking={controller.turnId !== null}

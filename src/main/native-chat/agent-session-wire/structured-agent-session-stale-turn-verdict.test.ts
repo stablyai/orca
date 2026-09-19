@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   runningTurnLifecycleRevisions,
-  settleStaleSessionStateOnAcquire,
   turnVerdictFromDeathEvidence
 } from './structured-agent-session-stale-turn-verdict'
 
@@ -39,32 +37,6 @@ function legacyLifecycleItem(turnId: string, startedAt: number): AgentJournalRen
       kind: 'status',
       text: 'Working',
       turnLifecycle: { turnId, state: 'running', startedAt }
-    }
-  }
-}
-
-function promptItem(state: 'pending' | 'resolved', sequence: number): AgentJournalRenderItem {
-  return {
-    itemId: agentJournalItemKey({
-      provider: 'legacy',
-      agent: 'codex',
-      sessionId: 'session-1',
-      recordId: `approval-${state}`
-    }),
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: {
-      kind: 'approval',
-      title: 'Approve?',
-      detail: null,
-      options: [],
-      resolution: {
-        state,
-        selectedOptionId: state === 'resolved' ? 'allow' : null,
-        resolvedBy: state === 'resolved' ? 'client-1' : null,
-        resolvedAt: state === 'resolved' ? 10 : null
-      }
     }
   }
 }
@@ -128,113 +100,5 @@ describe('running turn lifecycle revisions', () => {
   it('skips rows without a parseable identity', () => {
     const item = { ...lifecycleItem('turn-2', 'running', 2), itemId: 'not-an-item-key' }
     expect(runningTurnLifecycleRevisions([item], { state: 'unverifiable' })).toEqual([])
-  })
-})
-
-describe('stale session state on a cold acquire', () => {
-  function journalWith(items: AgentJournalRenderItem[]) {
-    const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 9 }))
-    const journal = {
-      snapshot: () => ({ items }),
-      cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
-      appendLifecycleBatch
-    } as unknown as AgentSessionJournal
-    return { journal, appendLifecycleBatch }
-  }
-
-  it('marks a running row from the dead generation unverifiable without an end time', async () => {
-    const { journal, appendLifecycleBatch } = journalWith([
-      lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 }),
-      lifecycleItem('turn-2', 'running', 2, { startedAt: 30 })
-    ])
-
-    await expect(
-      settleStaleSessionStateOnAcquire({
-        journal,
-        sessionId: 'session-1',
-        fence: 14,
-        acquisitionGeneration: 'generation-2'
-      })
-    ).resolves.toBe(1)
-
-    expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
-      settlementId: 'stale-session:session-1:14:generation-2',
-      fence: 14,
-      recovered: true,
-      mutations: [
-        {
-          kind: 'item',
-          identity: RUNNING_IDENTITY,
-          body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
-        }
-      ]
-    })
-  })
-
-  it('cancels only prompts whose callbacks were lost with the prior owner', async () => {
-    const pending = promptItem('pending', 1)
-    const resolved = promptItem('resolved', 2)
-    const { journal, appendLifecycleBatch } = journalWith([pending, resolved])
-
-    await expect(
-      settleStaleSessionStateOnAcquire({
-        journal,
-        sessionId: 'session-1',
-        fence: 14,
-        acquisitionGeneration: 'generation-2'
-      })
-    ).resolves.toBe(1)
-
-    expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
-      settlementId: 'stale-session:session-1:14:generation-2',
-      fence: 14,
-      recovered: true,
-      mutations: [
-        {
-          kind: 'item',
-          identity: {
-            provider: 'legacy',
-            agent: 'codex',
-            sessionId: 'session-1',
-            recordId: 'approval-pending'
-          },
-          body: {
-            ...pending.body,
-            resolution: {
-              state: 'cancelled',
-              selectedOptionId: null,
-              resolvedBy: null,
-              resolvedAt: null
-            }
-          }
-        }
-      ]
-    })
-  })
-
-  it('writes nothing when no turn is running and keys on the journal position without a generation', async () => {
-    const idle = journalWith([
-      lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 })
-    ])
-    await expect(
-      settleStaleSessionStateOnAcquire({
-        journal: idle.journal,
-        sessionId: 'session-1',
-        fence: 14,
-        acquisitionGeneration: null
-      })
-    ).resolves.toBe(0)
-    expect(idle.appendLifecycleBatch).not.toHaveBeenCalled()
-
-    const running = journalWith([lifecycleItem('turn-2', 'running', 2)])
-    await settleStaleSessionStateOnAcquire({
-      journal: running.journal,
-      sessionId: 'session-1',
-      fence: 14,
-      acquisitionGeneration: null
-    })
-    expect(running.appendLifecycleBatch).toHaveBeenCalledWith(
-      expect.objectContaining({ settlementId: 'stale-session:session-1:14:seq-8' })
-    )
   })
 })

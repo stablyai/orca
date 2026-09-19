@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 
 export type NativeChatResolvedTarget = {
   ptyId: string
@@ -31,4 +31,11 @@ export function nativeChatComposerTargetIsRemote(ptyId: string | null): boolean 
 export function formatNativeChatFileReference(filePath: string): string {
   const escaped = filePath.replace(/"/g, '\\"')
   return /\s/.test(filePath) ? `@"${escaped}"` : `@${filePath}`
+}
+
+export function resolveNativeChatComposerTarget(
+  ptyId: string | null,
+  tabId: string
+): NativeChatResolvedTarget | null {
+  return ptyId ? { ptyId, settings: getSettingsForAgentTabRuntimeOwner(tabId) } : null
 }

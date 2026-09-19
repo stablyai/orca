@@ -4,7 +4,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionDeathEvidence,
   AgentSessionRecord
@@ -149,7 +149,7 @@ describe('pending settlement retry', () => {
     expect(statusTexts()).toEqual([])
   })
 
-  it('writes user-facing copy carrying the cause when the exit was observed', async () => {
+  it('does not attribute imported history to a witnessed owner exit', async () => {
     await seedRunningTurn()
 
     await expect(
@@ -160,11 +160,9 @@ describe('pending settlement retry', () => {
       })
     ).resolves.toBe(true)
 
-    expect(statusTexts()).toEqual([
-      'The provider stopped while this response was in progress: transport closed. You can continue in this conversation.'
-    ])
+    expect(statusTexts()).toEqual([])
     expect(journal.snapshot().items.map((item) => item.body)).toContainEqual(
-      expect.objectContaining({ kind: 'turn', state: 'interrupted', completedAt: 1_500 })
+      expect.objectContaining({ kind: 'turn', state: 'unverifiable' })
     )
   })
 
@@ -187,4 +185,35 @@ describe('pending settlement retry', () => {
       })
     )
   })
+})
+
+it('reports a committed journal repair even when record cleanup fails', async () => {
+  await seedRunningTurn()
+  record = agentSessionRecordFixture({
+    ...agentSessionRecordFixture().lease,
+    runtimeFence: FENCE,
+    settlementRetryRequired: true,
+    settlementRetryId: 'cleanup-failure',
+    deathEvidence: { kind: 'pid-absent', detail: 'absent', observedAt: 1_500 }
+  })
+  const completed = vi.fn()
+  const result = await retryLoadedStructuredAgentSessionSettlement({
+    deps: {
+      store: {
+        getRecord: () => record,
+        transitionHandoff: async () => {
+          throw new Error('disk unavailable')
+        }
+      }
+    },
+    sessionId: SESSION,
+    session: { journal, fence: FENCE, acquisitionGeneration: null },
+    now: () => 2_000,
+    onCompleted: completed
+  })
+  expect(result).toBe(false)
+  expect(completed).toHaveBeenCalledWith(
+    expect.objectContaining({ settled: false, journalChanged: true, cursor: journal.cursor() })
+  )
+  expect(journal.snapshot().items[0]?.body).toMatchObject({ state: 'unverifiable' })
 })

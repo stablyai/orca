@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionSettlementCompletion } from './structured-agent-session-settlement-retry'
 import { join } from 'node:path'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -29,6 +30,7 @@ type HostHandoffAccess = {
   flush: (sessionId: string) => Promise<void>
   serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
   subscribers: AgentSessionSubscribers
+  completeSettlement?: (result: StructuredAgentSessionSettlementCompletion) => void
   publishStatus?: (sessionId: string) => void
   now: () => number
 }
@@ -113,7 +115,8 @@ export function createStructuredAgentSessionHostHandoff(
         deps,
         sessionId,
         session: host.session(sessionId),
-        now: host.now
+        now: host.now,
+        onCompleted: host.completeSettlement
       }),
     prepareTuiHistoryCatchup: (sessionId, fence) => tuiHistoryCatchup.prepare(sessionId, fence),
     recoverTuiHistoryCatchup: (sessionId, fence) => tuiHistoryCatchup.recover(sessionId, fence),

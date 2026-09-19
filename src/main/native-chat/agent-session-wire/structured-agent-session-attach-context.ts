@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionSettlementCompletion } from './structured-agent-session-settlement-retry'
 // What attaching needs from the host, named explicitly.
 //
 // Passing the host itself would let this quietly grow new dependencies; an explicit context makes
@@ -41,5 +42,6 @@ export type StructuredAgentSessionAttachContext = {
   /** Paired with `sessions.delete` by `forgetStructuredAgentSession`; a failed attach that only
    *  deleted would leave the store's row behind. */
   forgetStatus: (sessionId: string) => void
+  completeSettlement?: (result: StructuredAgentSessionSettlementCompletion) => void
   publishStatus?: (sessionId: string) => void
 }

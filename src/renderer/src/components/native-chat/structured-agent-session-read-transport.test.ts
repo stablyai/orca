@@ -80,7 +80,7 @@ describe('structured agent-session read transport generations', () => {
     })
   }
 
-  it('flushes queued rows before reading the applied cursor for reconnect', async () => {
+  it('ignores retired frames immediately after close and reconnects from accepted history', async () => {
     vi.useFakeTimers()
     try {
       let state = EMPTY_STRUCTURED_AGENT_SESSION
@@ -111,10 +111,10 @@ describe('structured agent-session read transport generations', () => {
       })
       expect(state.cursor?.sequence).toBe(100)
       await vi.advanceTimersByTimeAsync(30)
-      expect(state.cursor?.sequence).toBe(101)
+      expect(state.cursor?.sequence).toBe(100)
       expect(mocks.subscribe.mock.calls[1]?.[1]).toEqual({
         sessionId: 'session-a',
-        cursor: { epoch: 'epoch-a', sequence: 101 }
+        cursor: { epoch: 'epoch-a', sequence: 100 }
       })
       attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
       await flushPromises()
@@ -123,6 +123,43 @@ describe('structured agent-session read transport generations', () => {
       vi.useRealTimers()
     }
   })
+
+  it.each(['end', 'close'] as const)(
+    'revokes on %s immediately and fences every retired callback',
+    async (termination) => {
+      vi.useFakeTimers()
+      try {
+        const unavailable = vi.fn()
+        const events = vi.fn()
+        const transport = startStructuredAgentSessionReadTransport({
+          applyEvent: events,
+          applyError: vi.fn(),
+          getCursor: () => null,
+          onHistoryReadInvalidated: vi.fn(),
+          onConnectionUnavailable: unavailable,
+          sessionId: 'session-a',
+          target
+        })
+        attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+        await flushPromises()
+        unavailable.mockClear()
+        if (termination === 'end') {
+          attempts[0].onEvent({ type: 'end' })
+        } else {
+          attempts[0].onClose()
+        }
+        expect(unavailable).toHaveBeenCalledOnce()
+        attempts[0].onEvent(snapshot(44))
+        expect(events).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(750)
+        attempts[1].onEvent(snapshot(45))
+        expect(events).toHaveBeenCalledExactlyOnceWith(snapshot(45))
+        transport.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('ignores opening frames after disposal and a replacement transport starts', async () => {
     const applyEvent = vi.fn()
@@ -302,7 +339,10 @@ describe('structured agent-session read transport unattached refusals', () => {
       attempts[0].onError({ code: UNATTACHED, message: UNATTACHED })
       expect(applyError).not.toHaveBeenCalled()
 
-      attempts[0].onError({ code: 'runtime_error', message: 'transport died' })
+      attempts[0].onError({ code: 'runtime_error', message: 'retired error' })
+      expect(applyError).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(750)
+      attempts[1].onError({ code: 'runtime_error', message: 'transport died' })
       expect(applyError).toHaveBeenCalledOnce()
       transport.dispose()
     } finally {

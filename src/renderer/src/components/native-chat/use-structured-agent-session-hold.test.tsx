@@ -122,3 +122,30 @@ describe('a mounted structured chat', () => {
     expect(callsTo('agentSession.release')).toHaveLength(1)
   })
 })
+
+it('retries the same surface hold and waits for that retry before unmount release', async () => {
+  const view = renderHook(() =>
+    useStructuredAgentSessionHold({
+      sessionId: 'session',
+      target: LOCAL_TARGET,
+      surface: 'desktop-chat'
+    })
+  )
+  await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(1))
+  let finish = (): void => {}
+  mocks.call.mockImplementation((_target: unknown, method: string) =>
+    method === 'agentSession.hold'
+      ? new Promise<void>((resolve) => {
+          finish = resolve
+        })
+      : Promise.resolve()
+  )
+  const retry = view.result.current()
+  await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(2))
+  expect(callsTo('agentSession.hold')[1]).toEqual(callsTo('agentSession.hold')[0])
+  view.unmount()
+  expect(callsTo('agentSession.release')).toHaveLength(0)
+  finish()
+  await retry
+  await waitFor(() => expect(callsTo('agentSession.release')).toHaveLength(1))
+})

@@ -26,6 +26,7 @@ export type NativeChatComposerFieldProps = {
   disabled: boolean
   hasPty: boolean
   canSend: boolean
+  disabledReason?: string
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   notice: string | null
@@ -98,6 +99,7 @@ export function NativeChatComposerField({
   disabled,
   hasPty,
   canSend,
+  disabledReason,
   autocomplete,
   activeSuggestion,
   notice,
@@ -254,7 +256,7 @@ export function NativeChatComposerField({
                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
                   : undefined
               }
-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
+              placeholder={disabledReason ?? nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
               // Editable content grows naturally; the 8lh cap (plus
               // py-1) turns further growth into internal scrolling, and scrollbar-sleek

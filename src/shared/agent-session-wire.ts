@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionView } from './agent-session-execution-view'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -97,6 +98,7 @@ export type AgentSessionHistoryRequest = {
 }
 
 export type AgentSessionHistoryPage = {
+  execution?: AgentSessionExecutionView
   sessionId: string
   epoch: string
   /** Optional for mixed-version readers; write-capable clients use the
@@ -150,7 +152,7 @@ export type AgentSessionJournalBatch = {
 }
 
 /** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
-type AgentSessionHostClockField = { hostNow?: number }
+type AgentSessionHostClockField = { hostNow?: number; execution?: AgentSessionExecutionView }
 
 export type AgentSessionSubscribeEvent =
   | ({
@@ -198,6 +200,7 @@ export type AgentSessionSubscribeEvent =
  *  from the journal so no client has to replay a transcript to learn whether a
  *  turn is running. Additive surface: an older host has no such method. */
 export type AgentSessionStatusSummary = {
+  execution?: AgentSessionExecutionView
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string

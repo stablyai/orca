@@ -1,8 +1,8 @@
+import { resolveNativeChatComposerTarget } from './native-chat-composer-target'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import {
   applyMentionSuggestion,
   EMPTY_HISTORY,
@@ -11,7 +11,6 @@ import {
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
-import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
@@ -62,6 +61,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       targetPtyId,
       agent,
       canSend = true,
+      disabledReason,
       isWorking = false,
       onStop,
       onOptimisticSend,
@@ -138,12 +138,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     // Resolve the live ptyId for this chat leaf; runtime owner settings route
     // local vs remote (SSH) sends.
-    const resolveTarget = useCallback((): NativeChatResolvedTarget | null => {
-      if (!targetPtyId) {
-        return null
-      }
-      return { ptyId: targetPtyId, settings: getSettingsForAgentTabRuntimeOwner(terminalTabId) }
-    }, [targetPtyId, terminalTabId])
+    const resolveTarget = useCallback(
+      () => resolveNativeChatComposerTarget(targetPtyId, terminalTabId),
+      [targetPtyId, terminalTabId]
+    )
 
     const [hasPty, disabled] = structuredTransport
       ? [true, !canSend]
@@ -381,6 +379,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         disabled={disabled}
         hasPty={hasPty}
         canSend={canSend}
+        disabledReason={disabledReason}
         autocomplete={autocomplete}
         activeSuggestion={activeSuggestion}
         notice={notice}

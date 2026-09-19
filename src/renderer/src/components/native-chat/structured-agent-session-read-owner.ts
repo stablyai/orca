@@ -28,6 +28,7 @@ export type StructuredAgentSessionReadOwner = {
   activate: () => () => void
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
+  refresh: () => void
   loadOlder: () => Promise<void>
   subscribe: (listener: () => void) => () => void
 }
@@ -172,6 +173,7 @@ function createReadOwner(
     }
     const transport = startStructuredAgentSessionReadTransport({
       applyEvent: (event) => apply({ type: 'event', event }),
+      onConnectionUnavailable: () => apply({ type: 'disconnected' }),
       applyError: (message) => apply({ type: 'error', message }),
       getCursor: () => snapshot.state.cursor,
       onHistoryReadInvalidated: clearLoadingOlder,
@@ -212,6 +214,13 @@ function createReadOwner(
       activations.clear()
       listeners.clear()
       stopActiveRun?.()
+    },
+    refresh: () => {
+      if (activations.size === 0) {
+        return
+      }
+      stopActiveRun?.()
+      start()
     },
     getSnapshot: () => snapshot,
     loadOlder: async () => {

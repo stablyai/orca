@@ -22,7 +22,6 @@ import {
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
-import { settleStaleSessionStateOnAcquire } from './structured-agent-session-stale-turn-verdict'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -60,6 +59,15 @@ export function attachStructuredAgentSession(
       await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
         context.runtimeState.resolveRecovery(sessionId)
       )
+      const eventSink = context.runtimeState.eventSinkFor(sessionId)
+      const beforeRetirement = context.deps.store.getRecord(sessionId)
+      if (beforeRetirement?.lease.claimStatus === 'released') {
+        const barrier = await eventSink.drained()
+        if (!barrier.ok) {
+          context.deps.onEventSinkError?.({ sessionId, error: barrier.error })
+        }
+        eventSink.unbind()
+      }
       // Retries a durable provider-exit journal settlement before a new owner is reserved. Answers
       // settled when the record has none pending, so every attach can ask unconditionally.
       const settled = await withAgentSessionCreatePhase('settlement_retry', recordPhase, () =>
@@ -68,7 +76,9 @@ export function attachStructuredAgentSession(
           sessions: context.sessions,
           sessionId,
           params,
-          now: () => context.now()
+          now: () => context.now(),
+          forAdmission: true,
+          onCompleted: context.completeSettlement
         })
       )
       if (!settled) {
@@ -77,7 +87,6 @@ export function attachStructuredAgentSession(
           message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
         })
       }
-      const eventSink = context.runtimeState.eventSinkFor(sessionId)
       const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
         context.runtimeState.probeOwner(sessionId)
       )
@@ -113,22 +122,13 @@ export function attachStructuredAgentSession(
           eventSink.close()
           context.runtimeState.discardEventSink(sessionId)
         },
-        onAttached: async (attached, acquisitionGeneration, acquiredOwner) => {
+        onAttached: async (attached, acquisitionGeneration) => {
           const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
           const previous = context.sessions.get(sessionId)
           const previousFence = previous?.fence
           // Site 8: the provisional journal has no owner until the map takes it,
           // and the barrier below throws by design.
           try {
-            if (acquiredOwner) {
-              // Before the drain: the buffered events are the new child's, never a stale row's.
-              await settleStaleSessionStateOnAcquire({
-                journal: attached.journal,
-                sessionId,
-                fence,
-                acquisitionGeneration
-              })
-            }
             await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
               context.subscribers.publish(sessionId, attached.journal, activity)
             )

@@ -1,3 +1,6 @@
+import { AGENT_SESSION_RETIREMENT_TTL_MS } from '../../../shared/agent-session-retirement'
+import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { structuredSessionRecoveryIsResolvable } from './structured-agent-session-recovery-resolution'
 import {
   isProvenDeadProbe,
   type AgentSessionOwnerProbe
@@ -13,6 +16,10 @@ const RENEW_INTERVAL_MS = Math.floor(AGENT_SESSION_LEASE_TTL_MS / 3)
 export class StructuredAgentSessionLeaseRenewer {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
+  private readonly recoveryAttempts = new Map<
+    string,
+    { identity: string; attempts: number; nextAt: number }
+  >()
 
   constructor(
     private readonly input: {
@@ -22,7 +29,13 @@ export class StructuredAgentSessionLeaseRenewer {
         records: readonly AgentSessionRecord[]
       ) => Promise<Map<string, AgentSessionOwnerProbe>>
       now: () => number
+      onRecoveryCandidate?: (record: AgentSessionRecord) => Promise<void>
       onRenewed?: (record: AgentSessionRecord) => Promise<void>
+      onObserved?: (record: AgentSessionRecord) => void
+      onDeadNativeOwner?: (
+        record: AgentSessionRecord,
+        probe: AgentSessionOwnerProbe
+      ) => Promise<void>
       onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>
       onError?: (input: { sessionId: string; error: unknown }) => void
       intervalMs?: number
@@ -50,6 +63,7 @@ export class StructuredAgentSessionLeaseRenewer {
     }
     this.running = true
     try {
+      await this.recoverCandidates()
       const records = this.input.store.listRecords().filter(
         (record) =>
           !record.lease.unreconciled &&
@@ -73,7 +87,20 @@ export class StructuredAgentSessionLeaseRenewer {
       const now = this.input.now()
       for (const record of records) {
         const probe = probes.get(record.sessionId)
+        this.input.onObserved?.(record)
         if (!probe) {
+          continue
+        }
+        if (
+          record.lease.runtimeKind === 'native' &&
+          isProvenDeadProbe(probe) &&
+          this.input.onDeadNativeOwner
+        ) {
+          try {
+            await this.input.onDeadNativeOwner(record, probe)
+          } catch (error) {
+            this.input.onError?.({ sessionId: record.sessionId, error })
+          }
           continue
         }
         if (
@@ -126,6 +153,55 @@ export class StructuredAgentSessionLeaseRenewer {
     } finally {
       this.running = false
     }
+  }
+
+  private async recoverCandidates(): Promise<void> {
+    const recover = this.input.onRecoveryCandidate
+    if (!recover) {
+      return
+    }
+    const records = this.input.store
+      .listRecords()
+      .filter(
+        (record) =>
+          !record.lease.unreconciled &&
+          (structuredSessionRecoveryIsResolvable(record) ||
+            record.lease.settlementRetryRequired ||
+            Boolean(record.retirements?.receipts.length))
+      )
+    const candidates = new Set(records.map((record) => record.sessionId))
+    for (const id of this.recoveryAttempts.keys()) {
+      if (!candidates.has(id)) {
+        this.recoveryAttempts.delete(id)
+      }
+    }
+    await mapWithConcurrency(records, 4, async (record) => {
+      const identity = JSON.stringify([
+        record.lease.runtimeFence,
+        record.lease.ownerProcess,
+        record.lease.settlementRetryId,
+        record.retirements?.receipts.map((receipt) => [
+          receipt.id,
+          receipt.capture.incarnation,
+          this.input.now() - receipt.observedAt >= AGENT_SESSION_RETIREMENT_TTL_MS
+        ])
+      ])
+      const previous = this.recoveryAttempts.get(record.sessionId)
+      const budget =
+        previous?.identity === identity ? previous : { identity, attempts: 0, nextAt: 0 }
+      if (budget.attempts >= 6 || this.input.now() < budget.nextAt) {
+        return
+      }
+      budget.nextAt =
+        this.input.now() + (this.input.intervalMs ?? RENEW_INTERVAL_MS) * 2 ** budget.attempts
+      budget.attempts += 1
+      this.recoveryAttempts.set(record.sessionId, budget)
+      try {
+        await recover(record)
+      } catch (error) {
+        this.input.onError?.({ sessionId: record.sessionId, error })
+      }
+    })
   }
 
   private async probe(

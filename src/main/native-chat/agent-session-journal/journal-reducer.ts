@@ -1,3 +1,9 @@
+import { rememberAppliedSettlementId } from './journal-settlement-memory'
+export {
+  rememberAppliedSettlementId,
+  MAX_JOURNAL_APPLIED_SETTLEMENT_IDS
+} from './journal-settlement-memory'
+import { recordJournalMutationProvenance } from './journal-mutation-provenance'
 // THE reducer. One implementation folds rows into the render model, and both
 // the live append path and replay call it — a live-only shortcut is how a
 // reconnect starts disagreeing with the screen it replaced.
@@ -10,7 +16,6 @@
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import {
@@ -21,8 +26,6 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
 import { dispatchRejectionWasTransportWriteFailure } from '../../../shared/structured-agent-session-dispatch-rejection'
-
-export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
 export type JournalReducerState = {
   sessionId: string
@@ -41,6 +44,9 @@ export type JournalReducerState = {
    *  echo from appending a second copy of the user's own message. */
   aliases: Map<string, string>
   appliedSettlementIds: Set<string>
+  itemMutationSequences: Map<string, number>
+  submissionMutationSequences: Map<string, number>
+  aliasMutationSequences: Map<string, number>
 }
 
 export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
@@ -56,11 +62,19 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     submissions: new Map(),
     receipts: new Map(),
     aliases: new Map(),
-    appliedSettlementIds: new Set()
+    appliedSettlementIds: new Set(),
+    itemMutationSequences: new Map(),
+    submissionMutationSequences: new Map(),
+    aliasMutationSequences: new Map()
   }
 }
 
 export function applyJournalRow(state: JournalReducerState, row: JournalRow): void {
+  foldJournalRow(state, row)
+  recordJournalMutationProvenance(state, row)
+}
+
+function foldJournalRow(state: JournalReducerState, row: JournalRow): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
@@ -71,7 +85,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return
     }
-    const itemId = resolveJournalItemId(state, row.itemId, row.body)
+    const itemId = resolveJournalItemId(state, row.itemId, row.body, row.seq)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertItem(state, itemId, row.revision, {
       itemId,
@@ -96,7 +110,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
         if (journalItemRevisionIsStale(state, mutation.itemId, mutation.revision)) {
           continue
         }
-        const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
+        const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body, row.seq)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         upsertItem(state, itemId, mutation.revision, {
           itemId,
@@ -120,24 +134,11 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   applyDispatch(state, row)
 }
 
-export function rememberAppliedSettlementId(
-  state: JournalReducerState,
-  settlementId: string
-): void {
-  state.appliedSettlementIds.add(settlementId)
-  while (state.appliedSettlementIds.size > MAX_JOURNAL_APPLIED_SETTLEMENT_IDS) {
-    const oldest = state.appliedSettlementIds.values().next().value
-    if (oldest === undefined) {
-      return
-    }
-    state.appliedSettlementIds.delete(oldest)
-  }
-}
-
 export function resolveJournalItemId(
   state: JournalReducerState,
   itemId: string,
-  body?: AgentJournalRenderItem['body']
+  body?: AgentJournalRenderItem['body'],
+  mutationSequence?: number
 ): string {
   const aliased = state.aliases.get(itemId)
   if (aliased) {
@@ -178,6 +179,9 @@ export function resolveJournalItemId(
   }
   const submissionId = agentJournalSubmissionKey(submission.clientMessageId)
   state.aliases.set(itemId, submissionId)
+  if (mutationSequence !== undefined) {
+    state.aliasMutationSequences.set(itemId, mutationSequence)
+  }
   return submissionId
 }
 
@@ -272,6 +276,7 @@ function applyDispatch(
   if (submission.dispatchState === 'rejected' || submission.dispatchState === 'accepted') {
     return
   }
+  state.submissionMutationSequences.set(submission.clientMessageId, row.seq)
   submission.fence = row.fence
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
@@ -286,6 +291,7 @@ function applyDispatch(
     return
   }
   state.aliases.set(row.providerItemId, agentJournalSubmissionKey(row.clientMessageId))
+  state.aliasMutationSequences.set(row.providerItemId, row.seq)
   state.receipts.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     providerItemId: row.providerItemId,
@@ -313,6 +319,7 @@ function acceptSubmissionFromProviderItem(
   ) {
     return
   }
+  state.submissionMutationSequences.set(submission.clientMessageId, row.seq)
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
   submission.providerItemId = providerItemId
@@ -327,15 +334,4 @@ function acceptSubmissionFromProviderItem(
   })
 }
 
-/** Project the folded state into the client-facing snapshot. */
-export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
-  // Sequence is the sole ordering key; map insertion order is not, because a
-  // re-created item re-enters the map after the items that followed it.
-  const items = [...state.items.values()].sort((a, b) => a.sequence - b.sequence)
-  return {
-    sessionId: state.sessionId,
-    cursor: { epoch: state.epoch, sequence: state.lastSequence },
-    items,
-    submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
-  }
-}
+export { renderJournalState } from './journal-render-state'

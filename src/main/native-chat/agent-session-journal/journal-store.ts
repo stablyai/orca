@@ -1,3 +1,4 @@
+import { JournalRetirement } from './journal-retirement'
 // Append-only journal store for one agent session.
 
 import { randomUUID } from 'node:crypto'
@@ -72,6 +73,7 @@ export class AgentSessionJournal {
   private readonly itemAppender: JournalItemAppender
   private readonly lifecycleBatchAppender: JournalLifecycleBatchAppender
   private readonly restore: () => Promise<void>
+  readonly retirement: JournalRetirement
 
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
@@ -115,6 +117,14 @@ export class AgentSessionJournal {
     this.itemAppender = collaborators.itemAppender
     this.lifecycleBatchAppender = collaborators.lifecycleBatchAppender
     this.restore = collaborators.restore
+    this.retirement = new JournalRetirement({
+      state: () => this.state,
+      database: () => this.requireDatabase(),
+      readOnly: () => this.readOnly,
+      serialize: (run) => this.queue.serialize(run),
+      enqueue: (build) => this.enqueue(build),
+      cursor: this.cursor
+    })
   }
 
   get isReadOnly(): boolean {

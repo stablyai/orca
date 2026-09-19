@@ -34,7 +34,9 @@ function target(
   log: Recorded[],
   failOn?: number
 ): StructuredAgentSessionEventTarget {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This sink fixture implements every journal operation exercised below.
   const journal = {
+    cursor: () => ({ epoch: 'e', sequence: 0 }),
     appendItem: vi.fn(async (id: AgentJournalItemIdentity, _body: AgentJournalItemBody) => {
       const ordinal = id.provider === 'codex' ? id.ordinal : -1
       if (ordinal === failOn) {

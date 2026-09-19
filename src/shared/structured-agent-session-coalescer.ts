@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionView } from './agent-session-execution-view'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 
 export const STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS = 48
@@ -5,6 +6,8 @@ export const STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS = 48
 function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
   return (
     event.type !== 'batch' ||
+    (event.execution !== undefined &&
+      (event.execution.control === 'none' || event.execution.observation !== 'live')) ||
     event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
   )
 }
@@ -25,6 +28,10 @@ function mergeBatch(
   }
   return {
     type: 'batch',
+    execution: newerExecution(left.execution, right.execution),
+    ...(right.hostNow !== undefined || left.hostNow !== undefined
+      ? { hostNow: right.hostNow ?? left.hostNow }
+      : {}),
     ...(right.commands !== undefined || left.commands !== undefined
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
       : {}),
@@ -80,6 +87,13 @@ export function createStructuredAgentSessionEventCoalescer(
       if (event.type !== 'batch') {
         return
       }
+      if (
+        pending &&
+        (pending.sessionId !== event.sessionId ||
+          pending.batch.cursor.epoch !== event.batch.cursor.epoch)
+      ) {
+        flush()
+      }
       pending = pending ? mergeBatch(pending, event) : event
       timer ??= setTimeout(flush, delayMs)
     },
@@ -92,4 +106,17 @@ export function createStructuredAgentSessionEventCoalescer(
       pending = null
     }
   }
+}
+
+function newerExecution(
+  left: AgentSessionExecutionView | undefined,
+  right: AgentSessionExecutionView | undefined
+): AgentSessionExecutionView | undefined {
+  if (!right) {
+    return left
+  }
+  if (!left || left.hostIncarnation !== right.hostIncarnation) {
+    return right
+  }
+  return right.revision > left.revision ? right : left
 }

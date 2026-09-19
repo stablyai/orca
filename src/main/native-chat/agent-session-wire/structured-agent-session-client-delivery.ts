@@ -1,3 +1,5 @@
+import { StructuredAgentSessionExecutionPublication } from './structured-agent-session-execution-publication'
+import type { StructuredAgentSessionSettlementCompletion } from './structured-agent-session-settlement-retry'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import type {
@@ -15,29 +17,53 @@ import {
 export class StructuredAgentSessionClientDelivery {
   readonly subscribers: AgentSessionSubscribers
   readonly waitForSendSettlement: StructuredAgentSessionSendSettlement['wait']
+  readonly execution
   private readonly statusFeed
   private readonly sendSettlement
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
-    deps: () => StructuredAgentSessionHostDeps
+    deps: () => StructuredAgentSessionHostDeps,
+    observation: (sessionId: string) => 'live' | 'unverifiable' | 'exited' | undefined
   ) {
-    this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
+    this.execution = new StructuredAgentSessionExecutionPublication(sessions, deps, observation)
+    this.statusFeed = createStructuredAgentSessionHostStatusFeed({
+      sessions,
+      now,
+      deps,
+      readExecution: this.execution.read
+    })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.requireJournal(sessionId)
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      readExecution: this.execution.read,
       readCommands: (sessionId) => deps().adapter.readCommands?.(sessionId),
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
     })
   }
 
-  publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
+  completeSettlement = (result: StructuredAgentSessionSettlementCompletion): void => {
+    const session = this.sessions.get(result.sessionId)
+    if (session && result.journalChanged) {
+      this.subscribers.publish(result.sessionId, session.journal)
+    } else {
+      this.publishStatus(result.sessionId)
+    }
+  }
+
+  publishStatus = (sessionId: string): void => {
+    this.statusFeed.publish(sessionId)
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      this.subscribers.metadata(sessionId, session.journal)
+    }
+  }
 
   publishStatusAndSettlement = (sessionId: string): void => {
-    this.statusFeed.publish(sessionId)
+    this.publishStatus(sessionId)
     const journal = this.sessions.get(sessionId)?.journal
     if (journal) {
       this.sendSettlement.publish(sessionId, journal)
@@ -49,7 +75,10 @@ export class StructuredAgentSessionClientDelivery {
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)
-  forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
+  forgetStatus = (sessionId: string): void => {
+    this.statusFeed.forget(sessionId)
+    this.execution.forget(sessionId)
+  }
 
   closeSession(sessionId: string): void {
     this.sendSettlement.closeSession(sessionId)

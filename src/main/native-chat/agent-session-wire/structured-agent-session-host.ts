@@ -1,3 +1,4 @@
+import { createStructuredSessionRuntimeMaintenance } from './structured-agent-session-runtime-maintenance'
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
@@ -19,7 +20,6 @@ import {
   refreshRecoverableStructuredHandoffStatus,
   type StructuredAgentSessionHostHandoff
 } from './structured-agent-session-host-handoff'
-import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import {
   createStructuredAgentSessionHolds,
@@ -64,11 +64,12 @@ export class StructuredAgentSessionHost {
   private readonly clientDelivery = new StructuredAgentSessionClientDelivery(
     this.sessions,
     () => this.now(),
-    () => this.deps
+    () => this.deps,
+    (sessionId) => this.runtimeState?.executionObservation(sessionId)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
-  private readonly runtimeState: StructuredAgentSessionHostRuntimeState
+  private readonly runtimeState: ReturnType<typeof createStructuredSessionRuntimeMaintenance>
   private readonly reconcileLeases: (
     sessionId: string
   ) => Promise<SessionWire.AgentSessionWireRefusal | null>
@@ -87,23 +88,25 @@ export class StructuredAgentSessionHost {
       this.subscribers,
       (sessionId) => this.requireSession(sessionId),
       (sessionId) => this.handoffs.status(sessionId),
-      this.clientDelivery.publishStatus
+      this.clientDelivery.publishStatus,
+      this.clientDelivery.execution.read
     )
-    this.runtimeState = new StructuredAgentSessionHostRuntimeState(
-      deps,
-      (record) => this.restoreRenewedHandoff(record.sessionId),
-      (record, probe) =>
-        this.sessions.has(record.sessionId)
-          ? this.serialize(record.sessionId, () =>
-              this.handoffs.recoverDeadTuiOwner(record.sessionId, record.lease.runtimeFence, probe)
-            )
-          : Promise.resolve(),
-      (sessionId, error) => this.eventRecovery.recoverAfterSinkFailure(sessionId, error)
-    )
+    this.runtimeState = createStructuredSessionRuntimeMaintenance(deps, {
+      sessions: this.sessions,
+      delivery: this.clientDelivery,
+      now: this.now,
+      serialize: (id, task) => this.serialize(id, task),
+      restoreRenewed: (id) => this.restoreRenewedHandoff(id),
+      reveal: (id) => this.restore.revealSession(id),
+      recoverTui: (id, fence, probe) => this.handoffs.recoverDeadTuiOwner(id, fence, probe),
+      sinkFailed: (id, error) => this.eventRecovery.recoverAfterSinkFailure(id, error)
+    })
     this.reconcileLeases = createRestartReconciler({
       store: deps.store,
       probe: (record) => this.runtimeState.probeRecord(record),
-      ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
+      ...(deps.probeOwners
+        ? { probeMany: this.runtimeState.probeRecords.bind(this.runtimeState) }
+        : {}),
       now: () => this.now()
     })
     this.handoffs = createStructuredAgentSessionHostHandoff(deps, {
@@ -114,6 +117,7 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       subscribers: this.subscribers,
       publishStatus: this.clientDelivery.publishStatus,
+      completeSettlement: this.clientDelivery.completeSettlement,
       now: this.now
     })
     this.holds = createStructuredAgentSessionHolds(this.lifetimeContext(), {
@@ -121,19 +125,25 @@ export class StructuredAgentSessionHost {
       attach: (params) => this.attach({ callerKey: 'trusted-local:surface-hold' }, params),
       close: (sessionId) => this.close(sessionId)
     })
-    this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
-      reconcile: this.reconcileLeases,
-      resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      hasSession: this.hasSession,
-      // Site 10: cannot overwrite a live entry — the restorer returns early on
-      // `hasSession` inside the same serialized step as this `set`.
-      onReadable: (sessionId, restored) => {
-        this.sessions.set(sessionId, restored)
-        this.clientDelivery.publishRestored(sessionId)
-      },
-      restoreHandoff: (sessionId) => this.handoffs.restore(sessionId)
-    })
+    this.restore = createStructuredAgentSessionHostRestore(
+      deps,
+      this.sessions,
+      () => this.now(),
+      this.clientDelivery.completeSettlement,
+      {
+        reconcile: this.reconcileLeases,
+        resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
+        serialize: (sessionId, task) => this.serialize(sessionId, task),
+        hasSession: this.hasSession,
+        // Site 10: cannot overwrite a live entry — the restorer returns early on
+        // `hasSession` inside the same serialized step as this `set`.
+        onReadable: (sessionId, restored) => {
+          this.sessions.set(sessionId, restored)
+          this.clientDelivery.publishRestored(sessionId)
+        },
+        restoreHandoff: (sessionId) => this.handoffs.restore(sessionId)
+      }
+    )
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
       store: deps.store,
@@ -192,7 +202,8 @@ export class StructuredAgentSessionHost {
       tasks: this.tasks,
       reconcileLeases: (sessionId) => this.reconcileLeases(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
-      publishStatus: this.clientDelivery.publishStatus
+      publishStatus: this.clientDelivery.publishStatus,
+      completeSettlement: this.clientDelivery.completeSettlement
     }
   }
   /** Releases a session's resources without ending the conversation: the record and journal stay
@@ -237,6 +248,7 @@ export class StructuredAgentSessionHost {
     return this.serialize(sessionId, async () => {
       if (this.sessions.has(sessionId)) {
         await refreshRecoverableStructuredHandoffStatus(this.handoffs, this.deps.store, sessionId)
+        this.clientDelivery.publishStatus(sessionId)
       }
     })
   }

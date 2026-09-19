@@ -1,8 +1,5 @@
 import { useMemo } from 'react'
-import {
-  activeStructuredAgentSessionTurnId,
-  hasUnansweredStructuredAgentSessionDispatch
-} from '../../../../shared/structured-agent-session-projection'
+import { selectStructuredSessionCurrentExecution } from '../../../../shared/structured-agent-session-current-execution'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
@@ -18,9 +15,12 @@ export function useStructuredAgentSessionTransportState(
   const journalItems = enabled ? state.items : NO_JOURNAL_ITEMS
   const submissions = enabled ? state.submissions : NO_SUBMISSIONS
   const fence = enabled ? state.fence : null
-  const turnId = activeStructuredAgentSessionTurnId(journalItems)
-  const isWorking =
-    turnId !== null || hasUnansweredStructuredAgentSessionDispatch(submissions, fence)
+  const current = selectStructuredSessionCurrentExecution(
+    enabled
+      ? state
+      : { ...state, items: NO_JOURNAL_ITEMS, submissions: NO_SUBMISSIONS, execution: undefined }
+  )
+  const { turnId, isWorking } = current
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
     [enabled, journalItems, state.activity, turnId]
@@ -34,6 +34,8 @@ export function useStructuredAgentSessionTransportState(
     turnId
   )
   return {
+    execution: current.execution,
+    executionUnverifiable: current.unverifiable,
     journalItems,
     submissions,
     fence,

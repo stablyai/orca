@@ -1,3 +1,4 @@
+import { selectMobileStructuredCurrentPrompts } from './mobile-structured-current-prompts'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import {
@@ -7,11 +8,8 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
-import {
-  activeStructuredAgentSessionTurnId,
-  isStructuredAgentSessionThinking
-} from '../../../src/shared/structured-agent-session-live-turn'
+import { selectStructuredSessionCurrentExecution } from '../../../src/shared/structured-agent-session-current-execution'
+import { isStructuredAgentSessionThinking } from '../../../src/shared/structured-agent-session-live-turn'
 import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat-turn-activity'
 import {
   pendingStructuredApproval,
@@ -169,6 +167,10 @@ export function useMobileStructuredAgentSession(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
+      if (selectStructuredSessionCurrentExecution(stateRef.current).unverifiable) {
+        onSendError('Execution could not be verified. Recover the session before sending.')
+        return 'rejected'
+      }
       const timeoutMs = timeoutForDeadline(deadline)
       if (timeoutMs === null) {
         onSendError('Message not sent')
@@ -196,7 +198,7 @@ export function useMobileStructuredAgentSession(args: {
           conversationCommands
         },
         canRun: () =>
-          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
+          !selectStructuredSessionCurrentExecution(stateRef.current).isWorking &&
           !stateRef.current.items.some(
             (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
           ),
@@ -263,35 +265,31 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
-  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const execution = selectStructuredSessionCurrentExecution(state)
+  const { turnId } = execution
   const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
   const activityText =
     selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
-  const thinking = isStructuredAgentSessionThinking(state.items)
+  const thinking = execution.isWorking && isStructuredAgentSessionThinking(state.items)
   const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
   const status = state.status === 'idle' ? 'idle' : state.status
-  const approvalPrompt = useMemo(
-    () => state.items.find(pendingStructuredApproval) ?? null,
-    [state.items]
-  )
-  const questionPrompt = useMemo(
-    () => state.items.find(pendingStructuredQuestion) ?? null,
-    [state.items]
-  )
+  const { approvalPrompt, questionPrompt } = selectMobileStructuredCurrentPrompts(state)
   return {
     ...options,
     session: {
       messages,
       status,
       transcriptLoading: status === 'loading',
-      error: state.error,
+      error:
+        state.error ??
+        (execution.unverifiable && status === 'ready'
+          ? 'Execution could not be verified. History remains available.'
+          : undefined),
       hasMore: state.hasOlder,
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking:
-      turnId !== null ||
-      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
+    isWorking: execution.isWorking,
     turnId,
     turnIndicator,
     ...turnTiming,

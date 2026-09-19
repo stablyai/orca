@@ -1,3 +1,9 @@
+import {
+  isAgentSessionDeathEvidence,
+  type AgentSessionDeathEvidence
+} from './agent-session-death-evidence'
+export type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
+import { isAgentSessionRetirements, type AgentSessionRetirements } from './agent-session-retirement'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 /**
@@ -79,12 +85,6 @@ export type AgentSessionJournalCheckpoint = { epoch: number; sequence: number }
  */
 export type AgentSessionClaimStatus = 'reserved' | 'live' | 'conflicted' | 'released'
 
-export type AgentSessionDeathEvidence = {
-  kind: 'exit-observed' | 'pid-absent' | 'identity-mismatch'
-  detail: string
-  observedAt: number
-}
-
 export type AgentSessionLease = {
   sessionId: string
   runtimeKind: AgentSessionOwnerRuntimeKind
@@ -131,6 +131,7 @@ export type AgentSessionRecord = {
   accountHome: AgentSessionAccountHome
   /** Provider options acknowledged for the next turn, restored across owner replacement. */
   options?: Record<string, string>
+  retirements?: AgentSessionRetirements
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
@@ -274,21 +275,6 @@ function isAgentSessionJournalCheckpoint(value: unknown): value is AgentSessionJ
   )
 }
 
-function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeathEvidence {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const evidence = value as Partial<AgentSessionDeathEvidence>
-  return (
-    (evidence.kind === 'exit-observed' ||
-      evidence.kind === 'pid-absent' ||
-      evidence.kind === 'identity-mismatch') &&
-    isBoundedString(evidence.detail, MAX_ID_LENGTH) &&
-    Number.isSafeInteger(evidence.observedAt) &&
-    (evidence.observedAt as number) >= 0
-  )
-}
-
 function isAgentSessionLease(value: unknown): value is AgentSessionLease {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -345,6 +331,7 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    (record.retirements === undefined || isAgentSessionRetirements(record.retirements)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.conversationCommand === undefined ||
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&

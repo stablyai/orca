@@ -9,7 +9,7 @@
 // The release CHAINS off the hold rather than racing it: an unmount during the hold's round trip
 // would otherwise release a hold that has not landed yet, and the late hold would never be undone.
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -19,8 +19,9 @@ export function useStructuredAgentSessionHold(args: {
   target: RuntimeClientTarget
   surface: string
   enabled?: boolean
-}): void {
+}): () => Promise<void> {
   const { enabled = true, sessionId, surface, target } = args
+  const retryRef = useRef<(() => Promise<void>) | null>(null)
   // Keyed by VALUE, not identity: callers build the target inline, so an identity dependency would
   // release and re-take the hold on every render of the pane.
   const targetKey = target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
@@ -36,12 +37,23 @@ export function useStructuredAgentSessionHold(args: {
     }
     const runtimeTarget = targetRef.current
     const holderId = structuredAgentSessionHolderId(surface)
-    const held = callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
-      sessionId,
-      holderId
-      // An older host has no such method; the session still reads, it just is not held.
-    }).catch(() => undefined)
+    let held: Promise<void> = Promise.resolve()
+    const takeHold = (): Promise<void> => {
+      const pending = held.then(async () => {
+        await callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
+          sessionId,
+          holderId
+        })
+      })
+      held = pending.catch(() => undefined)
+      return pending
+    }
+    retryRef.current = takeHold
+    void takeHold().catch(() => undefined)
     return () => {
+      if (retryRef.current === takeHold) {
+        retryRef.current = null
+      }
       void held.then(() =>
         callStructuredAgentSession(runtimeTarget, 'agentSession.release', {
           sessionId,
@@ -50,4 +62,5 @@ export function useStructuredAgentSessionHold(args: {
       )
     }
   }, [enabled, sessionId, surface, targetKey])
+  return useCallback(() => retryRef.current?.() ?? Promise.resolve(), [])
 }

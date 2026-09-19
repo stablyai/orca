@@ -1,3 +1,4 @@
+import { projectExecutionStatusEvent } from './structured-agent-session-execution-capability'
 // `agentSession.subscribeStatus` — every structured session's projected status on one stream.
 //
 // Session lists read turn state from here instead of replaying transcripts: one stream per client
@@ -53,7 +54,10 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      dispose = host.subscribeStatus({ id: subscriptionId, emit })
+      dispose = host.subscribeStatus({
+        id: subscriptionId,
+        emit: (event) => emit(projectExecutionStatusEvent(event, ctx))
+      })
       if (stream.isClosed()) {
         dispose()
       }

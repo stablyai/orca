@@ -1,3 +1,7 @@
+import {
+  recordStructuredSessionLiveItem,
+  recordStructuredSessionLiveBatch
+} from './structured-agent-session-live-items'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
@@ -171,12 +175,18 @@ export function createDeferredStructuredAgentSessionEventSink(
       {
         bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
         coalescingKey: `lifecycle:${settlementId}`,
-        run: (bound) =>
-          bound.journal.appendLifecycleBatch({
+        run: async (bound) => {
+          const before = bound.journal.cursor()
+          const cursor = await bound.journal.appendLifecycleBatch({
             settlementId,
             mutations,
             fence: bound.fence
           })
+          if (cursor.epoch === before.epoch && cursor.sequence > before.sequence) {
+            recordStructuredSessionLiveBatch(bound.journal, bound.fence, mutations, cursor)
+          }
+          return cursor
+        }
       },
       { ...options, lifecycle: true }
     )
@@ -201,10 +211,15 @@ export function createDeferredStructuredAgentSessionEventSink(
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
             run: (bound) =>
-              bound.journal.appendItem(identity, body, {
-                fence: bound.fence,
-                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
-              })
+              bound.journal
+                .appendItem(identity, body, {
+                  fence: bound.fence,
+                  ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+                })
+                .then((result) => {
+                  recordStructuredSessionLiveItem(bound.journal, bound.fence, body, result)
+                  return result
+                })
           },
           options
         )
@@ -215,10 +230,15 @@ export function createDeferredStructuredAgentSessionEventSink(
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
             run: (bound) =>
-              bound.journal.appendItem(identity, body, {
-                fence: bound.fence,
-                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
-              })
+              bound.journal
+                .appendItem(identity, body, {
+                  fence: bound.fence,
+                  ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+                })
+                .then((result) => {
+                  recordStructuredSessionLiveItem(bound.journal, bound.fence, body, result)
+                  return result
+                })
           },
           options
         ),
@@ -237,7 +257,8 @@ export function createDeferredStructuredAgentSessionEventSink(
               if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
                 throw new Error('structured agent-session item identity exceeded its reserved size')
               }
-              await bound.journal.appendItem(identity, body, { fence: bound.fence })
+              const result = await bound.journal.appendItem(identity, body, { fence: bound.fence })
+              recordStructuredSessionLiveItem(bound.journal, bound.fence, body, result)
               bound.publish()
             }
           },

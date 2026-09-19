@@ -796,7 +796,7 @@ describe('useMobileStructuredAgentSession', () => {
       renderer?.update(createElement(Harness, { connected: false }))
     })
     expect(hook?.session.messages).toHaveLength(1)
-    expect(hook?.session.status).toBe('ready')
+    expect(hook?.session.status).toBe('loading')
 
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: true }))
@@ -816,7 +816,7 @@ describe('useMobileStructuredAgentSession', () => {
       renderer?.update(createElement(Harness, { connected: false, sessionId: 'session-2' }))
     })
     expect(hook?.session.messages).toEqual([])
-    expect(hook?.session.status).toBe('idle')
+    expect(hook?.session.status).toBe('loading')
 
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: false, sessionId: 'session-1' }))

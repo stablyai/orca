@@ -59,6 +59,9 @@ export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
   sessions: Map<string, StructuredAgentSessionHostSession>,
   now: () => number,
+  onSettlementCompleted: NonNullable<
+    Parameters<typeof retryPendingStructuredAgentSessionSettlement>[0]['onCompleted']
+  >,
   wiring: Omit<
     ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
     'store' | 'journalRoot' | 'supportsRecord' | 'retrySettlement'
@@ -72,7 +75,14 @@ export function createStructuredAgentSessionHostRestore(
     journalRoot: deps.journalRoot,
     supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
     retrySettlement: (sessionId, params) =>
-      retryPendingStructuredAgentSessionSettlement({ deps, sessions, sessionId, params, now }),
+      retryPendingStructuredAgentSessionSettlement({
+        deps,
+        sessions,
+        sessionId,
+        params,
+        now,
+        onCompleted: onSettlementCompleted
+      }),
     ...wiring
   })
   const gate = new StructuredAgentSessionRestartRestoreGate()

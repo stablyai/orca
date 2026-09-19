@@ -30,7 +30,7 @@ export function useStructuredAgentSession(args: {
   transportEnabled?: boolean
 }) {
   const { agent, isVisible, sessionId, target, transportEnabled = true } = args
-  const { state, loadingOlder, loadOlder, mutate, writeError, providerVisible } =
+  const { state, loadingOlder, loadOlder, mutate, writeError, providerVisible, retryVerification } =
     useStructuredAgentSessionTransport({
       sessionId,
       target,
@@ -57,7 +57,11 @@ export function useStructuredAgentSession(args: {
     submissions: transportState.submissions
   })
 
-  const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
+  const prompts = pendingStructuredSessionPrompts(transportState.journalItems).filter(
+    (prompt) =>
+      state.status === 'ready' &&
+      (!state.execution || transportState.execution?.promptIds.includes(prompt.itemId))
+  )
   const { outbox } = outboxController
   const messages = useStructuredAgentSessionMessages(
     transportState.journalItems,
@@ -65,12 +69,16 @@ export function useStructuredAgentSession(args: {
     transportState.submissions
   )
   return {
+    retryVerification,
+    executionUnverifiable: transportState.executionUnverifiable,
+    executionVerificationAvailable: state.execution !== undefined,
     conversationCommands,
     runConversationCommand: (command: AgentSessionConversationCommand) =>
       structuredConversationCommands.sendStructuredConversationCommand({
         command,
         pending: commandPending,
         blocked: Boolean(
+          transportState.executionUnverifiable ||
           transportState.turnId ||
           prompts.length ||
           transportState.backgroundTasks.isMonitoring ||
@@ -96,7 +104,9 @@ export function useStructuredAgentSession(args: {
     outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
-      !commandPending.current && outboxController.send(...input),
+      !transportState.executionUnverifiable &&
+      !commandPending.current &&
+      outboxController.send(...input),
     retry: outboxController.retry,
     isWorking: transportState.isWorking,
     workingStartedAt: transportState.turnTiming.workingStartedAt,

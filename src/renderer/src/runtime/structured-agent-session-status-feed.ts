@@ -55,6 +55,16 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     snapshot = next
     emit()
   }
+  const acceptSummary = (session: AgentSessionStatusSummary): boolean => {
+    const previous = snapshot.get(session.sessionId)?.execution
+    return (
+      !confirmedSessions.has(session.sessionId) ||
+      !previous ||
+      !session.execution ||
+      previous.hostIncarnation !== session.execution.hostIncarnation ||
+      previous.revision <= session.execution.revision
+    )
+  }
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
       reconnectAttempt = 0
@@ -62,13 +72,16 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       // the first snapshot can be empty and dropping those rows flickers every one to no-status.
       const next = new Map(snapshot)
       for (const session of event.sessions) {
+        if (!acceptSummary(session)) {
+          continue
+        }
         confirmedSessions.add(session.sessionId)
         next.set(session.sessionId, session)
       }
       setSnapshot(next)
       return
     }
-    if (event.type === 'status') {
+    if (event.type === 'status' && acceptSummary(event.session)) {
       confirmedSessions.add(event.session.sessionId)
       const next = new Map(snapshot)
       next.set(event.session.sessionId, event.session)
@@ -89,14 +102,20 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   const revokeSnapshotOwnership = (): void => {
     let next: Map<string, AgentSessionStatusSummary> | null = null
     for (const [sessionId, summary] of snapshot) {
-      if (!summary.hostExecutionOwned) {
+      if (
+        !summary.hostExecutionOwned &&
+        (!summary.execution || summary.execution.observation !== 'live')
+      ) {
         continue
       }
       if (!next) {
         next = new Map(snapshot)
       }
       const { hostExecutionOwned: _owned, ...retained } = summary
-      next.set(sessionId, retained)
+      next.set(
+        sessionId,
+        summary.execution?.observation === 'live' ? { ...retained, status: 'attention' } : retained
+      )
     }
     if (next) {
       snapshot = next

@@ -91,6 +91,7 @@ export function useMobileStructuredAgentState(args: {
     streamGenerationRef.current += 1
     sessionKeyRef.current = sessionKey
     setLoadingOlder(false)
+    apply({ type: 'disconnected' })
     if (!client || !sessionId || !enabled) {
       return
     }
@@ -99,9 +100,9 @@ export function useMobileStructuredAgentState(args: {
       // session's transcript visible while another tab can be selected.
       return
     }
-    apply({ type: 'loading' })
     const holderId = structuredAgentSessionHolderId('mobile-chat')
     let cancelled = false
+    let streamEnded = false
     let unsubscribe = (): void => {}
     const held = callAgentSession(client, 'agentSession.hold', {
       sessionId,
@@ -113,6 +114,9 @@ export function useMobileStructuredAgentState(args: {
           return
         }
         unsubscribe = client.subscribe('agentSession.subscribe', { sessionId }, (raw) => {
+          if (cancelled || streamEnded) {
+            return
+          }
           if (
             typeof raw === 'object' &&
             raw !== null &&
@@ -122,6 +126,7 @@ export function useMobileStructuredAgentState(args: {
             return
           }
           if (isSubscribeEvent(raw)) {
+            streamEnded = raw.type === 'end'
             apply({ type: 'event', event: raw })
           }
         })

@@ -1,3 +1,7 @@
+import {
+  executionViewStatus,
+  type AgentSessionExecutionView
+} from '../../../shared/agent-session-execution-view'
 // The host's answer to "what is every structured session doing", fanned out to session lists.
 //
 // A client used to learn whether a turn was running by replaying the journal through its own
@@ -54,6 +58,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
   /** Live provider-owned background tasks for the summary, so session lists can
    *  render subagent children. Optional: a provider without the hook projects none. */
+  readExecution?: (sessionId: string) => AgentSessionExecutionView | undefined
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null | undefined
 }
 
@@ -62,6 +67,7 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.workspaceId === b.workspaceId &&
     a.agent === b.agent &&
     a.status === b.status &&
+    a.execution?.revision === b.execution?.revision &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
     a.rewindBlockedReason === b.rewindBlockedReason &&
     // Settled activity changes ranking; streaming active turns must stay quiet.
@@ -80,6 +86,7 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
  *  `deps` is a thunk because the host builds the feed in a field initializer,
  *  before its constructor parameters are assigned. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
+  readExecution?: StructuredAgentSessionStatusFeedDeps['readExecution']
   sessions: StructuredAgentSessionStatusFeedDeps['sessions']
   now: () => number
   deps: () => {
@@ -95,6 +102,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
 }): StructuredAgentSessionStatusFeed {
   return new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
+    readExecution: args.readExecution,
     getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
     now: args.now,
     onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
@@ -249,12 +257,24 @@ export class StructuredAgentSessionStatusFeed {
     const backgroundTasks = this.deps
       .readBackgroundTasks?.(sessionId)
       ?.tasks?.map(({ totalTokens: _totalTokens, ...task }) => task)
+    const execution = this.deps.readExecution?.(sessionId)
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
-      ...(session.hasProviderChild ? { hostExecutionOwned: true as const } : {}),
+      ...((execution ? execution.control === 'native' : session.hasProviderChild)
+        ? { hostExecutionOwned: true as const }
+        : {}),
       ...projection.summary,
+      ...(execution
+        ? {
+            execution,
+            status: executionViewStatus(execution),
+            ...(execution.activity !== 'working'
+              ? { toolName: undefined, toolInput: undefined }
+              : {})
+          }
+        : {}),
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),

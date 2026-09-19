@@ -11,7 +11,6 @@ import type {
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionBackgroundTaskState,
-  type AgentSessionSlashCommand,
   type AgentSessionHandoffStatus,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
@@ -23,31 +22,16 @@ import {
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
 
-export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
-export type AgentSessionSubscribeInput = {
-  id: string
-  sessionId: string
-  emit: AgentSessionSubscriberEmit
-  cursor?: AgentJournalCursor
-}
-
-type Subscriber = {
-  id: string
-  sessionId: string
-  emit: AgentSessionSubscriberEmit
-  cursor: AgentJournalCursor
-  fence: number
-  commands?: AgentSessionSlashCommand[] | null
-}
-
-export type AgentSessionSubscribersHooks = {
-  readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
-  /** Fires after any publication that can change journal content, whether or not anyone
-   *  is subscribed to the transcript: session lists project status from this same edge. */
-  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
-  /** Host wall clock, stamped once per published frame as `hostNow`. */
-  now?: () => number
-}
+import type {
+  AgentSessionSubscriberEmit,
+  AgentSessionSubscribersHooks,
+  Subscriber
+} from './structured-agent-session-subscription-contract'
+export type {
+  AgentSessionSubscribeInput,
+  AgentSessionSubscriberEmit,
+  AgentSessionSubscribersHooks
+} from './structured-agent-session-subscription-contract'
 
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
@@ -181,6 +165,15 @@ export class AgentSessionSubscribers {
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
+  metadata(sessionId: string, journal: AgentSessionJournal): void {
+    const execution = this.hooks.readExecution?.(sessionId)
+    for (const subscriber of this.subscribers(sessionId)) {
+      if (execution && execution.revision !== subscriber.executionRevision) {
+        this.deliver(subscriber, journal, this.now(), undefined, true)
+      }
+    }
+  }
+
   handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
@@ -312,8 +305,15 @@ export class AgentSessionSubscribers {
         this.hooks.readCommands !== undefined &&
         event.type !== 'end' &&
         (event.type !== 'batch' || commands !== subscriber.commands)
-      subscriber.emit(includeCommands ? { ...event, commands: commands ?? null } : event)
+      const execution = this.hooks.readExecution?.(subscriber.sessionId)
+      if (event.type !== 'end' && execution) {
+        event = { ...event, execution }
+      }
+      subscriber.emit(
+        includeCommands && event.type !== 'end' ? { ...event, commands: commands ?? null } : event
+      )
       subscriber.commands = commands
+      subscriber.executionRevision = execution?.revision
     } catch {
       this.drop(subscriber)
     }

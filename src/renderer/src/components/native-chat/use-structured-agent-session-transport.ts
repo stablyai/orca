@@ -13,7 +13,7 @@ export function useStructuredAgentSessionTransport(args: {
 }) {
   const { enabled, isVisible, sessionId, target } = args
   const providerVisible = isVisible && enabled
-  useStructuredAgentSessionHold({
+  const retryHold = useStructuredAgentSessionHold({
     sessionId,
     target,
     surface: 'desktop-chat',
@@ -40,5 +40,16 @@ export function useStructuredAgentSessionTransport(args: {
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  return { ...read, ...mutation, providerVisible }
+  return {
+    ...read,
+    ...mutation,
+    providerVisible,
+    retryVerification: async () => {
+      try {
+        await retryHold()
+      } finally {
+        read.refresh()
+      }
+    }
+  }
 }

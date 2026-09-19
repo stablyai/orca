@@ -1,3 +1,7 @@
+import {
+  joinAgentSessionExecutionView,
+  type AgentSessionExecutionView
+} from './agent-session-execution-view'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -22,6 +26,7 @@ export type StructuredAgentHostClock = {
 }
 
 export type StructuredAgentSessionState = {
+  execution?: AgentSessionExecutionView
   epoch: string | null
   cursor: AgentJournalCursor | null
   fence: number | null
@@ -42,6 +47,7 @@ export type StructuredAgentSessionState = {
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
+  | { type: 'disconnected' }
   | { type: 'error'; message: string }
   | { type: 'handoff'; handoff: AgentSessionHandoffStatus }
   | { type: 'event'; event: AgentSessionSubscribeEvent }
@@ -155,6 +161,9 @@ export function reduceStructuredAgentSession(
   action: StructuredAgentSessionAction,
   receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
+  if (action.type === 'disconnected') {
+    return { ...state, status: 'loading', execution: undefined, error: undefined }
+  }
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
     return { ...state, status: 'loading', error: undefined }
@@ -173,6 +182,11 @@ export function reduceStructuredAgentSession(
         state.handoff ?? undefined,
         state.backgroundTasks,
         state.activity
+      ),
+      execution: joinAgentSessionExecutionView(
+        state.execution,
+        action.page.execution,
+        action.page.liveCursor ?? action.page.window.nextCursor
       ),
       commands: state.commands,
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
@@ -202,20 +216,34 @@ export function reduceStructuredAgentSession(
   }
   const event = action.event
   if (event.type === 'end') {
-    return state
+    return { ...state, status: 'loading', execution: undefined }
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
       ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
+      execution: joinAgentSessionExecutionView(
+        state.execution,
+        event.execution ?? event.page.execution,
+        event.page.liveCursor ?? event.page.window.nextCursor
+      ),
       commands: event.commands,
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
-  if (state.epoch !== event.batch.cursor.epoch) {
-    return state
-  }
-  if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
-    return state
+  const execution = joinAgentSessionExecutionView(
+    state.execution,
+    event.execution,
+    state.epoch !== event.batch.cursor.epoch
+      ? state.cursor
+      : state.cursor && state.cursor.sequence > event.batch.cursor.sequence
+        ? state.cursor
+        : event.batch.cursor
+  )
+  if (
+    state.epoch !== event.batch.cursor.epoch ||
+    (state.cursor && event.batch.cursor.sequence < state.cursor.sequence)
+  ) {
+    return execution === state.execution ? state : { ...state, execution }
   }
   const backgroundTasks =
     event.backgroundTasks !== undefined ? event.backgroundTasks : state.backgroundTasks
@@ -233,6 +261,7 @@ export function reduceStructuredAgentSession(
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
+    execution === state.execution &&
     state.status === 'ready' &&
     state.error === undefined
   ) {
@@ -244,6 +273,7 @@ export function reduceStructuredAgentSession(
   const items = trimRetainedItems(merged, state.retainedItemLimit)
   return {
     ...state,
+    execution,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
     items,

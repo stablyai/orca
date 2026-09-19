@@ -88,19 +88,19 @@ export async function handoffStructuredSessionToNative(
     throw new Error('agent_session_operation_conflict')
   }
   deps.stopTuiHistoryCatchup?.(sessionId)
+  if (record.lease.settlementRetryRequired) {
+    const settled = await deps.retryPendingSettlement(sessionId)
+    if (!settled && context.requireRecord(sessionId).lease.settlementRetryRequired) {
+      throw new Error('The provider-exit terminal journal settlement is still pending.')
+    }
+    record = context.requireRecord(sessionId)
+  }
   if (owner?.historySource !== 'provider-resume') {
     await deps.importTuiHistory({
       sessionId,
       fence: record.lease.runtimeFence,
       ...(transcriptPath ? { transcriptPath } : {})
     })
-  }
-  if (record.lease.settlementRetryRequired) {
-    const settled = await deps.retryPendingSettlement(sessionId)
-    if (!settled) {
-      throw new Error('The provider-exit terminal journal settlement is still pending.')
-    }
-    record = context.requireRecord(sessionId)
   }
   const spawnToken = randomUUID()
   record = await reserveStoredAgentSessionHandoffOwner(deps.store, {

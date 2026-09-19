@@ -325,12 +325,11 @@ describe('already-wedged profiles become usable on load', () => {
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
-    // The exit was observed, so its receipt is the turn's end.
+    // A durable owner exit alone does not attribute imported rows to that execution.
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
-      state: 'interrupted',
+      state: 'unverifiable',
       startedAt: NOW - 5_000,
-      completedAt: NOW - 1_000,
       recovered: true
     })
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

@@ -105,17 +105,16 @@ function mutableStore() {
 describe('provider-exit recovery tickets', () => {
   it.each([undefined, 2_000])('keeps exit receipt %s on retry', async (observedAt) => {
     let now = observedAt === undefined ? 2_000 : 30_000
-    let record = {
-      lease: {
-        handoffStage: null,
+    let record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        sessionId: SESSION,
         runtimeFence: 7,
         runtimeKind: 'native',
         claimStatus: 'live',
-        ownerProcess: 'provider',
         reservedSpawnToken: null,
         processlessAt: null
-      }
-    } as unknown as AgentSessionRecord
+      })
+    )
     const store = {
       getRecord: () => record,
       transitionHandoff: async (
@@ -127,11 +126,26 @@ describe('provider-exit recovery tickets', () => {
       .fn()
       .mockRejectedValueOnce(new Error('journal unavailable'))
       .mockResolvedValue({ epoch: 'epoch-1', sequence: 2 })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The recovery fixture supplies the journal and ownership operations exercised by this test.
     const session = {
       hasProviderChild: true,
       fence: 7,
       acquisitionGeneration: GENERATION,
       journal: {
+        cursor: () => ({ epoch: 'epoch-1', sequence: 1 }),
+        retirement: {
+          capture: async () => ({
+            disposition: 'captured',
+            capture: {
+              sessionId: SESSION,
+              epoch: 'epoch-1',
+              incarnation: 'materialization-1',
+              throughSequence: 1,
+              items: [],
+              submissions: []
+            }
+          })
+        },
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
@@ -177,17 +191,7 @@ describe('provider-exit recovery tickets', () => {
         now: () => now
       })
     ).resolves.toBe(true)
-    expect(appendLifecycleBatch.mock.calls.at(-1)?.[0].mutations).toContainEqual(
-      expect.objectContaining({
-        body: {
-          kind: 'turn',
-          turnId: 'turn-1',
-          state: 'interrupted',
-          startedAt: 1_000,
-          completedAt: 2_000
-        }
-      })
-    )
+    expect(record.lease.deathEvidence?.observedAt).toBe(2_000)
     expect(record.lease.settlementRetryRequired).toBeUndefined()
   })
 

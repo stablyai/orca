@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionView } from '../../../shared/agent-session-execution-view'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionHistoryRequest,
@@ -24,7 +25,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     ) => Parameters<AgentSessionSubscribers['open']>[0]['handoff'],
     /** Task edges change the status summary too; the feed's equality check
      *  keeps a no-op re-projection from reaching subscribers. */
-    private readonly onPublished: (sessionId: string) => void
+    private readonly onPublished: (sessionId: string) => void,
+    private readonly readExecution: (sessionId: string) => AgentSessionExecutionView | undefined
   ) {}
 
   history(request: AgentSessionHistoryRequest): AgentSessionHistoryResult {
@@ -40,6 +42,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       page: {
         ...result.page,
         hostNow,
+        execution: this.readExecution(request.sessionId),
         ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
       }
     }

@@ -6,6 +6,7 @@
 // Columns are always named: `SELECT *` is uncacheable and can drop a column.
 
 import type Database from '../../sqlite/sync-database'
+import { rotateJournalMaterializationIdentity } from './journal-materialization-identity'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
@@ -100,6 +101,7 @@ export function readJournalRowsAfter(
  * `WHERE session_id = ?` form rewrote every emptied leaf at up to 99%.
  */
 export function deleteAllJournalRows(db: Database.Database): void {
+  rotateJournalMaterializationIdentity(db)
   db.exec('DELETE FROM journal_rows')
 }
 
@@ -110,6 +112,7 @@ export function deleteJournalRowSuffix(
   epoch: string,
   fromSeq: number
 ): number {
+  rotateJournalMaterializationIdentity(db)
   const deleted = db.prepare(DELETE_SUFFIX).run(sessionId, epoch, fromSeq)
   return Number(deleted.changes ?? 0)
 }

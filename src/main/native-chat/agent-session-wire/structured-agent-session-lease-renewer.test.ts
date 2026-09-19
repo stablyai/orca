@@ -292,3 +292,162 @@ describe('structured agent-session lease renewal', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 })
+
+it('bounds unresolved recovery attempts and retries a superseding identity on the same scheduler', async () => {
+  const store = await liveStore()
+  await store.transitionHandoff('session-renewal', (record) => ({
+    ...record,
+    lease: { ...record.lease, handoffStage: 'recovering' }
+  }))
+  vi.useFakeTimers()
+  try {
+    let clock = NOW
+    const recover = vi.fn(async () => {})
+    const renewer = new StructuredAgentSessionLeaseRenewer({
+      store,
+      probe: async () => ({ outcome: 'indeterminate', reason: 'no contact' }),
+      now: () => clock,
+      onRecoveryCandidate: recover,
+      intervalMs: 10
+    })
+
+    for (let tick = 0; tick < 100; tick += 1) {
+      clock += 10
+      await renewer.renewNow()
+    }
+    expect(recover).toHaveBeenCalledTimes(6)
+    expect(store.getRecord('session-renewal')?.lease.ownerProcess).not.toBeNull()
+    await store.transitionHandoff('session-renewal', (record) => ({
+      ...record,
+      lease: { ...record.lease, runtimeFence: record.lease.runtimeFence + 1 }
+    }))
+    clock += 10
+    await renewer.renewNow()
+    expect(recover).toHaveBeenCalledTimes(7)
+    renewer.start()
+    renewer.stop()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retries durable receipts after legacy flags clear and gives expiry a final bounded attempt', async () => {
+  const store = await liveStore()
+  let clock = NOW
+  await store.transitionHandoff('session-renewal', (record) => ({
+    ...record,
+    lease: {
+      ...record.lease,
+      claimStatus: 'released',
+      ownerProcess: null,
+      settlementRetryRequired: undefined
+    },
+    retirements: {
+      abandonedCount: 0,
+      receipts: [
+        {
+          id: 'receipt',
+          fence: record.lease.runtimeFence,
+          observedAt: NOW,
+          capture: {
+            sessionId: record.sessionId,
+            epoch: 'epoch',
+            incarnation: 'immutable',
+            throughSequence: 1,
+            items: [],
+            submissions: []
+          }
+        }
+      ]
+    }
+  }))
+  const recover = vi.fn(async (): Promise<void> => {
+    throw new Error('journal temporarily unavailable')
+  })
+  const renewer = new StructuredAgentSessionLeaseRenewer({
+    store,
+    now: () => clock,
+    probe: async () => ({ outcome: 'pid-absent' }),
+    onRecoveryCandidate: recover,
+    intervalMs: 10
+  })
+  for (let tick = 0; tick < 100; tick += 1) {
+    clock += 10
+    await renewer.renewNow()
+  }
+  expect(recover).toHaveBeenCalledTimes(6)
+  clock = NOW + 24 * 60 * 60 * 1000
+  recover.mockImplementation(async () => {
+    await store.transitionHandoff('session-renewal', (record) => ({
+      ...record,
+      retirements: {
+        receipts: [],
+        abandonedCount: 1,
+        lastAbandonedReason: 'expired',
+        lastAbandonedAt: clock
+      }
+    }))
+  })
+  await renewer.renewNow()
+  await renewer.renewNow()
+  expect(recover).toHaveBeenCalledTimes(7)
+  expect(store.getRecord('session-renewal')?.retirements?.receipts).toEqual([])
+})
+
+it('repairs an unopened released session after transient failure without a legacy retry flag', async () => {
+  const { openAgentSessionJournal } = await import('../agent-session-journal/journal-store-factory')
+  const { preserveStructuredSessionRetirement, retryStructuredSessionRetirements } =
+    await import('./structured-agent-session-retirement')
+  const store = await liveStore()
+  const root = await mkdtemp(join(tmpdir(), 'receipt-maintenance-'))
+  roots.push(root)
+  const record = store.getRecord('session-renewal')!
+  const journal = await openAgentSessionJournal({
+    journalDir: root,
+    identity: {
+      sessionId: record.sessionId,
+      hostId: 'local',
+      workspaceId: 'folder',
+      agent: 'codex',
+      providerHandle: { kind: 'codex', threadId: 'thread' }
+    }
+  })
+  let clock = NOW
+  const context = { store, journal, sessionId: record.sessionId, now: () => clock }
+  try {
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'thread', turnId: 'old', ordinal: 1 },
+      { kind: 'turn', turnId: 'old', state: 'running' },
+      { fence: record.lease.runtimeFence }
+    )
+    await store.evictProvenDeadOwner({
+      sessionId: record.sessionId,
+      expectedFence: record.lease.runtimeFence,
+      probe: { outcome: 'pid-absent' },
+      now: clock
+    })
+    expect(await preserveStructuredSessionRetirement(context)).toBe(true)
+    expect(store.getRecord(record.sessionId)?.lease.settlementRetryRequired).toBeUndefined()
+    vi.spyOn(journal.retirement, 'repairItem').mockRejectedValueOnce(
+      new Error('temporary write failure')
+    )
+    const renewer = new StructuredAgentSessionLeaseRenewer({
+      store,
+      now: () => clock,
+      probe: async () => ({ outcome: 'pid-absent' }),
+      intervalMs: 10,
+      onRecoveryCandidate: async () => {
+        await retryStructuredSessionRetirements(context)
+      }
+    })
+    await renewer.renewNow()
+    expect(store.getRecord(record.sessionId)?.retirements?.receipts).toHaveLength(1)
+    clock += 10
+    await renewer.renewNow()
+    expect(store.getRecord(record.sessionId)?.retirements?.receipts).toEqual([])
+    expect(journal.snapshot().items[0].body).toMatchObject({ kind: 'turn', state: 'unverifiable' })
+  } finally {
+    await journal.close()
+  }
+})

@@ -749,7 +749,7 @@ describe('an unexpected provider exit', () => {
     expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
-  it('latches a failed exit settlement and blocks attach until the terminal batch is written', async () => {
+  it('preserves a failed exit settlement while admitting a safe replacement owner', async () => {
     await attach()
     await host.hold(SESSION, SURFACE)
     emitTurnLifecycle('running', 1)
@@ -795,15 +795,10 @@ describe('an unexpected provider exit', () => {
       runtimeFence: exitedFence + 1
     })
     expect(await host.attach(CALLER, hostTestAttachParams(exitedFence + 1))).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
-    })
-    expect(acquire).toHaveBeenCalledOnce()
-
-    appendSettlement.mockRestore()
-    expect(await host.attach(CALLER, hostTestAttachParams(exitedFence + 1))).toMatchObject({
       ok: true
     })
+    expect(acquire).toHaveBeenCalledTimes(2)
+    appendSettlement.mockRestore()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,

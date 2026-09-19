@@ -6,14 +6,19 @@
 // carries at most one row per session: the standing demand for a rebuild a
 // partial repair leaves behind (see journal-repair-marker.ts).
 
-/** DB shape version, carried in `PRAGMA user_version`. Independent of the row
- *  body version (`JournalRow.v`): a newer build can change either alone.
+/** DB shape (`PRAGMA user_version`) and row body versions evolve independently.
+ *  v3 adds immutable materialization identity for conditional historical repair.
  *  v2 added `journal_repairs`; a build without it would replay a partially
  *  repaired journal as clean, so it must latch read-only rather than write. */
-export const JOURNAL_DB_SCHEMA_VERSION = 2
+export const JOURNAL_DB_SCHEMA_VERSION = 3
 
 export function createJournalTablesSql(): string {
   return `
+CREATE TABLE IF NOT EXISTS journal_materialization (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  incarnation TEXT NOT NULL
+);
+INSERT OR IGNORE INTO journal_materialization VALUES (1, lower(hex(randomblob(16))));
 CREATE TABLE IF NOT EXISTS journal_rows (
   session_id TEXT    NOT NULL,
   epoch      TEXT    NOT NULL,

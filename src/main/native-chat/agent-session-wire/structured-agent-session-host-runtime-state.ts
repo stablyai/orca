@@ -1,3 +1,7 @@
+import {
+  isProvenAliveProbe,
+  isProvenDeadProbe
+} from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -10,6 +14,10 @@ import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-l
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
 
 export class StructuredAgentSessionHostRuntimeState {
+  private readonly observations = new Map<
+    string,
+    { identity: string; at: number; probe: AgentSessionOwnerProbe }
+  >()
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
@@ -18,13 +26,24 @@ export class StructuredAgentSessionHostRuntimeState {
     private readonly deps: StructuredAgentSessionHostDeps,
     onLeaseRenewed?: (record: AgentSessionRecord) => Promise<void>,
     onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>,
-    onEventSinkFailure?: (sessionId: string, error: unknown) => void
+    onEventSinkFailure?: (sessionId: string, error: unknown) => void,
+    onRecoveryCandidate?: (record: AgentSessionRecord) => Promise<void>,
+    onDeadNativeOwner?: (
+      record: AgentSessionRecord,
+      probe: AgentSessionOwnerProbe
+    ) => Promise<void>,
+    onObserved?: (record: AgentSessionRecord) => void
   ) {
     this.onEventSinkFailure = onEventSinkFailure
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({
       store: deps.store,
+      onRecoveryCandidate,
+      onDeadNativeOwner,
+      onObserved,
       probe: (record) => this.probeRecord(record),
-      ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
+      ...(deps.probeOwners
+        ? { probeMany: (records: readonly AgentSessionRecord[]) => this.probeRecords(records) }
+        : {}),
       now: () => deps.now?.() ?? Date.now(),
       ...(onLeaseRenewed ? { onRenewed: onLeaseRenewed } : {}),
       ...(onDeadTuiOwner ? { onDeadTuiOwner } : {}),
@@ -127,13 +146,60 @@ export class StructuredAgentSessionHostRuntimeState {
     return this.probeRecord(record)
   }
 
-  probeRecord(record: AgentSessionRecord): Promise<AgentSessionOwnerProbe> {
-    return (
-      this.deps.probeOwner?.(record) ??
+  async probeRecord(record: AgentSessionRecord): Promise<AgentSessionOwnerProbe> {
+    const probe = await (this.deps.probeOwner?.(record) ??
       Promise.resolve({
         outcome: 'indeterminate',
         reason: 'This host cannot probe structured session owners.'
+      }))
+    this.observations.set(record.sessionId, {
+      identity: this.observationIdentity(record),
+      at: this.deps.now?.() ?? Date.now(),
+      probe
+    })
+    return probe
+  }
+
+  async probeRecords(
+    records: readonly AgentSessionRecord[]
+  ): Promise<Map<string, AgentSessionOwnerProbe>> {
+    const probes =
+      (await this.deps.probeOwners?.(records)) ?? new Map<string, AgentSessionOwnerProbe>()
+    for (const record of records) {
+      const probe =
+        probes.get(record.sessionId) ??
+        ({ outcome: 'indeterminate', reason: 'Owner absent from partial probe response.' } as const)
+      this.observations.set(record.sessionId, {
+        identity: this.observationIdentity(record),
+        at: this.deps.now?.() ?? Date.now(),
+        probe
       })
-    )
+    }
+    return probes
+  }
+
+  executionObservation(sessionId: string): 'live' | 'unverifiable' | 'exited' | undefined {
+    const record = this.deps.store.getRecord(sessionId)
+    const cached = this.observations.get(sessionId)
+    if (!record || !cached || cached.identity !== this.observationIdentity(record)) {
+      return undefined
+    }
+    if ((this.deps.now?.() ?? Date.now()) - cached.at > 30_000) {
+      return 'unverifiable'
+    }
+    return isProvenDeadProbe(cached.probe)
+      ? 'exited'
+      : isProvenAliveProbe(cached.probe)
+        ? 'live'
+        : 'unverifiable'
+  }
+
+  private observationIdentity(record: AgentSessionRecord): string {
+    return JSON.stringify([
+      record.location,
+      record.lease.runtimeFence,
+      record.lease.ownerProcess,
+      record.lease.reservedSpawnToken
+    ])
   }
 }
