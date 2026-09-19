@@ -21,6 +21,10 @@ import {
   clearWebRuntimeWakeTerminalRespawnForWorktree,
   clearAllWebRuntimeWakeTerminalRespawn
 } from '../web-runtime-wake-terminal-respawn'
+import {
+  endWebRuntimeInitialTerminalBootstrap,
+  clearWebRuntimeInitialTerminalBootstrapsForEnvironment
+} from '../web-runtime-initial-terminal-bootstrap'
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
 import {
@@ -138,6 +142,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   lastHostTerminalTabCountByWorktree.delete(key)
   sessionTabsInventoryOmissionsByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
+  endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
@@ -214,6 +219,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   clearHostSessionMirrorHydration(trimmedEnvironmentId)
   clearHostMirrorHandleGapVerdictsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
+  clearWebRuntimeInitialTerminalBootstrapsForEnvironment(trimmedEnvironmentId)
 }
 
 export function getWebSessionTabsTrackingGeneration(environmentId: string): number {

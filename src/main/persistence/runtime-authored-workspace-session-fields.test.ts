@@ -63,6 +63,27 @@ describe('preserving runtime-authored workspace session fields', () => {
     expect(preserveRuntimeAuthoredWorkspaceSessionFields(next, session())).toBe(next)
     expect(preserveRuntimeAuthoredWorkspaceSessionFields(next, null)).toBe(next)
   })
+
+  it('keeps default-terminal-tab markers a persist snapshot omitted', () => {
+    const next = preserveRuntimeAuthoredWorkspaceSessionFields(session(), {
+      ...session(),
+      defaultTerminalTabsAppliedByWorktreeId: { 'repo-1::/wt-a': true }
+    })
+
+    expect(next.defaultTerminalTabsAppliedByWorktreeId).toEqual({ 'repo-1::/wt-a': true })
+  })
+
+  it('unions default-terminal-tab markers instead of replacing with a partial snapshot', () => {
+    const next = preserveRuntimeAuthoredWorkspaceSessionFields(
+      { ...session(), defaultTerminalTabsAppliedByWorktreeId: { 'repo-1::/wt-b': true } },
+      { ...session(), defaultTerminalTabsAppliedByWorktreeId: { 'repo-1::/wt-a': true } }
+    )
+
+    expect(next.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      'repo-1::/wt-a': true,
+      'repo-1::/wt-b': true
+    })
+  })
 })
 
 function session(

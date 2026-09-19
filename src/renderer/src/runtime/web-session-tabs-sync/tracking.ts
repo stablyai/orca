@@ -218,6 +218,14 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   return snapshot.snapshotVersion >= latest.snapshotVersion
 }
 
+export function beginWebSessionTabsSnapshotRecovery(
+  _environmentId: string,
+  _worktreeId: string,
+  _receivedFrame: number
+): () => void {
+  return () => {}
+}
+
 export function recordAcceptedWebSessionTabsEnvironment(
   environmentId: string,
   snapshot: RuntimeMobileSessionTabsResult
