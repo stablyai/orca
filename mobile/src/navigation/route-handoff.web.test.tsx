@@ -234,7 +234,7 @@ describe('a shell that granted no navigate', () => {
     expect(router.push).not.toHaveBeenCalled()
   })
 
-  it('names the reason once per client, not once per tap', () => {
+  it('names the reason once per hook instance, not once per tap', () => {
     const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] }, pageRoutes: [] })
     handoff.push('/h/host-a/session/wt-1')
     handoff.push('/h/host-a/session/wt-2')
