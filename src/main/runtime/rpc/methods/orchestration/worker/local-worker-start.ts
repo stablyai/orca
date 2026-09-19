@@ -65,6 +65,12 @@ export async function startLocalWorker(args: {
     : requestedWorktree === 'current'
       ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+  if (agent) {
+    const launchRepoSelector = createsWorktree
+      ? (params.repo ?? creationWorktree!.repoId)
+      : `id:${resolvedWorktree!.repoId}`
+    await runtime.validateOrchestrationAgentLauncherForRepo(agent, launchRepoSelector)
+  }
   if (params.terminal) {
     await assertExplicitWorkerTerminalUsable({
       runtime,

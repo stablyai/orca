@@ -15,7 +15,6 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 import {
   detectWslCommandsOnPath,
   type WslPreflightTarget
@@ -120,10 +119,6 @@ export function _resetPreflightCache(): void {
   preflightCacheEpoch += 1
 }
 
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
-}
-
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
@@ -140,12 +135,16 @@ async function detectCommandRuntime(
   return { installed: false }
 }
 
-export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+export async function detectInstalledAgents(
+  context?: PreflightRuntimeContext,
+  options: { failOnProbeError?: boolean } = {}
+): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     const foundCommands = await detectWslCommandsOnPath(
       wslTarget,
-      getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
+      getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl'),
+      options
     )
     return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
   }
@@ -177,10 +176,11 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
-  context?: PreflightRuntimeContext
+  context?: PreflightRuntimeContext,
+  options: { failOnProbeError?: boolean } = {}
 ): Promise<string[]> {
   await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context)
+  return detectInstalledAgents(context, options)
 }
 
 export type RefreshAgentsResult = {
@@ -238,18 +238,7 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
-  const mux = getActiveMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
-  }
-  const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
-}
+export { detectRemoteAgents } from './remote-agent-detection'
 
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
