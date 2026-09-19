@@ -1,3 +1,4 @@
+import type { CustomCssSnapshot } from '../../shared/custom-css'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings'
 import type {
   WarpThemeImportPreview,
@@ -32,4 +33,11 @@ export type KeybindingsApi = {
   openFile: () => Promise<KeybindingFileSnapshot>
   revealFile: () => Promise<KeybindingFileSnapshot>
   onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void) => () => void
+}
+
+export type CustomCssApi = {
+  get: () => Promise<CustomCssSnapshot>
+  openFile: () => Promise<CustomCssSnapshot>
+  revealFile: () => Promise<CustomCssSnapshot>
+  onChanged: (callback: (snapshot: CustomCssSnapshot) => void) => () => void
 }
