@@ -145,6 +145,9 @@ function issueLinkIdentity(
   if (parsed.provider === 'github') {
     return `github:${parsed.number}`
   }
+  if (parsed.provider === 'plane') {
+    return `plane:${parsed.workspaceSlug}:${parsed.projectId}:${parsed.issueId}`
+  }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
 }
@@ -180,6 +183,9 @@ function keepsLinkedWorkItem(
   }
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
+  }
+  if (parsed.provider === 'plane') {
+    return live.linkedWorkItemProvider === 'plane'
   }
   if (
     live.linkedWorkItemProvider !== 'linear' ||

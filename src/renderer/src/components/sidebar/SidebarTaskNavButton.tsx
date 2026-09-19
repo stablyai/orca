@@ -2,6 +2,7 @@ import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { PlaneIcon } from '@/components/icons/PlaneIcon'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -72,7 +73,9 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   )
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const planeStatusChecked = useAppStore((s) => s.planeStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const checkPlaneConnection = useAppStore((s) => s.checkPlaneConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
@@ -111,9 +114,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
+    if (!planeStatusChecked) {
+      void checkPlaneConnection()
+    }
   }, [
     checkLinearConnection,
+    checkPlaneConnection,
     linearStatusChecked,
+    planeStatusChecked,
     preflightStatusChecked,
     preflightStatusCurrent,
     refreshPreflightStatus
@@ -226,6 +234,17 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('plane') ? (
+              <TaskProviderShortcut
+                label={translate(
+                  'auto.components.sidebar.SidebarNav.openPlaneTasks',
+                  'Open Plane tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'plane' })}
+              >
+                <PlaneIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

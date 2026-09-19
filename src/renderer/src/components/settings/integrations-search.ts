@@ -221,5 +221,37 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'disconnect'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.integrations.search.plane_title',
+      'Plane Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.plane_description',
+      'Connect Plane Cloud or self-hosted to browse and link issues.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.plane_keyword',
+        'plane'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.faa0b5a0d9',
+        'api key'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      )
+    ]
   }
 ])
