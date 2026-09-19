@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Globe } from 'lucide-react-native'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
@@ -36,7 +36,7 @@ export default function BrowserSettingsScreen({
   onBack?: () => void
 }): React.JSX.Element {
   const router = useRouter()
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +70,7 @@ export default function BrowserSettingsScreen({
   }, [])
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"

@@ -105,7 +105,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     toggleGitLabStatus
   } = model
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {renderMobileTasksChrome(model)}
 
       {error ? (

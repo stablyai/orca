@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -14,8 +15,9 @@ export function MobileSettingsFrame({
 }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"

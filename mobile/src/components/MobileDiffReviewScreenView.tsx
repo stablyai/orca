@@ -50,7 +50,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   }, [])
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <MobileDiffReviewHeader
         filter={controller.filter}
         isWideLayout={isWideLayout}

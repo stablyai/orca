@@ -47,6 +47,7 @@ import {
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -66,6 +67,7 @@ export function MobileAgentSessionHistoryPanel({
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
   const router = useRouter()
+  const horizontalPadding = useHorizontalEdgePadding()
   const { client, state: connState } = useHostClient(hostId)
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
@@ -255,7 +257,7 @@ export function MobileAgentSessionHistoryPanel({
   )
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, horizontalPadding]}>
       <SafeAreaView style={styles.header} edges={['top']}>
         <View style={styles.topBar}>
           <Pressable

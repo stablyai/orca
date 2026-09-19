@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -8,12 +9,13 @@ import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-def
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"

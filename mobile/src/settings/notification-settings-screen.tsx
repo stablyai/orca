@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { AppState, View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ChevronLeft } from 'lucide-react-native'
@@ -26,6 +27,7 @@ export default function NotificationsScreen({
   children?: (enabled: boolean) => ReactNode
 }) {
   const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pushEnabled, setPushEnabled] = useState(false)
@@ -86,7 +88,7 @@ export default function NotificationsScreen({
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.sm,
+        ...screenPadding,
         paddingBottom: insets.bottom + spacing.xl
       }}
     >

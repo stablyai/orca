@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import { ChevronLeft, Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import { OrcaLogo } from '../components/OrcaLogo'
@@ -36,10 +36,10 @@ export default function AboutScreen({
     setError(null)
     void openExternal(url).catch(() => setError('Could not open the link. Try again.'))
   }
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           style={styles.backButton}

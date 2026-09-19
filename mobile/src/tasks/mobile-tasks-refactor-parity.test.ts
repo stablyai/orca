@@ -80,13 +80,17 @@ const hash = (parts: string[] | string): string =>
 // The pullfrog pass on the same round moved both once more, again by comment text alone: the
 // GitHub search `SAFETY:` line now separates the two members the schema requires (`items`,
 // `labels`) from the eight it only types. No statement, type or call changed; counts hold.
+//
+// The landscape safe-area fix adds 'left' and 'right' to the surface's SafeAreaView edges.
+// That is two more string literals in `semantics` and two more render tokens; hook,
+// statement, declaration and style hashes and every count but those two are untouched.
 const SCREEN_RPC_SCREEN_HOOKS = 'be9bb8e21c3a8c0912e8b9256a7c8e5c9ca08ebb776d57cf4fff1101fb060095'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
 const SCREEN_RPC_STATEMENTS = '5fb5ffb187b4b62bdd84e4ad49aaf0d481d943e09e8c4f37433a9eb2ca40c533'
 const MAIN_REBASED_DECLARATIONS = '920a1b66445d10e2a64fbdbe9d7138a4ebe21bbccde1b9ac9c89267cecc584b9'
-const SCREEN_RPC_SEMANTICS = '763f4ffc60b8b335eaab4a51820dc782be430ada879564888a5d28929c9e938b'
+const SCREEN_RPC_SEMANTICS = '7dd249476ccb94a0a07ec0a7c39b7348c558b8a8663b295362e7a7713de0e91a'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
-const SCREEN_RPC_RENDER_TREE = '46d5a3ce9d71a8281a1e7b17411fb1dd963a4f392a5d095bc126b6a7cff4b92d'
+const SCREEN_RPC_RENDER_TREE = '59aee9673da93a7b6cb1ad214aa1ec292d40313578227071b0e40df2ccfffff4'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -113,13 +117,13 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_274)
+    expect(semantics.split('\n')).toHaveLength(3_276)
     expect(hash(semantics)).toBe(SCREEN_RPC_SEMANTICS)
   })
 
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_195)
+    expect(tokens).toHaveLength(35_197)
     expect(hash(tokens)).toBe(SCREEN_RPC_RENDER_TREE)
   })
 

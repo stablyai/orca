@@ -16,7 +16,7 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <HostScreenHeader controller={controller} />
       <HostWorkspaceList controller={controller} />
       <HostScreenOverlays controller={controller} />

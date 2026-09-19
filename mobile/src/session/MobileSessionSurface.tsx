@@ -4,11 +4,13 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   const { setMobileSessionRootRef } = controller
+  const horizontalPadding = useHorizontalEdgePadding()
   return (
-    <View ref={setMobileSessionRootRef} style={styles.container}>
+    <View ref={setMobileSessionRootRef} style={[styles.container, horizontalPadding]}>
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} />
         {/* Content-row host (KTD2): on wide, content shares this row with the docked panel as the flex-1 left child. */}

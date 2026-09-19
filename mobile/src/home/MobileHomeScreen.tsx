@@ -112,7 +112,7 @@ export function MobileHomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
       {data.hostCatalog.length === 0 ? (
         <MobileHomeEmptyState
