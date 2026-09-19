@@ -235,9 +235,11 @@ describeDrawer('the bottom drawer on the page', () => {
         // `requestAnimationFrame` is the one that separates them. `withTiming` drives itself by
         // scheduling a frame per step (valueSetter.js `step`), and it does that whether or not
         // any mapper is listening, so frames during this window mean the shared value moved.
-        // Sheet writes do not separate them: the broken build writes once and an engine that
-        // never animated also writes once, so a "written more than once" check would report the
-        // defect this pin exists to catch as an engine that does not animate.
+        // Sheet writes separate nothing and are carried as context only. The broken build writes
+        // once, an engine that never animated writes once, and -- measured under `--cpus=0.35`
+        // in Playwright's Linux image -- a healthy page starved of frames also reaches
+        // translateY(0) in a single write, because `withTiming` covers the whole 180ms in one
+        // step when that is all the frames it gets. Asserting on the count would red that page.
         const frames = await page.evaluate(() => ({
           raf: globalThis.__raf - globalThis.__rafAtClick,
           sheetWrites: globalThis.__sheetWrites
@@ -256,12 +258,6 @@ describeDrawer('the bottom drawer on the page', () => {
           `${engine.name}: ${String(frames.sheetWrites)} style write(s) on the sheet across ` +
             `${String(frames.raf)} frame(s) -- ${JSON.stringify(drawer)}`
         ).toBe('matrix(1, 0, 0, 1, 0, 0)')
-        // The same subject counted a second way: a mapper that re-ran wrote a frame at a time,
-        // and one write is the mapper that ran once and stopped.
-        expect(
-          frames.sheetWrites,
-          `${engine.name}: the sheet's style was written ${String(frames.sheetWrites)} time(s)`
-        ).toBeGreaterThan(1)
         // And where that leaves the sheet: bottom-anchored inside the viewport, which is the
         // thing the user sees and the thing a parked sheet gets wrong.
         expect(drawer.bottom, JSON.stringify(drawer)).toBe(VIEWPORT.height)
