@@ -228,6 +228,10 @@ export function renderSmartWorkspaceNameInput(
           tryOpenSourcePopover()
         }}
         onKeyDown={(event) => {
+          // Why: cmdk intercepts Home/End at root and prevents native input caret navigation.
+          if (event.key === 'Home' || event.key === 'End') {
+            event.stopPropagation()
+          }
           if (event.key === 'Tab' && event.shiftKey) {
             const activeTrigger = tabsListRef.current?.querySelector<HTMLElement>(
               `[data-smart-name-mode="${mode}"]`
