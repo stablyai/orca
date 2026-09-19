@@ -43,6 +43,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Cursor',
   'Droid',
   'Devin',
+  'Freebuff',
   'Gemini',
   'Git',
   'Git Bash',
