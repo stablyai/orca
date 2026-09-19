@@ -23,6 +23,8 @@ vi.mock('child_process', () => ({
   spawnSync: spawnSyncMock
 }))
 
+vi.mock('./serve-runtime-preflight', () => ({ preflightServeRuntime: () => null }))
+
 import { launchOrcaApp, serveOrcaApp } from './launch'
 
 class FakeChildProcess extends EventEmitter {
@@ -602,6 +604,7 @@ describe('serveOrcaApp', () => {
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
     process.env.ORCA_APP_EXECUTABLE = 'C:\\repo\\node_modules\\.bin\\electron.cmd'
+    process.env.ORCA_USER_DATA_PATH = 'C:\\test-profile'
     const child = {
       kill: vi.fn(),
       once: vi.fn(
