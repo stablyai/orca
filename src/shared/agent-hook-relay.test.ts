@@ -49,6 +49,7 @@ describe('agent-hook-relay wire shape', () => {
   it('validates hook sources crossing persisted and relay trust boundaries', () => {
     expect(isAgentHookSource('claude')).toBe(true)
     expect(isAgentHookSource('kimi')).toBe(true)
+    expect(isAgentHookSource('mastracode')).toBe(true)
     expect(isAgentHookSource('prime-agent')).toBe(true)
     expect(isAgentHookSource('claude\0codex')).toBe(false)
     expect(isAgentHookSource('unknown')).toBe(false)

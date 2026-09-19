@@ -18,6 +18,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   grok: 'x.ai',
   copilot: 'github.com',
   opencode: 'opencode.ai',
+  mastracode: 'mastra.ai',
   'mimo-code': 'mimo.xiaomi.com',
   ante: 'antigma.ai',
   trae: 'www.trae.cn',

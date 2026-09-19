@@ -8,22 +8,23 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexHookService, codexHookService } from '../codex/hook-service'
-import { DroidHookService, droidHookService } from '../droid/hook-service'
-import { CursorHookService, cursorHookService } from '../cursor/hook-service'
+import { CodexHookService } from '../codex/hook-service'
+import { DroidHookService } from '../droid/hook-service'
+import { CursorHookService } from '../cursor/hook-service'
 import { CURSOR_EVENTS, type CursorEvent } from '../cursor/hook-events'
-import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
-import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
-import { AmpHookService, ampHookService } from '../amp/hook-service'
+import { CommandCodeHookService } from '../command-code/hook-service'
+import { GeminiHookService } from '../gemini/hook-service'
+import { AntigravityHookService } from '../antigravity/hook-service'
+import { AmpHookService } from '../amp/hook-service'
 import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
-import { GrokHookService, grokHookService } from '../grok/hook-service'
-import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
-import { HermesHookService, hermesHookService } from '../hermes/hook-service'
-import { DevinHookService, devinHookService } from '../devin/hook-service'
-import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { GrokHookService } from '../grok/hook-service'
+import { CopilotHookService } from '../copilot/hook-service'
+import { HermesHookService } from '../hermes/hook-service'
+import { DevinHookService } from '../devin/hook-service'
+import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
+import { REMOTE_MANAGED_HOOK_SERVICES_BY_AGENT } from './remote-managed-hook-services.test-fixture'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -695,22 +696,7 @@ describe('remote hook service installers', () => {
   // every locally-managed hook service that implements installRemote MUST be
   // wired into the remote installer.
   it('registers every managed agent that implements installRemote in the remote installer (issue #7253)', () => {
-    const servicesByAgent = new Map<string, { installRemote?: unknown }>([
-      ['claude', claudeHookService],
-      ['openclaude', openClaudeHookService],
-      ['codex', codexHookService],
-      ['gemini', geminiHookService],
-      ['antigravity', antigravityHookService],
-      ['amp', ampHookService],
-      ['cursor', cursorHookService],
-      ['droid', droidHookService],
-      ['command-code', commandCodeHookService],
-      ['grok', grokHookService],
-      ['copilot', copilotHookService],
-      ['hermes', hermesHookService],
-      ['devin', devinHookService],
-      ['kimi', kimiHookService]
-    ])
+    const servicesByAgent = REMOTE_MANAGED_HOOK_SERVICES_BY_AGENT
 
     // Guard against a service silently missing from the map above as new agents land.
     for (const [agent] of MANAGED_AGENT_HOOK_INSTALLERS) {

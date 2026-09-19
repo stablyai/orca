@@ -87,6 +87,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     }
   ],
   ['gemini', standardCommands],
+  ['mastracode', standardCommands],
   [
     'antigravity',
     {

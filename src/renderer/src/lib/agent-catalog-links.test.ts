@@ -10,4 +10,14 @@ describe('agent catalog documentation links', () => {
       'https://code.claude.com/docs/en/agent-teams'
     )
   })
+
+  it('links Mastra Code to its product site', () => {
+    const entry = getAgentCatalog().find((agent) => agent.id === 'mastracode')
+
+    expect(entry).toMatchObject({
+      label: 'Mastra Code',
+      cmd: 'mastracode',
+      homepageUrl: 'https://code.mastra.ai/'
+    })
+  })
 })

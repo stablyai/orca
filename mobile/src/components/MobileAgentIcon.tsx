@@ -41,6 +41,17 @@ function OmpIcon({ size = 16 }: { size?: number }) {
   )
 }
 
+function MastraCodeIcon({ size = 16 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 34 21">
+      <Path
+        fill={colors.textPrimary}
+        d="M4.5 11.7a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9M10.4 0a4.5 4.5 0 0 1 4.4 5.5c-.3 1.4-.6 3 .2 4.2l1.3 1.8.3.2q.2 0 .3-.2l1.3-1.9c.8-1.1.5-2.7.2-4a4.5 4.5 0 1 1 8.8 0c-.3 1.3-.6 2.8 0 4l1.3 2a4.5 4.5 0 1 1-4.3 3.5c.3-1.3.6-2.8 0-4l-1.2-2h-.2L21.5 11c-.8 1.2-.5 2.8-.2 4.2a4.5 4.5 0 1 1-8.8.2q.5-2-.4-3.8l-.9-1.3q-.9-1.1-2.4-1.6A4.5 4.5 0 0 1 10.4 0"
+      />
+    </Svg>
+  )
+}
+
 function AiderIcon({ size = 16 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 436 436">
@@ -100,6 +111,9 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   }
   if (agentId === 'aider') {
     return <AiderIcon size={size} />
+  }
+  if (agentId === 'mastracode') {
+    return <MastraCodeIcon size={size} />
   }
   if (agentId === '__blank__' || agentId === 'blank') {
     return <Terminal size={size} color={colors.textMuted} />

@@ -1,6 +1,7 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
+import { isPromptFlagHeadlessOneShotCommand } from './prompt-flag-headless-command'
 import type { TuiAgent } from './tui-agent'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
@@ -12,7 +13,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   claude: isPrintModeHeadlessOneShotCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
-  ante: isAnteHeadlessOneShotCommand
+  ante: isAnteHeadlessOneShotCommand,
+  mastracode: isPromptFlagHeadlessOneShotCommand
 }
 
 export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {
