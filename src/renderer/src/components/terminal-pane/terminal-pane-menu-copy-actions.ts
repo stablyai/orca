@@ -6,6 +6,7 @@ import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 
+/** Copy the current terminal selection from a context-menu pane. */
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
     return
@@ -21,6 +22,7 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
   })
 }
 
+/** Copy the stable pane key from a context-menu pane. */
 export const copyTerminalPaneMenuPaneId = async (
   pane: ManagedPane | null,
   tabId: string
@@ -53,9 +55,11 @@ export const copyTerminalPaneMenuPaneId = async (
   })
 }
 
+/** Copy Terminal ID from a context-menu pane. Relay panes use the encoded remote handle. */
 export const copyTerminalPaneMenuTerminalId = async (
   pane: ManagedPane | null,
-  tabId: string
+  tabId: string,
+  ptyId?: string | null
 ): Promise<void> => {
   if (!pane) {
     return
@@ -64,6 +68,7 @@ export const copyTerminalPaneMenuTerminalId = async (
     await copyTerminalHandleForPane({
       tabId,
       leafId: pane.leafId,
+      ptyId,
       callRuntime: window.api.runtime.call,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
     })
