@@ -56,11 +56,18 @@ export function SparsePresetSettingsSection({
 
   const nameError =
     draft && trimmedName.length === 0
-      ? 'Name is required.'
+      ? translate('components.sparse.preset.validation.nameRequired', 'Name is required.')
       : trimmedName.length > 80
-        ? 'Name must be 80 characters or fewer.'
+        ? translate(
+            'components.sparse.preset.validation.nameTooLong',
+            'Name must be 80 characters or fewer.'
+          )
         : collidingPreset
-          ? `"${collidingPreset.name}" already exists.`
+          ? translate(
+              'components.sparse.preset.validation.nameAlreadyExists',
+              '"{{name}}" already exists.',
+              { name: collidingPreset.name }
+            )
           : null
   const canSaveDraft =
     !!draft && !submitting && !nameError && parsedDirectories !== null && !parsedDirectories.error
