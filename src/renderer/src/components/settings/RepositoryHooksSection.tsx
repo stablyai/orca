@@ -224,14 +224,14 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title={translate(
           'auto.components.settings.RepositoryHooksSection.13394103bd',
-          'Custom GitHub Issue Command'
+          'Custom Issue Command'
         )}
         description={translate(
           'auto.components.settings.RepositoryHooksSection.2cc27dc12b',
           'Optional per-user override for the linked-issue command.'
         )}
         forceVisible={forceVisible}
-        keywords={['github issue command', 'issue command', 'workflow', 'agent', 'github']}
+        keywords={['issue command', 'workflow', 'agent', 'github', 'gitlab']}
       >
         <RepositoryIssueCommandSetting {...issueCommand} />
       </SearchableSetting>

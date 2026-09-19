@@ -26,7 +26,7 @@ After the branch is pushed, use the Source Control panel's hosted review action 
 
 If Orca needs to run a follow-up commit as part of the Create PR flow and that commit fails — hooks reject it, or the working tree has an uncommittable state — the dialog surfaces a detailed failure summary with the hook output and next-step buttons instead of dropping you back into the panel with no context. Use **Fix with AI** from the summary to hand the failure to an agent, or resolve it yourself and rerun.
 
-Use **Generate pull request details with AI** in the create-review dialog when you want Orca to draft the title, description, and draft state from the branch diff and commits. Generated copy aims for short ELI5 problem/solution sections and linked-issue guidance (`Fixes` vs `Refs` when a GitHub issue is attached). Orca keeps your selected base branch, rejects empty descriptions, and surfaces a clear error so you can retry instead of shipping a blank body. Review the fields before creating the review.
+Use **Generate pull request details with AI** in the create-review dialog when you want Orca to draft the title, description, and draft state from the branch diff and commits. Generated copy aims for short ELI5 problem/solution sections and linked-issue guidance (`Fixes` vs `Refs` when a GitHub or GitLab issue is attached). Orca keeps your selected base branch, rejects empty descriptions, and surfaces a clear error so you can retry instead of shipping a blank body. Review the fields before creating the review.
 
 ## Per-repo AI action recipes
 
@@ -34,7 +34,7 @@ Use **Generate pull request details with AI** in the create-review dialog when y
 
 Templates can include variables such as `{basePrompt}`, `{branch}`, `{stagedFiles}`, `{stagedPatch}`, and **`{linkedIssue}`** for commit messages; PR details also support `{baseBranch}`, `{currentTitle}`, `{currentBody}`, `{commitSummary}`, `{changedFiles}`, and `{patch}`.
 
-`{linkedIssue}` expands to the workspace-linked **GitHub issue number**, or empty when none is linked (including pure Linear/GitLab workspaces). Prefer instructional phrasing — a bare `Fixes #{linkedIssue}` becomes `Fixes #` when unlinked.
+`{linkedIssue}` expands to the workspace-linked **GitHub or GitLab issue number**, or empty when none is linked (including Linear-only workspaces). Prefer instructional phrasing — a bare `Fixes #{linkedIssue}` becomes `Fixes #` when unlinked.
 
 When a repository has its own recipe for an action, saving changes to the global default won't touch it — the settings pane surfaces a **Repository overrides** note listing which repos diverge and what they override (agent, CLI arguments, or command template), with a **Review** link that jumps to that repository's settings so you can update or remove the override.
 

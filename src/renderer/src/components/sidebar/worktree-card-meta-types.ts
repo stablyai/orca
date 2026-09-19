@@ -1,3 +1,4 @@
+import type { IssueReferenceTarget } from '../../../../shared/linked-issue-provider'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -45,6 +46,8 @@ export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
 
 export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
+  /** Where a bare `#123` in this workspace's note resolves; null renders plain text. */
+  issueReferenceTarget?: IssueReferenceTarget | null
   branchName?: string
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'

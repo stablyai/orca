@@ -21,6 +21,20 @@ export function branchSelectorMatches(branch: string, selector: string): boolean
   return normalizeLocalBranchName(branch) === normalizeLocalBranchName(selector)
 }
 
+/** Whether an `issue:<n>` selector names this workspace's linked issue. Both forge
+ *  slots match: a workspace linked with `--gitlab-issue` must be addressable the
+ *  same way a `--issue` one is, or the CLI can create what it cannot target. */
+export function issueSelectorMatches(
+  worktree: Partial<Pick<Worktree, 'linkedIssue' | 'linkedGitLabIssue'>>,
+  wanted: string
+): boolean {
+  return (
+    (typeof worktree.linkedIssue === 'number' && String(worktree.linkedIssue) === wanted) ||
+    (typeof worktree.linkedGitLabIssue === 'number' &&
+      String(worktree.linkedGitLabIssue) === wanted)
+  )
+}
+
 export function runtimePathsEqual(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
 }

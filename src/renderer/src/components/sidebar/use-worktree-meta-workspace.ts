@@ -5,6 +5,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
+import { inferIssueLinkProvider } from '../../../../shared/linked-issue-provider'
 import type { WorktreeMetaLiveLinks } from './worktree-meta-updates'
 
 /** Resolves the workspace the meta dialog edits and the issue-link state it
@@ -19,6 +20,7 @@ export function useWorktreeMetaWorkspace(args: {
 }): {
   worktree: Worktree | undefined
   linkedIssue: number | null
+  linkedGitLabIssue: number | null
   linkedLinearIssue: string | null
   /** The persisted value and its provider, from one source so they cannot drift. */
   currentIssue: string
@@ -61,17 +63,25 @@ export function useWorktreeMetaWorkspace(args: {
     [folderWorkspace, indexedWorktree]
   )
   const linkedIssue = worktree?.linkedIssue ?? null
+  const linkedGitLabIssue = worktree?.linkedGitLabIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null
-  // Why: `typeof` rather than a null check — an unhydrated projection can leave
-  // linkedIssue undefined, which `!== null` would read as a GitHub link.
-  const currentProvider: IssueLinkProvider =
-    typeof linkedIssue === 'number' ? 'github' : linkedLinearIssue ? 'linear' : 'github'
+  const currentProvider: IssueLinkProvider = inferIssueLinkProvider({
+    linkedIssue,
+    linkedGitLabIssue,
+    linkedLinearIssue,
+    linkedGitLabMR: worktree?.linkedGitLabMR ?? null,
+    linkedWorkItem: worktree?.linkedWorkItem ?? null
+  })
   const currentIssue =
     currentProvider === 'linear'
       ? (linkedLinearIssue ?? '')
-      : typeof linkedIssue === 'number'
-        ? String(linkedIssue)
-        : ''
+      : currentProvider === 'gitlab'
+        ? typeof linkedGitLabIssue === 'number'
+          ? String(linkedGitLabIssue)
+          : ''
+        : typeof linkedIssue === 'number'
+          ? String(linkedIssue)
+          : ''
   // Why: displacement is decided against live state, not the frozen snapshot —
   // the dialog's warning reads the same values, so a link added by the CLI while
   // the dialog was open cannot outlive a save that promised to displace it.
@@ -79,6 +89,7 @@ export function useWorktreeMetaWorkspace(args: {
     () => ({
       linkedPR: worktree?.linkedPR ?? null,
       linkedIssue,
+      linkedGitLabIssue,
       linkedLinearIssue,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
       linkedWorkItemProvider: worktree?.linkedWorkItem?.provider ?? null,
@@ -86,6 +97,7 @@ export function useWorktreeMetaWorkspace(args: {
     }),
     [
       linkedIssue,
+      linkedGitLabIssue,
       linkedLinearIssue,
       worktree?.linkedPR,
       worktree?.linkedLinearIssueOrganizationUrlKey,
@@ -96,6 +108,7 @@ export function useWorktreeMetaWorkspace(args: {
   return {
     worktree,
     linkedIssue,
+    linkedGitLabIssue,
     linkedLinearIssue,
     currentIssue,
     currentProvider,

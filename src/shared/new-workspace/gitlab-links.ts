@@ -11,6 +11,14 @@ import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
 const GL_ITEM_PATH_RE = /\/(?:issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
 const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
 
+// Why: same guards as the GitHub parser two files over (github/links.ts:32-35,59-60).
+// `/^\d+$/` accepts 400 digits, which parseInt turns into Infinity — JSON.stringify
+// then persists `null`, and a `0` iid reads as "no issue" at every truthiness check.
+function gitLabItemNumber(value: string): number | null {
+  const parsed = Number.parseInt(value, 10)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
 export type ProjectSlug = {
   /** GitLab hostname, preserving self-hosted instances from pasted URLs. */
   host: string
@@ -42,13 +50,17 @@ export function parseGitLabIssueOrMRNumber(input: string): number | null {
   // either form.
   const numeric = trimmed.startsWith('#') || trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
   if (/^\d+$/.test(numeric)) {
-    return Number.parseInt(numeric, 10)
+    return gitLabItemNumber(numeric)
   }
 
   let url: URL
   try {
     url = new URL(trimmed)
   } catch {
+    return null
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return null
   }
 
@@ -62,7 +74,7 @@ export function parseGitLabIssueOrMRNumber(input: string): number | null {
   if (!url.pathname.includes('/-/')) {
     return null
   }
-  return Number.parseInt(match[1], 10)
+  return gitLabItemNumber(match[1])
 }
 
 /**
@@ -86,6 +98,10 @@ export function parseGitLabIssueOrMRLink(input: string): {
     return null
   }
 
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return null
+  }
+
   const match = GL_ITEM_PATH_FULL_RE.exec(url.pathname)
   if (!match) {
     return null
@@ -98,11 +114,27 @@ export function parseGitLabIssueOrMRLink(input: string): {
     return null
   }
 
+  const number = gitLabItemNumber(match[3])
+  if (number === null) {
+    return null
+  }
+
   return {
     slug: { host: url.host, path },
     type: match[2].toLowerCase() === 'merge_requests' ? 'mr' : 'issue',
-    number: Number.parseInt(match[3], 10)
+    number
   }
+}
+
+/** The canonical web URL for a GitLab issue. The host comes from the project slug,
+ *  never a default — self-hosted is the normal case, not the exception. Path segments
+ *  are encoded individually so nested group paths keep their separators. */
+export function buildGitLabIssueUrl(slug: ProjectSlug, number: number): string | null {
+  if (!slug.host || !slug.path) {
+    return null
+  }
+  const path = slug.path.split('/').map(encodeURIComponent).join('/')
+  return `https://${slug.host}/${path}/-/issues/${number}`
 }
 
 /**

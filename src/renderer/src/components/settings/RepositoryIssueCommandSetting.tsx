@@ -21,7 +21,7 @@ export function RepositoryIssueCommandSetting({
         <h5 className="text-sm font-semibold">
           {translate(
             'auto.components.settings.RepositoryHooksSection.13394103bd',
-            'Custom GitHub Issue Command'
+            'Custom Issue Command'
           )}
         </h5>
         <p className="text-xs text-muted-foreground">
@@ -46,7 +46,7 @@ export function RepositoryIssueCommandSetting({
         value={issueCommandDraft}
         aria-label={translate(
           'auto.components.settings.RepositoryHooksSection.13394103bd',
-          'Custom GitHub Issue Command'
+          'Custom Issue Command'
         )}
         onChange={(event) => setIssueCommandDraft(event.target.value)}
         onBlur={() => void commitIssueCommand()}

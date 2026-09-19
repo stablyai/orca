@@ -1,3 +1,4 @@
+import { linkedIssueNumberForTemplate } from '../../../shared/linked-issue-provider'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
@@ -124,7 +125,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
         }
         const linkedIssueDetails = await linkedIssueDetailsPromise
         context = {
-          ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+          ...withLinkedIssueDraftContext(context, linkedIssueNumberForTemplate(issueMeta)),
           ...(args.provider ? { provider: args.provider } : {}),
           ...(linkedIssueDetails ? { linkedIssueDetails } : {})
         }
@@ -188,7 +189,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
       }
       const linkedIssueDetails = await linkedIssueDetailsPromise
       context = {
-        ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+        ...withLinkedIssueDraftContext(context, linkedIssueNumberForTemplate(issueMeta)),
         ...(args.provider ? { provider: args.provider } : {}),
         ...(linkedIssueDetails ? { linkedIssueDetails } : {})
       }

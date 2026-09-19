@@ -1,3 +1,4 @@
+import { linkedIssueNumberForTemplate } from '../../shared/linked-issue-provider'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
@@ -208,7 +209,7 @@ export class RuntimeGitGenerationCommands {
     }
     const linkedIssueDetails = await linkedIssueDetailsPromise
     context = {
-      ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+      ...withLinkedIssueDraftContext(context, linkedIssueNumberForTemplate(issueMeta)),
       ...(input.provider ? { provider: input.provider } : {}),
       ...(linkedIssueDetails ? { linkedIssueDetails } : {})
     }

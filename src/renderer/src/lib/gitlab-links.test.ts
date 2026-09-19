@@ -58,6 +58,12 @@ describe('parseGitLabIssueOrMRNumber', () => {
     expect(parseGitLabIssueOrMRNumber('  ')).toBeNull()
     expect(parseGitLabIssueOrMRNumber('not-a-url')).toBeNull()
   })
+
+  it('rejects zero and unsafe issue numbers', () => {
+    expect(parseGitLabIssueOrMRNumber('0')).toBeNull()
+    expect(parseGitLabIssueOrMRNumber('#0')).toBeNull()
+    expect(parseGitLabIssueOrMRNumber('9'.repeat(400))).toBeNull()
+  })
 })
 
 describe('parseGitLabIssueOrMRLink', () => {
@@ -142,6 +148,14 @@ describe('parseGitLabIssueOrMRLink', () => {
   it('returns null for non-GitLab URL shapes', () => {
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/stablyai/orca/issues/123')).toBeNull()
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/stablyai/orca/-/issues/123abc')).toBeNull()
+  })
+
+  it('rejects non-http schemes, zero, and unsafe issue numbers', () => {
+    expect(parseGitLabIssueOrMRLink('ftp://gitlab.com/g/p/-/issues/1')).toBeNull()
+    expect(parseGitLabIssueOrMRLink('https://gitlab.com/g/p/-/issues/0')).toBeNull()
+    expect(
+      parseGitLabIssueOrMRLink(`https://gitlab.com/g/p/-/issues/${'9'.repeat(400)}`)
+    ).toBeNull()
   })
 })
 

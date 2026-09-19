@@ -164,7 +164,7 @@ describe('RepositoryPane search entries', () => {
       expect(html).toContain('Worktree Hooks')
       expect(html).toContain('Setup Script')
       expect(html).toContain('Archive Script')
-      expect(html).toContain('Custom GitHub Issue Command')
+      expect(html).toContain('Custom Issue Command')
     } finally {
       useAppStore.setState({
         settingsSearchQuery: '',
