@@ -155,6 +155,28 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
+  // Why: closing the same tab again while its prompt is up means "I'm sure" (Cmd+W
+  // x2, #21603) — the repeat folds into the pending prompt and confirms without
+  // starting another probe.
+  it('confirms without probing when the tab already has a prompt open', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+      terminalTabId: 'tab-1',
+      tabLabel: 'npm run dev',
+      copyKind: 'command',
+      onConfirm: first
+    })
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
+
+    guard(second)
+
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+    expect(visibleRequest()).toBeNull()
+  })
+
   it('defers a busy terminal behind a confirmation that carries the tab label', async () => {
     const onClose = vi.fn()
 

@@ -73,6 +73,20 @@ export function guardRunningTerminalClose(params: {
   onCancel?: () => void
 }): void {
   const { terminalTabId, tabLabel, onClose, onCancel } = params
+  // Why: a second close while this tab's prompt is already open means "I'm sure"
+  // (Cmd+W x2, #21603) — route through the store so both closes fold and confirm
+  // without starting another probe. The prompt holds the inter-request guard.
+  const pendingConfirm = useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
+  if (pendingConfirm?.terminalTabId === terminalTabId) {
+    useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+      terminalTabId,
+      tabLabel,
+      copyKind: pendingConfirm.copyKind,
+      onConfirm: onClose,
+      ...(onCancel ? { onCancel } : {})
+    })
+    return
+  }
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId)
