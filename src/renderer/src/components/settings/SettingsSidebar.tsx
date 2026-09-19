@@ -8,7 +8,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
-import { RepoIconGlyph } from '../repo/repo-icon'
+import { ProjectIconGlyph } from '../repo/project-icon-glyph'
 import { RepoForkIndicator } from '../repo/repo-fork-indicator'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -281,7 +281,7 @@ export function SettingsSidebar({
                       onClick={() => onSelectSection(section.id)}
                       className={navItemClassName(isActive)}
                     >
-                      <RepoIconGlyph
+                      <ProjectIconGlyph
                         repoIcon={section.repoIcon}
                         color={section.badgeColor}
                         className="size-4 shrink-0 text-muted-foreground"
