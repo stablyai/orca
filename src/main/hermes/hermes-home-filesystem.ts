@@ -11,8 +11,8 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import type { ConfigParseResult, HermesConfig } from './hermes-config-yaml'
-import { parseHermesConfig, serializeHermesConfig } from './hermes-config-yaml'
+import type { ConfigParseResult } from './hermes-config-yaml'
+import { parseHermesConfig } from './hermes-config-yaml'
 import {
   HERMES_PLUGIN_MARKER,
   HERMES_PLUGIN_NAME,
@@ -41,17 +41,17 @@ function getInitPath(pluginDir = getPluginDir()): string {
   return join(pluginDir, '__init__.py')
 }
 
-export function readConfigFile(configPath: string): ConfigParseResult {
-  if (!existsSync(configPath)) {
-    return { ok: true, config: {} }
-  }
-  return parseHermesConfig(readFileSync(configPath, 'utf-8'))
+export function readConfigContent(configPath: string): string | null {
+  return existsSync(configPath) ? readFileSync(configPath, 'utf-8') : null
 }
 
-export function writeConfigFile(configPath: string, config: HermesConfig): void {
+export function readConfigFile(configPath: string): ConfigParseResult {
+  return parseHermesConfig(readConfigContent(configPath))
+}
+
+export function writeConfigFile(configPath: string, serialized: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
-  const serialized = serializeHermesConfig(config)
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === serialized) {

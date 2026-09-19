@@ -19,6 +19,7 @@ import {
   getHermesHome,
   getPluginDir,
   getPluginFilesState,
+  readConfigContent,
   readConfigFile,
   writeConfigFile,
   writePluginFiles
@@ -85,19 +86,19 @@ export class HermesHookService {
 
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const parsed = readConfigFile(configPath)
-    if (!parsed.ok) {
+    const next = updateConfigContent(readConfigContent(configPath), enablePlugin)
+    if (next.content === null) {
       return {
         agent: 'hermes',
         state: 'error',
         configPath,
         managedHooksPresent: getPluginFilesState().managed,
-        detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
+        detail: `Could not update Hermes config.yaml: ${next.detail ?? 'unknown error'}`
       }
     }
 
     writePluginFiles()
-    writeConfigFile(configPath, enablePlugin(parsed.config))
+    writeConfigFile(configPath, next.content)
     return this.getStatus()
   }
 
@@ -114,7 +115,7 @@ export class HermesHookService {
           state: 'error',
           configPath: remoteConfigPath,
           managedHooksPresent: false,
-          detail: `Could not parse remote Hermes config.yaml: ${next.detail ?? 'unknown error'}`
+          detail: `Could not update remote Hermes config.yaml: ${next.detail ?? 'unknown error'}`
         }
       }
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/plugin.yaml`, getPluginManifest())
@@ -140,21 +141,21 @@ export class HermesHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const parsed = readConfigFile(configPath)
-    if (!parsed.ok) {
+    const next = updateConfigContent(readConfigContent(configPath), disablePlugin)
+    if (next.content === null) {
       return {
         agent: 'hermes',
         state: 'error',
         configPath,
         managedHooksPresent: getPluginFilesState().managed,
-        detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
+        detail: `Could not update Hermes config.yaml: ${next.detail ?? 'unknown error'}`
       }
     }
     const pluginDir = getPluginDir()
     if (getPluginFilesState(pluginDir).managed) {
       rmSync(pluginDir, { recursive: true, force: true })
     }
-    writeConfigFile(configPath, disablePlugin(parsed.config))
+    writeConfigFile(configPath, next.content)
     return this.getStatus()
   }
 }
