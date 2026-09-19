@@ -107,6 +107,35 @@ function readDrawer() {
   }
 }
 
+/**
+ * Installed at document start, so the counters cover the page's whole life rather than a window
+ * a poll happened to catch. Both are the page's own activity: `__raf` is every frame the page
+ * asked for, `__sheetWrites` every inline-style write Reanimated landed on the sheet.
+ */
+function instrumentFrames() {
+  globalThis.__raf = 0
+  const realRaf = globalThis.requestAnimationFrame.bind(globalThis)
+  globalThis.requestAnimationFrame = (callback) => {
+    globalThis.__raf++
+    return realRaf(callback)
+  }
+  globalThis.__sheetWrites = 0
+  const observe = () => {
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target.dataset?.testid === 'bottom-drawer-sheet') {
+          globalThis.__sheetWrites++
+        }
+      }
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style'] })
+  }
+  if (document.body) {
+    observe()
+  } else {
+    document.addEventListener('DOMContentLoaded', observe)
+  }
+}
+
 /** The centre of the one leaf element whose whole text is `label`. */
 function centreOf(label) {
   const leaf = [...document.querySelectorAll('*')].find(
@@ -136,6 +165,7 @@ describeDrawer('the bottom drawer on the page', () => {
         })
         const errors = []
         page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
+        await page.addInitScript(instrumentFrames)
         await page.addInitScript(installShellDouble, {
           version: bridgeVersion,
           sessionId: 'render-check-session',
@@ -161,6 +191,12 @@ describeDrawer('the bottom drawer on the page', () => {
           polling: 250
         })
         const at = await chip.jsonValue()
+        // Both counters start at the click, so what they measure is the enter animation's window
+        // and not everything the page did while it was booting.
+        await page.evaluate(() => {
+          globalThis.__rafAtClick = globalThis.__raf
+          globalThis.__sheetWrites = 0
+        })
         await page.mouse.click(at.x, at.y)
         const opened = await page
           .waitForFunction(
@@ -177,10 +213,41 @@ describeDrawer('the bottom drawer on the page', () => {
         await page.waitForTimeout(1_000)
         const drawer = await page.evaluate(readDrawer)
         expect(drawer.sheet, JSON.stringify(drawer)).toBe(true)
+
+        // The precondition, named, because the transform below cannot on its own tell a mapper
+        // that is not subscribed from an engine that never ran the animation at all. Both leave
+        // a parked sheet and only the first is this pin's subject.
+        //
+        // `requestAnimationFrame` is the one that separates them. `withTiming` drives itself by
+        // scheduling a frame per step (valueSetter.js `step`), and it does that whether or not
+        // any mapper is listening, so frames during this window mean the shared value moved.
+        // Sheet writes do not separate them: the broken build writes once and an engine that
+        // never animated also writes once, so a "written more than once" check would report the
+        // defect this pin exists to catch as an engine that does not animate.
+        const frames = await page.evaluate(() => ({
+          raf: globalThis.__raf - globalThis.__rafAtClick,
+          sheetWrites: globalThis.__sheetWrites
+        }))
+        expect(
+          frames.raf,
+          `${engine.name}: the page was given no animation frames after the sheet opened, so ` +
+            'the enter animation never ran and the transform proves nothing about the mapper'
+        ).toBeGreaterThan(0)
+
         // Reanimated's own write, once its mapper has run to the end of `progress`. The initial
         // inline style is a full viewport of translateY, so a mapper that stopped after its first
         // frame leaves a matrix here with a large offset instead of none.
-        expect(drawer.transform, JSON.stringify(drawer)).toBe('matrix(1, 0, 0, 1, 0, 0)')
+        expect(
+          drawer.transform,
+          `${engine.name}: ${String(frames.sheetWrites)} style write(s) on the sheet across ` +
+            `${String(frames.raf)} frame(s) -- ${JSON.stringify(drawer)}`
+        ).toBe('matrix(1, 0, 0, 1, 0, 0)')
+        // The same subject counted a second way: a mapper that re-ran wrote a frame at a time,
+        // and one write is the mapper that ran once and stopped.
+        expect(
+          frames.sheetWrites,
+          `${engine.name}: the sheet's style was written ${String(frames.sheetWrites)} time(s)`
+        ).toBeGreaterThan(1)
         // And where that leaves the sheet: bottom-anchored inside the viewport, which is the
         // thing the user sees and the thing a parked sheet gets wrong.
         expect(drawer.bottom, JSON.stringify(drawer)).toBe(VIEWPORT.height)
