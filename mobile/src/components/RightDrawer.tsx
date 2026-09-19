@@ -108,10 +108,10 @@ function MountedRightDrawer({
   }, [onHidden, visible])
 
   useEffect(() => {
-    // Native only: react-native-web's `BackHandler.addEventListener` logs "BackHandler is not
-    // supported on web and should not be used." and hands back an inert subscription, so inside the
-    // shell's page every open of this drawer put that line on the console and armed nothing. There
-    // is no hardware back to intercept in a WebView; the shell owns the one the phone has.
+    // Native only, ahead of need: the review screen is this drawer's one caller and C4 is what
+    // serves that route from the page. React Native Web answers `BackHandler.addEventListener`
+    // with a console warning and an inert subscription, and a WebView has no hardware back to
+    // intercept; the shell owns the one the phone has.
     if (!visible || Platform.OS === 'web') {
       return
     }

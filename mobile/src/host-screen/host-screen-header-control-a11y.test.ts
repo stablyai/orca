@@ -8,14 +8,20 @@ import { describe, expect, it } from 'vitest'
  * and no name, so a screen reader could not find them and C2.9's render check could only assert
  * their absence at 390 px. The wide toolbar already names every control, and the name is computed
  * from the same state, so the two must agree rather than each invent wording.
+ *
+ * A spread reads as unknown rather than absent: a control whose handler or whose accessibility
+ * props arrive through one is a control this scan cannot judge, so it fails both rules and says so,
+ * instead of passing quietly or reading as an unnamed control.
  */
 const HEADER = 'src/host-screen/host-screen-header.tsx'
 const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
+const PRESSABLE_TAGS = new Set(['Pressable', 'TouchableOpacity'])
 
 /**
  * One entry per control both toolbars render, keyed by the handler it presses, which is what makes
- * the two siblings the same control. Each must be found twice: a control dropped from one toolbar
- * would otherwise leave the naming rule below comparing a group of one against itself.
+ * two elements the same control. Each must be found twice, so the naming rule below always has
+ * pairs to compare: the rule derives its own groups, and over a file with no repeated handler it
+ * would hold vacuously.
  */
 const SHARED_CONTROLS = [
   '() => state.setShowFilterModal(true)',
@@ -26,30 +32,40 @@ const SHARED_CONTROLS = [
   '() => state.setShowSearch((s) => !s)'
 ]
 
-type Control = { line: number; press: string; role: string; label: string }
+type Read = { known: true; value: string } | { known: false }
+const SPREAD: Read = { known: false }
+
+type Control = { line: number; press: Read; role: Read; label: Read }
 
 /** Formatting differs between the branches, so compare what the expression says, not how it wraps. */
 function normalize(source: string): string {
   return source.replace(/\s+/g, ' ').trim()
 }
 
-function attributeText(element: ts.JsxOpeningLikeElement, name: string): string {
+function spreadsProps(element: ts.JsxOpeningLikeElement): boolean {
+  return element.attributes.properties.some((property) => ts.isJsxSpreadAttribute(property))
+}
+
+function readAttribute(element: ts.JsxOpeningLikeElement, name: string): Read {
+  if (spreadsProps(element)) {
+    return SPREAD
+  }
   for (const property of element.attributes.properties) {
     if (ts.isJsxAttribute(property) && property.name.getText() === name) {
       const initializer = property.initializer
       if (!initializer) {
-        return ''
+        return { known: true, value: '' }
       }
       if (ts.isStringLiteral(initializer)) {
-        return initializer.text
+        return { known: true, value: initializer.text }
       }
       if (ts.isJsxExpression(initializer) && initializer.expression) {
-        return normalize(initializer.expression.getText())
+        return { known: true, value: normalize(initializer.expression.getText()) }
       }
-      return normalize(initializer.getText())
+      return { known: true, value: normalize(initializer.getText()) }
     }
   }
-  return ''
+  return { known: true, value: '' }
 }
 
 function headerControls(): Control[] {
@@ -64,14 +80,15 @@ function headerControls(): Control[] {
   function visit(node: ts.Node): void {
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       const element = ts.isJsxElement(node) ? node.openingElement : node
-      if (element.tagName.getText() === 'Pressable') {
-        const press = attributeText(element, 'onPress')
-        if (press) {
+      if (PRESSABLE_TAGS.has(element.tagName.getText())) {
+        const press = readAttribute(element, 'onPress')
+        // A Pressable with no handler is decoration; one whose handler is spread in is a control.
+        if (!press.known || press.value !== '') {
           found.push({
             line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
             press,
-            role: attributeText(element, 'accessibilityRole'),
-            label: attributeText(element, 'accessibilityLabel')
+            role: readAttribute(element, 'accessibilityRole'),
+            label: readAttribute(element, 'accessibilityLabel')
           })
         }
       }
@@ -82,38 +99,66 @@ function headerControls(): Control[] {
   return found
 }
 
+function show(read: Read): string {
+  if (!read.known) {
+    return 'spread'
+  }
+  return read.value || 'none'
+}
+
 function describeControl(control: Control): string {
-  return `${HEADER}:${control.line} press=${control.press} role=${control.role || 'none'} label=${
-    control.label || 'none'
-  }`
+  return `${HEADER}:${control.line} press=${show(control.press)} role=${show(control.role)} label=${show(
+    control.label
+  )}`
 }
 
 const CONTROLS = headerControls()
 
+/** Every handler this header presses more than once, with the names its sites give it. */
+function namesByHandler(): Map<string, Set<string>> {
+  const groups = new Map<string, Set<string>>()
+  for (const control of CONTROLS) {
+    if (!control.press.known) {
+      continue
+    }
+    const names = groups.get(control.press.value) ?? new Set<string>()
+    names.add(show(control.label))
+    groups.set(control.press.value, names)
+  }
+  return groups
+}
+
 describe('host header controls carry a role and a name in both toolbars', () => {
-  it('finds each shared control in both toolbars, so the naming rule cannot compare one with itself', () => {
+  it('finds each shared control in both toolbars, so the naming rule has pairs to compare', () => {
     expect(
       SHARED_CONTROLS.filter(
-        (press) => CONTROLS.filter((control) => control.press === press).length !== 2
+        (press) =>
+          CONTROLS.filter((control) => control.press.known && control.press.value === press)
+            .length !== 2
       )
     ).toEqual([])
   })
 
   it('gives every pressable control the button role', () => {
-    expect(CONTROLS.filter((control) => control.role !== 'button').map(describeControl)).toEqual([])
+    expect(
+      CONTROLS.filter((control) => !control.role.known || control.role.value !== 'button').map(
+        describeControl
+      )
+    ).toEqual([])
   })
 
   it('names every pressable control', () => {
-    expect(CONTROLS.filter((control) => control.label === '').map(describeControl)).toEqual([])
+    expect(
+      CONTROLS.filter((control) => !control.label.known || control.label.value === '').map(
+        describeControl
+      )
+    ).toEqual([])
   })
 
-  it('names a shared control the same way in both toolbars', () => {
-    const disagreeing = SHARED_CONTROLS.filter((press) => {
-      const labels = new Set(
-        CONTROLS.filter((control) => control.press === press).map((control) => control.label)
-      )
-      return labels.size > 1
-    })
+  it('names a control the same way wherever this header renders it', () => {
+    const disagreeing = [...namesByHandler()]
+      .filter(([, names]) => names.size > 1)
+      .map(([press, names]) => `${press} -> ${[...names].sort().join(' | ')}`)
     expect(disagreeing).toEqual([])
   })
 })
