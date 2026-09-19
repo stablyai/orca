@@ -8,19 +8,20 @@ import {
   type AuthContext,
   type Connection,
   type KeyboardAuthContext,
-  type PasswordAuthContext
+  type PasswordAuthContext,
+  type PublicKeyAuthContext
 } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
-import { buildConnectConfig } from './ssh-connection-utils'
+import { buildConnectConfig, type BuildConnectConfigOptions } from './ssh-connection-utils'
 
 // OpenSSH's default; a host that burns it disconnects before the MFA stage is reached.
 const MAX_AUTH_TRIES = 6
 const PASSWORD = 'stage-one-password'
 const PASSCODE = '123456'
 
-type AuthStage = 'password' | 'keyboard-interactive'
+type AuthStage = 'password' | 'keyboard-interactive' | 'publickey'
 
 type MfaServer = {
   port: number
@@ -62,6 +63,21 @@ async function startMultiFactorServer(stages: AuthStage[]): Promise<MfaServer> {
       if (context.method === 'password') {
         if ((context as PasswordAuthContext).password !== PASSWORD) {
           fail(context)
+          return
+        }
+        stage += 1
+        if (stage === stages.length) {
+          context.accept()
+          return
+        }
+        context.reject(remaining(), true)
+        return
+      }
+      if (context.method === 'publickey') {
+        const publicKey = context as PublicKeyAuthContext
+        // Query phase: claim the key is acceptable so the client sends the signature.
+        if (!publicKey.signature) {
+          context.accept()
           return
         }
         stage += 1
@@ -153,13 +169,11 @@ function connectWithOrcaConfig(
   target: SshTarget,
   resolved: SshResolvedConfig | null,
   password: string | undefined,
-  answers: string[]
+  answers: string[],
+  buildOptions: BuildConnectConfigOptions = { includeAgent: false, includePrivateKey: true }
 ): { ready: Promise<void>; prompts: string[] } {
   const prompts: string[] = []
-  const config = buildConnectConfig(target, resolved, {
-    includeAgent: false,
-    includePrivateKey: true
-  })
+  const config = buildConnectConfig(target, resolved, buildOptions)
   if (password != null) {
     config.password = password
   }
@@ -263,6 +277,44 @@ describe('multi-stage SSH authentication', () => {
       // re-offering keys there is what exhausts MaxAuthTries on real MFA hosts.
       expect(server.attempts.filter((method) => method === 'publickey')).toHaveLength(0)
     } finally {
+      await server.close()
+    }
+  })
+
+  it('answers the second factor after a publickey partial success on a key-deferring attempt', async () => {
+    const server = await startMultiFactorServer(['publickey', 'keyboard-interactive'])
+    const previousAgentSock = process.env.SSH_AUTH_SOCK
+    try {
+      // Mixed IdentityFiles: an encrypted key the agent-first attempt defers next to an
+      // unencrypted explicit one it carries, so the initial ladder withholds the challenge.
+      // The agent socket need not exist — the explicit key partial-succeeds before the agent
+      // rung is ever reached.
+      const encryptedKeyPath = join(tempDir, 'id_encrypted')
+      writeFileSync(
+        encryptedKeyPath,
+        '-----BEGIN OPENSSH PRIVATE KEY-----\nbWF4aW5nLXBsYWNlaG9sZGVy\n-----END OPENSSH PRIVATE KEY-----\n'
+      )
+      const explicitKeyPath = join(tempDir, 'id_mfa_explicit')
+      writeFileSync(explicitKeyPath, utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
+      process.env.SSH_AUTH_SOCK = join(tempDir, 'agent.sock')
+
+      const target = makeTarget(server.port, { source: 'ssh-config', configHost: 'hpc' })
+      const { ready, prompts } = connectWithOrcaConfig(
+        target,
+        makeResolved(server.port, [encryptedKeyPath, explicitKeyPath]),
+        undefined,
+        [PASSCODE],
+        { includeAgent: true }
+      )
+
+      await expect(ready).resolves.toBeUndefined()
+      expect(prompts).toEqual(['Duo passcode:'])
+    } finally {
+      if (previousAgentSock === undefined) {
+        delete process.env.SSH_AUTH_SOCK
+      } else {
+        process.env.SSH_AUTH_SOCK = previousAgentSock
+      }
       await server.close()
     }
   })

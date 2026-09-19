@@ -174,6 +174,32 @@ describe('ordered SSH private-key authentication', () => {
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
   })
 
+  it('still re-offers the challenge after a partial success on an attempt that deferred a key', () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    vi.spyOn(utils, 'parseKey').mockImplementation(
+      () => ({ isPrivateKey: () => true }) as ParsedKey
+    )
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityFile: ['/home/testuser/.ssh/id_ed25519', '/keys/explicit'] })
+    )
+
+    // Agent-first attempt: the default-name key is deferred and only the unencrypted explicit key
+    // is carried, so the initial ladder withholds the challenge — yet the flag itself stays true,
+    // because ssh2 discards a string challenge it did not pre-clear through tryKeyboard, and a host
+    // running `AuthenticationMethods publickey,keyboard-interactive` must still reach it once the
+    // explicit key partial-succeeds.
+    expect(config.tryKeyboard).toBe(true)
+    expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
+    expect(nextAuth(config, false)).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('/keys/explicit')
+    })
+    expect(nextAuth(config, false)).toMatchObject({ type: 'agent' })
+    expect(nextAuth(config, false)).toBe(false)
+    expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
+  })
+
   it('stops re-offering methods the host no longer accepts after a partial success', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
       includeAgent: false,

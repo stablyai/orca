@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { AnyAuthMethod, AuthenticationType, ConnectConfig } from 'ssh2'
 import type { SshConnectionCallbacks } from './ssh-connection'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -14,6 +15,30 @@ export function createTarget(overrides?: Partial<SshTarget>): SshTarget {
     username: 'deploy',
     ...overrides
   }
+}
+
+/** Walks an attempt's initial auth ladder (no partial success) to the method names it offers. */
+export function walkInitialAuthLadder(config: ConnectConfig): string[] {
+  // ssh2's handler callback receives false once the queue is exhausted, which its types omit.
+  const handler = config.authHandler as (
+    authsLeft: AuthenticationType[] | null,
+    partialSuccess: boolean,
+    next: (attempt: AuthenticationType | AnyAuthMethod | false) => void
+  ) => void
+  const walked: (AuthenticationType | AnyAuthMethod)[] = []
+  let exhausted = false
+  let firstCall = true
+  while (!exhausted) {
+    handler(firstCall ? null : ['none'], false, (attempt) => {
+      if (attempt === false) {
+        exhausted = true
+      } else {
+        walked.push(attempt)
+      }
+    })
+    firstCall = false
+  }
+  return walked.map((attempt) => (typeof attempt === 'string' ? attempt : attempt.type))
 }
 
 export function createResolvedConfig(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig {
