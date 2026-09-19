@@ -56,6 +56,7 @@ export function createTerminalPaneClosedHandler(
     refs.linkPointerGesturesRef.current.delete(paneId)
     disposeMapEntry(refs.fileLinkClickFallbackDisposablesRef.current, paneId)
     disposeMapEntry(refs.httpLinkClickFallbackDisposablesRef.current, paneId)
+    disposeMapEntry(refs.selectionCopyDisposablesRef.current, paneId)
     disposeMapEntry(refs.selectionDisposablesRef.current, paneId)
     disposeMapEntry(refs.nativeCopyDisposablesRef.current, paneId)
     disposeMapEntry(refs.imeCompositionDisposablesRef.current, paneId)

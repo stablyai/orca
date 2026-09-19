@@ -11,19 +11,19 @@ export function copyClipboardTextViaExecCommand(text: string, doc: Document = do
       return
     }
     event.clipboardData.setData('text/plain', text)
-    // Why bubble + stop: xterm's listener on terminal.element overwrites text/plain,
-    // and preventDefault alone does not stop it or any later window-level handler.
+    // Why capture + stop: a terminal selection handler may stop the target event,
+    // so this fallback must write the requested text before the event reaches it.
     event.stopImmediatePropagation()
     event.preventDefault()
     served = true
   }
-  doc.addEventListener('copy', onCopy)
+  doc.addEventListener('copy', onCopy, { capture: true })
   try {
     // Chromium can return true even when no handler supplied clipboard data.
     return doc.execCommand('copy') === true && served
   } catch {
     return false
   } finally {
-    doc.removeEventListener('copy', onCopy)
+    doc.removeEventListener('copy', onCopy, { capture: true })
   }
 }
