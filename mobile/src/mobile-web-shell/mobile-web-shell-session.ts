@@ -253,7 +253,17 @@ function onDownloadFailed(
     // The link went, not the bundle. A generation already on disk was compatible when it was
     // written, and it is the same one the offline gate would have opened had the reachability
     // change arrived before this rejection did; which of the two lands first is a race.
-    return openCached(session, cached)
+    //
+    // Judged by its own routes, not the manifest's. The newer manifest was read before the
+    // download was attempted, so its `pageRoutes` and `routeGrants` are already on the session:
+    // opening the cached page under them would grant it what a bundle it is not running declared,
+    // and would mount it for a route only the newer bundle claims.
+    const pageRoutes = implementedPageRoutes(cached.routes)
+    const routeGrants = grantsForRoute(cached.routes, session.routePathname)
+    if (!rendersRoute(pageRoutes, session.routePathname)) {
+      return step(session, { pageRoutes, routeGrants, state: NATIVE_ROUTE })
+    }
+    return openCached(session, cached, { pageRoutes, routeGrants })
   }
   return step(session, {
     state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
