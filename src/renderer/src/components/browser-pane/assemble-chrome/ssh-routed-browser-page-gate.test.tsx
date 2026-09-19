@@ -5,12 +5,14 @@ import { useAppStore } from '@/store'
 
 const mocks = vi.hoisted(() => ({
   executionHostId: 'local' as string,
+  runtimeEnvironmentId: vi.fn<() => string | null>(() => null),
   prepare: vi.fn(),
   destroyPersistentWebview: vi.fn()
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () => mocks.executionHostId
+  getExecutionHostIdForWorktree: () => mocks.executionHostId,
+  getRuntimeEnvironmentIdForWorktree: () => mocks.runtimeEnvironmentId()
 }))
 
 vi.mock('../host-guest/webview-registry', () => ({
@@ -28,6 +30,8 @@ const settle = () =>
 
 describe('SshRoutedBrowserPageGate', () => {
   beforeEach(() => {
+    useAppStore.setState({ runtimeOwnedSshConnectionStates: new Map() })
+    mocks.runtimeEnvironmentId.mockReturnValue(null)
     mocks.prepare.mockReset()
     mocks.destroyPersistentWebview.mockReset()
     Object.defineProperty(window, 'api', {
@@ -49,23 +53,26 @@ describe('SshRoutedBrowserPageGate', () => {
     expect(mocks.prepare).not.toHaveBeenCalled()
   })
 
-  it('mounts the page only on the prepared partition for SSH workspaces', async () => {
-    mocks.executionHostId = 'ssh:target-a'
-    mocks.prepare.mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
-    render(
-      <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId="session-x" pageIds={PAGE_IDS}>
-        {(partition) => <div data-testid="page">{String(partition)}</div>}
-      </SshRoutedBrowserPageGate>
-    )
-    // Why: fail closed — no webview may exist before the proxy-verified partition arrives.
-    expect(screen.queryByTestId('page')).toBeNull()
-    await settle()
-    expect(screen.getByTestId('page').textContent).toBe('persist:orca-browser-v1-routed')
-    expect(mocks.prepare).toHaveBeenCalledWith({
-      targetId: 'target-a',
-      browserProfileId: 'session-x'
-    })
-  })
+  it.each(['target-a', 'runtime-ssh-ephemeral-1'])(
+    'mounts %s only on the prepared partition',
+    async (targetId) => {
+      mocks.executionHostId = `ssh:${targetId}`
+      mocks.prepare.mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
+      render(
+        <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId="session-x" pageIds={PAGE_IDS}>
+          {(partition) => <div data-testid="page">{String(partition)}</div>}
+        </SshRoutedBrowserPageGate>
+      )
+      // Why: fail closed — no webview may exist before the proxy-verified partition arrives.
+      expect(screen.queryByTestId('page')).toBeNull()
+      await settle()
+      expect(screen.getByTestId('page').textContent).toBe('persist:orca-browser-v1-routed')
+      expect(mocks.prepare).toHaveBeenCalledWith({
+        targetId,
+        browserProfileId: 'session-x'
+      })
+    }
+  )
 
   it('never renders the page on failure and retries on demand', async () => {
     mocks.executionHostId = 'ssh:target-a'
@@ -206,6 +213,7 @@ describe('SshRoutedBrowserPageGate', () => {
 
   it('leaves runtime-owned ephemeral SSH targets to the paired machinery', async () => {
     mocks.executionHostId = 'ssh:runtime-ssh-ephemeral-1'
+    mocks.runtimeEnvironmentId.mockReturnValue('paired-server')
     render(
       <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
         {(partition) => <div data-testid="page">{String(partition)}</div>}
@@ -214,5 +222,31 @@ describe('SshRoutedBrowserPageGate', () => {
     await settle()
     expect(screen.getByTestId('page').textContent).toBe('null')
     expect(mocks.prepare).not.toHaveBeenCalled()
+  })
+
+  it('automatically retries when the recipe SSH session becomes ready after startup', async () => {
+    const targetId = 'runtime-ssh-ephemeral-1'
+    mocks.executionHostId = `ssh:${targetId}`
+    mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
+    render(
+      <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
+        {(partition) => <div data-testid="page">{String(partition)}</div>}
+      </SshRoutedBrowserPageGate>
+    )
+    await settle()
+    expect(screen.queryByTestId('page')).toBeNull()
+    mocks.prepare.mockResolvedValue({ partition: 'persist:vm-ready' })
+    act(() =>
+      useAppStore.getState().setRuntimeOwnedSshConnectionState(targetId, {
+        targetId,
+        status: 'connected',
+        reconnectAttempt: 0,
+        error: null,
+        connectionGeneration: 42
+      })
+    )
+    await settle()
+    expect(screen.getByTestId('page').textContent).toBe('persist:vm-ready')
+    expect(mocks.prepare).toHaveBeenCalledTimes(2)
   })
 })

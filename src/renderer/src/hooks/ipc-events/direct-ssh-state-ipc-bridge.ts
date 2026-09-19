@@ -1,3 +1,5 @@
+import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { registerRuntimeOwnedSshStateIpcBridge } from './runtime-owned-ssh-state-ipc-bridge'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type { DirectSshAuthority, SshConnectionState } from '../../../../shared/ssh-types'
 import { useAppStore } from '../../store'
@@ -10,10 +12,15 @@ import {
 } from '../direct-ssh-state-routing'
 import type { DirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydration'
+/**
+ * Hydrate direct SSH state and subscribe to connection, credential, and port events.
+ * Delegate recipe target state to its own bridge instead of the public-host reconnect coordinator.
+ */
 export function registerDirectSshStateIpcBridge(
   unsubs: (() => void)[],
   runtime: DirectSshBridgeRuntime
 ): void {
+  registerRuntimeOwnedSshStateIpcBridge(unsubs)
   const {
     reconnectAuthorityByTarget,
     reconnectCoordinator,
@@ -212,7 +219,11 @@ export function registerDirectSshStateIpcBridge(
   let sshTargetStateEventId = 0
   const latestSshTargetStateEventByTargetId = new Map<string, number>()
 
+  /** Fence asynchronous public-target hydration against newer pushes; recipe events use their own bridge. */
   const handleSshStateChangedEvent = (data: { targetId: string; state: unknown }): void => {
+    if (isRuntimeOwnedSshTargetId(data.targetId)) {
+      return
+    }
     const store = useAppStore.getState()
     const state = data.state as SshConnectionState
     const stateEventId = ++sshTargetStateEventId

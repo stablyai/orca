@@ -144,7 +144,7 @@ export function useWorktreeCardFoundation({
     repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
   )
   const sshStatus = useAppStore((s) => {
-    // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
+    // Recipe targets use their own connection-state map and lifecycle controls, not this public-host chip.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }

@@ -43,6 +43,8 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'projectGroups'
   | 'repos'
   | 'settings'
+  | 'runtimeOwnedSshConnectionStates'
+  | 'sshStateByEnvironment'
   | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'worktreesByRepo'

@@ -1,3 +1,6 @@
+import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
@@ -7,6 +10,7 @@ import {
   selectNativeChatImageOwnerState
 } from './native-chat-image-runtime-context'
 
+/** Build a typed transcript owner fixture with all SSH authority maps present. */
 function state(): AppState {
   const tab: TerminalTab = {
     id: 'tab-1',
@@ -18,13 +22,14 @@ function state(): AppState {
     sortOrder: 0,
     createdAt: 0
   }
-  const worktree = {
+  const worktree = makeWorktree({
     id: 'wt-1',
     repoId: 'repo',
     path: '/repo/worktree',
     hostId: 'local'
-  }
+  })
   return {
+    ...createTestStore().getState(),
     activeWorkspaceExecutionHostId: 'local',
     activeWorktreeId: 'wt-1',
     detectedWorktreesByRepo: {},
@@ -32,17 +37,18 @@ function state(): AppState {
     getKnownWorktreeById: () => worktree,
     projectGroups: [],
     removedRuntimeEnvironmentIds: new Set(),
-    repos: [{ id: 'repo', path: '/repo' }],
+    repos: [{ ...TEST_REPO, id: 'repo', path: '/repo' }],
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironmentCatalogHydrated: true,
     runtimeEnvironments: [],
-    settings: { activeRuntimeEnvironmentId: null },
-    sshConnectionStates: {},
-    sshStateByEnvironment: {},
+    settings: { ...getDefaultSettings('/home/test'), activeRuntimeEnvironmentId: null },
+    runtimeOwnedSshConnectionStates: new Map(),
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
     tabsByWorktree: { 'wt-1': [tab] },
     unifiedTabsByWorktree: {},
     worktreesByRepo: { repo: [worktree] }
-  } as unknown as AppState
+  }
 }
 
 describe('resolveNativeChatImageRuntimeContext', () => {
@@ -93,4 +99,49 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       settings: { activeRuntimeEnvironmentId: 'owner-a' }
     })
   })
+})
+
+it('keeps recipe VM image authority in the selected state and updates it on reconnect', () => {
+  const targetId = 'runtime-ssh-image-vm'
+  const hostId = toSshExecutionHostId(targetId)
+  const worktree = makeWorktree({ id: 'wt-1', repoId: 'repo', path: '/workspace/repo', hostId })
+  const connection = {
+    targetId,
+    status: 'connected' as const,
+    error: null,
+    reconnectAttempt: 0,
+    connectionGeneration: 42
+  }
+  const storeState: AppState = {
+    ...state(),
+    activeWorkspaceExecutionHostId: hostId,
+    worktreesByRepo: { repo: [worktree] },
+    getKnownWorktreeById: () => worktree,
+    runtimeOwnedSshConnectionStates: new Map([[targetId, connection]])
+  }
+  const selected = selectNativeChatImageOwnerState(storeState)
+  expect(resolveNativeChatImageRuntimeContext(selected, 'tab-1')).toMatchObject({
+    worktreePath: '/workspace/repo',
+    connectionId: targetId,
+    expectedExternalSshTargetId: targetId,
+    expectedExecutionHostId: hostId,
+    expectedSshConnectionGeneration: 42
+  })
+  const disconnected = selectNativeChatImageOwnerState({
+    ...storeState,
+    runtimeOwnedSshConnectionStates: new Map([
+      [targetId, { ...connection, status: 'disconnected' }]
+    ])
+  })
+  expect(shallow(selected, disconnected)).toBe(false)
+  expect(resolveNativeChatImageRuntimeContext(disconnected, 'tab-1')).toBeNull()
+  const reconnected = selectNativeChatImageOwnerState({
+    ...storeState,
+    runtimeOwnedSshConnectionStates: new Map([
+      [targetId, { ...connection, connectionGeneration: 43 }]
+    ])
+  })
+  expect(
+    resolveNativeChatImageRuntimeContext(reconnected, 'tab-1')?.expectedSshConnectionGeneration
+  ).toBe(43)
 })

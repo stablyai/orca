@@ -30,6 +30,7 @@ type OwnerState = Pick<
   | 'runtimeEnvironments'
   | 'runtimeEnvironmentCatalogHydrated'
   | 'removedRuntimeEnvironmentIds'
+  | 'runtimeOwnedSshConnectionStates'
   | 'sshConnectionStates'
   | 'sshStateByEnvironment'
   | 'activeWorktreeId'
@@ -40,8 +41,7 @@ type OwnerState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-// Keep the subscription limited to fields that can change image ownership. The
-// derived context is computed during render, after Zustand has filtered updates.
+/** Select all connection authorities that can change image ownership, including recipe VM sessions. */
 export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
   return {
     settings: state.settings,
@@ -53,6 +53,7 @@ export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
     runtimeEnvironments: state.runtimeEnvironments,
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+    runtimeOwnedSshConnectionStates: state.runtimeOwnedSshConnectionStates,
     sshConnectionStates: state.sshConnectionStates,
     sshStateByEnvironment: state.sshStateByEnvironment,
     activeWorktreeId: state.activeWorktreeId,

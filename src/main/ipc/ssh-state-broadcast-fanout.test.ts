@@ -142,7 +142,7 @@ describe('SSH IPC handlers', () => {
     expect(runtime.notifySshRelayReady).toHaveBeenCalledWith('ssh-1')
   })
 
-  it('keeps runtime-owned SSH state off the renderer while invalidating runtime scans', async () => {
+  it('publishes runtime-owned SSH authority locally without exposing it to paired clients', async () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -167,9 +167,15 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:connect')!(null, { targetId: 'runtime-ssh-1' })
 
-    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
       'ssh:state-changed',
-      expect.anything()
+      expect.objectContaining({
+        targetId: 'runtime-ssh-1',
+        state: expect.objectContaining({
+          connectionGeneration: expect.any(Number),
+          providerEpoch: expect.any(String)
+        })
+      })
     )
     expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
     expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
@@ -196,9 +202,15 @@ describe('SSH IPC handlers', () => {
 
     expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
     expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
-    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
       'ssh:state-changed',
-      expect.anything()
+      expect.objectContaining({
+        targetId: 'runtime-ssh-1',
+        state: expect.objectContaining({
+          connectionGeneration: expect.any(Number),
+          providerEpoch: expect.any(String)
+        })
+      })
     )
   })
 })

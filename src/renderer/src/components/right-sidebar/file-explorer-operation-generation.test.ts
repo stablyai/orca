@@ -174,3 +174,24 @@ describe('file explorer operation generations', () => {
     expect(() => guard.assertCurrent()).toThrow("Couldn't determine which host owns")
   })
 })
+
+it('admits recipe VM operations and invalidates them when the real connection changes', () => {
+  const targetId = 'runtime-ssh-orca-vm'
+  useAppStore.setState({ repos: [], worktreesByRepo: { 'repo-1': [worktree(`ssh:${targetId}`)] } })
+  const state = {
+    targetId,
+    status: 'connected' as const,
+    error: null,
+    reconnectAttempt: 0,
+    connectionGeneration: 42
+  }
+  useAppStore.getState().setRuntimeOwnedSshConnectionState(targetId, state)
+  const owner = getFileExplorerOperationOwner(worktreeId)
+  const guard = captureFileExplorerOperationGuard(worktreeId, owner)
+  expect(guard.route.expectedSshConnectionGeneration).toBe(42)
+  expect(() => guard.assertCurrent()).not.toThrow()
+  useAppStore
+    .getState()
+    .setRuntimeOwnedSshConnectionState(targetId, { ...state, connectionGeneration: 43 })
+  expect(() => guard.assertCurrent()).toThrow("Couldn't determine which host owns")
+})

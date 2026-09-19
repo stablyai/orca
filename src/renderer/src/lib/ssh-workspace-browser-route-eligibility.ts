@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 
 type SshBrowserRoutingSettings = Pick<
   GlobalSettings,
@@ -11,13 +11,18 @@ export type SshWorkspaceBrowserRouteEligibility = {
   eligible: boolean
 }
 
+/**
+ * Determine whether this desktop may route a workspace browser through SSH.
+ * Paired runtimes retain their own transport; desktop targets honor global and per-target opt-outs.
+ */
 export function resolveSshWorkspaceBrowserRouteEligibility(
   executionHostId: string | null | undefined,
-  settings: SshBrowserRoutingSettings | null | undefined
+  settings: SshBrowserRoutingSettings | null | undefined,
+  runtimeEnvironmentId: string | null
 ): SshWorkspaceBrowserRouteEligibility | null {
   const parsed = parseExecutionHostId(executionHostId)
-  // Why: runtime-owned ephemeral SSH targets belong to the paired runtime's browser route.
-  if (parsed?.kind !== 'ssh' || isRuntimeOwnedSshTargetId(parsed.targetId)) {
+  // Why: paired runtimes own their browser transport; desktop recipe targets use local SSH.
+  if (parsed?.kind !== 'ssh' || runtimeEnvironmentId !== null) {
     return null
   }
   return {

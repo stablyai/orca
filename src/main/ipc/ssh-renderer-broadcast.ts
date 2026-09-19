@@ -24,20 +24,25 @@ import {
 
 export const relayStateOverrides = new Map<string, SshConnectionState>()
 
+/**
+ * Publish SSH state with the current provider authority to the desktop renderer.
+ * Recipe targets invalidate runtime scans but stay out of paired clients' public SSH catalogs.
+ */
 export function broadcastSshState(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
   state: SshConnectionState
 ): void {
-  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
-  if (isRuntimeOwnedSshTargetId(targetId)) {
-    currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
-    return
-  }
   const enrichedState = withSshRemotePlatform(targetId, state)
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
+  }
+  // Runtime-owned targets are private to this desktop's recipe lifecycle. Publish
+  // their real authority locally, but keep them out of paired hosts' SSH catalogs.
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
+    return
   }
   // Why: paired remote clients have no ssh:state-changed IPC; without this their terminals keep a stale reconnect overlay.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)

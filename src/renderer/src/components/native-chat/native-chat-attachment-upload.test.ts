@@ -1,3 +1,4 @@
+import { TEST_REPO } from '@/store/slices/store-test-helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -224,4 +225,38 @@ describe('uploadNativeChatAttachmentPaths', () => {
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
+})
+
+it('authorizes recipe VM attachments using their own live SSH state', () => {
+  const targetId = 'runtime-ssh-attachment-vm'
+  const connection = {
+    targetId,
+    status: 'connected' as const,
+    error: null,
+    reconnectAttempt: 0,
+    connectionGeneration: 42
+  }
+  const ownerState = state({
+    repos: [{ ...TEST_REPO, id: 'repo', connectionId: targetId }],
+    runtimeOwnedSshConnectionStates: new Map([[targetId, connection]]),
+    sshStateByEnvironment: new Map()
+  })
+  expect(resolveNativeChatAttachmentOwner(ownerState, 'tab-1')).toMatchObject({
+    kind: 'ssh',
+    connectionId: targetId,
+    worktreePath: '/repo/worktree',
+    expectedSshTargetId: targetId,
+    expectedSshConnectionGeneration: 42
+  })
+  expect(
+    resolveNativeChatAttachmentOwner(
+      {
+        ...ownerState,
+        runtimeOwnedSshConnectionStates: new Map([
+          [targetId, { ...connection, status: 'disconnected' }]
+        ])
+      },
+      'tab-1'
+    )
+  ).toEqual({ kind: 'not-ready' })
 })

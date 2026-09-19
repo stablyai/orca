@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { makeWorktree } from '@/store/slices/store-test-helpers'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID,
@@ -13,7 +14,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () => mocks.executionHostId
+  getExecutionHostIdForWorktree: () => mocks.executionHostId,
+  getRuntimeEnvironmentIdForWorktree: () => null
 }))
 
 import { RemoteRuntimeEgressIndicator, SshEgressIndicator } from './browser-egress-indicator'
@@ -55,6 +57,40 @@ describe('SshEgressIndicator', () => {
     const icon = screen.getByTestId('ssh-egress-indicator')
     expect(icon.getAttribute('data-egress')).toBe('ssh')
     expect(icon.getAttribute('aria-label')).toContain('openclaw')
+  })
+
+  it.each([
+    { displayName: 'Avatar fixes', expected: 'Avatar fixes' },
+    { displayName: '', expected: 'feature/avatar-fix' }
+  ])('labels recipe VM egress with $expected', ({ displayName, expected }) => {
+    const hostId = 'ssh:runtime-ssh-recipe-vm'
+    mocks.executionHostId = hostId
+    const priorWorktrees = useAppStore.getState().worktreesByRepo
+    useAppStore.setState({
+      worktreesByRepo: {
+        repo: [
+          makeWorktree({
+            id: 'wt-1',
+            repoId: 'repo',
+            hostId,
+            displayName,
+            branch: 'refs/heads/feature/avatar-fix',
+            path: '/workspace/repo'
+          })
+        ]
+      }
+    })
+    try {
+      renderIndicator('wt-1')
+      expect(screen.getByTestId('ssh-egress-indicator').getAttribute('aria-label')).toBe(
+        `Browsing through ${expected}`
+      )
+      fireEvent.click(screen.getByTestId('ssh-egress-indicator'))
+      expect(screen.getByRole('dialog').textContent).toContain(expected)
+      expect(screen.getByRole('dialog').textContent).not.toContain('runtime-ssh-')
+    } finally {
+      useAppStore.setState({ worktreesByRepo: priorWorktrees })
+    }
   })
 
   it('shows the this-device icon when the target opted out', () => {
