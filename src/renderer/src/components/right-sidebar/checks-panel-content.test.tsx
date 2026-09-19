@@ -12,7 +12,10 @@ import {
 import { ConflictTriageStrip, PRTriageStrip } from './checks-panel/triage-strip'
 import { getFailedChecksForDetails } from './checks-panel/check-details-model'
 import { ChecksList } from './checks-panel/checks-list'
-import { isMutablePRConversationComment } from './checks-panel/comment-controls'
+import {
+  buildCopyAllCommentsText,
+  isMutablePRConversationComment
+} from './checks-panel/comment-controls'
 import { PRCommentsList } from './checks-panel/comments-list'
 import { CheckJobLogTail } from './check-job-log-tail'
 
@@ -340,6 +343,29 @@ describe('isMutablePRConversationComment', () => {
 })
 
 describe('PRCommentsList', () => {
+  it('offers filtered copy-all context and safely handles empty output', () => {
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'alice',
+        authorAvatarUrl: '',
+        body: 'Please update this line.',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#discussion_r1',
+        path: 'src/a.ts',
+        line: 12
+      }
+    ]
+    const markup = renderWithTooltips(
+      React.createElement(PRCommentsList, { comments, commentsLoading: false })
+    )
+
+    expect(markup).toContain('aria-label="Copy all"')
+    expect(buildCopyAllCommentsText(comments)).toContain('Context: src/a.ts:L12')
+    expect(buildCopyAllCommentsText(comments)).toContain('Author: alice')
+    expect(buildCopyAllCommentsText([])).toBe('')
+  })
+
   it('pins the comments header while scrolling the sidebar', () => {
     const comments: PRComment[] = [
       {
