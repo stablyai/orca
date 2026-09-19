@@ -1,6 +1,8 @@
 export {
   buildAgentFeatureSkillInstallCommand,
   buildAgentFeatureSkillUpdateCommand,
+  buildUnattendedAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillUpdateCommand,
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
   COMPUTER_USE_SKILL_NAME,
   COMPUTER_USE_SKILL_UPDATE_COMMAND,

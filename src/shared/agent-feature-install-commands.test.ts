@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillUpdateCommand,
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   buildAgentFeatureSkillUpdateArgs,
   buildAgentFeatureSkillUpdateCommand,
@@ -85,6 +87,23 @@ describe('agent feature skill commands', () => {
       buildAgentFeatureSkillInstallArgs(['orca-cli'], { yes: true, agents: ['universal'] }).at(-1)
     ).toBe('-y')
     expect(buildAgentFeatureSkillUpdateArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
+  })
+
+  it('maps detected Orca agents onto skills CLI keys for unattended installs', () => {
+    expect(
+      buildUnattendedAgentFeatureSkillInstallCommand(['orca-cli'], {
+        detectedAgents: ['claude', 'codex']
+      })
+    ).toBe(
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global --agent claude-code --agent codex --agent universal -y'
+    )
+    // Empty detection still targets universal so -y never becomes all-agents.
+    expect(buildUnattendedAgentFeatureSkillInstallCommand(['orca-cli'])).toBe(
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global --agent universal -y'
+    )
+    expect(buildUnattendedAgentFeatureSkillUpdateCommand('orca-cli')).toBe(
+      'npx skills update orca-cli --global -y'
+    )
   })
 
   it('builds single-skill update commands', () => {
