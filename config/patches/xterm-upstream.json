@@ -18,6 +18,24 @@
   },
   "packages": [
     {
+      "name": "@xterm/headless",
+      "version": "6.1.0-beta.302",
+      "packageDir": "headless",
+      "sourceDir": "..",
+      "sourceMaps": {
+        "lib-headless/xterm-headless.js.map": "webpack://@xterm/xterm/./",
+        "lib-headless/xterm-headless.mjs.map": "../../"
+      },
+      "$note": "The tarball omits src/. Verify every embedded source against the checkout and require each changed source in both maps; pristine bundles still must reproduce byte for byte.",
+      "sourcePatch": "config/patches/xterm-src/@xterm__headless@6.1.0-beta.302.src.patch",
+      "patch": "config/patches/@xterm__headless@6.1.0-beta.302.patch",
+      "generatedPaths": ["lib-headless/"],
+      "build": [
+        { "cwd": "..", "command": "npm", "args": ["run", "build"] },
+        { "cwd": "..", "command": "npm", "args": ["run", "package-headless"] }
+      ]
+    },
+    {
       "name": "@xterm/xterm",
       "version": "6.1.0-beta.303",
       "packageDir": ".",

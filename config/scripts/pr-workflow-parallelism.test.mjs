@@ -20,6 +20,7 @@ const shellContractFiles = [
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
+  'src/main/zsh-startup-hook-pty-harness.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'

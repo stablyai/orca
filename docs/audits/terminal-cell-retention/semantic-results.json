@@ -1,0 +1,29 @@
+{
+  "node": "v24.20.0",
+  "baselineBundleSha256": "e71666dbadcd0d4be1012b59c72c000d8f3624493050413d422bb0acebcce1d3",
+  "baselineBufferLineSha256": "26551bd2db8ddd5cdb4f77b0f62f3b5f1ae4d14fd76ac4d5b5eae70eab10ea12",
+  "patchedBufferLineSha256": "e521a463afe14df3d2a64fe65d0aa1b3feec0f3234b451b20a7148f1ad723e9b",
+  "semanticChecks": [
+    {
+      "variant": "patched",
+      "matchedMutations": 25000
+    }
+  ],
+  "retentionChecks": [
+    {
+      "variant": "baseline",
+      "deleteScratchCharsAfterErase": 100001,
+      "insertScratchCharsAfterErase": 100001,
+      "invalidCacheChars": 100001,
+      "erasedCombinedChars": 100001
+    },
+    {
+      "variant": "patched",
+      "deleteScratchCharsAfterErase": 0,
+      "insertScratchCharsAfterErase": 0,
+      "invalidCacheChars": 0,
+      "erasedCombinedChars": 0
+    }
+  ],
+  "limits": "Actual mapped BufferLine source with a test-only scratch inspection export; patch applied in memory. All visible cell/translation comparisons use the unmodified baseline."
+}

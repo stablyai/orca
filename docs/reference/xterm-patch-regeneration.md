@@ -5,12 +5,14 @@
 Orca ships `@xterm/xterm` with source changes it needs and upstream has
 not taken: the IME composition hooks, the `xterm-composition-*` custom events
 they raise, the `ICompositionHelper` surface those hooks widen, and a `SortedList`
-fix, plus a bound on contrast-cache entries. pnpm applies them through
+fix, a bound on contrast-cache entries, and cleanup of overwritten BufferLine
+cell storage. pnpm applies them through
 `config/patches/@xterm__xterm@<version>.patch`.
 
-That patch touches nine files. Five are hand-authored source
+That patch touches ten files. Six are hand-authored source
 (`src/browser/ColorContrastCache.ts`, `src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
-`src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`) and four
+`src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`,
+`src/common/buffer/BufferLine.ts`) and four
 are the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`,
 and both sourcemaps). The bundle half is 7.3 MB of minified code. It is
 generated, and this document exists so nobody edits it by hand.
@@ -28,7 +30,7 @@ upstream commit the published tarball was built from.
 `@xterm/addon-webgl`, `@xterm/addon-search`, `@xterm/addon-serialize` and `@xterm/addon-image` are
 generated the same way, from their own source patches under
 `config/patches/xterm-src/`. Their entries differ only in `packageDir` and build
-steps; everything below applies to all five. `@xterm/addon-ligatures` is the one
+steps; everything below applies to all listed addons. `@xterm/addon-ligatures` is the one
 patch still written by hand — see [Known Gaps](#known-gaps).
 
 The image patch bounds pending Kitty decoders by their maximum WASM capacity
@@ -49,6 +51,8 @@ after reset, disable or disposal. `config/scripts/xterm-image-lifecycle-contract
 exercises those boundaries against the installed addon. Font zoom scales visible
 tiles without creating enlarged full-image canvases;
 `config/scripts/xterm-image-resize-contract.test.mjs` checks allocation and tile mapping.
+
+`@xterm/headless` uses the same BufferLine change and verifies its sources through the published maps, as described below.
 
 ## Rules
 
@@ -123,15 +127,16 @@ Run the checkout outside this repository. A build tree underneath it makes
 `tsgo` walk up into Orca's own `node_modules` and fail with `TS2300: Duplicate
 identifier`, which is a symptom of where the tree sits and not of the patch.
 
-## Mobile Contrast Cache Patch
+## Mobile Memory Patches
 
 Mobile installs xterm in a separate pnpm project. Its patch includes only
-`ColorContrastCache.ts`; the desktop IME and `SortedList` changes are excluded.
-`regenerate-xterm-patches-mobile.mjs` derives that source stanza and reuses the
+`ColorContrastCache.ts` and `BufferLine.ts`; the desktop IME and `SortedList`
+changes are excluded. `regenerate-xterm-patches-mobile.mjs` derives those source
+stanzas and reuses the
 desktop manifest's version, upstream commit, toolchain, and build steps. It fails
-if mobile pins a different version or the contrast stanza is missing or duplicated.
+if mobile pins a different version or either stanza is missing or duplicated.
 
-After editing the desktop contrast source and regenerating the desktop patch:
+After editing either shared source and regenerating the desktop patch:
 
 ```sh
 node config/scripts/regenerate-xterm-patches-mobile.mjs --write
@@ -155,6 +160,15 @@ generator applies the same stamp.
 
 That pair of checks is what makes the rebuild trustworthy. Without them a wrong
 commit would still produce a plausible-looking 7 MB patch.
+
+`@xterm/headless` ships no `src/` directory. Its manifest instead declares both
+published source maps and their source-path prefixes. The generator compares
+every embedded source with the checkout, requires every edited source in both
+maps, and repeats those checks against the patched build. The final patch carries
+the rebuilt CJS/ESM bundles and maps; the separate source patch remains the
+editable input. An absent source or differing map fails regeneration.
+Headless's published `Version.ts` is unstamped (`6.0.0`), so its manifest omits
+`versionStampFile` and requires those exact upstream bytes.
 
 ## Build Order
 
@@ -186,6 +200,11 @@ The generator also builds the _unmodified_ commit first and asserts that it
 reproduces the published `lib/` byte for byte before it emits anything. A
 toolchain or build-order problem therefore surfaces as an explicit "did not
 reproduce the published bundles" error rather than as 7 MB of mystery diff.
+
+Headless uses the root `build` followed by `package-headless`, which emits
+`headless/lib-headless/` in both module formats. Its `sourceDir: ".."` keeps
+source patches rooted at the upstream repository while bundle paths remain
+relative to the headless package. It has the same pristine byte-comparison gate.
 
 ## Recovering From Hand-Edited Bundles
 

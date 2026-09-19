@@ -17,6 +17,7 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { assertMappedSourcesMatch } from './xterm-sourcemap-source.mjs'
 import {
   CHECKOUT_DIFF_FLAGS,
   PNPM_DIFF_FLAGS,
@@ -273,6 +274,14 @@ function assertToolchain(upstreamRoot, manifest) {
  * commit and every hunk below would be nonsense.
  */
 function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
+  if (packageEntry.sourceMaps) {
+    assertMappedSourcesMatch({
+      packageRoot: pristineDir,
+      sourceRoot: sourceRootFor(upstreamRoot, packageEntry),
+      sourceMaps: packageEntry.sourceMaps
+    })
+    return
+  }
   const stampFile = packageEntry.versionStampFile
   const sourceRoot = path.join(pristineDir, 'src')
   const drifted = listFilesRelative(sourceRoot)
@@ -292,13 +301,21 @@ function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
   }
 }
 
+function sourceRootFor(upstreamRoot, packageEntry) {
+  return path.join(upstreamRoot, packageEntry.packageDir, packageEntry.sourceDir ?? '.')
+}
+
 function buildPackage(upstreamRoot, packageEntry, manifest) {
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
-  for (const directory of ['lib', 'out', 'out-esbuild']) {
+  const sourceRoot = sourceRootFor(upstreamRoot, packageEntry)
+  for (const directory of packageEntry.generatedPaths) {
     rmSync(path.join(packageRoot, directory), { recursive: true, force: true })
   }
+  for (const directory of ['out', 'out-esbuild']) {
+    rmSync(path.join(sourceRoot, directory), { recursive: true, force: true })
+  }
   if (packageEntry.versionStampFile) {
-    const stampPath = path.join(packageRoot, packageEntry.versionStampFile)
+    const stampPath = path.join(sourceRoot, packageEntry.versionStampFile)
     writeFileSync(
       stampPath,
       stampVersionSource(readFileSync(stampPath, 'utf8'), packageEntry.version)
@@ -397,7 +414,8 @@ function regeneratePackage(packageEntry, manifest, context) {
   assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry)
 
   run('git', ['reset', '--quiet', '--hard', manifest.upstream.commit], { cwd: upstreamRoot })
-  const packageDir = toPosix(packageEntry.packageDir)
+  const sourceRoot = sourceRootFor(upstreamRoot, packageEntry)
+  const packageDir = toPosix(path.relative(upstreamRoot, sourceRoot)) || '.'
   run(
     'git',
     [
@@ -418,11 +436,11 @@ function regeneratePackage(packageEntry, manifest, context) {
   // patch and nothing else.
   if (packageEntry.versionStampFile) {
     run('git', ['checkout', '--', packageEntry.versionStampFile], {
-      cwd: path.join(upstreamRoot, packageEntry.packageDir)
+      cwd: sourceRoot
     })
   }
 
-  const source = diffCheckoutSource(path.join(upstreamRoot, packageEntry.packageDir))
+  const source = diffCheckoutSource(sourceRoot)
   if (source.trim().length === 0) {
     throw new Error(
       `${packageEntry.name}: applying ${packageEntry.sourcePatch} left the checkout unchanged. ` +
@@ -431,7 +449,16 @@ function regeneratePackage(packageEntry, manifest, context) {
     )
   }
   const patch = diffFolders(pristineDir, patchedDir)
-  assertSourceDerivationsAgree(source, patch)
+  if (packageEntry.sourceMaps) {
+    assertMappedSourcesMatch({
+      packageRoot: patchedDir,
+      sourceRoot,
+      sourceMaps: packageEntry.sourceMaps,
+      sourcePatch: source
+    })
+  } else {
+    assertSourceDerivationsAgree(source, patch)
+  }
   return { patch, source }
 }
 

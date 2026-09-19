@@ -1,0 +1,609 @@
+{
+  "marks": 100000,
+  "rows": 8,
+  "fixed": true,
+  "results": [
+    {
+      "phase": "before",
+      "sha256": "e71666dbadcd0d4be1012b59c72c000d8f3624493050413d422bb0acebcce1d3",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5727160,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5728192,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 44992320,
+          "visibleChars": 8,
+          "staleCombinedChars": 800008,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 44992128,
+          "visibleChars": 8,
+          "staleCombinedChars": 800008,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 45004512,
+          "visibleChars": 0,
+          "staleCombinedChars": 800008,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 45003784,
+          "visibleChars": 0,
+          "staleCombinedChars": 800008,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 44968984,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 800008
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 44971392,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 800008
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 5711760,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 5713160,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    },
+    {
+      "phase": "headless-cjs",
+      "sha256": "7d0909f225542e7bcc1354550303bc2c33f97a01d009bab4868d7cb5f8a82000",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5727696,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5728568,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 198360,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 200280,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 211752,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 209072,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 173032,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 176104,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 112744,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 114104,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    },
+    {
+      "phase": "headless-esm",
+      "sha256": "a13c1e73888e4458f82d5c3645039458a388463ec30bcd86eb5398b331a23038",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5731904,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5727464,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 200888,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 196504,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 214416,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 207408,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 176096,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 171880,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 115848,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 111776,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    },
+    {
+      "phase": "desktop-cjs",
+      "sha256": "e4c6d8f51ad199384ea01f93465789b4c0035d0b49d007dd6d002dab55a1ba73",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5728072,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5729568,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 195296,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 196688,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 209152,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 209696,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 170720,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 172376,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 113120,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 117920,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    },
+    {
+      "phase": "desktop-esm",
+      "sha256": "03c1aa8ec10d0a12934f2e43687894e47d7264280cf162830bdd5f07ea6856eb",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5727200,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5728600,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 192760,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 194216,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 205816,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 207192,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 166936,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 168728,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 114216,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 112960,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    },
+    {
+      "phase": "mobile-cjs",
+      "sha256": "90706b4dcc5a3e62eeddd04496f97e95e09ba2b0ec8b05baf1e657750336ff72",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5728072,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5729360,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 194248,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 196744,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 208216,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 209696,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 170808,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 172240,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 116056,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 114944,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    },
+    {
+      "phase": "mobile-esm",
+      "sha256": "1a008b9f2a3c8a53dd556bae55c332199c8c47d7fa3c5e001e19a75ee9ba4a26",
+      "samples": [
+        {
+          "scenario": "live",
+          "alternate": false,
+          "heapGrowth": 5727200,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "live",
+          "alternate": true,
+          "heapGrowth": 5728600,
+          "visibleChars": 100001,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": false,
+          "heapGrowth": 192760,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "overwrite",
+          "alternate": true,
+          "heapGrowth": 189824,
+          "visibleChars": 8,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": false,
+          "heapGrowth": 202816,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "erase",
+          "alternate": true,
+          "heapGrowth": 203256,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": false,
+          "heapGrowth": 166792,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "cache",
+          "alternate": true,
+          "heapGrowth": 168776,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": false,
+          "heapGrowth": 111192,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        },
+        {
+          "scenario": "scratch",
+          "alternate": true,
+          "heapGrowth": 112920,
+          "visibleChars": 0,
+          "staleCombinedChars": 0,
+          "invalidCacheChars": 0
+        }
+      ]
+    }
+  ]
+}

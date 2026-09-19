@@ -1272,3 +1272,176 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
        this._flushDeletedTask.flush();
      }
    }
+diff --git a/src/common/buffer/BufferLine.ts b/src/common/buffer/BufferLine.ts
+index 4984f3a49abe8437475c206db1345f5f5fe3979c..c6e91a357f25b4d671ee48242f8eed28721fceaf 100644
+--- a/src/common/buffer/BufferLine.ts
++++ b/src/common/buffer/BufferLine.ts
+@@ -116,12 +116,18 @@ export class BufferLine implements IBufferLine {
+    * @deprecated
+    */
+   public set(index: number, value: CharData): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     this._data[index * Constants.CELL_INDICIES + Cell.FG] = value[CHAR_DATA_ATTR_INDEX];
+     if (value[CHAR_DATA_CHAR_INDEX].length > 1) {
+       this._combined[index] = value[1];
+       this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = index | Content.IS_COMBINED_MASK | (value[CHAR_DATA_WIDTH_INDEX] << Content.WIDTH_SHIFT);
+     } else {
++      if ((this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] & Content.IS_COMBINED_MASK)) {
++        delete this._combined[index];
++      }
+       this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = value[CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[CHAR_DATA_WIDTH_INDEX] << Content.WIDTH_SHIFT);
+     }
+   }
+@@ -226,12 +232,23 @@ export class BufferLine implements IBufferLine {
+    * Set data at `index` to `cell`.
+    */
+   public setCell(index: number, cell: ICellData): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     if (cell.content & Content.IS_COMBINED_MASK) {
+       this._combined[index] = cell.combinedData;
++    } else {
++      if ((this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] & Content.IS_COMBINED_MASK)) {
++        delete this._combined[index];
++      }
+     }
+     if (cell.bg & BgFlags.HAS_EXTENDED) {
+       this._extendedAttrs[index] = cell.extended;
++    } else {
++      if ((this._data[index * Constants.CELL_INDICIES + Cell.BG] & BgFlags.HAS_EXTENDED)) {
++        delete this._extendedAttrs[index];
++      }
+     }
+     this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = cell.content;
+     this._data[index * Constants.CELL_INDICIES + Cell.FG] = cell.fg;
+@@ -244,9 +261,19 @@ export class BufferLine implements IBufferLine {
+    * it gets an optimized access method.
+    */
+   public setCellFromCodepoint(index: number, codePoint: number, width: number, attrs: IAttributeData): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
++    if ((this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] & Content.IS_COMBINED_MASK)) {
++      delete this._combined[index];
++    }
+     if (attrs.bg & BgFlags.HAS_EXTENDED) {
+       this._extendedAttrs[index] = attrs.extended;
++    } else {
++      if ((this._data[index * Constants.CELL_INDICIES + Cell.BG] & BgFlags.HAS_EXTENDED)) {
++        delete this._extendedAttrs[index];
++      }
+     }
+     const $idx = index * Constants.CELL_INDICIES;
+     this._data[$idx + Cell.CONTENT] = codePoint | (width << Content.WIDTH_SHIFT);
+@@ -261,6 +288,9 @@ export class BufferLine implements IBufferLine {
+    * by the previous `setDataFromCodePoint` call, we can omit it here.
+    */
+   public addCodepointToCell(index: number, codePoint: number, width: number): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     let content = this._data[index * Constants.CELL_INDICIES + Cell.CONTENT];
+     if (content & Content.IS_COMBINED_MASK) {
+@@ -288,6 +318,9 @@ export class BufferLine implements IBufferLine {
+   }
+ 
+   public insertCells(pos: number, n: number, fillCellData: ICellData): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     pos %= this.length;
+ 
+@@ -309,6 +342,8 @@ export class BufferLine implements IBufferLine {
+       }
+     }
+ 
++    $workCell.combinedData = '';
++
+     // handle fullwidth at line end: reset last cell if it is first cell of a wide char
+     if (this.getWidth(this.length - 1) === 2) {
+       this.setCellFromCodepoint(this.length - 1, 0, 1, fillCellData);
+@@ -316,6 +351,9 @@ export class BufferLine implements IBufferLine {
+   }
+ 
+   public deleteCells(pos: number, n: number, fillCellData: ICellData): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     pos %= this.length;
+     if (n < this.length - pos) {
+@@ -331,6 +369,8 @@ export class BufferLine implements IBufferLine {
+       }
+     }
+ 
++    $workCell.combinedData = '';
++
+     // handle fullwidth at pos:
+     // - reset pos-1 if wide char
+     // - reset pos if width==0 (previous second cell of a wide char)
+@@ -343,6 +383,9 @@ export class BufferLine implements IBufferLine {
+   }
+ 
+   public replaceCells(start: number, end: number, fillCellData: ICellData, respectProtect: boolean = false): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     // full branching on respectProtect==true, hopefully getting fast JIT for standard case
+     if (respectProtect) {
+@@ -383,6 +426,9 @@ export class BufferLine implements IBufferLine {
+    * excess memory (true after shrinking > Constants.CLEANUP_THRESHOLD).
+    */
+   public resize(cols: number, fillCellData: ICellData): boolean {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     if (cols === this.length) {
+       return this._data.length * 4 * Constants.CLEANUP_THRESHOLD < this._data.buffer.byteLength;
+@@ -443,6 +489,9 @@ export class BufferLine implements IBufferLine {
+ 
+   /** fill a line with fillCharData */
+   public fill(fillCellData: ICellData, respectProtect: boolean = false): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     // full branching on respectProtect==true, hopefully getting fast JIT for standard case
+     if (respectProtect) {
+@@ -515,6 +564,9 @@ export class BufferLine implements IBufferLine {
+   }
+ 
+   public copyCellsFrom(src: BufferLine, srcCol: number, destCol: number, length: number, applyInReverse: boolean): void {
++    if (this._cacheValid) {
++      this._cache = '';
++    }
+     this._cacheValid = false;
+     const srcData = src._data;
+     if (applyInReverse) {
+@@ -596,9 +648,17 @@ export class BufferLine implements IBufferLine {
+     const srcStart = srcCol * Constants.CELL_INDICIES;
+     if (src._data[srcStart + Cell.CONTENT] & Content.IS_COMBINED_MASK) {
+       this._combined[destCol] = src._combined[srcCol];
++    } else {
++      if (this._combined[destCol] !== undefined) {
++        delete this._combined[destCol];
++      }
+     }
+     if (src._data[srcStart + Cell.BG] & BgFlags.HAS_EXTENDED) {
+       this._extendedAttrs[destCol] = src._extendedAttrs[srcCol];
++    } else {
++      if (this._extendedAttrs[destCol] !== undefined) {
++        delete this._extendedAttrs[destCol];
++      }
+     }
+   }
+ 

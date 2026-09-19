@@ -8,7 +8,7 @@ import { regenerateXtermPatches } from './regenerate-xterm-patches.mjs'
 import { splitPatchEntries } from './xterm-patch-text.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
-const CONTRAST_SOURCE = 'src/browser/ColorContrastCache.ts'
+const MOBILE_SOURCES = ['src/browser/ColorContrastCache.ts', 'src/common/buffer/BufferLine.ts']
 
 export function mobileXtermPatchProfile(manifest, mobilePackage, desktopSource) {
   const coreEntries = manifest.packages.filter((entry) => entry.name === '@xterm/xterm')
@@ -19,13 +19,17 @@ export function mobileXtermPatchProfile(manifest, mobilePackage, desktopSource) 
   if (mobilePackage.dependencies['@xterm/xterm'] !== core.version) {
     throw new Error(`Mobile @xterm/xterm must pin the upstream manifest version ${core.version}`)
   }
-  const entries = splitPatchEntries(desktopSource).filter((entry) => entry.path === CONTRAST_SOURCE)
-  if (entries.length !== 1) {
-    throw new Error(`Expected exactly one ${CONTRAST_SOURCE} source stanza`)
+  const entries = splitPatchEntries(desktopSource).filter((entry) =>
+    MOBILE_SOURCES.includes(entry.path)
+  )
+  for (const source of MOBILE_SOURCES) {
+    if (entries.filter((entry) => entry.path === source).length !== 1) {
+      throw new Error(`Expected exactly one ${source} source stanza`)
+    }
   }
   const filename = `@xterm__xterm@${core.version}`
   return {
-    source: entries[0].text,
+    source: entries.map((entry) => entry.text).join(''),
     manifest: {
       ...manifest,
       packages: [
@@ -61,9 +65,7 @@ export function regenerateMobileXtermPatch({
     mkdirSync(path.dirname(sourcePath), { recursive: true })
     writeFileSync(sourcePath, profile.source)
   } else if (readFileSync(sourcePath, 'utf8') !== profile.source) {
-    throw new Error(
-      'Mobile contrast source drifted; run regenerate-xterm-patches-mobile.mjs --write'
-    )
+    throw new Error('Mobile xterm source drifted; run regenerate-xterm-patches-mobile.mjs --write')
   }
   regenerateXtermPatches({
     mode,

@@ -27,7 +27,7 @@ afterEach(async () => {
 })
 
 describe('mobile xterm patch generation', () => {
-  it('reuses the pinned core build while selecting only the contrast source', () => {
+  it('reuses the pinned core build while selecting only mobile memory fixes', () => {
     expect(profile.manifest.upstream).toEqual(manifest.upstream)
     expect(profile.manifest.toolchain).toEqual(manifest.toolchain)
     expect(profile.manifest.packages).toHaveLength(1)
@@ -38,10 +38,13 @@ describe('mobile xterm patch generation', () => {
       generatedPaths: desktopCore.generatedPaths
     })
     expect(splitPatchEntries(profile.source).map((entry) => entry.path)).toEqual([
-      'src/browser/ColorContrastCache.ts'
+      'src/browser/ColorContrastCache.ts',
+      'src/common/buffer/BufferLine.ts'
     ])
     expect(profile.source).toBe(
-      selectPatchEntries(desktopSource, (file) => file.endsWith('/ColorContrastCache.ts'))
+      selectPatchEntries(desktopSource, (file) =>
+        ['/ColorContrastCache.ts', '/BufferLine.ts'].some((suffix) => file.endsWith(suffix))
+      )
     )
     expect(profile.manifest.packages[0].sourcePatch).toMatch(/^mobile\/patches\/xterm-src\//)
     expect(profile.manifest.packages[0].patch).toMatch(/^mobile\/patches\//)
@@ -87,7 +90,7 @@ describe('mobile xterm patch generation', () => {
     expect(await readFile(path.join(repoRoot, 'mobile', 'pnpm-lock.yaml'), 'utf8')).toBe(lockfile)
   })
 
-  it('ships only the contrast source and all four rebuilt bundle/map files', async () => {
+  it('ships only mobile memory fixes and all four rebuilt bundle/map files', async () => {
     const core = profile.manifest.packages[0]
     const source = await readProject(core.sourcePatch)
     const patch = await readProject(core.patch)
@@ -102,7 +105,8 @@ describe('mobile xterm patch generation', () => {
       'lib/xterm.js.map',
       'lib/xterm.mjs',
       'lib/xterm.mjs.map',
-      'src/browser/ColorContrastCache.ts'
+      'src/browser/ColorContrastCache.ts',
+      'src/common/buffer/BufferLine.ts'
     ])
     expect(patch).not.toContain('xterm-composition-transaction-accepted')
     const lockfile = await readProject('mobile/pnpm-lock.yaml')

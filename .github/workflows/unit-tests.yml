@@ -61,6 +61,7 @@ jobs:
             --exclude=src/main/shell-startup-feature-channel.test.ts \
             --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
             --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
+            --exclude=src/main/zsh-startup-hook-pty-harness.test.ts \
             --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \

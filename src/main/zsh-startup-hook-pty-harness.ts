@@ -107,6 +107,10 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     }
   })
 
+  let resolveFirstData: (() => void) | undefined
+  const firstData = new Promise<void>((resolve) => {
+    resolveFirstData = resolve
+  })
   let output = ''
   let answeredCompinit = false
   let lastDataAt = Date.now()
@@ -115,6 +119,8 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     resolveReady = resolve
   })
   proc.onData((data) => {
+    resolveFirstData?.()
+    resolveFirstData = undefined
     output += data
     lastDataAt = Date.now()
     // Why this is answered rather than configured away: a host whose global
@@ -169,6 +175,8 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
   }
 
   try {
+    // Silence before the first startup output is not a ready prompt.
+    await Promise.race([firstData, exited, timedOut])
     await Promise.race([waitForQuiet(250), exited, timedOut])
     if (hasExited) {
       return { output, values: parseValues(resultPath), exitedBeforePrompt: true }

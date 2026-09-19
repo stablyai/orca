@@ -487,7 +487,25 @@ describe('committed xterm patch artifacts', () => {
     for (const packageEntry of manifest.packages) {
       const patch = await readFile(path.join(REPO_ROOT, packageEntry.patch), 'utf8')
       const source = await readFile(path.join(REPO_ROOT, packageEntry.sourcePatch), 'utf8')
-      expect(sourceHunks(source)).toBe(sourceHunks(patch))
+      if (packageEntry.sourceMaps) {
+        expect(sourceHunks(patch)).toBe('')
+        for (const [mapFile, prefix] of Object.entries(packageEntry.sourceMaps)) {
+          const stanza = selectPatchEntries(patch, (file) => file === mapFile)
+          const postimage = stanza
+            .split('\n')
+            .filter(
+              (line) => line.startsWith(' ') || (line.startsWith('+') && !line.startsWith('+++'))
+            )
+            .map((line) => line.slice(1))
+            .join('\n')
+          const map = JSON.parse(postimage)
+          for (const entry of splitPatchEntries(source)) {
+            expect(map.sources).toContain(prefix + entry.path)
+          }
+        }
+      } else {
+        expect(sourceHunks(source)).toBe(sourceHunks(patch))
+      }
       expect(generatedHunks(patch, packageEntry.generatedPaths)).not.toBe('')
     }
   })
