@@ -8,6 +8,11 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  claimSpatialPaneFocusOrWorktreeHistory,
+  isSpatialFocusDirection
+} from '@/lib/pane-manager/pane-spatial-focus'
+import { useAppStore } from '@/store'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
@@ -133,6 +138,23 @@ export function dispatchTerminalShortcutAction(
     return
   }
   if (action.type === 'focusPane') {
+    if (isSpatialFocusDirection(action.direction)) {
+      if (expandedPaneIdRef.current !== null) {
+        setExpandedPane(null)
+        restoreExpandedLayout()
+        refreshPaneSizes(true)
+        persistLayoutSnapshot()
+      }
+      claimSpatialPaneFocusOrWorktreeHistory(event, manager, action.direction, (historyDirection) => {
+        const store = useAppStore.getState()
+        if (historyDirection === 'back') {
+          store.goBackWorktree()
+        } else {
+          store.goForwardWorktree()
+        }
+      })
+      return
+    }
     const panes = manager.getPanes()
     if (panes.length < 2) {
       return
