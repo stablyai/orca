@@ -56,6 +56,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cc': 'cpp',
   '.cxx': 'cpp',
   '.hpp': 'cpp',
+  '.cu': 'cuda',
+  '.cuh': 'cuda',
   '.cs': 'csharp',
   '.rb': 'ruby',
   '.php': 'php',

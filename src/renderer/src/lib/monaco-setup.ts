@@ -8,6 +8,7 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
+import { registerCudaLanguage } from './monaco-languages/register-cuda'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
@@ -78,6 +79,7 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
+registerCudaLanguage(monaco)
 registerNimLanguage(monaco)
 registerJsonlLanguage(monaco)
 registerShellMarkdownAliases(monaco)

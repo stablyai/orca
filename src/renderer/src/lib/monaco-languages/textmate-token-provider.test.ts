@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
+import { loadCudaTextMateGrammar } from './register-cuda'
 import { createTextMateTokensProvider } from './textmate-token-provider'
 
 const require = createRequire(import.meta.url)
@@ -54,5 +55,37 @@ describe('createTextMateTokensProvider', () => {
         loadOniguruma: loadNodeOniguruma
       })
     ).rejects.toThrow('No TextMate grammar registered for scope source.unknown')
+  })
+
+  // Why: register-cuda.test.ts only asserts loadCudaTextMateGrammar returns the
+  // right object per scope. Tokenizing through the real registry here pins the
+  // "include": "source.cpp" fallback that loader wires up — if that stopped
+  // resolving, most of a .cu file would silently lose highlighting.
+  it('tokenizes CUDA qualifiers, built-ins, and kernel launches, falling back to C++ for comments', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.cuda-cpp',
+      loadGrammar: loadCudaTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+
+    let state = provider.getInitialState()
+    const qualifierLine = provider.tokenize('__global__ void kernel(int *a) {', state)
+    state = qualifierLine.endState
+    expect(qualifierLine.tokens.map((token) => token.scopes)).toContain(
+      'keyword.function.qualifier.cuda-cpp'
+    )
+
+    const builtinLine = provider.tokenize('  int i = blockIdx.x;', state)
+    state = builtinLine.endState
+    expect(builtinLine.tokens.map((token) => token.scopes)).toContain('variable.language.cuda-cpp')
+
+    const launchLine = provider.tokenize('kernel<<<grid, block>>>(a);', state)
+    state = launchLine.endState
+    expect(launchLine.tokens.map((token) => token.scopes)).toContain('meta.kernel-call.cuda-cpp')
+
+    const commentLine = provider.tokenize('// fallback comment', state)
+    expect(commentLine.tokens.map((token) => token.scopes)).toContain(
+      'comment.line.double-slash.cpp'
+    )
   })
 })
