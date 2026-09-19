@@ -4,7 +4,11 @@ import {
   BridgeNativeVerbRefusedError,
   BridgeReplyUndeliverableError
 } from './bridge-host-errors'
-import { isBridgeNativeMethod, readBridgeNativeVerbCall } from './bridge/bridge-native-verbs'
+import {
+  BRIDGE_NATIVE_VERBS,
+  isBridgeNativeMethod,
+  readBridgeNativeVerbCall
+} from './bridge/bridge-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { BRIDGE_MAX_SUBSCRIPTIONS, readBridgeExternalLinkUrl } from './bridge/bridge-caps'
@@ -170,8 +174,15 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (!call.ok) {
       throw new BridgeNativeVerbRefusedError(call.detail)
     }
-    const result = await options.serveNativeVerb(call.verb, call.params)
-    return { id, ok: true, result }
+    const answered = await options.serveNativeVerb(call.verb, call.params)
+    // The table declares what a verb answers, and without this that claim was decoration: a
+    // handler could hand the page any shape and the page's own parse would be the first to notice,
+    // halfway through a screen.
+    const result = BRIDGE_NATIVE_VERBS[call.verb].result.safeParse(answered)
+    if (!result.success) {
+      throw new BridgeNativeVerbRefusedError(`${call.verb} answered a result it does not declare`)
+    }
+    return { id, ok: true, result: result.data }
   }
 
   const requests = new BridgeHostRequests({

@@ -114,6 +114,18 @@ describe('a native method the page asks for', () => {
     expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
   })
 
+  it('refuses a result the verb does not declare, rather than passing it to the page', async () => {
+    // The table says what a verb answers; without this the claim was decoration and a handler
+    // could hand the page any shape at all.
+    const bridge = harness({ serveNativeVerb: () => Promise.resolve({ nonsense: 1 }) })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(reachedTheDesktop(bridge)).toEqual([])
+    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+    expect(replyPayload(bridge)).toBeNull()
+  })
+
   it('turns a handler that rejects into an error frame, still forwarding nothing', async () => {
     const bridge = harness({
       serveNativeVerb: () => Promise.reject(new Error('the pasteboard is unavailable'))
