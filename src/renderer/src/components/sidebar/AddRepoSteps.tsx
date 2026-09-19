@@ -9,6 +9,7 @@ import {
   withServerSshStates,
   type RemoteRepoTarget
 } from './add-repo-server-ssh-targets'
+import { isNonGitRepoRejection } from '../../../../shared/non-git-repo-rejection'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -155,7 +156,7 @@ export function useRemoteRepo(
       await onGitRepoReady(repo.id, ownerOptions.executionHostId)
     } catch (err) {
       const message = extractIpcErrorMessage(err, String(err))
-      if (message.includes('Not a valid git repository')) {
+      if (isNonGitRepoRejection(message)) {
         // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
         // silently adding as a folder.

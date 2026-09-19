@@ -53,14 +53,14 @@ async function rejectNextCallWith(code: string, message: string): Promise<void> 
   )
 }
 
+function pathStatusFixture(status: { path: string; exists: boolean; reason?: string }) {
+  return okFixture('req_path_status', { status })
+}
+
 function folderRepoFixture() {
   return okFixture('req_repo_add', {
     repo: { id: 'repo-1', path: FOLDER_PATH, displayName: 'notes', kind: 'folder' }
   })
-}
-
-function pathStatusFixture(status: { path: string; exists: boolean; reason?: string }) {
-  return okFixture('req_path_status', { status })
 }
 
 describe('orca repo add project kind', () => {
@@ -111,7 +111,7 @@ describe('orca repo add project kind', () => {
     expect(callMock).toHaveBeenCalledTimes(2)
     expect(callMock).not.toHaveBeenCalledWith('repo.add', { path: FOLDER_PATH, kind: 'folder' })
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'reports no directory there'
+      'the host reports no directory there'
     )
     expect(process.exitCode).toBe(1)
 
@@ -130,6 +130,25 @@ describe('orca repo add project kind', () => {
 
     expect(callMock).toHaveBeenLastCalledWith('repo.add', { path: FOLDER_PATH, kind: 'folder' })
   })
+
+  // `unavailable` and `ambiguous-connection` say the host could not look, not that the directory is
+  // absent, and only a positive refutation is allowed to cancel an add the caller asked for.
+  it.each(['unavailable', 'ambiguous-connection'])(
+    'still registers the folder when the probe answers %s',
+    async (reason) => {
+      await rejectNextCallWith('runtime_error', `Not a valid git repository: ${FOLDER_PATH}`)
+      queueFixtures(
+        callMock,
+        pathStatusFixture({ path: FOLDER_PATH, exists: false, reason }),
+        folderRepoFixture()
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['repo', 'add', '--path', FOLDER_PATH, '--json'], '/tmp')
+
+      expect(callMock).toHaveBeenLastCalledWith('repo.add', { path: FOLDER_PATH, kind: 'folder' })
+    }
+  )
 
   it('keeps --kind git a hard requirement instead of downgrading the project', async () => {
     await rejectNextCallWith('runtime_error', `Not a valid git repository: ${FOLDER_PATH}`)
@@ -177,7 +196,7 @@ describe('orca repo add project kind', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'reports no directory there'
+      'the host reports no directory there'
     )
     expect(process.exitCode).toBe(1)
 
