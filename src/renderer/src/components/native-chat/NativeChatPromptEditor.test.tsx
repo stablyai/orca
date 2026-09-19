@@ -7,7 +7,10 @@ import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 function setup(value = '') {
   const inputRef = createRef<NativeChatComposerInput>()
@@ -141,5 +144,21 @@ describe('native chat skill editor', () => {
     })
     expect(input.value).toBe('$review\nhello')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
+  })
+
+  it('reuses the document mapping while moving the caret through a large unchanged draft', () => {
+    const draft = 'A long pasted prompt. '.repeat(2500)
+    const { input, editor } = setup(draft)
+    expect(input.value).toBe(draft)
+    const traversal = vi.spyOn(editor.state.doc, 'forEach')
+
+    for (let index = 0; index < 100; index++) {
+      act(() => input.setSelectionRange(index, index + 1))
+      expect(input.value).toBe(draft)
+      expect(input.selectionStart).toBe(index)
+      expect(input.selectionEnd).toBe(index + 1)
+    }
+
+    expect(traversal.mock.calls.length).toBe(0)
   })
 })
