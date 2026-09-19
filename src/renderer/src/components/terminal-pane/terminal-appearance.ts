@@ -248,6 +248,7 @@ export function applyTerminalAppearance(
     dividerThicknessPx: paneStyles.dividerThicknessPx,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
     paddingX: settings.terminalPaddingX,
-    paddingY: settings.terminalPaddingY
+    paddingY: settings.terminalPaddingY,
+    singlePaneMaxWidth: settings.terminalSinglePaneMaxWidth
   })
 }

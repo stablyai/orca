@@ -16,6 +16,12 @@ describe('terminal container geometry', () => {
     )
   })
 
+  it('caps and centers an unsplit tab, and only while the pane is the only child', () => {
+    expect(terminalCss).toMatch(
+      /\[data-retained-pane-host\] \[data-terminal-tab-id\]:not\(\[data-terminal-chat-view\]\) > \.pane:only-child\s*{[^}]*max-width:\s*var\(--pane-single-max-width, 1100px\);[^}]*margin-inline:\s*auto;[^}]*border-inline:\s*var\(--pane-single-edge-width, 1px\)/s
+    )
+  })
+
   it('bounds cursor-blink repaints to the terminal surface (#10481)', () => {
     expect(terminalCss).toMatch(/\.xterm-container\s*{[^}]*contain:\s*paint;/s)
   })
