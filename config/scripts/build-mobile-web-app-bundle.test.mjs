@@ -4,6 +4,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_APP_ROOT_RESET,
   MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
   buildMobileWebAppBundle,
@@ -409,6 +410,23 @@ describeBundling('the app bundle', () => {
       expect(html).toContain('<script type="module" src="/assets/')
       const entry = html.match(/src="\/(assets\/[^"]+)"/)?.[1]
       expect(manifest.assets.map((asset) => asset.path)).toContain(entry)
+    })
+  }, 120_000)
+
+  it('carries the root reset, so the mounted tree has a height to be 1 of', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'root-reset')
+      await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
+      const declared = MOBILE_WEB_APP_ROOT_RESET.replace(/\s+/g, '')
+      // All three, because the chain is only as definite as its weakest link: a height on #root
+      // alone resolves against a body that has none, and percent of auto is auto.
+      expect(declared).toContain('html,body{height:100%')
+      expect(declared).toContain('#root{display:flex;height:100%')
+      // In the document itself, not a linked asset: the CSP that allows it is the one already
+      // relaxed for react-native-web's runtime sheet.
+      expect(html).not.toContain('<link rel="stylesheet"')
     })
   }, 120_000)
 

@@ -79,6 +79,24 @@ export const MOBILE_WEB_APP_SHIMS = [
   }
 ]
 
+/**
+ * react-native-web's own root reset, the bytes Expo's web template ships
+ * (`@expo/cli/static/template/index.html`), which nothing generates for a document built here.
+ *
+ * Every box below the mount is `flex: 1` against its parent, so with no definite height on all
+ * three the root measures 0 and the collapse is silent: the screen still lays out, still reaches
+ * the accessibility tree at the right offsets, and never paints or hit-tests below the header.
+ * A phone showed the header over a blank list with every row readable to VoiceOver and no row
+ * tappable (lane C1.7, both platforms).
+ *
+ * Inline, because the shell's CSP already allows `style-src 'unsafe-inline'` for the sheet
+ * react-native-web injects at runtime; a linked asset would need a second round trip before the
+ * first frame and would paint the collapsed layout until it landed.
+ */
+export const MOBILE_WEB_APP_ROOT_RESET =
+  '<style id="expo-reset">html,body{height:100%;margin:0}body{overflow:hidden}' +
+  '#root{display:flex;height:100%;flex:1}</style>'
+
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
   'src',
@@ -403,7 +421,7 @@ export async function buildMobileWebAppBundle({
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
-    '<title>Orca</title>\n</head>\n<body>\n<div id="root"></div>\n' +
+    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')
   const indexAsset = {
