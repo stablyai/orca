@@ -52,6 +52,64 @@ function isWriteTarget(node: ts.PropertyAccessExpression): boolean {
   return ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)
 }
 
+/**
+ * What each local name in this file means, for the hooks above, resolved through its imports.
+ *
+ * Matching on the callee's spelling would both miss and invent: `useAnimatedStyle as useAS` and
+ * `Reanimated.useAnimatedStyle` are the same hook under another name, and a local helper that
+ * happens to be called `useDerivedValue` is not this hook at all. Returns the local identifiers
+ * bound to each hook, plus the namespace names a member access has to go through.
+ */
+function reanimatedBindings(sourceFile: ts.SourceFile): {
+  byLocalName: Map<string, string>
+  namespaces: Set<string>
+} {
+  const byLocalName = new Map<string, string>()
+  const namespaces = new Set<string>()
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react-native-reanimated'
+    ) {
+      continue
+    }
+    const bindings = statement.importClause?.namedBindings
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text)
+    }
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        const imported = element.propertyName?.text ?? element.name.text
+        if (MAPPER_HOOKS.has(imported)) {
+          byLocalName.set(element.name.text, imported)
+        }
+      }
+    }
+    // The default export is the `Animated` namespace object, which carries no hooks.
+  }
+  return { byLocalName, namespaces }
+}
+
+/** The hook this callee names, or null when it is not one of ours. */
+function resolveHook(
+  callee: ts.Expression,
+  bindings: ReturnType<typeof reanimatedBindings>
+): string | null {
+  if (ts.isIdentifier(callee)) {
+    return bindings.byLocalName.get(callee.text) ?? null
+  }
+  if (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    bindings.namespaces.has(callee.expression.text) &&
+    MAPPER_HOOKS.has(callee.name.text)
+  ) {
+    return callee.name.text
+  }
+  return null
+}
+
 /** Every `X` in an `X.value` read under this node, which is what the mapper has to listen to. */
 function sharedValuesRead(updater: ts.Node): Set<string> {
   const names = new Set<string>()
@@ -84,7 +142,7 @@ function namesListed(dependencies: ts.ArrayLiteralExpression): Set<string> {
  * the mapper never listens to. That updater then stops re-running when only that value changes,
  * which is the same freeze as having no array at all, in one prop instead of all of them.
  */
-function callsMissingDependencies(path: string, source: string): string[] {
+function callsMissingDependencies(path: string, source: string, found: string[] = []): string[] {
   const sourceFile = ts.createSourceFile(
     path,
     source,
@@ -92,17 +150,23 @@ function callsMissingDependencies(path: string, source: string): string[] {
     true,
     extname(path) === '.tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   )
+  const bindings = reanimatedBindings(sourceFile)
   const missing: string[] = []
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const name = node.expression.text
-      const hook = MAPPER_HOOKS.get(name)
-      if (hook) {
+    if (ts.isCallExpression(node)) {
+      const name = resolveHook(node.expression, bindings)
+      const hook = name === null ? undefined : MAPPER_HOOKS.get(name)
+      if (name !== null && hook) {
+        found.push(name)
         const dependencies = node.arguments[hook.dependencies]
         const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
         const where = `${relative(mobileDirectory, path)}:${String(line + 1)} ${name}`
-        if (!dependencies || !ts.isArrayLiteralExpression(dependencies)) {
+        if (!dependencies) {
           missing.push(where)
+        } else if (!ts.isArrayLiteralExpression(dependencies)) {
+          // An array built elsewhere counts as present: the hook only needs one to exist, and
+          // this file cannot see what a hoisted `const deps = [...]` holds. Completeness below
+          // therefore covers literal arrays only.
         } else {
           const listed = namesListed(dependencies)
           const read = hook.updaters.flatMap((index) => {
@@ -125,34 +189,41 @@ function callsMissingDependencies(path: string, source: string): string[] {
 
 describe('reanimated mapper hooks in the web bundle', () => {
   it('are all given a dependency array, because esbuild writes no worklet closure', () => {
+    const found: string[] = []
     const missing = scanned.flatMap((directory) =>
       sourceFiles(join(mobileDirectory, directory)).flatMap((path) =>
         path.endsWith('.test.ts') || path.endsWith('.test.tsx')
           ? []
-          : callsMissingDependencies(path, readFileSync(path, 'utf8'))
+          : callsMissingDependencies(path, readFileSync(path, 'utf8'), found)
       )
     )
+    // The precondition the empty list above rests on. Binding resolution means a broken resolver
+    // reports nothing at all, which would read exactly like a clean tree.
+    expect(found.length).toBeGreaterThanOrEqual(5)
     expect(missing).toEqual([])
   })
+
+  const FROM = "import { useAnimatedStyle, useAnimatedReaction } from 'react-native-reanimated'\n"
 
   it('finds a call with no dependency array, which is what makes the census above real', () => {
     const found = callsMissingDependencies(
       'fixture.tsx',
-      'const style = useAnimatedStyle(() => ({ opacity: progress.value }))\n'
+      `${FROM}const s = useAnimatedStyle(() => ({ opacity: progress.value }))\n`
     )
-    expect(found).toEqual(['fixture.tsx:1 useAnimatedStyle'])
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle'])
   })
 
   it('reads useAnimatedReaction dependencies from its third argument, not its second', () => {
-    const missing = callsMissingDependencies(
-      'fixture.tsx',
-      'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v })\n'
-    )
-    expect(missing).toEqual(['fixture.tsx:1 useAnimatedReaction'])
     expect(
       callsMissingDependencies(
         'fixture.tsx',
-        'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n'
+        `${FROM}useAnimatedReaction(() => progress.value, (v) => { opacity.value = v })\n`
+      )
+    ).toEqual(['fixture.tsx:2 useAnimatedReaction'])
+    expect(
+      callsMissingDependencies(
+        'fixture.tsx',
+        `${FROM}useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n`
       )
     ).toEqual([])
   })
@@ -160,15 +231,15 @@ describe('reanimated mapper hooks in the web bundle', () => {
   it('names a shared value the updater reads but the array leaves out', () => {
     const found = callsMissingDependencies(
       'fixture.tsx',
-      'const s = useAnimatedStyle(() => ({ opacity: progress.value * fade.value }), [progress])\n'
+      `${FROM}const s = useAnimatedStyle(() => ({ opacity: progress.value * fade.value }), [progress])\n`
     )
-    expect(found).toEqual(['fixture.tsx:1 useAnimatedStyle omits fade'])
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle omits fade'])
   })
 
   it('does not ask for a value the updater only writes, which is an output', () => {
     const found = callsMissingDependencies(
       'fixture.tsx',
-      'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n'
+      `${FROM}useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n`
     )
     expect(found).toEqual([])
   })
@@ -176,15 +247,51 @@ describe('reanimated mapper hooks in the web bundle', () => {
   it('still asks for one that is read and written', () => {
     const found = callsMissingDependencies(
       'fixture.tsx',
-      'const s = useAnimatedStyle(() => { offset.value = offset.value + 1; return {} }, [])\n'
+      `${FROM}const s = useAnimatedStyle(() => { offset.value = offset.value + 1; return {} }, [])\n`
     )
-    expect(found).toEqual(['fixture.tsx:1 useAnimatedStyle omits offset'])
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle omits offset'])
   })
 
   it('accepts one that has a dependency array', () => {
     const found = callsMissingDependencies(
       'fixture.tsx',
-      'const style = useAnimatedStyle(() => ({ opacity: progress.value }), [progress])\n'
+      `${FROM}const s = useAnimatedStyle(() => ({ opacity: progress.value }), [progress])\n`
+    )
+    expect(found).toEqual([])
+  })
+
+  it('sees the hook through an alias, which spelling alone would miss', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      "import { useAnimatedStyle as useAS } from 'react-native-reanimated'\n" +
+        'const s = useAS(() => ({ opacity: progress.value }))\n'
+    )
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle'])
+  })
+
+  it('sees it through a namespace import too', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      "import * as Reanimated from 'react-native-reanimated'\n" +
+        'const s = Reanimated.useAnimatedStyle(() => ({ opacity: progress.value }))\n'
+    )
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle'])
+  })
+
+  it('leaves a local function of the same name alone', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      'function useDerivedValue(fn: () => number) { return fn() }\n' +
+        'const v = useDerivedValue(() => progress.value)\n'
+    )
+    expect(found).toEqual([])
+  })
+
+  it('takes an array built elsewhere as present rather than missing', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      `${FROM}const deps = [progress]\n` +
+        'const s = useAnimatedStyle(() => ({ opacity: progress.value }), deps)\n'
     )
     expect(found).toEqual([])
   })
