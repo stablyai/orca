@@ -49,7 +49,7 @@ export function useNativeVerbs(): NativeVerbs {
       if (!has(verb)) {
         throw new NativeVerbUngrantedError(verb)
       }
-      const reply = await client.sendRequest(verb, params)
+      const reply = await client.callNativeVerb(verb, params)
       if (!reply.ok) {
         throw new Error(reply.error.message)
       }

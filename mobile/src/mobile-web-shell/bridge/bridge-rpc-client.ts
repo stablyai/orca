@@ -70,6 +70,14 @@ export type BridgeRpcClient = RpcClient & {
    * a throw inside a tap handler is not that.
    */
   notifyExternalLink: (url: string) => boolean
+  /**
+   * Calls one shell-answered verb. It rides the same `request` frame, id space and in-flight cap
+   * as a desktop method; the `native.` prefix is what makes the host answer it instead of
+   * forwarding. It lives here rather than in a screen because that is what keeps the raw request
+   * port inside the module that owns it — a native verb is bridge machinery, not an RPC to a
+   * runtime, so it has no `RpcOperation` and no entry in the desktop's method catalog.
+   */
+  callNativeVerb: (verb: string, params: unknown) => Promise<RpcResponse>
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -316,6 +324,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyNavigate: notifications.notifyNavigate,
     notifyNavigateBack: notifications.notifyNavigateBack,
     notifyExternalLink: notifications.notifyExternalLink,
+    callNativeVerb: (verb, params) => sendRequest(verb, params),
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyPageFault: notifications.notifyPageFault,
     close,
