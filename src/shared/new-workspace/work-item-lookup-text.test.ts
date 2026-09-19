@@ -12,3 +12,16 @@ describe('isWorkItemLookupText Jira URLs', () => {
     expect(isWorkItemLookupText('https://jira.example.com/browse/ORCA-123/extra')).toBe(false)
   })
 })
+
+describe('isWorkItemLookupText bare numbers', () => {
+  it('treats an all-digits name as a deliberate name, not a lookup reference', () => {
+    expect(isWorkItemLookupText('002')).toBe(false)
+    expect(isWorkItemLookupText('347')).toBe(false)
+    expect(isWorkItemLookupText('7')).toBe(false)
+  })
+
+  it('still treats hash-prefixed numbers and issue/PR URLs as lookup references', () => {
+    expect(isWorkItemLookupText('#4900')).toBe(true)
+    expect(isWorkItemLookupText('https://github.com/stablyai/orca/issues/2')).toBe(true)
+  })
+})

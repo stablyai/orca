@@ -39,4 +39,9 @@ describe('isWorkItemLookupText', () => {
     expect(isWorkItemLookupText('https://example.com/some/page')).toBe(false)
     expect(isWorkItemLookupText('https://linear.app/acme/project/mobile')).toBe(false)
   })
+
+  it('rejects an all-digits name so a bare ticket number can be a deliberate name', () => {
+    expect(isWorkItemLookupText('002')).toBe(false)
+    expect(isWorkItemLookupText('347')).toBe(false)
+  })
 })

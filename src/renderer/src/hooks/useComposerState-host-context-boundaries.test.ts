@@ -123,6 +123,11 @@ describe('useComposerState host-context boundaries', () => {
     ).toBe(false)
   })
 
+  it('treats an all-digits typed name as user-authored, not a lookup reference', () => {
+    expect(isExplicitWorkspaceNameInput({ name: '002', lastAutoName: '' })).toBe(true)
+    expect(isExplicitWorkspaceNameInput({ name: '347', lastAutoName: '' })).toBe(true)
+  })
+
   it('does not auto-own arbitrary prefilled names', () => {
     expect(
       getInitialAutoManagedWorkspaceName({
