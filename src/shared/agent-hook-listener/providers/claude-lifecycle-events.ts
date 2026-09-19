@@ -16,7 +16,7 @@ import {
 } from './claude-roster-state'
 import { buildClaudeStatusPayload } from './claude-status-build'
 
-/** SubagentStart/Stop/TeammateIdle update the roster and re-emit the lead's last known state with the fresh child list, so the sidebar reflects spawn/finish even when a background child outlives the lead turn with no other hook traffic. */
+/** SubagentStart/Stop/TeammateIdle update the roster and reconcile the cached lead with the fresh child list, so the sidebar reflects spawn/finish and the parent's resumed work even when no other hook fires. */
 export function normalizeClaudeSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop' | 'TeammateIdle',
@@ -106,7 +106,7 @@ export function normalizeClaudeSubagentLifecycleEvent(
     endedRuntimeChildWork
   })
 }
-/** Re-emit the cached lead state without touching its tool/prompt caches; child churn and parallel completions must not dismiss live cards. */
+/** Reconcile the cached lead without touching its tool/prompt caches; child churn and parallel completions must not dismiss live cards. */
 export function buildClaudeCachedLeadStatusPayload(
   state: HookListenerState,
   eventName: unknown,
@@ -120,6 +120,11 @@ export function buildClaudeCachedLeadStatusPayload(
 ): ParsedAgentStatusPayload | null {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   let leadState = lead?.state
+  if (evidence.endedRuntimeChildWork && leadState === 'done' && lead?.interrupted !== true) {
+    // Why: Claude resumes the parent after a current-runtime child ends, often without another hook until its next tool. Keep the pane live through that silent generation window.
+    leadState = 'working'
+    state.claudeLeadStateByPaneKey.set(paneKey, { ...lead, state: leadState })
+  }
   if (!leadState) {
     if (evidence.workingChildEvidence || evidence.endedRuntimeChildWork) {
       // Why: ending a current-runtime child wakes its parent; only a cached lead boundary can prove the whole pane completed.
@@ -138,7 +143,7 @@ export function buildClaudeCachedLeadStatusPayload(
     }),
     updateToolSnapshot: false,
     interrupted: lead?.interrupted,
-    // Why: draining the last background child is this turn's all-clear; the stamp lets a consumer pair it with the announcement already sent.
+    // Why: lifecycle updates retain the lead boundary's completion identity even when a current child ending wakes the parent.
     turnCompletedAt: lead?.turnCompletedAt
   })
 }

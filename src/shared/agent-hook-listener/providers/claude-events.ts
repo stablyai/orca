@@ -184,7 +184,7 @@ export function normalizeClaudeEvent(
       })
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
-    // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
+    // Restore the stashed lead state, not this child's `working`; the child's later lifecycle event decides whether a finished parent resumes.
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
@@ -216,7 +216,7 @@ export function normalizeClaudeEvent(
       )
     }
   }
-  // Why: a child-induced wait displaces the lead state; stash it so clearing restores reality (lead may be done). A 2nd child wait carries the ORIGINAL stash, not the intermediate waiting state.
+  // Why: a child-induced wait displaces the lead state; stash it so clearing restores reality (lead may be done). A second child wait carries the original stash, not the intermediate waiting state.
   const stateBeforeWait =
     isWaitingInducing && eventAgentId && previousLead
       ? previousLead.state === 'waiting'
