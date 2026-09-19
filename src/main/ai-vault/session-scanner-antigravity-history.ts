@@ -28,7 +28,10 @@ type AntigravityHistoryEntry = {
   workspace: string
 }
 
-type AntigravityHistoryIndex = Map<string, AntigravityHistoryEntry[]>
+type AntigravityHistoryIndex = {
+  byConversationId: Map<string, AntigravityHistoryEntry>
+  byDisplay: Map<string, AntigravityHistoryEntry[]>
+}
 
 export type AntigravityWorkspaceResolver = {
   enrich(session: AiVaultSession, historyPath: string): Promise<AiVaultSession>
@@ -67,18 +70,31 @@ export function createAntigravityWorkspaceResolver(
 }
 
 function indexAntigravityHistory(content: string | null): AntigravityHistoryIndex {
-  const index: AntigravityHistoryIndex = new Map()
+  const index: AntigravityHistoryIndex = {
+    byConversationId: new Map(),
+    byDisplay: new Map()
+  }
   for (const line of content?.split(/\r?\n/) ?? []) {
     const record = parseJsonObject(line)
     const display = typeof record?.display === 'string' ? normalizeTitleText(record.display) : null
     const workspace = typeof record?.workspace === 'string' ? record.workspace.trim() : ''
+    const conversationId =
+      typeof record?.conversationId === 'string' ? record.conversationId.trim() : ''
     const entryTimestampMs = timestampMs(record?.timestamp)
-    if (!display || !workspace || !Number.isFinite(entryTimestampMs)) {
+    if (!workspace || !Number.isFinite(entryTimestampMs)) {
       continue
     }
-    const entries = index.get(display) ?? []
-    entries.push({ timestampMs: entryTimestampMs, workspace })
-    index.set(display, entries)
+    const entry = { timestampMs: entryTimestampMs, workspace }
+    const directEntry = index.byConversationId.get(conversationId)
+    if (conversationId && (!directEntry || entryTimestampMs < directEntry.timestampMs)) {
+      index.byConversationId.set(conversationId, entry)
+    }
+    if (!display) {
+      continue
+    }
+    const entries = index.byDisplay.get(display) ?? []
+    entries.push(entry)
+    index.byDisplay.set(display, entries)
   }
   return index
 }
@@ -87,6 +103,10 @@ function findAntigravityWorkspace(
   session: AiVaultSession,
   index: AntigravityHistoryIndex
 ): string | null {
+  const directMatch = index.byConversationId.get(session.sessionId)
+  if (directMatch) {
+    return directMatch.workspace
+  }
   // Why: truncated titles are not prompt identities; long worker prompts often
   // share the same 96-character prefix across unrelated workspaces.
   if (session.title.endsWith('...')) {
@@ -99,10 +119,10 @@ function findAntigravityWorkspace(
   if (!Number.isFinite(promptTimestampMs)) {
     return null
   }
-  const matches = (index.get(session.title) ?? []).filter(
+  const matches = (index.byDisplay.get(session.title) ?? []).filter(
     (entry) => Math.abs(entry.timestampMs - promptTimestampMs) <= HISTORY_MATCH_WINDOW_MS
   )
-  // Why: history rows have no conversation id. A unique prompt/time match is
-  // evidence for cwd; ambiguity must stay unknown instead of crossing projects.
+  // Why: legacy history rows have no conversation id. A unique prompt/time
+  // match is evidence for cwd; ambiguity must stay unknown instead of crossing projects.
   return matches.length === 1 ? (matches[0]?.workspace ?? null) : null
 }
