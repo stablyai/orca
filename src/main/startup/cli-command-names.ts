@@ -6,6 +6,7 @@ export const CLI_COMMAND_NAMES = [
   'artifacts',
   'automations',
   'back',
+  'bridge',
   'browser',
   'capture',
   'check',

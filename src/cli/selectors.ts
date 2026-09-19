@@ -12,6 +12,9 @@ import {
 import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { resolveTerminalTarget } from './terminal-target-selector'
+
+export { resolveTerminalTarget }
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
 
 export type BrowserCliTarget = {
@@ -211,7 +214,12 @@ export async function getTerminalHandle(
 ): Promise<string> {
   const explicit = getOptionalStringFlag(flags, 'terminal')
   if (explicit) {
-    return explicit
+    const isSpecialTarget = /^[@#]?\d+$/.test(explicit.trim()) || explicit.startsWith('@')
+    if (!isSpecialTarget) {
+      return explicit
+    }
+    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    return await resolveTerminalTarget(explicit, worktree, client)
   }
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', {
