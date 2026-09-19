@@ -18,9 +18,10 @@ import type {
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
-import type {
-  AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
+import {
+  AgentSessionPreDispatchRefusal,
+  type AgentSessionDispatchOutcome,
+  type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -92,6 +93,9 @@ async function dispatchSafely(
       ...(requestedAt === undefined ? {} : { requestedAt })
     })
   } catch (error) {
+    if (error instanceof AgentSessionPreDispatchRefusal) {
+      return { state: 'rejected', reason: error.reason }
+    }
     if (error instanceof AgentSessionPreDispatchError) {
       throw error
     }

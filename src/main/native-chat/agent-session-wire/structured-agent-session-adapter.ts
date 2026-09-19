@@ -43,6 +43,14 @@ export class AgentSessionAcquisitionRefusal extends Error {
   }
 }
 
+/** A dispatch was refused before the provider adapter was entered. */
+export class AgentSessionPreDispatchRefusal extends Error {
+  constructor(readonly reason: string) {
+    super(reason)
+    this.name = 'AgentSessionPreDispatchRefusal'
+  }
+}
+
 export class AgentSessionRewindRefusal extends AgentSessionAcquisitionRefusal {
   constructor(readonly rewindReason: AgentSessionRewindReason) {
     super(`agent_session_rewind:${rewindReason}`)

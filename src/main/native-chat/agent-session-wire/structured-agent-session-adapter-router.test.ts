@@ -4,7 +4,9 @@ import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+import { AgentSessionPreDispatchRefusal } from './structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
+import { DISPATCH_REJECTED_PROVIDER_NOT_OWNED } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 function claudeIdentity(sessionId: string): AgentSessionJournalIdentity {
   return {
@@ -56,6 +58,31 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
     await expect(router.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(false)
     expect(claude.releaseAcquisition).toHaveBeenCalledTimes(2)
     expect(codex.releaseAcquisition).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('StructuredAgentSessionAdapterRouter.dispatch', () => {
+  it('reports a typed pre-dispatch refusal when no live route exists', async () => {
+    const dispatch = vi.fn()
+    const claude = adapterOf(vi.fn(async () => true))
+    claude.dispatch = dispatch
+    const router = new StructuredAgentSessionAdapterRouter(
+      { claude, codex: adapterOf(vi.fn(async () => false)) },
+      async () => {}
+    )
+
+    await expect(
+      router.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: { kind: 'message', role: 'user', blocks: [] },
+        fence: 1
+      })
+    ).rejects.toMatchObject({
+      constructor: AgentSessionPreDispatchRefusal,
+      reason: DISPATCH_REJECTED_PROVIDER_NOT_OWNED
+    })
+    expect(dispatch).not.toHaveBeenCalled()
   })
 })
 

@@ -9,6 +9,7 @@ import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent
 import {
   dispatchWriteFailureReason,
   DISPATCH_REJECTED_CANCELLED,
+  DISPATCH_REJECTED_PROVIDER_NOT_OWNED,
   DISPATCH_REJECTED_QUEUE_FULL
 } from './structured-agent-session-dispatch-rejection'
 import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
@@ -93,6 +94,12 @@ describe('what a rejection shows the user', () => {
     // ourselves. It has no user-facing meaning, so it gets copy rather than the token.
     const shown = notice(DISPATCH_REJECTED_QUEUE_FULL)
     expect(shown).not.toContain('queue is full')
+    expect(shown).toBe('Orca could not send your message — Retry to send it again.')
+  })
+
+  it('treats a missing provider owner as a safe, retryable rejection', () => {
+    const shown = notice(DISPATCH_REJECTED_PROVIDER_NOT_OWNED)
+    expect(shown).not.toContain(DISPATCH_REJECTED_PROVIDER_NOT_OWNED)
     expect(shown).toBe('Orca could not send your message — Retry to send it again.')
   })
 })

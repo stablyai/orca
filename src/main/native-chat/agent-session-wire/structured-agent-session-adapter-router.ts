@@ -3,7 +3,11 @@ import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import {
+  AgentSessionPreDispatchRefusal,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
+import { DISPATCH_REJECTED_PROVIDER_NOT_OWNED } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 type RoutedAgent = 'claude' | 'codex'
 type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
@@ -58,8 +62,15 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return released
   }
 
-  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    this.owner(input.sessionId).dispatch(input)
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => {
+    const owner = this.liveOwnerOrNull(input.sessionId)
+    if (!owner) {
+      return Promise.reject(
+        new AgentSessionPreDispatchRefusal(DISPATCH_REJECTED_PROVIDER_NOT_OWNED)
+      )
+    }
+    return owner.dispatch(input)
+  }
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.rewindSupport?.(sessionId) ?? {

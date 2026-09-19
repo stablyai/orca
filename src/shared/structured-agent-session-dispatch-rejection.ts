@@ -29,6 +29,9 @@ export const DISPATCH_REJECTED_CODEX_QUEUE_FULL = 'codex structured dispatch que
 /** The provider confirmed a queued frame was withdrawn before execution. */
 export const DISPATCH_REJECTED_CANCELLED = 'provider_cancelled_before_start'
 
+/** The host had no live provider owner, so no provider dispatch was entered. */
+export const DISPATCH_REJECTED_PROVIDER_NOT_OWNED = 'provider_owner_unavailable_before_dispatch'
+
 export function dispatchWriteFailureReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `${DISPATCH_REJECTED_WRITE_FAILED}: ${detail}`
@@ -54,6 +57,7 @@ export function dispatchRejectionReasonIsInternal(reason: string | null | undefi
     dispatchRejectionWasTransportWriteFailure(reason) ||
     reason === DISPATCH_REJECTED_QUEUE_FULL ||
     reason === DISPATCH_REJECTED_CODEX_QUEUE_FULL ||
-    reason === DISPATCH_REJECTED_CANCELLED
+    reason === DISPATCH_REJECTED_CANCELLED ||
+    reason === DISPATCH_REJECTED_PROVIDER_NOT_OWNED
   )
 }
