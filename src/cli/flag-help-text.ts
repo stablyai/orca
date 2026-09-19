@@ -49,6 +49,20 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',
   repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
+  'setup-script':
+    '--setup-script <text|null> Local script run after a new worktree is created; null clears it',
+  'setup-script-file':
+    '--setup-script-file <path|-> Read the local setup script from a file or stdin',
+  'archive-script':
+    '--archive-script <text|null> Local script run before a worktree is archived; null clears it',
+  'archive-script-file':
+    '--archive-script-file <path|-> Read the local archive script from a file or stdin',
+  'setup-run-policy':
+    '--setup-run-policy <policy> ask, run-by-default, or skip-by-default for new worktrees',
+  'agent-startup':
+    '--agent-startup <policy> start-immediately, or wait-for-setup to hold the agent until setup finishes',
+  'command-source':
+    '--command-source <policy> shared-only, local-only, or run-both when orca.yaml and local scripts both exist',
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
