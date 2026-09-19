@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readlink, rename, rmdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { quoteShell } from './cli-install-path-format'
 
 export type EntryIdentity = {
@@ -90,14 +90,20 @@ export async function inspectStableCommand(
     }
     let fileSha256: string | null = null
     let rawSymlinkTarget: string | null = null
+    const isSymlinkEntry = afterInspection?.isSymbolicLink === true
     try {
-      if (afterInspection?.isSymbolicLink) {
+      if (isSymlinkEntry) {
         rawSymlinkTarget = await readlink(commandPath)
       } else if (afterInspection && status.state !== 'conflict') {
         fileSha256 = await hashCommandFile(commandPath)
       }
-    } catch {
-      continue
+    } catch (error) {
+      // Why only the symlink branch: an unreadable link is not an unstable one, so retrying only
+      // exhausts the attempts and throws. An unreadable file must still retry and fail rather than
+      // be replaced on hash evidence we never gathered.
+      if (!(isSymlinkEntry && isPermissionError(error))) {
+        continue
+      }
     }
     const afterEvidence = await readEntrySnapshot(commandPath)
     if (hasSameSnapshot(afterInspection, afterEvidence)) {
@@ -200,7 +206,8 @@ export function buildMacPrivilegedSymlinkTransaction(
     `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; else /bin/rmdir ${quoteShell(transactionDirectory)}; fi; exit 73`
   return (
     `${capture}if /bin/mkdir ${quoteShell(publishDirectory)} && ` +
-    `/bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)} && ` +
+    // Why a subshell: the link must be traversable while the script's own `umask 077` stays intact.
+    `(umask 022; /bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)}) && ` +
     `/bin/ln -P ${quoteShell(publishPath)} ${quoteShell(commandDirectory)}; then ` +
     `/bin/rm ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)}; ` +
     `if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; ` +
