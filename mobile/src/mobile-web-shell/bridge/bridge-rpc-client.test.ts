@@ -6,6 +6,7 @@ import {
 import type { RpcResponse } from '../../transport/types'
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
 import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 
 /**
@@ -207,6 +208,65 @@ describe('bridge round trip: notifications and state', () => {
     expect(pair.navigations).toEqual(['/h/host-a/session/wt-1?name=a+b'])
     // One way: the page hears nothing back, and nothing about it reaches the shell's client.
     expect(pair.rpc.requests).toEqual([])
+  })
+
+  /**
+   * The page's normalization and the host's are separate calls on the same rule, and the frame in
+   * between is the only place they could disagree.
+   *
+   * Two halves, because the first cannot see the second: the page normalizes before it posts, so
+   * over the client the host only ever receives an already-normalized URL and forwarding it raw
+   * would pass. The injected frame at the end is what holds the host to the rule on its own.
+   */
+  it('asks the shell to open a URL outside the app, normalized once and the same on both sides', async () => {
+    const pair = await ready(createFakeBridgePortPair())
+    const inputs = [
+      'https://github.com/stablyai/orca/pull/1',
+      'ht\ntps://example.com',
+      'https://example.com/a\r\n',
+      '  https://example.com/a  ',
+      'https:example.com',
+      'mailto:someone@example.com'
+    ]
+    for (const url of inputs) {
+      expect(pair.client.notifyExternalLink(url), url).toBe(true)
+    }
+    await pair.flush()
+    // Byte-equal to what the page put on the wire, read back off the frames rather than recomputed.
+    const posted = pair.toShell
+      .map((json: string) => JSON.parse(json))
+      .filter((frame: { name?: string }) => frame.name === 'externalLink')
+      .map((frame: { url: string }) => frame.url)
+    expect(pair.externalLinks).toEqual(posted)
+    expect(posted).toEqual([
+      'https://github.com/stablyai/orca/pull/1',
+      'https://example.com/',
+      'https://example.com/a',
+      'https://example.com/a',
+      'https://example.com/',
+      'mailto:someone@example.com'
+    ])
+    // The host's own half: a frame the page client never shaped, delivered straight to the host.
+    pair.host.receive(
+      JSON.stringify({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: 'externalLink',
+        url: '  https://example.com/b\r\n  '
+      })
+    )
+    await pair.flush()
+    expect(pair.externalLinks.at(-1)).toBe('https://example.com/b')
+    // One way: the page hears nothing back, and nothing about it reaches the shell's client.
+    expect(pair.rpc.requests).toEqual([])
+  })
+
+  it('refuses a URL outside the grant without putting a frame on the wire', async () => {
+    const pair = await ready(createFakeBridgePortPair())
+    expect(pair.client.notifyExternalLink('javascript:alert(1)')).toBe(false)
+    await pair.flush()
+    expect(pair.externalLinks).toEqual([])
+    expect(pair.hostDiagnostics).toEqual([])
   })
 
   it('reads the shell client through init and fans out every change after it', async () => {
