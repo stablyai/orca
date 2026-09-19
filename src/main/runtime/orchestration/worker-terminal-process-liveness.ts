@@ -5,6 +5,21 @@ import type { PtyProcessInfo } from '../../providers/pty-process-info'
 export type { WorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
 export { parseWorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
 
+/** Compare full identity without splitting colon-bearing IDs. */
+export function matchesProcessIncarnation(
+  ptyId: string,
+  incarnationId: string | null | undefined,
+  processIncarnation: string
+): boolean {
+  if (!incarnationId || incarnationId !== incarnationId.trim()) {
+    return false
+  }
+  if (!processIncarnation.startsWith(`${ptyId}:`)) {
+    return false
+  }
+  return `${ptyId}:${incarnationId}` === processIncarnation
+}
+
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]
@@ -13,13 +28,9 @@ export function classifyWorkerTerminalProcessIncarnation(
     processIncarnation.startsWith(`${session.id}:`)
   )
   if (
-    possibleMatches.some((session) => {
-      const incarnationId = session.incarnationId
-      if (!incarnationId || incarnationId !== incarnationId.trim()) {
-        return false
-      }
-      return `${session.id}:${incarnationId}` === processIncarnation
-    })
+    possibleMatches.some((session) =>
+      matchesProcessIncarnation(session.id, session.incarnationId, processIncarnation)
+    )
   ) {
     return 'live'
   }

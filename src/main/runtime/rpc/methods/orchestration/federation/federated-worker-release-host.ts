@@ -1,3 +1,5 @@
+import { remoteAttachmentLeaseIsCurrent } from './federation-terminal-release-lease'
+import { recoverExitedFederationRelease } from './federation-release-exit-recovery'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 import type {
@@ -106,10 +108,11 @@ export async function releaseRemoteAttachment(args: {
   }
   const resource = requested.resource
   if (!observation.exact || !observation.terminal) {
-    if (
-      args.mode === 'recovery' &&
-      (observation.status === 'missing' || observation.status === 'unattached')
-    ) {
+    if (observation.status === 'missing' || observation.status === 'unattached') {
+      const recovered = await recoverExitedFederationRelease(runtime, attachment, resource)
+      if (recovered) {
+        return recovered
+      }
       return {
         dispatchId: attachment.dispatch_id,
         state: 'release_pending',
@@ -264,28 +267,6 @@ export async function releaseRemoteAttachment(args: {
     archive: archiveSummary(released),
     output: projectArchivedOutputLiveness(output, 'exited')
   }
-}
-
-function remoteAttachmentLeaseIsCurrent(
-  runtime: OrcaRuntimeService,
-  attachment: RemoteDispatchAttachmentRow,
-  observation: Awaited<ReturnType<typeof inspectRemoteAttachment>>,
-  resource: WorkerTerminalResourceRow
-): boolean {
-  const db = runtime.getOrchestrationDb()
-  return Boolean(
-    observation.exact &&
-    observation.terminal?.handle === resource.terminal_handle &&
-    attachment.terminal_handle === resource.terminal_handle &&
-    resource.owner_dispatch_id === attachment.dispatch_id &&
-    resource.ownership_state === 'owned' &&
-    db.isRemoteAttachmentProcessCurrent({
-      dispatchId: attachment.dispatch_id,
-      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
-      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
-    }) &&
-    !db.workerTerminalResourceHasIdentityConflict(resource.id)
-  )
 }
 
 function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {

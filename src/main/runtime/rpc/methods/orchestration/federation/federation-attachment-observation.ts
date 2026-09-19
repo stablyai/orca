@@ -36,21 +36,33 @@ export async function inspectRemoteAttachment(
   if (!attachment?.terminal_handle) {
     return { terminal: null, exact: false, status: 'unattached' }
   }
-  const terminal = await runtime.showTerminal(attachment.terminal_handle).catch(() => null)
+  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+  let terminalHandle = attachment.terminal_handle
+  let terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
+  if (!terminal && resource?.process_incarnation === attachment.process_incarnation) {
+    const recovered = runtime.resolveTerminalHandleByProcessIncarnation(
+      attachment.process_incarnation ?? '',
+      resource.host_scope
+    )
+    if (recovered) {
+      terminalHandle = recovered
+      terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
+    }
+  }
   if (!terminal) {
     return { terminal: null, exact: false, status: 'missing' }
   }
   const exact = db.isRemoteAttachmentProcessCurrent({
     dispatchId,
-    paneKey: runtime.getTerminalPaneKey(attachment.terminal_handle),
-    processIncarnation: runtime.getTerminalProcessIncarnation(attachment.terminal_handle)
+    paneKey: runtime.getTerminalPaneKey(terminalHandle),
+    processIncarnation: runtime.getTerminalProcessIncarnation(terminalHandle)
   })
   if (!exact) {
     return { terminal, exact, status: 'identity_changed' }
   }
   // Why: transport loss clears `connected` for every remote PTY; only the execution host can certify exit.
   const agentWait = terminal.agentWait
-  const verdict = runtime.getTerminalLivenessVerdict?.(attachment.terminal_handle) ?? null
+  const verdict = runtime.getTerminalLivenessVerdict?.(terminalHandle) ?? null
   if (verdict?.status === 'unverifiable') {
     return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
@@ -60,9 +72,7 @@ export async function inspectRemoteAttachment(
     // The host owns a connected local pane, so its own connected flag is host evidence of life,
     // exactly as worker-show reads it. Nothing weaker earns a claim: a disconnected pane or an
     // SSH-scoped one (contact, not the process) stays unverifiable, never `exited`.
-    const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(
-      attachment.terminal_handle
-    )?.hostScope
+    const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(terminalHandle)?.hostScope
     const persistedHostScope = parseWorkerTerminalHostScope(
       db.getWorkerTerminalResourceByOwner(dispatchId)?.host_scope ?? null
     )
