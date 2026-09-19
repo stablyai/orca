@@ -56,9 +56,14 @@ export const BRIDGE_MAX_ROUTE_PARAM_CHARS = 1024
  * spellings of it would be two rules that drift.
  *
  * Which is why the dot-segment lookahead ends a segment at `?` as well as at `/` and at the end of
- * the string. A pathname carries no query, but an href does, so `/h/..?x` reaches the shared rule
- * and is the same climb out of the prefix as `/h/../x`. Widening the boundary cannot loosen the
- * pathname pattern, where a `?` fails the character class wherever it appears.
+ * the string. A pathname carries no query, but an href does, so `/h/..?x` reaches the shared rule.
+ * The harm there is not the climb `replaceState` performs on the pathname: the href's sink is the
+ * native router, which resolves a dot segment only for an href beginning with `.` and otherwise
+ * matches segments literally, so `..` is taken as a value for `[hostId]` and the shell opens a host
+ * screen for an id no host has. Different screen, same reason to refuse it.
+ *
+ * Widening the boundary cannot loosen the pathname pattern, where a `?` fails the character class
+ * wherever it appears.
  */
 export const BRIDGE_ROUTE_SEGMENT_SOURCE = String.raw`(?!(?:\.|%2[eE]){1,2}(?:[/?]|$))[^/\\?#\s]+`
 

@@ -680,8 +680,9 @@ describe('the segment rule both route patterns are built from', () => {
   })
 
   it('refuses a trailing dot segment the query is what ends, not a slash', () => {
-    // The `notify` sink is `router.push`, and a URL parser resolves `/h/..?x` to `/?x`: the same
-    // climb out of the `/h/` prefix the slash-terminated spellings above are refused for.
+    // The `notify` sink is `router.push`, which does not resolve these: it matches segments
+    // literally, so `..` becomes the `[hostId]` a screen is opened for. A different wrong screen
+    // from the spellings above, and the same reason one rule covers both patterns.
     for (const spelling of ['/h/..?x', '/h/%2e%2e?x', '/h/.?x', '/h/a/..?x', '/h/..?']) {
       expect(BRIDGE_ROUTE_HREF_PATTERN.test(spelling), spelling).toBe(false)
     }
