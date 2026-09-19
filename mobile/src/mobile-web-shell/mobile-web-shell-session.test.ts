@@ -905,6 +905,20 @@ describe('falling back to the cached generation after a failed download', () => 
     expect([...step.session.routeGrants]).toEqual(['navigate'])
   })
 
+  it('carries a verb declared in the manifest through to the session grants', () => {
+    // The whole path a verb takes before a page can call one: the desktop's manifest contract
+    // admits the name, the phone's reader keeps it, and the route policy grants it because this
+    // build implements it.
+    const step = run(afterCacheRead(null).session, {
+      type: 'manifest-read',
+      manifest: {
+        ...MANIFEST,
+        routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.clipboard.write'] }]
+      }
+    })
+    expect([...step.session.routeGrants]).toEqual(['navigate', 'native.clipboard.write'])
+  })
+
   it('had the newer grants before the download failed, so the case discriminates', () => {
     const step = run(afterCacheRead(cachedOnlyNavigate).session, {
       type: 'manifest-read',

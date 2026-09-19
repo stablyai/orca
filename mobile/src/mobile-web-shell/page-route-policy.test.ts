@@ -3,7 +3,8 @@ import {
   implementedPageRoutes,
   matchesRoutePattern,
   pageRendersRoute,
-  MOBILE_WEB_SHELL_GRANTS
+  MOBILE_WEB_SHELL_GRANTS,
+  grantsForRoute
 } from './page-route-policy'
 import {
   BRIDGE_NATIVE_METHOD_PREFIX,
@@ -112,5 +113,42 @@ describe('the native verbs this app serves', () => {
         { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.dictation.start'] }
       ])
     ).toEqual([])
+  })
+})
+
+/**
+ * What an old phone does with a grant name it has never heard of.
+ *
+ * Widening what a manifest field may contain is a new optional value crossing to readers that
+ * shipped before it. The phone's manifest schema bounds a grant's length and nothing else, on
+ * purpose, so an unknown name is not a parse failure that would refuse the whole bundle — it is a
+ * grant this build does not implement, and the route carrying it stays native.
+ */
+describe('a grant name this build has never heard of', () => {
+  it('leaves that route native rather than refusing the bundle', () => {
+    expect(
+      implementedPageRoutes([
+        { pathname: '/h/[hostId]', grants: ['navigate'] },
+        { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.dictation.start'] }
+      ])
+    ).toEqual(['/h/[hostId]'])
+  })
+
+  it('grants nothing from it either, so a route it names is served none of it', () => {
+    expect(
+      grantsForRoute(
+        [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.dictation.start'] }],
+        '/h/host-1'
+      )
+    ).toEqual(['navigate'])
+  })
+
+  it('carries a verb the build does implement all the way to the session grants', () => {
+    expect(
+      grantsForRoute(
+        [{ pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.clipboard.write'] }],
+        '/h/host-1/tasks'
+      )
+    ).toEqual(['navigate', 'native.clipboard.write'])
   })
 })

@@ -128,8 +128,26 @@ describe('the page routes a manifest declares', () => {
   })
 
   it('refuses a grant name that is not one', () => {
+    // One segment under `native` is not a verb: the namespace is `native.<domain>.<action>`, and
+    // anything shorter is a plain name wearing a dot.
     expect(withRoutes([{ pathname: '/h', grants: ['native.navigate'] }])).toBe(false)
     expect(withRoutes([{ pathname: '/h', grants: [''] }])).toBe(false)
+    for (const grant of ['navigate.', '.native', 'native..read', 'Native.Clipboard.Read', 'a.b']) {
+      expect(withRoutes([{ pathname: '/h', grants: [grant] }]), grant).toBe(false)
+    }
+  })
+
+  it('takes a native verb, which a route must be able to declare to ever be granted one', () => {
+    // Without this no manifest can name a verb, and with per-route grants that leaves every native
+    // verb unreachable for every route.
+    for (const grant of [
+      'native.clipboard.write',
+      'native.clipboard.read',
+      'native.file.pick',
+      'native.a.b.c'
+    ]) {
+      expect(withRoutes([{ pathname: '/h', grants: [grant] }]), grant).toBe(true)
+    }
   })
 
   it('refuses a route carrying a field the contract does not declare', () => {
