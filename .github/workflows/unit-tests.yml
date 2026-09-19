@@ -46,6 +46,9 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+          # The hosted Linux runner has four vCPUs, but this suite spends more time waiting on
+          # subprocesses and filesystem fixtures than saturating CPU. Eight fork workers reduce
+          # wall time without changing the shard set or test isolation.
           pnpm exec vitest run --config config/vitest.config.ts \
             --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             --exclude=src/main/daemon/shell-ready.test.ts \
@@ -67,6 +70,7 @@ jobs:
             --exclude=tests/e2e/relay-region-compatibility.unit.test.ts \
             --exclude=tests/e2e/relay-region-correction.unit.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
+            --maxWorkers=8 \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
       - name: Upload unit shard assignment
