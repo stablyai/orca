@@ -214,6 +214,8 @@ export type RemoteDispatchAttachmentRow = {
   last_error: string | null
   created_at: string
   updated_at: string
+  /** Host scope where the remote terminal was created (JSON stringified). */
+  host_scope?: string | null
 }
 
 export type FederationRelayDirection = 'to_home' | 'to_worker'
