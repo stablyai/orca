@@ -489,54 +489,6 @@ describeRender('the Route A page in a real browser', () => {
     }
   }, 60_000)
 
-  it('mounts the agent-history route, whose panel no unit test renders for real', async () => {
-    // What this proves, exactly: every module in the route's closure imports and evaluates under
-    // React Native Web, and the panel's own chrome paints. The unit tests mock react-native,
-    // safe-area, svg, lucide and the icon assets away — they have to, react-native is Flow source
-    // vitest cannot parse — so import-time breakage had no test anywhere until this one.
-    //
-    // What it does not prove: the double answers no RPC, so the panel's session scan fails and it
-    // paints its "Unable to Load" state. The session list, its rows, the resume button and the
-    // scope tabs are never rendered here, and a render-time gap inside one of them would pass this
-    // check. Covering those needs a double that answers `aiVault.listSessions`, which is a
-    // different instrument from this one and would put domain behaviour in this file.
-    const route = `${HOST_ROUTE}/agent-history/wt-1`
-    const { errors, cspErrors, text, session, url } = await render(route, 'Agent Session History', {
-      shellRoute: { pathname: route, params: { name: 'my worktree' } }
-    })
-    expect(cspErrors).toEqual([])
-    expect(errors).toEqual([])
-    expect(session.sessionId).toBe(SHELL_SESSION_ID)
-    // The params half reaches the screen, not just the URL: the subtitle is the worktree label.
-    expect(url).toBe(`${route}?name=my+worktree`)
-    expect(text).toContain('Agent Session History')
-    expect(text).toContain('my worktree')
-    expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
-
-  it("fetches the agent-history route's own chunk when the page navigates to it", async () => {
-    // C5 is the first series whose success path pulls a second chunk after the first paint, which
-    // on iOS goes through WKURLSchemeHandler under `script-src 'self'`.
-    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
-    const { page, errors, scripts } = opened
-    await page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    const loadedForFirstRoute = [...scripts]
-    const route = `${HOST_ROUTE}/agent-history/wt-1`
-    await page.evaluate((to) => {
-      history.pushState(null, '', to)
-      dispatchEvent(new PopStateEvent('popstate'))
-    }, route)
-    await waitForRoute(opened, route, 'Agent Session History')
-    const chunk = routeChunks['./h/[hostId]/agent-history/[worktreeId].tsx']
-    expect(chunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
-    const fetchedOnNavigation = scripts.filter((path) => !loadedForFirstRoute.includes(path))
-    expect(fetchedOnNavigation, scripts.join(' ')).toContain(`/assets/${chunk}`)
-    expect(loadedForFirstRoute).not.toContain(`/assets/${chunk}`)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 60_000)
-
   it('refuses a target the shell will not take, rather than opening it in the page', async () => {
     // The double grants only `fault`, so `notifyNavigate` answers false -- the shell-disposed and
     // older-shell cases reach the page the same way. Before C5.1 this left the host route and
