@@ -5,7 +5,9 @@ import type { AppShortcutState, ShortcutDispatchInput } from './app-command-hand
 
 const mocks = vi.hoisted(() => ({
   applyWorkspacePinIntent: vi.fn(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hoisted slot starts empty and each test assigns the row it needs.
   pinTarget: null as Worktree | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beforeEach replaces this with the fields the handlers read; the empty seed is never exercised.
   store: {} as AppState
 }))
 
@@ -38,6 +40,7 @@ function shortcutState(): AppShortcutState {
   return {
     activeView: 'terminal',
     activeWorktreeId: 'repo::/feature',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pin handlers never read the action bag; an unexpected access must fail the test.
     actions: {} as AppShortcutState['actions'],
     creationLayoutActive: false,
     floatingTerminalEnabled: false,
@@ -59,7 +62,9 @@ function shortcutInput(): ShortcutDispatchInput {
 describe('workspace pin app commands', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pin handlers read only the active workspace id off the store.
     mocks.store = { activeWorktreeId: 'repo::/feature' } as AppState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the target is forwarded untouched to a mocked apply, which only needs these two fields.
     mocks.pinTarget = { id: 'repo::/feature', isPinned: false } as Worktree
   })
 
