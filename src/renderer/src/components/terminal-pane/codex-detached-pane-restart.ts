@@ -16,7 +16,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -175,9 +175,13 @@ async function executeDetachedCodexPaneRestart(
     }
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
-    store.clearTabPtyId(located.tab.id, ptyId)
-    store.consumeSuppressedPtyExit(ptyId)
-    store.queueTabStartupCommand(located.tab.id, { ...CODEX_ACCOUNT_RESTART_STARTUP })
+    const restartStartup = buildCodexAccountRestartStartup({
+      tabId: located.tab.id,
+      leafId: located.leafId,
+      worktreeId: located.worktreeId,
+      shellOverride: located.tab.shellOverride
+    })
+    store.queueTabStartupCommand(located.tab.id, { ...restartStartup })
     store.clearCodexRestartNotice(ptyId)
     killReplacedCodexPanePty(ptyId)
     return
@@ -206,6 +210,13 @@ async function executeDetachedCodexPaneRestart(
     return
   }
 
+  const restartStartup = buildCodexAccountRestartStartup({
+    tabId: tab.id,
+    leafId,
+    worktreeId,
+    shellOverride: tab.shellOverride
+  })
+
   // Hidden replacements converge on mount; provider sizing must not delay ownership transfer.
   const spawned = await window.api.pty.spawn({
     cols: 80,
@@ -213,9 +224,15 @@ async function executeDetachedCodexPaneRestart(
     ...(cwd ? { cwd } : {}),
     cwdFallback: 'worktree',
     env: buildPaneIdentityEnv(state, worktreeId, tab.id, leafId),
-    command: CODEX_ACCOUNT_RESTART_STARTUP.command,
-    startupCommandDelivery: CODEX_ACCOUNT_RESTART_STARTUP.startupCommandDelivery,
-    launchAgent: CODEX_ACCOUNT_RESTART_STARTUP.launchAgent,
+    command: restartStartup.command,
+    startupCommandDelivery: restartStartup.startupCommandDelivery,
+    launchAgent: restartStartup.launchAgent,
+    codexAccountSwitchRestart: restartStartup.codexAccountSwitchRestart,
+    ...(restartStartup.env ? { env: restartStartup.env } : {}),
+    ...(restartStartup.launchConfig ? { launchConfig: restartStartup.launchConfig } : {}),
+    ...(restartStartup.resumeProviderSession
+      ? { resumeProviderSession: restartStartup.resumeProviderSession }
+      : {}),
     worktreeId,
     tabId: tab.id,
     leafId,
