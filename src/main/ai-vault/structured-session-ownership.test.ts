@@ -11,6 +11,7 @@ import {
   assertLegacyAiVaultResumeCommandAllowed,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
+import { StructuredSessionResumeRefusedError } from './structured-session-resume-refusal'
 
 const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
@@ -27,7 +28,38 @@ describe('structured AI Vault ownership', () => {
     })
   })
 
-  it('derives typed refusals from the single writer predicate for live and proving leases', async () => {
+  it('throws a resume-domain refusal with owner facts and display copy', () => {
+    installOwnership({ lease: agentSessionLeaseFixture({ runtimeKind: 'native' }) })
+    let thrown: unknown
+    try {
+      assertLegacyAiVaultResumeAllowed({
+        agent: 'codex',
+        filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
+        codexHome: null,
+        executionHostId: 'local'
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(StructuredSessionResumeRefusedError)
+    if (!(thrown instanceof StructuredSessionResumeRefusedError)) {
+      throw new Error('Expected a structured session resume refusal')
+    }
+    expect(thrown.message).toBe('agent_session_conflict')
+    expect(thrown.displayMessage).toBe(
+      'This session is already open in a chat. Open the chat to continue.'
+    )
+    expect(thrown.refusal).toEqual({
+      code: 'agent_session_conflict',
+      sessionId: 'session-alpha',
+      ownerRuntimeKind: 'native',
+      handoffStage: null,
+      ownerPid: 4242,
+      runtimeFence: 7
+    })
+  })
+
+  it('derives refusal codes from the single writer predicate for live and proving leases', async () => {
     installOwnership()
     expect(() =>
       assertLegacyAiVaultResumeAllowed({
