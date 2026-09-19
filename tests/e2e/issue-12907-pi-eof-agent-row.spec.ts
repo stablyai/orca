@@ -6,7 +6,10 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
-import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
+import {
+  stageNodeScriptForTerminal,
+  type StagedTerminalNodeScript
+} from './helpers/run-node-script-in-terminal'
 import { worktreeRow } from './worktree-row-locators'
 
 test('Pi EOF removes the completed agent row from the live Electron sidebar (#12907)', async ({
@@ -28,11 +31,12 @@ test('Pi EOF removes the completed agent row from the live Electron sidebar (#12
     }
   })
 
-  const script = await runNodeScriptInTerminal(
-    orcaPage,
-    ptyId,
+  const script: StagedTerminalNodeScript = stageNodeScriptForTerminal(
     "process.stdout.write('PI_EOF_AGENT_READY\\r\\n\\x1b]0;Pi\\x07'); process.stdin.resume(); process.stdin.on('end', () => process.exit(0))"
   )
+  // Keep the shell from becoming the surviving process after the child accepts
+  // EOF. The queued `exit` runs after node exits, on POSIX shells used here.
+  await sendToTerminal(orcaPage, ptyId, `${script.command}; exit\r`)
   try {
     await waitForTerminalOutput(orcaPage, 'PI_EOF_AGENT_READY', 15_000)
     const agentRows = worktreeRow(orcaPage, worktreeId).locator('[aria-label="Agents"] > div')
