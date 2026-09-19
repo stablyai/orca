@@ -1157,9 +1157,6 @@
           "b5c0479e21": "Unmodified user agent",
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
         },
-        "BrowserTerminalLinkActionsSetting": {
-          "title": "Show link actions"
-        },
         "BrowserUsePane": {
           "e44c5d681e": "From"
         },

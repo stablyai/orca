@@ -11329,7 +11329,7 @@
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "BrowserTerminalLinkActionsSetting": {
-          "title": "Show link actions",
+          "title": "Terminal URL clicks",
           "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal.",
           "descriptionV2": "Control clicks on detected URLs printed in terminal panes and chat transcripts.",
           "plainClickLabel": "Plain click",
