@@ -20,6 +20,8 @@ import { getStatusPluginPostSource } from './status-plugin-post-source'
 import { getStatusPluginDeliverySource } from './status-plugin-delivery-source'
 import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source'
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
+import { getStatusPluginV2EventSource } from './status-plugin-v2-event-source'
+import { getStatusPluginV2SetupSource } from './status-plugin-v2-setup-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
@@ -43,10 +45,15 @@ function toSafeDirName(id: string): string {
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
+/** Builds the generated status plugin module for the primary OpenCode hook path. */
 export function getOpenCodePluginSource(): string {
   return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
+/**
+ * Builds the generated OpenCode-family plugin module for one hook pathname:
+ * the shared status engine plus the OpenCode 2 compatibility layer.
+ */
 export function getOpenCodeFamilyPluginSource(
   hookPathname: string,
   options: { emitSessionStart: boolean }
@@ -61,6 +68,8 @@ export function getOpenCodeFamilyPluginSource(
     ...getStatusPluginDeliverySource(),
     ...getStatusPluginOwnershipSource(),
     ...getStatusPluginLifecycleSource(),
+    ...getStatusPluginV2EventSource(),
+    ...getStatusPluginV2SetupSource(),
     ...getStatusPluginFactorySource(options)
   ].join('\n')
 }
