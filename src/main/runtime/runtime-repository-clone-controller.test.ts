@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 
@@ -14,17 +15,32 @@ const repoAt = (path: string): Repo => ({
   kind: 'git'
 })
 
+// Type-correct filler: no test below reaches the work that would write meta.
+const emptyWorktreeMeta = (): WorktreeMeta => ({
+  displayName: '',
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 0
+})
+
 // Minimal RuntimeStore: the clone controller reads repos and settings only until
 // the clone succeeds, and every test below returns from the idempotency check.
 const makeStore = (repos: Repo[], workspaceDir: string): RuntimeStore => ({
   getRepos: () => repos,
   getRepo: () => undefined,
   addRepo: () => {},
-  updateRepo: () => undefined,
-  getAllWorktreeMeta: () => [],
-  getWorktreeMeta: () => null,
-  setWorktreeMeta: () => {},
+  updateRepo: () => null,
+  getAllWorktreeMeta: () => ({}),
+  getWorktreeMeta: () => undefined,
+  setWorktreeMeta: () => emptyWorktreeMeta(),
   removeWorktreeMeta: () => {},
+  getGitHubCache: () => ({ pr: {}, issue: {} }),
   getSettings: () => ({
     workspaceDir,
     nestWorkspaces: false,
