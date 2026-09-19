@@ -6,6 +6,7 @@ import { CdpDebuggerLifecycle } from './cdp-debugger-lifecycle'
 import { CdpElementStateCommands } from './cdp-element-state-commands'
 import { CdpNavigationOperations } from './cdp-navigation-operations'
 import { CdpPageCommands } from './cdp-page-commands'
+import { CdpElementActionability } from './cdp-element-actionability'
 import { CdpPointerCommands } from './cdp-pointer-commands'
 import { CdpRefResolution } from './cdp-ref-resolution'
 import { CdpTabCommands } from './cdp-tab-commands'
@@ -22,7 +23,13 @@ export class CdpBridgeCommandSet {
   constructor(bridgeState: CdpBridgeState) {
     const debuggerLifecycle = new CdpDebuggerLifecycle(bridgeState)
     const navigation = new CdpNavigationOperations()
-    const refResolution = new CdpRefResolution(bridgeState, debuggerLifecycle, navigation)
+    const actionability = new CdpElementActionability(bridgeState, debuggerLifecycle)
+    const refResolution = new CdpRefResolution(
+      bridgeState,
+      debuggerLifecycle,
+      navigation,
+      actionability
+    )
     const moduleArgs = [bridgeState, debuggerLifecycle, refResolution, navigation] as const
 
     this.elements = new CdpElementStateCommands(...moduleArgs)

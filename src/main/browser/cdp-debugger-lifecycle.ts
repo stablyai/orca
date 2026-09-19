@@ -49,18 +49,6 @@ export class CdpDebuggerLifecycle {
       )
     }
 
-    const sender = this.makeCdpSender(guest)
-    await sender('Page.enable')
-    await sender('DOM.enable')
-    await sender('Network.enable')
-
-    // Why: OOPIF iframes are invisible to the parent CDP session; flatten:true gives each a targetable sessionId.
-    await sender('Target.setAutoAttach', {
-      autoAttach: true,
-      waitForDebuggerOnStart: false,
-      flatten: true
-    })
-
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)
 
@@ -68,6 +56,7 @@ export class CdpDebuggerLifecycle {
       state.debuggerAttached = false
       state.snapshotResult = null
       state.iframeSessions.clear()
+      state.iframeParentSessions.clear()
       this.removeDebuggerListeners(guest, state)
     }
 
@@ -77,6 +66,25 @@ export class CdpDebuggerLifecycle {
     state.debuggerMessageListener = messageListener
     guest.debugger.on('detach', detachListener)
     guest.debugger.on('message', messageListener)
+
+    const sender = this.makeCdpSender(guest)
+    try {
+      await sender('Page.enable')
+      await sender('DOM.enable')
+      await sender('Network.enable')
+
+      // Why: the listener must be live before auto-attach emits events for already-loaded OOPIFs.
+      await sender('Target.setAutoAttach', {
+        autoAttach: true,
+        waitForDebuggerOnStart: false,
+        flatten: true
+      })
+    } catch (error) {
+      state.iframeSessions.clear()
+      state.iframeParentSessions.clear()
+      this.removeDebuggerListeners(guest, state)
+      throw error
+    }
 
     state.debuggerAttached = true
   }

@@ -23,8 +23,11 @@ export type CdpTabState = {
   snapshotResult: SnapshotResult | null
   debuggerAttached: boolean
   debuggerDetachListener: (() => void) | null
-  debuggerMessageListener: ((_event: unknown, method: string, params: unknown) => void) | null
+  debuggerMessageListener:
+    | ((_event: unknown, method: string, params: unknown, sessionId?: string) => void)
+    | null
   iframeSessions: Map<string, string>
+  iframeParentSessions: Map<string, string | null>
   capturing: boolean
   consoleLog: BrowserConsoleEntry[]
   networkLog: BrowserNetworkEntry[]
