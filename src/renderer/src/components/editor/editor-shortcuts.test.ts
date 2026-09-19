@@ -19,6 +19,7 @@ vi.mock('@/store', () => ({
 
 import {
   installEditorAddReviewNoteShortcut,
+  installEditorCopyPathShortcuts,
   installEditorFindShortcut,
   installMonacoDiffChangeNavigationShortcut,
   installMonacoEditorFindShortcut,
@@ -394,5 +395,111 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     expect(disposedEvent.defaultPrevented).toBe(false)
     expect(fixture.goToDiff).toHaveBeenCalledTimes(1)
     expect(fixture.goToDiff).toHaveBeenCalledWith('next')
+  })
+})
+
+describe('installEditorCopyPathShortcuts', () => {
+  function createCopyPathFixture(paths = { filePath: '/repo/src/a.ts', relativePath: 'src/a.ts' }) {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const current = { paths }
+    container.appendChild(input)
+    document.body.appendChild(container)
+    const writeClipboardText = vi.fn()
+    vi.stubGlobal('window', { ...window, api: { ui: { writeClipboardText } } })
+    return {
+      input,
+      current,
+      writeClipboardText,
+      dispose: installEditorCopyPathShortcuts(container, () => current.paths)
+    }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('copies the relative path on the default binding', () => {
+    const fixture = createCopyPathFixture()
+
+    const event = dispatchKeyDown(fixture.input, {
+      key: 'c',
+      code: 'KeyC',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true
+    })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fixture.writeClipboardText).toHaveBeenCalledWith('src/a.ts')
+    fixture.dispose()
+  })
+
+  it('ships the absolute-path action unbound so it cannot steal editor.copyContext', () => {
+    const fixture = createCopyPathFixture()
+
+    // Mod+Alt+C is editor.copyContext's default; this action must not answer it.
+    const event = dispatchKeyDown(fixture.input, {
+      key: 'c',
+      code: 'KeyC',
+      metaKey: true,
+      altKey: true
+    })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(fixture.writeClipboardText).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('copies the absolute path once a user binds it', () => {
+    shortcutState.keybindings = { 'editor.copyPath': ['Mod+Alt+P'] }
+    const fixture = createCopyPathFixture()
+
+    const event = dispatchKeyDown(fixture.input, {
+      key: 'p',
+      code: 'KeyP',
+      metaKey: true,
+      altKey: true
+    })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fixture.writeClipboardText).toHaveBeenCalledWith('/repo/src/a.ts')
+    fixture.dispose()
+  })
+
+  it('reads the paths at press time so a switched tab copies its own file', () => {
+    const fixture = createCopyPathFixture()
+    fixture.current.paths = { filePath: '/repo/src/b.ts', relativePath: 'src/b.ts' }
+
+    dispatchKeyDown(fixture.input, {
+      key: 'c',
+      code: 'KeyC',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true
+    })
+
+    expect(fixture.writeClipboardText).toHaveBeenCalledWith('src/b.ts')
+    fixture.dispose()
+  })
+
+  it('consumes matched repeats without copying again, and stops after dispose', () => {
+    const fixture = createCopyPathFixture()
+    const chord = {
+      key: 'c',
+      code: 'KeyC',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true
+    }
+
+    dispatchKeyDown(fixture.input, chord)
+    const repeat = dispatchKeyDown(fixture.input, { ...chord, repeat: true })
+    fixture.dispose()
+    const afterDispose = dispatchKeyDown(fixture.input, chord)
+
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(afterDispose.defaultPrevented).toBe(false)
+    expect(fixture.writeClipboardText).toHaveBeenCalledTimes(1)
   })
 })
