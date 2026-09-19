@@ -13,6 +13,7 @@ import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { mastraCodeHookService } from '../mastracode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
@@ -59,6 +60,7 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
       })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
+  ['mastracode', (sftp, remoteHome) => mastraCodeHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],

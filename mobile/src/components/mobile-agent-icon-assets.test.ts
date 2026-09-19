@@ -12,7 +12,8 @@ const GLYPH_AGENT_IDS = new Set<TuiAgent>([
   'codex',
   'pi',
   'omp',
-  'aider'
+  'aider',
+  'mastracode'
 ])
 
 const dirname = import.meta.dirname

@@ -22,6 +22,7 @@ import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
+import { normalizeMastraCodeEvent } from './providers/mastracode-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -89,6 +90,9 @@ export function normalizeProviderEvent(input: {
       )
       break
     }
+    case 'mastracode':
+      payload = normalizeMastraCodeEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
     case 'cursor':
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayload)
       break

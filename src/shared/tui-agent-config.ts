@@ -128,6 +128,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  mastracode: {
+    detectCmd: 'mastracode',
+    promptInjectionMode: 'stdin-after-start'
+  },
   'mimo-code': {
     detectCmd: 'mimo',
     promptInjectionMode: 'flag-prompt',

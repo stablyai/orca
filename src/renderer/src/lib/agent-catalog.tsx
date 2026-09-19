@@ -8,6 +8,7 @@ import {
   AiderIcon,
   CopilotIcon,
   KiloIcon,
+  MastraCodeIcon,
   OmpIcon,
   OpenCodeIcon,
   PiIcon
@@ -90,6 +91,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
     homepageUrl: 'https://opencode.ai/docs/cli/'
+  },
+  {
+    id: 'mastracode',
+    label: translate('auto.lib.agent.catalog.mastracode_label', 'Mastra Code'),
+    cmd: 'mastracode',
+    homepageUrl: 'https://code.mastra.ai/'
   },
   {
     id: 'mimo-code',
@@ -358,6 +365,9 @@ export function AgentIcon({
   }
   if (agent === 'opencode') {
     return <OpenCodeIcon size={size} />
+  }
+  if (agent === 'mastracode') {
+    return <MastraCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   // Why: prefer the favicon bundled at build time so the icon renders without a

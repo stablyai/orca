@@ -236,6 +236,7 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'amp':
+    case 'mastracode':
     case 'cursor':
     case 'command-code':
     case 'hermes':
