@@ -145,6 +145,7 @@ export type PtyTransportRecoveryState = {
 }
 
 export type PtyTransport = {
+  getPendingEscapeTailAnsi?: () => string
   connect: (options: {
     url: string
     cols?: number
