@@ -70,7 +70,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
             {agentCount > 0
               ? translate(
                   'auto.components.terminal.pane.PinnedTabCloseDialog.agentsCloseDescription',
-                  'This tab is running {{count}} agents. Closing it ends all of them.',
+                  'This tab is running {{count}} agents. Closing it ends them.',
                   { count: agentCount }
                 )
               : translate(

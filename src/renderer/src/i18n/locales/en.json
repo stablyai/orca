@@ -3360,9 +3360,9 @@
             "0b38ee2f86": "Cancel",
             "c337c9d75c": "Close",
             "agentsCloseTitle": "Close all agents?",
-            "agentsCloseDescription": "This tab is running {{count}} agents. Closing it ends all of them.",
+            "agentsCloseDescription": "This tab is running {{count}} agents. Closing it ends them.",
             "agentsCloseDescription_one": "This tab is running {{count}} agent. Closing it ends it.",
-            "agentsCloseDescription_other": "This tab is running {{count}} agents. Closing it ends all of them.",
+            "agentsCloseDescription_other": "This tab is running {{count}} agents. Closing it ends them.",
             "agentsCloseConfirm": "Close {{count}} agents",
             "agentsCloseConfirm_one": "Close {{count}} agent",
             "agentsCloseConfirm_other": "Close {{count}} agents"
