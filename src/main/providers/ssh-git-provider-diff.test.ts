@@ -28,14 +28,22 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(diffResult)
 
     const result = await provider.getDiff('/home/user/repo', 'src/index.ts', true)
-    expect(mux.request).toHaveBeenCalledWith('git.diff', {
-      worktreePath: '/home/user/repo',
-      filePath: 'src/index.ts',
-      staged: true,
-      // Why: opts into response streaming; a small result still comes back as a
-      // single frame (relay decides), and old relays ignore the flag.
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.diff',
+      {
+        worktreePath: '/home/user/repo',
+        filePath: 'src/index.ts',
+        staged: true,
+        // Why: opts into response streaming; a small result still comes back as a
+        // single frame (relay decides), and old relays ignore the flag.
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
     expect(result).toEqual(diffResult)
   })
 
@@ -44,11 +52,19 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(diffs)
 
     const result = await provider.getBranchDiff('/home/user/repo', 'main')
-    expect(mux.request).toHaveBeenCalledWith('git.branchDiff', {
-      worktreePath: '/home/user/repo',
-      baseRef: 'main',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.branchDiff',
+      {
+        worktreePath: '/home/user/repo',
+        baseRef: 'main',
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
     expect(result).toEqual(diffs)
   })
 
@@ -67,21 +83,39 @@ describe('SshGitProvider', () => {
       headOid: undefined
     })
 
-    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.branchDiff', {
-      worktreePath: '/home/user/repo',
-      baseRef: 'main',
-      includePatch: true,
-      filePath: 'src/file.ts',
-      headOid,
-      __streamResponse: true
-    })
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.branchDiff', {
-      worktreePath: '/home/user/repo',
-      baseRef: 'main',
-      includePatch: true,
-      filePath: 'src/other-file.ts',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'git.branchDiff',
+      {
+        worktreePath: '/home/user/repo',
+        baseRef: 'main',
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid,
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.branchDiff',
+      {
+        worktreePath: '/home/user/repo',
+        baseRef: 'main',
+        includePatch: true,
+        filePath: 'src/other-file.ts',
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
   })
 
   // Why: an unpinned compare snapshot reaches getBranchDiff as null despite the type.
@@ -110,21 +144,39 @@ describe('SshGitProvider', () => {
 
     await waitForRequestCount(mux.request, 2)
     expect(mux.request).toHaveBeenCalledTimes(2)
-    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.branchDiff', {
-      worktreePath: '/home/user/repo',
-      baseRef: 'main',
-      includePatch: true,
-      filePath: 'src/file.ts',
-      __streamResponse: true
-    })
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.branchDiff', {
-      worktreePath: '/home/user/repo',
-      baseRef: 'main',
-      includePatch: true,
-      filePath: 'src/file.ts',
-      headOid,
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'git.branchDiff',
+      {
+        worktreePath: '/home/user/repo',
+        baseRef: 'main',
+        includePatch: true,
+        filePath: 'src/file.ts',
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.branchDiff',
+      {
+        worktreePath: '/home/user/repo',
+        baseRef: 'main',
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid,
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
 
     pendingDiff.resolve()
     await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 3 }, () => diffs))

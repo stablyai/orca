@@ -484,10 +484,14 @@ describe('SshFilesystemProvider', () => {
   it('listFiles sends a streamable fs.listFiles request', async () => {
     mux.request.mockResolvedValue(['src/index.ts', 'package.json'])
     const result = await provider.listFiles('/home/user/project')
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        __streamResponse: true
+      },
+      { signal: undefined, timeoutMs: undefined, beforeResolve: expect.any(Function) }
+    )
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
@@ -497,22 +501,30 @@ describe('SshFilesystemProvider', () => {
       maxResults: 20_000,
       searchQuery: 'target'
     })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      excludePaths: ['/home/user/project/worktrees/b'],
-      maxResults: 20_000,
-      searchQuery: 'target',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        excludePaths: ['/home/user/project/worktrees/b'],
+        maxResults: 20_000,
+        searchQuery: 'target',
+        __streamResponse: true
+      },
+      { signal: undefined, timeoutMs: undefined, beforeResolve: expect.any(Function) }
+    )
   })
 
   it('listFiles omits excludePaths when empty', async () => {
     mux.request.mockResolvedValue([])
     await provider.listFiles('/home/user/project', { excludePaths: [] })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        __streamResponse: true
+      },
+      { signal: undefined, timeoutMs: undefined, beforeResolve: expect.any(Function) }
+    )
   })
 
   it('listFiles forwards the cancellation signal to the mux request (#7721)', async () => {
@@ -522,7 +534,7 @@ describe('SshFilesystemProvider', () => {
     expect(mux.request).toHaveBeenCalledWith(
       'fs.listFiles',
       { rootPath: '/home/user/project', __streamResponse: true },
-      { signal: controller.signal, timeoutMs: undefined }
+      { signal: controller.signal, timeoutMs: undefined, beforeResolve: expect.any(Function) }
     )
   })
 

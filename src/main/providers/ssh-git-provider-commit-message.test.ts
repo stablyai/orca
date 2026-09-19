@@ -37,11 +37,19 @@ describe('SshGitProvider', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: 'diff --git a/README.md b/README.md\n+hello'
     })
-    expect(mux.request).toHaveBeenCalledWith('git.exec', {
-      args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      cwd: '/home/user/repo',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.exec',
+      {
+        args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        cwd: '/home/user/repo',
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
   })
 
   it('getStagedCommitContext returns null when nothing is staged', async () => {
