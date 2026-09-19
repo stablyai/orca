@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   applyWorkspacePinIntent,
   resolveWorkspacePinShortcutTarget,
@@ -9,6 +9,7 @@ import {
 } from './workspace-pin-shortcut-target'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the only fields the pin path reads; the cast supplies the rest of the row shape.
   return {
     id: 'repo::/feature',
     repoId: 'repo',
@@ -21,6 +22,7 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 function hoveredDocument(...rows: { workspaceId: string; hostIdentity: string }[]) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements exactly the two Document members the resolver calls.
   return {
     activeElement: null,
     querySelectorAll: () => ({
@@ -28,7 +30,8 @@ function hoveredDocument(...rows: { workspaceId: string; hostIdentity: string }[
       item: (index: number) => {
         const row = rows[index]
         return row
-          ? ({
+          ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake row carries only the two dataset keys the hover resolver reads.
+            ({
               dataset: {
                 worktreeId: row.workspaceId,
                 worktreeHostIdentity: row.hostIdentity
@@ -44,6 +47,7 @@ function state(
   worktrees: Worktree[],
   overrides: Partial<WorkspacePinShortcutState> = {}
 ): WorkspacePinShortcutState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal names every store field the resolver touches; the cast supplies the rest of AppState.
   return {
     activeModal: 'none',
     activeWorkspaceExecutionHostId: null,
@@ -138,7 +142,7 @@ describe('workspace pin shortcut target', () => {
     expect(
       resolveWorkspacePinShortcutTarget(
         state([folder], {
-          activeWorkspaceKey: 'folder:abc' as AppState['activeWorkspaceKey'],
+          activeWorkspaceKey: folderWorkspaceKey('abc'),
           activeWorktreeId: null
         }),
         hoveredDocument()
@@ -151,11 +155,12 @@ describe('workspace pin shortcut target', () => {
 
     expect(
       resolveWorkspacePinShortcutTarget(
-        state([active], { activeModal: 'quick-open' as AppState['activeModal'] }),
+        state([active], { activeModal: 'quick-open' }),
         hoveredDocument({ workspaceId: 'repo::/feature', hostIdentity: 'local|repo::/feature' })
       )
     ).toBeNull()
     expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inline stub implements exactly the two Document members the resolver calls.
       resolveWorkspacePinShortcutTarget(state([active]), {
         activeElement: document.createElement('input'),
         querySelectorAll: hoveredDocument().querySelectorAll
