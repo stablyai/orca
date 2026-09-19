@@ -63,8 +63,9 @@ describe('the C5 page closure', () => {
     // derivation was re-run.
     //
     // Compared against the imported object rather than the committed text, which is sound here
-    // because `C5_PAGE_CLOSURE` inlines its families instead of spreading C1's: there is no spread
-    // for an edited entry to be laundered through. `pinsFromSource` is what the composed tables use.
+    // because `C5_PAGE_CLOSURE` inlines its families instead of spreading C1's: there is no
+    // spread for an edited entry to be laundered through. `pinsFromSource` is what the composed
+    // tables use.
     for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
       expect(C5_PAGE_CLOSURE[family], family).toEqual(pinned)
     }

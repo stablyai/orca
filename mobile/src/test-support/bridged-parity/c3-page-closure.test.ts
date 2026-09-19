@@ -73,9 +73,19 @@ describe('the C3 page closure', () => {
     // Against the file's text rather than the imported object: the composition spreads that object,
     // so a hand-edited inherited entry would be read back as C1's and agree with itself.
     //
-    // C2's rule does not reproduce these pins — measured here, it disagrees on 13 of the 103, being
-    // `tasks.smart-source-search` 7, `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 —
-    // so inheritance is the derivation rather than a re-derivation that looked close.
+    // What this cannot see is an edit to `c1-page-closure.ts` itself, because both sides of the
+    // comparison then move together. What it does see is a C3 half redeclaring an inherited family,
+    // which the spread would otherwise take silently from the last table. Both measured: flipping
+    // `settings-repo-metadata-icons` in C1's file leaves this case green and reds seven others —
+    // the class totals and the exclusion counts in C2's suite and this one, both cross-series
+    // agreements, and C5's own inheritance case, which compares against an independent literal
+    // rather than a spread. Redeclaring `settings.repo-metadata` in the preview half reds this one
+    // along with five more.
+    //
+    // C2's rule does not reproduce these pins — measured here, it disagrees on 13 of the 103,
+    // being `tasks.smart-source-search` 7, `host-worktree-refresh` 5 and
+    // `worktree-catalog-snapshot` 1 — so inheritance is the derivation rather than a
+    // re-derivation that looked close.
     const committed = pinsFromSource(C1_SOURCE)
     expect({
       families: Object.keys(committed).length,

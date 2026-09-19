@@ -32,7 +32,8 @@ const FILES_PIN_TABLES = [
   'mobile/src/test-support/bridged-parity/c3-preview-closure-families.ts'
 ]
 
-/** Both files routes, because the C3 closure is their union and either alone pins fewer families. */
+/** Both files routes, because the C3 closure is their union and either alone pins fewer
+ *  families. */
 const FILES_ROUTES = [
   'app/h/[hostId]/files/[worktreeId].tsx',
   'app/h/[hostId]/files/preview/[worktreeId].tsx'

@@ -4,10 +4,11 @@ import type { PageClosurePins } from './page-closure'
  * The goldens the file explorer adds to the C3 closure, and what each one did at the bridge.
  *
  * One family: `MobileFileExplorerPanel.tsx` is the only site in this route's closure the corpus
- * records against. Its two directory reads are the pair the screen chooses between — `files.readDir`
- * where the desktop allowlists it, and the capped `files.list` fallback where it does not — and both
- * replay byte-identically. The two `matrix-` goldens are the reply partitions driven at those same
- * sites, which land in `result-absent-settlement` for the reason the suite's own docstring gives:
+ * records against. Its two directory reads are the pair the screen chooses between —
+ * `files.readDir` where the desktop allowlists it, and the capped `files.list` fallback where it
+ * does not — and both replay byte-identically. The two `matrix-` goldens are the reply partitions
+ * driven at those same sites, which land in `result-absent-settlement` for the reason the suite's
+ * own docstring gives:
  * the recorder injects `{ ok: true }` with no `result` below the frame boundary, and a shape the
  * wire itself drops has no byte-identical replay available at any bridge.
  *
