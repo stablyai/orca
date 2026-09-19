@@ -12,14 +12,12 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import {
-  isClaudeIdentityFrameTitle,
-  resolveExplicitTerminalTitleAgentType
-} from '../../../shared/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { titlePresentsAgent } from '../../../shared/terminal-title-identity-claim'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 // A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
@@ -119,10 +117,9 @@ export function resolveTabAgentFromSignals(args: {
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
   const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
-  // Why: a "claude" token in another agent's task text is a mention, not identity, so it must
-  // not take a pane from its known owner — only a title that PRESENTS Claude may (#8940).
+  // Why: an agent name in another agent's task text is a mention, not identity (#8940, #14937).
   const titleClaimsIdentity =
-    explicitTitleAgent !== 'claude' || isClaudeIdentityFrameTitle(args.title)
+    explicitTitleAgent !== null && titlePresentsAgent(args.title, explicitTitleAgent)
   // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
@@ -278,8 +275,9 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     }
     const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(tab.title)
     // Why: only a title naming the launched agent arms its exit clearing — sibling/other-agent evidence must not.
+    // Task-text mentions must not arm exit clearing.
     const fallbackAgentSignal = tab.launchAgent
-      ? explicitTitleAgent === tab.launchAgent
+      ? explicitTitleAgent === tab.launchAgent && titlePresentsAgent(tab.title, tab.launchAgent)
       : Boolean(explicitTitleAgent || siblingHookAgent)
     // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
     // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an
