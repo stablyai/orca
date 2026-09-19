@@ -21,7 +21,7 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserPointerModifier } from './browser-keyboard-descriptors'
 
 const TOUCH_CLICK_RADIUS_DIP = 14
 type PendingWheelCommand = {

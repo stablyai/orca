@@ -132,8 +132,6 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   },
   keyboardDock: {
     zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
   inputRow: {
