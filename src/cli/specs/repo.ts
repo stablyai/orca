@@ -11,8 +11,16 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['repo', 'add'],
     summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
+    usage: 'orca repo add --path <path> [--kind git|folder] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind'],
+    notes: [
+      'Without --kind, a git checkout is added as a git project and any other directory as a folder project.',
+      'A folder project has no branches, worktrees, or review state; pass --kind git to fail instead when the path is not a checkout.'
+    ],
+    examples: [
+      'orca repo add --path /abs/repo --json',
+      'orca repo add --path /abs/notes --kind folder --json'
+    ]
   },
   {
     path: ['repo', 'show'],

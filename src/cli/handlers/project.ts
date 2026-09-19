@@ -11,7 +11,6 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
-import type { RepoKind } from '../../shared/repo-types'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch'
@@ -31,6 +30,7 @@ import {
 } from '../execution-host-flag'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { findProjectSetups, resolveProjectIdSelector } from '../project-selector'
+import { getOptionalRepoKind } from '../repo-kind-flag'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
@@ -103,17 +103,6 @@ async function getOptionalSetupHostId(
   }
   // Unresolved, like the setup paths: a removed SSH target's stale setup must stay deletable.
   return await getRequiredHostId(flags, client)
-}
-
-function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
-  const kind = getOptionalStringFlag(flags, 'kind')
-  if (kind === undefined) {
-    return undefined
-  }
-  if (kind === 'git' || kind === 'folder') {
-    return kind
-  }
-  throw new RuntimeClientError('invalid_argument', '--kind must be git or folder')
 }
 
 export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
