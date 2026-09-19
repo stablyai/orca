@@ -15,6 +15,7 @@ import {
 import { useAppStore } from '@/store'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { buildTrustedComposerIssueCommand } from '@/lib/composer-issue-command'
+import { resolveQuickCreateAgentPrompt } from '@/lib/linked-work-item-context'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -22,6 +23,7 @@ import type { PendingSmartGitHubSubmitResolution } from './source-selection-deci
 
 export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
   const {
+    agentPrompt,
     branchAutoNameRef,
     branchNameOverridePreservesNameEdits,
     checkedHooksContextKey,
@@ -246,6 +248,11 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         !createDisplayName
 
       const trimmedNote = note.trim()
+      // Why: with no agent there is nothing to hand a prompt to.
+      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+        agent === null
+          ? { prompt: '', draftPrompt: null }
+          : resolveQuickCreateAgentPrompt(submitLinkedWorkItem, trimmedNote, agentPrompt)
 
       return Object.assign(source, {
         effectiveSetupDecision,
@@ -257,10 +264,13 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        trimmedNote
+        trimmedNote,
+        quickPrompt,
+        quickDraftPrompt
       })
     },
     [
+      agentPrompt,
       branchNameOverridePreservesNameEdits,
       checkedHooksContextKey,
       commitHookCheckIfCurrent,
