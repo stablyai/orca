@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BridgeInitRouteSchema } from '../mobile-web-shell/bridge/bridge-envelope'
-import { mobileFileShellRoute } from './mobile-file-shell-route'
+import {
+  BridgeInitRouteSchema,
+  type BridgeInitRoute
+} from '../mobile-web-shell/bridge/bridge-envelope'
+import { shellRouteHref } from '../mobile-web-shell/bridge/page-bootstrap'
+import { mobileFileShellRoute, mobileFileShellRouteKey } from './mobile-file-shell-route'
 import {
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
@@ -56,5 +60,23 @@ describe('the route the files screens hand the shell', () => {
       params: { relativePath: 'docs/../my notes/readme.md', source: 'worktree' }
     }
     expect(mobileFileShellRoute(route)).toEqual(route)
+  })
+})
+
+describe('the key a shell screen remounts on', () => {
+  /**
+   * The key has to be the URL the page would end up at, because that is what it would be showing.
+   * `shellRouteHref` is the page's own serializer and cannot be imported into a native route file —
+   * it lives beside the page's RPC client — so the copy is pinned equal here rather than trusted.
+   */
+  it.each<BridgeInitRoute>([
+    { pathname: '/h/host-1/files/wt-1' },
+    { pathname: '/h/host-1/files/wt-1', params: { name: 'my worktree' } },
+    {
+      pathname: '/h/host-1/files/preview/wt-1',
+      params: { relativePath: 'docs/my notes/readme.md', source: 'worktree', line: '12' }
+    }
+  ])('is the href the page would write into its history: %o', (route) => {
+    expect(mobileFileShellRouteKey(route)).toBe(shellRouteHref(route))
   })
 })

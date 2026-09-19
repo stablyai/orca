@@ -36,7 +36,10 @@ export function mobileFileShellRoute(route: BridgeInitRoute): BridgeInitRoute | 
  * makes that change a remount, which is the only thing that hands the page a new route.
  *
  * Serialized the same way the page's own bootstrap serializes it, so two routes that would put the
- * same URL in the page's history are the same key.
+ * same URL in the page's history are the same key. Deliberately not imported from there:
+ * `shellRouteHref` lives in `page-bootstrap.ts`, which reaches the page's RPC client and its
+ * document channel, and a native route file must not pull those into the app. The test pins the
+ * two equal instead, which is the dependency this comment actually has.
  */
 export function mobileFileShellRouteKey(route: BridgeInitRoute): string {
   const search = new URLSearchParams(route.params ?? {}).toString()

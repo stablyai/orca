@@ -45,13 +45,22 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // a wide layout — and every `/h` route reaches both, `/h/[hostId]` included, which declares no
   // `externalLink`. That tablet tap stays dead on all of them: a pre-existing gap this route
   // neither widens nor fixes.
+  //
+  // One hop is still open and is not this series' to close: the sidebar `HostScreen` the layout
+  // renders on a wide layout pushes to `/h/<id>/tasks` through the handoff, which is local, so
+  // from any page route on a tablet the tasks page runs without `native.clipboard.write` and its
+  // copy actions refuse silently. Pre-existing on main for the worktree list and agent history
+  // since C2.1; the fix is a handoff rule — hand off to the shell when the target's grants exceed
+  // the session's — in its own PR.
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink']
   },
-  // The file preview. Same two, plus `externalLink`: a Markdown preview renders links, and
-  // `MobileMarkdown` opens them through the platform seam. That is a consumer inside the domain
-  // rather than the shared wall, which is what makes this route's list longer than the explorer's.
+  // The file preview. Same three. `externalLink` is this route's own rather than inherited: a
+  // Markdown preview renders links and `MobileMarkdown` opens them through the platform seam, which
+  // is a consumer inside the domain rather than the shared wall. The explorer declares the same
+  // list only because it can become this route in-page, so the two happen to be equal today and
+  // the reasons are not.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink']

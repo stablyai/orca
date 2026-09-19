@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reachesReactNativeLinking } from '/Users/jinwoo/orca-lanes/ota-c3-design/config/scripts/mobile-web-app-external-link-seam.mjs'
+import { reachesReactNativeLinking } from './mobile-web-app-external-link-seam.mjs'
 describe('the seam predicate', () => {
   it.each([
     ["import { Linking } from 'react-native'", true],

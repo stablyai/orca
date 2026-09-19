@@ -6,11 +6,11 @@
  * which both shells refuse and which resolves whether or not anything opened, so a call site left on
  * that path reports success into a tap that did nothing.
  *
- * The two routes are declared with different grants, and this file is where that difference is
- * held to something: the preview renders Markdown, so it reaches the seam through `MobileMarkdown`
- * and is granted `externalLink`; the explorer reaches it only through the protocol wall in the
- * shared host layout, which every page route reaches and which the worktree list is granted
- * nothing for either.
+ * Both routes declare `externalLink`, for different reasons, and this file holds each to its own.
+ * The preview renders Markdown and reaches the seam through `MobileMarkdown`, a consumer inside the
+ * domain. The explorer has no such consumer — its only reach is the shared host layout, which every
+ * page route reaches and which the worktree list declares nothing for — and declares the grant
+ * because its rows push to the preview in-page, under the session the explorer opened.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -30,7 +30,7 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 const EXPLORER = 'app/h/[hostId]/files/[worktreeId].tsx'
 const PREVIEW = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
 
-/** The seam's only in-domain consumer, and the reason the preview's grant list is longer. */
+/** The seam's only in-domain consumer, and the reason the preview declares the grant itself. */
 const MARKDOWN = 'src/components/MobileMarkdown.tsx'
 
 function offenders(closure) {
