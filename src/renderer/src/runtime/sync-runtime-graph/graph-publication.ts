@@ -11,15 +11,14 @@ import type {
   RuntimeRendererSyncWindowGraph
 } from '../../../../shared/runtime-types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import {
-  collectAmbiguousTerminalTabIds,
   findRegisteredTerminalTab,
+  getTerminalTabOwnershipIndex,
   graphState,
   mobilePublicationEpoch,
   NO_TRANSPORT_GRACE_MS
@@ -32,27 +31,13 @@ export async function syncRuntimeGraph(): Promise<void> {
   // The store getter is injected to break the terminal-slice construction cycle.
   const state = graphState.getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
-  const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
-  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tabsById = new Map<string, TerminalTab>()
-    for (const tab of tabs) {
-      // Duplicate ids in one worktree are malformed persisted state; don't
-      // guess which PTY a mounted surface owns.
-      if (tabsById.has(tab.id)) {
-        tabsById.delete(tab.id)
-        continue
-      }
-      tabsById.set(tab.id, tab)
-    }
-    terminalTabsByWorktree.set(worktreeId, tabsById)
-  }
+  // Duplicate ids are malformed persisted state; the index omits them rather than guessing which
+  // PTY a mounted surface owns. Memoized on the slice, so a title frame no longer rebuilds one
+  // lookup map per accumulated worktree to find the handful of mounted tabs.
+  const tabOwnership = getTerminalTabOwnershipIndex(state.tabsByWorktree)
+  const ambiguousTerminalTabIds = tabOwnership.ambiguousTabIds
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
-  const mobileSessionTabs = buildMobileSessionTabSnapshots(
-    state,
-    systemPrefersDark,
-    ambiguousTerminalTabIds
-  )
+  const mobileSessionTabs = buildMobileSessionTabSnapshots(state, systemPrefersDark)
   const publication = partitionMobileSessionPublication(mobileSessionTabs)
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
@@ -66,7 +51,10 @@ export async function syncRuntimeGraph(): Promise<void> {
     if (ambiguousTerminalTabIds.has(registeredTab.tabId)) {
       continue
     }
-    const tab = terminalTabsByWorktree.get(registeredTab.worktreeId)?.get(registeredTab.tabId)
+    const tab =
+      tabOwnership.worktreeIdByTabId.get(registeredTab.tabId) === registeredTab.worktreeId
+        ? tabOwnership.tabById.get(registeredTab.tabId)
+        : undefined
     if (!tab) {
       continue
     }
