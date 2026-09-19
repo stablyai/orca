@@ -142,7 +142,7 @@ export function installGlobalSessionTabsSubscriptions({
     const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
     environmentIdBySpec.push(environmentId)
     subscriptionSpecs.push({
-      subscribe: (isCurrent, { visibilityGeneration }) => {
+      subscribe: (isCurrent, { visibilityGeneration, requestRetry }) => {
         const awaitingVisibilityResumeInventory = { value: visibilityGeneration > 0 }
         if (!requestedInitialLoad) {
           requestedInitialLoad = true
@@ -184,7 +184,17 @@ export function installGlobalSessionTabsSubscriptions({
                 awaitingVisibilityResumeInventory,
                 coordinator
               })
+              if (
+                !response.ok ||
+                (typeof response.result === 'object' &&
+                  response.result !== null &&
+                  'type' in response.result &&
+                  response.result.type === 'end')
+              ) {
+                requestRetry()
+              }
             },
+            onClose: requestRetry,
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] global subscription error:', error.message)
