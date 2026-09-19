@@ -13,7 +13,11 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 
-/** Row model for Cmd+J's empty-query recent tabs section. */
+/**
+ * Row model for Cmd+J's empty-query "Recent chats & terminals" section.
+ * Ranking is a two-tier collapse of the sidebar's attention model, deliberately blind to agent
+ * activity (`updatedAt`) so a chatty agent can't pin itself to the top.
+ */
 export type RecentWorkspaceTabRow = {
   /** Palette item id. */
   id: string
@@ -31,12 +35,26 @@ export type RecentWorkspaceTabRow = {
   /** Terminal tab whose panes carry agent state. Null for editor, browser and simulator rows. */
   terminalTab: Pick<TerminalTab, 'id' | 'title'> | null
   worktreeLastActivityAt: number
+  /** When this tab was last focused. Orders the rows that are not asking for the user. */
   lastFocusedAt?: number | null
 }
 
 export type RecentWorkspaceTabOrderInputs = {
   rows: readonly RecentWorkspaceTabRow[]
+  paneSources: TabPaneInputSources
+  now: number
 }
+
+type RankedRow = {
+  occurrenceId: string
+  needsAttention: boolean
+  attentionClass: SmartClass
+  attentionTimestamp: number
+  visitedAt: number
+}
+
+/** Classes 1 (blocked/waiting) and 2 (freshly done) are the rows that want the user. */
+const NEEDS_ATTENTION_MAX_CLASS = 2
 
 const STATUS_BY_ATTENTION_CLASS: Record<SmartClass, WorktreeStatus | null> = {
   1: 'permission',
@@ -100,15 +118,48 @@ export function resolveRecentWorkspaceTabStatus(
   return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'
 }
 
-/** Unknown visit times stay at the bottom in their existing order. */
-export function orderRecentWorkspaceTabs({ rows }: RecentWorkspaceTabOrderInputs): string[] {
-  const visitedAt = (row: RecentWorkspaceTabRow): number =>
-    typeof row.lastFocusedAt === 'number' &&
+function visitedAt(row: RecentWorkspaceTabRow): number {
+  return typeof row.lastFocusedAt === 'number' &&
     Number.isFinite(row.lastFocusedAt) &&
     row.lastFocusedAt > 0
-      ? row.lastFocusedAt
-      : 0
-  return [...rows]
-    .sort((a, b) => visitedAt(b) - visitedAt(a))
-    .map((row) => row.occurrenceId ?? row.id)
+    ? row.lastFocusedAt
+    : 0
+}
+
+function compareRankedRows(a: RankedRow, b: RankedRow): number {
+  if (a.needsAttention !== b.needsAttention) {
+    return a.needsAttention ? -1 : 1
+  }
+  if (a.needsAttention) {
+    return a.attentionClass !== b.attentionClass
+      ? a.attentionClass - b.attentionClass
+      : b.attentionTimestamp - a.attentionTimestamp
+  }
+  return b.visitedAt - a.visitedAt
+}
+
+/**
+ * Rank rows into ids, most-wanted first:
+ *   tier 1 — needs attention: class 1 (blocked/waiting) then 2 (fresh done), newest first
+ *   tier 2 — everything else: the tab's own focus recency
+ * Unknown visit times stay at the bottom in their existing order.
+ */
+export function orderRecentWorkspaceTabs({
+  rows,
+  paneSources,
+  now
+}: RecentWorkspaceTabOrderInputs): string[] {
+  return rows
+    .map((row): RankedRow => {
+      const attention = resolveRecentWorkspaceTabAttention(row, paneSources, now)
+      return {
+        occurrenceId: row.occurrenceId ?? row.id,
+        needsAttention: attention.cls <= NEEDS_ATTENTION_MAX_CLASS,
+        attentionClass: attention.cls,
+        attentionTimestamp: attention.attentionTimestamp,
+        visitedAt: visitedAt(row)
+      }
+    })
+    .sort(compareRankedRows)
+    .map((row) => row.occurrenceId)
 }

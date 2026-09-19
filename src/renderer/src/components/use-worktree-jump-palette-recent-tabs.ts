@@ -215,7 +215,9 @@ export function useWorktreeJumpPaletteRecentTabs({
       return
     }
     const order = orderRecentWorkspaceTabs({
-      rows: recentTabRows
+      rows: recentTabRows,
+      paneSources: recentTabPaneSources,
+      now: Date.now()
     })
     if (order.length === 0) {
       setRecentTabSnapshot(EMPTY_RECENT_TAB_SNAPSHOT)

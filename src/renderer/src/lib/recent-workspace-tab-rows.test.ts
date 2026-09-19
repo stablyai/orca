@@ -60,6 +60,13 @@ function sources(
   }
 }
 
+function order(
+  rows: RecentWorkspaceTabRow[],
+  paneSources: TabPaneInputSources = sources([])
+): string[] {
+  return orderRecentWorkspaceTabs({ rows, paneSources, now: NOW })
+}
+
 describe('orderRecentWorkspaceTabs', () => {
   it('orders individual tab visits across worktrees and hosts', () => {
     const rows = [
@@ -67,7 +74,7 @@ describe('orderRecentWorkspaceTabs', () => {
       row('recent', { lastFocusedAt: NOW - 60_000, worktreeHostId: 'ssh:builder' }),
       row('newest', { lastFocusedAt: NOW, worktreeId: 'folder:/project' })
     ]
-    expect(orderRecentWorkspaceTabs({ rows })).toEqual(['newest', 'recent', 'old'])
+    expect(order(rows)).toEqual(['newest', 'recent', 'old'])
   })
 
   it('keeps unknown and invalid visit times below visited tabs with stable ties', () => {
@@ -78,13 +85,7 @@ describe('orderRecentWorkspaceTabs', () => {
       row('infinite', { lastFocusedAt: Infinity }),
       row('second', { lastFocusedAt: NOW })
     ]
-    expect(orderRecentWorkspaceTabs({ rows })).toEqual([
-      'first',
-      'second',
-      'unknown',
-      'nan',
-      'infinite'
-    ])
+    expect(order(rows)).toEqual(['first', 'second', 'unknown', 'nan', 'infinite'])
     expect(rows[0].id).toBe('unknown')
   })
 
@@ -93,19 +94,71 @@ describe('orderRecentWorkspaceTabs', () => {
       row('same', { occurrenceId: 'local', lastFocusedAt: NOW - 1 }),
       row('same', { occurrenceId: 'ssh', worktreeHostId: 'ssh:builder', lastFocusedAt: NOW })
     ]
-    expect(orderRecentWorkspaceTabs({ rows })).toEqual(['ssh', 'local'])
+    expect(order(rows)).toEqual(['ssh', 'local'])
   })
 
-  it('retains permission badges without promoting an old permission title', () => {
+  it('puts blocked agents above freshly finished ones, whatever their timestamps', () => {
+    const rows = [row('done'), row('blocked')]
+    const paneSources = sources([
+      entry('done', 'done', NOW - 1_000),
+      entry('blocked', 'blocked', NOW - 600_000)
+    ])
+
+    expect(order(rows, paneSources)).toEqual(['blocked', 'done'])
+  })
+
+  it('lifts both attention tiers above the tab the user just left', () => {
+    const rows = [
+      row('just-left', { lastFocusedAt: NOW }),
+      row('blocked', { lastFocusedAt: NOW - 600_000 }),
+      row('done', { lastFocusedAt: NOW - 120_000 })
+    ]
+    const paneSources = sources([
+      entry('blocked', 'blocked', NOW - 600_000),
+      entry('done', 'done', NOW - 60_000)
+    ])
+
+    expect(order(rows, paneSources)).toEqual(['blocked', 'done', 'just-left'])
+  })
+
+  it('orders within a tier by attention timestamp, newest first', () => {
+    const rows = [row('older'), row('newer')]
+    const paneSources = sources([
+      entry('older', 'waiting', NOW - 500_000),
+      entry('newer', 'waiting', NOW - 1_000)
+    ])
+
+    expect(order(rows, paneSources)).toEqual(['newer', 'older'])
+  })
+
+  it('demotes an interrupted done below a live blocked row', () => {
+    const rows = [row('interrupted'), row('blocked')]
+    const paneSources = sources([
+      entry('interrupted', 'done', NOW - 1_000, { interrupted: true }),
+      entry('blocked', 'blocked', NOW - 900_000)
+    ])
+
+    expect(order(rows, paneSources)).toEqual(['blocked', 'interrupted'])
+  })
+
+  it('drops a stale done out of the attention tier after the freshness window', () => {
+    const rows = [row('stale'), row('visited', { lastFocusedAt: NOW - 1_000 })]
+    const paneSources = sources([entry('stale', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)])
+
+    expect(order(rows, paneSources)).toEqual(['visited', 'stale'])
+  })
+
+  it('promotes a hookless agent whose live pane still asks for permission', () => {
     const old = row('old', {
       lastFocusedAt: NOW - 3 * 86400_000,
       terminalTab: { id: 'old', title: 'OMP - action required' }
     })
     const paneSources = sources([], { ptyIdsByTabId: { old: ['pty-1'] } })
     expect(resolveRecentWorkspaceTabStatus(old, paneSources, NOW)).toBe('permission')
-    expect(
-      orderRecentWorkspaceTabs({ rows: [old, row('recent', { lastFocusedAt: NOW })] })
-    ).toEqual(['recent', 'old'])
+    expect(order([old, row('recent', { lastFocusedAt: NOW })], paneSources)).toEqual([
+      'old',
+      'recent'
+    ])
   })
 })
 
