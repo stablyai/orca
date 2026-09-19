@@ -1480,6 +1480,7 @@ export class SshRelaySession {
           argv,
           cwd,
           env,
+          executionHostId: toSshExecutionHostId(this.targetId),
           ...(stdin !== undefined ? { stdin } : {}),
           ...(artifactInput ? { artifactInput } : {}),
           runtimeAuthority
