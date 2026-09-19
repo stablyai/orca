@@ -71,7 +71,11 @@ try {
       await emit(extension, 'agent_start', root)
       const session = extractAgentProviderSession('omp', posts.at(-1))
       assert.equal(session.transcriptPath, root.getSessionFile())
-      assert.deepEqual(getAgentResumeArgv('omp', session), ['omp', '--resume', root.getSessionId()])
+      assert.deepEqual(getAgentResumeArgv('omp', session), [
+        'omp',
+        '--resume',
+        root.getSessionFile()
+      ])
       const options = {
         transcriptPath: session.transcriptPath,
         ompSessionsDir: join(scratch, 'unused')
