@@ -91,13 +91,16 @@ design-docs/
 
 # Local-only design/planning docs (not checked in), including most of docs/reference/.
 # Durable docs that should be tracked must live in one of the allow-listed
-# locations below (assets, readme, STYLEGUIDE, mobile terminal shortcut bar,
+# locations below (assets, audits, readme, STYLEGUIDE, mobile terminal shortcut bar,
 # and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
 # The deployable docs app is source, not local engineering notes.
 !docs/site/
 !docs/site/**
+# Retention audit evidence: tracked reproductions and before/after results.
+!docs/audits/
+!docs/audits/**
 !docs/assets/
 !docs/assets/**
 !docs/readme/
