@@ -367,6 +367,12 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       // Each by id, because the counts above cannot see this domain: a closure golden that stopped
       // replaying identically is paid for by any of the other 684 that started.
       expect({ closure: pageClosureDrift(C1_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
+      // And the run's own totals over this closure, as the two blocks below do. `c1-page-closure.ts`
+      // pins no class counts of its own, so without this a verdict edited inside that file is green
+      // everywhere C1 is read alone.
+      expect(pageClosureRunTotals(C1_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C1_PAGE_CLOSURE)
+      )
     })
 
     it('gives every golden the C5 page closure records the verdict it is pinned to', () => {

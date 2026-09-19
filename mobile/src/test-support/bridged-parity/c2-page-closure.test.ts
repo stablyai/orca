@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { C1_PAGE_CLOSURE } from './c1-page-closure'
@@ -17,6 +17,48 @@ import {
 import { readGolden } from '../rpc-recording/golden-recording'
 
 const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
+const C1_SOURCE = resolve(import.meta.dirname, 'c1-page-closure.ts')
+
+/**
+ * A pin table read back out of its file's own text, which a spread cannot launder.
+ *
+ * `C2_PAGE_CLOSURE` is composed by spreading `C1_PAGE_CLOSURE`, so comparing the two is vacuous —
+ * a hand-edited inherited entry in C2's table would be read back as C1's and agree with itself.
+ * Reading C1's source is the independent half of that comparison.
+ *
+ * The formatter wraps a long entry onto two lines, an id alone and its verdict indented beneath, so
+ * both forms are handled: a reader that saw only the single-line form is what once dropped three
+ * `result-absent-stream-release` pins while its mismatch list stayed empty.
+ */
+function pinsFromSource(path: string): Record<string, Record<string, string>> {
+  const table: Record<string, Record<string, string>> = {}
+  let family: Record<string, string> | undefined
+  let wrappedId: string | undefined
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    const opened = /^ {2}'([^']+)': \{/.exec(line)?.[1]
+    if (opened !== undefined) {
+      family = {}
+      table[opened] = family
+      wrappedId = undefined
+      continue
+    }
+    const whole = /^ {4}'([^']+)': '([^']+)'/.exec(line)
+    const verdict = whole?.[2]
+    if (whole?.[1] !== undefined && verdict !== undefined && family !== undefined) {
+      family[whole[1]] = verdict
+      wrappedId = undefined
+      continue
+    }
+    const wrapped = /^\s+'([^']+)'/.exec(line)?.[1]
+    if (wrappedId !== undefined && wrapped !== undefined && family !== undefined) {
+      family[wrappedId] = wrapped
+      wrappedId = undefined
+      continue
+    }
+    wrappedId = /^ {4}'([^']+)':\s*$/.exec(line)?.[1]
+  }
+  return table
+}
 
 /** The run a corpus that diverged exactly as the pin says would hand the rule. */
 function asPinned(): Map<string, PageClosureObservation> {
@@ -66,16 +108,32 @@ describe('the C2 page closure', () => {
     })
   })
 
-  it("inherits C1's families whole, with the verdicts C1 committed", () => {
-    // Not "the same families": the same goldens in them, at the same verdicts. C2's own rule does
-    // not reproduce these — measured, it disagrees on 13 of the 103, being `tasks.smart-source-
-    // search` 7, `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 — so inheritance is
-    // the derivation, and this is what says it happened rather than a re-derivation that looked
-    // close.
-    for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
+  it("inherits C1's families whole, with the verdicts C1's file commits", () => {
+    // Against the file's text rather than the imported object, because today the composition
+    // spreads that object and a comparison to it agrees with itself. This holds the shape of the
+    // inheritance: that C2's table carries C1's families at C1's verdicts and overrides none of
+    // them, and it keeps holding if the spread is ever replaced by inlined entries.
+    //
+    // What it cannot hold: a verdict changed inside `c1-page-closure.ts`. C2 inherits whatever C1
+    // commits, so both sides of this comparison move together. Measured, that edit is red in the
+    // bridged-parity gate, which compares the pin to a run rather than to a file, and here in the
+    // class totals and the exclusion count, which pin absolute numbers. It is green in
+    // `c1-page-closure.test.ts`, whose exclusion check is `toBeGreaterThan(0)` and which pins no
+    // class totals at all.
+    //
+    // C2's own rule does not reproduce these pins — measured, it disagrees on 13 of the 103, being
+    // `tasks.smart-source-search` 7, `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 —
+    // so inheritance is the derivation rather than a re-derivation that looked close.
+    const committed = pinsFromSource(C1_SOURCE)
+    // The reader found a table rather than nothing, which every assertion below depends on.
+    expect({
+      families: Object.keys(committed).length,
+      pins: Object.values(committed).flatMap(Object.keys).length
+    }).toEqual({ families: 22, pins: 103 })
+    for (const [family, pinned] of Object.entries(committed)) {
       expect(C2_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
-    expect(Object.keys(C1_PAGE_CLOSURE).length).toBe(22)
+    expect(Object.keys(C1_PAGE_CLOSURE)).toEqual(Object.keys(committed))
   })
 
   it('agrees with C5 object for object on every family both domains pin', () => {
