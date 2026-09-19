@@ -37,6 +37,11 @@ import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
 
+// Why: every spawn reply carries the pid the caller proves TUI process identity from, so the
+// three reply builders below must agree on what counts as one rather than each deciding.
+export const provenPid = (pid: number | null | undefined): pid is number =>
+  typeof pid === 'number' && Number.isFinite(pid) && pid > 0
+
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
@@ -105,6 +110,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     return {
       id: ctx.result.id,
       ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+      ...(provenPid(ctx.result.pid) ? { pid: ctx.result.pid } : {}),
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
   }
@@ -260,10 +266,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       worktreeId: args.worktreeId ?? null,
       sessionId: ctx.sessionId ?? null,
       paneKey,
-      pid:
-        typeof ctx.result.pid === 'number' && Number.isFinite(ctx.result.pid) && ctx.result.pid > 0
-          ? ctx.result.pid
-          : null
+      pid: provenPid(ctx.result.pid) ? ctx.result.pid : null
     })
   }
   // Why: runtime-owned/background spawns bypass mounted-pane state, so inventory consumers need an explicit signal.
@@ -289,6 +292,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const response = {
     id: ctx.result.id,
     ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+    // Why: the caller proves the resumed TUI's process identity from this pid.
+    ...(provenPid(ctx.result.pid) ? { pid: ctx.result.pid } : {}),
     ...(ctx.stablePaneOwner && (ctx.stablePaneOwner.handle || args.preAllocatedHandle)
       ? {
           stablePaneOwner: {

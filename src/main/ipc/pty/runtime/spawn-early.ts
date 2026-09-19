@@ -5,6 +5,7 @@ import { snapshotCodexPaneHomeRoutes, codexReattachedHomeRouteField } from '../h
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { provenPid } from './spawn-commit'
 
 export function adoptMaterializedRuntimePtySpawn(
   ctx: RuntimePtySpawnState,
@@ -43,6 +44,9 @@ export function adoptMaterializedRuntimePtySpawn(
     id: ctx.preAdoptedStablePane.result.id,
     ...(ctx.preAdoptedStablePane.result.incarnationId
       ? { incarnationId: ctx.preAdoptedStablePane.result.incarnationId }
+      : {}),
+    ...(provenPid(ctx.preAdoptedStablePane.result.pid)
+      ? { pid: ctx.preAdoptedStablePane.result.pid }
       : {}),
     ...(typeof ctx.preAdoptedStablePane.result.wslDistro === 'string'
       ? { wslDistro: ctx.preAdoptedStablePane.result.wslDistro }

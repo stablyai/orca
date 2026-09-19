@@ -14,12 +14,13 @@ import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { executeRuntimePtySpawn } from './spawn-execute'
-import { commitRuntimePtySpawn } from './spawn-commit'
+import { commitRuntimePtySpawn, provenPid } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 
 function toRuntimeSpawnReply(result: {
   id: string
   incarnationId?: string
+  pid?: number | null
   wslDistro?: string | null
   stablePaneOwner?: { handle: string; tabId: string; leafId: string }
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -27,6 +28,9 @@ function toRuntimeSpawnReply(result: {
   return {
     id: result.id,
     ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+    // Why: the runtime proves TUI process identity from this pid; dropping it here
+    // made every claimed structured resume fail its identity guard and self-close.
+    ...(provenPid(result.pid) ? { pid: result.pid } : {}),
     ...(typeof result.wslDistro === 'string' ? { wslDistro: result.wslDistro } : {}),
     ...(result.stablePaneOwner ? { stablePaneOwner: result.stablePaneOwner } : {}),
     ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
