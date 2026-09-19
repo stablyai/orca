@@ -108,7 +108,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
 // spelled at the call site.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a5496f14589916b027334a236630720b39eb0360d91538d212b408c1f61bb523'
+  'fcb1e8d5926d52055279eec6e3805bf2d51403e2b9414c30d9c034d4a87c32b9'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
 const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
 const HEAD_STYLE_REFERENCE_SHA256 =
@@ -546,7 +546,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(532)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

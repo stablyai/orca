@@ -62,6 +62,7 @@ const SCOPE_B = 'h\0w\0tab-b'
 
 function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): HookArgs {
   return {
+    agent: 'claude',
     activeHandleRef: { current: 'term-1' },
     deviceTokenRef: { current: null },
     getActiveWorktreeConnectionId: async () => null,
@@ -137,7 +138,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
   })
 
-  it('rides pending images along on send: pastes the path, settles, then delegates the text', async () => {
+  it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
@@ -166,6 +167,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     mount(
       baseArgs({
         client: trackedClient as RpcClient,
+        agent,
         deviceTokenRef: { current: 'device-1' },
         baseSend,
         sleep
@@ -187,7 +189,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(2)
     expect(sendCalls[0]?.params).toMatchObject({ text: '\x15', enter: false })
     expect(sendCalls[1]?.params).toMatchObject({
-      text: '\x1b[200~/tmp/a.png\x1b[201~ ',
+      text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/a.png\x1b[201~ `,
       enter: false
     })
     const combined = String(sendCalls[1]?.params.text ?? '') + 'look at this'

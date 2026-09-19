@@ -2662,7 +2662,8 @@
         "questionCount": "{{value0}} questions"
       },
       "composer": {
-        "effort": "Effort"
+        "effort": "Effort",
+        "imageUnsupported": "Image paste is not supported for this agent."
       },
       "question": {
         "other": "Other…"
