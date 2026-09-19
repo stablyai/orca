@@ -97,6 +97,35 @@ describe('an unproven worker stop', () => {
     })
   })
 
+  it('lets a succeeded report settle while a legacy sibling keeps the task dispatched', () => {
+    const { task, dispatch } = localWorker()
+
+    // A fresh DB cannot open two dispatches on one task, but a migrated row can hold the
+    // shape: the context-only sibling keeps the task dispatched through the unproven stop.
+    db.db
+      .prepare(
+        "INSERT INTO dispatch_contexts (id, task_id, status, depth) VALUES (?, ?, 'dispatched', 0)"
+      )
+      .run('ctx_sibling', task.id)
+    db.beginWorkerStop(dispatch.id, 'epoch_home')
+    db.markWorkerStopUnknown(dispatch.id, 'the execution host did not answer')
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+
+    expect(
+      db.settleWorkerReport({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'succeeded',
+        result: '{"summary":"done"}'
+      })
+    ).toMatchObject({ action: 'settled' })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
+      state: 'succeeded',
+      last_error: null
+    })
+  })
+
   it('lets a failed worker report settle a dispatch the unproven stop left blocked', () => {
     const { task, dispatch } = localWorker()
 

@@ -105,13 +105,16 @@ export function settleWorkerReportInTransaction(
     recordAcceptedReportFact(this, params)
     return { action: 'settled', outcome: params.outcome, duplicate: true }
   }
-  // Both `start_unknown` and `stop_unknown` are unproven inferences about the worker that left
-  // the same shape behind: dispatch active, task blocked. The worker's own report is first-hand
-  // evidence it is alive and outranks either guess.
+  // Both `start_unknown` and `stop_unknown` are unproven inferences about the worker; its own
+  // report is first-hand evidence it is alive and outranks either guess. The task is normally
+  // `blocked` behind that shape, but a legacy sibling dispatch can hold it at `dispatched` —
+  // the worker reconnect below cannot key on the task marker alone.
+  const unprovenWorker =
+    reportingWorker?.state === 'start_unknown' || reportingWorker?.state === 'stop_unknown'
   const reconnectingWorker =
     (dispatch.status === 'pending' || dispatch.status === 'dispatched') &&
     task.status === 'blocked' &&
-    (reportingWorker?.state === 'start_unknown' || reportingWorker?.state === 'stop_unknown')
+    unprovenWorker
   const reportingStart =
     dispatch.status === 'pending' &&
     task.status === 'dispatched' &&
@@ -241,7 +244,7 @@ export function settleWorkerReportInTransaction(
       projection: { stage: 'settled', updated_at: new Date().toISOString() },
       correction: 'unobserved_prompt_report'
     })
-  } else if ((reconnectingWorker || reportingStart) && params.outcome === 'succeeded') {
+  } else if (params.outcome === 'succeeded' && (reconnectingWorker || reportingStart || unprovenWorker)) {
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: params.dispatchId,
