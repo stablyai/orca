@@ -3,6 +3,7 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
 import AgentDashboardSidebarHost from './AgentDashboardSidebarHost'
 
 vi.mock('@/components/dashboard/AgentDashboardDrawer', () => ({
@@ -57,6 +58,24 @@ describe('AgentDashboardSidebarHost', () => {
     )
 
     await waitFor(() => expect(closeWorkspaceBoard).toHaveBeenCalledOnce())
+  })
+
+  it('keeps the dock open when the sidebar closes or the workspace board opens', async () => {
+    const closeWorkspaceBoard = vi.fn()
+    useAppStore.setState({
+      agentDashboardDrawerOpen: true,
+      settings: { ...getDefaultSettings('/workspaces'), experimentalAgentDashboardDocked: true }
+    })
+    render(
+      <AgentDashboardSidebarHost
+        sidebarOpen={false}
+        workspaceBoardOpen
+        closeWorkspaceBoard={closeWorkspaceBoard}
+        statusBarVisible
+      />
+    )
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true)
+    expect(closeWorkspaceBoard).not.toHaveBeenCalled()
   })
 
   it('clears an open dashboard when the sidebar closes', async () => {

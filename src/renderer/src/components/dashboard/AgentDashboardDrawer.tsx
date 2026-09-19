@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
@@ -12,8 +9,7 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../sidebar/workspace-chrome-metrics'
-import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
+import { AgentDashboardInWindowBoard } from './AgentDashboardInWindowBoard'
 import { translate } from '@/i18n/i18n'
 
 // Why: Escape should dismiss interactive nested overlays (e.g. the terminal
@@ -28,56 +24,6 @@ const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[role="menu"][data-state="open"]',
   '[role="listbox"][data-state="open"]'
 ].join(', ')
-
-/** The in-window Agent Dashboard body. Mounted only while open so the live
- *  snapshot derivation stays off the hot path when the drawer is closed. */
-function AgentDashboardDrawerBody({
-  onClose,
-  onMenuOpenChange
-}: {
-  onClose: () => void
-  onMenuOpenChange: (open: boolean) => void
-}): React.JSX.Element {
-  const snapshot = useLiveDashboardSnapshot()
-
-  // In-window ack/reveal act on the local store directly — the pop-out's IPC
-  // relay is gated to the pop-out renderer and would reject calls from here.
-  const handleAckAgent = useCallback((paneKey: string) => {
-    useAppStore.getState().acknowledgeAgents([paneKey])
-  }, [])
-  const handleRevealAgent = useCallback(
-    (args: AgentRevealArgs) => {
-      revealDashboardAgent(args)
-      onClose()
-    },
-    [onClose]
-  )
-
-  // Switching to pop-out from the board hands the surface over rather than
-  // leaving an in-window board that the setting says should be a window.
-  const handleSwitchToPopout = useCallback(() => {
-    onClose()
-    void window.api.dashboard.openPopout?.()
-  }, [onClose])
-
-  return (
-    <AgentKanbanBoard
-      snapshot={snapshot}
-      // Why: bg-transparent lets the sheet's worktree-sidebar surface through
-      // so the board reads as the same companion panel as the workspace board.
-      containerClassName="h-full w-full bg-transparent"
-      onAckAgent={handleAckAgent}
-      onRevealAgent={handleRevealAgent}
-      onClose={onClose}
-      headerActions={
-        <AgentDashboardSettingsMenu
-          onSwitchToPopout={handleSwitchToPopout}
-          onOpenChange={onMenuOpenChange}
-        />
-      }
-    />
-  )
-}
 
 type AgentDashboardDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
@@ -222,7 +168,7 @@ export function AgentDashboardDrawer({
         {/* Radix unmounts SheetContent while closed, so the live snapshot
             derivation in the body stays off the closed path. */}
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
-          <AgentDashboardDrawerBody onClose={close} onMenuOpenChange={setMenuOpen} />
+          <AgentDashboardInWindowBoard onClose={close} onMenuOpenChange={setMenuOpen} />
         </div>
       </SheetContent>
     </Sheet>

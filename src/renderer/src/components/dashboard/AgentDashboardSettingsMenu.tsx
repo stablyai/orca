@@ -10,6 +10,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSegmentedControl, SettingsSwitch } from '../settings/SettingsFormControls'
 import type { AgentDashboardMode } from '../../../../shared/ui-chrome-types'
+import { AgentDashboardDockSetting } from '../settings/AgentDashboardDockSetting'
 import { translate } from '@/i18n/i18n'
 
 type AgentDashboardSettingsMenuProps = {
@@ -29,6 +30,7 @@ export function AgentDashboardSettingsMenu({
   onOpenChange
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
   const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
+  const docked = useAppStore((s) => s.settings?.experimentalAgentDashboardDocked === true)
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
 
@@ -73,7 +75,7 @@ export function AgentDashboardSettingsMenu({
             <span className="block text-[11px] leading-4 text-muted-foreground">
               {translate(
                 'auto.components.settings.ExperimentalPane.agentDashboard.modeCopy',
-                'Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.'
+                'Show the dashboard inside the app or in a separate pop-out window.'
               )}
             </span>
           </span>
@@ -104,6 +106,16 @@ export function AgentDashboardSettingsMenu({
                 )
               }
             ]}
+          />
+        </div>
+        <div className="px-1.5 py-2">
+          <AgentDashboardDockSetting
+            compact
+            settings={{
+              experimentalAgentDashboardMode: mode,
+              experimentalAgentDashboardDocked: docked
+            }}
+            updateSettings={updateSettings}
           />
         </div>
         <DropdownMenuSeparator />
