@@ -1,5 +1,7 @@
 import { defaultSchema } from 'rehype-sanitize'
+import { stripMarkdownCode } from './markdown-code-stripping'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
+import { getRichMarkdownHtmlValidationOutput } from './markdown-rich-html-validation'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
@@ -35,6 +37,17 @@ export type MarkdownRichModeEligibilityDecision = {
 }
 
 const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
+
+// Mirrors marked's declaration rules: `<![A-Z]…>` and `<![CDATA[…]]>`.
+const HTML_DECLARATION_PATTERN = /<!(?:\[CDATA\[[\s\S]*?\]\]|[A-Za-z][^>]*)>/
+const ANCHORED_HTML_DECLARATION_PATTERN = new RegExp(HTML_DECLARATION_PATTERN, 'y')
+
+function getHtmlDeclarationEnd(content: string, startIndex: number): number | null {
+  ANCHORED_HTML_DECLARATION_PATTERN.lastIndex = startIndex
+  return ANCHORED_HTML_DECLARATION_PATTERN.test(content)
+    ? ANCHORED_HTML_DECLARATION_PATTERN.lastIndex
+    : null
+}
 
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
@@ -119,9 +132,12 @@ export function getMarkdownRichModeUnsupportedReason(
   }
 
   if (hasHtml) {
-    // Why: the round-trip check creates a throwaway TipTap Editor synchronously
-    // on the main thread. For large files this blocks for seconds, so we skip it and conservatively block rich mode for HTML files
-    // above this threshold.
+    // The source codec recognizes multiline code spans that the cheap scan can misclassify.
+    const htmlOutput = getRichMarkdownHtmlValidationOutput(body)
+    if (htmlOutput && preservesEmbeddedHtml(body, htmlOutput)) {
+      return null
+    }
+    // Other HTML still needs a full editor round trip; cap it to avoid blocking the UI.
     const roundTripOutput = body.length <= 50_000 ? getRichMarkdownRoundTripOutput(body) : null
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
@@ -162,6 +178,10 @@ function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
   if (commentStart !== -1 && content.includes('-->', commentStart + 4)) {
     return true
   }
+  // `<!DOCTYPE …>` and `<![CDATA[…]]>` match no tag pattern but are still escaped on save.
+  if (HTML_DECLARATION_PATTERN.test(content)) {
+    return true
+  }
   for (const match of content.matchAll(new RegExp(pattern, 'g'))) {
     if (isHtmlOrJsxFragment(match[0])) {
       return true
@@ -183,33 +203,6 @@ function isHtmlOrJsxFragment(fragment: string): boolean {
 
   const suffix = fragment.slice(tagName.length + 1, -1)
   return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
-}
-
-function stripMarkdownCode(content: string): string {
-  let sanitized = ''
-  let activeFence: '`' | '~' | null = null
-  let lineStart = 0
-
-  while (lineStart <= content.length) {
-    const newlineIndex = content.indexOf('\n', lineStart)
-    const index = newlineIndex === -1 ? content.length : newlineIndex
-    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
-    const line = content.slice(lineStart, lineEnd)
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
-    if (fenceMatch) {
-      const fenceMarker = fenceMatch[1][0] as '`' | '~'
-      activeFence = activeFence === fenceMarker ? null : fenceMarker
-    } else if (!activeFence) {
-      sanitized += line.replace(/`+[^`\n]*`+/g, '')
-    }
-
-    if (index < content.length) {
-      sanitized += '\n'
-    }
-    lineStart = index + 1
-  }
-
-  return sanitized
 }
 
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
@@ -238,6 +231,8 @@ function forEachEmbeddedHtmlFragment(
     if (content.startsWith('<!--', index)) {
       const commentEnd = index + 4 <= lastCommentClose ? content.indexOf('-->', index + 4) : -1
       fragmentEnd = commentEnd === -1 ? null : commentEnd + 3
+    } else if (content.charCodeAt(index + 1) === 33) {
+      fragmentEnd = getHtmlDeclarationEnd(content, index)
     } else {
       fragmentEnd = getHtmlTagEnd(content, index)
     }
