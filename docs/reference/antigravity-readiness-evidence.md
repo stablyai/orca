@@ -349,3 +349,25 @@ The honest summary is that this is a screen-shaped problem being solved with lin
 rule over the derived tail can be made much better than what ships today, but the durable fix is to
 ask the terminal emulator what the bottom row of the screen actually is, rather than inferring it
 from a byte stream that was written with cursor addressing.
+
+## 2026-09-19: renderer continuation delivery
+
+The renderer's generated-prompt path still used a separate bracketed-paste/quiet
+observer. A wrapper that waits 12 seconds before executing installed agy 1.2.7
+reproduced #18088: the shell echoed the continuation before agy started, and the
+agent opened with an empty composer and no matching saved first turn.
+
+Antigravity draft delivery now resolves the pane on its owning host and uses
+`terminal.wait` with `tui-idle`, reusing the recorded-screen classifier above.
+It allows 60 seconds for readiness and never falls back to process presence.
+The same live PTY and host-published Antigravity identity are checked before
+writing. Paired hosts must advertise `terminal.antigravity-visible-readiness.v1`;
+older hosts leave the context unsent and use the existing failure notice.
+
+With the delayed wrapper, no context was visible at 10.4 seconds, before agent
+startup. Once ready, the saved first user turn exactly matched the generated
+prompt. A 36,868-character continuation also matched byte-for-byte (SHA-256),
+without transcript truncation. The final identity-checked implementation passed
+another delayed launch with an exact 920-character first-turn match. Generation
+still failed with the existing 401 authentication error; this verifies delivery,
+not a successful continuation task. Real Windows/WSL/SSH runs remain unverified.

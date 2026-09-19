@@ -165,6 +165,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   antigravity: {
     detectCmd: 'agy',
+    draftPasteReadyTimeoutMs: 60_000,
     promptInjectionMode: 'flag-prompt-interactive'
   },
   aider: {

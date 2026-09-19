@@ -292,7 +292,11 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
+export const ANTIGRAVITY_VISIBLE_READINESS_RUNTIME_CAPABILITY =
+  'terminal.antigravity-visible-readiness.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
+  ANTIGRAVITY_VISIBLE_READINESS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
   'runtime.status.compat.v1',
