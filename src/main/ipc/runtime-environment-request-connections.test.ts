@@ -1,8 +1,17 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
+import {
+  addEnvironmentFromPairingCode,
+  removeEnvironment
+} from '../../shared/runtime-environment-store'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer
 } from '../../shared/remote-runtime-shared-control-test-server'
+import { setRuntimeEnvironmentRemovalWatch } from './runtime-environment-removal-watch'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   captureRuntimeEnvironmentCapabilityEvidence,
@@ -23,11 +32,26 @@ import {
 } from './runtime-environment-request-connections'
 
 const ENVIRONMENT_ID = 'standing-intent-test'
+const tempUserDataPaths: string[] = []
+
+function storeEnvironment(pairing: PairingOffer): { userDataPath: string; environmentId: string } {
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-request-connections-'))
+  tempUserDataPaths.push(userDataPath)
+  const environment = addEnvironmentFromPairingCode(userDataPath, {
+    name: 'desk',
+    pairingCode: encodePairingOffer(pairing)
+  })
+  return { userDataPath, environmentId: environment.id }
+}
 
 afterEach(async () => {
   closeRemoteRuntimeRequestConnection(ENVIRONMENT_ID)
   clearRuntimeEnvironmentManualDisconnect(ENVIRONMENT_ID)
   resetRuntimeEnvironmentCapabilityEvidence()
+  setRuntimeEnvironmentRemovalWatch(null)
+  for (const dir of tempUserDataPaths.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
   await closeSharedControlTestServers()
 })
 
@@ -75,6 +99,28 @@ describe('runtime environment shared-control connection cache', () => {
 
     expect(server.connectionCount()).toBe(0)
     expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)).toBeNull()
+  })
+
+  it('never retries a connection whose environment the CLI removed from the store', async () => {
+    const server = await createSharedControlTestServer()
+    const { userDataPath, environmentId } = storeEnvironment(server.pairing)
+    setRuntimeEnvironmentRemovalWatch({
+      getUserDataPath: () => userDataPath,
+      retire: async (id) => closeRemoteRuntimeRequestConnection(id)
+    })
+    ensureRemoteRuntimeSharedControlConnection(environmentId, server.pairing)
+    reconnectRemoteRuntimeSharedControlConnection(environmentId)
+    await waitFor(() => server.connectionCount() === 1)
+
+    removeEnvironment(userDataPath, environmentId)
+    server.closeClients()
+    // Why the cache entry disappears rather than settling on 'closed': the close observes the
+    // removal and retires the transport, which is what leaves nothing behind to retry.
+    await waitFor(() => getRemoteRuntimeSharedControlDiagnostics(environmentId) === null)
+    await delay(400)
+
+    expect(server.connectionCount()).toBe(1)
+    closeRemoteRuntimeRequestConnection(environmentId)
   })
 
   it('lets a bypass request finish but never retries it after manual disconnect', async () => {

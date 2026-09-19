@@ -22,9 +22,14 @@ export function openSharedControlSocket(
     // Why: reconnect is edge-triggered on `close`, but a half-open tunnel
     // never delivers one. Liveness pings and declares the socket dead when
     // the server goes silent, so the close/reconnect path can run (#7718).
+    // Why: the liveness cadence is the only level-triggered hook an open socket has, so a
+    // transport whose environment was removed out-of-process is retired on the same tick
+    // instead of surviving until the next disconnect (#20995).
     liveness?: {
       options?: RemoteRuntimeSocketLivenessOptions
       onDead: (error: RemoteRuntimeClientError) => void
+      isRetired?: () => boolean
+      onRetired?: () => void
     }
   }
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
@@ -68,6 +73,10 @@ export function openSharedControlSocket(
   const liveness = callbacks.liveness
   const monitor = startRemoteRuntimeSocketLiveness({
     ping: () => {
+      if (liveness.isRetired?.() === true) {
+        liveness.onRetired?.()
+        return
+      }
       if (ws.readyState === 1) {
         ws.ping()
       }
