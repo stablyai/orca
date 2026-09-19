@@ -54,6 +54,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
       <Pressable
         style={styles.backButton}
         onPress={() => router.back()}
+        hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Back"
       >

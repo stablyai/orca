@@ -235,6 +235,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
             onPress={requestBack}
             hitSlop={8}
+            accessibilityRole="button"
             accessibilityLabel="Back to files"
           >
             <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />

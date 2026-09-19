@@ -9,10 +9,18 @@ import { describe, expect, it } from 'vitest'
  * reader has nothing to announce and an automation harness has nothing to find. The C2.7 device
  * proof located the tasks Back only by tapping the native control's coordinates.
  *
- * The oracle is the house's Back affordance — a Pressable rendering a ChevronLeft that either
- * carries the back-button style or calls back. A Back control drawn some other way is invisible to
- * it, which is why the table below names one screen tree per page route instead of trusting a scan
- * to find the screens on its own.
+ * What makes a control a Back control here is what it does, not what it draws. A glyph does not
+ * separate the two: dismisses sit in the same header slot with the same style, so keying on
+ * ChevronLeft claims a dismiss and then tells it to be called Back, and lets a Back drawn any
+ * other way walk past. So the predicate is the press handler reaching a back call, or a label that
+ * already says Back; a control matching neither is outside this rule whatever it renders.
+ *
+ * The label half of that predicate would be circular on its own — a control with the wrong label
+ * and an opaque handler would simply not be found — which is what the presence assertion below is
+ * for: a screen tree that yields no control at all fails. Two of the five depend on it today, the
+ * host screen through `actions.leaveHost` and the preview through the hook's `requestBack`, so it
+ * is load-bearing rather than decorative. The gap it leaves is a second Back control in a tree
+ * that already has one.
  */
 const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
 const PAGE_ROUTE_REGISTRY = join(
@@ -27,13 +35,22 @@ const PAGE_ROUTE_REGISTRY = join(
 const PAGE_SERVED_SCREENS = [
   { pathname: '/h/[hostId]', tree: 'src/host-screen' },
   { pathname: '/h/[hostId]/agent-history/[worktreeId]', tree: 'src/agent-history' },
-  { pathname: '/h/[hostId]/tasks', tree: 'src/tasks' }
+  { pathname: '/h/[hostId]/tasks', tree: 'src/tasks' },
+  { pathname: '/h/[hostId]/files/[worktreeId]', tree: 'src/files' },
+  { pathname: '/h/[hostId]/files/preview/[worktreeId]', tree: 'src/files' }
 ]
 
 const PRESSABLE_TAGS = new Set(['Pressable', 'TouchableOpacity'])
-const GOES_BACK = /\.back\(\)|\brequestBack\b/
+/** `router.back()`, `goBack()`, `onBack()`; the leading class keeps `callback(` and `rollback(` out. */
+const BACK_CALL = /(?:^|[^A-Za-z0-9_$])(?:back|goBack|onBack)\s*\(/
+const BACK_HANDLER = /^(?:back|[A-Za-z0-9_$]*Back)$/
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
-type BackControl = { path: string; line: number; role: string; label: string }
+/** A spread hides the props this rule reads, so it answers "unknown" rather than "absent". */
+type Read = { known: true; value: string } | { known: false }
+const UNKNOWN: Read = { known: false }
+
+type BackControl = { path: string; line: number; role: Read; label: Read }
 
 function componentFiles(tree: string): string[] {
   const found: string[] = []
@@ -48,38 +65,65 @@ function componentFiles(tree: string): string[] {
   return found
 }
 
-function attribute(element: ts.JsxOpeningLikeElement, name: string): string {
+function spreadsProps(element: ts.JsxOpeningLikeElement): boolean {
+  return element.attributes.properties.some((property) => ts.isJsxSpreadAttribute(property))
+}
+
+function readAttribute(element: ts.JsxOpeningLikeElement, name: string): Read {
+  if (spreadsProps(element)) {
+    return UNKNOWN
+  }
   for (const property of element.attributes.properties) {
     if (ts.isJsxAttribute(property) && property.name.getText() === name) {
       const initializer = property.initializer
       if (!initializer) {
-        return ''
+        return { known: true, value: '' }
       }
-      return ts.isStringLiteral(initializer) ? initializer.text : initializer.getText()
+      if (ts.isStringLiteral(initializer)) {
+        return { known: true, value: initializer.text }
+      }
+      if (ts.isJsxExpression(initializer) && initializer.expression) {
+        return { known: true, value: initializer.expression.getText() }
+      }
+      return { known: true, value: initializer.getText() }
     }
   }
-  return ''
+  return { known: true, value: '' }
 }
 
-function rendersChevronLeft(element: ts.JsxElement): boolean {
-  let found = false
+/** One hop: `onPress={requestBack}` is read through the declaration `requestBack` names here. */
+function declarationText(source: ts.SourceFile, name: string): string {
+  let text = ''
   function visit(node: ts.Node): void {
-    if (found) {
+    if (text) {
       return
     }
-    if (
-      (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
-      node.tagName.getText() === 'ChevronLeft'
-    ) {
-      found = true
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) {
+      text = node.getText(source)
+      return
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
+      text = node.getText(source)
       return
     }
     ts.forEachChild(node, visit)
   }
-  for (const child of element.children) {
-    visit(child)
+  visit(source)
+  return text
+}
+
+function pressGoesBack(source: ts.SourceFile, press: Read): boolean {
+  if (!press.known) {
+    return false
   }
-  return found
+  const text = press.value.trim()
+  if (BACK_CALL.test(text)) {
+    return true
+  }
+  if (!IDENTIFIER.test(text)) {
+    return false
+  }
+  return BACK_HANDLER.test(text) || BACK_CALL.test(declarationText(source, text))
 }
 
 function backControlsIn(path: string): BackControl[] {
@@ -92,17 +136,23 @@ function backControlsIn(path: string): BackControl[] {
   )
   const found: BackControl[] = []
   function visit(node: ts.Node): void {
-    if (ts.isJsxElement(node) && PRESSABLE_TAGS.has(node.openingElement.tagName.getText())) {
-      const opening = node.openingElement
-      const style = attribute(opening, 'style')
-      const press = attribute(opening, 'onPress')
-      if (rendersChevronLeft(node) && (style.includes('backButton') || GOES_BACK.test(press))) {
-        found.push({
-          path,
-          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-          role: attribute(opening, 'accessibilityRole'),
-          label: attribute(opening, 'accessibilityLabel')
-        })
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const element = ts.isJsxElement(node) ? node.openingElement : node
+      if (PRESSABLE_TAGS.has(element.tagName.getText())) {
+        const label = readAttribute(element, 'accessibilityLabel')
+        const named = label.known && /^Back\b/.test(label.value)
+        if (
+          spreadsProps(element) ||
+          named ||
+          pressGoesBack(source, readAttribute(element, 'onPress'))
+        ) {
+          found.push({
+            path,
+            line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+            role: readAttribute(element, 'accessibilityRole'),
+            label
+          })
+        }
       }
     }
     ts.forEachChild(node, visit)
@@ -115,10 +165,15 @@ function backControlsUnder(tree: string): BackControl[] {
   return componentFiles(tree).flatMap((path) => backControlsIn(path))
 }
 
+function show(read: Read): string {
+  if (!read.known) {
+    return 'unknown'
+  }
+  return read.value || 'none'
+}
+
 function describeControl(control: BackControl): string {
-  return `${control.path}:${control.line} role=${control.role || 'none'} label=${
-    control.label || 'none'
-  }`
+  return `${control.path}:${control.line} role=${show(control.role)} label=${show(control.label)}`
 }
 
 function registeredPathnames(): string[] {
@@ -127,7 +182,8 @@ function registeredPathnames(): string[] {
     .sort()
 }
 
-const CONTROLS = PAGE_SERVED_SCREENS.flatMap((screen) => backControlsUnder(screen.tree))
+const SCREEN_TREES = [...new Set(PAGE_SERVED_SCREENS.map((screen) => screen.tree))]
+const CONTROLS = SCREEN_TREES.flatMap((tree) => backControlsUnder(tree))
 
 describe('Back controls in the screens the page serves', () => {
   it('covers every page route and finds a control in each, so the rules below cannot pass vacuously', () => {
@@ -136,20 +192,24 @@ describe('Back controls in the screens the page serves', () => {
     expect(registeredPathnames()).toEqual(
       PAGE_SERVED_SCREENS.map((screen) => screen.pathname).sort()
     )
-    for (const screen of PAGE_SERVED_SCREENS) {
-      expect({ [screen.tree]: backControlsUnder(screen.tree).map(describeControl) }).not.toEqual({
-        [screen.tree]: []
-      })
+    for (const tree of SCREEN_TREES) {
+      expect({ [tree]: backControlsUnder(tree).map(describeControl) }).not.toEqual({ [tree]: [] })
     }
   })
 
   it('gives every one of them the button role', () => {
-    expect(CONTROLS.filter((control) => control.role !== 'button').map(describeControl)).toEqual([])
+    expect(
+      CONTROLS.filter((control) => !control.role.known || control.role.value !== 'button').map(
+        describeControl
+      )
+    ).toEqual([])
   })
 
   it('names every one of them in the app’s own wording for Back', () => {
     expect(
-      CONTROLS.filter((control) => !/^Back\b/.test(control.label)).map(describeControl)
+      CONTROLS.filter(
+        (control) => !control.label.known || !/^Back\b/.test(control.label.value)
+      ).map(describeControl)
     ).toEqual([])
   })
 })
