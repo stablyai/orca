@@ -80,6 +80,7 @@ export function configureLocalPtyProvider(args: {
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+        disabledTuiAgents: ptySettings?.disabledTuiAgents,
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
