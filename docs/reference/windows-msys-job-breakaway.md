@@ -119,14 +119,19 @@ never carries the patch:
 | -------------------- | ----------------------------- | ---------------- | ------------------ |
 | same host, same arch | patched                       | yes              | `build/Release`    |
 | cross host           | absent, cannot be cross-built | no               | the prebuild       |
-| cross arch, built    | patched, target arch          | no               | `build/Release`    |
+| cross arch, built    | patched, target arch          | yes              | `build/Release`    |
 | cross arch, failed   | the host's arch               | no               | the prebuild       |
 
 `beforeBuild` runs `rebuild-native-deps.mjs --platform=win32 --arch=<target>`, so
 a cross-arch slice normally does get a patched `build/Release` for the target —
-row three is a correct package whose leftover prebuild is never reached.
-`prunePackagedNodePty` keeps that prebuild anyway, because its guard is
-`electronArch === process.arch` rather than the arch of the binary.
+row three is a correct package. `prunePackagedNodePty` asks the same question the
+loader does, reading the PE machine of `build/Release` rather than comparing
+`electronArch` to `process.arch`, so row three's leftover prebuild goes. Keying
+off the host arch kept it: unreached in the normal case, but still the binary the
+loader takes if `build/Release` ever fails to load for an unrelated reason — an
+AV quarantine, a missing dependency — which is the silent fall-through this whole
+gate exists to close. Rows two and four keep the prebuild because it is the only
+thing there the target could load.
 
 So presence alone cannot separate row three from row four, and failing on any
 unmarked file present would reject a correct package with advice its builder
