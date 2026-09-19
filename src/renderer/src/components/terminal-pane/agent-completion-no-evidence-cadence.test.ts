@@ -111,6 +111,24 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(1)
   })
 
+  it('looks within 2s, not 15s, when a reattach paint marks activity at tracking start', async () => {
+    // Why: a reattach/restore paint goes through writeReplayData, which now
+    // records pane activity (see fresh-spawn-follow-reset-replay-activity.test.ts).
+    // On a remote pane that turns the first post-restart inspection from a
+    // 15s wait into a 2s one, so a running-but-quiet agent is found promptly.
+    const sshPtyId = toAppSshPtyId('target-1', 'pty-1')
+    const inspectProcess = vi.fn(async () => processResult('claude', true))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      getPtyId: () => sshPtyId,
+      isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, sshPtyId)
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the full 2s idle cadence on hosts where inspection is cheap', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess, {
