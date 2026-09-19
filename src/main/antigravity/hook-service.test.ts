@@ -18,6 +18,7 @@ vi.mock('os', async () => {
 
 import { AntigravityHookService } from './hook-service'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { posixHookInnerCommand } from '../agent-hooks/posix-hook-exec-command.test-fixture'
 
 const ANTIGRAVITY_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
@@ -128,10 +129,13 @@ describe('AntigravityHookService', () => {
     if (process.platform === 'win32') {
       expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
     } else {
-      expect(config['orca-status'].PreInvocation[0].command).toContain(
+      expect(config['orca-status'].PreToolUse[0].hooks?.[0]?.command).toMatch(/^\/bin\/sh -c /)
+      expect(posixHookInnerCommand(config['orca-status'].PreInvocation[0].command ?? '')).toContain(
         "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
       )
-      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
+      expect(posixHookInnerCommand(config['orca-status'].Stop[0].command ?? '')).toContain(
+        "ORCA_ANTIGRAVITY_EVENT='Stop'"
+      )
     }
 
     const script = readFileSync(

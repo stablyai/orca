@@ -1,6 +1,8 @@
+import { ANTIGRAVITY_EVENTS } from '../antigravity/hook-events'
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
+import { posixHookInnerCommand } from './posix-hook-exec-command.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -348,25 +350,23 @@ describe('remote hook service installers', () => {
         { matcher?: string; command?: string; hooks?: { command: string }[] }[]
       >
     }
-    for (const eventName of ['PreInvocation', 'PostInvocation', 'Stop']) {
-      const command = antigravityConfig['orca-status'][eventName]?.[0]?.command
+    const agyHooks = antigravityConfig['orca-status']
+    for (const { eventName, schema } of ANTIGRAVITY_EVENTS) {
+      const definition = agyHooks[eventName]?.[0]
+      const raw = definition?.command ?? definition?.hooks?.[0]?.command ?? ''
+      expect(raw).toMatch(/^\/bin\/sh -c /)
+      const command = posixHookInnerCommand(raw)
+      if (schema === 'tool') {
+        expect(definition?.matcher).toBe('*')
+      }
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
-    for (const eventName of ['PreToolUse', 'PostToolUse']) {
-      const definition = antigravityConfig['orca-status'][eventName]?.[0]
-      const command = definition?.hooks?.[0]?.command
-      expect(definition?.matcher).toBe('*')
-      expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
-    }
-    // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
-    expect(antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
-      `printf '%s\\n' '{"decision":"ask"}'`
-    )
-    expect(antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command).not.toContain(
-      '{"decision"'
-    )
+    // A remote host missing the script must still answer the gate (#2426).
+    const preTool = posixHookInnerCommand(agyHooks.PreToolUse[0].hooks?.[0]?.command ?? '')
+    const postTool = posixHookInnerCommand(agyHooks.PostToolUse[0].hooks?.[0]?.command ?? '')
+    expect(preTool).toContain(`printf '%s\\n' '{"decision":"ask"}'`)
+    expect(postTool).not.toContain('{"decision"')
 
     const ampPlugin = amp.fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')
     expect(ampPlugin).toContain('/hook/amp')

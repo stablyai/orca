@@ -31,3 +31,12 @@ export function wrapPosixHookCommand(
   ].join(' && ')
   return `if ${guards}; then ${invocation}; else ${fallback}; fi`
 }
+
+// ACP launches argv[0] directly; give the shell guard an executable interpreter.
+export function wrapPosixHookCommandForExec(
+  scriptPath: string,
+  env: Record<string, string> = {},
+  options: { fallbackStdout?: string; requiredEnvVar?: string } = {}
+): string {
+  return `/bin/sh -c ${quotePosixShellString(wrapPosixHookCommand(scriptPath, env, options))}`
+}

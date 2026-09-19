@@ -6,7 +6,7 @@ import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared
 import {
   getSharedManagedScriptPath,
   readHooksJson,
-  wrapPosixHookCommand,
+  wrapPosixHookCommandForExec,
   wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
@@ -60,7 +60,9 @@ function getWindowsWrapperScriptPath(event: AntigravityEvent): string {
 }
 
 function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): string {
-  return wrapPosixHookCommand(
+  // Why: Antigravity's ACP host execs this string as argv[0] rather than running it through a shell,
+  // so it must stay one spawnable token (#16087) — see wrapPosixHookCommandForExec.
+  return wrapPosixHookCommandForExec(
     scriptPath,
     { ORCA_ANTIGRAVITY_EVENT: event.eventName },
     // Why: a missing managed script must not brick tools; the guard answers PreToolUse itself instead of staying silent.
