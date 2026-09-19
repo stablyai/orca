@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(async () => ({ ok: true })),
   cancelStructuredAgentLaunch: vi.fn(),
   floatingFocused: false,
-  targetInsideFloatingPanel: false
+  targetInsideFloatingPanel: false,
+  paneColumnMoves: [] as { direction: string; worktreeId: string | null | undefined }[]
 }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
@@ -45,6 +46,12 @@ vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
 }))
 vi.mock('./terminal-agent-tab-shortcut', () => ({
   resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
+}))
+vi.mock('./tab-bar/tab-move-to-pane-column', () => ({
+  moveActiveTabToNewPaneColumn: (direction: string, worktreeId: string | null | undefined) => {
+    mocks.paneColumnMoves.push({ direction, worktreeId })
+    return true
+  }
 }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
@@ -100,6 +107,59 @@ function pressCmdS(): (EditorRequestCmdSaveDetail | undefined)[] {
   }
   return details
 }
+
+describe('handleTerminalWorkspaceKeyDown tab.moveToSplit', () => {
+  function pressMoveRight(): void {
+    const target = document.createElement('div')
+    document.body.appendChild(target)
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      metaKey: true,
+      altKey: true,
+      cancelable: true
+    })
+    Object.defineProperty(event, 'target', { value: target })
+    try {
+      handleTerminalWorkspaceKeyDown(
+        event,
+        {
+          ...controller,
+          keybindings: { 'tab.moveToSplitRight': ['Cmd+Alt+Right'] }
+        } as unknown as TerminalActivationController,
+        'darwin'
+      )
+    } finally {
+      target.remove()
+    }
+  }
+
+  beforeEach(() => {
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    mocks.paneColumnMoves = []
+    mocks.state = { activeView: 'terminal', activeTabType: 'terminal', getActiveTab: () => null }
+  })
+
+  it('moves the tab in the active workspace', () => {
+    pressMoveRight()
+
+    expect(mocks.paneColumnMoves).toEqual([
+      { direction: 'right', worktreeId: 'repo-1::/repo/worktree' }
+    ])
+  })
+
+  // Why: without this the chord pressed in the floating panel silently moved a
+  // tab in the background workspace the user cannot see.
+  it('moves the tab in the floating workspace when the panel has focus', () => {
+    mocks.floatingFocused = true
+
+    pressMoveRight()
+
+    expect(mocks.paneColumnMoves).toEqual([
+      { direction: 'right', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+    ])
+  })
+})
 
 describe('handleTerminalWorkspaceKeyDown editor.save', () => {
   beforeEach(() => {
