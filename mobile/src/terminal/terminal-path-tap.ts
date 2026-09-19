@@ -12,13 +12,13 @@ export type TappedFilePath = ParsedFileLinkLocation
 
 // Separator-anchored path tokens (absolute, relative, ~/, drive-letter, UNC) OR
 // a bare filename with an extension (README.md, index.ts), optionally suffixed
-// with :line or :line:col. Like desktop, we propose candidates and let the host
+// with :line, :line-end, or :line:col. Like desktop, we propose candidates and let the host
 // existence-check reject non-files — agents often print a bare filename, so
 // requiring a slash would miss the common case.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+(?:-\d+)?)?(?::\d+)?/g
 const SPACED_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+(?:-\d+)?)?(?::\d+)?/g
 
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
@@ -82,7 +82,7 @@ function trimSpacedPathTrailingProse(
   // segment is path-like (contains a separator) — "v1.2 reports/result.json"
   // extends, prose like "failed to start app.py" must not be swallowed.
   let selected: string | null = null
-  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+(?:-\d+)?)?(?::\d+)?(?=\s+|$)/g
   let match: RegExpExecArray | null
   while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
     const end = match.index + match[0].length
@@ -134,7 +134,7 @@ function hasSpacedPathExtension(text: string): boolean {
   if (!trimmed) {
     return false
   }
-  return /\s/.test(trimmed) && /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?$/.test(trimmed)
+  return /\s/.test(trimmed) && /\.[A-Za-z0-9_+-]+(?::\d+(?:-\d+)?)?(?::\d+)?$/.test(trimmed)
 }
 
 function matchSpacedFilePathAtColumn(lineText: string, col: number): TappedFilePath | null {

@@ -30,11 +30,11 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // filename tokens that only become links if they resolve against the cwd.
 
 // Matches a path with at least one `/` separator, optionally followed by
-// `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
+// `:line`, `:line-end`, and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
 // Why: framework route files commonly use punctuation segments like
 // `app/(shop)/products/[id]/page.tsx`; keep those links whole.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/gu
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]]*(?::\d+(?:-\d+)?)?(?::\d+)?/gu
 
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
@@ -43,15 +43,15 @@ const LOCAL_PATH_REGEX =
 // separator" inside the regex creates overlapping whitespace backtracking on
 // large ConPTY TUI lines. Keep the scan linear and filter candidates in code.
 const SPACED_PATH_WITH_SEPARATOR_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+(?:-\d+)?)?(?::\d+)?/g
 // Why this shares the broad candidate shape: extension paths with prose after
 // them still need trimming, but the whitespace/extension test stays in code.
 const SPACED_PATH_WITH_EXTENSION_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+(?:-\d+)?)?(?::\d+)?/g
 // Why this is also broad: the candidates path runs on hover, including huge
 // space-padded TUI lines, so reject line-ending spaced paths outside the regex.
 const LINE_ENDING_SPACED_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+(?:-\d+)?)?(?::\d+)?/g
 const SPACED_LOCAL_PATH_REGEXES = [
   SPACED_PATH_WITH_SEPARATOR_REGEX,
   SPACED_PATH_WITH_EXTENSION_REGEX,
@@ -94,7 +94,7 @@ function hasSpacedPathExtension(text: string): boolean {
     endIndex: text.length
   })
   const trimmedText = trimmedRange.text.trimEnd()
-  return /\s/.test(trimmedText) && /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?$/.test(trimmedText)
+  return /\s/.test(trimmedText) && /\.[A-Za-z0-9_+-]+(?::\d+(?:-\d+)?)?(?::\d+)?$/.test(trimmedText)
 }
 
 function getImmediateUriPrefix(lineText: string, endIndex: number): string {
@@ -124,7 +124,7 @@ function trimSpacedPathTrailingProse(
   // path-like (contains a separator) — "v1.2 reports/result.json" extends,
   // prose like "failed to start app.py" must not be swallowed.
   let selected: string | null = null
-  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+(?:-\d+)?)?(?::\d+)?(?=\s+|$)/g
   const pathStartPattern = /(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g
   let pathStartCount = 0
   let nextPathStart = pathStartPattern.exec(range.text)
@@ -188,7 +188,7 @@ function buildLineEndingSpacedPathPrefixRanges(
 
 // Ported from VSCode's TerminalLocalLinkDetector. Extracts anything that
 // contains a path separator, optionally with a `:line:col` suffix — covers
-// `./src/foo.ts`, `/abs/bar`, `src/foo.ts:12:3`, etc.
+// `./src/foo.ts`, `/abs/bar`, `src/foo.ts:12:3`, `src/foo.ts:12-18`, etc.
 function detectLocalPathLinks(
   lineText: string,
   includeLineEndingPrefixCandidates = false

@@ -36,6 +36,11 @@ const FILE_URL_TAP_CASES: FileTapResolverCase[] = [
     expected: { pathText: '/tmp/result.json', line: 8, column: 2 }
   },
   {
+    name: 'trailing line range suffix',
+    uri: 'file:///tmp/result.json:8-12',
+    expected: { pathText: '/tmp/result.json', line: 8, column: null }
+  },
+  {
     name: 'percent-encoded colon suffix stays in the path',
     uri: 'file:///tmp/report%3A8%3A2',
     expected: { pathText: '/tmp/report:8:2', line: null, column: null }

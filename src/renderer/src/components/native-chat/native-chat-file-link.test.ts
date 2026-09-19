@@ -175,6 +175,14 @@ describe('resolveNativeChatFileLink', () => {
     })
   })
 
+  it('opens a terminal-style line range at its starting line', () => {
+    expect(resolveNativeChatFileLink('fakesnow/cursor.py:447-464', context)).toEqual({
+      absolutePath: '/repo/worktree/fakesnow/cursor.py',
+      line: 447,
+      column: null
+    })
+  })
+
   it('resolves encoded file URIs', () => {
     expect(resolveNativeChatFileLink('file:///repo/worktree/My%20File.md#L7', context)).toEqual({
       absolutePath: '/repo/worktree/My File.md',

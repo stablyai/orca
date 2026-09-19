@@ -5,7 +5,7 @@ export type ParsedFileLinkLocation = {
 }
 
 export function parseFileLinkLocation(value: string): ParsedFileLinkLocation | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
+  const match = /^(.*?)(?::(\d+)(?:-\d+)?)?(?::(\d+))?$/.exec(value)
   const pathText = match?.[1]
   if (!pathText) {
     return null
