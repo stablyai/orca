@@ -713,7 +713,9 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\""
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "newWorkspace": "New workspace",
+      "addProject": "Add project"
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -1499,6 +1501,27 @@
     "smartRailRow": {
       "title": "Smart rail",
       "subtitle": "Shows keys for what your agent is doing"
+    },
+    "addProjectModal": {
+      "title": "Add project",
+      "browseFolder": "Browse folder",
+      "browseFolderHint": "Existing Git repository or folder on this host",
+      "cloneFromUrl": "Clone from URL",
+      "cloneFromUrlHint": "Clone a remote Git repository",
+      "createNewProject": "Create new project",
+      "createNewProjectHint": "Start from an empty folder",
+      "repositoryUrlLabel": "Repository URL",
+      "repositoryUrlPlaceholder": "https://github.com/owner/repo",
+      "cloneHint": "Cloned into the host's default projects folder. Large repositories can take a few minutes.",
+      "cloneButton": "Clone repository",
+      "projectNameLabel": "Project name",
+      "projectNamePlaceholder": "my-project",
+      "createHint": "An empty git repository with an initial commit, created in the host's default projects folder.",
+      "createButton": "Create project",
+      "projectPathLabel": "Project path",
+      "projectPathPlaceholder": "/home/dev/my-project",
+      "addExistingHint": "The absolute path of an existing git repository on this host.",
+      "backButton": "Back to Add project"
     }
   },
   "pullRequest": {
