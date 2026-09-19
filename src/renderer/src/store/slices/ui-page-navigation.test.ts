@@ -736,4 +736,26 @@ describe('createUISlice space navigation', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
     expect(store.getState().activeView).toBe('artifacts')
   })
+
+  it('opens worktree palette modal and stores intent when handling worktree-create deep link', () => {
+    const store = createUIStore()
+
+    store.getState().openWorktreeDeepLink({
+      type: 'worktree-create',
+      repo: 'wom7web',
+      name: 'feat/siri-shortcuts',
+      branch: 'main'
+    })
+
+    expect(store.getState().activeModal).toBe('worktree-palette')
+    expect(store.getState().pendingWorktreeDeepLink).toEqual({
+      type: 'worktree-create',
+      repo: 'wom7web',
+      name: 'feat/siri-shortcuts',
+      branch: 'main'
+    })
+
+    store.getState().clearPendingWorktreeDeepLink()
+    expect(store.getState().pendingWorktreeDeepLink).toBeNull()
+  })
 })

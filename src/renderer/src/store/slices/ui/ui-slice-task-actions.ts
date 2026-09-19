@@ -22,6 +22,7 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
     previousViewBeforeSpace: 'terminal',
     previousViewBeforeSkills: 'terminal',
     pendingSkillShareId: null,
+    pendingWorktreeDeepLink: null,
     pendingSkillsSharedView: false,
     previousViewBeforeMobile: 'terminal',
     previousViewBeforeArtifacts: 'terminal',
