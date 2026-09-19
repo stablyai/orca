@@ -13,6 +13,13 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
 
+export function resolveWorkerWorktreeBaseBranch(
+  requestedBaseBranch: string | undefined,
+  parentBranch: string
+): string | undefined {
+  return requestedBaseBranch ?? (parentBranch || undefined)
+}
+
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -44,11 +51,15 @@ export async function createWorkerWorktree(args: {
 }> {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
+  const baseBranch =
+    requestedWorktree === 'new-child'
+      ? resolveWorkerWorktreeBaseBranch(params.baseBranch, coordinatorWorktree.branch)
+      : params.baseBranch
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
     repoSelector: params.repo ?? coordinatorWorktree.repoId,
     name: params.name as string,
-    baseBranch: params.baseBranch,
+    baseBranch,
     displayName: params.displayName,
     ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
     comment: params.comment,
@@ -75,7 +86,8 @@ export async function createWorkerWorktree(args: {
   effects.push({
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
+    id: created.worktree.id,
+    ...(baseBranch ? { baseBranch } : {})
   })
   db.recordWorkerStage({
     dispatchId,
