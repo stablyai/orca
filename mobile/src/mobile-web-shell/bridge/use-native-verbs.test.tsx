@@ -17,7 +17,12 @@ vi.mock('../../transport/host-client-hooks', () => ({
 import { RpcClientProvider } from '../../transport/client-context.web'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
-import { NativeVerbError, useNativeVerbs, type NativeVerbs } from './use-native-verbs'
+import {
+  NATIVE_VERB_REASONS,
+  NativeVerbError,
+  useNativeVerbs,
+  type NativeVerbs
+} from './use-native-verbs'
 
 const held: { verbs: NativeVerbs | null } = { verbs: null }
 
@@ -157,12 +162,37 @@ describe('a verb the shell refuses', () => {
     return caught
   }
 
-  it('names the seam when the handler declines', async () => {
-    const error = await rejectionFrom(() =>
-      Promise.reject(new Error('image is not served by this build for native.clipboard.read'))
-    )
-    expect(error.reason).toBe('native_verb_refused')
-    expect(error.message).toContain('not served by this build')
+  it('names an out-of-scope mime as its own reason, without the handler message', async () => {
+    // A coded error, not the handler's class: what the host reads is the `code` property, so this
+    // is the contract between the two and importing the real class would pull react-native in.
+    const declined = Object.assign(new Error('image is not served by this build'), {
+      code: 'native_verb_out_of_scope'
+    })
+    const error = await rejectionFrom(() => Promise.reject(declined))
+    expect(error.reason).toBe('native_verb_out_of_scope')
+    // The handler's words stay on the device: this one names the mime, and a read that failed
+    // after reading could name what it read.
+    expect(error.message).not.toContain('image')
+  })
+
+  it('separates a device failure from an out-of-scope one, which is the point of the codes', async () => {
+    const error = await rejectionFrom(() => Promise.reject(new Error('the pasteboard is gone')))
+    expect(error.reason).toBe('native_verb_failed')
+    expect(error.message).not.toContain('pasteboard')
+  })
+
+  it('answers a reason from the declared list for every arm a caller can reach', async () => {
+    const reasons = [
+      (await rejectionFrom(() => Promise.reject(new Error('x')))).reason,
+      (await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))).reason,
+      (await rejectionFrom(() => Promise.resolve({ nonsense: 1 }))).reason
+    ]
+    // No `unreported`: every path this build can take names itself.
+    for (const reason of reasons) {
+      expect(NATIVE_VERB_REASONS, reason).toContain(reason)
+      expect(reason).not.toBe('unreported')
+    }
+    expect(reasons).toEqual(['native_verb_failed', 'reply-too-large', 'native_verb_result'])
   })
 
   it('names the frame refusal when the reply could never have reached the page', async () => {

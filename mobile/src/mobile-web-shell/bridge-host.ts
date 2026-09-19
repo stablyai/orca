@@ -4,12 +4,8 @@ import {
   BridgeNativeVerbRefusedError,
   BridgeReplyUndeliverableError
 } from './bridge-host-errors'
-import {
-  BRIDGE_NATIVE_VERBS,
-  isBridgeNativeMethod,
-  readBridgeNativeVerbCall,
-  type BridgeNativeVerb
-} from './bridge/bridge-native-verbs'
+import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
+import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { BRIDGE_MAX_SUBSCRIPTIONS, readBridgeExternalLinkUrl } from './bridge/bridge-caps'
@@ -164,47 +160,16 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     }
   }
 
-  /**
-   * One `native.` verb, answered here and never forwarded. The reply is built as an `RpcResponse`
-   * so it rides `sendReply` like any other: that is what applies `BRIDGE_MAX_REPLY_BYTES`, so a
-   * clipboard too large for the page is refused rather than truncated. No `_meta` — no runtime
-   * produced this, and `isRpcResponse` does not require one.
-   */
-  async function serveNative(id: string, method: string, params: unknown): Promise<RpcResponse> {
-    const call = readBridgeNativeVerbCall({ method, granted: BRIDGE_NATIVE_GRANTS, params })
-    if (!call.ok) {
-      throw new BridgeNativeVerbRefusedError(call.detail)
-    }
-    const answered = await serveVerbCoded(call.verb, call.params)
-    // The table declares what a verb answers, and without this that claim was decoration: a
-    // handler could hand the page any shape and the page's own parse would be the first to notice,
-    // halfway through a screen.
-    const result = BRIDGE_NATIVE_VERBS[call.verb].result.safeParse(answered)
-    if (!result.success) {
-      throw new BridgeNativeVerbRefusedError(`${call.verb} answered a result it does not declare`)
-    }
-    return { id, ok: true, result: result.data }
-  }
-
-  /** A handler's own failure, re-raised under the seam's code so every native refusal names itself
-   *  the same way page-side. The message is the handler's, because it is the one that says why. */
-  async function serveVerbCoded(verb: BridgeNativeVerb, params: unknown): Promise<unknown> {
-    try {
-      return await options.serveNativeVerb(verb, params)
-    } catch (error) {
-      throw new BridgeNativeVerbRefusedError(
-        error instanceof Error ? error.message : `${verb} could not be served`
-      )
-    }
-  }
-
   const requests = new BridgeHostRequests({
     client,
     isIdTaken: (id) => subscriptions.has(id),
     sendReply,
     sendError,
     capExceeded: (message) => new BridgeCapExceededError(message),
-    serveNative
+    serveNative: createNativeVerbServer({
+      granted: BRIDGE_NATIVE_GRANTS,
+      serveVerb: (verb, params) => options.serveNativeVerb(verb, params)
+    })
   })
 
   // `wantsBinary` is read by the contract and acted on in C6, which owns the screencast encoder and
@@ -223,7 +188,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (isBridgeNativeMethod(message.method)) {
       sendError(
         id,
-        new BridgeNativeVerbRefusedError(`${message.method} is not a stream this shell serves`)
+        new BridgeNativeVerbRefusedError(
+          'native_verb_not_a_stream',
+          `${message.method} is not a stream this shell serves`
+        )
       )
       return
     }

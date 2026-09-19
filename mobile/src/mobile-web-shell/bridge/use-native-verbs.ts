@@ -57,9 +57,33 @@ export class NativeVerbError extends Error {
  */
 const shellCodedErrorSchema = z.object({ code: z.string() })
 
+/**
+ * Every reason a caller can be handed, so a `switch` over them is exhaustive.
+ *
+ * `ungranted` is this side's, decided before a frame is sent. The rest are the shell's, carried on
+ * the rejection by `reconstructBridgeError`. `unreported` is the floor: nothing in this build
+ * reaches it, and it exists so a shell newer than the page still produces a reason rather than a
+ * blank one.
+ */
+export const NATIVE_VERB_REASONS = [
+  'ungranted',
+  'native_verb_unknown',
+  'native_verb_ungranted',
+  'native_verb_params',
+  'native_verb_result',
+  'native_verb_out_of_scope',
+  'native_verb_failed',
+  'native_verb_not_a_stream',
+  'native_verb_not_a_verb',
+  'bridge_cap_exceeded',
+  'bridge_host_disposed',
+  'reply-too-large',
+  'unreported'
+] as const
+
 function nativeVerbReason(error: unknown): string {
   const coded = shellCodedErrorSchema.safeParse(error)
-  return coded.success ? coded.data.code : 'unknown'
+  return coded.success ? coded.data.code : 'unreported'
 }
 
 export function useNativeVerbs(): NativeVerbs {

@@ -83,6 +83,13 @@ export function readBridgeNativeVerb(method: string): BridgeNativeVerb | null {
 /** Why the seam would not serve a `native.` method. Each is a different fault, so each is named. */
 export type BridgeNativeVerbRefusal = 'unknown-verb' | 'ungranted' | 'invalid-params'
 
+/** The code each pre-dispatch refusal crosses under. One decision, one name, in one place. */
+export const BRIDGE_NATIVE_VERB_REFUSAL_CODES = {
+  'unknown-verb': 'native_verb_unknown',
+  ungranted: 'native_verb_ungranted',
+  'invalid-params': 'native_verb_params'
+} as const
+
 export type BridgeNativeVerbRead =
   | { ok: true; verb: BridgeNativeVerb; params: unknown }
   | { ok: false; refusal: BridgeNativeVerbRefusal; detail: string }

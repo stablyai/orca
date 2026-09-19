@@ -14,6 +14,9 @@ import {
  * claiming the latter would send whoever adds images looking for a platform gap that is not there.
  */
 export class NativeVerbOutOfScopeError extends Error {
+  /** Read by the host so this reaches the page as its own reason, without its message. */
+  readonly code = 'native_verb_out_of_scope'
+
   constructor(verb: BridgeNativeVerb, mime: BridgeClipboardMime) {
     super(`${mime} is not served by this build for ${verb}`)
     this.name = 'NativeVerbOutOfScopeError'

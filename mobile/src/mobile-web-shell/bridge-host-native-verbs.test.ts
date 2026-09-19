@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
-import { BRIDGE_NATIVE_REFUSAL_CODE } from './bridge-host-errors'
 
 function request(method: string, params?: unknown): string {
   return params === undefined
@@ -49,7 +48,7 @@ describe('a native method on a frame that is not a request', () => {
       clientFrame({ type: 'subscribe', id: ID, method: 'native.clipboard.read', params: {} })
     )
     expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
   })
 
   it('names the collision, not the fence, when the id is one already in flight', async () => {
@@ -73,7 +72,7 @@ describe('a native method on a frame that is not a request', () => {
       clientFrame({ type: 'subscribe', id: ID, method: 'native.dictation.listen', params: {} })
     )
     expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
   })
 })
 
@@ -117,7 +116,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(request('native.dictation.start', {}))
     await flushBridge()
     expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
   })
 
   it('refuses params the verb does not take', async () => {
@@ -126,7 +125,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(request('native.clipboard.write', { mime: 'text' }))
     await flushBridge()
     expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
   })
 
   it('refuses a result the verb does not declare, rather than passing it to the page', async () => {
@@ -137,7 +136,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
     await flushBridge()
     expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
     expect(replyPayload(bridge)).toBeNull()
   })
 
@@ -149,7 +148,18 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
     await flushBridge()
     expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.message).toContain('the pasteboard is unavailable')
+    expect(refusal(bridge)).not.toBeNull()
+  })
+
+  it('does not carry a handler message to the page, which could be what it just read', async () => {
+    // A handler that puts pasteboard text in its message would otherwise hand that text back
+    // through the error frame, which is the one path out of this seam that is not a result.
+    const secret = 'sk-live-not-for-the-page'
+    const bridge = harness({ serveNativeVerb: () => Promise.reject(new Error(secret)) })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(JSON.stringify(bridge.posted)).not.toContain(secret)
   })
 
   it('takes a slot each, so the one over the cap is refused like any other request', async () => {

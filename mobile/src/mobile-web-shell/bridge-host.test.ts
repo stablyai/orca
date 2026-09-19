@@ -420,6 +420,7 @@ describe('teardown', () => {
         id: ID,
         error: {
           category: 'BridgeHostDisposedError',
+          code: 'bridge_host_disposed',
           message: 'the page bridge was torn down before this request answered',
           isRpcDeliveryUnknown: true
         }
