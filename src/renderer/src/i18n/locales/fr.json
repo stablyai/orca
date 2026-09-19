@@ -48,7 +48,8 @@
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "turkish": "Türkçe"
       },
       "statusBar": {
         "claudeToggleDescription": "Afficher l'utilisation des tokens et des coûts de Claude pour l'espace de travail actif.",
