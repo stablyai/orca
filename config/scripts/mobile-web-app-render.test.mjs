@@ -456,9 +456,12 @@ describeRender('an image preview under the shell policy', () => {
   it('decodes a data: URI, which is the only shape a file preview has', async () => {
     // What a preview actually is: normalizeMobileFilePreviewResult composes
     // `data:<mime>;base64,<content>` out of a reply the page already holds and hands it to React
-    // Native Web's Image, which paints it as a CSS background and hangs its onError on a hidden
-    // <img> of the same URI. That element is the oracle — its failure is what turns the screen
-    // into "Binary preview unavailable" — and under img-src 'self' alone it never loads.
+    // Native Web's Image, which paints it as a CSS background. The `new Image()` below is not a
+    // stand-in for that: react-native-web 0.21.2 loads through `ImageLoader.load`, which is
+    // `new window.Image()` with `onload`/`onerror` on it, and the hidden <img> the component also
+    // renders carries neither — it is there for the browser's image context menu and for
+    // `getBackgroundSize()`. So this is the same mechanism the screen's own load runs through, and
+    // its failure is what turns the screen into "Unable to load preview".
     const { page, errors } = await openPage()
     await page.goto(`${origin}/`, { waitUntil: 'load' })
     const naturalWidth = await page.evaluate(
