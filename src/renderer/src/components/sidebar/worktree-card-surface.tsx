@@ -4,6 +4,7 @@ import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
+import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
 import { buildWorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
@@ -40,6 +41,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     setShowRenameErrorDialog
   } = card
   const { titleOnlyCard, cardStyle } = presentation
+  const isSleeping = useIsSleepingWorktree(worktree.id)
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
 
@@ -66,6 +68,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
+        // Why: sleep dim carries the awake/sleeping distinction in new-card style,
+        // where quiet statuses share the branch/PR lane (#19624). Same token as
+        // the disconnected dim; legacy keeps its green/gray dots untouched.
         // Why: no SSH dim — the inline host control now states the disconnected state
         // explicitly, and a subtree opacity would composite its destructive tint and spinner
         // down to an illegible alpha (a descendant cannot escape an ancestor's opacity).
@@ -94,7 +99,15 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           </div>
         </div>
       )}
-      {parentCardContent}
+      {isSleeping && newCardStyle && !isDeleting ? (
+        // Why a token mix (see [data-worktree-sleeping-dim] in main.css), not opacity:
+        // opacity dims toward whatever is painted behind, so the step shrank on lighter
+        // surfaces and vanished on custom backgrounds (#19624). Scoped to the parent row
+        // so awake lineage children keep their own brightness.
+        <div data-worktree-sleeping-dim="">{parentCardContent}</div>
+      ) : (
+        parentCardContent
+      )}
 
       {newCardStyle && lineageChildren ? (
         <div

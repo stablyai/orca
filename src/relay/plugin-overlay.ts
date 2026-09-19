@@ -243,8 +243,10 @@ export class PluginOverlayManager {
     }
   }
 
-  private getDefaultPiAgentDir(kind: PiAgentKind): string {
-    return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
+  private getDefaultPiAgentDir(kind: PiAgentKind, configDirName?: string): string {
+    const root =
+      kind === 'omp' ? configDirName || PI_AGENT_HOME_DIR_NAME.omp : PI_AGENT_HOME_DIR_NAME[kind]
+    return join(this.homeDir, root, PI_AGENT_SUBDIR)
   }
 
   private canOverwritePiExtension(path: string): boolean {
@@ -285,14 +287,15 @@ export class PluginOverlayManager {
     id: string,
     existingAgentDir?: string,
     kind: PiAgentKind = 'pi',
-    options?: { materializeDefaultHome?: boolean }
+    options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): MaterializePiResult | null {
     const extensionSource = this.getPiExtensionSource(kind)
     if (!extensionSource || !isUsableId(id)) {
       return null
     }
     try {
-      const sourceAgentDir = existingAgentDir ?? this.getDefaultPiAgentDir(kind)
+      const sourceAgentDir =
+        existingAgentDir ?? this.getDefaultPiAgentDir(kind, options?.configDirName)
       if (existingAgentDir && !existsSync(existingAgentDir)) {
         return null
       }

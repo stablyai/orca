@@ -7,6 +7,7 @@ export type LocalPtyProviderOptions = {
     id: string,
     baseEnv: Record<string, string>,
     ctx?: {
+      explicitEnv?: PtySpawnOptions['env']
       command?: string
       launchAgent?: PtySpawnOptions['launchAgent']
       codexHomePathOverride?: PtySpawnOptions['codexHomePathOverride']

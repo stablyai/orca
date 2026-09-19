@@ -160,7 +160,13 @@ export function buildPtyHostEnv(
 
     if (shouldPrepareOmpShadow) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp', {
-        materializeDefaultHome: explicitPiAgentKind === 'omp'
+        materializeDefaultHome: explicitPiAgentKind === 'omp',
+        // WSL loads the host-rooted managed extension through drvfs; guest storage stays separate.
+        ...(opts.isWsl
+          ? { configDirName: '.omp' }
+          : baseEnv.PI_CONFIG_DIR !== undefined
+            ? { configDirName: baseEnv.PI_CONFIG_DIR }
+            : {})
       })
       Object.assign(baseEnv, ompEnv)
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)

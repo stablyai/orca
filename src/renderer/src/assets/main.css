@@ -1274,6 +1274,29 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
+/* Why: a sleeping card dims by mixing the theme's own text tokens toward the
+   sidebar surface in oklab, not by painting opacity over whatever is behind it.
+   An opacity step shrinks as the surface lightens, so the cue faded on lighter
+   themes and custom tints; an oklab mix is a fixed perceptual step, keeps themed
+   hues instead of greying them, and reaches every descendant through the tokens
+   they already use (#19624). The amber unread badge sits outside this family and
+   stays full-bright. */
+[data-worktree-sleeping-dim] {
+  color: color-mix(in oklab, var(--worktree-sidebar-foreground) 52%, var(--worktree-sidebar));
+  --foreground: color-mix(
+    in oklab,
+    var(--worktree-sidebar-foreground) 52%,
+    var(--worktree-sidebar)
+  );
+  --muted-foreground: color-mix(
+    in oklab,
+    var(--worktree-sidebar-foreground) 34%,
+    var(--worktree-sidebar)
+  );
+  --muted: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
+  --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
+}
+
 .worktree-agent-row-hover:hover {
   background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
 }
@@ -2761,12 +2784,22 @@ html.native-shell .app-layout {
   outline-offset: 1px;
 }
 
-.orca-diff-comment-range-highlight {
-  background: rgba(59, 130, 246, 0.14);
+/* Why: the band a gutter drag paints, and the band that stays lit under an open composer.
+   Mixed from --ring (the token for active selection) rather than an invented accent, and
+   carried mostly by the solid left bar so it still reads on top of the added/removed row
+   tints. Matches the .orca-conflict-* recipe above. */
+.monaco-editor .orca-diff-comment-range-highlight {
+  background: color-mix(in srgb, var(--ring) 38%, transparent);
+  border-left: 3px solid var(--ring);
 }
 
-.dark .orca-diff-comment-range-highlight {
-  background: rgba(96, 165, 250, 0.18);
+.monaco-editor .orca-diff-comment-range-margin {
+  background: color-mix(in srgb, var(--ring) 26%, transparent);
+}
+
+/* Why: while a drag is live the pane stops trying to select text under the sweeping pointer. */
+.orca-diff-comment-range-dragging {
+  user-select: none;
 }
 
 .orca-diff-comment-inline {

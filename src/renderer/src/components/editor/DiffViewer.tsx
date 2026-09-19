@@ -107,6 +107,8 @@ export default function DiffViewer({
     comments: worktreeId ? diffComments : [],
     commentableLineNumbers,
     addButtonLabel: addLineCommentLabel,
+    pendingCommentTarget: popover,
+    addNoteShortcutEnabled: hasLineCommentAction,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
       setPopover({
         lineNumber,
@@ -379,7 +381,7 @@ export default function DiffViewer({
       <div ref={diffBodyRef} className="flex-1 min-h-0 relative">
         {popover && hasLineCommentAction && !renderLimit.limited && (
           <DiffCommentPopover
-            key={popover.lineNumber}
+            key={`${popover.startLine ?? popover.lineNumber}:${popover.lineNumber}`}
             lineNumber={popover.lineNumber}
             startLine={popover.startLine}
             top={popover.top}
