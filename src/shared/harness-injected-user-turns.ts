@@ -10,7 +10,7 @@
 // `<user_query>` envelope is a genuine user turn, and misclassifying it would
 // hide the turn (drop it from transcripts, demote its session title, or leave
 // the agent visibly done after an interrupt).
-const LEADING_TAG_NAME = /^<([a-z][a-z0-9-]*)(?:[\s>]|$)/
+const LEADING_TAG_NAME = /^<([a-z][a-z0-9_-]*)(?:[\s>]|$)/i
 
 // Consumers must only treat tags we have observed from harnesses as machinery;
 // arbitrary kebab tags can be genuine user code.
@@ -24,6 +24,7 @@ const KNOWN_HARNESS_TAG_NAMES = new Set([
   'command-name',
   'cross-session-message',
   'fork-boilerplate',
+  'hook_result',
   'local-command-caveat',
   'local-command-stderr',
   'local-command-stdout',
@@ -67,6 +68,51 @@ export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
     return true
   }
   return HARNESS_INJECTED_TURN_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
+
+// Why: nested same-tag content needs depth tracking; a single linear scan avoids quadratic rescans.
+function findMatchingCloseTagEnd(remaining: string, tagName: string): number | null {
+  const tagRe = new RegExp(`<(?:(/)${tagName}>|${tagName}(?=[\\s>]|$))`, 'gi')
+  let depth = 1
+  tagRe.lastIndex = 1
+  let match: RegExpExecArray | null
+  while ((match = tagRe.exec(remaining))) {
+    if (!match[1]) {
+      depth += 1
+      continue
+    }
+    depth -= 1
+    if (depth === 0) {
+      return tagRe.lastIndex
+    }
+  }
+  return null
+}
+
+// Why: 'channel' is only machinery in its attributed <channel source=…> form,
+// matching HARNESS_INJECTED_TURN_PREFIXES — a bare <channel> is real user content.
+function isKnownHarnessEnvelopeStart(remaining: string, tagName: string): boolean {
+  return (
+    KNOWN_HARNESS_TAG_NAMES.has(tagName) ||
+    (tagName === 'channel' && remaining.toLowerCase().startsWith('<channel source='))
+  )
+}
+
+/** Remove leading known harness XML wrappers while preserving the real prompt after them. */
+export function stripKnownHarnessEnvelope(text: string): string {
+  let remaining = text.trim()
+  while (remaining) {
+    const tagName = LEADING_TAG_NAME.exec(remaining)?.[1]?.toLowerCase()
+    if (!tagName || !isKnownHarnessEnvelopeStart(remaining, tagName)) {
+      break
+    }
+    const closeTagEnd = findMatchingCloseTagEnd(remaining, tagName)
+    if (closeTagEnd === null) {
+      return ''
+    }
+    remaining = remaining.slice(closeTagEnd).trim()
+  }
+  return remaining
 }
 
 /** True only for the observed post-compaction continuation prompt. */
