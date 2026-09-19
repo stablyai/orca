@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { execFile, execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -72,6 +72,130 @@ describe('HermesHookService', () => {
     expect(config.model).toBe('test-model')
     expect(config.plugins.enabled).toEqual(['disk-cleanup', _internals.HERMES_PLUGIN_NAME])
     expect(config.plugins.disabled).toEqual([])
+  })
+
+  it('preserves user YAML comments and multiline formatting while toggling the plugin', () => {
+    writeFileSync(
+      join(homeDir, 'config.yaml'),
+      [
+        '# Keep this user documentation.',
+        'model: test-model # Keep this inline explanation.',
+        '',
+        'plugins:',
+        '  # Keep this plugin-list explanation.',
+        '  enabled:',
+        '    - disk-cleanup # Keep this entry explanation.',
+        '  disabled: []',
+        '',
+        'system_prompt: |',
+        '  Keep this multiline user configuration.',
+        '  It is unrelated to Orca.',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const service = new HermesHookService()
+    const installed = service.install()
+    expect(installed.state).toBe('installed')
+
+    const installedConfig = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
+      plugins: { enabled: string[] }
+    }
+    expect(installedConfig.plugins.enabled).toContain(_internals.HERMES_PLUGIN_NAME)
+
+    const removed = service.remove()
+    expect(removed.state).toBe('not_installed')
+
+    const config = readFileSync(join(homeDir, 'config.yaml'), 'utf-8')
+    expect(config).toContain('# Keep this user documentation.')
+    expect(config).toContain('model: test-model # Keep this inline explanation.')
+    expect(config).toContain('# Keep this plugin-list explanation.')
+    expect(config).toContain('- disk-cleanup # Keep this entry explanation.')
+    expect(config).toContain('system_prompt: |')
+    expect(config).toContain('  Keep this multiline user configuration.')
+    expect(config).not.toContain(_internals.HERMES_PLUGIN_NAME)
+  })
+
+  it('updates a null config root safely', () => {
+    writeFileSync(join(homeDir, 'config.yaml'), ['null', ''].join('\n'), 'utf-8')
+
+    const service = new HermesHookService()
+    const status = service.install()
+
+    expect(status).toMatchObject({ state: 'installed', detail: null })
+    const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
+      plugins: { enabled: string[] }
+    }
+    expect(config.plugins.enabled).toEqual([_internals.HERMES_PLUGIN_NAME])
+  })
+
+  it('does not mutate YAML aliases when updating plugin lists', () => {
+    writeFileSync(
+      join(homeDir, 'config.yaml'),
+      [
+        'plugins: &plugin-config',
+        '  enabled: &enabled-plugins',
+        '    - disk-cleanup',
+        'plugin-config-copy: *plugin-config',
+        'enabled-copy: *enabled-plugins',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const status = new HermesHookService().install()
+
+    expect(status).toMatchObject({ state: 'installed', detail: null })
+    const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
+      plugins: { enabled: string[] }
+      'plugin-config-copy': { enabled: string[] }
+      'enabled-copy': string[]
+    }
+    expect(config.plugins.enabled).toEqual(['disk-cleanup', _internals.HERMES_PLUGIN_NAME])
+    expect(config['plugin-config-copy'].enabled).toEqual(['disk-cleanup'])
+    expect(config['enabled-copy']).toEqual(['disk-cleanup'])
+  })
+
+  it('does not add absent plugin list keys or wrap unrelated long scalars', () => {
+    const longValue = 'x'.repeat(120)
+    const original = [
+      'plugins:',
+      '  enabled:',
+      '    - disk-cleanup',
+      `unrelated: ${longValue}`,
+      ''
+    ].join('\n')
+    writeFileSync(join(homeDir, 'config.yaml'), original, 'utf-8')
+
+    const status = new HermesHookService().install()
+    const config = readFileSync(join(homeDir, 'config.yaml'), 'utf-8')
+
+    expect(status.state).toBe('installed')
+    expect(config).toContain(`unrelated: ${longValue}`)
+    expect(config).not.toMatch(/^  disabled:/m)
+  })
+
+  it('reports malformed disabled lists without treating them as empty', () => {
+    writeFileSync(
+      join(homeDir, 'config.yaml'),
+      [
+        'plugins:',
+        `  enabled: [${_internals.HERMES_PLUGIN_NAME}]`,
+        '  disabled: not-a-list',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    const pluginDir = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME)
+    mkdirSync(pluginDir, { recursive: true })
+    writeFileSync(join(pluginDir, 'plugin.yaml'), _internals.getPluginManifest(), 'utf-8')
+    writeFileSync(join(pluginDir, '__init__.py'), _internals.getPluginInitSource(), 'utf-8')
+
+    const status = new HermesHookService().getStatus()
+
+    expect(status.state).toBe('partial')
+    expect(status.detail).toContain('plugins.disabled is not a string list')
   })
 
   it('normalizes malformed plugin lists during install', () => {
