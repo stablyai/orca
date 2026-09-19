@@ -33,6 +33,7 @@ afterEach(() => {
 function renderSection(
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
   options: {
+    skipRemoveProjectConfirm?: boolean
     defaultsSupported?: boolean
     sourceDefaultsSupported?: boolean
     worktreeVisibilityDefaults?: ReturnType<typeof getDefaultSettings>['worktreeVisibilityDefaults']
@@ -40,6 +41,7 @@ function renderSection(
 ): void {
   const settings = getDefaultSettings('/home/user')
   settings.worktreeVisibilityDefaults = options.worktreeVisibilityDefaults
+  settings.skipRemoveProjectConfirm = options.skipRemoveProjectConfirm ?? false
   act(() => {
     root.render(
       <GeneralWorkspaceSettingsSection
@@ -146,5 +148,18 @@ describe('GeneralWorkspaceSettingsSection external visibility', () => {
     })
     const sourceId = defaults.customSources[0].id
     expect(defaults.sourcePreferences.custom).toEqual({ [sourceId]: 'hide' })
+  })
+})
+
+describe('project removal confirmation setting', () => {
+  it.each([false, true])('can reverse the skip preference from %s', async (skip) => {
+    const updateSettings = vi.fn()
+    renderSection(updateSettings, { skipRemoveProjectConfirm: skip })
+    const control = container.querySelector<HTMLButtonElement>(
+      '#general-skip-remove-project-confirm [role="switch"]'
+    )!
+    expect(control.getAttribute('aria-checked')).toBe(String(!skip))
+    await act(async () => control.click())
+    expect(updateSettings).toHaveBeenCalledWith({ skipRemoveProjectConfirm: !skip })
   })
 })

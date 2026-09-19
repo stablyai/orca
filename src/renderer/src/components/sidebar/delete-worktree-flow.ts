@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { runProjectRemoval } from './remove-project-flow'
 import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
 import { toWorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
@@ -55,8 +56,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       settings: state.settings
     })
     const hostId = repo ? getRepoExecutionHostId(repo) : target.hostId
-    // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
-    state.openModal('confirm-remove-folder', {
+    // Why: git refuses to delete the primary checkout; offer removal of its owning project from Orca.
+    runProjectRemoval({
       repoId: target.repoId,
       displayName: repo?.displayName ?? target.displayName,
       ...(hostId ? { hostId } : {})
