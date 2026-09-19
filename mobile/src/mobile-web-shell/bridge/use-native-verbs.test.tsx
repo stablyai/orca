@@ -127,11 +127,12 @@ describe('the native verb member on the client', () => {
   it('refuses a method outside the prefix instead of sending it to the desktop', async () => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
-    // Typed `BridgeNativeVerb`, so this is a compile error too; the runtime check is what holds a
-    // caller that reached the member through a widened type.
-    await expect(pair.client.callNativeVerb('worktree.list' as never, { a: 1 })).rejects.toThrow(
-      /not a native verb/
-    )
+    // The compile-time half, held by the tests-typecheck ratchet: widening the parameter back to
+    // `string` makes this directive unused and fails there. The call still runs, which is the
+    // runtime half — a caller that reached the member through a widened type.
+    // @ts-expect-error a desktop method is not a native verb
+    const sent = pair.client.callNativeVerb('worktree.list', { a: 1 })
+    await expect(sent).rejects.toThrow(/not a native verb/)
     await pair.flush()
     expect(pair.rpc.requests).toEqual([])
   })
