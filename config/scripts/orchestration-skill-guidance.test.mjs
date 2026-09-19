@@ -472,9 +472,17 @@ describe('owned orchestration references', () => {
     expect(reference).toContain('run_legacy_local')
     expect(reference).toContain('Recovered orchestration work from a contract update')
     expect(reference).toContain('run-use --id <adopted_run_id> --takeover-legacy')
+    expect(reference).toContain('run-use --id <adopted_run_id> --json')
+    expect(reference).toContain('task-list --run <adopted_run_id>')
+    expect(reference).toContain('still pending or dispatched')
+    expect(reference).toContain(
+      'Legacy takeover must be invoked by the live coordinator agent terminal it will bind'
+    )
+    expect(reference).toContain('legacy_read_only')
     expect(reference).toContain(
       'Never take over while the original coordinator is actively coordinating'
     )
+    expect(reference).not.toContain('coordinator_handle is null')
   })
 })
 

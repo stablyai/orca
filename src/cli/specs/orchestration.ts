@@ -21,7 +21,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
     notes: [
-      '--takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
+      '--takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.',
+      'A settled adopted Run (no pending/dispatched legacy Dispatch) can bind with plain run-use. Live legacy work still needs --takeover-legacy.'
     ]
   },
   {
