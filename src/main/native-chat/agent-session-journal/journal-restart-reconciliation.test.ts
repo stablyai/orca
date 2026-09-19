@@ -110,7 +110,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     expect(submission?.providerItemId).toBe(agentJournalItemKey(claudeIdentity('uuid-1')))
   })
 
-  it('settles a message provably absent from history as rejected: not_delivered', async () => {
+  it('leaves a message absent from history unknown — absence is never a verdict', async () => {
     const journal = await reopenAfterCrash()
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
@@ -119,10 +119,11 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       history: window([])
     })
 
-    expect(settled).toEqual(['cm_1'])
-    const submission = journal.submissions()[0]
-    expect(submission?.dispatchState).toBe('rejected')
-    expect(submission?.reason).toBe('not_delivered')
+    // Nothing is settled: a message the window does not hold may still have
+    // reached the provider, and `rejected` is the one state that would license
+    // a re-send under its own id.
+    expect(settled).toEqual([])
+    expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
   })
 
   it('leaves a submission unknown while the provider reports a turn in flight', async () => {
@@ -218,7 +219,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       history: window([history('uuid-old', 'deploy the thing')])
     })
 
-    expect(restarted.submissions()[0]?.dispatchState).toBe('rejected')
+    expect(restarted.submissions()[0]?.dispatchState).toBe('unknown')
   })
 
   it('does not let an older accepted provider item stand in for a new identical send', async () => {
@@ -252,9 +253,8 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
 
     expect(restarted.submissions().map((entry) => entry.dispatchState)).toEqual([
       'accepted',
-      'rejected'
+      'unknown'
     ])
-    expect(restarted.submissions()[1]?.reason).toBe('not_delivered')
   })
 
   it('leaves two identical unsettled sends unknown rather than guessing between them', async () => {

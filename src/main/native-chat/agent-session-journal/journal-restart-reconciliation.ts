@@ -1,14 +1,15 @@
 // The production caller for `reconcileSubmissions`.
 //
 // Runs once per journal open, after the crash boundary has already settled every
-// survivor to `unknown`. It only ever narrows that answer: `accepted` when the
-// provider's own history holds the message, `rejected` when a boundary we can
-// vouch for proves it never arrived. Anything the reconciler leaves `unknown`
-// is left exactly as the crash boundary wrote it.
+// survivor to `unknown`. It narrows that answer in ONE direction only:
+// `accepted`, when the provider's own history positively holds the message.
+// Absence is never a verdict here — a message missing from the window may still
+// have been delivered, so anything not positively matched is left exactly as the
+// crash boundary wrote it.
 //
-// Nothing here dispatches. A `rejected` submission becomes re-sendable only
-// through the user's Retry, which rotates the client message id; Orca still
-// never puts a message back on the wire on the user's behalf.
+// Nothing here dispatches, and nothing here can make a message re-sendable:
+// settling a doubt as "never arrived" is what turns an unprovable read into a
+// duplicate delivery.
 
 import type {
   AgentJournalMessageItem,
@@ -90,26 +91,16 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
     submissions,
     history: unseenHistory(input.journal, input.history)
   })) {
-    if (outcome.outcome === 'unknown') {
+    if (outcome.outcome !== 'accepted') {
       continue
     }
-    await input.journal.resolveDispatch(
-      outcome.outcome === 'accepted'
-        ? {
-            clientMessageId: outcome.clientMessageId,
-            state: 'accepted',
-            providerIdentity: outcome.identity,
-            fence: input.fence,
-            recovered: true
-          }
-        : {
-            clientMessageId: outcome.clientMessageId,
-            state: 'rejected',
-            reason: outcome.reason,
-            fence: input.fence,
-            recovered: true
-          }
-    )
+    await input.journal.resolveDispatch({
+      clientMessageId: outcome.clientMessageId,
+      state: 'accepted',
+      providerIdentity: outcome.identity,
+      fence: input.fence,
+      recovered: true
+    })
     settled.push(outcome.clientMessageId)
   }
   return settled

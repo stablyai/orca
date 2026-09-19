@@ -226,7 +226,7 @@ describe('crash between provider accept and journal commit', () => {
     })
   })
 
-  it('reports a rejected submission as never delivered, and never re-sends it', async () => {
+  it('leaves a submission absent from history unknown, and never re-sends it', async () => {
     const journal = await open()
     await journal.appendSubmission({
       clientMessageId: 'cm_1',
@@ -241,18 +241,21 @@ describe('crash between provider accept and journal commit', () => {
       submissions: restarted.submissions(),
       history: window([])
     })
+    // Absence is not proof: a message missing from the window may still have
+    // been delivered, so the reconciler refuses to call it undelivered.
     expect(outcome).toEqual({
       clientMessageId: 'cm_1',
-      outcome: 'rejected',
-      reason: 'not_delivered'
+      outcome: 'unknown',
+      reason: 'unmatched'
     })
 
+    // A FIRST-HAND rejection is still reachable and still terminal: this is the
+    // provider refusing the frame, not a restart pass inferring it.
     await restarted.resolveDispatch({
       clientMessageId: 'cm_1',
       state: 'rejected',
-      reason: 'not_delivered',
-      fence: 2,
-      recovered: true
+      reason: 'provider_write_failed',
+      fence: 2
     })
     // The bubble survives with an explicit terminal state — the message is not
     // silently retried and not silently dropped.
@@ -394,7 +397,7 @@ describe('reconciliation matching', () => {
         }
       ])
     })
-    expect(outcome).toMatchObject({ outcome: 'rejected', reason: 'not_delivered' })
+    expect(outcome).toMatchObject({ outcome: 'unknown', reason: 'unmatched' })
   })
 
   it('lets a strong client-id match win an item a weaker fingerprint would have claimed', () => {
@@ -405,7 +408,7 @@ describe('reconciliation matching', () => {
       ])
     })
     expect(outcomes).toEqual([
-      expect.objectContaining({ clientMessageId: 'cm_1', outcome: 'rejected' }),
+      expect.objectContaining({ clientMessageId: 'cm_1', outcome: 'unknown' }),
       expect.objectContaining({ clientMessageId: 'cm_2', providerItemId: 'item-1' })
     ])
   })
@@ -435,7 +438,7 @@ describe('reconciliation matching', () => {
     })
     expect(outcomes).toEqual([
       expect.objectContaining({ clientMessageId: 'cm_1', providerItemId: 'item-7' }),
-      expect.objectContaining({ clientMessageId: 'cm_2', outcome: 'rejected' })
+      expect.objectContaining({ clientMessageId: 'cm_2', outcome: 'unknown' })
     ])
   })
 

@@ -101,17 +101,16 @@ afterEach(async () => {
 })
 
 describe('attachJournal restart reconciliation', () => {
-  it('settles a provably undelivered submission and stops reporting it unconfirmed', async () => {
+  it('keeps a submission the window cannot positively match unconfirmed', async () => {
     await crashedJournal()
     const { adapter, dispatch } = adapterWith(async () => window())
 
     const attached = await attach(adapter)
 
-    expect(attached.unconfirmedClientMessageIds).toEqual([])
-    const submission = attached.journal.submissions()[0]
-    expect(submission?.dispatchState).toBe('rejected')
-    expect(submission?.reason).toBe('not_delivered')
-    // Deciding is not sending: nothing here puts the message back on the wire.
+    // An empty window decides nothing. Reporting it unconfirmed is what keeps
+    // the message out of the one state a Retry may re-send under a fresh id.
+    expect(attached.unconfirmedClientMessageIds).toEqual(['cm_1'])
+    expect(attached.journal.submissions()[0]?.dispatchState).toBe('unknown')
     expect(dispatch).not.toHaveBeenCalled()
   })
 

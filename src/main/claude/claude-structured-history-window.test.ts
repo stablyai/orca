@@ -94,7 +94,7 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
     // The renderer computes a send's fingerprint with one, the host admission gate
     // validates it with the other, and the window matches with the host's. A
     // divergence would refuse every send long before it reached here — but it
-    // would also silently turn every reconciliation into `not_delivered`.
+    // would also silently stop every reconciliation from ever matching.
     const input = {
       method: 'agentSession.send',
       sessionId: ORCA_SESSION,
