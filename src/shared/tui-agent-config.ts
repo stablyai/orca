@@ -288,6 +288,17 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  muse: {
+    detectCmd: 'muse',
+    // Why: skip the workspace trust menu so it cannot consume the drafted task — the TUI
+    // would otherwise sit on the dialog while Orca pastes into it. Permission bypass
+    // stays configurable via the yolo default args.
+    launchCmd: 'muse --trust-workspace',
+    // Why: a leading positional matching a subcommand name (resume/exec/init/…) is routed
+    // to that subcommand even after `--`, so launch the TUI with no argv prompt and
+    // inject after startup.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 
