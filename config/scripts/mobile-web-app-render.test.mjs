@@ -591,9 +591,16 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 
   it('mounts the agent-history route, whose panel no unit test renders for real', async () => {
-    // The second page route, and the only place its module graph meets React Native Web: the unit
-    // tests mock react-native, safe-area, svg, lucide and the icon assets away, so a component in
-    // this closure with no web build would reach a device before it reached a test.
+    // What this proves, exactly: every module in the route's closure imports and evaluates under
+    // React Native Web, and the panel's own chrome paints. The unit tests mock react-native,
+    // safe-area, svg, lucide and the icon assets away — they have to, react-native is Flow source
+    // vitest cannot parse — so import-time breakage had no test anywhere until this one.
+    //
+    // What it does not prove: the double answers no RPC, so the panel's session scan fails and it
+    // paints its "Unable to Load" state. The session list, its rows, the resume button and the
+    // scope tabs are never rendered here, and a render-time gap inside one of them would pass this
+    // check. Covering those needs a double that answers `aiVault.listSessions`, which is a
+    // different instrument from this one and would put domain behaviour in this file.
     const route = `${HOST_ROUTE}/agent-history/wt-1`
     const { errors, cspErrors, text, session, url } = await render(route, 'Agent Session History', {
       shellRoute: { pathname: route, params: { name: 'my worktree' } }
