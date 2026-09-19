@@ -43,9 +43,6 @@ export function normalizeHookPayload(
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
-  // Why: a rewritten shared-server post needs the bound pane's live token, so
-  // remember every pane's latest one regardless of source.
-  trackOpenCodePaneLaunchToken(state, stampedPaneKey, stampedLaunchToken)
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
@@ -73,6 +70,10 @@ export function normalizeHookPayload(
     },
     sessionId: providerSession?.id
   })
+  // Why after the resolve: tracking the stamped token first would let a stale
+  // shared-server stamp overwrite the pane's live token; the resolved envelope
+  // carries the stored token (or nothing) for bound sessions instead.
+  trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   const providerPromptId =
     source === 'claude'
       ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)

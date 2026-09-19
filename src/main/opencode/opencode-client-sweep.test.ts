@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   isOpenCodeClientArgv,
-  parseCimArgsLine,
+  nativeWindowsRowToIdentity,
   parsePsArgsLine,
-  parsePsElapsedToMs
+  parsePsElapsedToMs,
+  splitCommandLineArgv,
+  sweepProcessIdentities
 } from './opencode-client-sweep'
 
 const NOW = 1_700_000_000_000
@@ -33,6 +35,11 @@ describe('parsePsArgsLine', () => {
     expect(row?.argv).toEqual(['opencode', '--session', 'ses_abc'])
   })
 
+  it('keeps a quoted executable path as argv[0]', () => {
+    const row = parsePsArgsLine('999 100 00:05 "/opt/my tools/opencode" --session ses_abc', NOW)
+    expect(row?.argv).toEqual(['/opt/my tools/opencode', '--session', 'ses_abc'])
+  })
+
   it('drops header-shaped and truncated rows', () => {
     expect(parsePsArgsLine('PID PPID ELAPSED COMMAND', NOW)).toBeNull()
     expect(parsePsArgsLine('1 0', NOW)).toBeNull()
@@ -40,19 +47,48 @@ describe('parsePsArgsLine', () => {
   })
 })
 
-describe('parseCimArgsLine', () => {
-  it('parses ticks and command line', () => {
-    // 2026-09-18T18:28:40Z in .NET ticks.
-    const row = parseCimArgsLine('23487\t22618\t639253529200000000\topencode --session ses_1')
-    expect(row?.pid).toBe(23487)
-    expect(row?.ppid).toBe(22618)
-    expect(row?.startedAtMs).toBe(Date.parse('2026-09-18T18:28:40Z'))
-    expect(row?.argv).toEqual(['opencode', '--session', 'ses_1'])
+describe('splitCommandLineArgv', () => {
+  it('groups double-quoted spans', () => {
+    expect(
+      splitCommandLineArgv('"C:\\Program Files\\OpenCode\\opencode.exe" --session ses_1')
+    ).toEqual(['C:\\Program Files\\OpenCode\\opencode.exe', '--session', 'ses_1'])
   })
 
-  it('drops rows without a command line', () => {
-    expect(parseCimArgsLine('4\t0\t639254819200000000\t')).toBeNull()
-    expect(parseCimArgsLine('not-a-row')).toBeNull()
+  it('splits plain argv on whitespace', () => {
+    expect(splitCommandLineArgv('opencode --session ses_1')).toEqual([
+      'opencode',
+      '--session',
+      'ses_1'
+    ])
+  })
+
+  it('drops empties', () => {
+    expect(splitCommandLineArgv('')).toEqual([])
+  })
+})
+
+describe('nativeWindowsRowToIdentity', () => {
+  it('maps pid, creation time and quoted command line', () => {
+    const row = nativeWindowsRowToIdentity({
+      pid: 23487,
+      ppid: 22618,
+      name: 'opencode.exe',
+      creationTimeMs: 1_700_000_000_000 - 60_000,
+      command: '"C:\\Program Files\\OpenCode\\opencode.exe" --session ses_1'
+    })
+    expect(row).toMatchObject({
+      pid: 23487,
+      ppid: 22618,
+      startedAtMs: 1_700_000_000_000 - 60_000,
+      argv: ['C:\\Program Files\\OpenCode\\opencode.exe', '--session', 'ses_1']
+    })
+  })
+
+  it('skips rows without a creation time or command line', () => {
+    expect(nativeWindowsRowToIdentity({ pid: 4, ppid: 0, name: 'System', command: '' })).toBeNull()
+    expect(
+      nativeWindowsRowToIdentity({ pid: 4, ppid: 0, name: 'System', command: 'opencode' })
+    ).toBeNull()
   })
 })
 
@@ -61,8 +97,30 @@ describe('isOpenCodeClientArgv', () => {
     expect(isOpenCodeClientArgv(['opencode'])).toBe(true)
     expect(isOpenCodeClientArgv(['/opt/homebrew/bin/opencode', '--session', 'ses_1'])).toBe(true)
     expect(isOpenCodeClientArgv(['C:\\tools\\opencode.exe'])).toBe(true)
+    expect(
+      isOpenCodeClientArgv(['C:\\Program Files\\OpenCode\\opencode.exe', '--session', 'ses_1'])
+    ).toBe(true)
     expect(isOpenCodeClientArgv(['opencode.exe', 'serve', '--service'])).toBe(false)
     expect(isOpenCodeClientArgv(['node', 'server.js'])).toBe(false)
     expect(isOpenCodeClientArgv([])).toBe(false)
+  })
+})
+
+describe('sweepProcessIdentities', () => {
+  it('reads the Windows table through the injected reader', async () => {
+    const rows = await sweepProcessIdentities({
+      platform: 'win32',
+      readWindowsTable: async () => [
+        {
+          pid: 23487,
+          ppid: 22618,
+          name: 'opencode.exe',
+          creationTimeMs: NOW - 60_000,
+          command: '"C:\\Program Files\\OpenCode\\opencode.exe"'
+        }
+      ]
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ pid: 23487, ppid: 22618, startedAtMs: NOW - 60_000 })
   })
 })

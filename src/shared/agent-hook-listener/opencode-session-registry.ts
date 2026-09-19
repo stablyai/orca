@@ -28,6 +28,7 @@ export const OPENCODE_SESSION_BINDINGS_MAX = 1000
 /** Per-pane launch-token cache; keyed differently from bindings but shares the same bound. */
 export const OPENCODE_PANE_LAUNCH_TOKENS_MAX = 1000
 
+/** Per-listener session→pane map; the binder writes, ingest reads. */
 function bindings(state: HookListenerState): Map<string, OpenCodeSessionBinding> {
   return state.opencodeSessionPaneBySessionId
 }
@@ -77,7 +78,9 @@ export function lookupOpenCodeSessionPane(
 export function unbindOpenCodeSessionsOfPane(state: HookListenerState, paneKey: string): number {
   let removed = 0
   for (const [sessionId, binding] of bindings(state)) {
-    if (binding.paneKey === paneKey || binding.paneKey.startsWith(`${paneKey}\0`)) {
+    // Why exact match only: bindings store validated `tabId:uuid` pane keys,
+    // which cannot carry the `\0` subscopes the hierarchical pane caches use.
+    if (binding.paneKey === paneKey) {
       bindings(state).delete(sessionId)
       removed += 1
     }
@@ -97,8 +100,6 @@ export function moveOpenCodeSessionBindings(
   for (const binding of bindings(state).values()) {
     if (binding.paneKey === fromPaneKey) {
       binding.paneKey = toPaneKey
-    } else if (binding.paneKey.startsWith(`${fromPaneKey}\0`)) {
-      binding.paneKey = `${toPaneKey}${binding.paneKey.slice(fromPaneKey.length)}`
     }
   }
 }
@@ -138,6 +139,7 @@ export function lookupOpenCodePaneLaunchToken(
   return state.lastLaunchTokenByPaneKey.get(paneKey)
 }
 
+/** Envelope fields the rewrite may substitute, as stamped by the poster. */
 export type OpenCodeStampedEnvelope = {
   paneKey: string
   tabId?: string
@@ -147,9 +149,10 @@ export type OpenCodeStampedEnvelope = {
 
 /**
  * Reattribute one shared-server post to the bound pane (#21359). Reads
- * nothing but the registry: unbound sessions, other sources and already-
- * correct stamps pass through untouched, so this is a no-op everywhere the
- * binder has said nothing.
+ * nothing but the registry: unbound sessions and other sources pass through
+ * untouched, so this is a no-op everywhere the binder has said nothing. A
+ * bound session always takes the stored pane token — which may be absent,
+ * in which case the post carries no token rather than the frozen stamp.
  */
 export function resolveOpenCodeSharedServerEnvelope(args: {
   state: HookListenerState
@@ -162,7 +165,7 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
     return stamped
   }
   const binding = lookupOpenCodeSessionPane(state, sessionId)
-  if (!binding || binding.paneKey === stamped.paneKey) {
+  if (!binding) {
     return stamped
   }
   return {
@@ -171,9 +174,11 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
     // key, so the substituted tab must come from the substituted pane.
     tabId: parsePaneKey(binding.paneKey)?.tabId ?? stamped.tabId,
     worktreeId: binding.worktreeId ?? stamped.worktreeId,
-    // Why substitute: the frozen stamp carries the server-starter's (usually
-    // empty) token, which a fenced pane would suppress. The session is the
-    // authority here, not the posting process.
-    launchToken: lookupOpenCodePaneLaunchToken(state, binding.paneKey) ?? stamped.launchToken
+    // Why the stored token or nothing: the frozen stamp carries the
+    // server-starter's (usually empty) token, which a fenced pane would
+    // suppress — and recording that stale token as live would poison the
+    // cache for the pane's real posts. The session is the authority here,
+    // not the posting process.
+    launchToken: lookupOpenCodePaneLaunchToken(state, binding.paneKey)
   }
 }

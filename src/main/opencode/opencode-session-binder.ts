@@ -28,6 +28,7 @@ import type { HookListenerState } from '../../shared/agent-hook-listener/listene
  * (read-only + query_only + busy timeout).
  */
 
+/** One pane snapshot feeding a binder round. */
 export type BinderPaneSnapshot = {
   paneKey: string
   /** Worktree root backing the pane (null when unknown); sessions beneath it are candidates. */
@@ -36,6 +37,7 @@ export type BinderPaneSnapshot = {
   shellPid: number | null
 }
 
+/** One session store row feeding a binder round. */
 export type BinderSessionRow = {
   id: string
   directory: string
@@ -43,9 +45,9 @@ export type BinderSessionRow = {
   parentId: string | null
 }
 
+/** Everything one binder round needs, injected for tests. */
 export type BinderRoundDeps = {
   nowMs: number
-  dbPath: string
   sessions: readonly BinderSessionRow[]
   panes: readonly BinderPaneSnapshot[]
   processes: readonly ProcessIdentityRow[]
@@ -53,12 +55,50 @@ export type BinderRoundDeps = {
   parentBySessionId: ReadonlyMap<string, string | null>
 }
 
+/** Ownership decisions from one binder round. */
 export type BinderRoundResult = {
   ownerships: SessionOwnership[]
-  /** Highest session creation seen; the next round's watermark. */
-  watermarkMs: number
 }
 
+/** Position in the session store; composite so same-millisecond rows are never skipped. */
+export type OpenCodeSessionCursor = {
+  ms: number
+  id: string
+}
+
+/** Cursor before anything was ever read. */
+export const OPENCODE_SESSION_CURSOR_START: OpenCodeSessionCursor = { ms: 0, id: '' }
+
+/** Order cursors the way the store lists rows: oldest first, id as tiebreak. */
+function compareSessionRows(left: OpenCodeSessionCursor, right: OpenCodeSessionCursor): number {
+  return left.ms - right.ms || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+}
+
+/**
+ * Advance the store cursor past handled rows only. `fresh` arrives in store
+ * order; handling is prefix-closed (the unbound-cap break only ever skips the
+ * tail), so the first unhandled row freezes the cursor and every row at or
+ * past it is re-listed next round instead of silently dropped.
+ */
+export function advanceBinderCursor(args: {
+  fresh: readonly BinderSessionRow[]
+  isHandled: (sessionId: string) => boolean
+  current: OpenCodeSessionCursor
+}): OpenCodeSessionCursor {
+  let cursor = args.current
+  for (const session of args.fresh) {
+    if (!args.isHandled(session.id)) {
+      break
+    }
+    const candidate: OpenCodeSessionCursor = { ms: session.createdAtMs, id: session.id }
+    if (compareSessionRows(candidate, cursor) > 0) {
+      cursor = candidate
+    }
+  }
+  return cursor
+}
+
+/** pid→ppid index for one sweep; first row wins on duplicate pids. */
 function childrenIndex(processes: readonly ProcessIdentityRow[]): Map<number, number> {
   const ppidByPid = new Map<number, number>()
   for (const row of processes) {
@@ -69,7 +109,7 @@ function childrenIndex(processes: readonly ProcessIdentityRow[]): Map<number, nu
   return ppidByPid
 }
 
-/** Nearest pane shell above this pid, or null (external terminals stay unattributed). */
+/** Nearest pane shell at or above this pid; external terminals stay unattributed. */
 function owningPane(
   ppidByPid: Map<number, number>,
   shellPidByPid: Map<number, string>,
@@ -88,6 +128,7 @@ function owningPane(
   return null
 }
 
+/** Attribute opencode client rows to panes via shell-subtree walks. */
 function toCorrelatedClients(
   processes: readonly ProcessIdentityRow[],
   panes: readonly BinderPaneSnapshot[],
@@ -168,13 +209,10 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
       knownOwners
     })
   ]
-  let watermarkMs = 0
-  for (const session of sessions) {
-    watermarkMs = Math.max(watermarkMs, session.createdAtMs)
-  }
-  return { ownerships, watermarkMs }
+  return { ownerships }
 }
 
+/** True when the v2 session table has every column the binder reads. */
 function canReadSessionV2(db: SyncDatabase): boolean {
   return (
     tableExists(db, 'session_v2') &&
@@ -184,12 +222,17 @@ function canReadSessionV2(db: SyncDatabase): boolean {
 }
 
 /**
- * Sessions created after `sinceMs`, newest last. Probes `session_v2` first
- * (2.x) and falls back to the v1 `session` table; unknown shapes read as
- * empty so an opencode schema move degrades to unbound sessions, never a
- * crash. Fail-open [] on any read error for the same reason.
+ * Sessions newer than `cursor`, oldest first. The composite
+ * `(time_created, id)` position means rows sharing a millisecond with the
+ * cursor — including rows the LIMIT cut off last round — are re-listed
+ * instead of permanently skipped. Unknown shapes read as empty so an opencode
+ * schema move degrades to unbound sessions, never a crash. Fail-open [] on
+ * any read error for the same reason.
  */
-export function listOpenCodeDbSessions(dbPath: string, sinceMs: number): BinderSessionRow[] {
+export function listOpenCodeDbSessions(
+  dbPath: string,
+  cursor: OpenCodeSessionCursor
+): BinderSessionRow[] {
   try {
     return readOpenCodeDatabase({
       dbPath,
@@ -205,9 +248,9 @@ export function listOpenCodeDbSessions(dbPath: string, sinceMs: number): BinderS
         const parent = columnExists(db, table, 'parent_id') ? 'parent_id' : 'NULL'
         const rows: unknown[] = db
           .prepare(
-            `SELECT id, directory, time_created, ${parent} AS parent_id FROM ${table} WHERE time_created > ? ORDER BY time_created ASC LIMIT 500`
+            `SELECT id, directory, time_created, ${parent} AS parent_id FROM ${table} WHERE time_created > ? OR (time_created = ? AND id > ?) ORDER BY time_created ASC, id ASC LIMIT 500`
           )
-          .all(sinceMs)
+          .all(cursor.ms, cursor.ms, cursor.id)
         const sessions: BinderSessionRow[] = []
         for (const row of rows) {
           if (typeof row !== 'object' || row === null) {

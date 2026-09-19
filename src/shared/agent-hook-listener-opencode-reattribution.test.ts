@@ -79,4 +79,28 @@ describe('opencode shared-server reattribution (#21359)', () => {
     )
     expect(result?.paneKey).toBe(PANE_A)
   })
+
+  it('never lets a stale same-pane stamp overwrite the live token', () => {
+    const state = createHookListenerState()
+    // A tokened post teaches the listener pane B's live token.
+    normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_B, launchToken: 'token-b-live', payload: { hook_event_name: 'Stop' } },
+      'production'
+    )
+    bindOpenCodeSession(state, 'ses_1', {
+      paneKey: PANE_B,
+      boundAt: 1,
+      basis: 'argv'
+    })
+    // The shared server's frozen stamp carries a stale token for the same pane.
+    const result = opencodeBusy(state, PANE_B, 'ses_1', 'token-b-stale')
+    expect(result?.paneKey).toBe(PANE_B)
+    expect(result?.launchToken).toBe('token-b-live')
+    // And the stale stamp must not have poisoned the cache: a later lookup
+    // still returns the live token.
+    const again = opencodeBusy(state, PANE_B, 'ses_1', 'token-b-stale')
+    expect(again?.launchToken).toBe('token-b-live')
+  })
 })

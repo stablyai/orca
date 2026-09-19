@@ -9,6 +9,7 @@
  * (argv-aware process sweep); this module only decides.
  */
 
+/** One session row as the binder sees it. */
 export type CorrelatedSession = {
   id: string
   directory: string
@@ -17,6 +18,7 @@ export type CorrelatedSession = {
   parentId: string | null
 }
 
+/** One pane as the binder sees it. */
 export type CorrelatedPane = {
   paneKey: string
   /**
@@ -28,6 +30,7 @@ export type CorrelatedPane = {
   directory: string | null
 }
 
+/** One live client process as the binder sees it. */
 export type CorrelatedClient = {
   /** Pane whose subtree holds this client. */
   paneKey: string
@@ -39,6 +42,7 @@ export type CorrelatedClient = {
   argv: readonly string[]
 }
 
+/** One decided session owner for this round. */
 export type SessionOwnership = {
   sessionId: string
   paneKey: string
@@ -48,18 +52,62 @@ export type SessionOwnership = {
 /** Allow for stamp skew between the process table and the session store. */
 export const OPENCODE_CREATE_SKEW_MS = 2 * 60 * 1000
 
+import { normalizeRuntimePathForComparison } from '../cross-platform-path'
+
+/**
+ * macOS symlinks /tmp, /var and /etc into /private; opencode records
+ * whichever spelling the process saw, so fold the alias to the real root
+ * before comparing. Narrow on purpose: a blanket `/private` strip would merge
+ * genuinely distinct POSIX roots (`/private/repo` vs `/repo`).
+ */
+function foldMacOsPrivateAlias(directory: string): string {
+  for (const name of ['tmp', 'var', 'etc']) {
+    if (directory === `/${name}`) {
+      return `/private/${name}`
+    }
+    if (directory.startsWith(`/${name}/`)) {
+      return `/private/${directory.slice(1)}`
+    }
+  }
+  return directory
+}
+
+/** Lexically resolve `.` and `..` so prefix containment cannot be fooled by dot segments. */
+function resolveDotSegments(normalized: string): string {
+  const isAbsolute = normalized.startsWith('/')
+  const parts: string[] = []
+  for (const part of normalized.split('/')) {
+    if (part === '' || part === '.') {
+      continue
+    }
+    if (part === '..') {
+      if (parts.length > 0 && parts.at(-1) !== '..') {
+        parts.pop()
+        continue
+      }
+      if (!isAbsolute) {
+        parts.push(part)
+      }
+      continue
+    }
+    parts.push(part)
+  }
+  const joined = parts.join('/')
+  if (isAbsolute) {
+    return `/${joined}`
+  }
+  return joined === '' ? '.' : joined
+}
+
+/**
+ * Comparison key for session/pane directories. NFC + Windows-only backslash
+ * folding and case folding come from the shared helper (a backslash stays a
+ * literal filename character on POSIX); dot segments resolve lexically.
+ */
 function normalizeDir(directory: string): string {
-  let out = directory.trim().replace(/\\/g, '/')
-  // Why: macOS resolves /tmp to /private/tmp (and opencode records whichever
-  // spelling the process saw). Strip the well-known prefix so both spellings
-  // meet; no legitimate cross-platform path depends on it.
-  if (out === '/private' || out.startsWith('/private/')) {
-    out = out.slice('/private'.length) || '/'
-  }
-  while (out.endsWith('/') && out.length > 1) {
-    out = out.slice(0, -1)
-  }
-  return out
+  return resolveDotSegments(
+    normalizeRuntimePathForComparison(foldMacOsPrivateAlias(directory.trim()))
+  )
 }
 
 /** `--session <id>`, `-s <id>`, `--session=<id>` or a trailing attach target. */
@@ -110,6 +158,7 @@ export function correlateOpenCodeSessionOwners(args: {
   const owners = new Map(knownOwners)
   const results: SessionOwnership[] = []
 
+  /** Record one ownership decision, visible to later sessions in this round. */
   const claim = (sessionId: string, paneKey: string, basis: SessionOwnership['basis']): void => {
     owners.set(sessionId, paneKey)
     results.push({ sessionId, paneKey, basis })
@@ -150,6 +199,7 @@ export function correlateOpenCodeSessionOwners(args: {
     return found
   }
 
+  /** Walk the parent chain for an already-known root owner. */
   const rootOwner = (session: CorrelatedSession): string | undefined => {
     let current: CorrelatedSession | undefined = session
     const seen = new Set<string>()

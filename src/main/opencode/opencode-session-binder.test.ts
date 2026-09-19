@@ -4,7 +4,9 @@ import { lookupOpenCodeSessionPane } from '../../shared/agent-hook-listener/open
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { ProcessIdentityRow } from './opencode-client-sweep'
 import {
+  advanceBinderCursor,
   applyBinderOwnerships,
+  OPENCODE_SESSION_CURSOR_START,
   runOpenCodeBinderRound,
   type BinderPaneSnapshot
 } from './opencode-session-binder'
@@ -31,7 +33,6 @@ describe('runOpenCodeBinderRound', () => {
   it('attributes a client to its pane subtree and binds the session', () => {
     const { ownerships } = runOpenCodeBinderRound({
       nowMs: NOW,
-      dbPath: '/tmp/opencode.db',
       sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
       panes: [pane(PANE_A, 100), pane(PANE_B, 200)],
       processes: [
@@ -50,7 +51,6 @@ describe('runOpenCodeBinderRound', () => {
   it('ignores clients outside every pane subtree', () => {
     const { ownerships } = runOpenCodeBinderRound({
       nowMs: NOW,
-      dbPath: '/tmp/opencode.db',
       sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
       panes: [pane(PANE_A, 100)],
       processes: [proc(100, 1, ['zsh']), proc(999, 1, ['opencode'], NOW - 90_000)],
@@ -63,7 +63,6 @@ describe('runOpenCodeBinderRound', () => {
   it('inherits a root owner across the watermark via the parent map', () => {
     const { ownerships } = runOpenCodeBinderRound({
       nowMs: NOW,
-      dbPath: '/tmp/opencode.db',
       sessions: [
         { id: 'ses_child', directory: DIR, createdAtMs: NOW - 30_000, parentId: 'ses_root' }
       ],
@@ -80,7 +79,6 @@ describe('runOpenCodeBinderRound', () => {
   it('dedupes same-key snapshots newest-wins', () => {
     const { ownerships } = runOpenCodeBinderRound({
       nowMs: NOW,
-      dbPath: '/tmp/opencode.db',
       sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
       panes: [
         { ...pane(PANE_A, 100), directory: '/elsewhere' },
@@ -99,20 +97,43 @@ describe('runOpenCodeBinderRound', () => {
     ])
   })
 
-  it('advances the watermark past seen sessions', () => {
-    const { watermarkMs } = runOpenCodeBinderRound({
-      nowMs: NOW,
-      dbPath: '/tmp/opencode.db',
-      sessions: [
-        { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
-        { id: 'ses_2', directory: DIR, createdAtMs: NOW - 10_000, parentId: null }
-      ],
-      panes: [],
-      processes: [],
-      knownOwners: new Map(),
-      parentBySessionId: new Map()
-    })
-    expect(watermarkMs).toBe(NOW - 10_000)
+  it('advances the cursor past handled rows only', () => {
+    const fresh = [
+      { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
+      { id: 'ses_2', directory: DIR, createdAtMs: NOW - 10_000, parentId: null }
+    ]
+    expect(
+      advanceBinderCursor({
+        fresh,
+        isHandled: () => true,
+        current: OPENCODE_SESSION_CURSOR_START
+      })
+    ).toEqual({ ms: NOW - 10_000, id: 'ses_2' })
+  })
+
+  it('freezes the cursor before the first unhandled row so it is re-listed', () => {
+    const fresh = [
+      { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
+      { id: 'ses_2', directory: DIR, createdAtMs: NOW - 10_000, parentId: null }
+    ]
+    expect(
+      advanceBinderCursor({
+        fresh,
+        isHandled: (id) => id === 'ses_1',
+        current: OPENCODE_SESSION_CURSOR_START
+      })
+    ).toEqual({ ms: NOW - 60_000, id: 'ses_1' })
+  })
+
+  it('keeps the cursor when nothing was handled', () => {
+    const current = { ms: NOW - 120_000, id: 'ses_0' }
+    expect(
+      advanceBinderCursor({
+        fresh: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
+        isHandled: () => false,
+        current
+      })
+    ).toBe(current)
   })
 })
 

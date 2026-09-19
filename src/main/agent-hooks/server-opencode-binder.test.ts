@@ -26,6 +26,10 @@ class BinderTestServer extends AgentHookServer {
     return this.runOpenCodeBinderRoundOnce()
   }
 
+  public startBinderLoop(): void {
+    this.startOpenCodeBinderLoop()
+  }
+
   public ingest(source: AgentHookSource, body: unknown): void {
     this.normalizeLocalHookPayload(source, body)
   }
@@ -120,6 +124,35 @@ describe('opencode binder loop', () => {
     writeDb(dbPath, 'session_v2')
     expect(() => server.stop()).not.toThrow()
   })
+
+  it('runs a round immediately on loop start', async () => {
+    writeDb(dbPath, 'session_v2')
+    server.startBinderLoop()
+    try {
+      await vi.waitFor(() => expect(server.readRegistry('ses_live')).toBe(PANE_A))
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('discards a round that was in flight across stop', async () => {
+    writeDb(dbPath, 'session_v2')
+    let releaseSweep!: () => void
+    const sweepGate = new Promise<void>((resolve) => {
+      releaseSweep = resolve
+    })
+    server.bindDeps({
+      sweep: async () => {
+        await sweepGate
+        return [{ pid: 112, ppid: 111, startedAtMs: Date.now() - 120_000, argv: ['opencode'] }]
+      }
+    })
+    const round = server.runBinderRound()
+    server.stop()
+    releaseSweep()
+    expect(await round).toBe(0)
+    expect(server.readRegistry('ses_live')).toBeUndefined()
+  })
 })
 
 describe('listOpenCodeDbSessions', () => {
@@ -137,14 +170,14 @@ describe('listOpenCodeDbSessions', () => {
 
   it('reads session_v2 rows newer than the watermark', () => {
     writeDb(dbPath, 'session_v2')
-    const rows = listOpenCodeDbSessions(dbPath, 0)
+    const rows = listOpenCodeDbSessions(dbPath, { ms: 0, id: '' })
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ id: 'ses_live', directory: DIR, parentId: null })
-    expect(listOpenCodeDbSessions(dbPath, Date.now())).toEqual([])
+    expect(listOpenCodeDbSessions(dbPath, { ms: Date.now(), id: '' })).toEqual([])
   })
 
   it('returns [] for a missing database instead of throwing', () => {
-    expect(listOpenCodeDbSessions(join(dir, 'absent.db'), 0)).toEqual([])
+    expect(listOpenCodeDbSessions(join(dir, 'absent.db'), { ms: 0, id: '' })).toEqual([])
   })
 
   it('the default path points at the local opencode store', () => {

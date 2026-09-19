@@ -1,11 +1,14 @@
 import {
+  advanceBinderCursor,
   applyBinderOwnerships,
   defaultOpenCodeDbPath,
   listBinderPaneSnapshots,
   listOpenCodeDbSessions,
+  OPENCODE_SESSION_CURSOR_START,
   runOpenCodeBinderRound,
   type BinderPaneSnapshot,
-  type BinderSessionRow
+  type BinderSessionRow,
+  type OpenCodeSessionCursor
 } from '../../opencode/opencode-session-binder'
 import {
   sweepProcessIdentities,
@@ -22,10 +25,11 @@ const OPENCODE_BINDER_UNBOUND_RETRY_MS = 10 * 60_000
 const OPENCODE_BINDER_PARENTS_MAX = 2_000
 const OPENCODE_BINDER_UNBOUND_MAX = 500
 
+/** Injectable I/O for the binder loop; real singletons by default, fakes in tests. */
 export type OpenCodeBinderLoopDeps = {
   now: () => number
   dbPath: () => string
-  listSessions: (dbPath: string, sinceMs: number) => BinderSessionRow[]
+  listSessions: (dbPath: string, cursor: OpenCodeSessionCursor) => BinderSessionRow[]
   listPanes: () => BinderPaneSnapshot[]
   sweep: () => Promise<ProcessIdentityRow[]>
 }
@@ -42,7 +46,8 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
   private openCodeBinderTimer: ReturnType<typeof setInterval> | null = null
   private openCodeBinderKickTimer: ReturnType<typeof setTimeout> | null = null
   private openCodeBinderRunning = false
-  private openCodeBinderWatermarkMs = 0
+  private openCodeBinderGeneration = 0
+  private openCodeBinderWatermark: OpenCodeSessionCursor = { ...OPENCODE_SESSION_CURSOR_START }
   private openCodeBinderParents = new Map<string, string | null>()
   private openCodeBinderUnbound = new Map<string, { row: BinderSessionRow; firstSeenMs: number }>()
   private openCodeBinderDeps: OpenCodeBinderLoopDeps = {
@@ -58,6 +63,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     this.openCodeBinderDeps = { ...this.openCodeBinderDeps, ...deps }
   }
 
+  /** Start the 60s poll loop plus one immediate round, idempotently. */
   protected startOpenCodeBinderLoop(): void {
     if (this.openCodeBinderTimer) {
       return
@@ -68,9 +74,16 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     if (this.openCodeBinderTimer.unref) {
       this.openCodeBinderTimer.unref()
     }
+    // Why immediately: existing sessions would otherwise keep the frozen
+    // stamp for up to a full interval after launch or restart.
+    void this.runOpenCodeBinderRoundOnce()
   }
 
+  /** Stop timers and drop ephemeral binder state; in-flight rounds are discarded by generation. */
   protected stopOpenCodeBinderLoop(): void {
+    // Why the generation bump: a round awaiting the process sweep must not
+    // apply ownerships — or resurrect the watermark — after the loop stopped.
+    this.openCodeBinderGeneration += 1
     if (this.openCodeBinderTimer) {
       clearInterval(this.openCodeBinderTimer)
       this.openCodeBinderTimer = null
@@ -80,7 +93,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
       this.openCodeBinderKickTimer = null
     }
     this.openCodeBinderRunning = false
-    this.openCodeBinderWatermarkMs = 0
+    this.openCodeBinderWatermark = { ...OPENCODE_SESSION_CURSOR_START }
     this.openCodeBinderParents.clear()
     this.openCodeBinderUnbound.clear()
   }
@@ -103,6 +116,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     }
   }
 
+  /** Run one correlate-and-bind round; returns applied binding count. */
   protected async runOpenCodeBinderRoundOnce(): Promise<number> {
     if (this.openCodeBinderRunning) {
       return 0
@@ -111,7 +125,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     try {
       const deps = this.openCodeBinderDeps
       const nowMs = deps.now()
-      const fresh = deps.listSessions(deps.dbPath(), this.openCodeBinderWatermarkMs)
+      const fresh = deps.listSessions(deps.dbPath(), this.openCodeBinderWatermark)
       const sessions = [...fresh]
       for (const [id, entry] of this.openCodeBinderUnbound) {
         if (nowMs - entry.firstSeenMs > OPENCODE_BINDER_UNBOUND_RETRY_MS) {
@@ -126,7 +140,11 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
         return 0
       }
       const panes = deps.listPanes()
+      const generation = this.openCodeBinderGeneration
       const processes = await deps.sweep()
+      if (generation !== this.openCodeBinderGeneration) {
+        return 0
+      }
       const knownOwners = new Map<string, string>()
       for (const session of sessions) {
         const bound = lookupOpenCodeSessionPane(this.state, session.id)
@@ -143,9 +161,8 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
         }
         this.openCodeBinderParents.delete(oldest)
       }
-      const { ownerships, watermarkMs } = runOpenCodeBinderRound({
+      const { ownerships } = runOpenCodeBinderRound({
         nowMs,
-        dbPath: deps.dbPath(),
         sessions,
         panes,
         processes,
@@ -166,7 +183,17 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
           this.openCodeBinderUnbound.set(session.id, { row: session, firstSeenMs: nowMs })
         }
       }
-      this.openCodeBinderWatermarkMs = Math.max(this.openCodeBinderWatermarkMs, watermarkMs)
+      // Why from handled rows only: a session the full map could not track
+      // must stay re-listable next round instead of being silently passed by
+      // the watermark.
+      this.openCodeBinderWatermark = advanceBinderCursor({
+        fresh,
+        isHandled: (sessionId) =>
+          knownOwners.has(sessionId) ||
+          boundIds.has(sessionId) ||
+          this.openCodeBinderUnbound.has(sessionId),
+        current: this.openCodeBinderWatermark
+      })
       return applied
     } catch (err) {
       // Why swallow: a binder failure must never break hook serving; the next

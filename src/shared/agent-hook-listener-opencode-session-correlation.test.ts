@@ -66,7 +66,7 @@ describe('correlateOpenCodeSessionOwners', () => {
     ])
   })
 
-  it('strips the macOS /private prefix so both spellings meet', () => {
+  it('strips the macOS /tmp alias so both spellings meet', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [
         { id: 'ses_1', directory: '/tmp/binder-e2e', createdAtMs: NOW - 60_000, parentId: null }
@@ -78,6 +78,56 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
     ])
+  })
+
+  it('keeps genuinely distinct /private roots apart', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [
+        { id: 'ses_1', directory: '/private/repo', createdAtMs: NOW - 60_000, parentId: null }
+      ],
+      panes: [{ paneKey: 'pane-a', directory: '/repo' }],
+      clients: [client('pane-a', NOW - 120_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
+  })
+
+  it('folds Windows case differences', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [
+        { id: 'ses_1', directory: 'c:\\users\\repo', createdAtMs: NOW - 60_000, parentId: null }
+      ],
+      panes: [{ paneKey: 'pane-a', directory: 'C:\\Users\\Repo' }],
+      clients: [client('pane-a', NOW - 120_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
+    ])
+  })
+
+  it('keeps POSIX backslashes literal', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [
+        { id: 'ses_1', directory: '/repo/a\\b', createdAtMs: NOW - 60_000, parentId: null }
+      ],
+      panes: [{ paneKey: 'pane-a', directory: '/repo/a/b' }],
+      clients: [client('pane-a', NOW - 120_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
+  })
+
+  it('resolves dot segments before containment', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [
+        { id: 'ses_1', directory: '/repo/../other', createdAtMs: NOW - 60_000, parentId: null }
+      ],
+      panes: [{ paneKey: 'pane-a', directory: '/repo' }],
+      clients: [client('pane-a', NOW - 120_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
   })
 
   it('leaves a session unbound when no client brackets it', () => {

@@ -1,4 +1,8 @@
 import { runProcess } from '../../shared/child-process/run-process'
+import {
+  readWindowsProcessTable,
+  type WindowsProcessRow as NativeWindowsProcessRow
+} from '../windows/windows-process-table'
 
 /**
  * Host-wide sweep locating live OpenCode client processes for the
@@ -7,11 +11,13 @@ import { runProcess } from '../../shared/child-process/run-process'
  * Why a dedicated sweep instead of reusing the memory collector's: that
  * index carries pid/ppid/cpu/rss but no argv or start times, and importing
  * the memory subsystem here would drag its Electron app-metrics dependency
- * into the hook path. The invocation pattern (runProcess, 5 s timeout,
- * 10 MB cap, tab-joined rows, fail-open []) mirrors
+ * into the hook path. On Windows the table is read only through the native
+ * reader (`windows-process-table.ts`); on macOS/Linux through one `ps` call.
+ * The invocation pattern (5 s timeout, 10 MB cap, fail-open []) mirrors
  * `windows-process-resource-collector.ts`.
  */
 
+/** One process identity row from a host sweep. */
 export type ProcessIdentityRow = {
   pid: number
   ppid: number
@@ -41,47 +47,72 @@ export function parsePsElapsedToMs(etime: string, nowMs: number): number | null 
 }
 
 /**
+ * Split a command line into argv, grouping `"..."` so a quoted executable
+ * path survives as argv[0]. Covers the shapes that matter here (a quoted
+ * install path plus plain flags); it is not a full shell parser — an escaped
+ * quote inside a quoted span still splits, and only argv[0] (classification)
+ * plus flag-adjacent values (`--session <id>`) are ever read downstream.
+ */
+export function splitCommandLineArgv(commandLine: string): string[] {
+  const argv: string[] = []
+  const pattern = /"([^"]*)"|(\S+)/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(commandLine)) !== null) {
+    argv.push(match[1] ?? match[2] ?? '')
+  }
+  return argv.filter((part) => part.length > 0)
+}
+
+/**
  * One `ps -eo pid=,ppid=,etime=,args=` line. `args` is the joined command
- * line, so argv is split on runs of whitespace: argv[0] and flag values
- * survive, but paths containing spaces do not. Enough to spot an `opencode`
+ * line; argv[0] and flag values survive quote-aware splitting, but a path
+ * containing an unquoted space does not. Enough to spot an `opencode`
  * client and read its `--session` value, not enough to re-exec anything.
  */
 export function parsePsArgsLine(line: string, nowMs: number): ProcessIdentityRow | null {
-  const fields = line.trim().split(/\s+/)
-  if (fields.length < 4) {
+  // Why a regex instead of split-with-limit: split discards everything past
+  // the limit, which would truncate argv to its first token.
+  const match = line.trim().match(/^(\S+)\s+(\S+)\s+(\S+)\s+([\s\S]*\S)\s*$/)
+  if (!match) {
     return null
   }
-  const [pidText, ppidText, etimeText, ...args] = fields
-  if (!pidText || !ppidText || !etimeText || args.length === 0) {
+  const [, pidText, ppidText, etimeText, argsText] = match
+  if (!pidText || !ppidText || !etimeText || !argsText) {
     return null
   }
   const pid = Number.parseInt(pidText, 10)
   const ppid = Number.parseInt(ppidText, 10)
   const startedAtMs = parsePsElapsedToMs(etimeText, nowMs)
-  if (!Number.isFinite(pid) || !Number.isFinite(ppid) || startedAtMs === null) {
-    return null
-  }
-  return { pid, ppid, startedAtMs, argv: args }
-}
-
-/** One TSV row from the Windows CIM query below. */
-export function parseCimArgsLine(line: string): ProcessIdentityRow | null {
-  const [pidText, ppidText, ticksText, commandLine] = line.split('\t')
-  const pid = Number.parseInt(pidText ?? '', 10)
-  const ppid = Number.parseInt(ppidText ?? '', 10)
-  // Why ticks: ConvertTo-Json datetime shapes vary by PowerShell version;
-  // ticks are unambiguous and parse with one division.
-  const startedAtMs = Number.parseInt(ticksText ?? '', 10) / 10_000 - 62_135_596_800_000
-  const argv = (commandLine ?? '').split(/\s+/).filter((part) => part.length > 0)
+  const argv = splitCommandLineArgv(argsText)
   if (
     !Number.isFinite(pid) ||
     !Number.isFinite(ppid) ||
-    !Number.isFinite(startedAtMs) ||
+    startedAtMs === null ||
     argv.length === 0
   ) {
     return null
   }
   return { pid, ppid, startedAtMs, argv }
+}
+
+/**
+ * One native Windows process-table row. Rows without a kernel creation time
+ * cannot bracket a session creation, so they are skipped rather than guessed.
+ */
+export function nativeWindowsRowToIdentity(
+  row: NativeWindowsProcessRow
+): ProcessIdentityRow | null {
+  if (!Number.isFinite(row.pid) || !Number.isFinite(row.ppid)) {
+    return null
+  }
+  if (typeof row.creationTimeMs !== 'number' || !Number.isFinite(row.creationTimeMs)) {
+    return null
+  }
+  const argv = splitCommandLineArgv(row.command)
+  if (argv.length === 0) {
+    return null
+  }
+  return { pid: row.pid, ppid: row.ppid, startedAtMs: row.creationTimeMs, argv }
 }
 
 function argvZeroBase(argv: readonly string[]): string {
@@ -106,6 +137,7 @@ export async function sweepProcessIdentities(
     platform?: NodeJS.Platform
     run?: typeof runProcess
     nowMs?: number
+    readWindowsTable?: () => Promise<NativeWindowsProcessRow[]>
   } = {}
 ): Promise<ProcessIdentityRow[]> {
   const platform = deps.platform ?? process.platform
@@ -113,18 +145,14 @@ export async function sweepProcessIdentities(
   const nowMs = deps.nowMs ?? Date.now()
   try {
     if (platform === 'win32') {
-      const stdout = await execFileText(run, 'powershell.exe', [
-        '-NoLogo',
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " +
-          'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,CommandLine | ' +
-          'ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.CreationDate.ToUniversalTime().Ticks, (($_.CommandLine -replace "`r?`n", \' \') -replace "`t", \' \'))) } catch {} }'
-      ])
-      return stdout
-        .split('\n')
-        .map((line) => parseCimArgsLine(line.trim()))
+      // Why the native table and nothing else: it is the only sanctioned
+      // Windows process-table reader (see windows-process-enumeration.md);
+      // forking powershell.exe for a whole-table CIM scan is exactly the
+      // pattern it retired.
+      const readTable = deps.readWindowsTable ?? readWindowsProcessTable
+      const rows = await readTable()
+      return rows
+        .map((row) => nativeWindowsRowToIdentity(row))
         .filter((row): row is ProcessIdentityRow => row !== null)
     }
     const stdout = await execFileText(run, 'ps', ['-eo', 'pid=,ppid=,etime=,args='])
@@ -138,6 +166,7 @@ export async function sweepProcessIdentities(
   }
 }
 
+/** Run one child process to text, throwing on timeout or nonzero exit. */
 async function execFileText(
   run: typeof runProcess,
   program: string,
