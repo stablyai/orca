@@ -266,4 +266,42 @@ describe('useDashboardSnapshot', () => {
     expect(requestSnapshot).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
+
+  it('absorbs benign InvalidStateError on startViewTransition synchronously and applies snapshot', () => {
+    const throwingStart = vi.fn(() => {
+      const err = new Error('Transition was aborted because of invalid state')
+      err.name = 'InvalidStateError'
+      throw err
+    })
+    ;(document as unknown as { startViewTransition: unknown }).startViewTransition = throwingStart
+
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    expect(result.current.cards[0].bucket).toBe('idle')
+
+    act(() => apply(snapshot([card({ bucket: 'working' })])))
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('absorbs benign AbortError rejection from transition.finished promise', async () => {
+    let rejectFinished!: (err: unknown) => void
+    const abortingStart = vi.fn((cb: () => void) => {
+      cb()
+      return {
+        finished: new Promise<void>((_, reject) => {
+          rejectFinished = reject
+        })
+      }
+    })
+    ;(document as unknown as { startViewTransition: unknown }).startViewTransition = abortingStart
+
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    expect(result.current.cards[0].bucket).toBe('idle')
+
+    const err = new Error('Transition was skipped')
+    err.name = 'AbortError'
+    rejectFinished(err)
+    await Promise.resolve()
+  })
 })
