@@ -15,6 +15,7 @@ import {
   formatTerminalFocus,
   formatTerminalList,
   formatTerminalRead,
+  formatTerminalReadWithCompaction,
   formatTerminalRename,
   formatTerminalShow,
   formatTerminalSplit,
@@ -111,7 +112,19 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         'This Orca host does not support --screen reads, so it answered with accumulated output instead of the rendered screen. Update Orca on the host, or drop --screen to read accumulated output deliberately.'
       )
     }
-    printResult(result, json, formatTerminalRead)
+    const isRaw = flags.get('raw') === true
+    const isCompact = flags.get('compact') === true
+    if (json) {
+      printResult(result, json, formatTerminalRead)
+    } else if (isRaw) {
+      printResult(result, json, formatTerminalRead)
+    } else {
+      const output = await formatTerminalReadWithCompaction(result.result, {
+        compact: isCompact,
+        raw: false
+      })
+      console.log(output)
+    }
   },
   'terminal send': terminalSendHandler,
   'terminal wait': async ({ flags, client, cwd, json }) => {

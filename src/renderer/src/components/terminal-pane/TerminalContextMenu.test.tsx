@@ -313,4 +313,20 @@ describe('TerminalContextMenu', () => {
     expect(rendered).toContain('Loading host…')
     expect(rendered).not.toContain('Add Quick Command…')
   })
+
+  it('renders frame color picker options and triggers onSetTabColor', () => {
+    const onSetTabColor = vi.fn()
+    const rendered = renderMenu({
+      tabColor: '#ef4444',
+      onSetTabColor
+    })
+
+    expect(rendered).toContain('Frame Color')
+    const colorItems = items.list.filter((item) =>
+      Boolean((item as { title?: string }).title?.includes('Blue'))
+    )
+    expect(colorItems.length).toBeGreaterThan(0)
+    colorItems[0].onSelect?.()
+    expect(onSetTabColor).toHaveBeenCalledWith('#3b82f6')
+  })
 })

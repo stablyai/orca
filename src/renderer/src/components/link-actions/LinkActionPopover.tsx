@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
+import { Check, Copy, ExternalLink, Globe, Settings, GripVertical, MonitorPlay } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-fe
 import { translate } from '@/i18n/i18n'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { useAppStore } from '@/store'
+import { isHtmlPathString } from '../browser-pane/navigate/browser-html-drag-resolver'
+import { absolutePathToFileUri } from '../editor/markdown-internal-links'
 import type { LinkAction, LinkActionRequest } from './link-action-request'
 
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
@@ -53,6 +55,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const isHtml = request?.destination ? isHtmlPathString(request.destination) : false
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
@@ -135,11 +138,40 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => request.restoreFocus()}
         >
-          <div className="mb-0.5 flex items-center gap-1 overflow-hidden border-b border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+          <div className="mb-0.5 flex items-center gap-1 overflow-hidden border-b border-border px-1.5 py-1 font-mono text-xs text-muted-foreground">
+            {isHtml ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex items-center text-violet-400 cursor-grab active:cursor-grabbing mr-0.5 select-none">
+                    <GripVertical className="size-3.5" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  按住可直接拖拉至內建瀏覽器預覽
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <span
-              className="line-clamp-2 min-w-0 flex-1 break-all"
+              className={`line-clamp-2 min-w-0 flex-1 break-all select-all ${
+                isHtml
+                  ? 'cursor-grab active:cursor-grabbing text-violet-200 hover:text-white transition-colors'
+                  : ''
+              }`}
               data-terminal-link-destination
-              title={request.destination}
+              title={
+                isHtml ? `${request.destination} (按住可拖拉至瀏覽器預覽)` : request.destination
+              }
+              draggable={isHtml}
+              onDragStart={(e) => {
+                if (isHtml) {
+                  e.dataTransfer.setData('text/plain', request.destination)
+                  e.dataTransfer.setData(
+                    'text/uri-list',
+                    absolutePathToFileUri(request.destination)
+                  )
+                  e.dataTransfer.effectAllowed = 'copy'
+                }
+              }}
             >
               {request.destination}
             </span>
@@ -178,6 +210,25 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               </TooltipContent>
             </Tooltip>
           </div>
+          {isHtml ? (
+            <Button
+              className="h-8 w-full justify-start gap-1.5 px-1.5 text-[13px] font-medium text-violet-300 hover:text-violet-100 hover:bg-violet-950/40 has-[>svg]:px-1.5"
+              variant="ghost"
+              onClick={() => {
+                onClose()
+                request.restoreFocus()
+                const store = useAppStore.getState()
+                const worktreeId = store.activeWorktreeId ?? ''
+                const fileUrl = absolutePathToFileUri(request.destination)
+                const title = request.destination.split(/[/\\]/).pop() || 'HTML Preview'
+                store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
+                toast.success(`🌐 已在內建瀏覽器開啟: ${title}`)
+              }}
+            >
+              <MonitorPlay className="size-3.5 text-violet-400" />
+              <span className="min-w-0 flex-1 truncate text-left">在內建瀏覽器預覽 HTML</span>
+            </Button>
+          ) : null}
           <ActionRow
             action={request.primary}
             alternate={false}

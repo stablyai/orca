@@ -18,6 +18,7 @@ import type {
   RuntimeTerminalSplit,
   RuntimeTerminalWait
 } from '../shared/runtime-types'
+import { formatTerminalHuman, type FormatTerminalHumanOptions } from './terminal-human-formatter'
 
 export function formatTerminalList(
   result: WithAnnotatedHostScope<RuntimeTerminalListResult>
@@ -151,6 +152,36 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
       : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
+}
+
+export async function formatTerminalReadWithCompaction(
+  result: { terminal: RuntimeTerminalRead },
+  options: FormatTerminalHumanOptions = {}
+): Promise<string> {
+  const terminal = result.terminal
+  const oldestCursor =
+    typeof terminal.oldestCursor === 'string' ? [`oldest cursor: ${terminal.oldestCursor}`] : []
+  const latestCursor =
+    typeof terminal.latestCursor === 'string' ? [`latest cursor: ${terminal.latestCursor}`] : []
+  const limitedWarning = formatTerminalReadLimitedWarning(terminal)
+  const header = [
+    `handle: ${terminal.handle}`,
+    `status: ${terminal.status}`,
+    ...(terminal.source ? [`source: ${terminal.source}`] : []),
+    ...(terminal.draft ? [`draft: ${JSON.stringify(terminal.draft)}`] : []),
+    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
+    ...oldestCursor,
+    ...latestCursor,
+    ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
+    ...(limitedWarning ? [limitedWarning] : []),
+    ...(terminal.source === 'screen-unavailable'
+      ? [
+          'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+        ]
+      : [])
+  ]
+  const formattedTail = await formatTerminalHuman(terminal.tail, options)
+  return [...header, '', formattedTail].join('\n')
 }
 
 function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string | null {

@@ -238,3 +238,23 @@ export const AgentTeamsPrepareLaunch = z.object({
   env: z.record(z.string(), z.string()).optional(),
   prepareAuth: z.boolean().optional()
 })
+
+export const TerminalA2ALink = z.object({
+  id: OptionalString,
+  from: requiredString('Missing from'),
+  to: requiredString('Missing to'),
+  fromIndex: z.number().int().positive().optional(),
+  toIndex: z.number().int().positive().optional(),
+  fromLabel: OptionalString,
+  toLabel: OptionalString,
+  type: z.enum(['send', 'message', 'type', 'keys']).default('send').optional(),
+  text: OptionalString,
+  timestamp: z.number().optional(),
+  durationMs: z.number().optional(),
+  dispatch: z.boolean().optional(),
+  delivered: z.boolean().optional(),
+  targetHandle: OptionalString,
+  bytesWritten: z.number().optional(),
+  executionState: z.enum(['delivered', 'executing', 'failed', 'simulated']).optional(),
+  error: OptionalString
+})

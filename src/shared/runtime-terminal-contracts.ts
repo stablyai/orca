@@ -12,6 +12,23 @@ import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type {
+  RuntimeTerminalVisualGroupNode,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
+  RuntimeTerminalVisualTerminalNode
+} from './runtime-terminal-visual-contracts'
+
+export type {
+  RuntimeTerminalVisualGroupNode,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
+  RuntimeTerminalVisualTerminalNode
+}
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -34,54 +51,12 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
-}
-
-export type RuntimeTerminalVisualTerminalNode = {
-  type: 'terminal'
-  handle: string
-  tabId: string
-  leafId: string
-  title: string | null
-  connected: boolean
-  active: boolean
-}
-
-export type RuntimeTerminalVisualPaneNode =
-  | RuntimeTerminalVisualTerminalNode
-  | {
-      type: 'pane-split'
-      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
-      first: RuntimeTerminalVisualPaneNode
-      second: RuntimeTerminalVisualPaneNode
-    }
-
-export type RuntimeTerminalVisualTab = {
-  tabId: string
-  title: string | null
-  activeLeafId: string | null
-  panes: RuntimeTerminalVisualPaneNode
-}
-
-export type RuntimeTerminalVisualGroupNode = {
-  type: 'group'
-  groupId: string | null
-  activeTabId: string | null
-  tabs: RuntimeTerminalVisualTab[]
-}
-
-export type RuntimeTerminalVisualLayoutNode =
-  | RuntimeTerminalVisualGroupNode
-  | {
-      type: 'split'
-      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
-      first: RuntimeTerminalVisualLayoutNode
-      second: RuntimeTerminalVisualLayoutNode
-    }
-
-export type RuntimeTerminalVisualLayout = {
-  worktreeId: string
-  worktreePath: string
-  root: RuntimeTerminalVisualLayoutNode
+  /** Worktree-scoped 1-based index of this terminal for easy addressing (e.g. 1, 2). */
+  index?: number
+  /** Short targeting selector for cross-terminal mention and bridge commands (e.g. '@1'). */
+  target?: string
+  /** Human-assigned or custom label for addressing by name (e.g. 'worker', 'reviewer'). */
+  label?: string | null
 }
 
 /** The shared listing-scope shape, kept under its incumbent name for existing consumers. */

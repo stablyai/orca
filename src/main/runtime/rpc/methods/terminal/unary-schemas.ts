@@ -1,6 +1,7 @@
 export {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalA2ALink,
   TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,

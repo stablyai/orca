@@ -5,6 +5,7 @@ import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
+import { useA2AStore } from '../../store/a2a-traces-store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
@@ -62,6 +63,13 @@ export function installAppLifetimeIpcEvents(
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
   )
+  if (typeof window !== 'undefined' && window.api?.ui?.onA2ALink) {
+    unsubs.push(
+      window.api.ui.onA2ALink((trace) => {
+        useA2AStore.getState().addTrace(trace)
+      })
+    )
+  }
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
   const statusApi = window.api.runtimeEnvironments

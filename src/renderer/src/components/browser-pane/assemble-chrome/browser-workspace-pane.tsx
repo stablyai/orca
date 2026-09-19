@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Globe } from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  extractHtmlUrlFromDataTransfer,
+  isHtmlOrWebUrlDrag
+} from '../navigate/browser-html-drag-resolver'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
@@ -107,6 +113,47 @@ export default function BrowserPane({
     }
   }, [activeBrowserPageId])
 
+  const [isDropTargetActive, setIsDropTargetActive] = useState(false)
+
+  const handleContainerDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (isHtmlOrWebUrlDrag(e.dataTransfer)) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'copy'
+      setIsDropTargetActive(true)
+    }
+  }, [])
+
+  const handleContainerDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (
+      e.clientX <= rect.left ||
+      e.clientX >= rect.right ||
+      e.clientY <= rect.top ||
+      e.clientY >= rect.bottom
+    ) {
+      setIsDropTargetActive(false)
+    }
+  }, [])
+
+  const handleContainerDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      setIsDropTargetActive(false)
+      if (!isHtmlOrWebUrlDrag(e.dataTransfer)) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+
+      const resolved = extractHtmlUrlFromDataTransfer(e.dataTransfer)
+      if (resolved && activeBrowserPage) {
+        toast.success(`🌐 已在內建瀏覽器載入預覽: ${resolved.title}`)
+        setBrowserPageUrl(activeBrowserPage.id, resolved.url)
+      }
+    },
+    [activeBrowserPage, setBrowserPageUrl]
+  )
+
   if (activeBrowserRuntimeEnvironmentId) {
     const environmentHandle =
       activeRemotePageHandle?.environmentId === activeBrowserRuntimeEnvironmentId
@@ -157,7 +204,28 @@ export default function BrowserPane({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex h-full min-h-0 flex-1 flex-col"
+      onDragOver={handleContainerDragOver}
+      onDragLeave={handleContainerDragLeave}
+      onDrop={handleContainerDrop}
+    >
+      {isDropTargetActive && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-violet-950/85 backdrop-blur-sm border-2 border-dashed border-violet-400 p-6 pointer-events-none animate-in fade-in duration-150 shadow-2xl"
+          data-testid="browser-html-drop-overlay"
+        >
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-violet-600/30 text-violet-300 border border-violet-400/40 mb-3 shadow-lg shadow-violet-900/40 animate-bounce">
+            <Globe className="size-8 text-violet-200" />
+          </div>
+          <span className="text-sm font-semibold text-white tracking-wide">
+            放開滑鼠以在內置瀏覽器預覽 HTML
+          </span>
+          <span className="text-xs text-violet-300/80 mt-1 font-mono">
+            支援 index.html、本機檔案及網頁 URL
+          </span>
+        </div>
+      )}
       {localBrowserPages.length > 0 ? (
         <SshRoutedBrowserPageGate
           worktreeId={browserTab.worktreeId}

@@ -1,3 +1,4 @@
+import { TERMINAL_A2A_METHODS } from './terminal/terminal-a2a-methods'
 import { TERMINAL_LIFECYCLE_METHODS } from './terminal/terminal-lifecycle-methods'
 import { TERMINAL_MULTIPLEX_METHODS } from './terminal/terminal-multiplex-method'
 import { TERMINAL_QUERY_METHODS } from './terminal/terminal-query-methods'
@@ -13,6 +14,7 @@ import {
 export const TERMINAL_METHODS = [
   ...TERMINAL_QUERY_METHODS,
   ...TERMINAL_SEND_METHODS,
+  ...TERMINAL_A2A_METHODS,
   ...TERMINAL_LIFECYCLE_METHODS,
   ...TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS,
   ...TERMINAL_MULTIPLEX_METHODS,

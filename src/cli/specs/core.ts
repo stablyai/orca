@@ -207,10 +207,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'read'],
-    summary: 'Read bounded terminal output',
+    summary:
+      'Read bounded terminal output with human-readable formatting and optional fast-jev compaction',
     usage:
-      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
+      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--compact] [--raw] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen', 'compact', 'raw'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
       'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',

@@ -264,7 +264,9 @@ function removePersistentWebview(
     window.api.browser.unregisterGuest({ browserPageId: browserTabId })
   ).catch(() => {})
   moveFocusToRendererBeforeWebviewDetach(webview)
-  webview.remove()
+  try {
+    webview.remove()
+  } catch {}
   unregisterPersistentWebview(browserTabId)
   if (!preserveViewport) {
     clearBrowserPageViewportPresetSize(browserTabId)

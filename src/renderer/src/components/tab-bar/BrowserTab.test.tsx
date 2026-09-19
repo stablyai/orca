@@ -138,6 +138,21 @@ vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => null
 }))
 
+const mockStore = {
+  browserTabsByWorktree: {
+    'wt-1': [{ id: 'browser-1', worktreeId: 'wt-1' }]
+  },
+  unifiedTabsByWorktree: {},
+  tabGroupsByWorktree: {},
+  terminalLayoutsByTabId: {}
+}
+const useAppStoreMock = (selector: (state: typeof mockStore) => unknown) => selector(mockStore)
+useAppStoreMock.getState = () => mockStore
+
+vi.mock('@/store', () => ({
+  useAppStore: useAppStoreMock
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
@@ -338,5 +353,15 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images).toHaveLength(1)
     expect(images[0].props.src).toBe(iconUrl)
     expect(findElementsByType(retryRender, 'Globe')).toHaveLength(0)
+  })
+
+  it('renders @b index badge corresponding to browser tab position', async () => {
+    const tab = baseBrowserTab({ id: 'browser-1', worktreeId: 'wt-1' })
+    const tree = await renderExpandedBrowserTab(tab)
+    const spans = findElementsByType(tree, 'span')
+    const badge = spans.find((s) => s.props['data-testid'] === 'tab-browser-index')
+    expect(badge).toBeDefined()
+    expect(badge?.props['data-browser-index']).toBe('1')
+    expect(badge?.props.children).toEqual(['@b', 1])
   })
 })

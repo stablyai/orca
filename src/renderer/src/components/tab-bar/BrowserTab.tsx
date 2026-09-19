@@ -39,6 +39,7 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { useAppStore } from '@/store'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -125,6 +126,16 @@ export default function BrowserTab({
   }
   const tabLabel = getBrowserTabLabel(tab)
 
+  // Why: determine 1-based browser tab index within the worktree for cross-tab addressing (@b1, @b2)
+  const browserIndex = useAppStore((s) => {
+    const tabs = s.browserTabsByWorktree?.[tab.worktreeId]
+    if (!tabs) {
+      return undefined
+    }
+    const idx = tabs.findIndex((t) => t.id === tab.id)
+    return idx !== -1 ? idx + 1 : undefined
+  })
+
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
@@ -195,6 +206,15 @@ export default function BrowserTab({
         className="size-3 mr-1"
         fallbackClassName="text-blue-500"
       />
+      {browserIndex !== undefined && (
+        <span
+          data-testid="tab-browser-index"
+          data-browser-index={String(browserIndex)}
+          className="mr-1 inline-flex items-center rounded px-1 py-0.5 text-[10px] font-mono font-medium text-blue-400 bg-blue-500/15 border border-blue-500/30"
+        >
+          @b{browserIndex}
+        </span>
+      )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {!isPinned && (

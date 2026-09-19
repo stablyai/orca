@@ -25,6 +25,12 @@ import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { toast } from 'sonner'
+import {
+  extractHtmlUrlFromDataTransfer,
+  isHtmlOrWebUrlDrag
+} from '../browser-pane/navigate/browser-html-drag-resolver'
+import { useAppStore } from '@/store'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -141,6 +147,29 @@ export function renderTabBarSurface({
         <div
           className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          onDragOver={(e) => {
+            if (isHtmlOrWebUrlDrag(e.dataTransfer)) {
+              e.preventDefault()
+              e.stopPropagation()
+              e.dataTransfer.dropEffect = 'copy'
+            }
+          }}
+          onDrop={(e) => {
+            if (!isHtmlOrWebUrlDrag(e.dataTransfer)) {
+              return
+            }
+            e.preventDefault()
+            e.stopPropagation()
+            const resolved = extractHtmlUrlFromDataTransfer(e.dataTransfer)
+            if (resolved) {
+              const store = useAppStore.getState()
+              store.createBrowserTab(worktreeId, resolved.url, {
+                title: resolved.title,
+                activate: true
+              })
+              toast.success(`🌐 已在新瀏覽器分頁載入預覽: ${resolved.title}`)
+            }
+          }}
         >
           <div
             ref={tabStripRef}

@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
@@ -106,9 +104,6 @@ export function TabBarQuickCommandsButton({
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
-  const defaultHostId = hosts.some((host) => host.hostId === executionHostId)
-    ? executionHostId
-    : hosts[0].hostId
 
   const addRepoCommand = (hostId: ExecutionHostId): void => {
     setEditor({
@@ -168,37 +163,10 @@ export function TabBarQuickCommandsButton({
     return null
   }
 
-  // Empty state: single button that opens the dialog directly.
-  if (!hasAnyCommands && hosts.length === 1 && !remoteHostPending) {
-    return (
-      <>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => addRepoCommand(defaultHostId)}
-              className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label={translate(
-                'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
-                'Add quick command'
-              )}
-            >
-              <Play className="size-3.5" />
-              <span className="text-[12px] font-medium">
-                {translate(
-                  'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Command'
-                )}
-              </span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {translate(
-              'auto.components.tab.bar.TabBarQuickCommandsButton.1d411fb6a5',
-              'Save a quick command for this repo'
-            )}
-          </TooltipContent>
-        </Tooltip>
+  // When no commands are configured, do not render a placeholder button in the tab bar.
+  if (!hasAnyCommands) {
+    if (editor !== null) {
+      return (
         <TerminalQuickCommandDialog
           open={editor !== null}
           mode={editor?.mode ?? 'add'}
@@ -207,8 +175,9 @@ export function TabBarQuickCommandsButton({
           onOpenChange={(open) => !open && setEditor(null)}
           onSave={handleSaveCommand}
         />
-      </>
-    )
+      )
+    }
+    return null
   }
 
   return (

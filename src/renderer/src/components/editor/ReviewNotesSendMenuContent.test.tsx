@@ -807,4 +807,49 @@ describe('ReviewNotesSendMenuContent', () => {
       launchSource: 'notes_send'
     })
   })
+
+  it('renders terminal agent number badge for running agents', () => {
+    const paneKeyA = makePaneKey(TAB_A, LEAF_A)
+    const paneKeyB = makePaneKey(TAB_B, LEAF_B)
+    setStore({
+      tabsByWorktree: {
+        'wt-1': [
+          tab(TAB_A, { title: 'Terminal 1' }),
+          tab(TAB_B, { title: 'Custom Task', color: '#ef4444' })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [TAB_A]: leafLayout(LEAF_A, 'pty-a'),
+        [TAB_B]: leafLayout(LEAF_B, 'pty-b')
+      }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: paneKeyA,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      },
+      {
+        paneKey: paneKeyB,
+        tabId: TAB_B,
+        leafId: LEAF_B,
+        agentType: 'antigravity',
+        tabTitle: 'Custom Task',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render()
+    const items = findAllByType(tree, 'DropdownMenuItem')
+
+    expect(items).toHaveLength(2)
+    expect(collectText(items[0])).toContain('#1')
+    expect(collectText(items[0])).toContain('Claude')
+    expect(collectText(items[1])).toContain('#2')
+    expect(collectText(items[1])).toContain('Antigravity')
+    expect(collectText(items[1])).toContain('Custom Task')
+  })
 })

@@ -12,7 +12,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import TabBar from '../tab-bar/TabBar'
 
-import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -265,59 +264,58 @@ export default function TabGroupPanel({
             />
           ) : null}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          <div
-            className="ml-1.5 flex shrink-0 items-center gap-0.5"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <div className={focusedActionChromeClassName}>
-              {isFocused ? (
-                <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
-              ) : null}
-              {isFocused && hasSplitGroups ? (
-                <Tooltip>
-                  <DropdownMenu modal={false}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={translate(
-                            'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                            'Pane Actions'
-                          )}
-                          onClick={(event) => {
-                            event.stopPropagation()
+          {hasSplitGroups ? (
+            <div
+              className="ml-1.5 flex shrink-0 items-center gap-0.5"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              <div className={focusedActionChromeClassName}>
+                {isFocused ? (
+                  <Tooltip>
+                    <DropdownMenu modal={false}>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={translate(
+                              'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                              'Pane Actions'
+                            )}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                            }}
+                            className={menuButtonClassName}
+                          >
+                            <Ellipsis className="size-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => {
+                            commands.closeGroup()
                           }}
-                          className={menuButtonClassName}
                         >
-                          <Ellipsis className="size-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => {
-                          commands.closeGroup()
-                        }}
-                      >
-                        <X className="size-4" />
-                        {translate(
-                          'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-                          'Close split pane'
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                      'Pane Actions'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
+                          <X className="size-4" />
+                          {translate(
+                            'auto.components.tab.group.TabGroupPanel.closePaneColumn',
+                            'Close split pane'
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {translate(
+                        'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                        'Pane Actions'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
           {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
           {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
             <div

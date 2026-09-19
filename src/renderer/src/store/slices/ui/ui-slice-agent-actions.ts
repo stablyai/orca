@@ -14,6 +14,20 @@ function createAgentSendTargetModeInstanceId(): string {
   return `${Date.now()}:${agentSendTargetModeInstanceCounter}`
 }
 
+const SIDEBAR_COLLAPSE_MODE_STORAGE_KEY = 'orca.sidebarCollapseMode.v1'
+
+function getInitialSidebarCollapseMode(): 'rail' | 'hidden' {
+  try {
+    const saved = window.localStorage.getItem(SIDEBAR_COLLAPSE_MODE_STORAGE_KEY)
+    if (saved === 'hidden' || saved === 'rail') {
+      return saved
+    }
+  } catch {
+    // ignore
+  }
+  return 'rail'
+}
+
 export function createUiAgentActions(
   set: UISliceSet,
   get: UISliceGet
@@ -21,9 +35,12 @@ export function createUiAgentActions(
   UISlice,
   | 'sidebarOpen'
   | 'sidebarWidth'
+  | 'sidebarCollapseMode'
   | 'toggleSidebar'
   | 'setSidebarOpen'
   | 'setSidebarWidth'
+  | 'setSidebarCollapseMode'
+  | 'toggleSidebarCollapseMode'
   | 'agentSendPopoverTargetMode'
   | 'openAgentSendPopoverTargetMode'
   | 'closeAgentSendPopoverTargetMode'
@@ -43,9 +60,27 @@ export function createUiAgentActions(
     ...createUiActivityActions(set, get),
     sidebarOpen: true,
     sidebarWidth: 280,
+    sidebarCollapseMode: getInitialSidebarCollapseMode(),
     toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
     setSidebarOpen: (open) => set({ sidebarOpen: open }),
     setSidebarWidth: (width) => set({ sidebarWidth: width }),
+    setSidebarCollapseMode: (mode) => {
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSE_MODE_STORAGE_KEY, mode)
+      } catch {
+        // ignore
+      }
+      set({ sidebarCollapseMode: mode })
+    },
+    toggleSidebarCollapseMode: () => {
+      const next = get().sidebarCollapseMode === 'rail' ? 'hidden' : 'rail'
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSE_MODE_STORAGE_KEY, next)
+      } catch {
+        // ignore
+      }
+      set({ sidebarCollapseMode: next })
+    },
     agentSendPopoverTargetMode: null,
     openAgentSendPopoverTargetMode: (args) => {
       const targets = deriveRunningAgentSendTargets(get(), args.worktreeId)
