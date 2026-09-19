@@ -1,5 +1,5 @@
-import { link, lstat, mkdir } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { lstat } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   getCodexSessionBackfillStateDirPath,
   getOrcaManagedCodexHomePath,
@@ -7,10 +7,9 @@ import {
 } from './codex-home-paths'
 import {
   createCodexSessionBackfillAuditPass,
-  readCodexSessionTargetStat,
   type CodexSessionBackfillAuditPass
 } from './codex-session-backfill-audit-pass'
-import { describeCodexSessionBackfillErrorCode } from './codex-session-backfill-audit'
+import { backfillOneManagedSessionFile } from './codex-session-backfill-publish'
 import {
   isCodexSessionRolloutPath,
   listCodexSessionBackfillFilesForDates
@@ -152,9 +151,11 @@ function resolveCodexSessionBackfillScanPlan(
 /**
  * Backfills managed-home session rollout files into the real Codex home.
  *
- * Non-destructive by contract: existing target files are always skipped, and
- * nothing in either home is deleted or moved. A hardlink keeps mutable rollout
- * contents coherent; cross-volume snapshots are skipped as unsupported.
+ * Non-destructive by contract: existing target files are always skipped, and a
+ * rollout the user archived in Codex is neither republished nor read. The one
+ * removal is a redundant active hardlink to an already-archived rollout, which
+ * loses no contents. A hardlink keeps mutable rollout contents coherent;
+ * cross-volume snapshots are skipped as unsupported.
  */
 export async function backfillManagedCodexSessionsIntoSystemHome(
   paths: CodexSessionBackfillPaths,
@@ -166,6 +167,7 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
     linkedFiles: 0,
     copiedFiles: 0,
     skippedExistingFiles: 0,
+    skippedArchivedFiles: 0,
     skippedUnexpectedFiles: 0,
     skippedSymlinkFiles: 0,
     skippedUnsupportedFilesystemFiles: 0,
@@ -245,113 +247,8 @@ async function checkManagedSessionsRoot(
   }
 }
 
-async function backfillOneManagedSessionFile(
-  paths: CodexSessionBackfillPaths,
-  managedSessionFilePath: string,
-  summary: CodexSessionBackfillSummary,
-  ensuredTargetDirectories: Set<string>,
-  auditPass: CodexSessionBackfillAuditPass
-): Promise<void> {
-  if (await isSymbolicLink(managedSessionFilePath)) {
-    // Why: bridge-created symlinks already point at a file in the user's own
-    // home; materializing them here could duplicate a foreign tree.
-    summary.skippedSymlinkFiles += 1
-    return
-  }
-  const relativePath = relative(paths.managedSessionsRoot, managedSessionFilePath)
-  const systemSessionFilePath = join(paths.systemSessionsRoot, relativePath)
-  const existingTargetStat = await readCodexSessionTargetStat(systemSessionFilePath)
-  if (existingTargetStat) {
-    await auditPass.recordExisting(
-      summary,
-      managedSessionFilePath,
-      systemSessionFilePath,
-      existingTargetStat
-    )
-    return
-  }
-
-  let linkAttempted = false
-  try {
-    const targetDirectory = dirname(systemSessionFilePath)
-    if (!ensuredTargetDirectories.has(targetDirectory)) {
-      // Why: one date directory can contain thousands of rollouts; avoid a
-      // redundant filesystem round trip before every hardlink.
-      await mkdir(targetDirectory, { recursive: true })
-      ensuredTargetDirectories.add(targetDirectory)
-    }
-    linkAttempted = true
-    await link(managedSessionFilePath, systemSessionFilePath)
-    summary.linkedFiles += 1
-    await auditPass.recordPublished(
-      summary,
-      'hardlink',
-      managedSessionFilePath,
-      systemSessionFilePath
-    )
-  } catch (linkError) {
-    if (linkAttempted && isExistsError(linkError)) {
-      // Why: another window can publish the target after our existence probe;
-      // enqueue it here too in case that writer died before its audit append.
-      await auditPass.recordExisting(
-        summary,
-        managedSessionFilePath,
-        systemSessionFilePath,
-        await readCodexSessionTargetStat(systemSessionFilePath)
-      )
-      return
-    }
-    if (isNotFoundError(linkError)) {
-      ensuredTargetDirectories.delete(dirname(systemSessionFilePath))
-    }
-    const sourceStat = await readCodexSessionTargetStat(managedSessionFilePath)
-    if (linkAttempted && isUnsupportedHardlinkError(linkError)) {
-      // Why: a mutable rollout cannot be kept coherent by a cross-volume snapshot.
-      summary.skippedUnsupportedFilesystemFiles += 1
-      await auditPass.recordDiagnostic(
-        {
-          action: 'copy-unsupported',
-          source: managedSessionFilePath,
-          target: systemSessionFilePath,
-          linkErrorCode: describeCodexSessionBackfillErrorCode(linkError)
-        },
-        sourceStat
-      )
-      return
-    }
-    summary.failedFiles += 1
-    await auditPass.recordDiagnostic(
-      {
-        action: 'failed',
-        source: managedSessionFilePath,
-        target: systemSessionFilePath,
-        linkError: describeError(linkError),
-        linkErrorCode: describeCodexSessionBackfillErrorCode(linkError)
-      },
-      sourceStat
-    )
-  }
-}
-
-async function isSymbolicLink(filePath: string): Promise<boolean> {
-  try {
-    return (await lstat(filePath)).isSymbolicLink()
-  } catch {
-    return false
-  }
-}
-
-function isExistsError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === 'EEXIST'
-}
-
 function isNotFoundError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-}
-
-function isUnsupportedHardlinkError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | null)?.code
-  return code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS'
 }
 
 function describeError(error: unknown): string {
