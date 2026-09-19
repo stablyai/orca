@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
@@ -183,21 +183,24 @@ describe('lifecycle reconciliation', () => {
   })
 
   it.each([
-    { payload: undefined, code: 'invalid_payload' },
-    { payload: '{', code: 'invalid_payload' },
+    { payload: undefined, code: 'invalid_payload', expectedTo: 'term_worker' },
+    { payload: '{', code: 'invalid_payload', expectedTo: 'term_worker' },
     {
       payload: JSON.stringify({ dispatchId: 'ctx_1', outcome: 'succeeded' }),
-      code: 'missing_task_id'
+      code: 'missing_task_id',
+      expectedTo: 'term_worker'
     },
     {
       payload: JSON.stringify({ taskId: 'task_1', outcome: 'succeeded' }),
-      code: 'missing_dispatch_id'
+      code: 'missing_dispatch_id',
+      expectedTo: 'term_worker'
     },
     {
       payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1', outcome: 'maybe' }),
-      code: 'invalid_outcome'
+      code: 'invalid_outcome',
+      expectedTo: 'term_worker'
     }
-  ])('rejects malformed worker reports with $code', ({ payload, code }) => {
+  ])('rejects malformed worker reports with $code', ({ payload, code, expectedTo }) => {
     db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({
       runId: 'run_legacy_local',
@@ -210,9 +213,171 @@ describe('lifecycle reconciliation', () => {
 
     expect(reconcileLifecycleMessage(db, message)).toMatchObject({ action: 'rejected', code })
     expect(db.getMessageById(message.id)).toMatchObject({
+      type: 'worker_done',
       priority: 'high',
       subject: 'Rejected worker_done: Done'
     })
+    const bounce = db
+      .getAllMessages(expectedTo, 10)
+      .find((entry) => entry.subject.startsWith('Rejected worker_done:'))
+    expect(bounce).toMatchObject({
+      from_handle: 'orca',
+      to_handle: expectedTo,
+      type: 'status',
+      priority: 'high',
+      delivery_contract: 'current_delivery'
+    })
+    expect(JSON.parse(bounce?.payload ?? '{}')).toMatchObject({
+      lifecycleRejection: true,
+      rejectedMessageId: message.id,
+      rejectedType: 'worker_done',
+      code,
+      reason: expect.any(String)
+    })
+  })
+
+  it('falls back to the sender mailbox for an unknown dispatch ID', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: 'ctx_missing',
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'unknown_dispatch'
+    })
+    expect(db.getAllMessages('term_worker', 10)).toContainEqual(
+      expect.objectContaining({ to_handle: 'term_worker', type: 'status' })
+    )
+    expect(db.getAllMessages('dispatch:ctx_missing', 10)).toHaveLength(0)
+  })
+
+  it('rewrites a rejection and inserts its sender bounce atomically', () => {
+    db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      body: 'original body',
+      type: 'worker_done',
+      payload: JSON.stringify({ outcome: 'maybe' })
+    })
+    const insert = vi.spyOn(db, 'insertMessage').mockImplementationOnce(() => {
+      throw new Error('bounce insert failed')
+    })
+
+    expect(() =>
+      db.convertLifecycleMessageToRejection(message.id, 'invalid_outcome', 'invalid outcome')
+    ).toThrow('bounce insert failed')
+    insert.mockRestore()
+
+    expect(db.getMessageById(message.id)).toMatchObject({
+      priority: 'normal',
+      subject: 'Done',
+      body: 'original body',
+      payload: JSON.stringify({ outcome: 'maybe' })
+    })
+    expect(db.getAllMessages('term_worker', 10)).toHaveLength(0)
+  })
+
+  it('inserts one deterministic sender bounce when rejection conversion is replayed', () => {
+    db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done'
+    })
+
+    db.convertLifecycleMessageToRejection(message.id, 'invalid_payload', 'invalid payload')
+    db.convertLifecycleMessageToRejection(message.id, 'invalid_payload', 'invalid payload')
+
+    const bounces = db
+      .getAllMessages('term_worker', 10)
+      .filter((entry) => entry.subject.startsWith('Rejected worker_done:'))
+    expect(bounces).toHaveLength(1)
+    expect(db.getMessageById(message.id)?.subject).toBe('Rejected worker_done: Done')
+  })
+
+  it('bounces supervised lifecycle rejections to the dispatch mailbox', () => {
+    // Why: check/check --wait for active workers only reads dispatch:<id> (#13199).
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'maybe'
+      })
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'invalid_outcome'
+    })
+    const bounce = db
+      .getAllMessages(`dispatch:${dispatch.id}`, 10)
+      .find((entry) => entry.subject.startsWith('Rejected worker_done:'))
+    expect(bounce).toMatchObject({
+      from_handle: 'orca',
+      to_handle: `dispatch:${dispatch.id}`,
+      type: 'status',
+      priority: 'high'
+    })
+    expect(JSON.parse(bounce?.payload ?? '{}')).toMatchObject({
+      lifecycleRejection: true,
+      rejectedMessageId: message.id,
+      code: 'invalid_outcome',
+      reason: 'worker_done requires outcome=succeeded or outcome=failed.'
+    })
+    expect(db.getAllMessages('term_worker', 10).some((entry) => entry.type === 'status')).toBe(
+      false
+    )
+  })
+
+  it('bounces a no-dispatchId rejection to the sender active dispatch mailbox', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, outcome: 'succeeded' })
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'missing_dispatch_id'
+    })
+    expect(db.getAllMessages(`dispatch:${dispatch.id}`, 10)).toContainEqual(
+      expect.objectContaining({
+        from_handle: 'orca',
+        to_handle: `dispatch:${dispatch.id}`,
+        type: 'status'
+      })
+    )
+    expect(db.getAllMessages('term_worker', 10)).toHaveLength(0)
   })
 
   it('completes worker_done from the same leaf after a pane break-out changed the tab half', () => {
@@ -345,6 +510,9 @@ describe('lifecycle reconciliation', () => {
       code: 'sender_not_assignee'
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(
+      db.getAllMessages('term_coordinator', 10).filter((entry) => entry.type === 'status')
+    ).toHaveLength(0)
   })
 
   it('uses exact handle equality only for a legacy dispatch without a pane key', () => {
@@ -519,6 +687,22 @@ describe('lifecycle reconciliation', () => {
       type: 'heartbeat',
       subject: 'Rejected heartbeat: alive'
     })
+    const bounce = db
+      .getAllMessages('term_other_worker', 10)
+      .find((entry) => entry.subject.startsWith('Rejected heartbeat:'))
+    expect(bounce).toMatchObject({
+      from_handle: 'orca',
+      to_handle: 'term_other_worker',
+      type: 'status',
+      priority: 'high'
+    })
+    expect(JSON.parse(bounce?.payload ?? '{}')).toMatchObject({
+      lifecycleRejection: true,
+      rejectedMessageId: heartbeat.id,
+      rejectedType: 'heartbeat',
+      code: 'sender_not_assignee'
+    })
+    expect(db.getAllMessages(`dispatch:${dispatch.id}`, 10)).toHaveLength(0)
     // Why: the coordinator's re-read of the already-converted heartbeat must
     // still log the rejection, since the send-path conversion logged nothing.
     const persisted = db.getMessageById(heartbeat.id)

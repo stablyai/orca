@@ -1,6 +1,6 @@
 import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
-import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
+import { convertLifecycleMessageToRejection } from '../lifecycle-rejection-bounce'
 import type { OrchestrationDb } from '../orchestration-db'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
@@ -57,34 +57,7 @@ export function getUnreadMessages(
   )
 }
 
-export function convertLifecycleMessageToRejection(
-  this: OrchestrationDb,
-  messageId: string,
-  code: string,
-  reason: string
-): MessageRow | undefined {
-  const message = this.getMessageById(messageId)
-  if (
-    !message ||
-    !['worker_done', 'heartbeat', 'escalation', 'decision_gate'].includes(message.type)
-  ) {
-    return message
-  }
-
-  const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
-  const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
-  const payload = addLifecycleRejectionMarker(message.payload, code, reason)
-  // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
-  this.db
-    .prepare(
-      `UPDATE messages
-       SET type = CASE WHEN type IN ('escalation', 'decision_gate') THEN 'status' ELSE type END,
-           priority = 'high', subject = ?, body = ?, payload = ?
-       WHERE id = ?`
-    )
-    .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
-  return this.getMessageById(messageId)
-}
+export { convertLifecycleMessageToRejection }
 
 // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
 export function getUndeliveredUnreadMessages(
