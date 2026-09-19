@@ -1,4 +1,4 @@
-import { createElement, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +26,7 @@ vi.mock('react-native', () => ({
     }
   },
   Pressable: 'Pressable',
-  StyleSheet: { create: <T>(styles: T) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
   View: 'View',
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
@@ -58,12 +58,16 @@ vi.mock('react-native-reanimated', () => ({
 
 import { RightDrawer } from './RightDrawer'
 
+function DrawerBody(): null {
+  return null
+}
+
 function drawer(visible: boolean): ReactElement {
-  return createElement(RightDrawer, {
-    visible,
-    onClose: () => {},
-    children: createElement('DrawerBody')
-  })
+  return (
+    <RightDrawer visible={visible} onClose={() => {}}>
+      <DrawerBody />
+    </RightDrawer>
+  )
 }
 
 function render(visible: boolean): ReactTestRenderer {
