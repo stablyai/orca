@@ -21,7 +21,7 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }
  
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318e7db194c 100644
+index 4977ad741065e26bbfd35bc50e7558a033b13340..ccf57dbcfff85eeb4c383fa987bcc07aa28e5d14 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -32,7 +32,28 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
  import { IColorContrastCache } from 'browser/Types';
  import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
  import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-@@ -135,21 +136,23 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -42,7 +43,8 @@ const enum Constants {
+    * is enforced to ensure uploading the texture still finishes in a reasonable amount of time. A
+    * 4096 squared image takes up 16MB of GPU memory.
+    */
+-  FORCED_MAX_TEXTURE_SIZE = 4096
++  FORCED_MAX_TEXTURE_SIZE = 4096,
++  EMPTY_GLYPH_CACHE_LIMIT = 4096
+ }
+ 
+ interface ICharAtlasActiveRow {
+@@ -60,6 +62,10 @@ export class TextureAtlas implements ITextureAtlas {
+   private _cacheMap: FourKeyMap<number, number, number, number, IRasterizedGlyph> = new FourKeyMap();
+   private _cacheMapCombined: FourKeyMap<string, number, number, number, IRasterizedGlyph> = new FourKeyMap();
+ 
++  private _emptyCacheMap: FourKeyMap<number, number, number, number, IRasterizedGlyph> = new FourKeyMap();
++  private _emptyCacheMapCombined: FourKeyMap<string, number, number, number, IRasterizedGlyph> = new FourKeyMap();
++  private _emptyGlyphCount = 0;
++
+   // The texture that the atlas is drawn to
+   private _pages: AtlasPage[] = [];
+   public get pages(): { canvas: HTMLCanvasElement, version: number }[] { return this._pages; }
+@@ -135,21 +141,24 @@ export class TextureAtlas implements ITextureAtlas {
    private _pageLayoutVersion = 0;
    public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
  
@@ -44,6 +65,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
 +
    public clearTexture(): void {
 -    if (this._pages[0].currentRow.x === 0 && this._pages[0].currentRow.y === 0) {
++    this._clearEmptyGlyphCache();
 +    // Guard on every page rather than pages[0]: a merged page is never written through
 +    // currentRow, so once one lands at index 0 the old check made every later clear a no-op.
 +    if (this._pages.every(page => page.glyphs.length === 0 && page.currentRow.x === 0 && page.currentRow.y === 0)) {
@@ -68,7 +90,68 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    }
  
    private _createNewPage(): AtlasPage {
-@@ -465,6 +468,36 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -273,17 +282,18 @@ export class TextureAtlas implements ITextureAtlas {
+     this._overflowSizePage = undefined;
+     this._cacheMap.clear();
+     this._cacheMapCombined.clear();
++    this._clearEmptyGlyphCache();
+     this._didWarmUp = false;
+     this._pageLayoutVersion++;
+     this._logService.debug(`Evicted ${pageCount} WebGL atlas pages in ${(performance.now() - startTime).toFixed(2)}ms`);
+   }
+ 
+   public getRasterizedGlyphCombinedChar(chars: string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
+-    return this._getFromCacheMap(this._cacheMapCombined, chars, bg, fg, ext, restrictToCellHeight, domContainer);
++    return this._getFromCacheMap(this._cacheMapCombined, this._emptyCacheMapCombined, chars, bg, fg, ext, restrictToCellHeight, domContainer);
+   }
+ 
+   public getRasterizedGlyph(code: number, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
+-    return this._getFromCacheMap(this._cacheMap, code, bg, fg, ext, restrictToCellHeight, domContainer);
++    return this._getFromCacheMap(this._cacheMap, this._emptyCacheMap, code, bg, fg, ext, restrictToCellHeight, domContainer);
+   }
+ 
+   /**
+@@ -291,6 +301,7 @@ export class TextureAtlas implements ITextureAtlas {
+    */
+   private _getFromCacheMap(
+     cacheMap: FourKeyMap<string | number, number, number, number, IRasterizedGlyph>,
++    emptyCacheMap: FourKeyMap<string | number, number, number, number, IRasterizedGlyph>,
+     key: string | number,
+     bg: number,
+     fg: number,
+@@ -298,14 +309,29 @@ export class TextureAtlas implements ITextureAtlas {
+     restrictToCellHeight: boolean,
+     domContainer: HTMLElement | undefined
+   ): IRasterizedGlyph {
+-    $glyph = cacheMap.get(key, bg, fg, ext);
++    $glyph = cacheMap.get(key, bg, fg, ext) ?? emptyCacheMap.get(key, bg, fg, ext);
+     if (!$glyph) {
+       $glyph = this._drawToCache(key, bg, fg, ext, restrictToCellHeight, domContainer);
+-      cacheMap.set(key, bg, fg, ext, $glyph);
++      if ($glyph === NULL_RASTERIZED_GLYPH) {
++        // Empty glyphs consume no atlas pixels, so page eviction cannot bound their metadata.
++        if (this._emptyGlyphCount >= Constants.EMPTY_GLYPH_CACHE_LIMIT) {
++          this._clearEmptyGlyphCache();
++        }
++        emptyCacheMap.set(key, bg, fg, ext, $glyph);
++        this._emptyGlyphCount++;
++      } else {
++        cacheMap.set(key, bg, fg, ext, $glyph);
++      }
+     }
+     return $glyph;
+   }
+ 
++  private _clearEmptyGlyphCache(): void {
++    this._emptyCacheMap.clear();
++    this._emptyCacheMapCombined.clear();
++    this._emptyGlyphCount = 0;
++  }
++
+   private _getColorFromAnsiIndex(idx: number): IColor {
+     if (idx >= this._config.colors.ansi.length) {
+       throw new Error('No color found for idx ' + idx);
+@@ -465,6 +491,36 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
  
@@ -105,7 +188,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -536,6 +569,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -536,6 +592,7 @@ export class TextureAtlas implements ITextureAtlas {
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
        `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;

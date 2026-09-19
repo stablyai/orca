@@ -37,6 +37,24 @@ describe('vendored xterm WebGL runtime contract', () => {
     }
   })
 
+  it('keeps invisible glyph eviction separate from the visible glyph cache', () => {
+    const webgl = xtermManifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
+    for (const source of [
+      readProject(webgl.sourcePatch),
+      readInstalled('@xterm/addon-webgl', 'src/TextureAtlas.ts')
+    ]) {
+      expect(source).toContain('emptyCacheMap.get(key, bg, fg, ext)')
+      expect(source).toContain('this._emptyGlyphCount >= Constants.EMPTY_GLYPH_CACHE_LIMIT')
+      expect(source).toContain('this._clearEmptyGlyphCache()')
+    }
+    for (const bundle of ['lib/addon-webgl.js', 'lib/addon-webgl.mjs']) {
+      const contents = readInstalled('@xterm/addon-webgl', bundle)
+      expect(contents, bundle).toContain('_emptyCacheMapCombined')
+      expect(contents, bundle).toContain('_clearEmptyGlyphCache')
+      expect(contents, bundle).toMatch(/_emptyGlyphCount>=4096/)
+    }
+  })
+
   it('keeps the Orca-only WebGL hunks in the generated patch', () => {
     const webgl = xtermManifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
     const patch = readProject(webgl.patch)
