@@ -31,13 +31,6 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
 }
 
-/** The `notify` names a grant gates, whichever grant each of them rides. */
-export const BRIDGE_GRANT_GATED_NOTIFY_NAMES: readonly string[] = Object.entries(
-  BRIDGE_NOTIFY_GRANTS
-)
-  .filter(([, grant]) => grant !== null)
-  .map(([name]) => name)
-
 export type BridgeNotifyRefusal = 'before-ready' | 'ungranted'
 
 /**

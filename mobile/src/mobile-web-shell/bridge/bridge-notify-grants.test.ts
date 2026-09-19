@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_FAULT_GRANT, BRIDGE_NAVIGATE_BACK_NOTIFY } from './bridge-envelope'
-import { BRIDGE_GRANT_GATED_NOTIFY_NAMES, bridgeNotifyRefusal } from './bridge-notify-grants'
+import { bridgeNotifyRefusal } from './bridge-notify-grants'
 
 const GRANTED = [BRIDGE_FAULT_GRANT]
 
@@ -31,7 +31,6 @@ describe('what the host will act on', () => {
     // `foreground` and the viewport are not grants and must not become ones by being in this file.
     for (const name of ['foreground', 'terminalViewport'] as const) {
       expect(bridgeNotifyRefusal({ name, initSent: true, granted: [] }), name).toBeNull()
-      expect(BRIDGE_GRANT_GATED_NOTIFY_NAMES, name).not.toContain(name)
     }
   })
 })
@@ -87,15 +86,6 @@ describe('a notify that rides a grant of another name', () => {
  * union without a row here is a compile error on the table — and these cases pin the rows it has.
  */
 describe('the grant table', () => {
-  it('gates exactly the four names that ride a grant', () => {
-    expect([...BRIDGE_GRANT_GATED_NOTIFY_NAMES].sort()).toEqual([
-      'fault',
-      'navigate',
-      'navigate-back',
-      'storage'
-    ])
-  })
-
   it('holds navigate and storage to their own grants, not just navigate-back', () => {
     expect(bridgeNotifyRefusal({ name: 'navigate', initSent: true, granted: [] })).toBe('ungranted')
     expect(bridgeNotifyRefusal({ name: 'storage', initSent: true, granted: [] })).toBe('ungranted')
