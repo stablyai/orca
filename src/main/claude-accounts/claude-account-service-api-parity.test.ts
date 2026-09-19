@@ -19,6 +19,10 @@ type PublicClaudeAccountService = {
     accountId: string | null,
     target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
   ): Promise<ClaudeRateLimitAccountsState>
+  updateDisplayName(
+    accountId: string,
+    displayName: string | null
+  ): Promise<ClaudeRateLimitAccountsState>
   cancelPendingLogin(): boolean
   getRuntimeConfigDir(target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): string
 }

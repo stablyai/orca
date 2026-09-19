@@ -65,6 +65,8 @@ export type ClaudeManagedAccount = {
   authMethod: 'subscription-oauth' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
+  /** Optional Orca-only label. Email remains the identity. */
+  displayName?: string | null
   createdAt: number
   updatedAt: number
   lastAuthenticatedAt: number
@@ -78,6 +80,7 @@ export type ClaudeManagedAccountSummary = {
   authMethod: 'subscription-oauth' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
+  displayName?: string | null
   createdAt: number
   updatedAt: number
   lastAuthenticatedAt: number

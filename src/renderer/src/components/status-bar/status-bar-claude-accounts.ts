@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getClaudeManagedAccountLabel } from '../../../../shared/claude-managed-account-label'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import {
@@ -92,7 +93,7 @@ export function buildClaudeStatusSwitchGroups(
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
-          label: account.email,
+          label: getClaudeManagedAccountLabel(account),
           active: account.id === activeId,
           runtimeTarget: target
         }))
@@ -152,6 +153,7 @@ function getClaudeStatusAccountsFromSettings(
         authMethod: account.authMethod ?? 'unknown',
         organizationUuid: account.organizationUuid ?? null,
         organizationName: account.organizationName ?? null,
+        displayName: account.displayName ?? null,
         createdAt: account.createdAt,
         updatedAt: account.updatedAt,
         lastAuthenticatedAt: account.lastAuthenticatedAt
