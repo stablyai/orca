@@ -47,15 +47,15 @@ function focusEditorContent(): void {
  * Orca's external-file authorize + `openFile` pipeline; it never grants write
  * capability by itself and never redirects the open to a remote host.
  */
-export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
+export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<boolean> {
   const filePath = session.filePath?.trim()
   // Defensive: UI availability should already withhold blank/remote/synthetic
   // paths. Bail silently rather than toast — there is no user-actionable error.
   if (!filePath || !canOpenAiVaultSessionLogInOrca(session)) {
-    return
+    return false
   }
   if (inFlightOpenPaths.has(filePath)) {
-    return
+    return false
   }
   inFlightOpenPaths.add(filePath)
   try {
@@ -70,7 +70,7 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
           "Couldn't open log — workspace is no longer available."
         )
       )
-      return
+      return false
     }
     const targetGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? undefined
     // Why: an already-open *writable* tab must keep its edit authority — View Log
@@ -96,7 +96,7 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
           "Couldn't open log — path not authorized."
         )
       )
-      return
+      return false
     }
 
     const stateAfterAuth = useAppStore.getState()
@@ -107,7 +107,7 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
           "Couldn't open log — workspace is no longer available."
         )
       )
-      return
+      return false
     }
 
     stateAfterAuth.openFile(
@@ -145,7 +145,25 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
     }
 
     focusEditorContent()
+    return true
   } finally {
     inFlightOpenPaths.delete(filePath)
   }
+}
+
+export async function openAiVaultSessionMessageJump(
+  session: AiVaultLogSession,
+  jump: { filePath: string; lineNumber: number; matchLength: number }
+): Promise<void> {
+  const filePath = jump.filePath || session.filePath
+  const opened = await openAiVaultSessionLogInOrca({ ...session, filePath })
+  if (!opened) {
+    return
+  }
+  useAppStore.getState().setPendingEditorReveal({
+    filePath,
+    line: Math.max(1, jump.lineNumber),
+    column: 1,
+    matchLength: Math.max(0, jump.matchLength)
+  })
 }
