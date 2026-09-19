@@ -4,6 +4,7 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_READ_COMMAND_SPEC } from './terminal-read'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -196,44 +197,26 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
     notes: [
-      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.',
+      'Prefer ptyId from the list when addressing a terminal across restarts; use --terminal pty:<ptyId> with any terminal command that accepts --terminal (handles rotate; ptyId is stable).'
     ]
   },
   {
     path: ['terminal', 'show'],
     summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
-  },
-  {
-    path: ['terminal', 'read'],
-    summary: 'Read bounded terminal output',
-    usage:
-      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
+    usage: 'orca terminal show [--terminal <handle> | --terminal pty:<ptyId>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     notes: [
-      'Omit --terminal to target the active terminal in the current worktree.',
-      'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
-      'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
-      'The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.',
-      'When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.',
-      '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
-      'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
-      'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
-      'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
-    ],
-    examples: [
-      'orca terminal read --json',
-      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json',
-      'orca terminal read --terminal term_abc123 --screen --json'
+      '--terminal accepts a runtime handle or pty:<ptyId> from terminal list (ptyId survives restarts; handles do not).'
     ]
   },
+  TERMINAL_READ_COMMAND_SPEC,
   TERMINAL_SEND_COMMAND_SPEC,
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
     usage:
-      'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
+      'orca terminal wait [--terminal <handle> | --terminal pty:<ptyId>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
   },
   {
@@ -272,7 +255,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     // alias rather than a duplicate spec + handler registration.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
-    usage: 'orca terminal switch [--terminal <handle>] [--json]',
+    usage: 'orca terminal switch [--terminal <handle> | --terminal pty:<ptyId>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
@@ -280,7 +263,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
-    usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',
+    usage:
+      'orca terminal rename [--terminal <handle> | --terminal pty:<ptyId>] [--title <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
     notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
     examples: [
@@ -292,7 +276,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
     usage:
-      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
+      'orca terminal split [--terminal <handle> | --terminal pty:<ptyId>] [--direction horizontal|vertical] [--command <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
