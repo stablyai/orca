@@ -24,10 +24,13 @@ import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInfo } from './types'
 
 export function writeLocalPty(id: string, data: string): boolean {
-  // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
-  // those is still held, which they must not overtake (#13137, #7329, #15559).
-  if (startupIngressByPty.get(id)?.answerLiveQueryReply(data)) {
-    return true
+  // Cooked PTYs echo private DSR/OSC/XTVERSION replies; CPR/DA stay on the raw path.
+  const startupIngress = startupIngressByPty.get(id)
+  if (startupIngress) {
+    const liveQueryReply = startupIngress.deliverLiveQueryReply(data)
+    if (liveQueryReply !== 'unrecognized') {
+      return liveQueryReply === 'wrote'
+    }
   }
   const proc = ptyProcesses.get(id)
   if (!proc) {
