@@ -18,6 +18,10 @@ import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
  * Each case is run twice, once on a client the page holds through the bridge and once on the same
  * fake directly, and the two verdicts are compared rather than written down. A change that moved
  * the native behaviour would move both and pass a written-down expectation.
+ *
+ * One case has no second leg and cannot have one: a shell that goes away mid-write is something
+ * only the bridged transport can do, so there is no native run to compare it against. It asserts
+ * the property directly instead, and says so where it is.
  */
 
 const LAUNCH = { command: 'codex resume abc' }
@@ -68,12 +72,77 @@ async function firstRequest(
   rpc: FakeRpcClient,
   flush: () => Promise<void>
 ): Promise<FakeRpcClient['requests'][number]> {
-  await flush()
-  const request = rpc.requests[0]
+  return nthRequest(rpc, flush, 0)
+}
+
+/**
+ * The nth request, waited for rather than read once.
+ *
+ * A resume is two writes and the second is only made after the first settles, so on the bridged
+ * leg it is two more lane round trips away: reading `requests[1]` straight after settling the
+ * create finds nothing, and a test that treated that as "the send never happened" would pass while
+ * proving the opposite of what it says.
+ */
+async function nthRequest(
+  rpc: FakeRpcClient,
+  flush: () => Promise<void>,
+  index: number
+): Promise<FakeRpcClient['requests'][number]> {
+  for (let attempt = 0; attempt < 10 && rpc.requests.length <= index; attempt += 1) {
+    await flush()
+  }
+  const request = rpc.requests[index]
   if (request === undefined) {
-    throw new Error('the write never reached the shell')
+    throw new Error(`request ${index} never reached the shell (saw ${rpc.requests.length})`)
   }
   return request
+}
+
+/** A create the send below is addressed to: the one reply shape the tab reader accepts. */
+const CREATED_TERMINAL: RpcResponse = {
+  id: 'reply-create',
+  ok: true,
+  result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } },
+  _meta: { runtimeId: 'runtime-a' }
+}
+
+/**
+ * Drives both writes on one transport and returns what the caller was left with.
+ *
+ * `caller` is what the screen holds and `rpc` is what the shell holds; on the direct leg they are
+ * the same object, which is the point — the only difference between the two runs is the bridge.
+ */
+async function resumeVerdict(args: {
+  caller: Parameters<typeof resumeAiVaultSessionInTerminal>[0]
+  rpc: FakeRpcClient
+  flush: () => Promise<void>
+  sendReply: RpcResponse
+}): Promise<Verdict> {
+  const run = verdictOf(resumeAiVaultSessionInTerminal(args.caller, 'wt-1', LAUNCH))
+  ;(await nthRequest(args.rpc, args.flush, 0)).resolve(CREATED_TERMINAL)
+  ;(await nthRequest(args.rpc, args.flush, 1)).resolve(args.sendReply)
+  await args.flush()
+  return run
+}
+
+/** Both legs of one send reply, so a case reads as the one comparison it is making. */
+async function bothLegs(sendReply: RpcResponse): Promise<{ bridged: Verdict; direct: Verdict }> {
+  const pair = createFakeBridgePortPair()
+  await pair.flush()
+  const bridged = await resumeVerdict({
+    caller: pair.client,
+    rpc: pair.rpc,
+    flush: pair.flush,
+    sendReply
+  })
+  const native = createFakeRpcClient()
+  const direct = await resumeVerdict({
+    caller: native,
+    rpc: native,
+    flush: async () => {},
+    sendReply
+  })
+  return { bridged, direct }
 }
 
 describe('a resume write through the bridge answers the caller as the native client does', () => {
@@ -124,6 +193,8 @@ describe('a resume write through the bridge answers the caller as the native cli
     expect(await bridged).toEqual(await direct)
   })
 
+  // The one case with no direct leg: a fake RPC client has no door to shut, so there is no native
+  // run to compare against. The property is asserted rather than differenced.
   it('leaves a write in flight when the shell goes ambiguous, not failed', async () => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
@@ -133,6 +204,45 @@ describe('a resume write through the bridge answers the caller as the native cli
     pair.host.dispose()
     await pair.flush()
     expect((await bridged).deliveryUnknown).toBe(true)
+  })
+
+  it('raises the host message on a refused send, which no earlier case reached', async () => {
+    // Every case above settles the create, so `terminal.send` had never crossed the bridge at all
+    // and the second half of the resume was uncompared.
+    const { bridged, direct } = await bothLegs({
+      id: 'reply-send',
+      ok: false,
+      error: { code: 'busy', message: 'That terminal is gone.' },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    expect(bridged).toEqual(direct)
+    expect(bridged).toEqual({ message: 'That terminal is gone.', deliveryUnknown: false })
+  })
+
+  it('says the terminal is locked when the send is accepted and refuses in-band', async () => {
+    // An accepted envelope reporting `accepted: false` is a different failure from a refused send,
+    // and it is the branch the caller words itself; the reader answers that one question.
+    const { bridged, direct } = await bothLegs({
+      id: 'reply-send',
+      ok: true,
+      result: { send: { accepted: false } },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    expect(bridged).toEqual(direct)
+    expect(bridged).toEqual({ message: 'Terminal input is locked', deliveryUnknown: false })
+  })
+
+  it('resolves through both writes when the host takes them, on both transports', async () => {
+    // The presence precondition for the two above: a run that failed at the create would give the
+    // same shape of verdict, and this is what says the send is reached at all.
+    const { bridged, direct } = await bothLegs({
+      id: 'reply-send',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    expect(bridged).toEqual(direct)
+    expect(bridged).toEqual({ message: '(resolved)', deliveryUnknown: false })
   })
 
   it('resumes on the shared home when an older host cannot prepare, through the bridge too', async () => {
