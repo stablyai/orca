@@ -167,7 +167,10 @@ export function buildRemoteSettingsSections(
           : (setups[0]?.path ?? representativeRepo.path)
       return {
         id: `repo-${representativeRepoId}`,
-        title: project.displayName,
+        // Why: name the checkout (representative repo), not the merged project, so split
+        // same-host clones get distinct nav labels ("ios" vs "ios2") instead of both reading
+        // the merged project's name (#18493).
+        title: representativeRepo.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
         searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {

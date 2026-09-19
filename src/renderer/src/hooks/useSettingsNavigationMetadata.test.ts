@@ -401,6 +401,42 @@ describe('settings navigation metadata', () => {
     expect(repoSections[0].id).toBe('repo-local-1')
   })
 
+  it('renders a distinctly-titled nav section per checkout for same-host clones (#18493)', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        {
+          id: 'ios',
+          path: '/Users/dev/ios',
+          displayName: 'ios',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote
+        },
+        {
+          id: 'ios2',
+          path: '/Users/dev/ios2',
+          displayName: 'ios2',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote
+        }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections.map((section) => section.id)).toEqual(['repo-ios', 'repo-ios2'])
+    // Each row names its own checkout, not the shared merged-project name.
+    expect(repoSections.map((section) => section.title)).toEqual(['ios', 'ios2'])
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
