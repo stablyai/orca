@@ -117,6 +117,7 @@ docs/**
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
+!docs/reference/opencode-tool-readout-followup.md
 !docs/reference/pnpm-install-policy.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-cmd-shim-resolution.md
