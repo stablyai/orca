@@ -13,6 +13,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
 import type {
+  LocalBaseRefDriftWarning,
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
@@ -49,6 +50,10 @@ import {
   hasLocalWorktreeBaseRef,
   probeWorktreeBaseRefPresence
 } from '../git/worktree-base-ref-probe'
+import {
+  formatLocalBaseRefDriftWarning,
+  getLocalBaseRefDriftWarningForWorktreeCreate
+} from '../git/worktree-base-refresh-analysis'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
@@ -2365,6 +2370,7 @@ async function performLocalWorktreeCreate(
     !args.branchNameOverride && settings.branchPrefix === 'git-username'
       ? resolveLocalGitUsername(repo.path)
       : Promise.resolve('')
+  let localBaseRefDriftWarning: LocalBaseRefDriftWarning | undefined
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
@@ -2390,6 +2396,14 @@ async function performLocalWorktreeCreate(
         }
       }
       return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate, localGitExecOptions)
+    },
+    onPersistedBaseSelected: async (baseRef, defaultBaseRef) => {
+      localBaseRefDriftWarning = await getLocalBaseRefDriftWarningForWorktreeCreate(
+        repo.path,
+        baseRef,
+        defaultBaseRef,
+        localGitExecOptions
+      )
     }
   })
   const [username, resolvedBaseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
@@ -3042,6 +3056,15 @@ async function performLocalWorktreeCreate(
     })
   )
 
+  const startupWarning = stagedStartup.warning
+    ? appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning)
+    : includeCopyWarning
+  const warning = localBaseRefDriftWarning
+    ? appendWorktreeCreateWarning(
+        startupWarning,
+        formatLocalBaseRefDriftWarning(localBaseRefDriftWarning)
+      )
+    : startupWarning
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree: {
@@ -3065,13 +3088,10 @@ async function performLocalWorktreeCreate(
     ...(addResult.localBaseRefUpdateSuggestion
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
+    ...(localBaseRefDriftWarning ? { localBaseRefDriftWarning } : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(baseFallback ? { baseFallback } : {}),
-    ...(stagedStartup.warning
-      ? { warning: appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning) }
-      : includeCopyWarning
-        ? { warning: includeCopyWarning }
-        : {}),
+    ...(warning ? { warning } : {}),
     timing: timing.finish()
   }
 }
