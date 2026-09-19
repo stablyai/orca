@@ -136,18 +136,45 @@ describe('Option-composed characters in kitty keyboard panes', () => {
     ).toBeNull()
   })
 
-  it('still reports non-ASCII Option chords as kitty CSI-u hotkeys', () => {
-    // #8031: compose layouts must keep reaching TUI Option hotkeys, and every
-    // glyph those layouts compose on a bound key is non-ASCII.
+  it('types non-ASCII composed characters instead of reporting chords on a compose side (#20171)', () => {
+    // The effective setting says Option composes; a genuine composition must type its text even
+    // in kitty panes, or ç/ą/å prose is untypable. Ghostty-matching chords are reserved for the
+    // Alt side and for keys the layout did not compose.
     expect(resolveKitty(event({ key: 'ƒ', code: 'KeyF', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[102;3u'
+      data: 'ƒ'
     })
     expect(resolveKitty(event({ key: '∫', code: 'KeyB', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[98;3u'
+      data: '∫'
     })
     expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: 'å'
+    })
+  })
+
+  it('types Polish diacritics resolved through the active layout under Claude Code flags', () => {
+    // Polish Pro composes every diacritic on Option+letter (ą ć ę ł ń ó ś ź ż) with no
+    // dead-key fallback, so a kitty pane could not type ordinary Polish words.
+    // flags 5 = disambiguate + report-event-types, what Claude Code negotiates (CSI > 5 u).
+    const polishPro = (code: string): string | undefined => (code === 'KeyA' ? 'a' : undefined)
+    expect(
+      resolveKitty(event({ key: 'ą', code: 'KeyA', altKey: true }), 'false', 0, polishPro, 5)
+    ).toEqual({ type: 'sendInput', data: 'ą' })
+  })
+
+  it('counts supplementary-plane compositions as one character, not a chord', () => {
+    // Astral-plane glyphs are length-2 UTF-16 strings; the guard must count code points.
+    expect(resolveKitty(event({ key: '𝕒', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '𝕒'
+    })
+  })
+
+  it('still reports non-ASCII chords when the user explicitly configures Option as Alt', () => {
+    // Direction A escape hatch: macOptionAsAlt 'true' keeps physical-key chords for TUI hotkeys.
+    expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }), 'true', 0)).toEqual({
       type: 'sendInput',
       data: '\x1b[97;3u'
     })

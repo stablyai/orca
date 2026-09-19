@@ -47,20 +47,25 @@ function createRelease(flags: number): TerminalOptionKittyRelease | undefined {
   return (flags & KITTY_REPORT_EVENT_TYPES) === 0 ? undefined : { flags }
 }
 
-// Why ASCII-only: the protocol says a text-producing key sends its text, but #8031 needs Option
-// hotkeys to still reach kitty TUIs. ASCII splits the two — layouts hide `@ $ # [ ] { } \ |` behind
-// Option with no other way to type them, while the glyphs on TUI-bound keys (π, ƒ, ∫) never are.
-function isLayoutComposedAsciiCharacter(
+// Why composed-text wins over chords on a compose side: the effective Option setting is the
+// user's contract — when it says Option composes (#20171), a genuine composition must type its
+// text even in kitty panes, or non-Latin prose (ç, ą, å…) becomes untypable. Chords stay for
+// keys the layout did NOT compose (the key echoes its base character), so #8031 Option hotkeys
+// keep reaching kitty TUIs, and for sides configured as Alt (`shouldActAsMeta`).
+function isLayoutComposedCharacter(
   key: string,
   characterWithoutOption: string | undefined
 ): boolean {
-  if (key.length !== 1) {
+  // Why code points, not UTF-16 units: supplementary-plane compositions (𝕒-style) are
+  // length 2 strings and must still count as a single composed character.
+  const chars = Array.from(key)
+  if (chars.length !== 1) {
     return false
   }
-  const codePoint = key.codePointAt(0) as number
+  const codePoint = chars[0].codePointAt(0) as number
   return (
     codePoint > 0x20 &&
-    codePoint <= 0x7e &&
+    codePoint !== 0x7f &&
     (characterWithoutOption === undefined ||
       key.toLowerCase() !== characterWithoutOption.toLowerCase())
   )
@@ -131,7 +136,7 @@ export function resolveTerminalOptionShortcutAction(
       !kittyReportsAllKeysAsEscapeCodes(flags) &&
       canSendComposedText &&
       !isNumpad &&
-      isLayoutComposedAsciiCharacter(event.key, characterWithoutOption)
+      isLayoutComposedCharacter(event.key, characterWithoutOption)
     ) {
       return { type: 'sendInput', data: event.key, optionKittyRelease: createRelease(flags) }
     }
