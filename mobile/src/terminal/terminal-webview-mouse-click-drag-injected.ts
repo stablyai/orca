@@ -2,12 +2,14 @@
 // surface, injected into XTERM_HTML. Extracted from terminal-webview-html.ts to
 // keep that file within its max-lines budget. Companion to
 // terminal-webview-wheel-scroll-injected.ts, which owns the wheel half (#11247);
-// this owns the click/drag half of #8818. Closes over host-IIFE state/functions:
-// term, ESC, sel, selMode, selectionOverlay, TAP_SLOP, getMouseTrackingMode,
-// viewportToCell, viewportToMouseReportCell, isSafeSgrMouseCoordinate,
-// sgrMouseMode, sgrMousePixelsMode, notify, notifyTerminalSurfaceTap,
-// cancelSelect, applyXtermSelection, repositionOverlay, handleDragMove,
-// stopEdgeScroll, and dispatcherShouldBlockSurface.
+// this owns the click/drag half of #8818, plus the right-button/double-click
+// selection overrides (the mobile analog of desktop Shift+drag). Closes over
+// host-IIFE state/functions: term, ESC, sel, selMode, selectionOverlay,
+// TAP_SLOP, getMouseTrackingMode, viewportToCell, viewportToMouseReportCell,
+// isSafeSgrMouseCoordinate, sgrMouseMode, sgrMousePixelsMode, notify,
+// notifyTerminalSurfaceTap, cancelSelect, enterSelect, applyXtermSelection,
+// repositionOverlay, handleDragMove, stopEdgeScroll, and
+// dispatcherShouldBlockSurface.
 //
 // Why pointer events: a hardware mouse on Android/iPadOS raises pointer events
 // with pointerType 'mouse' and NO touch events, while a finger raises
@@ -17,6 +19,22 @@
 // dropped by the mobile bridge), and pointer events are unaffected by it.
 export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
   var mouseGesture = null;
+
+  // Why: touch taps raise the soft keyboard via the terminal-tap notify, but a
+  // mouse click historically could not (protecting iPad + hardware keyboard,
+  // #12772). Rule: raise it on Android only — iPadOS never matches an Android
+  // UA. There is no WebView-visible hardware-keyboard probe (navigator.keyboard
+  // is SecureContext-gated and this document loads without a baseUrl, so it is
+  // undefined on every Android device), so whether the soft IME actually opens
+  // over a hardware keyboard is the OS's call — Android keeps it closed while
+  // it sees one active, and focus lands either way, so keystrokes flow.
+  function shouldMouseTapFocusKeyboard() {
+    return /Android/i.test(navigator.userAgent);
+  }
+
+  var DOUBLE_CLICK_MS = 350;
+  var DOUBLE_CLICK_SLOP = 24;
+  var lastLeftClick = null; // {x, y, t} of the last dispatched left tap
 
   // One report per transition, built with the same encoding ladder as
   // buildMouseClickInput: SGR pixels (1016) > SGR (1006) > default. Returns ''
@@ -60,6 +78,9 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
     var gesture = mouseGesture;
     mouseGesture = null;
     if (!gesture) return;
+    // Why: a cancelled left gesture was never a dispatched tap, so it must not
+    // pair with a later tap into a double click.
+    if (gesture.button === 0) lastLeftClick = null;
     if (gesture.mode === 'tracking') {
       // Why: the press report already went to the TUI; a lost pointer must not
       // leave the button latched down on the far side.
@@ -73,7 +94,14 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
 
   function beginMouseDrag(gesture) {
     gesture.moved = true;
-    if (getMouseTrackingMode() !== 'none') {
+    // Why: once a left gesture becomes a drag it is no longer a tap; leaving the
+    // prior tap armed would let drag-then-tap masquerade as a double click (and
+    // eat the user's next genuine one).
+    if (gesture.button === 0) lastLeftClick = null;
+    // Why: the right button is the selection override — desktop terminals offer
+    // Shift+drag to select over a mouse-tracking TUI, but touch hardware has no
+    // Shift; the right button is always available and never reported to the TUI.
+    if (gesture.button !== 2 && getMouseTrackingMode() !== 'none') {
       gesture.mode = 'tracking';
       gesture.lastCellKey = mouseReportCellKey(gesture.startX, gesture.startY);
       var press = buildMouseButtonReport('press', gesture.startX, gesture.startY);
@@ -99,7 +127,7 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
 
   function attachSurfaceMouseClickDragHandler(targetSurface) {
     targetSurface.addEventListener('pointerdown', function(e) {
-      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      if (e.pointerType !== 'mouse' || (e.button !== 0 && e.button !== 2)) return;
       if (dispatcherShouldBlockSurface() || !term) return;
       // Why: a pointerup lost outside the WebView must not leave the previous
       // gesture latched (tracking press with no release) when the next one lands.
@@ -113,6 +141,7 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
         startX: e.clientX, startY: e.clientY,
         lastX: e.clientX, lastY: e.clientY,
         lastCellKey: null,
+        button: e.button,
         moved: false,
         mode: 'pending',
         dismissedSelection: false
@@ -131,7 +160,8 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
       if (!term) return;
       gesture.lastX = e.clientX;
       gesture.lastY = e.clientY;
-      if ((e.buttons & 1) === 0) {
+      var buttonMask = gesture.button === 2 ? 2 : 1;
+      if ((e.buttons & buttonMask) === 0) {
         // Why: a pointerup lost outside the WebView (capture unavailable) must
         // end the gesture here, or a tracked press stays latched at the TUI.
         // Coordinates first, so the synthesized release lands where the
@@ -161,7 +191,7 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
 
     targetSurface.addEventListener('pointerup', function(e) {
       var gesture = mouseGesture;
-      if (e.pointerType !== 'mouse' || !gesture || e.button !== 0) return;
+      if (e.pointerType !== 'mouse' || !gesture || e.button !== gesture.button) return;
       mouseGesture = null;
       if (gesture.mode === 'cancelled' || !term) return;
       if (gesture.mode === 'tracking') {
@@ -176,11 +206,33 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
         return;
       }
       if (dispatcherShouldBlockSurface()) return;
+      if (gesture.button === 2) {
+        // Right click without a drag: word-select where the pointer sits, the
+        // mouse analog of the touch long-press. Runs past the dismiss guard on
+        // purpose — replacing a selection is exactly what a re-select means.
+        var cell = viewportToCell(e.clientX, e.clientY);
+        if (cell) enterSelect(cell.col, cell.row);
+        return;
+      }
+      var now = Date.now();
+      // Why: record the tap before the dismiss guard so a dismissing click
+      // still anchors a double click — dismiss-then-double-click must reselect.
+      var doubleTap = lastLeftClick
+        && (now - lastLeftClick.t) <= DOUBLE_CLICK_MS
+        && (Math.abs(e.clientX - lastLeftClick.x) + Math.abs(e.clientY - lastLeftClick.y)) <= DOUBLE_CLICK_SLOP;
+      lastLeftClick = doubleTap ? null : { x: e.clientX, y: e.clientY, t: now };
       // Why: a dismissing tap only clears the selection (touch parity); it must
       // not also open a link or focus the keyboard underneath.
       if (gesture.dismissedSelection) return;
+      if (doubleTap && getMouseTrackingMode() === 'none') {
+        // Why: only in 'none' — a TUI consuming clicks owns its double-click
+        // semantics, and both of its clicks were already reported above.
+        var tapCell = viewportToCell(e.clientX, e.clientY);
+        if (tapCell) enterSelect(tapCell.col, tapCell.row);
+        return;
+      }
       // Pointer clicks keep their current link, file, TUI mouse, and focus priority.
-      notifyTerminalSurfaceTap(e.clientX, e.clientY, false);
+      notifyTerminalSurfaceTap(e.clientX, e.clientY, shouldMouseTapFocusKeyboard());
     }, true);
 
     targetSurface.addEventListener('pointercancel', function(e) {
@@ -193,6 +245,13 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
     // the document touch dispatcher owns the gesture.
     targetSurface.addEventListener('touchstart', function() {
       if (mouseGesture) abandonMouseGesture();
+    }, true);
+
+    // Why: the right button now performs selection; the WebView's native
+    // context menu on top of it would be pure noise.
+    targetSurface.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
     }, true);
   }
 `

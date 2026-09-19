@@ -67,7 +67,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
-    keyboardLift
+    keyboardLift,
+    keyboardHeight
   } = controller
   return (
     !activeMarkdownTab &&
@@ -265,9 +266,16 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 !canSend && styles.liveInputFocusTargetDisabled
               ]}
               disabled={!canSend}
-              onPress={focusLiveInput}
+              // Why: with no keyboard attached the keyboard row is the only
+              // always-reachable show/hide control — mouse users on tablets
+              // have no dismiss key while the keyboard is closed.
+              onPress={keyboardHeight > 0 ? dismissSoftwareKeyboard : focusLiveInput}
               accessibilityRole="button"
-              accessibilityLabel="Show keyboard for live terminal input"
+              accessibilityLabel={
+                keyboardHeight > 0
+                  ? 'Hide keyboard for live terminal input'
+                  : 'Show keyboard for live terminal input'
+              }
               accessibilityHint="Typed text is sent directly to the active terminal"
             >
               <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />

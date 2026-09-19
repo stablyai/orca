@@ -38,9 +38,12 @@ describe('terminal live input affordance', () => {
   it('keeps the live status row wired as the keyboard focus control', () => {
     const block = liveInputBarBlock()
 
-    expect(block).toContain('onPress={focusLiveInput}')
+    expect(block).toContain(
+      'onPress={keyboardHeight > 0 ? dismissSoftwareKeyboard : focusLiveInput}'
+    )
     expect(block).toContain('accessibilityRole="button"')
-    expect(block).toContain('accessibilityLabel="Show keyboard for live terminal input"')
+    expect(block).toContain("'Show keyboard for live terminal input'")
+    expect(block).toContain("'Hide keyboard for live terminal input'")
     expect(block).toContain(
       'accessibilityHint="Typed text is sent directly to the active terminal"'
     )

@@ -46,7 +46,39 @@ describe('terminal WebView external mouse click', () => {
     expect(mouse.terminalInputBytes()).toBe('')
   })
 
-  it('ignores non-mouse pointers and non-left buttons', () => {
+  it('raises the keyboard for a mouse click on Android, even inside a click-tracking TUI', () => {
+    mouse.boot()
+    mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
+    mouse.stubPointerEnvironment({
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'
+    })
+
+    mouse.mouseClick(40, 60)
+
+    // Touch parity: the TUI still consumes its click report, but the tap also
+    // reaches the native input focus so the soft keyboard opens.
+    expect(mouse.terminalInputBytes()).not.toBe('')
+    expect(
+      mouse.postedMessages().filter((message) => message.type === 'terminal-tap')
+    ).toHaveLength(1)
+  })
+
+  it('keeps mouse clicks silent for iPad pointer users (#12772)', () => {
+    mouse.boot()
+    mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
+    mouse.stubPointerEnvironment({
+      userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1'
+    })
+
+    mouse.mouseClick(40, 60)
+
+    expect(mouse.terminalInputBytes()).not.toBe('')
+    expect(mouse.postedMessages().filter((message) => message.type === 'terminal-tap')).toEqual([])
+  })
+
+  it('ignores non-mouse pointers', () => {
     mouse.boot()
     mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
 
@@ -64,8 +96,6 @@ describe('terminal WebView external mouse click', () => {
       button: 0,
       buttons: 0
     })
-    mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 2, buttons: 2 })
-    mouse.dispatchPointer('pointerup', { x: 40, y: 60, button: 2, buttons: 0 })
 
     expect(mouse.terminalInputBytes()).toBe('')
     expect(mouse.postedMessages().filter((message) => message.type === 'terminal-tap')).toEqual([])

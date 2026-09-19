@@ -135,6 +135,60 @@ function mouseDrag(x1: number, y1: number, x2: number, y2: number): void {
   dispatchPointer('pointerup', { x: x2, y: y2, button: 0, buttons: 0 })
 }
 
+function mouseRightClick(x: number, y: number): void {
+  dispatchPointer('pointerdown', { x, y, button: 2, buttons: 2 })
+  dispatchPointer('pointerup', { x, y, button: 2, buttons: 0 })
+}
+
+function mouseRightDrag(x1: number, y1: number, x2: number, y2: number): void {
+  dispatchPointer('pointerdown', { x: x1, y: y1, button: 2, buttons: 2 })
+  const midX = Math.round((x1 + x2) / 2)
+  const midY = Math.round((y1 + y2) / 2)
+  dispatchPointer('pointermove', { x: midX, y: midY, button: 2, buttons: 2 })
+  dispatchPointer('pointermove', { x: x2, y: y2, button: 2, buttons: 2 })
+  dispatchPointer('pointerup', { x: x2, y: y2, button: 2, buttons: 0 })
+}
+
+function dispatchContextMenu(x: number, y: number): MouseEvent {
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: x,
+    clientY: y,
+    button: 2
+  })
+  terminalSurface().dispatchEvent(event)
+  return event
+}
+
+// Why: the injected mouse code gates keyboard focus on navigator.userAgent
+// ("Android"). happy-dom's default UA is not Android, so tests steer it.
+type PointerEnvironment = {
+  userAgent?: string
+}
+
+let originalUserAgentDescriptor: PropertyDescriptor | undefined
+
+function stubPointerEnvironment(environment: PointerEnvironment): void {
+  if (environment.userAgent !== undefined) {
+    originalUserAgentDescriptor ??=
+      Object.getOwnPropertyDescriptor(window.navigator, 'userAgent') ??
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window.navigator), 'userAgent')
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: environment.userAgent,
+      configurable: true
+    })
+  }
+}
+
+function restorePointerEnvironment(): void {
+  Reflect.deleteProperty(window.navigator, 'userAgent')
+  if (originalUserAgentDescriptor) {
+    Object.defineProperty(window.navigator, 'userAgent', originalUserAgentDescriptor)
+  }
+  originalUserAgentDescriptor = undefined
+}
+
 function postedMessages(postMessage: PostMessage): Record<string, unknown>[] {
   return postMessage.mock.calls.map(([raw]) => JSON.parse(String(raw)) as Record<string, unknown>)
 }
@@ -229,6 +283,7 @@ export function useTerminalMouseWebViewHarness() {
     for (const { type, listener, options } of registeredWindowListeners) {
       window.removeEventListener(type, listener as EventListener, options)
     }
+    restorePointerEnvironment()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -237,11 +292,15 @@ export function useTerminalMouseWebViewHarness() {
     activeTerminal,
     boot,
     clearPostedMessages: () => postMessage.mockClear(),
+    dispatchContextMenu,
     dispatchPointer,
     mouseClick,
     mouseDrag,
+    mouseRightClick,
+    mouseRightDrag,
     postedMessages: () => postedMessages(postMessage),
     selectionSpy: () => select,
+    stubPointerEnvironment,
     terminalInputBytes: () => terminalInputBytes(postMessage),
     terminalSurface
   }
