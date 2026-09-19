@@ -4,6 +4,7 @@ import type { IGrammar, IOnigLib, IRawGrammar, StateStack } from 'vscode-textmat
 import onigurumaWasmUrl from 'vscode-oniguruma/release/onig.wasm?url'
 
 type TextMateTokensProvider = Monaco.languages.TokensProvider
+type TextMateEncodedTokensProvider = Monaco.languages.EncodedTokensProvider
 
 export type TextMateGrammarLoader = (scopeName: string) => Promise<IRawGrammar | null | undefined>
 
@@ -11,6 +12,11 @@ export type TextMateTokensProviderOptions = {
   scopeName: string
   loadGrammar: TextMateGrammarLoader
   loadOniguruma?: () => Promise<IOnigLib>
+}
+
+export type TextMateEncodedTokensProviderOptions = TextMateTokensProviderOptions & {
+  initialLanguage: number
+  embeddedLanguages: Record<string, number>
 }
 
 let browserOnigurumaPromise: Promise<IOnigLib> | undefined
@@ -71,28 +77,74 @@ function createTokensProvider(
   }
 }
 
-export async function createTextMateTokensProvider(
-  options: TextMateTokensProviderOptions
-): Promise<TextMateTokensProvider> {
-  const registry = new Registry({
-    onigLib: (options.loadOniguruma ?? loadBrowserOniguruma)(),
-    loadGrammar: options.loadGrammar
-  })
+function createEncodedTokensProvider(grammar: IGrammar): TextMateEncodedTokensProvider {
+  return {
+    getInitialState() {
+      return new TextMateTokenizerState(INITIAL)
+    },
+    tokenizeEncoded(line, state) {
+      const textMateState =
+        state instanceof TextMateTokenizerState ? state : new TextMateTokenizerState(INITIAL)
+      const result = grammar.tokenizeLine2(line, textMateState.ruleStack)
+      return {
+        endState: new TextMateTokenizerState(result.ruleStack),
+        tokens: result.tokens
+      }
+    }
+  }
+}
+
+async function requireGrammar(
+  scopeName: string,
+  load: () => Promise<IGrammar | null>
+): Promise<IGrammar> {
   let grammar: IGrammar | null
   try {
-    grammar = await registry.loadGrammar(options.scopeName)
+    grammar = await load()
   } catch (error) {
     if (
       error instanceof Error &&
-      error.message.includes(`No grammar provided for <${options.scopeName}>`)
+      error.message.includes(`No grammar provided for <${scopeName}>`)
     ) {
-      throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
+      throw new Error(`No TextMate grammar registered for scope ${scopeName}`)
     }
     throw error
   }
   if (!grammar) {
-    throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
+    throw new Error(`No TextMate grammar registered for scope ${scopeName}`)
   }
+  return grammar
+}
+
+function createRegistry(options: TextMateTokensProviderOptions): Registry {
+  return new Registry({
+    onigLib: (options.loadOniguruma ?? loadBrowserOniguruma)(),
+    loadGrammar: options.loadGrammar
+  })
+}
+
+export async function createTextMateTokensProvider(
+  options: TextMateTokensProviderOptions
+): Promise<TextMateTokensProvider> {
+  const registry = createRegistry(options)
+  const grammar = await requireGrammar(options.scopeName, () =>
+    registry.loadGrammar(options.scopeName)
+  )
 
   return createTokensProvider(grammar, options.scopeName)
+}
+
+export async function createTextMateEncodedTokensProvider(
+  options: TextMateEncodedTokensProviderOptions
+): Promise<TextMateEncodedTokensProvider> {
+  const registry = createRegistry(options)
+  const grammar = await requireGrammar(options.scopeName, () =>
+    registry.loadGrammarWithEmbeddedLanguages(
+      options.scopeName,
+      options.initialLanguage,
+      options.embeddedLanguages
+    )
+  )
+
+  return createEncodedTokensProvider(grammar)
 }
