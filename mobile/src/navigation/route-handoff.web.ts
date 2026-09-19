@@ -21,7 +21,22 @@ type RouteHandoffOutcome = 'local' | 'handed-off' | 'refused'
 /** Why a target went nowhere: a shape the protocol drops, or a shell that would not take it. */
 type RouteHandoffRefusal = 'malformed-href' | 'shell-refused'
 
-/** One line per reason for the life of one client, the bound every page-side reporter here takes. */
+/**
+ * One line per reason per hook instance, which is the bound this can offer rather than the one
+ * `createPageDiagnosticReporter` offers.
+ *
+ * The set lives in the `useMemo` below, keyed on `[client, router]`. `useRouter()` is expo-router's
+ * module singleton and the page holds one client, so in practice the memo is not recomputed and a
+ * reason is reported once — but every screen that calls this hook gets its own set, so a reason can
+ * be reported once per screen rather than once per document. That is the honest bound: a per-module
+ * set would outlive the page's client, which is the lifetime the rest of these reporters are scoped
+ * to, and there is no document-wide reporter to join without reaching into a contract file.
+ *
+ * `console.warn` rather than the page's fault notify on purpose: this is the vocabulary
+ * `createPageDiagnosticReporter` already writes in (`page-bootstrap.ts:35`), and a `fault` notify
+ * would be wrong twice over — the shell drops the generation on a page fault, and a navigation the
+ * page declined is not a page that failed.
+ */
 function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) => void {
   const reported = new Set<RouteHandoffRefusal>()
   return (reason, target) => {
