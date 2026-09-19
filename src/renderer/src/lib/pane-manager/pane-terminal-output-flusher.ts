@@ -22,11 +22,14 @@ import { discardDetachedQueueEntry, hasQueuedChunks } from './pane-terminal-outp
 import { clearForegroundRelease, isEntryDrainable } from './pane-terminal-foreground-queue-state'
 import {
   BACKGROUND_CHUNK_CHARS,
+  DENSE_SGR_CHUNK_CHARS,
+  canDrainQueueEntry,
   discardTerminalOutput,
   fireQueuedAckCredits,
   queuedByTerminal,
   requestRegisteredTerminalBacklogRecovery,
   scheduleDrain,
+  reserveDenseSgrBatch,
   type TerminalOutputTarget
 } from './pane-terminal-output-queue-registry'
 
@@ -49,6 +52,11 @@ export function flushTerminalOutputImpl(
     queuedByTerminal.set(terminal, entry)
     return
   }
+  if (!canDrainQueueEntry(entry)) {
+    queuedByTerminal.set(terminal, entry)
+    scheduleDrain(0)
+    return
+  }
   if (entry.backgroundBacklogDropped && requestRegisteredTerminalBacklogRecovery(terminal)) {
     fireQueuedAckCredits(entry)
     entry.chunks.length = 0
@@ -61,13 +69,17 @@ export function flushTerminalOutputImpl(
   }
 
   let flushedChars = 0
-  let queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+  let queuedWrite = takeQueuedChunk(
+    entry,
+    entry.denseSgr ? DENSE_SGR_CHUNK_CHARS : BACKGROUND_CHUNK_CHARS
+  )
   while (queuedWrite) {
     flushedChars += queuedWrite.data.length
     if (debugEnabled) {
       debugState.flushWriteCount++
     }
     const ackCreditsParsed = registerTerminalOutputAckCredits(terminal, queuedWrite.ackCredits)
+    const denseSgrRelease = entry.denseSgr ? reserveDenseSgrBatch(terminal) : undefined
     armTerminalWriteStallWatch(terminal, {
       onCertifiedDead: () => discardTerminalOutput(terminal)
     })
@@ -87,16 +99,27 @@ export function flushTerminalOutputImpl(
                 terminal,
                 queuedWrite.onParsed,
                 ackCreditsParsed,
-                undefined
+                undefined,
+                denseSgrRelease
               ),
-              onWriteFailure: composeWriteFailureCallback(terminal, ackCreditsParsed)
+              onWriteFailure: composeWriteFailureCallback(
+                terminal,
+                ackCreditsParsed,
+                denseSgrRelease
+              )
             }
           )
         : writeBackgroundTerminalChunk(
             terminal,
             queuedWrite.data,
-            composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined),
-            composeWriteFailureCallback(terminal, ackCreditsParsed)
+            composeParsedCallback(
+              terminal,
+              queuedWrite.onParsed,
+              ackCreditsParsed,
+              undefined,
+              denseSgrRelease
+            ),
+            composeWriteFailureCallback(terminal, ackCreditsParsed, denseSgrRelease)
           )
       if (!writeAccepted) {
         fireQueuedAckCredits(entry)
@@ -108,12 +131,16 @@ export function flushTerminalOutputImpl(
       // Why: pre-write hooks/setup failed before xterm owned these bytes; cancel the watch, but consumed + abandoned chunks still credit delivery.
       cancelTerminalWriteStallWatch(terminal)
       ackCreditsParsed?.()
+      denseSgrRelease?.()
       fireQueuedAckCredits(entry)
       clearForegroundRelease(entry)
       recordQueueDebugPressure()
       return
     }
     if (options?.maxChars !== undefined && flushedChars >= options.maxChars) {
+      break
+    }
+    if (entry.denseSgr) {
       break
     }
     queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)

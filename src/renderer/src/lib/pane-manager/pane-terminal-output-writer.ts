@@ -34,6 +34,7 @@ import {
 import {
   ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
   BACKGROUND_FLUSH_DELAY_MS,
+  DENSE_SGR_CHUNK_CHARS,
   FOREGROUND_BACKLOG_WARNING,
   LARGE_BACKLOG_CHARS,
   discardTerminalOutput,
@@ -42,6 +43,7 @@ import {
   type TerminalOutputTarget,
   type WriteTerminalOutputOptions
 } from './pane-terminal-output-queue-registry'
+import { isDenseSgr } from '../../../../shared/terminal-sgr-density'
 
 export function writeTerminalOutputImpl(
   terminal: TerminalOutputTarget,
@@ -186,7 +188,48 @@ export function writeTerminalOutputImpl(
       scheduleDrain(0)
       return
     }
+    if (data.length >= DENSE_SGR_CHUNK_CHARS && isDenseSgr(data)) {
+      const queued = entry ?? createQueueEntry(terminal, options)
+      queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+      queued.highPriority = true
+      queuedByTerminal.set(terminal, queued)
+      enqueueChunk(queued, data, {
+        foreground: true,
+        forceForegroundRefresh: options.forceForegroundRefresh,
+        followupForegroundRefresh: options.followupForegroundRefresh,
+        shouldRefreshForegroundSynchronously: options.shouldRefreshForegroundSynchronously,
+        stripTransientCursorShows: options.stripTransientCursorShows,
+        beforeWrite: options.beforeWrite,
+        onParsed: options.onParsed,
+        ackCredit: options.ackCredit
+      })
+      if (queueCapExceeded(queued)) {
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
+      }
+      scheduleDrain(0)
+      return
+    }
     flushTerminalOutputImpl(terminal)
+    const remaining = queuedByTerminal.get(terminal)
+    if (remaining) {
+      // A dense batch may still be parsing when an explicit flush returns.
+      // Keep the new foreground bytes behind its retained tail so terminal
+      // byte order remains intact.
+      remaining.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+      remaining.highPriority = true
+      enqueueChunk(remaining, data, {
+        foreground: true,
+        forceForegroundRefresh: options.forceForegroundRefresh,
+        followupForegroundRefresh: options.followupForegroundRefresh,
+        shouldRefreshForegroundSynchronously: options.shouldRefreshForegroundSynchronously,
+        stripTransientCursorShows: options.stripTransientCursorShows,
+        beforeWrite: options.beforeWrite,
+        onParsed: options.onParsed,
+        ackCredit: options.ackCredit
+      })
+      scheduleDrain(0)
+      return
+    }
     if (debugEnabled) {
       debugState.foregroundWriteCount++
     }

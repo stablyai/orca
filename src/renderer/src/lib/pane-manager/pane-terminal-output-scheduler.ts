@@ -8,6 +8,7 @@ import { flushTerminalOutputImpl } from './pane-terminal-output-flusher'
 import { writeTerminalOutputImpl } from './pane-terminal-output-writer'
 import {
   requestRegisteredTerminalBacklogRecovery,
+  queuedByTerminal,
   type TerminalOutputTarget,
   type WriteTerminalOutputOptions
 } from './pane-terminal-output-queue-registry'
@@ -22,6 +23,7 @@ export {
   BACKGROUND_DRAIN_INTERVAL_MS,
   BACKGROUND_FLUSH_DELAY_MS,
   DRAIN_TIME_BUDGET_MS,
+  DENSE_SGR_CHUNK_CHARS,
   FOREGROUND_BACKLOG_WARNING,
   HIGH_PRIORITY_DRAIN_INTERVAL_MS,
   HIGH_PRIORITY_MAX_WRITES_PER_DRAIN,
@@ -78,6 +80,7 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
   return new Promise((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
+    let probeTimer: ReturnType<typeof setTimeout> | null = null
     const finish = (): void => {
       if (settled) {
         return
@@ -86,6 +89,9 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
       if (timer !== null) {
         clearTimeout(timer)
       }
+      if (probeTimer !== null) {
+        clearTimeout(probeTimer)
+      }
       resolve()
     }
     const finishParsed = (): void => {
@@ -93,14 +99,21 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
       recordTerminalParseProgress(terminal)
       finish()
     }
-    timer = setTimeout(finish, PARSE_SETTLE_TIMEOUT_MS)
-    try {
-      terminal.write('', finishParsed)
-    } catch {
-      // Why: a synchronous rejection means this xterm can't accept even an empty FIFO probe; recovery must replace it before reuse.
-      failTerminalWriteStallWatch(terminal)
-      finish()
+    const submitParseProbe = (): void => {
+      if (queuedByTerminal.has(terminal)) {
+        probeTimer = setTimeout(submitParseProbe, 0)
+        return
+      }
+      try {
+        terminal.write('', finishParsed)
+      } catch {
+        // Why: a synchronous rejection means this xterm can't accept even an empty FIFO probe; recovery must replace it before reuse.
+        failTerminalWriteStallWatch(terminal)
+        finish()
+      }
     }
+    timer = setTimeout(finish, PARSE_SETTLE_TIMEOUT_MS)
+    submitParseProbe()
   })
 }
 

@@ -14,9 +14,11 @@ import { recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure } fr
 import { clearForegroundRelease } from './pane-terminal-foreground-queue-state'
 import {
   BACKGROUND_CHUNK_CHARS,
+  DENSE_SGR_CHUNK_CHARS,
   discardTerminalOutput,
   fireQueuedAckCredits,
   queuedByTerminal,
+  reserveDenseSgrBatch,
   scheduleDrain,
   type QueueEntry,
   type TerminalOutputParsedCallback,
@@ -72,7 +74,8 @@ export function composeParsedCallback(
   terminal: TerminalOutputTarget,
   onParsed: TerminalOutputParsedCallback | undefined,
   ackCreditsParsed: (() => void) | undefined,
-  pacer: (() => void) | undefined
+  pacer: (() => void) | undefined,
+  denseSgrRelease: (() => void) | undefined = undefined
 ): TerminalOutputParsedCallback {
   // Why always non-undefined: the callback doubles as the pipeline-health settle signal — with none, the stall watch could never settle, forcing a probe round-trip per healthy idle pane.
   return () => {
@@ -80,6 +83,7 @@ export function composeParsedCallback(
       onParsed?.()
     } finally {
       ackCreditsParsed?.()
+      denseSgrRelease?.()
       pacer?.()
       settleTerminalWriteStallWatch(terminal)
     }
@@ -88,12 +92,14 @@ export function composeParsedCallback(
 
 export function composeWriteFailureCallback(
   terminal: TerminalOutputTarget,
-  ackCreditsParsed: (() => void) | undefined
+  ackCreditsParsed: (() => void) | undefined,
+  denseSgrRelease: (() => void) | undefined = undefined
 ): () => void {
   return () => {
     try {
       // A rejected write still consumed the main-owned delivery window.
       ackCreditsParsed?.()
+      denseSgrRelease?.()
     } finally {
       // Why: a synchronous rejection proves undeliverability but nothing about parse progress; recover without extending replay guards.
       failTerminalWriteStallWatch(terminal)
@@ -108,11 +114,15 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
     discardTerminalOutput(entry.terminal)
     return null
   }
-  const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+  const queuedWrite = takeQueuedChunk(
+    entry,
+    entry.denseSgr ? DENSE_SGR_CHUNK_CHARS : BACKGROUND_CHUNK_CHARS
+  )
   if (!queuedWrite) {
     return null
   }
   const pacer = entry.highPriority ? makeParseClockPacer() : undefined
+  const denseSgrRelease = entry.denseSgr ? reserveDenseSgrBatch(entry.terminal) : undefined
   const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
   // Why armed BEFORE the write: a wedged WriteBuffer (issue #2836) or disposed xterm (6.1.0-beta.287) never runs the parsed callback, so the watch must be live first to catch it.
   armTerminalWriteStallWatch(entry.terminal, {
@@ -134,16 +144,27 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
               entry.terminal,
               queuedWrite.onParsed,
               ackCreditsParsed,
-              pacer
+              pacer,
+              denseSgrRelease
             ),
-            onWriteFailure: composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
+            onWriteFailure: composeWriteFailureCallback(
+              entry.terminal,
+              ackCreditsParsed,
+              denseSgrRelease
+            )
           }
         )
       : writeBackgroundTerminalChunk(
           entry.terminal,
           queuedWrite.data,
-          composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer),
-          composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
+          composeParsedCallback(
+            entry.terminal,
+            queuedWrite.onParsed,
+            ackCreditsParsed,
+            pacer,
+            denseSgrRelease
+          ),
+          composeWriteFailureCallback(entry.terminal, ackCreditsParsed, denseSgrRelease)
         )
     if (!writeAccepted) {
       // Why: the failure callback credited the submitted chunk; credit and abandon the detached tail so the drain can't retry a certified-dead xterm.
@@ -159,6 +180,7 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
     // Why: beforeWrite or write setup can fail before xterm owns the bytes; cancel the armed watch without claiming parser failure.
     cancelTerminalWriteStallWatch(entry.terminal)
     ackCreditsParsed?.()
+    denseSgrRelease?.()
     fireQueuedAckCredits(entry)
     entry.chunks.length = 0
     entry.chunkIndex = 0

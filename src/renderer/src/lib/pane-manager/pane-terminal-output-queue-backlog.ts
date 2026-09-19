@@ -17,6 +17,7 @@ import {
   MAX_BACKGROUND_QUEUE_CHUNKS,
   fireQueuedAckCredits,
   getTerminalOutputMaxQueueChars,
+  canDrainQueueEntry,
   queuedByTerminal,
   type QueueEntry,
   type TerminalOutputBeforeWrite
@@ -95,6 +96,7 @@ export function hasHighPriorityBacklog(): boolean {
   for (const entry of queuedByTerminal.values()) {
     if (
       isEntryDrainable(entry) &&
+      canDrainQueueEntry(entry) &&
       (entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS)
     ) {
       return true

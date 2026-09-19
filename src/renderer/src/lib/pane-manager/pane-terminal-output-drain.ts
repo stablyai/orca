@@ -7,6 +7,7 @@ import { clearForegroundRelease, isEntryDrainable } from './pane-terminal-foregr
 import { hasHighPriorityBacklog, hasQueuedChunks } from './pane-terminal-output-queue-backlog'
 import {
   BACKGROUND_DRAIN_INTERVAL_MS,
+  canDrainQueueEntry,
   DRAIN_TIME_BUDGET_MS,
   HIGH_PRIORITY_DRAIN_INTERVAL_MS,
   HIGH_PRIORITY_MAX_WRITES_PER_DRAIN,
@@ -24,7 +25,7 @@ import { writeQueuedChunk } from './pane-terminal-output-pipeline'
 
 function hasDrainableBacklog(): boolean {
   for (const entry of queuedByTerminal.values()) {
-    if (isEntryDrainable(entry)) {
+    if (isEntryDrainable(entry) && canDrainQueueEntry(entry)) {
       return true
     }
   }
@@ -37,6 +38,9 @@ function takeNextDrainableEntry(): QueueEntry | null {
   let largeBacklogEntry: QueueEntry | null = null
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
+      continue
+    }
+    if (!canDrainQueueEntry(entry)) {
       continue
     }
     // Why: active/foreground output should be chosen first, not left in insertion order behind older background terminals.
@@ -54,6 +58,9 @@ function takeNextDrainableEntry(): QueueEntry | null {
   }
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
+      continue
+    }
+    if (!canDrainQueueEntry(entry)) {
       continue
     }
     queuedByTerminal.delete(entry.terminal)
@@ -100,6 +107,11 @@ export function drainQueuedOutputImpl(): void {
     } else {
       entry.highPriority = false
       clearForegroundRelease(entry)
+    }
+    // Dense SGR batches are parser paced. A completion callback schedules the
+    // next drain after xterm has finished this batch.
+    if (entry.denseSgr) {
+      break
     }
     // Why: xterm parsing and DOM work share the renderer thread with input; keep draining cooperative so WSL/agent output can't pin the UI.
     if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
