@@ -49,7 +49,7 @@ function manager(
     maxActive: options.maxActive,
     idleReapMs: options.idleReapMs,
     executeHostCall: async () => ({ ok: true, value: null }),
-    log: vi.fn(),
+    log: () => vi.fn(),
     onWorkerStateChange: vi.fn(),
     onWorkerGone: vi.fn()
   })
