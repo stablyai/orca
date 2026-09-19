@@ -209,8 +209,22 @@ describeDrawer('the bottom drawer on the page', () => {
           .then(() => true)
         expect(opened, errors.join(' | ')).toBe(true)
 
-        // The enter animation is 180ms; anything left parked after this is parked for good.
-        await page.waitForTimeout(1_000)
+        // Wait for the animation to arrive rather than for a clock. A fixed pause makes the pin
+        // a race on a loaded runner: too short and a healthy-but-slow engine reads as parked,
+        // and the failure names the transform instead of the wait. A sheet that is genuinely
+        // parked never moves, so this times out and the assertions below still report what it
+        // found -- the same red, minus the timing assumption.
+        await page
+          .waitForFunction(
+            () => {
+              const sheet = document.querySelector('[data-testid="bottom-drawer-sheet"]')
+              return sheet && getComputedStyle(sheet).transform === 'matrix(1, 0, 0, 1, 0, 0)'
+                ? true
+                : null
+            },
+            { timeout: 15_000, polling: 50 }
+          )
+          .catch(() => null)
         const drawer = await page.evaluate(readDrawer)
         expect(drawer.sheet, JSON.stringify(drawer)).toBe(true)
 
