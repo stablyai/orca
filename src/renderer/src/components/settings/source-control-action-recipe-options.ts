@@ -62,7 +62,9 @@ const AGENT_ARGS_PLACEHOLDER_OVERRIDES: Partial<Record<TuiAgent, string>> = {
   // Why: Source Control AI action prompts are short, reviewable tasks; the
   // mini Codex model is a better default hint than the frontier model.
   codex: '--model gpt-5.4-mini',
-  copilot: '--model gpt-5.4-mini'
+  copilot: '--model gpt-5.4-mini',
+  // Pi's default sentinel is not a valid value for --model.
+  pi: '--model provider/model'
 }
 
 const MODEL_FLAG_BY_AGENT: Partial<Record<TuiAgent, string>> = {

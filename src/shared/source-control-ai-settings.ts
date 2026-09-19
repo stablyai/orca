@@ -1,3 +1,7 @@
+import {
+  prunePiConfiguredDefaultFromDiscovery,
+  prunePiConfiguredDefaultFromHostDiscovery
+} from './pi-configured-default-discovery'
 import { isCustomAgentId } from './commit-message-agent-spec'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import {
@@ -139,9 +143,11 @@ export function normalizeSourceControlAiSettings(
     selectedModelByAgentByHost:
       copyRecord(base.selectedModelByAgentByHost) ?? defaults.selectedModelByAgentByHost,
     discoveredModelsByAgent:
-      copyRecord(base.discoveredModelsByAgent) ?? defaults.discoveredModelsByAgent,
+      prunePiConfiguredDefaultFromDiscovery(base.discoveredModelsByAgent) ??
+      defaults.discoveredModelsByAgent,
     discoveredModelsByAgentByHost:
-      copyRecord(base.discoveredModelsByAgentByHost) ?? defaults.discoveredModelsByAgentByHost,
+      prunePiConfiguredDefaultFromHostDiscovery(base.discoveredModelsByAgentByHost) ??
+      defaults.discoveredModelsByAgentByHost,
     selectedThinkingByModel: {
       ...defaults.selectedThinkingByModel,
       ...base.selectedThinkingByModel

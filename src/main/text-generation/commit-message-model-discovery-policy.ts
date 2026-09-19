@@ -1,3 +1,4 @@
+import { PI_COMPATIBILITY_MODEL, PI_DEFAULT_MODEL_ID } from '../../shared/commit-message-agent-spec'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { planAgentBinary } from '../../shared/commit-message-plan'
@@ -48,7 +49,13 @@ export function finalizeModelDiscoveryOutput(
   if (models.length === 0 && stderr.trim()) {
     models = spec.modelDiscovery?.parse(stderr) ?? []
   }
+  if (spec.id === 'pi') {
+    models = models.filter((model) => model.id !== PI_DEFAULT_MODEL_ID)
+  }
   if (models.length === 0) {
+    if (spec.id === 'pi') {
+      return staticModelDiscoveryResult(spec, [PI_COMPATIBILITY_MODEL], PI_COMPATIBILITY_MODEL.id)
+    }
     if (spec.models.length > 0) {
       console.warn('[commit-message] Model discovery returned no models; using static fallback:', {
         label: spec.label
