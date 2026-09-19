@@ -77,20 +77,6 @@ export function readBridgeNativeVerb(method: string): BridgeNativeVerb | null {
   return BRIDGE_NATIVE_VERB_NAMES.find((verb) => verb === method) ?? null
 }
 
-/**
- * A reply this host authored, as opposed to one a runtime answered.
- *
- * `RpcSuccess` requires `_meta: { runtimeId }` in TypeScript, and these replies have no runtime to
- * name. The wire is the looser of the two: `isRpcResponse` checks `id`, `ok` and the presence of
- * `result`, and never reads `_meta`, so a reply without one is a reply the page's own reader
- * accepts. This type says that in the one place it is true, instead of minting a runtime id that
- * would be a lie or asserting past the difference.
- *
- * A page reader must not reach for `_meta` on a `native.*` reply; the type will offer it and it
- * will not be there.
- */
-export type BridgeHostAuthoredReply = { id: string; ok: true; result: unknown }
-
 /** Why the seam would not serve a `native.` method. Each is a different fault, so each is named. */
 export type BridgeNativeVerbRefusal = 'unknown-verb' | 'ungranted' | 'invalid-params'
 

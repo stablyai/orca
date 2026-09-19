@@ -122,6 +122,7 @@ function Harness(props: {
     pageRoutes: ['/h/[hostId]'],
     onNavigate: (href) => props.probe.navigations.push(href),
     onExternalLink: (url) => props.probe.externalLinks.push(url),
+    serveNativeVerb: () => Promise.resolve({ value: 'pasteboard' }),
     onNavigateBack: () => {
       props.probe.backPops += 1
       return 'popped'
