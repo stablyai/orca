@@ -9,6 +9,7 @@ on:
       - ready_for_review
     paths:
       - 'mobile/**'
+      - 'config/scripts/xterm-patch-text*'
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
@@ -46,6 +47,7 @@ on:
       - main
     paths:
       - 'mobile/**'
+      - 'config/scripts/xterm-patch-text*'
       - '.github/workflows/mobile.yml'
 
 concurrency:
@@ -92,6 +94,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify mobile xterm patch matches the pinned upstream build
+        run: node ../config/scripts/regenerate-xterm-patches-mobile.mjs --check
 
       - name: Typecheck
         run: pnpm typecheck

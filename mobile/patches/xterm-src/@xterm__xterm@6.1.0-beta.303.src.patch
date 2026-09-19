@@ -1,0 +1,47 @@
+diff --git a/src/browser/ColorContrastCache.ts b/src/browser/ColorContrastCache.ts
+index fdcd9d133199a6cd6ba9bea9606a02c03ad03b3d..0558a8873f680e8fb2a27cc833c49c5ba658e1dd 100644
+--- a/src/browser/ColorContrastCache.ts
++++ b/src/browser/ColorContrastCache.ts
+@@ -7,11 +7,17 @@ import { IColorContrastCache } from './Types';
+ import { IColor } from '../common/Types';
+ import { TwoKeyMap } from '../common/MultiKeyMap';
+ 
++const CONTRAST_CACHE_MAX_ENTRIES = 4096;
++
+ export class ColorContrastCache implements IColorContrastCache {
+   private _color: TwoKeyMap</* bg */number, /* fg */number, IColor | null> = new TwoKeyMap();
+   private _css: TwoKeyMap</* bg */number, /* fg */number, string | null> = new TwoKeyMap();
++  private _entryCount = 0;
+ 
+   public setCss(bg: number, fg: number, value: string | null): void {
++    if (this._css.get(bg, fg) === undefined) {
++      this._admitNewEntry();
++    }
+     this._css.set(bg, fg, value);
+   }
+ 
+@@ -20,6 +26,9 @@ export class ColorContrastCache implements IColorContrastCache {
+   }
+ 
+   public setColor(bg: number, fg: number, value: IColor | null): void {
++    if (this._color.get(bg, fg) === undefined) {
++      this._admitNewEntry();
++    }
+     this._color.set(bg, fg, value);
+   }
+ 
+@@ -30,5 +39,14 @@ export class ColorContrastCache implements IColorContrastCache {
+   public clear(): void {
+     this._color.clear();
+     this._css.clear();
++    this._entryCount = 0;
++  }
++
++  private _admitNewEntry(): void {
++    // Color pairs outlive atlas pages, including cached misses and DOM-rendered colors.
++    if (this._entryCount >= CONTRAST_CACHE_MAX_ENTRIES) {
++      this.clear();
++    }
++    this._entryCount++;
+   }
+ }

@@ -439,14 +439,15 @@ export function regenerateXtermPatches({
   mode,
   repoRoot = DEFAULT_REPO_ROOT,
   workDir = path.join(tmpdir(), 'orca-xterm-patch-build'),
+  manifest = JSON.parse(readFileSync(path.join(repoRoot, MANIFEST_RELATIVE_PATH), 'utf8')),
+  lockfileRelativePath = 'pnpm-lock.yaml',
   log = console.info
 } = {}) {
-  const manifest = JSON.parse(readFileSync(path.join(repoRoot, MANIFEST_RELATIVE_PATH), 'utf8'))
   assertBuildStepsAllowed(manifest)
   assertSourcemapPolicy(manifest)
   mkdirSync(workDir, { recursive: true })
 
-  const lockfilePath = path.join(repoRoot, 'pnpm-lock.yaml')
+  const lockfilePath = path.join(repoRoot, lockfileRelativePath)
   let lockfile = readFileSync(lockfilePath, 'utf8')
   let lockfileChanged = false
 
