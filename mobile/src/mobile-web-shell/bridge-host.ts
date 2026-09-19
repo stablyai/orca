@@ -211,18 +211,20 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // the measurement that earns it. Until then every stream crosses as JSON.
   function handleSubscribe(message: SubscribeMessage): void {
     const { id } = message
+    // Collision first: both refusals settle the same exchange, and an id already in flight is the
+    // truer cause — answering the fence there would kill a live request while naming the method.
+    if (requests.has(id) || subscriptions.has(id)) {
+      sendError(id, new BridgeCapExceededError('that id is already in flight'))
+      return
+    }
     // The fence is about the method name, not the frame kind: a `native.` verb is answered here or
-    // not at all, and a stream is another door to the same client. Refused before the id is even
-    // claimed, so nothing about this frame reaches the desktop or occupies a slot.
+    // not at all, and a stream is another door to the same client. Still before any slot is taken,
+    // so nothing about this frame reaches the desktop.
     if (isBridgeNativeMethod(message.method)) {
       sendError(
         id,
         new BridgeNativeVerbRefusedError(`${message.method} is not a stream this shell serves`)
       )
-      return
-    }
-    if (requests.has(id) || subscriptions.has(id)) {
-      sendError(id, new BridgeCapExceededError('that id is already in flight'))
       return
     }
     if (subscriptions.size >= BRIDGE_MAX_SUBSCRIPTIONS) {

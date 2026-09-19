@@ -52,6 +52,20 @@ describe('a native method on a frame that is not a request', () => {
     expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
   })
 
+  it('names the collision, not the fence, when the id is one already in flight', async () => {
+    // Both answers settle the same exchange, so the page loses the request either way; which cause
+    // it is told is the whole difference between a page bug it can see and one it cannot.
+    const bridge = harness({ serveNativeVerb: () => new Promise(() => {}) })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    bridge.host.receive(
+      clientFrame({ type: 'subscribe', id: ID, method: 'native.clipboard.read', params: {} })
+    )
+    await flushBridge()
+    expect(refusal(bridge)?.message).toContain('already in flight')
+    expect(reachedTheDesktop(bridge)).toEqual([])
+  })
+
   it('refuses an unknown native method on subscribe too, rather than streaming it', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
