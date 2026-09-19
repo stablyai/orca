@@ -1246,6 +1246,15 @@ jobs:
           for action_path in "${required[@]}"; do
             test -f "$action_path"
           done
+          # Why: a cut ref this old also predates the .gitattributes LF pin on
+          # mobile/patches (#21439), so the Windows checkout wrote them CRLF and
+          # the mobile install fails with ERR_PNPM_INVALID_PATCH. Rewrite them
+          # from the index without eol conversion; the index bytes are LF.
+          shopt -s nullglob
+          patches=(mobile/patches/*.patch)
+          if [ "${#patches[@]}" -gt 0 ]; then
+            git -c core.autocrlf=false checkout-index --force -- "${patches[@]}"
+          fi
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
