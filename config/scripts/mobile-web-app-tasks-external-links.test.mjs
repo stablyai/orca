@@ -11,15 +11,13 @@
  * The rule, not the twelve call sites it happens to have today: a module entering this closure
  * later is held to it without anyone remembering to add it here.
  */
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   EXTERNAL_LINK_SEAM as SEAM,
-  reachesReactNativeLinking
+  externalLinkOffenders
 } from './mobile-web-app-external-link-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
@@ -30,18 +28,9 @@ describeClosure(
   () => {
     it('opens every external URL through the platform seam', async () => {
       const closure = await mobileWebAppRouteClosure('app/h/[hostId]/tasks.tsx')
-      const offenders = closure.local
-        .filter((file) => file !== SEAM)
-        .filter((file) => {
-          try {
-            // Which module the name comes from, not which text a call site writes: the tasks tree
-            // still calls `Linking.openURL`, and that `Linking` is the barrel's seam-backed export.
-            return reachesReactNativeLinking(readFileSync(join(mobileDir, file), 'utf8'))
-          } catch {
-            return false
-          }
-        })
-      expect(offenders.sort()).toEqual([])
+      // Which module the name comes from, not which text a call site writes: the tasks tree
+      // still calls `Linking.openURL`, and that `Linking` is the barrel's seam-backed export.
+      expect(externalLinkOffenders(mobileDir, closure)).toEqual([])
     })
 
     it('contains the seam, so the rule above is not vacuous', async () => {

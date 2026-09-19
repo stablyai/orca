@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
@@ -233,7 +234,7 @@ export function PRChecksSection({
               {url ? (
                 <Pressable
                   style={styles.rowTrailing}
-                  onPress={() => void Linking.openURL(url).catch(() => {})}
+                  onPress={() => openExternalLink(url)}
                   hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${check.name} on the web`}
