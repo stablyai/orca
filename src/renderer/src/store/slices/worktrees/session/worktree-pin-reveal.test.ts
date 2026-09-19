@@ -3,17 +3,22 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { createSetWorktreesPinnedAndReveal } from './worktree-pin-reveal'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the only fields the pin path reads; the cast supplies the rest of the row shape.
+const ROW = {
+  id: 'repo::/feature',
+  repoId: 'repo',
+  path: '/feature',
+  branch: 'feature',
+  isMainWorktree: false,
+  isPinned: false
+} as Worktree
+
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
-  return {
-    id: 'repo::/feature',
-    repoId: 'repo',
-    path: '/feature',
-    branch: 'feature',
-    isMainWorktree: false,
-    isPinned: false,
-    ...overrides
-  } as Worktree
+  return { ...ROW, ...overrides }
 }
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the creator never calls `set`; every write under test lands on the mocked updaters reached through `get`.
+const UNUSED_SET = vi.fn() as unknown as WorktreeSliceSet
 
 function sliceState(worktrees: Worktree[], active: Record<string, unknown> = {}) {
   const state = {
@@ -34,6 +39,7 @@ function sliceState(worktrees: Worktree[], active: Record<string, unknown> = {})
           (executionHostId === undefined || (candidate.hostId ?? 'local') === executionHostId)
       )
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock names every field this suite exercises; the cast only supplies the rest of the slice.
   return { state, get: (() => state) as unknown as WorktreeSliceGet }
 }
 
@@ -43,7 +49,7 @@ describe('setWorktreesPinnedAndReveal', () => {
     const remote = worktree({ hostId: 'ssh:build' })
     const { state, get } = sliceState([local, remote])
 
-    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+    createSetWorktreesPinnedAndReveal(UNUSED_SET, get)(
       [{ worktreeId: 'repo::/feature', executionHostId: 'ssh:build' }],
       true
     )
@@ -56,10 +62,7 @@ describe('setWorktreesPinnedAndReveal', () => {
   it('keeps the bare-id form working for callers that do not know the host', () => {
     const { state, get } = sliceState([worktree({ hostId: 'local' })])
 
-    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
-      ['repo::/feature'],
-      true
-    )
+    createSetWorktreesPinnedAndReveal(UNUSED_SET, get)(['repo::/feature'], true)
 
     expect(state.updateWorktreesMeta).toHaveBeenCalledWith([
       { worktreeId: 'repo::/feature', updates: { isPinned: true }, executionHostId: 'local' }
@@ -69,7 +72,7 @@ describe('setWorktreesPinnedAndReveal', () => {
   it('skips a qualified target already in the requested state', () => {
     const { state, get } = sliceState([worktree({ hostId: 'ssh:build', isPinned: true })])
 
-    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+    createSetWorktreesPinnedAndReveal(UNUSED_SET, get)(
       [{ worktreeId: 'repo::/feature', executionHostId: 'ssh:build' }],
       true
     )
@@ -84,7 +87,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       activeWorkspaceExecutionHostId: 'ssh:build'
     })
 
-    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+    createSetWorktreesPinnedAndReveal(UNUSED_SET, get)(
       [{ worktreeId: 'repo::/feature', executionHostId: 'ssh:build' }],
       true
     )
@@ -103,7 +106,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       activeWorkspaceExecutionHostId: 'local'
     })
 
-    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+    createSetWorktreesPinnedAndReveal(UNUSED_SET, get)(
       [{ worktreeId: 'repo::/feature', executionHostId: 'ssh:build' }],
       true
     )
@@ -119,7 +122,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       worktree({ id: 'folder:abc', path: '/folder', hostId: 'ssh:build' })
     ])
 
-    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+    createSetWorktreesPinnedAndReveal(UNUSED_SET, get)(
       [{ worktreeId: 'folder:abc', executionHostId: 'ssh:build' }],
       true
     )
