@@ -18,11 +18,17 @@ import { useEffect, useState } from 'react'
  * is a resize, and the browser scrolling the focused input into view is a scroll that moves
  * `offsetTop` without resizing anything.
  *
- * No `visualViewport` at all is 0 rather than a guess. It is the answer for a document that cannot
- * be occluded by a keyboard it has no way to see.
+ * A pinch zoom is not a keyboard, and geometry alone cannot tell them apart: a 2x zoom shrinks the
+ * visual viewport by exactly as much as a half-screen keyboard. So a `scale` other than 1 answers
+ * 0. A keyboard raised while the page is zoomed is the case that costs, and it is the rare one.
+ * `scale` is read defensively because older WebViews do not implement it, and treating its absence
+ * as zoomed would answer 0 for every keyboard on them.
+ *
+ * No `visualViewport` at all is 0 rather than a guess — that guard is in the effect below, which
+ * is also the only thing that can act on it, and a second copy here was unreachable.
  */
-function occlusion(viewport: VisualViewport | undefined): number {
-  if (viewport === undefined) {
+function occlusion(viewport: VisualViewport): number {
+  if ((viewport.scale ?? 1) !== 1) {
     return 0
   }
   return Math.max(0, window.innerHeight - (viewport.height + viewport.offsetTop))

@@ -21,8 +21,8 @@ export function useKeyboardOcclusion(): number {
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
 
     const onShow = Keyboard.addListener(showEvent, (event) => {
-      // Why: iOS keyboard height already describes the obscured screen area.
-      // Subtracting the safe-area inset lets the commit bar tuck under the keyboard.
+      // The keyboard's own height already describes the obscured area; the consumer adds whatever
+      // clearance it wants above it.
       setKeyboardLift(Math.max(0, event.endCoordinates.height))
     })
     const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))

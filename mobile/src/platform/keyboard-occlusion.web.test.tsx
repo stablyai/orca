@@ -8,6 +8,8 @@ import { useKeyboardAvoidingPadding, useKeyboardOcclusion } from './keyboard-occ
 class FakeVisualViewport extends EventTarget {
   height: number
   offsetTop = 0
+  /** Optional as the browser's is: older WebViews do not implement it. */
+  scale: number | undefined = 1
   readonly counts = { resize: 0, scroll: 0 }
 
   constructor(height: number) {
@@ -33,6 +35,14 @@ class FakeVisualViewport extends EventTarget {
   resizeTo(height: number, offsetTop = 0): void {
     this.height = height
     this.offsetTop = offsetTop
+    this.dispatchEvent(new Event('resize'))
+  }
+
+  /** Pinch zoom: the visual viewport shrinks by the scale factor with no keyboard anywhere. */
+  zoomTo(scale: number): void {
+    this.scale = scale
+    this.height = LAYOUT_HEIGHT / scale
+    this.offsetTop = 0
     this.dispatchEvent(new Event('resize'))
   }
 
@@ -116,7 +126,44 @@ describe('the keyboard the browser reports', () => {
     expect(lift).toBe(336)
   })
 
-  it('answers 0 for a document with no visual viewport at all', async () => {
+  it('never reports a negative strip, whatever the two viewports disagree about', async () => {
+    // Mobile Safari reports a visual viewport taller than the layout one mid-scroll, and a bare
+    // subtraction would push the commit bar down the screen instead of up.
+    await mount()
+    await act(async () => viewport?.resizeTo(LAYOUT_HEIGHT + 120))
+    expect(lift).toBe(0)
+  })
+
+  it('reads a pinch zoom as no keyboard, because geometry alone cannot tell them apart', async () => {
+    // A 2x zoom halves the visual viewport exactly as a 400px keyboard would, and answering 400
+    // here moves the commit bar and the composer on a page nobody is typing into.
+    await mount()
+    await act(async () => viewport?.zoomTo(2))
+    expect(lift).toBe(0)
+  })
+
+  it('goes back to measuring once the zoom is released', async () => {
+    await mount()
+    await act(async () => viewport?.zoomTo(2))
+    await act(async () => viewport?.zoomTo(1))
+    await act(async () => viewport?.resizeTo(464))
+    expect(lift).toBe(336)
+  })
+
+  it('takes a viewport that reports no scale as unzoomed', async () => {
+    // `scale` is absent on older WebViews; treating that as zoomed would answer 0 for every
+    // keyboard on them.
+    await mount()
+    await act(async () => {
+      if (viewport !== null) {
+        viewport.scale = undefined
+        viewport.resizeTo(464)
+      }
+    })
+    expect(lift).toBe(336)
+  })
+
+  it('answers 0 when the effect finds no visual viewport to subscribe to', async () => {
     Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true })
     await mount()
     expect(lift).toBe(0)

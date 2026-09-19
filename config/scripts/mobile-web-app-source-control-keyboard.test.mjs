@@ -10,7 +10,7 @@
  * the one module in either closure allowed to name the stub, and it has a `.web.ts` sibling that
  * reads `visualViewport` instead.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -35,9 +35,18 @@ const SEAM = 'src/platform/keyboard-occlusion.web.ts'
  */
 const SUBSCRIBES_TO_THE_STUB = ['src/components/mounted-bottom-drawer.tsx']
 
+/**
+ * The seam itself, which is the one place allowed to name the stub.
+ *
+ * The two files by name rather than everything under `src/platform/`: a later
+ * `src/platform/<something>.web.ts` that subscribed to `Keyboard` directly would be the same
+ * defect this census exists for, and a directory-wide exemption would wave it through.
+ */
+const SEAM_FILES = ['src/platform/keyboard-occlusion.ts', 'src/platform/keyboard-occlusion.web.ts']
+
 function keyboardSubscribers(closure) {
   return closure.local
-    .filter((file) => !file.startsWith('src/platform/'))
+    .filter((file) => !SEAM_FILES.includes(file))
     .filter((file) => {
       try {
         return readFileSync(join(mobileDir, file), 'utf8').includes('Keyboard.addListener')
@@ -61,6 +70,23 @@ describeClosure(
       // code at all produces, and the census would pass against a page that measures nothing.
       const closure = await mobileWebAppRouteClosure(route)
       expect(closure.local).toContain(SEAM)
+    })
+
+    it('names a module under src/platform that is not the seam', async () => {
+      // The exemption is the two seam files, not their directory: a planted subscriber beside them
+      // is named, which a `startsWith('src/platform/')` filter would have let through.
+      const planted = join(mobileDir, 'src', 'platform', 'other.web.ts')
+      writeFileSync(
+        planted,
+        'import { Keyboard } from "react-native"\nKeyboard.addListener("x", () => {})\n'
+      )
+      try {
+        expect(
+          keyboardSubscribers({ local: ['src/platform/other.web.ts', ...SEAM_FILES] })
+        ).toEqual(['src/platform/other.web.ts'])
+      } finally {
+        rmSync(planted)
+      }
     })
 
     it('names an exemption that is really in both closures, so it cannot outlive its subject', async () => {
