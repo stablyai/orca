@@ -99,6 +99,7 @@ export function buildTerminalCreateWindow(args: {
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate,
         onSplitTerminal: () => () => {},
+        onEqualizeTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onFocusTerminal: (
           listener: (data: {
