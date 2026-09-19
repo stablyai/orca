@@ -87,8 +87,8 @@ export function SessionActionMenuItems({
         <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
           <PanelTopOpen className="size-3.5" />
           {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
-            'Jump to Worktree'
+            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorkspace',
+            'Jump to Workspace'
           )}
         </Item>
       ) : null}

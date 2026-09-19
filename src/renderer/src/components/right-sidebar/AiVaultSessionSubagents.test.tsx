@@ -149,7 +149,7 @@ describe('independent child resume', () => {
       <SessionSubagentsSection session={makeSession({ agent: 'omp' })} resume={resume} />
     )
     await act(async () => {})
-    fireEvent.click(getByRole('button', { name: 'Resume in Worktree' }))
+    fireEvent.click(getByRole('button', { name: 'Resume in Workspace' }))
     expect(resume.getState).toHaveBeenCalledWith(child)
     expect(resume.onResume).toHaveBeenCalledExactlyOnceWith(child, 'folder:repo')
   })
@@ -220,7 +220,7 @@ describe('nested OMP history', () => {
       parentFilePath: child.filePath
     })
     expect(view.queryByText('Research')).not.toBeNull()
-    fireEvent.click(view.getAllByRole('button', { name: 'Resume in Worktree' })[1])
+    fireEvent.click(view.getAllByRole('button', { name: 'Resume in Workspace' })[1])
     expect(resume.onResume).toHaveBeenCalledExactlyOnceWith(grandchild, 'folder:repo')
   })
 

@@ -708,7 +708,8 @@
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "remoteBrowseLocalHistory": "Remote workspaces can browse local history. Resume actions run from local workspaces.",
-            "valueCopyFailed": "Unable to copy {{value0}}"
+            "valueCopyFailed": "Unable to copy {{value0}}",
+            "worktreeUnavailable": "Worktree is no longer available."
           },
           "AiVaultPanelControls": {
             "allSessions": "All sessions",
@@ -739,6 +740,7 @@
             "originalAsk": "Original ask",
             "resumeCommand": "Resume command",
             "resumeInNewTab": "Resume in New Tab",
+            "resumeInWorktree": "Resume in Worktree",
             "revealLog": "Reveal Log",
             "session": "Session",
             "sessionActions": "{{value0}} session actions",
@@ -752,9 +754,11 @@
             "usage": "Usage",
             "usageValue": "{{value0}} msgs{{value1}}",
             "user": "User",
-            "workingDir": "Working dir"
+            "workingDir": "Working dir",
+            "worktree": "Worktree"
           },
           "AiVaultSessionRow": {
+            "jumpToWorktree": "Jump to Worktree",
             "resumeAgentSession": "Resume {{value0}} session",
             "tokenCount": "{{value0}} tok"
           },

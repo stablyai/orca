@@ -1,4 +1,7 @@
 import { useMemo } from 'react'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
+import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
@@ -37,7 +40,7 @@ export type AiVaultSessionWorktreeInfo = {
 }
 
 type WorktreeCandidate = {
-  worktree: Worktree
+  worktree: Pick<Worktree, 'id' | 'displayName' | 'isArchived'>
   path: string
   hostId: ExecutionHostId
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
@@ -51,15 +54,20 @@ export function resolveAiVaultSessionWorktreeInfo({
   session,
   repos = [],
   worktrees,
-  activeWorktreeId
+  activeWorktreeId,
+  folderState
 }: {
   session: AiVaultSession
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
+  folderState?: AiVaultSessionResumeTargetState
 }): AiVaultSessionWorktreeInfo | null {
   return withAiVaultCurrentWorktreeStatus(
-    resolveWorktreeInfoFromCandidates(session, buildWorktreeCandidates(worktrees, repos)),
+    resolveWorktreeInfoFromCandidates(
+      session,
+      buildWorktreeCandidates(worktrees, repos, folderState)
+    ),
     activeWorktreeId
   )
 }
@@ -130,11 +138,12 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
+  folderState?: AiVaultSessionResumeTargetState
 }): AiVaultSessionWorktreeInfo | null {
   return withAiVaultCurrentWorktreeStatus(
     resolveWorktreeDisplayFromCandidates(
       args.session,
-      buildWorktreeCandidates(args.worktrees, args.repos ?? [])
+      buildWorktreeCandidates(args.worktrees, args.repos ?? [], args.folderState)
     ),
     args.activeWorktreeId
   )
@@ -179,28 +188,31 @@ function resolveWorktreeDisplayFromCandidates(
 export function useAiVaultSessionWorktreeMap({
   sessions,
   repos = [],
-  worktrees
+  worktrees,
+  folderState
 }: {
   sessions: readonly AiVaultSession[]
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
+  folderState?: AiVaultSessionResumeTargetState
 }): ReadonlyMap<string, AiVaultSessionWorktreeInfo> {
   return useMemo(() => {
     // Hoisted out of the per-session loop: candidates and their normalized
     // roots are session-independent.
-    const candidates = buildWorktreeCandidates(worktrees, repos)
+    const candidates = buildWorktreeCandidates(worktrees, repos, folderState)
     return new Map(
       sessions.flatMap((session) => {
         const worktreeInfo = resolveWorktreeDisplayFromCandidates(session, candidates)
         return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
       })
     )
-  }, [repos, sessions, worktrees])
+  }, [repos, sessions, worktrees, folderState])
 }
 
 function buildWorktreeCandidates(
   worktrees: readonly Worktree[],
-  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
+  folderState?: AiVaultSessionResumeTargetState
 ): WorktreeCandidate[] {
   const candidates: WorktreeCandidate[] = []
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
@@ -220,11 +232,29 @@ function buildWorktreeCandidates(
       candidates.push(makeWorktreeCandidate(worktree, parsed.worktreePath, hostId, 'prior-path'))
     }
   }
+  for (const folder of folderState?.folderWorkspaces ?? []) {
+    if (!folderState || !hasUsablePath(folder.folderPath)) {
+      continue
+    }
+    const id = folderWorkspaceKey(folder.id)
+    const hostId = getAiVaultResumeWorkspaceExecutionHostId(folderState, id)
+    if (!hostId) {
+      continue
+    }
+    candidates.push(
+      makeWorktreeCandidate(
+        { id, displayName: folder.name, isArchived: folder.isArchived },
+        folder.folderPath,
+        hostId,
+        'current-path'
+      )
+    )
+  }
   return candidates
 }
 
 function makeWorktreeCandidate(
-  worktree: Worktree,
+  worktree: WorktreeCandidate['worktree'],
   path: string,
   hostId: ExecutionHostId,
   source: WorktreeCandidate['source']

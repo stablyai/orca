@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -289,4 +291,133 @@ describe('lazy OMP child resume targets', () => {
       ).toEqual({ blocked: true, worktreeId: null, usesSessionWorktree: false })
     }
   )
+})
+
+function folderState(overrides: Partial<FolderWorkspace> = {}): AiVaultSessionResumeTargetState {
+  return {
+    repos: [],
+    projectGroups: [],
+    worktreesByRepo: {},
+    folderWorkspaces: [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'AGY folder',
+        folderPath: '/repo/alpha',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        ...overrides
+      }
+    ]
+  }
+}
+
+describe('folder session ownership', () => {
+  it('maps a real-style agy cwd to its folder and updates when the folder moves', () => {
+    const session = makeSession({ agent: 'antigravity', cwd: '/repo/alpha/src' })
+    const { result, rerender } = renderHook(
+      ({ state }) =>
+        useAiVaultSessionWorktreeMap({
+          sessions: [session],
+          worktrees: [],
+          folderState: state
+        }),
+      { initialProps: { state: folderState() } }
+    )
+    const info = result.current.get(session.id) ?? null
+    expect(info).toEqual({
+      status: 'active',
+      label: 'AGY folder',
+      path: '/repo/alpha',
+      worktreeId: 'folder:folder-1'
+    })
+    expect(withAiVaultCurrentWorktreeStatus(info, 'folder:folder-1')?.status).toBe('current')
+    rerender({ state: folderState({ folderPath: '/moved' }) })
+    expect(result.current.get(session.id)?.status).toBe('unavailable')
+  })
+
+  it.each(['local', 'ssh:box', 'runtime:env'] as const)(
+    'matches only the owning %s host',
+    (host) => {
+      const state = folderState({ executionHostId: host })
+      for (const sessionHost of ['local', 'ssh:box', 'runtime:env'] as const) {
+        const info = resolveAiVaultSessionWorktreeDisplay({
+          session: makeSession({ cwd: '/repo/alpha', executionHostId: sessionHost }),
+          worktrees: [],
+          folderState: state,
+          activeWorktreeId: null
+        })
+        expect(info?.status).toBe(host === sessionHost ? 'active' : 'unavailable')
+      }
+    }
+  )
+
+  it('prefers a nested git worktree and preserves archived folder status', () => {
+    const args = {
+      session: sessionInA,
+      worktrees: [worktreeA],
+      folderState: folderState({ folderPath: '/repo' }),
+      activeWorktreeId: null
+    }
+    expect(resolveAiVaultSessionWorktreeDisplay(args)?.worktreeId).toBe(worktreeA.id)
+    expect(
+      resolveAiVaultSessionWorktreeDisplay({
+        ...args,
+        worktrees: [],
+        folderState: folderState({ isArchived: true })
+      })?.status
+    ).toBe('archived')
+  })
+
+  it('does not match a sibling path or guess an ambiguous execution host', () => {
+    const state = folderState()
+    state.repos = [
+      makeRepo({ path: '/repo/alpha/local' }),
+      makeRepo({ id: 'remote', path: '/repo/alpha/remote', executionHostId: 'ssh:box' })
+    ]
+    expect(
+      resolveAiVaultSessionWorktreeDisplay({
+        session: sessionInA,
+        worktrees: [],
+        folderState: state,
+        activeWorktreeId: null
+      })?.status
+    ).toBe('unavailable')
+    expect(
+      resolveAiVaultSessionWorktreeDisplay({
+        session: makeSession({ cwd: '/repo/alpha-sibling' }),
+        worktrees: [],
+        folderState: folderState(),
+        activeWorktreeId: null
+      })?.status
+    ).toBe('unavailable')
+  })
+
+  it('uses the session folder as the resume destination with another workspace active', () => {
+    const state = folderState()
+    const session = makeSession({ agent: 'antigravity', cwd: '/repo/alpha' })
+    const info = resolveAiVaultSessionWorktreeDisplay({
+      session,
+      worktrees: [],
+      folderState: state,
+      activeWorktreeId: null
+    })
+    expect(
+      resolveAiVaultHistorySessionResumeState({
+        session,
+        worktreeInfo: info,
+        activeWorktreeId: worktreeB.id,
+        worktrees,
+        repos,
+        targetState: state
+      })
+    ).toEqual({ blocked: false, worktreeId: 'folder:folder-1', usesSessionWorktree: true })
+  })
 })

@@ -8,14 +8,14 @@ import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 const mockState: {
   settings: { aiVaultSearch?: { enabled: boolean } }
   runtimeEnvironments: never[]
-  folderWorkspaces: Record<string, never>
+  folderWorkspaces: never[]
   projectGroups: never[]
   repos: never[]
   worktreesByRepo: Record<string, never>
 } = {
   settings: {},
   runtimeEnvironments: [],
-  folderWorkspaces: {},
+  folderWorkspaces: [],
   projectGroups: [],
   repos: [],
   worktreesByRepo: {}

@@ -564,7 +564,7 @@ describe('resolveAiVaultSessionLaunchTarget', () => {
 
 describe('aiVaultSessionResumeLabel', () => {
   it('names the session worktree action distinctly from the active-workspace fallback', () => {
-    expect(aiVaultSessionResumeLabel({ usesSessionWorktree: true })).toBe('Resume in Worktree')
+    expect(aiVaultSessionResumeLabel({ usesSessionWorktree: true })).toBe('Resume in Workspace')
     expect(aiVaultSessionResumeLabel({ usesSessionWorktree: false })).toBe('Resume in New Tab')
   })
 })

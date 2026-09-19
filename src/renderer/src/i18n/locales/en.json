@@ -13214,7 +13214,8 @@
             "sessionDeleteFailed": "Couldn't delete the session",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
-            "resumeInChatFailed": "Could not resume this session in a new chat."
+            "resumeInChatFailed": "Could not resume this session in a new chat.",
+            "workspaceUnavailable": "Workspace is no longer available."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -13317,7 +13318,9 @@
             "copied": "Copied",
             "copy": "Copy",
             "noFirstPromptAvailable": "No first prompt available",
-            "loadingFirstPrompt": "Loading first prompt…"
+            "loadingFirstPrompt": "Loading first prompt…",
+            "resumeInWorkspace": "Resume in Workspace",
+            "workspace": "Workspace"
           },
           "AiVaultSessionRow": {
             "noPreviewAvailable": "No conversation preview available",
@@ -13351,7 +13354,8 @@
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
             "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
-            "resumeInNewChat": "Resume in New Chat"
+            "resumeInNewChat": "Resume in New Chat",
+            "jumpToWorkspace": "Jump to Workspace"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -13410,7 +13414,11 @@
             "noRecordedWorktree": "No worktree was recorded for this session.",
             "archivedJumpUnavailable": "This session is in an archived worktree.",
             "noActiveWorktreeMatch": "No active worktree matches this session.",
-            "noActiveWorktreeTarget": "No active worktree is available."
+            "noActiveWorktreeTarget": "No active worktree is available.",
+            "jumpToWorkspace": "Jump to Workspace",
+            "currentWorkspace": "Current workspace",
+            "activeWorkspace": "Active workspace",
+            "archivedWorkspace": "Archived workspace"
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "Subagents ({{value0}})",

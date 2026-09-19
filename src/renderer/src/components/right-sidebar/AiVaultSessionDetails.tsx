@@ -101,8 +101,8 @@ export function SessionInlineDetails({
             >
               <Play className="size-3.5" />
               {translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-                'Resume in Worktree'
+                'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorkspace',
+                'Resume in Workspace'
               )}
             </Button>
           ) : null}
@@ -228,8 +228,8 @@ export function SessionInlineDetails({
           <SessionReceiptSection
             icon={<FolderGit2 className="size-3" />}
             label={translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.worktree',
-              'Worktree'
+              'auto.components.right.sidebar.AiVaultSessionDetails.workspace',
+              'Workspace'
             )}
           >
             <WorktreeMetadataLines worktreeInfo={worktreeDisplay} vaultScope={vaultScope} />
@@ -308,7 +308,7 @@ function WorktreeMetadataLines({
         }) ? (
           <>
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-              {aiVaultWorktreeStatusLabel(worktreeInfo.status)}
+              {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId)}
             </span>
             <span className="shrink-0 text-muted-foreground/45">·</span>
           </>

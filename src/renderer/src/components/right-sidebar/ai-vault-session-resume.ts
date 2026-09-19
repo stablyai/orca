@@ -104,6 +104,7 @@ export function resolveAiVaultHistorySessionResumeState(
           session: args.session,
           worktrees: args.worktrees,
           repos: args.repos,
+          folderState: args.targetState,
           activeWorktreeId: args.activeWorktreeId
         })
       : args.worktreeInfo,
@@ -249,8 +250,8 @@ export function aiVaultSessionResumeLabel(
 ): string {
   if (state.usesSessionWorktree) {
     return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-      'Resume in Worktree'
+      'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorkspace',
+      'Resume in Workspace'
     )
   }
   return translate(

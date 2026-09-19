@@ -181,7 +181,8 @@ export default function AiVaultPanel(): React.JSX.Element {
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,
-    worktrees: allWorktrees
+    worktrees: allWorktrees,
+    folderState: resumeTargetState
   })
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   // `current` is stamped per row at read time so the map above stays cached.

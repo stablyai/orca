@@ -1,3 +1,4 @@
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { normalizeRuntimePathSeparators } from '../../../../shared/cross-platform-path'
 import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -29,6 +30,12 @@ export function aiVaultWorktreeJumpTooltip(
   worktreeInfo: AiVaultSessionWorktreeInfo | null
 ): string {
   if (canJumpToAiVaultSessionWorktree(worktreeInfo)) {
+    if (parseWorkspaceKey(worktreeInfo?.worktreeId ?? '')?.type === 'folder') {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToWorkspace',
+        'Jump to Workspace'
+      )
+    }
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToWorktree',
       'Jump to Worktree'
@@ -97,7 +104,30 @@ export function shouldShowAiVaultWorktreeStatusBadge(
   return true
 }
 
-export function aiVaultWorktreeStatusLabel(status: AiVaultSessionWorktreeStatus): string {
+export function aiVaultWorktreeStatusLabel(
+  status: AiVaultSessionWorktreeStatus,
+  workspaceId?: string
+): string {
+  if (parseWorkspaceKey(workspaceId ?? '')?.type === 'folder') {
+    if (status === 'current') {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.currentWorkspace',
+        'Current workspace'
+      )
+    }
+    if (status === 'active') {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.activeWorkspace',
+        'Active workspace'
+      )
+    }
+    if (status === 'archived') {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.archivedWorkspace',
+        'Archived workspace'
+      )
+    }
+  }
   if (status === 'current') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.currentWorktree',
