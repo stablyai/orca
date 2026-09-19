@@ -30,6 +30,7 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
+import { OrchestrationWorkerModelSetting } from './OrchestrationWorkerModelSetting'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -61,6 +62,10 @@ export function OrchestrationPane({
   updateSettings
 }: OrchestrationPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const defaultWorkerAgent = settings.orchestrationDefaultWorkerAgent
+  const disabledAgents = settings.disabledTuiAgents
+  const workerModels = settings.orchestrationWorkerModels
+  const workerEfforts = settings.orchestrationWorkerEfforts
   const showNestedWorkerDepth = !isPairedWebClientWindow()
   const searchEntries = getOrchestrationPaneSearchEntries({
     includeNestedWorkerDepth: showNestedWorkerDepth
@@ -111,6 +116,19 @@ export function OrchestrationPane({
       forceVisible
       className="space-y-5 py-2"
     >
+      <OrchestrationWorkerModelSetting
+        defaultAgent={defaultWorkerAgent}
+        disabledAgents={disabledAgents}
+        models={workerModels}
+        efforts={workerEfforts}
+        onDefaultAgentChange={(orchestrationDefaultWorkerAgent) => {
+          void updateSettings({ orchestrationDefaultWorkerAgent })
+        }}
+        onChange={(orchestrationWorkerModels, orchestrationWorkerEfforts) => {
+          void updateSettings({ orchestrationWorkerModels, orchestrationWorkerEfforts })
+        }}
+      />
+
       <AgentSkillSetupPanel
         title={translate(
           'auto.components.settings.OrchestrationPane.07641b9768',
