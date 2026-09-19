@@ -43,9 +43,15 @@ describe('opening a URL from inside the shell', () => {
     expect(warned.mock.calls[0]?.[0]).toBe('[page] the shell did not take a URL to open')
   })
 
-  it('refuses everything in a document that published no opener', () => {
-    // A page outside the shell: nothing was published, so there is nothing to ask.
-    publishExternalLinkOpener(() => false)
-    expect(() => openExternalLink('https://example.com')).not.toThrow()
+  it('refuses everything in a document that published no opener', async () => {
+    // A fresh module, because `post` is module state: every case above has already published one,
+    // and without this the default at the top of the module is never the thing under test. The
+    // reason is asserted for the same rule — `not.toThrow()` passes against any implementation.
+    vi.resetModules()
+    const fresh: typeof import('./external-link.web') = await import('./external-link.web')
+    fresh.openExternalLink('https://example.com')
+    expect(warned.mock.calls).toEqual([
+      ['[page] the shell did not take a URL to open', { url: 'https://example.com' }]
+    ])
   })
 })
