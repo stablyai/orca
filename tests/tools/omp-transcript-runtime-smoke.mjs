@@ -62,16 +62,25 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 60))
     }
     const extension = await load()
+    const childExtension = await load()
     await emit(extension, 'session_start', root)
     for (const phase of ['initial', 'new']) {
       if (phase === 'new') {
         await root.newSession()
       }
+      await child.newSession({ parentSession: root.getSessionFile() })
+      const beforeChildFirst = posts.length
+      await emit(childExtension, 'agent_start', child)
+      assert.equal(posts.length, beforeChildFirst)
       assert.equal(root.isSessionOnDisk(), false)
       await emit(extension, 'agent_start', root)
       const session = extractAgentProviderSession('omp', posts.at(-1))
       assert.equal(session.transcriptPath, root.getSessionFile())
-      assert.deepEqual(getAgentResumeArgv('omp', session), ['omp', '--resume', root.getSessionId()])
+      assert.deepEqual(getAgentResumeArgv('omp', session), [
+        'omp',
+        '--resume',
+        root.getSessionFile()
+      ])
       const options = {
         transcriptPath: session.transcriptPath,
         ompSessionsDir: join(scratch, 'unused')
@@ -90,7 +99,6 @@ try {
       assert.ok(JSON.stringify(transcript.messages).includes(`Transcript proof ${kind} ${phase}`))
       transcripts.push({ kind, phase, sessionId: session.id, messages: transcript.messages })
       const beforeChild = posts.length
-      const childExtension = await load()
       await emit(childExtension, 'session_start', child)
       await emit(childExtension, 'agent_start', child)
       await emit(childExtension, 'agent_end', child)

@@ -221,6 +221,35 @@ describe('getPiAgentStatusExtensionSource', () => {
     ])
   })
 
+  it('does not let a nested OMP session replace the root resume identity', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    const root = {
+      getSessionId: () => 'root-session',
+      getSessionFile: () => '/tmp/root.jsonl',
+      getHeader: () => ({ parentSession: undefined })
+    }
+    const child = {
+      getSessionId: () => 'child-session',
+      getSessionFile: () => '/tmp/root-artifacts/worker.jsonl',
+      getHeader: () => ({ parentSession: '/tmp/root.jsonl' })
+    }
+
+    await harness.callHook('agent_start', undefined, { sessionManager: child })
+    await harness.callHook('agent_start', undefined, { sessionManager: root })
+
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+    const payloads = harness.fetchMock.mock.calls.map(
+      ([_event, init]) => JSON.parse(String(init?.body)).payload
+    )
+    expect(payloads).toEqual([
+      {
+        hook_event_name: 'agent_start',
+        session_id: 'root-session',
+        session_file: '/tmp/root.jsonl'
+      }
+    ])
+  })
+
   it.each([
     ['OMP extension', { kind: 'omp' as const }],
     ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
