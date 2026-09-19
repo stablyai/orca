@@ -6,10 +6,9 @@ import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
+import { resolveDefaultCreateProjectParent } from '../../../shared/git/repo-default-locations'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
@@ -35,23 +34,14 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
   })
 }
 
-/** Ignore seeded workspaceDir: treating it as user intent nests projects inside the worktree root. */
+/**
+ * Where the "Create new project" Location field starts. Settings -> Workspace
+ * Directory owns this once the user has actually set it, including a per-host
+ * override for the local host, which is the only scope this handler answers for.
+ * Ignore seeded workspaceDir: treating it as user intent nests projects inside the worktree root.
+ */
 function getDefaultCreateProjectParent(store: Store): string {
-  const home = homedir()
-  const settings = store.getSettings()
-  const configured = getEffectiveHostSetting(
-    settings,
-    LOCAL_EXECUTION_HOST_ID,
-    'defaultWorktreeLocation',
-    settings.workspaceDir ?? ''
-  ).trim()
-  const isUntouchedDefault =
-    normalizeRuntimePathForComparison(configured) ===
-    normalizeRuntimePathForComparison(getDefaultWorkspaceDir(home))
-  if (configured && !isUntouchedDefault) {
-    return configured
-  }
-  return join(home, 'orca', 'projects')
+  return resolveDefaultCreateProjectParent({ settings: store.getSettings(), home: homedir() })
 }
 
 export function registerRepoCreationHandlers(
