@@ -8,6 +8,10 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  applySpatialPaneFocusKey,
+  isSpatialFocusDirection
+} from '@/lib/pane-manager/pane-spatial-focus'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
@@ -135,6 +139,18 @@ export function dispatchTerminalShortcutAction(
   if (action.type === 'focusPane') {
     const panes = manager.getPanes()
     if (panes.length < 2) {
+      return
+    }
+    if (isSpatialFocusDirection(action.direction)) {
+      // Restore expanded geometry before measuring; do not claim the chord
+      // until a neighbor exists so worktree history can still run at an edge.
+      if (expandedPaneIdRef.current !== null) {
+        setExpandedPane(null)
+        restoreExpandedLayout()
+        refreshPaneSizes(true)
+        persistLayoutSnapshot()
+      }
+      applySpatialPaneFocusKey(event, manager, action.direction)
       return
     }
     event.preventDefault()

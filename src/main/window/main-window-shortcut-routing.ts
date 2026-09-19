@@ -61,6 +61,16 @@ export function installMainWindowShortcutRouting(args: {
       return false
     }
 
+    // Why: terminal.focusPaneLeft/Right default to the same Mod+Alt+Arrow chords
+    // as worktree history. Yield in a focused terminal so the renderer can move
+    // to an adjacent pane, or leave the chord unclaimed at a layout edge.
+    if (
+      action.type === 'worktreeHistoryNavigate' &&
+      focusedShortcutContext.context === 'terminal'
+    ) {
+      return false
+    }
+
     const capturedTerminalActionId =
       focusedShortcutContext.context === 'terminal' &&
       focusedShortcutContext.terminalShortcutPolicy === 'orca-first' &&
