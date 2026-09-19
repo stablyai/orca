@@ -73,7 +73,8 @@ function getNewestActiveRecordsByClaimKey(
 }
 
 function isPaneOnlyLiveResumeRecord(record: SleepingAgentSessionRecord): boolean {
-  return record.origin === 'live' && record.resumeScope === 'pane'
+  // Legacy Pi live records predate resumeScope; preserve their pane ownership on upgrade.
+  return record.agent === 'pi' && record.origin === 'live' && record.resumeScope !== 'worktree'
 }
 
 function getAgentStatusTabId(entry: {

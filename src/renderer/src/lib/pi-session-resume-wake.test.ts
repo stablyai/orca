@@ -45,6 +45,36 @@ describe('Pi session wake', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
+  it('treats legacy Pi live records without resumeScope as pane-owned', () => {
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'pi-legacy-session',
+      transcriptPath: join(tmpdir(), 'pi-legacy-session.jsonl')
+    }
+    const record: SleepingAgentSessionRecord = {
+      paneKey: 'tab-legacy:leaf-1',
+      tabId: 'tab-legacy',
+      worktreeId: 'wt-legacy',
+      agent: 'pi',
+      providerSession,
+      prompt: '',
+      state: 'working',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live'
+    }
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-legacy': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    })
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-legacy')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-legacy']).toHaveLength(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
   it('wakes a manually slept Pi session with its transcript identity', () => {
     const providerSession = {
       key: 'session_id' as const,
