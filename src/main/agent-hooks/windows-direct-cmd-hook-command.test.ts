@@ -1,13 +1,15 @@
 // Why (#18875): the registered Windows Claude hook is now the script path itself, so this file
 // pins the two things that make that safe — the shape carries nothing MSYS or cmd.exe rewrites,
-// and it still answers with neutral JSON when the script is gone. The live legs run the string
-// through BOTH hosts Claude Code can pick, because the shape has to parse in either.
+// and a host that cannot spawn the .cmd fails loudly instead of being masked by `|| echo {}`
+// (#21514). The live legs run the string through BOTH hosts Claude Code can pick, because the
+// shape has to parse in either.
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { getManagedWindowsLauncherScript } from '../claude/hook-script'
 import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
 import { wrapWindowsDirectCmdHookCommand } from './windows-direct-cmd-hook-command'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
@@ -15,10 +17,14 @@ import { findGitBash } from './windows-git-bash-path.test-fixture'
 const SAFE_PATH = 'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
 
 describe('wrapWindowsDirectCmdHookCommand', () => {
-  it('emits the script path with forward slashes and a neutral-JSON fallback', () => {
+  it('emits the bare script path with forward slashes and no shell fallback', () => {
     expect(wrapWindowsDirectCmdHookCommand(SAFE_PATH)).toBe(
-      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd || echo {}'
+      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
     )
+    // Why (#21514): `|| echo {}` could not tell "script missing" from "host cannot spawn a
+    // .cmd" (a bash resolving to WSL, not Git Bash) and answered both with healthy neutral
+    // JSON — status vanished silently. The {} answer now lives inside the launcher script.
+    expect(wrapWindowsDirectCmdHookCommand(SAFE_PATH)).not.toContain('||')
   })
 
   it('spells nothing either shell would rewrite or reinterpret', () => {
@@ -117,15 +123,59 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
   })
 
   it.skipIf(!canRunLive)(
-    'still answers {} and exit 0 in both hosts when the script is gone',
+    'fails loudly in both hosts when the launcher script is gone (#21514)',
     () => {
-      // Why: compat consumers require neutral JSON even with no managed script (#14818). The
-      // encoded launcher did this with a Test-Path; `|| echo {}` does it with no interpreter.
+      // Why: the bare path no longer masks a spawn failure. Under the old `|| echo {}` a
+      // WSL-resolved bash that cannot execute a .cmd still exited 0 printing {} — every hook
+      // event reported healthy while reaching nothing. A missing launcher now reads as the
+      // launch failure it is; getStatus's sweep rewrites the entry on the next install.
       withTempDir((dir, scriptPath, command) => {
         expect(existsSync(scriptPath)).toBe(false)
         for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
-          expect(result.stdout.trim()).toBe('{}')
+          expect(result.status).not.toBe(0)
+          expect(result.stdout.trim()).not.toBe('{}')
+        }
+      })
+    }
+  )
+
+  it.skipIf(!canRunLive)('delegates to the impl sibling via %~dp0 in both hosts', () => {
+    withTempDir((dir, scriptPath, command) => {
+      writeFileSync(scriptPath, getManagedWindowsLauncherScript('claude-hook-impl.cmd'), 'utf8')
+      writeFileSync(
+        join(dir, 'claude-hook-impl.cmd'),
+        '@echo off\r\necho {"via":"impl"}\r\nexit /b 0\r\n',
+        'utf8'
+      )
+      for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
+        expect(result.status).toBe(0)
+        expect(result.stdout).toContain('"via":"impl"')
+      }
+    })
+  })
+
+  it.skipIf(!canRunLive)('propagates a nonzero impl exit status in both hosts', () => {
+    // Why: `exit /b 0` after `call` would mask a failing impl the same way the old
+    // `|| echo {}` masked a spawn failure — the launcher's contract is to forward it.
+    withTempDir((dir, scriptPath, command) => {
+      writeFileSync(scriptPath, getManagedWindowsLauncherScript('claude-hook-impl.cmd'), 'utf8')
+      writeFileSync(join(dir, 'claude-hook-impl.cmd'), '@echo off\r\nexit /b 7\r\n', 'utf8')
+      for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
+        expect(result.status).toBe(7)
+      }
+    })
+  })
+
+  it.skipIf(!canRunLive)(
+    'answers {} and exit 0 in both hosts when the impl is missing (#14818)',
+    () => {
+      // Why: the launcher's internal fallback keeps the neutral-JSON contract for a managed
+      // install whose impl vanished — it only runs once the .cmd itself spawned.
+      withTempDir((dir, scriptPath, command) => {
+        writeFileSync(scriptPath, getManagedWindowsLauncherScript('claude-hook-impl.cmd'), 'utf8')
+        for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
           expect(result.status).toBe(0)
+          expect(result.stdout.trim()).toBe('{}')
         }
       })
     }

@@ -15,6 +15,33 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 
+// Why (#21514): the registered Windows command is this launcher's bare path — no `||`,
+// so a host that cannot spawn a `.cmd` (a bash that resolves to WSL, not Git Bash)
+// fails loudly instead of the old `|| echo {}` printing healthy neutral JSON for it.
+// The #14818 missing-payload answer moved inside the launcher: it only runs when the
+// spawn already succeeded. Mirrors the antigravity wrapper convention (`%~dp0` core).
+export function getManagedWindowsLauncherScript(implFileName: string): string {
+  return [
+    '@echo off',
+    // Why (#9358/#9941): `!` is legal in the hooks path; inherited delayed expansion
+    // eats it out of the percent-expanded `%~dp0` and the launcher misses the impl.
+    'setlocal DisableDelayedExpansion',
+    `set "ORCA_CLAUDE_HOOK_IMPL=%~dp0${implFileName}"`,
+    // Why: the impl's exit status must survive — `exit /b 0` after `call` would mask a
+    // failing impl behind the same healthy-looking silence the spawn fallback caused.
+    'if not exist "%ORCA_CLAUDE_HOOK_IMPL%" goto :missing_impl',
+    'call "%ORCA_CLAUDE_HOOK_IMPL%"',
+    'exit /b %errorlevel%',
+    ':missing_impl',
+    'echo {}',
+    // Missing-impl fallbacks obey the same outside-Orca stdin guard as the impl,
+    // and share its drain epilogue so every managed .cmd keeps one stdin contract.
+    ...buildWindowsHookEnvironmentGuardLines(),
+    ...buildWindowsHookStdinDrainEpilogue(),
+    ''
+  ].join('\r\n')
+}
+
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
   options: {

@@ -3,6 +3,7 @@ import {
   CLAUDE_HOOK_SETTINGS,
   OPENCLAUDE_HOOK_SETTINGS,
   getManagedLifecycleHook,
+  getWindowsManagedLifecycleHook,
   getRemoteManagedCommand as getClaudeRemoteCommand
 } from '../claude/hook-settings'
 import {
@@ -64,11 +65,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   [
     'claude',
     {
-      local: (path) =>
-        [true, false].map(
-          (gitBashAvailable) =>
-            getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS, { gitBashAvailable }).command
-        ),
+      local: (path) => [
+        getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS).command,
+        // Why (#21514): the encoded fallback still ships for profile paths the shells
+        // cannot carry bare — keep both registered shapes under the contract.
+        getWindowsManagedLifecycleHook('C:\\Users\\%name%\\.orca\\agent-hooks\\claude-hook.cmd')
+          .command
+      ],
       remote: (path) => [getClaudeRemoteCommand(path)]
     }
   ],

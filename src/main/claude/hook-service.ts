@@ -13,8 +13,12 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
-import { getManagedScript } from './hook-script'
+import {
+  managedScriptExists,
+  refreshManagedScriptIfPresent,
+  restoreManagedScript
+} from '../agent-hooks/managed-hook-script-refresh'
+import { getManagedScript, getManagedWindowsLauncherScript } from './hook-script'
 
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
@@ -24,6 +28,8 @@ import {
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
+  getManagedImplScriptFileName,
+  getManagedImplScriptPath,
   getConfigPath,
   getManagedCommand,
   getManagedLifecycleHook,
@@ -112,13 +118,29 @@ export class ClaudeHookService {
   }
 
   async refreshManagedScripts(): Promise<void> {
-    await refreshManagedScriptIfPresent(
-      getManagedScriptPath(this.options.settings),
-      getManagedScript('local', {
-        skipWhenDevinImportsClaude: this.options.agent === 'claude',
-        skipWhenGrokImportsClaude: this.options.agent === 'claude'
-      })
-    )
+    const payload = getManagedScript('local', {
+      skipWhenDevinImportsClaude: this.options.agent === 'claude',
+      skipWhenGrokImportsClaude: this.options.agent === 'claude'
+    })
+    if (process.platform === 'win32' && this.options.settings.usesWindowsCompatLauncher) {
+      const scriptPath = getManagedScriptPath(this.options.settings)
+      const implPath = getManagedImplScriptPath(this.options.settings)
+      const implPresent = await refreshManagedScriptIfPresent(implPath, payload)
+      const launcherPresent = await managedScriptExists(scriptPath)
+      // Why (#21514): a launcher without its impl answers {} for every event —
+      // healthy-looking but dead. The impl must land before the launcher is
+      // rewritten, or a pre-launcher install is observed — and stranded, if the
+      // impl write fails — in exactly that masked state.
+      if (launcherPresent && !implPresent) {
+        await restoreManagedScript(implPath, payload)
+      }
+      await refreshManagedScriptIfPresent(
+        scriptPath,
+        getManagedWindowsLauncherScript(getManagedImplScriptFileName(this.options.settings))
+      )
+    } else {
+      await refreshManagedScriptIfPresent(getManagedScriptPath(this.options.settings), payload)
+    }
     // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
     await refreshManagedScriptIfPresent(
       getStatusLineScriptPath(this.options.settings),
@@ -147,13 +169,21 @@ export class ClaudeHookService {
       getManagedScriptFileName(this.options.settings),
       this.options.agent === 'claude' ? options : undefined
     )
-    writeManagedScript(
-      scriptPath,
-      getManagedScript('local', {
-        skipWhenDevinImportsClaude: this.options.agent === 'claude',
-        skipWhenGrokImportsClaude: this.options.agent === 'claude'
-      })
-    )
+    const payload = getManagedScript('local', {
+      skipWhenDevinImportsClaude: this.options.agent === 'claude',
+      skipWhenGrokImportsClaude: this.options.agent === 'claude'
+    })
+    if (process.platform === 'win32' && this.options.settings.usesWindowsCompatLauncher) {
+      // Why (#21514): the registered script is a thin launcher; the impl is
+      // written first so a live launcher never observes its own {} fallback.
+      writeManagedScript(getManagedImplScriptPath(this.options.settings), payload)
+      writeManagedScript(
+        scriptPath,
+        getManagedWindowsLauncherScript(getManagedImplScriptFileName(this.options.settings))
+      )
+    } else {
+      writeManagedScript(scriptPath, payload)
+    }
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
       nextConfig = this.installManagedStatusLine(nextConfig)
