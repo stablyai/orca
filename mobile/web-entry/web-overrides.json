@@ -50,6 +50,10 @@
       "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
     },
     {
+      "file": "src/platform/keyboard-occlusion.web.ts",
+      "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document \u2014 the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
+    },
+    {
       "file": "src/platform/clipboard.web.ts",
       "reason": "expo-clipboard resolves to navigator.clipboard on the web, which needs a secure context; the iOS shell serves the page from the custom scheme orca-mobile-web://<session>/ while Android serves https, so that path would work on one platform and silently not on the other. This one asks the shell through the native.clipboard.write verb, where the pasteboard is the device's, and rejects when the route was not granted it so the caller's own catch puts that on screen."
     },
