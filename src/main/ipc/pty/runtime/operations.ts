@@ -1,4 +1,5 @@
 import type { IPtyProvider } from '../../../providers/types'
+import type { PtyProviderOperationRetry } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from '../provider/ownership-state'
@@ -18,19 +19,20 @@ import {
 export function writePtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  data: string
+  data: string,
+  options?: PtyProviderOperationRetry
 ): boolean
 export function writePtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
   data: string,
-  options: { waitForSettlement: true }
+  options: { waitForSettlement: true; operationId?: string }
 ): WriteSettlement | Promise<WriteSettlement>
 export function writePtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
   data: string,
-  options?: { waitForSettlement: true }
+  options?: { waitForSettlement?: true; operationId?: string }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
   // Why: the backstop for every runtime write path — query replies, followups, deliveries —
   // so a caller that forgets the typed gate still cannot reach a provider.
@@ -52,14 +54,20 @@ export function writePtyFromRuntimeController(
       return writeRefused('provider_cannot_settle')
     }
     try {
-      return provider.writeWithSettlement(ptyId, data)
+      return options.operationId
+        ? provider.writeWithSettlement(ptyId, data, { operationId: options.operationId })
+        : provider.writeWithSettlement(ptyId, data)
     } catch {
       // A synchronous throw cannot prove the transport took nothing.
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
   try {
-    return provider.write(ptyId, data) !== false
+    return (
+      (options?.operationId
+        ? provider.write(ptyId, data, { operationId: options.operationId })
+        : provider.write(ptyId, data)) !== false
+    )
   } catch {
     return false
   }

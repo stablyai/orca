@@ -136,6 +136,48 @@ describe('registerRuntimeHandlers', () => {
     })
   })
 
+  it('routes ownership-transfer preflight and status through the runtime gate', async () => {
+    const preflightPtyOwnershipTransfer = vi.fn().mockResolvedValue({
+      topology: 'direct-ssh',
+      transferSupported: false,
+      statusQuerySupported: true,
+      blocker: 'live-transfer-disabled',
+      capabilities: { liveTransfer: false }
+    })
+    const getPtyOwnershipTransferStatus = vi.fn().mockResolvedValue({ phase: 'prepared' })
+    const transferPtyOwnership = vi.fn().mockResolvedValue({ phase: 'published' })
+    registerRuntimeHandlers({
+      preflightPtyOwnershipTransfer,
+      getPtyOwnershipTransferStatus,
+      transferPtyOwnership
+    } as never)
+    const transferHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:transferPtyOwnership'
+    )![1]
+    const preflightHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:preflightPtyOwnershipTransfer'
+    )![1]
+    const statusHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:getPtyOwnershipTransferStatus'
+    )![1]
+    const request = {
+      connectionId: 'target-1',
+      ptyId: 'ssh:target-1@@pty-1',
+      destinationRuntimeId: 'runtime-1'
+    }
+    const statusRequest = { ...request, identity: { bridgeId: 'bridge-1' } }
+
+    await expect(preflightHandler({}, request)).resolves.toMatchObject({
+      transferSupported: false,
+      statusQuerySupported: true
+    })
+    await expect(statusHandler({}, statusRequest)).resolves.toEqual({ phase: 'prepared' })
+    await expect(transferHandler({}, statusRequest)).resolves.toEqual({ phase: 'published' })
+    expect(preflightPtyOwnershipTransfer).toHaveBeenCalledWith(request)
+    expect(getPtyOwnershipTransferStatus).toHaveBeenCalledWith(statusRequest)
+    expect(transferPtyOwnership).toHaveBeenCalledWith(statusRequest)
+  })
+
   it('projects Claude structured tabs to the same-version desktop client', async () => {
     const claudeTab = {
       type: 'agent-session',

@@ -747,6 +747,7 @@ describe('TerminalHost', () => {
       const sessions = host.listSessions()
       expect(sessions).toHaveLength(2)
       expect(sessions.map((s) => s.sessionId).sort()).toEqual(['session-1', 'session-2'])
+      expect(sessions.every((session) => session.createdAt > 0)).toBe(true)
     })
 
     it('uses applied size without serializing terminal snapshots', async () => {

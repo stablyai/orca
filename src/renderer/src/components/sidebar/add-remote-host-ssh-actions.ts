@@ -38,14 +38,12 @@ type SshApi = {
 export async function saveNewSshHostFromForm({
   form,
   ssh,
-  recordSshRepoReadoptions,
-  setSshTargetsMetadata,
+  provisionTarget,
   recordFeatureInteraction
 }: {
   form: EditingTarget
   ssh: SshApi
-  recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
-  setSshTargetsMetadata: (targets: SshTarget[]) => void
+  provisionTarget: (target: SshTargetCreateInput) => Promise<void>
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<'saved' | 'validation-failed' | 'failed'> {
   const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
@@ -116,13 +114,8 @@ export async function saveNewSshHostFromForm({
       return 'validation-failed'
     }
 
-    const result = await ssh.addTarget({ target })
-    recordSshRepoReadoptions(result.repoReadoptions)
-    setSshTargetsMetadata(await ssh.listTargets())
+    await provisionTarget(target)
     recordFeatureInteraction('ssh')
-    toast.success(
-      translate('auto.components.sidebar.AddRemoteHostDialog.sshSaved', 'SSH host added.')
-    )
     return 'saved'
   } catch (error) {
     toast.error(

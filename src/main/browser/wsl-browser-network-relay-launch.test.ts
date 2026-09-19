@@ -43,4 +43,24 @@ describe('WSL browser network relay launch', () => {
     expect(readFileSync(join(installDir, '.browser-network-version'), 'utf8')).toBe(version)
     expect(readFileSync(join(installDir, 'launch.sh'), 'utf8')).toContain(version)
   })
+
+  it('supports a release launcher with no distro Node fallback', () => {
+    const script = buildWslBrowserNetworkGuestLaunchScript('0.1.0+strict', {
+      requiresBundledBun: true
+    })
+    execFileSync('sh', ['-n'], { input: script })
+    expect(script).not.toContain('command -v node')
+    expect(script).toContain('exit 73')
+  })
+
+  it('propagates the Bun-only policy into the installed browser launcher', () => {
+    const script = buildWslBrowserNetworkGuestInstallScript(
+      Buffer.from('relay'),
+      '0.1.0+strict',
+      { 'x64-glibc': Buffer.from('bun-binary') },
+      { requiresBundledBun: true }
+    )
+    expect(script).not.toContain('command -v node')
+    expect(script).toContain('exit 73')
+  })
 })

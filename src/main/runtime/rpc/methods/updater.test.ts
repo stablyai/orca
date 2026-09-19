@@ -69,4 +69,9 @@ describe('runtime updater RPC methods', () => {
       remoteUpdateSupport: snapshot.support
     })
   })
+
+  it('registers the orcad terminal census as a runtime-only method', () => {
+    expect(STATUS_METHODS.some((method) => method.name === 'orcad.terminalCensus')).toBe(true)
+    expect(STATUS_METHODS.some((method) => method.name === 'orcad.health')).toBe(true)
+  })
 })

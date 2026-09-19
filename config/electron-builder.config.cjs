@@ -19,6 +19,7 @@ const {
   assertMobileWebBundleBuilt
 } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const { verifyPackagedOrcadTemplate } = require('./scripts/verify-packaged-orcad-template.cjs')
 const {
   verifyPackagedWindowsNodePty
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
@@ -86,6 +87,10 @@ const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
+const orcadTemplateExtraResource = {
+  from: 'out/orcad-template',
+  to: 'orcad-template'
+}
 // Why: bundled plugins are immutable install inputs and must remain ordinary
 // directories so the startup bootstrap can verify and publish exact bytes.
 const bundledPluginResources = {
@@ -105,6 +110,7 @@ const emojiShortcodeDatasetResource = {
 }
 const commonExtraResources = [
   relayExtraResource,
+  orcadTemplateExtraResource,
   bundledPluginResources,
   skillFreshnessResources,
   emojiShortcodeDatasetResource
@@ -218,6 +224,10 @@ module.exports = {
     // Why: out/electron-dev caches `pnpm dev`'s per-branch Electron.app copies (~270MB each).
     // CI never creates it, but packaging on a machine that has run dev would pack them all.
     '!out/electron-dev{,/**/*}',
+    '!out/orcad{,/**/*}',
+    '!out/orcad-template{,/**/*}',
+    '!out/.orcad-template-build{,/**/*}',
+    '!out/.orcad-bun-runtime{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
@@ -278,6 +288,7 @@ module.exports = {
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/daemon-entry.js',
+    'out/main/windows-bun-pty-gate-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/session-scanner-opencode-sqlite-worker-entry.js',
@@ -385,7 +396,12 @@ module.exports = {
       )
     }
     // Why: inspect electron-builder's real output so a broken extraResources
-    // mapping fails packaging before bundled content reaches users.
+    // mapping fails packaging before bundled content reaches users. Lightweight
+    // unit fixtures call this hook without a packager and intentionally omit the
+    // optional orcad template; real electron-builder contexts always provide one.
+    if (context.packager || existsSync(join(resourcesDir, 'orcad-template'))) {
+      verifyPackagedOrcadTemplate(resourcesDir)
+    }
     verifyPackagedPluginResources(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)

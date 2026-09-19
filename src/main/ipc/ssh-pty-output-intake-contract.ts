@@ -1,4 +1,5 @@
 import type { LegacySshProjectionSemantics } from './ssh-pty-legacy-projection'
+import type { PtyOwnershipTransferOutputEnvelope } from '../../shared/pty-ownership-transfer-output-envelope'
 import type {
   SshPtyModelAdmissionOptions,
   SshPtyModelAdmissionReceipt
@@ -33,6 +34,7 @@ export type SshPtyOutputDataEvent = Readonly<{
     deliveryToken: string
     sourceStartSu: number
     sourceEndSu: number
+    ownershipTransfer?: PtyOwnershipTransferOutputEnvelope
   }>
 }>
 
@@ -46,12 +48,22 @@ export type SshPtyOutputExitEvent = Readonly<{
 export type SshPtyOutputReceipt = SshPtyModelAdmissionReceipt &
   Readonly<{ projection: LegacySshProjectionSemantics }>
 
+export type SshPtyOwnershipTransferModelCheckpointRequest = Readonly<{
+  event: SshPtyOutputDataEvent
+  projection: LegacySshProjectionSemantics
+  modelSequenceEnd: number
+}>
+
 export type SshPtyOutputIntakeDependencies = {
   getModelSequence: (id: string) => number
   acceptModel: (
     event: SshPtyOutputDataEvent,
     projection: LegacySshProjectionSemantics
   ) => { sequence: number; completion: Promise<void> }
+  /** Resolution proves crash-durable, idempotent inclusion in the destination terminal model. */
+  checkpointOwnershipTransferModel?: (
+    request: SshPtyOwnershipTransferModelCheckpointRequest
+  ) => Promise<void>
   project: (event: SshPtyOutputDataEvent, projection: LegacySshProjectionSemantics) => void
   prepareExit: (event: SshPtyOutputExitEvent) => void | (() => void)
   finalizeExit: (event: SshPtyOutputExitEvent) => void
@@ -74,4 +86,6 @@ export type SshPtyOutputIntakeDependencies = {
 export type SshPtyOutputIntakeOptions = SshPtyModelAdmissionOptions & {
   exitBarrierMs?: number
   exitCancellationProofMs?: number
+  /** Only require destination delivery when a durable ownership-transfer sink is installed. */
+  ownershipTransferOutputEnabled?: boolean
 }

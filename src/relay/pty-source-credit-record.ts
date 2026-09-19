@@ -5,6 +5,7 @@ import type {
   PtySourceSpan,
   PtySourceTransform
 } from '../shared/pty-source-credit-contract'
+import type { PtyOwnershipTransferOutputEnvelope } from '../shared/pty-ownership-transfer-output-envelope'
 import {
   ptySourceDeliveryKey,
   ptySourceSpanIsSplittable,
@@ -84,6 +85,7 @@ export function createDeliveryRecord(
 export type PtySourceAppendInput = Readonly<{
   spanId: string
   data: string
+  ownershipTransfer?: PtyOwnershipTransferOutputEnvelope
   displayStart: number
   displayEnd: number
   splittable: boolean
@@ -97,6 +99,9 @@ export function createAppendedSourceSpan(
   const span = Object.freeze({
     ...record.identity,
     ...input,
+    ...(input.ownershipTransfer
+      ? { ownershipTransfer: Object.freeze({ ...input.ownershipTransfer }) }
+      : {}),
     transform: Object.freeze({ ...input.transform }),
     sourceStartSu: record.receivedEndSu,
     sourceEndSu: record.receivedEndSu + input.transform.rawLengthSu
@@ -113,17 +118,27 @@ export function sliceAtSourceStart(span: PtySourceSpan, sourceStartSu: number): 
     throw new Error('Indivisible PTY source span cannot be split for recovery')
   }
   const offset = sourceStartSu - span.sourceStartSu
-  return Object.freeze({
+  const ownershipTransfer = span.ownershipTransfer
+    ? Object.freeze({
+        ...span.ownershipTransfer,
+        fragmentStartSu: span.ownershipTransfer.fragmentStartSu + offset,
+        fragmentEndSu: span.ownershipTransfer.fragmentEndSu
+      })
+    : undefined
+  const suffix = Object.freeze({
     ...span,
     spanId: `${span.spanId}:suffix:${sourceStartSu}`,
     sourceStartSu,
     displayStart: span.displayStart + offset,
     data: span.data.slice(offset),
+    ...(ownershipTransfer ? { ownershipTransfer } : {}),
     transform: Object.freeze({
       ...span.transform,
       rawLengthSu: span.sourceEndSu - sourceStartSu
     })
   })
+  assertPtySourceSpan(suffix)
+  return suffix
 }
 
 export function sliceForSend(
@@ -154,14 +169,24 @@ export function sliceForSend(
   if (endOffset <= 0) {
     throw new Error('Available source window would split a surrogate pair')
   }
-  return Object.freeze({
+  const slice = Object.freeze({
     ...remaining,
     spanId: `${remaining.spanId}:slice:${remaining.sourceStartSu + endOffset}`,
     sourceEndSu: remaining.sourceStartSu + endOffset,
     displayEnd: remaining.displayStart + endOffset,
     data: remaining.data.slice(0, endOffset),
+    ...(remaining.ownershipTransfer
+      ? {
+          ownershipTransfer: Object.freeze({
+            ...remaining.ownershipTransfer,
+            fragmentEndSu: remaining.ownershipTransfer.fragmentStartSu + endOffset
+          })
+        }
+      : {}),
     transform: Object.freeze({ ...remaining.transform, rawLengthSu: endOffset })
   })
+  assertPtySourceSpan(slice)
+  return slice
 }
 
 export function findPtySourceSpanForSend(record: DeliveryRecord): PtySourceSpan | undefined {

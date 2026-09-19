@@ -4,6 +4,7 @@ import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 export type DaemonPtyRouterDataEvent = {
   id: string
   data: string
+  incarnationId?: PtyIncarnationId
   sequenceChars?: number
   transformed?: boolean
   seq?: number

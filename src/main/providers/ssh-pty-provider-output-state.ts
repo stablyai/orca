@@ -1,16 +1,20 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type {
   SshPtyDataCallback,
+  SshPtyOwnershipTransferOwner,
   SshPtyDeliveryPauseAdapter,
   SshPtyExitCallback,
-  SshPtyReplayCallback
+  SshPtyReplayCallback,
+  SshPtyOwnershipTransferOutputCallback
 } from './ssh-pty-provider-contract'
+import { SshPtyOwnershipTransferOutputAssembler } from './ssh-pty-ownership-transfer-output-assembler'
 import {
   subscribeSshPtyNotifications,
   type SshPtyNotificationSubscription,
   type SshPtyReceivingActivationLease
 } from './ssh-pty-notification-routing'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
+import type { RelayPtyOwnershipTransferSource } from '../../relay/relay-pty-ownership-transfer-adapter'
 
 export class SshPtyProviderOutputState {
   private readonly dataListeners = new Set<SshPtyDataCallback>()
@@ -20,6 +24,7 @@ export class SshPtyProviderOutputState {
   private readonly incarnationByRelayPtyId = new Map<string, string>()
   private readonly pausedRelayPtyIds = new Set<string>()
   private deliveryPauseAdapter: SshPtyDeliveryPauseAdapter | null = null
+  private readonly ownershipTransferAssembler: SshPtyOwnershipTransferOutputAssembler | null
   private legacyIncarnationSerial = 1
   private subscription: SshPtyNotificationSubscription | null
 
@@ -30,10 +35,15 @@ export class SshPtyProviderOutputState {
       toAppPtyId: (id: string) => string
       livePtyIds: Set<string>
       recordExit: (relayPtyId: string, incarnationId: unknown) => void
+      onOwnershipTransferOutput?: SshPtyOwnershipTransferOutputCallback
     }
   ) {
+    const { onOwnershipTransferOutput, ...subscriptionArgs } = args
+    this.ownershipTransferAssembler = args.onOwnershipTransferOutput
+      ? new SshPtyOwnershipTransferOutputAssembler()
+      : null
     this.subscription = subscribeSshPtyNotifications({
-      ...args,
+      ...subscriptionArgs,
       dataListeners: this.dataListeners,
       rejectedDataListeners: this.rejectedDataListeners,
       replayListeners: this.replayListeners,
@@ -46,7 +56,21 @@ export class SshPtyProviderOutputState {
         args.recordExit(relayPtyId, incarnationId)
         this.incarnationByRelayPtyId.delete(relayPtyId)
         this.pausedRelayPtyIds.delete(relayPtyId)
-      }
+      },
+      ...(onOwnershipTransferOutput
+        ? {
+            onOwnershipTransferOutput: (payload: Parameters<SshPtyDataCallback>[0]) => {
+              const envelope = payload.source?.ownershipTransfer
+              if (!envelope || !this.ownershipTransferAssembler) {
+                return
+              }
+              return this.ownershipTransferAssembler.acceptAndDeliver(
+                payload,
+                onOwnershipTransferOutput
+              )
+            }
+          }
+        : {})
     })
   }
 
@@ -59,6 +83,7 @@ export class SshPtyProviderOutputState {
     this.replayListeners.clear()
     this.exitListeners.clear()
     this.incarnationByRelayPtyId.clear()
+    this.ownershipTransferAssembler?.clear()
     this.deliveryPauseAdapter = null
   }
 
@@ -126,6 +151,31 @@ export class SshPtyProviderOutputState {
     ) {
       this.incarnationByRelayPtyId.set(relayPtyId, incarnationId)
     }
+  }
+
+  resolveOwnershipTransferSourceAuthority(
+    relayPtyId: string,
+    owner: SshPtyOwnershipTransferOwner | null
+  ): RelayPtyOwnershipTransferSource | null {
+    const activation = this.subscription?.resolveCommittedActivation(relayPtyId)
+    if (
+      !activation ||
+      !owner ||
+      activation.ownerGeneration !== owner.sourceOwnerGeneration ||
+      this.incarnationByRelayPtyId.get(relayPtyId) !== activation.ptyIncarnation
+    ) {
+      return null
+    }
+    return Object.freeze({
+      terminalId: relayPtyId,
+      incarnationId: activation.ptyIncarnation,
+      ownerLease: owner.ownerLease,
+      sourceOwnerGeneration: owner.sourceOwnerGeneration
+    })
+  }
+
+  getPtyIncarnation(relayPtyId: string): string | null {
+    return this.incarnationByRelayPtyId.get(relayPtyId) ?? null
   }
 
   private resolvePtyIncarnation(relayPtyId: string, incarnationId: unknown): string {

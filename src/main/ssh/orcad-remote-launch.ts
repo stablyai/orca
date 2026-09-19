@@ -13,29 +13,39 @@
  * still owns a running service.
  */
 import { shellEscape } from './ssh-connection-utils'
-import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import {
   assertPosixOrcadHost as assertPosixHost,
   ORCAD_PID_FILENAME,
   posixProcessAliveShellFunction
 } from './orcad-remote-host-support'
 import type { ServeReadiness } from '../server/serve-readiness'
+import { ORCAD_BUN_RUNTIME_FILENAME, orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
+import { ORCAD_BUN_TARGETS } from '../../shared/orcad-bun-runtime'
+import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
+import { quoteWindowsArgument } from '../../shared/child-process/windows-command-line'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { z } from 'zod'
 
 /** Stdout of the launched candidate: exactly one `orca_server_ready` line, then nothing. */
 export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
 /** Stderr, including the bind-exposure line and every supervision message. */
 export const ORCAD_LOG_FILENAME = 'orcad.log'
-export { ORCAD_PID_FILENAME, OrcadRemoteLaunchUnsupportedError } from './orcad-remote-host-support'
+const ORCAD_READINESS_MAX_BYTES = 256 * 1024
+const ORCAD_READINESS_TOO_LARGE = '__ORCAD_READINESS_TOO_LARGE__'
+export { ORCAD_PID_FILENAME } from './orcad-remote-host-support'
 
 export type OrcadLaunchSpec = {
   remoteInstallDir: string
-  nodePath: string
+  nodePath?: string
   fullVersion: string
   /** Shared across versions, and the reason rollback needs a snapshot. */
   userDataDir: string
   /** Loopback by default; the client reaches it through an SSH local port-forward. */
   bindHost: string
   port: number
+  /** Only rollback may launch a pre-Bun install that has no bundled runtime. */
+  allowHostNodeFallback?: boolean
 }
 
 /**
@@ -46,6 +56,9 @@ export type OrcadLaunchSpec = {
  * inheriting whatever the installed build happens to default to.
  */
 export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSpec): string {
+  if (isWindowsRemoteHost(host)) {
+    return windowsOrcadLaunchCommand(host, spec)
+  }
   assertPosixHost(host)
   const dir = shellEscape(spec.remoteInstallDir)
   const readiness = shellEscape(
@@ -53,29 +66,84 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
   )
   const log = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
   const pidFile = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
+  const stopRequest = shellEscape(
+    joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME)
+  )
   const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, 'orcad.js'))
+  const bundledRuntime = shellEscape(
+    joinRemotePath(host, spec.remoteInstallDir, orcadBunRuntimeFilename(host.os))
+  )
   return [
     `cd ${dir} &&`,
+    'umask 077 &&',
+    `rm -f ${stopRequest} &&`,
     // Why truncate: a re-launch into a dir that already holds a previous readiness line would
     // otherwise let the deploy activate on the OLD process's health payload.
     `: > ${readiness} &&`,
-    'umask 077 &&',
+    `ORCAD_RUNTIME=${bundledRuntime} &&`,
+    spec.allowHostNodeFallback && spec.nodePath
+      ? `if [ ! -x "$ORCAD_RUNTIME" ]; then ORCAD_RUNTIME=${shellEscape(spec.nodePath)}; fi &&`
+      : 'if [ ! -x "$ORCAD_RUNTIME" ]; then echo "orcad: bundled Bun runtime is missing" >&2; exit 78; fi &&',
     `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
     `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
-    `nohup ${shellEscape(spec.nodePath)} ${entry}`,
+    `nohup "$ORCAD_RUNTIME" ${entry}`,
     `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &`,
     `echo $! > ${pidFile} && cat ${pidFile}`
   ].join(' ')
 }
 
+function windowsOrcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSpec): string {
+  const runtime = joinRemotePath(host, spec.remoteInstallDir, orcadBunRuntimeFilename(host.os))
+  const legacyRuntime = joinRemotePath(host, spec.remoteInstallDir, ORCAD_BUN_RUNTIME_FILENAME)
+  const entry = joinRemotePath(host, spec.remoteInstallDir, 'orcad.js')
+  const readiness = joinRemotePath(host, spec.remoteInstallDir, ORCAD_READINESS_FILENAME)
+  const log = joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME)
+  const pidFile = joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME)
+  const stopRequest = joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME)
+  const args = [entry, '--json', '--bind', spec.bindHost, '--port', String(spec.port)]
+    .map(quoteWindowsArgument)
+    .join(' ')
+  const fallback =
+    spec.allowHostNodeFallback && spec.nodePath
+      ? `$runtime = ${powerShellLiteral(spec.nodePath)}`
+      : `Write-Error 'orcad: bundled Bun runtime is missing'; exit 78`
+  return powerShellCommand(
+    [
+      `$runtime = ${powerShellLiteral(runtime)}`,
+      `if (-not (Test-Path -LiteralPath $runtime -PathType Leaf) -and (Test-Path -LiteralPath ${powerShellLiteral(legacyRuntime)})) { Write-Error 'orcad: extensionless Windows Bun slot must be rebuilt'; exit 78 }`,
+      `if (-not (Test-Path -LiteralPath $runtime -PathType Leaf)) { ${fallback} }`,
+      `Remove-Item -LiteralPath ${powerShellLiteral(stopRequest)} -Force -ErrorAction SilentlyContinue`,
+      `[IO.File]::WriteAllText(${powerShellLiteral(readiness)}, '')`,
+      `$env:ORCA_VERSION = ${powerShellLiteral(spec.fullVersion)}`,
+      `$env:ORCA_USER_DATA = ${powerShellLiteral(spec.userDataDir)}`,
+      `$process = Start-Process -FilePath $runtime -ArgumentList ${powerShellLiteral(args)} ` +
+        `-WorkingDirectory ${powerShellLiteral(spec.remoteInstallDir)} ` +
+        `-RedirectStandardOutput ${powerShellLiteral(readiness)} ` +
+        `-RedirectStandardError ${powerShellLiteral(log)} -WindowStyle Hidden -PassThru -ErrorAction Stop`,
+      `[IO.File]::WriteAllText(${powerShellLiteral(pidFile)}, [string]$process.Id)`,
+      `Write-Output $process.Id`
+    ].join('; ')
+  )
+}
+
 export function readOrcadReadinessCommand(
   host: RemoteHostPlatform,
   remoteInstallDir: string
 ): string {
+  if (isWindowsRemoteHost(host)) {
+    const readiness = joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME)
+    return powerShellCommand(
+      `if (Test-Path -LiteralPath ${powerShellLiteral(readiness)} -PathType Leaf) { ` +
+        `$item = Get-Item -LiteralPath ${powerShellLiteral(readiness)} -Force; ` +
+        `if ($item.Length -gt ${ORCAD_READINESS_MAX_BYTES}) { ` +
+        `Write-Output ${powerShellLiteral(ORCAD_READINESS_TOO_LARGE)} } else { ` +
+        `Write-Output ([IO.File]::ReadAllText(${powerShellLiteral(readiness)})) } }`
+    )
+  }
   assertPosixHost(host)
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
-  return `cat ${readiness} 2>/dev/null || true`
+  return `head -c ${ORCAD_READINESS_MAX_BYTES + 1} ${readiness} 2>/dev/null || true`
 }
 
 /**
@@ -89,6 +157,19 @@ export function orcadLivenessProbeCommand(
   host: RemoteHostPlatform,
   remoteInstallDir: string
 ): string {
+  if (isWindowsRemoteHost(host)) {
+    const pidFile = joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME)
+    return powerShellCommand(
+      [
+        `$pidText = if (Test-Path -LiteralPath ${powerShellLiteral(pidFile)} -PathType Leaf) { ` +
+          `[IO.File]::ReadAllText(${powerShellLiteral(pidFile)}).Trim() } else { '' }`,
+        `[int]$orcadPid = 0`,
+        `if (-not [int]::TryParse($pidText, [ref]$orcadPid) -or $orcadPid -le 0) { Write-Output 'UNKNOWN'; exit 0 }`,
+        `$process = Get-Process -Id $orcadPid -ErrorAction SilentlyContinue`,
+        `if ($null -eq $process) { Write-Output 'DEAD' } else { Write-Output 'LIVE' }`
+      ].join('; ')
+    )
+  }
   assertPosixHost(host)
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
   return [
@@ -123,6 +204,79 @@ export type OrcadReadinessParse =
   | { state: 'pending' }
   | { state: 'malformed'; reason: string }
 
+const ReadinessStringSchema = z.string().min(1).max(4_096)
+const OrcadPtySelfTestSchema = z.object({
+  ok: z.boolean(),
+  coverage: z.enum(['pty-spawn', 'handshake']),
+  verdict: z.enum(['healthy', 'unreachable', 'rejected', 'pty-spawn-unhealthy', 'no-daemon']),
+  durationMs: z.number().finite().nonnegative()
+})
+const OrcadTerminalDaemonHealthSchema = z.object({
+  state: z.enum(['live', 'degraded', 'absent']),
+  ownsFreshSessions: z.boolean(),
+  pid: z.number().int().positive().nullable(),
+  buildVersion: ReadinessStringSchema.nullable(),
+  entryPath: ReadinessStringSchema.nullable(),
+  protocolVersion: z.number().int().nonnegative().nullable(),
+  runtimeKind: z.enum(['node', 'bun']).optional(),
+  runtimeVersion: ReadinessStringSchema.optional(),
+  ptyBackend: z.enum(['node-pty', 'bun-terminal']).optional(),
+  selfTest: OrcadPtySelfTestSchema
+})
+const NodePlatformSchema = z.custom<NodeJS.Platform>(
+  (value) => typeof value === 'string' && value.length > 0 && value.length <= 32
+)
+const OrcadHealthSchema = z.object({
+  buildHash: ReadinessStringSchema,
+  buildVersion: ReadinessStringSchema,
+  nodeVersion: ReadinessStringSchema,
+  nodeAbi: ReadinessStringSchema,
+  runtimeKind: z.enum(['node', 'bun']).optional(),
+  runtimeVersion: ReadinessStringSchema.optional(),
+  ptyBackend: z.enum(['node-pty', 'bun-terminal']).optional(),
+  buildTarget: z.enum(ORCAD_BUN_TARGETS).optional(),
+  libc: z.enum(['glibc', 'musl']).optional(),
+  glibcVersion: ReadinessStringSchema.optional(),
+  platform: NodePlatformSchema,
+  arch: ReadinessStringSchema,
+  pid: z.number().int().positive(),
+  terminalDaemon: OrcadTerminalDaemonHealthSchema
+})
+const OrcadPairingReadinessSchema = z.discriminatedUnion('available', [
+  z.object({
+    available: z.literal(true),
+    url: ReadinessStringSchema,
+    endpoint: ReadinessStringSchema,
+    deviceId: ReadinessStringSchema,
+    webClientUrl: z.string().max(4_096).nullable(),
+    scope: z.enum(['runtime', 'mobile']),
+    qr: z.string().max(1_000_000).nullable()
+  }),
+  z.object({
+    available: z.literal(false),
+    reason: z.enum([
+      'websocket_unavailable',
+      'device_registry_unavailable',
+      'e2ee_key_unavailable',
+      'invalid_advertised_endpoint',
+      'relay_mint_failed',
+      'network_exposure_failed',
+      'disabled_by_operator'
+    ]),
+    guidance: z.string().max(4_096)
+  })
+])
+const OrcadServeReadinessSchema = z.object({
+  type: z.literal('orca_server_ready'),
+  schemaVersion: z.literal(1),
+  runtimeId: ReadinessStringSchema,
+  boundEndpoint: ReadinessStringSchema.nullable(),
+  advertisedEndpoint: z.string().max(4_096).nullable(),
+  managedWslCliReconciliation: z.enum(['pending', 'settled', 'failed']),
+  pairing: OrcadPairingReadinessSchema,
+  health: OrcadHealthSchema.optional()
+})
+
 /**
  * Pull the `orca_server_ready` payload out of whatever the candidate has written so far.
  *
@@ -131,47 +285,36 @@ export type OrcadReadinessParse =
  * not `malformed` — reporting a parse failure for a race would fail deploys that were fine.
  */
 export function parseOrcadReadinessOutput(raw: string): OrcadReadinessParse {
+  if (
+    raw.includes(ORCAD_READINESS_TOO_LARGE) ||
+    Buffer.byteLength(raw, 'utf8') > ORCAD_READINESS_MAX_BYTES
+  ) {
+    return { state: 'malformed', reason: 'readiness payload exceeds the 256 KiB limit' }
+  }
   const lines = raw.split('\n')
-  let sawCandidate = false
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) {
       continue
     }
-    sawCandidate = true
     let parsed: unknown
     try {
       parsed = JSON.parse(trimmed)
     } catch {
-      continue
+      return index === lines.length - 1 && !raw.endsWith('\n')
+        ? { state: 'pending' }
+        : { state: 'malformed', reason: 'readiness line is not valid JSON' }
     }
-    if (typeof parsed !== 'object' || parsed === null) {
-      continue
-    }
-    const payload = parsed as { type?: unknown }
-    if (payload.type !== 'orca_server_ready') {
+    const readiness = OrcadServeReadinessSchema.safeParse(parsed)
+    if (!readiness.success) {
+      const issue = readiness.error.issues[0]
+      const path = issue?.path.length ? issue.path.join('.') : 'payload'
       return {
         state: 'malformed',
-        reason: `expected an orca_server_ready line, got type=${JSON.stringify(payload.type)}`
+        reason: `readiness ${path} is invalid: ${issue?.message ?? 'unknown shape'}`
       }
     }
-    return { state: 'ready', readiness: toServeReadiness(payload as Record<string, unknown>) }
+    return { state: 'ready', readiness: readiness.data }
   }
-  return sawCandidate ? { state: 'pending' } : { state: 'pending' }
-}
-
-function toServeReadiness(payload: Record<string, unknown>): ServeReadiness {
-  return {
-    runtimeId: typeof payload.runtimeId === 'string' ? payload.runtimeId : '',
-    boundEndpoint: typeof payload.boundEndpoint === 'string' ? payload.boundEndpoint : null,
-    advertisedEndpoint:
-      typeof payload.advertisedEndpoint === 'string' ? payload.advertisedEndpoint : null,
-    managedWslCliReconciliation:
-      payload.managedWslCliReconciliation === 'pending' ||
-      payload.managedWslCliReconciliation === 'failed'
-        ? payload.managedWslCliReconciliation
-        : 'settled',
-    pairing: payload.pairing as ServeReadiness['pairing'],
-    ...(payload.health ? { health: payload.health as ServeReadiness['health'] } : {})
-  }
+  return { state: 'pending' }
 }

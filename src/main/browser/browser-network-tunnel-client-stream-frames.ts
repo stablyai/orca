@@ -8,9 +8,42 @@ import { dispatchBrowserNetworkTunnelClientFrame } from './browser-network-tunne
 import type { BrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-stream'
 import {
   finishBrowserNetworkSourceData,
+  grantBrowserNetworkSourceReceiveCredit,
   queueBrowserNetworkSourceData
 } from './browser-network-tunnel-source-receive-flow'
 import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
+import { completeBrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-retirement'
+import type { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
+
+export function replenishBrowserNetworkClientCredit(
+  stream: BrowserNetworkTunnelClientStream,
+  bytes: number,
+  sender: BrowserNetworkTunnelFrameSender,
+  close: (error: Error) => void
+): void {
+  if (stream.remoteClosed || bytes === 0) {
+    return
+  }
+  if (
+    !grantBrowserNetworkSourceReceiveCredit(
+      stream,
+      bytes,
+      BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+    )
+  ) {
+    close(new Error('Browser tunnel receive credit overflow'))
+    return
+  }
+  if (
+    !sender.send(
+      BrowserNetworkTunnelOpcode.WindowUpdate,
+      stream.id,
+      encodeBrowserNetworkTunnelWindowUpdate(bytes)
+    )
+  ) {
+    close(new Error('Browser tunnel transport rejected receive credit'))
+  }
+}
 
 type BrowserNetworkTunnelClientStreamFrameActions = {
   send: (
@@ -112,10 +145,14 @@ function closeStream(
     return
   }
   stream.remoteClosed = true
+  if (stream.pendingWrites.length > 0 || stream.socket.writableLength > 0) {
+    actions.retire(stream, new Error('browser_tunnel_remote_closed_with_pending_writes'))
+    return
+  }
   stream.localEnded = true
-  stream.socket.once('end', () => actions.retire(stream))
   if (!stream.remoteEnded) {
     finishBrowserNetworkSourceData(stream)
   }
   stream.socket.end()
+  completeBrowserNetworkTunnelClientStream(stream, actions.retire)
 }

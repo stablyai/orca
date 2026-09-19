@@ -1,10 +1,10 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
+import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation,
   isTerminalMiddleClickActivation
 } from './terminal-link-activation'
-import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 const MAX_DEFERRED_PTY_INPUT_FRAMES = 64

@@ -9,6 +9,10 @@ import {
 import type { PtyListedSession, PtySessionListScope } from '../../../../shared/pty-listed-session'
 import { ptyOwnership } from '../provider/ownership-state'
 import {
+  readRegisteredPtyProviderInventory,
+  assertRegisteredPtyInventoryCurrent
+} from '../provider/registered-provider-inventory'
+import {
   getProviderForPty,
   getProvider,
   hasPtyProviderForInspection,
@@ -59,14 +63,18 @@ export function installPtyInspectIpcHandlers(deps: {
       }
       const deduped = new Map<string, PtyListedSession>()
       const admission = new PtyProcessListAdmission()
+      const entries = registeredPtyProviders().filter(
+        (entry) => scope === undefined || entry.connectionId === scope.connectionId
+      )
+      if (scope?.connectionId && entries.length === 0) {
+        getProvider(scope.connectionId)
+      }
       await visitPtyProcessListingsInBatches(
-        scope === undefined
-          ? registeredPtyProviders()
-          : [{ provider: getProvider(scope.connectionId), connectionId: scope.connectionId }],
-        ({ provider, connectionId }) =>
-          connectionId === null || scope !== undefined
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => []),
+        entries,
+        (entry) =>
+          entry.connectionId === null || scope !== undefined
+            ? readRegisteredPtyProviderInventory(entry)
+            : readRegisteredPtyProviderInventory(entry).catch(() => []),
         ({ provider, connectionId }, sessions) => {
           for (const rawSession of sessions) {
             const session = admission.admit(rawSession)
@@ -83,13 +91,14 @@ export function installPtyInspectIpcHandlers(deps: {
               agentOwnership:
                 (session.agentSessionOwners?.length ?? 0) > 0
                   ? 'present'
-                  : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                  : provider?.providesAgentSessionOwnerListings?.(session.id) === true
                     ? 'absent'
                     : 'unknown'
             })
           }
         }
       )
+      assertRegisteredPtyInventoryCurrent(entries)
       return Array.from(deduped.values())
     }
   )

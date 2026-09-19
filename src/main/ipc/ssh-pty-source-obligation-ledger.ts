@@ -17,6 +17,7 @@ import type {
   SshPtySourceTokenSnapshot
 } from './ssh-pty-source-obligation-contract'
 import { createSshPtySourceAckPublication } from './ssh-pty-source-ack-publication'
+import { requireLiveSshPtyOutputSettlement } from './ssh-pty-live-output-settlement'
 import {
   beginSourceExitTimeout,
   cancelOpenSourceObligations,
@@ -44,13 +45,7 @@ import {
   transitionOpenSourceObligation
 } from './ssh-pty-source-obligation-transitions'
 
-export type {
-  SshPtySourceAckPublication,
-  SshPtySourceAdmissionReservation,
-  SshPtySourceConsumerId,
-  SshPtySourceObligationState,
-  SshPtySourceTokenSnapshot
-} from './ssh-pty-source-obligation-contract'
+export type * from './ssh-pty-source-obligation-contract'
 
 export class SshPtySourceObligationLedger {
   private readonly tokens = new Map<string, TokenRecord>()
@@ -272,6 +267,14 @@ export class SshPtySourceObligationLedger {
     return modelAcceptedSourceEnd(this.requireToken(identity))
   }
 
+  requireLiveSettlement(identity: PtySourceDeliveryIdentity, expectedEndSu: number) {
+    return requireLiveSshPtyOutputSettlement(
+      this.requireToken(identity),
+      this.reservations.values(),
+      expectedEndSu
+    )
+  }
+
   obligation(spanId: string, consumer: SshPtySourceConsumerId): SshPtySourceObligationState {
     const obligation = requireSourceSpan(this.spanOwners, spanId).span.obligations.get(consumer)
     if (!obligation) {
@@ -284,9 +287,7 @@ export class SshPtySourceObligationLedger {
     return requireSourceSpan(this.spanOwners, spanId).span.span
   }
 
-  hasRetainedSpan(spanId: string): boolean {
-    return this.spanOwners.has(spanId)
-  }
+  hasRetainedSpan = (spanId: string): boolean => this.spanOwners.has(spanId)
 
   private transitionOpen(
     spanId: string,

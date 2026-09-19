@@ -30,6 +30,7 @@ export type SshPtyNotificationSubscription = Readonly<{
     relayPtyId: string,
     activation: PtySourceReceivingActivation
   ) => SshPtyReceivingActivationLease
+  resolveCommittedActivation: (relayPtyId: string) => PtySourceReceivingActivation | null
 }>
 
 export function subscribeSshPtyNotifications(args: {
@@ -44,6 +45,7 @@ export function subscribeSshPtyNotifications(args: {
   providerGeneration: number
   resolvePtyIncarnation: (relayPtyId: string, incarnationId?: unknown) => string
   peekPtyIncarnation: (relayPtyId: string) => string | undefined
+  onOwnershipTransferOutput?: (payload: Parameters<SshPtyDataCallback>[0]) => void | Promise<void>
 }): SshPtyNotificationSubscription {
   const toDataPayload = (
     pending: PendingSshPtySourceData,
@@ -71,6 +73,20 @@ export function subscribeSshPtyNotifications(args: {
   const publishData = (pending: PendingSshPtySourceData): void => {
     const payload = toDataPayload(pending)
     args.livePtyIds.add(payload.id)
+    if (payload.source?.ownershipTransfer && args.onOwnershipTransferOutput) {
+      try {
+        const delivery = args.onOwnershipTransferOutput(payload)
+        if (delivery) {
+          void Promise.resolve(delivery).catch((error) => {
+            // Keep the source credit fenced; the caller owns retry/reconnect recovery.
+            console.warn('[ssh-pty] ownership-transfer output delivery failed', error)
+          })
+        }
+      } catch (error) {
+        // Keep the source credit fenced; the caller owns retry/reconnect recovery.
+        console.warn('[ssh-pty] ownership-transfer output delivery failed', error)
+      }
+    }
     for (const listener of args.dataListeners) {
       listener(payload)
     }
@@ -222,7 +238,9 @@ export function subscribeSshPtyNotifications(args: {
         transferToRecovery: (sink: SshPtyDataCallback) =>
           lease.transferToRecovery((pending) => sink(toDataPayload(pending)))
       })
-    }
+    },
+    resolveCommittedActivation: (relayPtyId) =>
+      sourceDeliveries.resolveCommittedActivation(relayPtyId)
   })
 }
 

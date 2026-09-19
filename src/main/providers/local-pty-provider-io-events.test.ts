@@ -154,7 +154,7 @@ describe('LocalPtyProvider', () => {
     })
     spawnMock.mockReturnValue(mockProc)
 
-    provider = new LocalPtyProvider()
+    provider = new LocalPtyProvider({ ptySpawn: spawnMock })
   })
 
   describe('write', () => {
@@ -167,6 +167,52 @@ describe('LocalPtyProvider', () => {
     it('is a no-op for unknown PTY ids', () => {
       expect(provider.write('nonexistent', 'hello')).toBe(false)
       expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('rejects incumbent writes while ownership-transfer input is fenced', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      expect(provider.writeOwnershipTransferInput(id, 'not-fenced')).toBe(false)
+      provider.setInputFenced(id, true)
+      expect(provider.write(id, 'blocked')).toBe(false)
+      expect(provider.writeWithSettlement(id, 'blocked-settlement')).toEqual({
+        outcome: 'refused',
+        reason: 'write_gate_denied'
+      })
+      expect(mockProc.write).not.toHaveBeenCalled()
+      expect(provider.writeOwnershipTransferInput(id, 'transferred')).toBe(true)
+      expect(mockProc.write).toHaveBeenCalledWith('transferred')
+
+      provider.setInputFenced(id, false)
+      expect(provider.write(id, 'accepted')).toBe(true)
+      expect(mockProc.write).toHaveBeenCalledWith('accepted')
+      expect(provider.writeWithSettlement(id, 'settled')).toEqual({ outcome: 'accepted' })
+      expect(mockProc.write).toHaveBeenCalledWith('settled')
+    })
+
+    it('does not retain a fence after the owning PTY exits', async () => {
+      const sessionId = 'ownership-transfer-reused-session'
+      const first = await provider.spawn({ cols: 80, rows: 24, sessionId })
+      provider.setInputFenced(first.id, true)
+      expect(provider.write(first.id, 'blocked')).toBe(false)
+
+      exitCb?.({ exitCode: 0 })
+      mockProc.write.mockClear()
+      const replacement = await provider.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(replacement.id).toBe(first.id)
+      expect(provider.write(replacement.id, 'replacement')).toBe(true)
+      expect(mockProc.write).toHaveBeenCalledWith('replacement')
+    })
+
+    it('does not fence a future PTY through an unknown id', async () => {
+      const sessionId = 'ownership-transfer-future-session'
+      provider.setInputFenced(sessionId, true)
+
+      const spawned = await provider.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(provider.write(spawned.id, 'accepted')).toBe(true)
+      expect(mockProc.write).toHaveBeenCalledWith('accepted')
     })
   })
 
@@ -215,22 +261,22 @@ describe('LocalPtyProvider', () => {
     it('notifies data listeners when PTY produces output', async () => {
       const dataHandler = vi.fn()
       provider.onData(dataHandler)
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
 
       // Simulate node-pty data event
       const onDataCb = mockProc.onData.mock.calls[0][0]
       onDataCb('hello world')
 
-      expect(dataHandler).toHaveBeenCalledWith({ id, data: 'hello world' })
+      expect(dataHandler).toHaveBeenCalledWith({ id, data: 'hello world', incarnationId })
     })
 
     it('classifies startup queries before runtime and public data listeners', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const runtimeData = vi.fn()
       const dataHandler = vi.fn()
-      provider.configure({ onData: runtimeData })
+      provider.configure({ onData: runtimeData, ptySpawn: spawnMock })
       provider.onData(dataHandler)
-      const { id } = await provider.spawn({
+      const { id, incarnationId } = await provider.spawn({
         cols: 80,
         rows: 24,
         startupIngress: {
@@ -253,15 +299,23 @@ describe('LocalPtyProvider', () => {
         ['prompt', expect.any(Number)]
       ])
       expect(dataHandler.mock.calls.map(([payload]) => payload)).toEqual([
-        { id, data: '', sequenceChars: query.length, seq: query.length, transformed: true },
         {
           id,
           data: '',
+          incarnationId,
+          sequenceChars: query.length,
+          seq: query.length,
+          transformed: true
+        },
+        {
+          id,
+          data: '',
+          incarnationId,
           sequenceChars: echo.length,
           seq: query.length + echo.length,
           transformed: true
         },
-        { id, data: 'prompt' }
+        { id, data: 'prompt', incarnationId }
       ])
     })
 
@@ -269,7 +323,7 @@ describe('LocalPtyProvider', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const dataHandler = vi.fn()
       provider.onData(dataHandler)
-      const { id } = await provider.spawn({
+      const { id, incarnationId } = await provider.spawn({
         cols: 80,
         rows: 24,
         shellOverride: 'powershell.exe'
@@ -282,6 +336,7 @@ describe('LocalPtyProvider', () => {
       expect(dataHandler).toHaveBeenCalledWith({
         id,
         data: '',
+        incarnationId,
         sequenceChars: query.length,
         seq: query.length,
         transformed: true

@@ -1,4 +1,6 @@
 import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { createPtyAcceptedInputWriter } from './pty-accepted-input-writer'
+import type { PtyInputOperationOptions } from './pty-transport-types'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -35,7 +37,6 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   let generation = 0
   let failedGeneration: number | null = null
   let drainPromise: Promise<void> | null = null
-  const pendingAcceptedCancels = new Set<() => void>()
 
   function resetSequenceIfEmpty(): void {
     if (pendingOrdinary.items.length === 0 && pendingReplies.items.length === 0) {
@@ -108,26 +109,9 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     nextSequence = 0
   }
 
-  // Why: one cancel per in-flight write rather than `.then()` on a queue-lifetime
-  // promise — those reactions are retained until that promise settles, so a
-  // long-lived pane accumulated one record per acknowledged write (Esc, Ctrl+C).
-  async function writeAcceptedChunk(id: string, data: string): Promise<boolean> {
-    let cancel = (): void => undefined
-    const cancelled = new Promise<boolean>((resolve) => {
-      cancel = () => resolve(false)
-    })
-    // Registered before the write starts so a clear() inside a synchronous
-    // writeAccepted callback still unblocks this race.
-    pendingAcceptedCancels.add(cancel)
-    try {
-      return await Promise.race([
-        cancelled,
-        Promise.resolve(deps.writeAccepted?.(id, data) ?? false).catch(() => false)
-      ])
-    } finally {
-      pendingAcceptedCancels.delete(cancel)
-    }
-  }
+  const { writeAcceptedChunk, cancelPendingAcceptedWrites } = createPtyAcceptedInputWriter(
+    deps.writeAccepted
+  )
 
   async function drain(): Promise<void> {
     let failureGeneration = generation
@@ -195,9 +179,15 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
           continue
         }
         const writeGeneration = generation
+        const chunkIndex = next.nextChunkIndex ?? 0
+        const options =
+          next.operationId === undefined
+            ? undefined
+            : { operationId: chunkOperationId(next.operationId, chunkIndex) }
         const accepted = next.resolveAccepted
-          ? await writeAcceptedChunk(next.id, chunk.value)
-          : (deps.write(next.id, chunk.value), true)
+          ? await writeAcceptedChunk(next.id, chunk.value, options)
+          : (options ? deps.write(next.id, chunk.value, options) : deps.write(next.id, chunk.value),
+            true)
         if (generation !== writeGeneration || firstPending() !== next) {
           continue
         }
@@ -210,6 +200,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
           removePending(next, true)
         } else {
           next.nextChunk = following.value
+          next.nextChunkIndex = chunkIndex + 1
         }
         if (firstPending()) {
           await yieldBetweenWrites()
@@ -251,6 +242,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     id: string,
     data: string,
     queryReply: boolean,
+    options?: PtyInputOperationOptions,
     resolveAccepted?: PendingPtyInputWrite['resolveAccepted']
   ): boolean {
     try {
@@ -268,7 +260,15 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         resolveAccepted?.(false)
         return false
       }
-      const item = { sequence: nextSequence, id, text: data, replyOnly, tooLarge, resolveAccepted }
+      const item = {
+        sequence: nextSequence,
+        id,
+        text: data,
+        replyOnly,
+        tooLarge,
+        resolveAccepted,
+        ...(options?.operationId ? { operationId: options.operationId } : {})
+      }
       nextSequence += 1
       if (replyOnly) {
         pendingReplies.items.push(item)
@@ -286,17 +286,17 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   }
 
   return {
-    enqueue(id: string, data: string): boolean {
-      return enqueueInput(id, data, false)
+    enqueue(id: string, data: string, options?: PtyInputOperationOptions): boolean {
+      return enqueueInput(id, data, false, options)
     },
 
-    enqueueQueryReply(id: string, data: string): boolean {
-      return enqueueInput(id, data, true)
+    enqueueQueryReply(id: string, data: string, options?: PtyInputOperationOptions): boolean {
+      return enqueueInput(id, data, true, options)
     },
 
-    enqueueAccepted: (id, data) =>
+    enqueueAccepted: (id, data, options) =>
       new Promise((resolve) => {
-        enqueueInput(id, data, false, resolve)
+        enqueueInput(id, data, false, options, resolve)
       }),
 
     async waitForDrain(): Promise<void> {
@@ -309,10 +309,11 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       generation += 1
       failedGeneration = null
       clearPending()
-      for (const cancel of pendingAcceptedCancels) {
-        cancel()
-      }
-      pendingAcceptedCancels.clear()
+      cancelPendingAcceptedWrites()
     }
   }
+}
+
+function chunkOperationId(operationId: string, index: number): string {
+  return index === 0 ? operationId : `${operationId}:chunk:${index}`
 }

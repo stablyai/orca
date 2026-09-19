@@ -15,8 +15,10 @@ import {
   disconnectDaemon,
   daemonOwnsFreshPersistentPtys,
   initDaemonPtyProvider,
-  readDaemonPidRecord
+  readDaemonPidRecord,
+  requestIdleDaemonRetirement
 } from '../daemon/daemon-init'
+import type { OrcadDecommissionResult } from '../../shared/orcad-decommission'
 
 export type OrcadDaemonStartup =
   | { state: 'live'; pid: number | null }
@@ -31,7 +33,17 @@ export type OrcadDaemonStartup =
  * — `daemonOwnsFreshPersistentPtys()` is what the runtime reads for that, and it answers
  * false here without any extra bookkeeping.
  */
-export async function startOrcadDaemon(): Promise<OrcadDaemonStartup> {
+export async function startOrcadDaemon(
+  options: { recoveryOnly?: boolean } = {}
+): Promise<OrcadDaemonStartup> {
+  if (options.recoveryOnly) {
+    const { initDaemonRecoveryProvider } = await import('../daemon/daemon-recovery-provider-init')
+    initDaemonRecoveryProvider()
+    return {
+      state: 'degraded',
+      reason: 'managed-stop recovery; fresh terminal admission remains fenced'
+    }
+  }
   try {
     // Why no login-session watch: that retires the daemon when the spawning macOS GUI login
     // session dies. An orcad daemon must survive its SSH session ending — that is the point.
@@ -64,4 +76,43 @@ export async function startOrcadDaemon(): Promise<OrcadDaemonStartup> {
  */
 export async function stopOrcadDaemon(): Promise<void> {
   await disconnectDaemon()
+}
+
+/** Fence all future terminal admission before allowing a managed runtime to stop. */
+export type OrcadNativeDecommissionResult = OrcadDecommissionResult & {
+  admissionReopened?: true
+}
+
+export async function decommissionOrcadDaemonIfIdle(): Promise<OrcadNativeDecommissionResult> {
+  const result = await requestIdleDaemonRetirement()
+  if (result.state === 'retiring') {
+    return { outcome: 'accepted' }
+  }
+  if (result.state === 'busy' && result.liveSessions !== null && result.liveSessions > 0) {
+    return {
+      outcome: 'refused',
+      verdict: 'live',
+      code: 'orcad_decommission_live_sessions',
+      ...(result.admissionReopened ? { admissionReopened: true as const } : {}),
+      reason:
+        `${result.liveSessions} terminal ` +
+        `${result.liveSessions === 1 ? 'session is' : 'sessions are'} still live. ` +
+        'Close the sessions before stopping and unlinking this server.'
+    }
+  }
+  return {
+    outcome: 'refused',
+    verdict: 'unverifiable',
+    ...(result.state === 'busy' && result.admissionReopened
+      ? { admissionReopened: true as const }
+      : {}),
+    code:
+      result.state === 'unsupported'
+        ? 'orcad_decommission_daemon_incompatible'
+        : 'orcad_decommission_unverifiable',
+    reason:
+      result.state === 'unsupported'
+        ? 'The terminal daemon is from an older generation that cannot be atomically decommissioned.'
+        : 'The host could not atomically prove that terminal admission is fenced and no sessions are live.'
+  }
 }

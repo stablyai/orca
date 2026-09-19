@@ -15,12 +15,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 
-import type {
-  SessionState,
-  ShellReadyState,
-  TakePendingOutputResult,
-  TerminalSnapshot
-} from './types'
+import type * as SessionProtocol from './types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
@@ -29,7 +24,8 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
-  private _state: SessionState = 'running'
+  readonly createdAt: number
+  private _state: SessionProtocol.SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
   private subprocess: SubprocessHandle
@@ -46,6 +42,7 @@ export class Session {
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
+    this.createdAt = opts.createdAt ?? Date.now()
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
@@ -55,7 +52,8 @@ export class Session {
       wslDistro: opts.wslDistro,
       historySeedChunks: opts.historySeedChunks,
       subprocess: this.subprocess,
-      isAlive: () => !this._disposed && this._state !== 'exited'
+      isAlive: () => !this._disposed && this._state !== 'exited',
+      incarnationId: this.incarnationId
     })
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
@@ -95,11 +93,11 @@ export class Session {
     this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
-  get state(): SessionState {
+  get state(): SessionProtocol.SessionState {
     return this._state
   }
 
-  get shellState(): ShellReadyState {
+  get shellState(): SessionProtocol.ShellReadyState {
     return this.shellReady.state
   }
 
@@ -221,7 +219,7 @@ export class Session {
     this.producerPause.release({ resume: true })
   }
 
-  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
+  getSnapshot(opts: { scrollbackRows?: number } = {}): SessionProtocol.TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
     return this.output.getSnapshot(opts)
   }
@@ -237,7 +235,7 @@ export class Session {
   takePendingOutput(
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
-  ): TakePendingOutputResult | null {
+  ): SessionProtocol.TakePendingOutputResult | null {
     if (this._disposed) {
       return null
     }

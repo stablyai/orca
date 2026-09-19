@@ -1,4 +1,11 @@
-import type { OrcadOptions } from './orcad-entry'
+export type OrcadOptions = {
+  port?: number
+  json?: boolean
+  noPairing?: boolean
+  pairingAddress?: string
+  /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
+  bind?: string
+}
 
 /**
  * orcad's flags. A value-taking flag consumes the next token whatever it looks

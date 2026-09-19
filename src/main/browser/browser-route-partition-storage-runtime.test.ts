@@ -76,12 +76,29 @@ function seedBindings(): void {
 }
 
 beforeEach(() => {
+  mocks.environments = [{ id: 'env-1' }]
   seedBindings()
   mocks.cleared.length = 0
   mocks.removedDirectories.length = 0
 })
 
 describe('route partition storage runtime with local SSH scopes', () => {
+  it('retains historical environment storage independently of canonical catalog selection', async () => {
+    mocks.environments = [{ id: 'env-1' }, { id: 'canonical' }]
+    const canonicalPartition = `persist:orca-browser-v1-${'d'.repeat(64)}`
+    mocks.bindings.set(canonicalPartition, {
+      fingerprint: '4'.repeat(64),
+      storageScope: deriveBrowserRoutePartitionStorageScope({
+        orcaProfileId: 'local-default',
+        environmentId: 'canonical'
+      })
+    })
+    expect(await collectOrphanedBrowserRoutePartitionStorage(() => ['target-live'])).toEqual([
+      REMOVED_TARGET_PARTITION
+    ])
+    expect(mocks.bindings.has(ENV_PARTITION)).toBe(true)
+    expect(mocks.bindings.has(canonicalPartition)).toBe(true)
+  })
   it('keeps partitions of listed targets and sweeps only removed-target scopes', async () => {
     const cleared = await collectOrphanedBrowserRoutePartitionStorage(() => ['target-live'])
     expect(cleared).toEqual([REMOVED_TARGET_PARTITION])

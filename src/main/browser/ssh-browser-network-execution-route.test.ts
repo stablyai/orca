@@ -1,11 +1,14 @@
 import { EventEmitter, once } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
-import { createServer, type AddressInfo } from 'node:net'
+import { createServer, type AddressInfo, type Socket } from 'node:net'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from '../ssh/ssh-connection'
 import type { SshProviderEpoch } from '../../shared/ssh-types'
 import { resolveSshBrowserNetworkExecutionRoute } from './ssh-browser-network-execution-route'
+import { SshConnectionWorkLedger } from '../ssh/ssh-connection-work-ledger'
+import { forwardTrackedSshChannel } from '../ssh/ssh-forward-channel-lifetime'
+import { openTrackedSshSocket } from '../ssh/ssh-connection-channel-lifetime'
 
 const executionHost = {
   kind: 'ssh' as const,
@@ -15,7 +18,13 @@ const executionHost = {
 }
 
 function fakeConnection(client: unknown): SshConnection {
+  const ledger = new SshConnectionWorkLedger()
   return {
+    fenceWorkForReset: () => ledger.fenceForReset(),
+    prepareForwardRoute: (prepare: () => Promise<unknown>) => ledger.run(prepare),
+    openForwardSocket: (open: () => NodeJS.EventEmitter) => openTrackedSshSocket(ledger, open),
+    forwardOut: ((expected, socket, ...args) =>
+      forwardTrackedSshChannel(ledger, expected, socket, ...args)) as SshConnection['forwardOut'],
     getState: () => ({
       targetId: 'target-a',
       status: 'connected',
@@ -44,6 +53,59 @@ afterEach(async () => {
 })
 
 describe('SSH browser network execution route', () => {
+  it('does not fall back to raw SSH when the selected session tunnel refuses admission', async () => {
+    const forwardOut = vi.fn()
+    const connection = fakeConnection({ forwardOut })
+    const release = vi.fn()
+    const openNetworkTunnel = vi.fn(async () => {
+      throw new Error('relay_network_tunnel_capability_unavailable')
+    })
+    await expect(
+      resolveSshBrowserNetworkExecutionRoute(
+        { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
+        {
+          connectionManager: { getConnection: () => connection },
+          isCurrentAuthority: () => true,
+          registerAuthorityAbort: () => release,
+          openNetworkTunnel
+        }
+      )
+    ).rejects.toThrow('capability_unavailable')
+    expect(openNetworkTunnel).toHaveBeenCalledOnce()
+    expect(forwardOut).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('fences cached route opens while allowing an admitted channel to finish', async () => {
+    const channel = new PassThrough() as PassThrough & { close: () => void }
+    channel.close = () => {
+      channel.destroy()
+    }
+    const forwardOut = vi.fn((_a, _b, _c, _d, callback) => callback(undefined, channel))
+    const connection = fakeConnection({ forwardOut })
+    const route = await resolveSshBrowserNetworkExecutionRoute(
+      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
+      {
+        connectionManager: { getConnection: () => connection },
+        isCurrentAuthority: () => true,
+        registerAuthorityAbort: () => () => {}
+      }
+    )
+    const admitted = route.connect({ host: 'internal', port: 443 })
+    await once(admitted as unknown as EventEmitter, 'connect')
+    const fence = connection.fenceWorkForReset()
+    expect(route.isValid()).toBe(true)
+    const refused = route.connect({ host: 'internal', port: 443 })
+    const [error] = await once(refused as unknown as EventEmitter, 'error')
+    expect(error.message).toBe('ssh_connection_work_admission_closed')
+    expect(forwardOut).toHaveBeenCalledTimes(1)
+    expect(channel.destroyed).toBe(false)
+    expect(() => fence.assertDrained()).toThrow('not_drained')
+    channel.destroy()
+    await fence.drain(new AbortController().signal)
+    await route.close()
+  })
+
   it('rejects an unavailable or stale authority before opening a destination', async () => {
     const connection = fakeConnection({ forwardOut: vi.fn() })
     const registerAuthorityAbort = vi.fn()
@@ -166,7 +228,7 @@ describe('SSH browser network execution route', () => {
 
     await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
     expect(socket.destroyed).toBe(true)
-    await route.close()
+    await expect(route.close()).rejects.toThrow('Not connected')
     expect(close).toHaveBeenCalledOnce()
   })
 
@@ -179,7 +241,9 @@ describe('SSH browser network execution route', () => {
     process.exitCode = null
     process.signalCode = null
     const dispose = vi.fn()
-    const close = vi.fn(async () => {})
+    const stopped = Promise.withResolvers<void>()
+    const close = vi.fn(() => stopped.promise)
+    const release = vi.fn()
     const startDynamicForward = vi.fn(async () => ({
       localPort: 45678,
       process: process as unknown as ChildProcess,
@@ -192,7 +256,7 @@ describe('SSH browser network execution route', () => {
       {
         connectionManager: { getConnection: () => connection },
         isCurrentAuthority: () => true,
-        registerAuthorityAbort: () => () => {},
+        registerAuthorityAbort: () => release,
         startDynamicForward
       }
     )
@@ -201,10 +265,117 @@ describe('SSH browser network execution route', () => {
     process.emit('error', new Error('dynamic forward failed'))
     await route.whenInvalidated
     expect(route.isValid()).toBe(false)
-    await route.close()
-    await route.close()
+    const closing = route.close()
+    expect(route.close()).toBe(closing)
+    expect(release).not.toHaveBeenCalled()
+    stopped.resolve()
+    await closing
+    expect(release).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('retains system route authority evidence after unconfirmed process closure', async () => {
+    const connection = fakeConnection(null)
+    const release = vi.fn()
+    const close = vi.fn(async () => {
+      throw new Error('stop unconfirmed')
+    })
+    const route = await resolveSshBrowserNetworkExecutionRoute(
+      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
+      {
+        connectionManager: { getConnection: () => connection },
+        isCurrentAuthority: () => true,
+        registerAuthorityAbort: () => release,
+        startDynamicForward: async () => ({
+          localPort: 45678,
+          process: Object.assign(new EventEmitter(), {
+            exitCode: null,
+            signalCode: null
+          }) as unknown as ChildProcess,
+          stderrTail: () => '',
+          dispose: () => {},
+          close
+        })
+      }
+    )
+    const closing = route.close()
+    await expect(closing).rejects.toThrow('stop unconfirmed')
+    expect(route.close()).toBe(closing)
+    expect(release).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('drains admitted system sockets and refuses cached route opens without another TCP connection', async () => {
+    const accepted: Socket[] = []
+    const listener = createServer((socket) => {
+      accepted.push(socket)
+      socket.once('data', () => {
+        socket.write(Buffer.from([5, 0]))
+        socket.once('data', () => socket.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])))
+      })
+    })
+    servers.push(listener)
+    await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve))
+    const connection = fakeConnection(null)
+    const process = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null })
+    const dispose = vi.fn()
+    const route = await resolveSshBrowserNetworkExecutionRoute(
+      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
+      {
+        connectionManager: { getConnection: () => connection },
+        isCurrentAuthority: () => true,
+        registerAuthorityAbort: () => () => {},
+        startDynamicForward: async () => ({
+          localPort: (listener.address() as AddressInfo).port,
+          process: process as unknown as ChildProcess,
+          stderrTail: () => '',
+          dispose,
+          close: async () => {}
+        })
+      }
+    )
+    const socket = route.connect({ host: 'internal', port: 443 })
+    socket.on('error', () => {})
+    try {
+      await once(socket as unknown as EventEmitter, 'connect')
+      const fence = connection.fenceWorkForReset()
+      const refused = route.connect({ host: 'internal', port: 443 })
+      const [error] = await once(refused as unknown as EventEmitter, 'error')
+      expect(error.message).toBe('ssh_connection_work_admission_closed')
+      expect(route.isValid()).toBe(true)
+      expect(accepted).toHaveLength(1)
+      expect(dispose).not.toHaveBeenCalled()
+      socket.destroy()
+      expect(() => fence.assertDrained()).toThrow('not_drained')
+      await fence.drain(new AbortController().signal)
+    } finally {
+      socket.destroy()
+      for (const peer of accepted) {
+        peer.destroy()
+      }
+      await route.close()
+    }
+  })
+
+  it('refuses system route startup after reset and releases its authority registration', async () => {
+    const connection = fakeConnection(null)
+    connection.fenceWorkForReset()
+    const startDynamicForward = vi.fn()
+    const release = vi.fn()
+    await expect(
+      resolveSshBrowserNetworkExecutionRoute(
+        { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
+        {
+          connectionManager: { getConnection: () => connection },
+          isCurrentAuthority: () => true,
+          registerAuthorityAbort: () => release,
+          startDynamicForward
+        }
+      )
+    ).rejects.toThrow('admission_closed')
+    expect(startDynamicForward).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledOnce()
   })
 
   it('fails a stale system SSH socket loudly instead of closing it silently', async () => {

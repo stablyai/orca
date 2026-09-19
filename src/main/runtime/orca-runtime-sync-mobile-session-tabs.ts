@@ -4,6 +4,7 @@ import { OrcaRuntimeWithWriteOrchestrationPointerPty } from './orca-runtime-writ
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-merge'
+import { assertOutgoingMobileSnapshotPublicationAllowed } from './outgoing-mobile-snapshot-admission'
 
 export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
   // Returns the worktrees whose stored snapshot object changed during this
@@ -18,6 +19,8 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
     if (snapshots === undefined) {
       return changedWorktreeIds
     }
+    assertOutgoingMobileSnapshotPublicationAllowed(this, this.mobileSessionTabsByWorktree.values())
+    assertOutgoingMobileSnapshotPublicationAllowed(this, snapshots)
     // Why: snapshots are immutable — every writer replaces the map entry with a
     // new object, and the accept gate below drops semantically-unchanged
     // renderer resends before they replace an entry — so reference identity

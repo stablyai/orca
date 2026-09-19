@@ -64,7 +64,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
-      if (!this.ptyController?.write(ptyId, initialWrite)) {
+      if (
+        !(options.operationId
+          ? this.ptyController?.write(ptyId, initialWrite, { operationId: options.operationId })
+          : this.ptyController?.write(ptyId, initialWrite))
+      ) {
         throw new Error('terminal_not_writable')
       }
     } catch (error) {
@@ -106,7 +110,13 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     if (!submitWithPaste) {
-      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
+      if (
+        !(options.operationId
+          ? this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, {
+              operationId: `${options.operationId}:suffix`
+            })
+          : this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT))
+      ) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
     }

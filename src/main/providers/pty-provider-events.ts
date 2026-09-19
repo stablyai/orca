@@ -3,6 +3,8 @@ import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-
 export type PtyDataEvent = {
   id: string
   data: string
+  /** Exact process incarnation; absence cannot authorize ownership-transfer journaling. */
+  incarnationId?: string
   sequenceChars?: number
   transformed?: boolean
   seq?: number

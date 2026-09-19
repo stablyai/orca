@@ -18,6 +18,7 @@ export type PendingLocalPtySpawn = {
 export type DataCallback = (payload: {
   id: string
   data: string
+  incarnationId?: string
   sequenceChars?: number
   transformed?: boolean
   seq?: number
@@ -31,6 +32,7 @@ export type ExitCallback = (payload: {
 }) => void
 
 let ptyCounter = 0
+export const ownershipTransferInputFences = new Set<string>()
 export const ptyProcesses = new Map<string, pty.IPty>()
 export const ptyIncarnations = new Map<string, string>()
 // Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
@@ -116,6 +118,7 @@ export function runPtyCleanup(id: string): void {
  * Removes all local tracking state for a PTY id after teardown.
  */
 export function clearPtyState(id: string): void {
+  ownershipTransferInputFences.delete(id)
   clearLocalPtyForceKillTimer(id)
   runPtyCleanup(id)
   disposePtyListeners(id)

@@ -19,20 +19,9 @@
  * pre-activation snapshot rather than against a version comparison.
  */
 import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 
-export type OrcadTerminalCensus = {
-  /**
-   * Sessions the live daemon owns right now. `null` means the probe could not answer —
-   * never treated as zero, because loss of contact is not evidence of process death
-   * (docs/reference/ssh-execution-boundary.md).
-   */
-  liveSessions: number | null
-  /**
-   * Of those, how many started at or after `record.activatedAt`. These are the sessions the
-   * pre-activation snapshot does not describe.
-   */
-  startedSinceActivation: number | null
-}
+export type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 
 export type OrcadUpdateDecision =
   | { action: 'noop'; reason: string }
@@ -45,6 +34,7 @@ export type OrcadUpdateDecision =
   | { action: 'defer'; code: OrcadUpdateDeferCode; reason: string }
 
 export type OrcadUpdateDeferCode =
+  | 'orcad_update_decommission_pending'
   | 'orcad_update_terminals_running'
   | 'orcad_update_terminal_census_unavailable'
 
@@ -62,6 +52,16 @@ export function planOrcadUpdate(input: {
   census: OrcadTerminalCensus
   force?: boolean
 }): OrcadUpdateDecision {
+  if (input.record.decommissioning) {
+    return {
+      action: 'defer',
+      code: 'orcad_update_decommission_pending',
+      reason:
+        `Managed stop for orcad ${input.record.decommissioning.version} was accepted and ` +
+        'terminal admission is fenced. Finish or retry unlinking this managed server before ' +
+        'deploying another version.'
+    }
+  }
   if (input.record.active === input.candidateVersion) {
     return {
       action: 'noop',
@@ -132,8 +132,10 @@ export type OrcadRollbackSafety =
   | { safety: 'unsafe'; code: OrcadRollbackUnsafeCode; reason: string }
 
 export type OrcadRollbackUnsafeCode =
+  | 'orcad_rollback_decommission_pending'
   | 'orcad_rollback_no_target'
   | 'orcad_rollback_snapshot_missing'
+  | 'orcad_rollback_snapshot_unverifiable'
   | 'orcad_rollback_orphans_live_terminals'
   | 'orcad_rollback_census_unavailable'
 
@@ -156,8 +158,8 @@ export type OrcadRollbackUnsafeCode =
  */
 export function assessOrcadRollback(input: {
   record: OrcadActivationRecord
-  /** Whether the snapshot named by the record is actually still on the host. */
-  snapshotPresent: boolean
+  /** Whether the snapshot is still on the host; `null` means the probe was unverifiable. */
+  snapshotPresent: boolean | null
   census: OrcadTerminalCensus
   /**
    * Whether the shared store has been written since activation, from its mtime against
@@ -166,6 +168,16 @@ export function assessOrcadRollback(input: {
    */
   stateWritesSinceActivation: boolean | null
 }): OrcadRollbackSafety {
+  if (input.record.decommissioning) {
+    return {
+      safety: 'unsafe',
+      code: 'orcad_rollback_decommission_pending',
+      reason:
+        `Managed stop for orcad ${input.record.decommissioning.version} was accepted and ` +
+        'terminal admission is fenced. Finish or retry unlinking this managed server before ' +
+        'rolling back.'
+    }
+  }
   const target = input.record.previous
   if (!target) {
     return {
@@ -174,6 +186,15 @@ export function assessOrcadRollback(input: {
       reason:
         'This host has no previous orcad version recorded, so there is nothing to roll back ' +
         'to. Deploy a known-good build instead.'
+    }
+  }
+  if (input.record.snapshot && input.snapshotPresent === null) {
+    return {
+      safety: 'unsafe',
+      code: 'orcad_rollback_snapshot_unverifiable',
+      reason:
+        'The host did not provide a trustworthy snapshot-presence verdict. Retry when the ' +
+        'host is reachable; loss of contact is not evidence that the snapshot is absent.'
     }
   }
   if (!input.record.snapshot || !input.snapshotPresent) {

@@ -6,7 +6,13 @@ import {
 } from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../shared/ssh-types'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
+
+type NetworkTunnelDrain = {
+  drain: (signal: AbortSignal) => Promise<void>
+  assertDrained: () => void
+  seal?: () => void
+}
 
 type RelayGraceLifecycleOptions = {
   dispatcher: RelayDispatcher
@@ -19,6 +25,8 @@ type RelayGraceLifecycleOptions = {
   ownsSocketPath: () => boolean
   disposeOwnedProcesses: () => Promise<void>
   disposeRuntime: () => void
+  fenceNetworkTunnels?: () => NetworkTunnelDrain
+  hasNetworkTunnels?: () => boolean
 }
 
 export class RelayGraceLifecycle {
@@ -26,10 +34,15 @@ export class RelayGraceLifecycle {
   private graceReason: string | null = null
   private graceBranch: RelayGraceBranch | null = null
   private shutdownInFlight = false
+  private shutdownPreparation: Promise<void> | null = null
+  private shutdownPrepared = false
+  private shutdownInitiator: RequestContext | undefined
+  private networkTunnelDrain: NetworkTunnelDrain | undefined
   private stopPoolWatch = (): void => {}
   private stopPoolActiveWatch = (): void => {}
 
   constructor(private readonly options: RelayGraceLifecycleOptions) {
+    options.ptyHandler.setOwnershipTransferGraceGuardEnabled(true)
     options.dispatcher.onNotification(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, (params) => {
       this.configure(params)
     })
@@ -74,6 +87,11 @@ export class RelayGraceLifecycle {
       `[relay] Grace started (${reason}): timeoutMs=${decision.timeoutMs}, branch=${this.graceBranch}, ptys=${this.options.ptyHandler.activePtyCount}, clients=${this.options.readSocketClientCount()}`
     )
     this.options.ptyHandler.startGraceTimer(() => {
+      if (this.options.ptyHandler.hasLiveOwnershipTransferFence) {
+        relayLogLine(`[relay] Grace expired (${reason}) with ownership transfer active; deferring`)
+        this.start('ownership transfer active')
+        return
+      }
       if (this.graceBranch === 'idle-no-ptys' && !this.isRelayIdle()) {
         relayLogLine(`[relay] Grace expired (${reason}) but relay is no longer idle; re-evaluating`)
         this.start(reason)
@@ -113,22 +131,18 @@ export class RelayGraceLifecycle {
     if (this.shutdownInFlight) {
       return
     }
-    this.shutdownInFlight = true
+    if (this.options.ptyHandler.hasLiveOwnershipTransferFence) {
+      relayLogLine('[relay] Shutdown deferred: ownership transfer active')
+      if (this.options.readSocketClientCount() === 0) {
+        this.start('ownership transfer active')
+      }
+      return
+    }
     relayLogLine(
       `[relay] Shutdown: ptys=${this.options.ptyHandler.activePtyCount}, clients=${this.options.readSocketClientCount()}, ownsSocket=${this.options.ownsSocketPath()}`
     )
-    this.graceDeadlineAt = null
-    this.graceReason = null
-    this.graceBranch = null
-    void this.options.ptyHandler
-      .dispose()
-      .then(async () => {
-        await this.options.disposeOwnedProcesses()
-        this.stopPoolWatch()
-        this.stopPoolActiveWatch()
-        this.options.disposeRuntime()
-        process.exit(0)
-      })
+    void this.prepareShutdown()
+      .then(() => this.finishShutdown())
       .catch((error) => {
         this.shutdownInFlight = false
         relayLogLine(
@@ -138,6 +152,94 @@ export class RelayGraceLifecycle {
           this.start('shutdown deferred', { retryDeferredShutdown: true })
         }
       })
+  }
+
+  /** Leaves transport alive so a host-owned reset can settle its response before exiting. */
+  prepareShutdown(initiator?: RequestContext, onAdmitted?: () => void): Promise<void> {
+    if (initiator) {
+      try {
+        this.options.dispatcher.assertActiveWorkContext(initiator)
+      } catch (error) {
+        return Promise.reject(error)
+      }
+    }
+    if (this.shutdownPreparation) {
+      if (initiator && initiator !== this.shutdownInitiator) {
+        return Promise.reject(new Error('relay_shutdown_preparation_in_progress'))
+      }
+      return this.shutdownPreparation
+    }
+    if (this.options.ptyHandler.hasLiveOwnershipTransferFence) {
+      return Promise.reject(new Error('pty_ownership_transfer_source_shutdown_fenced'))
+    }
+    try {
+      onAdmitted?.()
+    } catch (error) {
+      return Promise.reject(error)
+    }
+    this.shutdownInFlight = true
+    this.shutdownInitiator = initiator
+    let drainage: Promise<void>
+    try {
+      this.cancel('shutdown preparation')
+      this.networkTunnelDrain ??= this.options.fenceNetworkTunnels?.()
+      drainage = this.options.dispatcher.beginWorkDrain(initiator)
+    } catch (error) {
+      this.shutdownInFlight = false
+      return Promise.reject(error)
+    }
+    const tunnelDrain = this.networkTunnelDrain
+    let disposal: Promise<void>
+    try {
+      if (tunnelDrain) {
+        this.options.ptyHandler.fenceCreationForShutdown()
+        disposal = Promise.resolve()
+          .then(() => tunnelDrain.drain(new AbortController().signal))
+          .then(() => {
+            tunnelDrain.assertDrained()
+            tunnelDrain.seal?.()
+            return this.options.ptyHandler.dispose()
+          })
+      } else {
+        disposal = this.options.ptyHandler.dispose()
+      }
+    } catch (error) {
+      disposal = Promise.reject(error)
+    }
+    const preparation = Promise.allSettled([drainage, disposal]).then(async (results) => {
+      const failures = results.filter((result) => result.status === 'rejected')
+      if (failures.length === 1) {
+        throw failures[0].reason
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(
+          failures.map((failure) => failure.reason),
+          'relay_shutdown_admitted_work_incomplete'
+        )
+      }
+      await this.options.disposeOwnedProcesses()
+      // Cleanup controls may have arrived while owned producers were settling.
+      await this.options.dispatcher.beginWorkDrain(initiator)
+      tunnelDrain?.assertDrained()
+      this.shutdownPrepared = true
+    })
+    this.shutdownPreparation = preparation.catch((error) => {
+      this.shutdownPreparation = null
+      this.shutdownInFlight = false
+      throw error
+    })
+    return this.shutdownPreparation
+  }
+
+  finishShutdown(): void {
+    if (!this.shutdownPrepared) {
+      throw new Error('relay_shutdown_preparation_required')
+    }
+    this.networkTunnelDrain?.assertDrained()
+    this.stopPoolWatch()
+    this.stopPoolActiveWatch()
+    this.options.disposeRuntime()
+    process.exit(0)
   }
 
   private configure(params: Record<string, unknown>): { graceTimeMs: number } {
@@ -154,6 +256,7 @@ export class RelayGraceLifecycle {
   private isRelayIdle(): boolean {
     return (
       this.options.ptyHandler.activePtyCount === 0 &&
+      !this.options.hasNetworkTunnels?.() &&
       this.options.ptyHandler.pendingPtyCreationCount === 0
     )
   }

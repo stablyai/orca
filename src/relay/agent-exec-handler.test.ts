@@ -468,6 +468,9 @@ describe('AgentExecHandler', () => {
       }
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(1)
+      expect(child.listenerCount('close')).toBe(1)
+      child.emit('close', null)
       expect(child.listenerCount('error')).toBe(0)
       expect(child.listenerCount('close')).toBe(0)
     } finally {

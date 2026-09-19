@@ -137,6 +137,39 @@ describe('relay immediate descendant cleanup', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
+  it('refuses transfer while an immediate-close descendant snapshot is pending', async () => {
+    const id = await spawn()
+    const closing = close(id)
+    expect(kill).not.toHaveBeenCalled()
+    expect(() => handler.setOwnershipTransferInputFenced(id, true)).toThrow(
+      'pty_ownership_transfer_source_shutdown_pending'
+    )
+    expect(handler.hasLiveOwnershipTransferFence).toBe(false)
+    release?.()
+    await vi.waitFor(() => expect(kill).toHaveBeenCalledTimes(1))
+    exit?.({ exitCode: 137 })
+    await closing
+  })
+
+  it('uses the same descendant sweep for authorized destination shutdown', async () => {
+    const id = await spawn()
+    const source = handler.resolveOwnershipTransferTerminal(id)
+    if (!source) throw new Error('missing source')
+    handler.setOwnershipTransferInputFenced(id, true)
+    const closing = handler.applyOwnershipTransferControl(
+      id,
+      source.incarnationId,
+      { kind: 'shutdown', immediate: true },
+      () => true
+    )
+    expect(sweep).toHaveBeenCalledTimes(1)
+    expect(kill).not.toHaveBeenCalled()
+    release?.()
+    await vi.waitFor(() => expect(kill).toHaveBeenCalledTimes(1))
+    exit?.({ exitCode: 137 })
+    await expect(closing).resolves.toBe('applied')
+  })
+
   it('retains the agent claim instead of adopting or duplicating a closing owner', async () => {
     const id = await spawn({ agentSessionEnsure: ensure })
     const closing = close(id)

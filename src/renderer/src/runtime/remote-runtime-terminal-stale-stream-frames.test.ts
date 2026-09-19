@@ -84,4 +84,13 @@ describe('remote terminal stale stream frames', () => {
     expect(opcodeCount(TerminalStreamOpcode.ClaimViewport)).toBe(0)
     expect(opcodeCount(TerminalStreamOpcode.Resize)).toBe(0)
   })
+
+  it('keeps operation-aware input off the legacy binary stream', async () => {
+    const stream = await subscribeStream('terminal-1')
+    sent = []
+    expect(stream.sendInput('retry-aware', { operationId: 'paste-1' })).toBe(false)
+    expect(inputTextOnWire()).toBe('')
+    expect(stream.sendInput('ordinary')).toBe(true)
+    expect(inputTextOnWire()).toBe('ordinary')
+  })
 })

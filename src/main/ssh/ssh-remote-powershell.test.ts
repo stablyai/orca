@@ -43,6 +43,11 @@ describe('powerShellCommand', () => {
 
 const MAIN_DIR = join(import.meta.dirname, '..')
 
+function policyScanSource(source: string): string {
+  // Get-ChildItem's file filter does not load a script or invoke another interpreter.
+  return stripComments(source).replace(/(\bGet-ChildItem\b[^;\r\n|&`"']*?)\s-File\b/gi, '$1')
+}
+
 // Why: execution policy gates loading script FILES and nothing else, so dropping
 // `-ExecutionPolicy Bypass` is a no-op exactly while no remote payload loads one. That
 // invariant is what makes the switch safe to omit, and it was previously guarded by nothing:
@@ -90,9 +95,15 @@ const POLICY_GATED_CONSTRUCTS = [
     catches: [
       `runRemote("powershell.exe -NoProfile -File 'C:\\x.ps1'")`,
       `runRemote("powershell.exe  -file   $scriptVar")`,
-      `runRemote(["-NoProfile", "-File", scriptVar])`
+      `runRemote(["-NoProfile", "-File", scriptVar])`,
+      `powerShellCommand("Get-ChildItem -File; powershell.exe -File $scriptVar")`,
+      `powerShellCommand("Get-ChildItem -File | powershell.exe -File $scriptVar")`
     ],
-    ignores: [`fetchWith("--credential-file", path)`, `run("--log-file $p --body-file $b")`]
+    ignores: [
+      `fetchWith("--credential-file", path)`,
+      `run("--log-file $p --body-file $b")`,
+      `powerShellCommand("Get-ChildItem -LiteralPath $path -File -Recurse -Force")`
+    ]
   },
   {
     // The quote/backtick prefixes matter: a dot-source in a generated payload usually sits at
@@ -130,7 +141,7 @@ describe('remote PowerShell payload invariant', () => {
     'loads no remote payload through $label',
     ({ label, pattern }) => {
       const offenders = importers
-        .filter((file) => pattern.test(stripComments(file.source)))
+        .filter((file) => pattern.test(policyScanSource(file.source)))
         .map((file) => file.relativePath)
 
       expect(
@@ -153,10 +164,10 @@ describe('remote PowerShell payload invariant', () => {
     'detects $label wherever it is spelled',
     ({ pattern, catches, ignores }) => {
       for (const sample of catches) {
-        expect(pattern.test(sample), `should catch: ${sample}`).toBe(true)
+        expect(pattern.test(policyScanSource(sample)), `should catch: ${sample}`).toBe(true)
       }
       for (const sample of ignores) {
-        expect(pattern.test(sample), `should ignore: ${sample}`).toBe(false)
+        expect(pattern.test(policyScanSource(sample)), `should ignore: ${sample}`).toBe(false)
       }
     }
   )

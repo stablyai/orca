@@ -1,5 +1,4 @@
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
-import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -10,7 +9,8 @@ import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { getAppliedSizeReadE2eDelayMs } from '../pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from '../pty-size-reassertion'
 import { isPaneReplaying } from '../replay-guard'
-import { isXtermMouseReport, isXtermWheelCursorKey } from '../terminal-pointer-input-sequences'
+import { isTerminalInputUnsafeDuringReplay } from '../terminal-pointer-input-sequences'
+import { subscribePtyInputForward } from './pty-input-subscription'
 import { shouldDropQuarantinedTerminalInput } from '../terminal-input-quarantine'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
@@ -24,23 +24,22 @@ import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { recordE2eInputDisposition } from './e2e-terminal-pty-harness'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
-  session.forwardPtyInput = (data: string, wasUserInput = false): void => {
-    // Why: replaying recorded PTY bytes makes xterm auto-reply to embedded
-    // queries (DA1/DECRQM/OSC 10-11/CPR) via onData; those must not leak into
-    // the shell, but keystrokes typed mid-restore must survive. Pointer input
-    // stays dropped even though xterm flags it as user input: replayed bytes can
-    // leave mouse tracking armed until the guarded mode reset lands (a click
-    // would print SGR fragments on the fresh prompt), and a wheel over a
-    // replayed alt-screen frame becomes cursor keys that would recall history
-    // at that prompt once ?1049l lands. See replay-guard.ts.
+  session.forwardPtyInput = (data: string, userInput = false, blockedAtEmission = false): void => {
+    recordE2eInputDisposition(session.pane.id, 'entered')
+    // Replayed queries must not inject replies, but concurrent user typing is not replay.
     if (
-      isPaneReplaying(session.deps.replayingPanesRef, session.pane.id) &&
-      (!wasUserInput ||
-        isXtermMouseReport(data) ||
-        (isXtermWheelCursorKey(data) && session.pane.terminal.buffer.active.type === 'alternate'))
+      blockedAtEmission ||
+      (isPaneReplaying(session.deps.replayingPanesRef, session.pane.id) &&
+        isTerminalInputUnsafeDuringReplay(
+          data,
+          userInput,
+          session.pane.terminal.buffer.active.type
+        ))
     ) {
+      recordE2eInputDisposition(session.pane.id, 'replay')
       return
     }
     const currentPtyId = session.transport.getPtyId()
@@ -57,6 +56,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         panePtyId: currentPtyId
       })
     ) {
+      recordE2eInputDisposition(session.pane.id, 'stale')
       session.clearPendingTerminalInputIntent()
       return
     }
@@ -64,6 +64,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     // PTY, desktop keystrokes must not reach the shell; the visible overlay's
     // explicit Take back action owns restoring desktop input and dimensions.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
+      recordE2eInputDisposition(session.pane.id, 'locked')
       session.clearPendingTerminalInputIntent()
       return
     }
@@ -76,16 +77,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       // disabling the mode would permanently silence focus events on resume.
       return
     }
-    // Why: xterm answers CPR/DSR/DA queries natively through this same onData
-    // stream (mixed with keystrokes). Those replies are latency-critical — a
-    // querying program reads them in raw mode with a short timeout — so send
-    // them immediately, skipping the remote input debounce that would corrupt
-    // them (#7329). They are not user input, so they bypass intent inference and
-    // activity recording below. No pending-intent guard: the only intents are
-    // plain-escape (`\x1b`) and ctrl-c (`\x03`), neither of which can satisfy
-    // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
-    // so a real keystroke never reaches this branch.
-    if (isTerminalQueryReply(data)) {
+    // Device replies need immediate delivery; genuine keyboard sequences can share their grammar.
+    if (!userInput && isTerminalQueryReply(data)) {
       session.sendDesktopQueryReplyImmediate(data)
       return
     }
@@ -95,6 +88,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     // of the interrupted line would be submitted by the user's own Enter and a
     // compound command could run its surviving half (#10065 follow-up).
     if (shouldDropQuarantinedTerminalInput(session.deps.tabId, data)) {
+      recordE2eInputDisposition(session.pane.id, 'quarantine')
       session.clearPendingTerminalInputIntent()
       return
     }
@@ -162,30 +156,18 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     session.claimViewportForUserActivity()
     if (session.transport.sendInput(data)) {
+      recordE2eInputDisposition(session.pane.id, 'sent')
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)
       session.observeSentTerminalInputIntent(data)
     } else {
+      recordE2eInputDisposition(session.pane.id, 'rejected')
       session.clearPendingTerminalInputIntent()
       session.requestRecoveryForUndeliverableInput()
     }
   }
-  // Why bind once: provenance must survive deferPtyInput's later callback, and
-  // this is the per-keystroke hot path, so no closure allocation per onData event.
-  const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
-  const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
-  session.onDataDisposable = subscribeToTerminalInputData(
-    session.pane.terminal,
-    (data, wasUserInput) => {
-      const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
-      if (session.deps.deferPtyInput) {
-        session.deps.deferPtyInput(session.pane.id, data, forward)
-        return
-      }
-      forward(data)
-    }
-  )
+  session.onDataDisposable = subscribePtyInputForward(session)
   session.imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
     terminalElement: session.pane.terminal.element,
     terminal: session.pane.terminal,
@@ -201,12 +183,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   }
 
   session.isRendererPtyResizeAuthoritative = (): boolean => {
-    if (session.deps.isVisibleRef.current) {
-      return true
-    }
     // Why: hidden-tab layout churn is not authoritative; visible resume
     // owns correction, and hidden SIGWINCH can reset full-screen TUIs.
-    return false
+    return session.deps.isVisibleRef.current
   }
 
   session.forwardPtyResize = (cols: number, rows: number): void => {

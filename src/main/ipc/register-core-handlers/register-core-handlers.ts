@@ -214,7 +214,7 @@ export function registerCoreHandlers(
   }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
-  registerRuntimeEnvironmentHandlers(store)
+  registerRuntimeEnvironmentHandlers(store, runtime, runtime)
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>

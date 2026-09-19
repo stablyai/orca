@@ -95,6 +95,7 @@ export class RpcDispatcher {
         context: {
           runtime: this.runtime,
           signal: options?.signal,
+          transportGeneration: options?.transportGeneration,
           connectionId: options?.connectionId,
           requestId: request.id,
           clientId: options?.clientId,

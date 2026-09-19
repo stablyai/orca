@@ -25,7 +25,7 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-function syncDirectorySync(directory: string): void {
+export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
   try {
     fd = openSync(directory, 'r')
@@ -190,12 +190,17 @@ export async function removeStaleDurableWriteTempFiles(
 export function writeFileDurableSync(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array
+  payload: string | Uint8Array,
+  mode?: number
 ): void {
   let renamed = false
   try {
     // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
-    writeFileSync(tmpPath, payload)
+    if (mode === undefined) {
+      writeFileSync(tmpPath, payload)
+    } else {
+      writeFileSync(tmpPath, payload, { mode })
+    }
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)
@@ -204,7 +209,7 @@ export function writeFileDurableSync(
     }
     renameFileWithWindowsRetry(tmpPath, finalPath)
     renamed = true
-    syncDirectorySync(dirname(finalPath))
+    syncDirectoryDurablySync(dirname(finalPath))
   } finally {
     if (!renamed) {
       rmSync(tmpPath, { force: true })

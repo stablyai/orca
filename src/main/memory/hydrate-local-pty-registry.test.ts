@@ -60,7 +60,8 @@ function makeStore(
     kind?: Repo['kind']
     path?: string
   }[] = [],
-  worktreeMeta: Record<string, WorktreeMeta> = {}
+  worktreeMeta: Record<string, WorktreeMeta> = {},
+  folderWorkspaces: FolderWorkspace[] = []
 ): Store {
   const built: Repo[] = repos.map((r) => ({
     id: r.id,
@@ -72,15 +73,17 @@ function makeStore(
     executionHostId: r.executionHostId ?? null,
     kind: r.kind
   }))
-  return {
+  const store: Partial<Store> = {
     getRepos: () => built,
-    getFolderWorkspaces: (): FolderWorkspace[] => [],
+    getFolderWorkspaces: () => folderWorkspaces,
+    getProjectGroups: () => [],
     getAllWorktreeMeta: () => worktreeMeta,
     getAllWorktreeMetaForHost: (hostId) =>
       Object.fromEntries(
         Object.entries(worktreeMeta).filter(([, meta]) => !meta.hostId || meta.hostId === hostId)
       )
-  } as Store
+  }
+  return store as Store
 }
 
 function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSessions'> {
@@ -804,6 +807,57 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
           pid: 4242
         })
       }
+      expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('hydrates surviving true folder workspace PTYs without enumerating Git', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+    const workspace = {
+      id: 'folder-workspace-1',
+      executionHostId: 'local'
+    } as FolderWorkspace
+    getDaemonProviderMock.mockReturnValue(
+      makeProvider([
+        {
+          sessionId: 'folder:folder-workspace-1@@cafebabe',
+          pid: 4242,
+          cwd: '/workspace/folder'
+        } as unknown as SessionInfo
+      ])
+    )
+
+    await hydrate(makeStore([], {}, [workspace]))
+    expect(listRegisteredPtys()).toEqual([
+      expect.objectContaining({
+        ptyId: 'folder:folder-workspace-1@@cafebabe',
+        worktreeId: 'folder:folder-workspace-1',
+        pid: 4242
+      })
+    ])
+    expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['deleted', 'remote'] as const)(
+    'rechecks folder ownership after inventory when the catalog becomes %s',
+    async (change) => {
+      const { hydrate, listRegisteredPtys } = await loadFresh()
+      const folders = [{ id: 'folder-1', executionHostId: 'local' } as FolderWorkspace]
+      const store = makeStore([], {}, folders)
+      getDaemonProviderMock.mockReturnValue({
+        listSessions: vi.fn().mockImplementation(async () => {
+          if (change === 'deleted') {
+            folders.splice(0)
+          } else {
+            folders[0].executionHostId = 'runtime:environment-1'
+          }
+          return [{ sessionId: 'folder:folder-1@@cafebabe', pid: 4242 } as SessionInfo]
+        })
+      })
+
+      await hydrate(store)
+
+      expect(listRegisteredPtys()).toEqual([])
       expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
     }
   )

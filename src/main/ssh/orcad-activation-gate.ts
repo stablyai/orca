@@ -13,15 +13,26 @@
  * things.
  */
 import type { ServeReadiness } from '../server/serve-readiness'
+import { parsePairingCode } from '../../shared/pairing'
+import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import type { OrcadBunTarget } from '../../shared/orcad-bun-runtime'
 
 export type OrcadActivationRejectCode =
   | 'orcad_activation_no_readiness'
   | 'orcad_activation_no_health'
   | 'orcad_activation_build_mismatch'
+  | 'orcad_activation_build_target_mismatch'
   | 'orcad_activation_not_listening'
+  | 'orcad_activation_pairing_unavailable'
+  | 'orcad_activation_pairing_invalid'
+  | 'orcad_activation_runtime_mismatch'
+  | 'orcad_activation_pty_backend_mismatch'
+  | 'orcad_activation_daemon_runtime_mismatch'
+  | 'orcad_activation_daemon_pty_backend_mismatch'
   | 'orcad_activation_daemon_absent'
   | 'orcad_activation_daemon_degraded'
   | 'orcad_activation_pty_self_test_failed'
+  | 'orcad_activation_pty_self_test_insufficient'
   | 'orcad_activation_no_persistent_terminals'
 
 export type OrcadActivationVerdict =
@@ -29,9 +40,8 @@ export type OrcadActivationVerdict =
       decision: 'activate'
       /**
        * `pty-spawn` means a real PTY was created and torn down inside the daemon.
-       * `handshake` means the daemon answered but its spawn probe is a no-op on this
-       * platform (win32). Carried through so an activation is never recorded as proving
-       * more than it did.
+       * `handshake` means the daemon answered but did not prove a PTY spawn. Retained for
+       * mixed-version payloads; activation rejects this weaker coverage.
        */
       coverage: 'pty-spawn' | 'handshake'
       warnings: string[]
@@ -43,6 +53,37 @@ export type OrcadActivationExpectation = {
   buildHash: string
   /** The full content-hashed version this deploy installed. */
   fullVersion: string
+  /** Runtime that the selected immutable slot is expected to launch. */
+  runtimeKind: 'bun' | 'node'
+  /** Native slot selected after probing the execution host. */
+  buildTarget?: OrcadBunTarget
+  /** Remote port the managed SSH tunnel is pinned to. */
+  port: number
+  /** Require runtime/backend proof from the terminal daemon itself. */
+  requireDaemonRuntimeIdentity?: boolean
+}
+
+function isLoopbackWebSocketEndpoint(value: string): boolean {
+  try {
+    const endpoint = new URL(value)
+    return (
+      (endpoint.protocol === 'ws:' || endpoint.protocol === 'wss:') &&
+      classifyRemotePairingHostname(endpoint.hostname) === 'loopback'
+    )
+  } catch {
+    return false
+  }
+}
+
+function endpointPort(value: string): number | null {
+  try {
+    const endpoint = new URL(value)
+    const port = endpoint.port || (endpoint.protocol === 'wss:' ? '443' : '80')
+    const parsed = Number.parseInt(port, 10)
+    return Number.isInteger(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -88,13 +129,84 @@ export function evaluateOrcadActivation(
         'upload did not land. Nothing was activated.'
     }
   }
-  if (!readiness.boundEndpoint) {
+  if (expected.buildTarget) {
+    const [platform, arch, libc] = expected.buildTarget.split('-')
+    if (
+      health.buildTarget !== expected.buildTarget ||
+      health.platform !== platform ||
+      health.arch !== arch ||
+      (platform === 'linux' && health.libc !== libc)
+    ) {
+      return {
+        decision: 'reject',
+        code: 'orcad_activation_build_target_mismatch',
+        reason:
+          `The candidate reports target ${health.buildTarget ?? 'unknown'} on ` +
+          `${health.platform}-${health.arch}${health.libc ? `-${health.libc}` : ''}, not the ` +
+          `${expected.buildTarget} slot selected for this host. Nothing was activated.`
+      }
+    }
+  }
+  if (
+    !readiness.boundEndpoint ||
+    !isLoopbackWebSocketEndpoint(readiness.boundEndpoint) ||
+    endpointPort(readiness.boundEndpoint) !== expected.port
+  ) {
     return {
       decision: 'reject',
       code: 'orcad_activation_not_listening',
       reason:
-        'The candidate reported no bound endpoint, so no client could reach it. Nothing was ' +
-        'activated.'
+        'The candidate did not report a loopback WebSocket endpoint, so the managed SSH ' +
+        'tunnel cannot reach it without widening network exposure. Nothing was activated.'
+    }
+  }
+  if (!readiness.pairing.available) {
+    return {
+      decision: 'reject',
+      code: 'orcad_activation_pairing_unavailable',
+      reason:
+        `The candidate did not publish a managed-runtime pairing offer ` +
+        `(${readiness.pairing.reason}). Without credentials the client cannot link the ` +
+        'server after activation. Nothing was activated.'
+    }
+  }
+  const pairingOffer = parsePairingCode(readiness.pairing.url)
+  if (
+    !pairingOffer ||
+    pairingOffer.scope !== 'runtime' ||
+    pairingOffer.pairedDeviceId !== readiness.pairing.deviceId ||
+    readiness.pairing.scope !== 'runtime' ||
+    !isLoopbackWebSocketEndpoint(pairingOffer.endpoint) ||
+    !isLoopbackWebSocketEndpoint(readiness.pairing.endpoint) ||
+    endpointPort(pairingOffer.endpoint) !== expected.port ||
+    endpointPort(readiness.pairing.endpoint) !== expected.port ||
+    new URL(pairingOffer.endpoint).toString() !== new URL(readiness.pairing.endpoint).toString()
+  ) {
+    return {
+      decision: 'reject',
+      code: 'orcad_activation_pairing_invalid',
+      reason:
+        'The candidate published an invalid or inconsistent managed-runtime pairing offer. ' +
+        'The client could not safely create its tunneled credential. Nothing was activated.'
+    }
+  }
+  if (health.runtimeKind !== expected.runtimeKind) {
+    return {
+      decision: 'reject',
+      code: 'orcad_activation_runtime_mismatch',
+      reason:
+        `The candidate is running under ${health.runtimeKind ?? 'an unidentified runtime'}, ` +
+        `not the expected ${expected.runtimeKind}. Nothing was activated.`
+    }
+  }
+  const expectedPtyBackend = expected.runtimeKind === 'bun' ? 'bun-terminal' : 'node-pty'
+  if (health.ptyBackend !== expectedPtyBackend) {
+    return {
+      decision: 'reject',
+      code: 'orcad_activation_pty_backend_mismatch',
+      reason:
+        `The candidate reports PTY backend ${health.ptyBackend ?? 'unknown'}, not ` +
+        `${expectedPtyBackend}. Nothing was activated.`
     }
   }
   const daemon = health.terminalDaemon
@@ -118,6 +230,27 @@ export function evaluateOrcadActivation(
         'Nothing was activated; the previous version is still serving.'
     }
   }
+  if (expected.requireDaemonRuntimeIdentity) {
+    if (daemon.runtimeKind !== expected.runtimeKind) {
+      return {
+        decision: 'reject',
+        code: 'orcad_activation_daemon_runtime_mismatch',
+        reason:
+          `The terminal daemon is running under ${daemon.runtimeKind ?? 'an unidentified runtime'}, ` +
+          `not the expected ${expected.runtimeKind}. Nothing was activated.`
+      }
+    }
+    const expectedDaemonBackend = expected.runtimeKind === 'bun' ? 'bun-terminal' : 'node-pty'
+    if (daemon.ptyBackend !== expectedDaemonBackend) {
+      return {
+        decision: 'reject',
+        code: 'orcad_activation_daemon_pty_backend_mismatch',
+        reason:
+          `The terminal daemon reports PTY backend ${daemon.ptyBackend ?? 'unknown'}, not ` +
+          `${expectedDaemonBackend}. Nothing was activated.`
+      }
+    }
+  }
   if (!daemon.selfTest.ok) {
     return {
       decision: 'reject',
@@ -125,6 +258,15 @@ export function evaluateOrcadActivation(
       reason:
         `The candidate's PTY self-test failed (${daemon.selfTest.verdict}). The host is ` +
         'listening but cannot create a terminal. Nothing was activated.'
+    }
+  }
+  if (daemon.selfTest.coverage !== 'pty-spawn') {
+    return {
+      decision: 'reject',
+      code: 'orcad_activation_pty_self_test_insufficient',
+      reason:
+        "The candidate's daemon answered its health handshake but did not prove a real PTY " +
+        'spawn and exit on this host. Nothing was activated.'
     }
   }
   if (!daemon.ownsFreshSessions) {
@@ -137,12 +279,6 @@ export function evaluateOrcadActivation(
     }
   }
   const warnings: string[] = []
-  if (daemon.selfTest.coverage === 'handshake') {
-    warnings.push(
-      'The PTY self-test covered the daemon handshake only — this platform does not spawn a ' +
-        'probe PTY. Terminal creation is unproven on this host.'
-    )
-  }
   if (health.buildVersion !== expected.fullVersion) {
     // Not a rejection: the hash already proved identity, and ORCA_VERSION is whatever the
     // launch command exported. Worth saying, because a mismatch means the launch env is wrong.

@@ -12,11 +12,10 @@ import {
   type DecodedFrame
 } from './protocol'
 import { relayLogLine } from './relay-diagnostic-log'
+import { beginRelayConnectHandshake } from './relay-connect-handshake'
 
 // Why: clients treat this exit code as non-retryable; other non-zero exits are transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
-// Why distinct from 42: a refused credential is a live daemon saying no, which the client must
-// not confuse with a crashed bridge (exit 0/1) or with a version skew (42).
 export const EXIT_CODE_CREDENTIAL_MISMATCH = 43
 
 // Why: read .version beside the resolved script path, not the arbitrary launch cwd.
@@ -139,8 +138,10 @@ function handleDaemonHandshakeFrame(
     sock.end()
     return false
   }
-  const presented = 'endpointCredential' in msg ? msg.endpointCredential : undefined
-  if (endpointCredential !== undefined && presented !== endpointCredential) {
+  if (
+    endpointCredential !== undefined &&
+    ('endpointCredential' in msg ? msg.endpointCredential : undefined) !== endpointCredential
+  ) {
     relayLogLine('[relay] Endpoint credential mismatch; closing socket')
     try {
       sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-credential-mismatch' }))
@@ -169,81 +170,25 @@ export function runConnectHandshake(
   cb: ConnectHandshakeCallbacks,
   endpointCredential?: string
 ): void {
-  let handshakeDone = false
-
-  const decoder: FrameDecoder = new FrameDecoder(
-    (frame: DecodedFrame) => {
-      if (handshakeDone) {
-        return
-      }
-      if (frame.type !== MessageType.Handshake) {
-        process.stderr.write(
-          `[relay-connect] Protocol violation: expected Handshake frame, got type=${frame.type}\n`
-        )
-        sock.destroy()
-        process.exit(1)
-      }
-      let msg: ReturnType<typeof parseHandshakeMessage>
-      try {
-        msg = parseHandshakeMessage(frame.payload)
-      } catch (err) {
-        process.stderr.write(
-          `[relay-connect] Could not parse handshake reply: ${(err as Error).message}\n`
-        )
-        sock.destroy()
-        process.exit(1)
-      }
-      if (msg.type === 'orca-relay-handshake-ok') {
-        process.stderr.write(`[relay-connect] Handshake OK at version=${msg.version}\n`)
-        handshakeDone = true
-        const leftover = decoder.drain()
-        sock.removeAllListeners('data')
+  beginRelayConnectHandshake(
+    sock,
+    myVersion,
+    {
+      onAccepted: (leftover) => {
+        process.stderr.write(`[relay-connect] Handshake OK at version=${myVersion}\n`)
         cb.onAccepted(leftover)
-        return
-      }
-      if (msg.type === 'orca-relay-handshake-mismatch') {
-        // Why: exit inside the write callback; stderr is async on pipe transports, so exiting early drops the version detail.
+      },
+      onRejected: (error) => {
+        // Flush diagnostics before the CLI exits; in-process clients report the same error.
         process.stderr.write(
-          `[relay-connect] Handshake mismatch: expected=${msg.expected}, daemon=${msg.got}; exiting ${EXIT_CODE_VERSION_MISMATCH}\n`,
+          `[relay-connect] ${error.message}; exiting ${error.exitCode}\n`,
           () => {
             sock.destroy()
-            process.exit(EXIT_CODE_VERSION_MISMATCH)
+            process.exit(error.exitCode)
           }
         )
-        return
       }
-      if (msg.type === 'orca-relay-handshake-credential-mismatch') {
-        process.stderr.write(
-          `[relay-connect] Endpoint credential refused by daemon; exiting ${EXIT_CODE_CREDENTIAL_MISMATCH}\n`,
-          () => {
-            sock.destroy()
-            process.exit(EXIT_CODE_CREDENTIAL_MISMATCH)
-          }
-        )
-        return
-      }
-      process.stderr.write(`[relay-connect] Unexpected handshake type: ${msg.type}\n`)
-      sock.destroy()
-      process.exit(1)
     },
-    (err) => {
-      process.stderr.write(`[relay-connect] Handshake decode error: ${err.message}\n`)
-      sock.destroy()
-      process.exit(1)
-    }
-  )
-
-  sock.on('data', (chunk: Buffer) => {
-    if (!handshakeDone) {
-      decoder.feed(chunk)
-    }
-  })
-
-  sock.write(
-    encodeHandshakeFrame({
-      type: 'orca-relay-handshake',
-      version: myVersion,
-      ...(endpointCredential ? { endpointCredential } : {})
-    })
+    endpointCredential
   )
 }

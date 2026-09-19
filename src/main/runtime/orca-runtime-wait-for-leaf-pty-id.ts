@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } from './orca-runtime-restore-live-paired-renderer-session-owned-mobile-terminals'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import { assertOutgoingPtyModelMutationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals {
   // Why: mobile may subscribe before the PTY spawns; wait for it so subscribe proceeds with phone-fit instead of a bare scrollback+end.
@@ -110,6 +111,7 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
     },
     trailingOutput: { data: string; seq: number }[] = []
   ): void {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     if (!snapshot.data) {
       return
     }

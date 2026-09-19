@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RELAY_BUN_RUNTIME_FILENAME,
+  RELAY_BUN_GLIBC_RUNTIME_FILENAME,
+  RELAY_BUN_MUSL_RUNTIME_FILENAME,
   RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  relayBunRuntimeFilename,
   relayArtifactFilenames,
   relayOptionalArtifactFilenames
 } from './relay-artifacts'
@@ -16,7 +20,29 @@ describe('optional relay artifacts', () => {
 
   it('never offers it to a non-Windows host', () => {
     expect(relayOptionalArtifactFilenames(false)).not.toContain(RELAY_WINDOWS_PROCESS_TREE_FILENAME)
-    expect(relayOptionalArtifactFilenames(false)).toEqual([])
+  })
+
+  it('declares the Bun runtime optional for both host families', () => {
+    for (const isWindows of [false, true]) {
+      expect(relayOptionalArtifactFilenames(isWindows)).toContain(RELAY_BUN_RUNTIME_FILENAME)
+    }
+  })
+
+  it('filters current Linux packages to both libc-specific runtimes', () => {
+    expect(relayOptionalArtifactFilenames('linux-x64')).toEqual([
+      RELAY_BUN_GLIBC_RUNTIME_FILENAME,
+      RELAY_BUN_MUSL_RUNTIME_FILENAME
+    ])
+    expect(relayOptionalArtifactFilenames('darwin-arm64')).toContain(RELAY_BUN_RUNTIME_FILENAME)
+    expect(relayOptionalArtifactFilenames('darwin-arm64')).not.toContain(
+      RELAY_BUN_GLIBC_RUNTIME_FILENAME
+    )
+  })
+
+  it('maps Bun target names to staged runtime filenames', () => {
+    expect(relayBunRuntimeFilename('linux-x64-glibc')).toBe(RELAY_BUN_GLIBC_RUNTIME_FILENAME)
+    expect(relayBunRuntimeFilename('linux-arm64-musl')).toBe(RELAY_BUN_MUSL_RUNTIME_FILENAME)
+    expect(relayBunRuntimeFilename('win32-x64')).toBe(RELAY_BUN_RUNTIME_FILENAME)
   })
 
   it('keeps required and optional sets disjoint', () => {

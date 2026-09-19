@@ -6,15 +6,21 @@
  * activated" would deploy over a live install and lose its rollback target.
  */
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import {
   ORCAD_ACTIVATION_FILENAME,
   emptyOrcadActivationRecord,
   parseOrcadActivationRecord,
+  serializeOrcadActivationRecord,
   type OrcadActivationRecord
 } from './orcad-activation-record'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import {
+  readBoundedOrcadRemoteRecord,
+  writeAtomicOrcadRemoteRecord
+} from './orcad-remote-record-file'
+
+const ORCAD_ACTIVATION_RECORD_MAX_BYTES = 64 * 1024
 
 export function orcadActivationPath(host: RemoteHostPlatform, remoteHome: string): string {
   return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, ORCAD_ACTIVATION_FILENAME)
@@ -27,10 +33,7 @@ export async function readOrcadActivationRecord(options: {
   signal?: AbortSignal
 }): Promise<OrcadActivationRecord> {
   const path = orcadActivationPath(options.host, options.remoteHome)
-  const raw = await execCommand(options.conn, `cat ${shellQuote(path)} 2>/dev/null || true`, {
-    wrapCommand: options.host.commandDialect !== 'powershell',
-    signal: options.signal
-  }).catch(() => '')
+  const raw = await readBoundedOrcadRemoteRecord(options, path, ORCAD_ACTIVATION_RECORD_MAX_BYTES)
   const parsed = parseOrcadActivationRecord(raw)
   if (parsed.state === 'ok') {
     return parsed.record
@@ -43,6 +46,16 @@ export async function readOrcadActivationRecord(options: {
   return emptyOrcadActivationRecord()
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
+export async function writeOrcadActivationRecord(
+  options: {
+    conn: SshConnection
+    host: RemoteHostPlatform
+    remoteHome: string
+    signal?: AbortSignal
+  },
+  record: OrcadActivationRecord
+): Promise<void> {
+  const path = orcadActivationPath(options.host, options.remoteHome)
+  const contents = serializeOrcadActivationRecord(record)
+  await writeAtomicOrcadRemoteRecord(options, path, contents)
 }

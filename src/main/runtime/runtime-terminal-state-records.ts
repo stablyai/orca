@@ -108,6 +108,7 @@ export type RuntimePtyTitleTrackerEntry = {
 }
 
 export type RuntimeHeadlessTerminal = {
+  restoringSnapshot?: boolean
   emulator: HeadlessEmulator
   outputSequence: number
   writeChain: Promise<void>
@@ -146,6 +147,8 @@ export type RuntimeTerminalBufferSnapshot = {
 }
 
 export type HeadlessSeedMetadata = {
+  lastTitle?: string
+  pendingEscapeTailAnsi?: string
   cwd?: string | null
   oscLinks?: TerminalOscLinkRange[]
   preferProviderIfExisting?: boolean

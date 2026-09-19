@@ -167,6 +167,9 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     this.scheduleRestoredMessageRepoints()
   }
 
+  stopLegacyWorkerTerminalRecovery(): Promise<void> {
+    return this.legacyWorkerRecovery.stop()
+  }
   protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
     const store = this.store
     if (store?.flushPendingOrThrowAsync) {

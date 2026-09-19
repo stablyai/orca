@@ -26,7 +26,8 @@ function setup(requestTail: Buffer = Buffer.alloc(0)) {
       socket.emit('close')
     })
   })
-  const accept = vi.mocked(createServer).mock.calls.at(-1)![0] as (socket: Socket) => void
+  const accept = vi.mocked(createServer).mock.calls.at(-1)![1] as (socket: Socket) => void
+  expect(vi.mocked(createServer).mock.calls.at(-1)![0]).toEqual({ allowHalfOpen: true })
   accept(socket as unknown as Socket)
   socket.emit('data', Buffer.from([5, 1, 0]))
   socket.emit('data', Buffer.concat([Buffer.from([5, 1, 0, 1, 127, 0, 0, 1, 1, 187]), requestTail]))

@@ -86,11 +86,12 @@ export function activateLocalPtySession(args: {
           ? {
               id,
               data: emission.data,
+              incarnationId,
               sequenceChars,
               seq: emission.rawEndSeq,
               transformed: true
             }
-          : { id, data: emission.data }
+          : { id, data: emission.data, incarnationId }
       )
     }
   }
