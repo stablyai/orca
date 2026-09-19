@@ -491,7 +491,9 @@ describeRender('the Route A page in a real browser', () => {
       )
       const box = fab?.getBoundingClientRect() ?? null
       const hit =
-        box === null ? null : document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+        box === null
+          ? null
+          : document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
       return {
         rootHeight: document.getElementById('root').getBoundingClientRect().height,
         viewportHeight: window.innerHeight,
