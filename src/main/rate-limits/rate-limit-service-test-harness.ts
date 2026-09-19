@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { vi, type Mock } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
+import { fetchAntigravityRateLimits } from './antigravity-quota-fetch'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
@@ -89,6 +90,10 @@ export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  // Why: the mirror is the documented fallback, so an un-stubbed Antigravity read must leave it in charge.
+  vi.mocked(fetchAntigravityRateLimits).mockImplementation(async () =>
+    unavailableProvider('antigravity')
+  )
 }
 
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
@@ -106,6 +111,7 @@ export function resetRateLimitProviderMocks(): void {
     error: null,
     status: 'unavailable'
   })
+  vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
 }

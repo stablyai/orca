@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-quota-fetch'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import {
   errorProvider,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
@@ -17,6 +19,10 @@ vi.mock('./claude-fetcher', () => ({
 vi.mock('./codex-fetcher', () => ({
   consumeCodexRateLimitResetCredit: vi.fn(),
   fetchCodexRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-quota-fetch', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./gemini-usage-fetcher', () => ({
@@ -96,5 +102,54 @@ describe('RateLimitService Antigravity usage', () => {
     // Why: stale-retention would otherwise show Gemini numbers as "Refresh failed" Antigravity usage.
     expect(service.getState().antigravity?.status).toBe('unavailable')
     expect(service.getState().antigravity?.session).toBeNull()
+  })
+
+  it("publishes Antigravity's own quota instead of the Gemini mirror when a read succeeds", async () => {
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue({
+      ...okProvider('antigravity', 90, Date.now()),
+      buckets: [
+        {
+          name: 'Claude and GPT models (5h)',
+          usedPercent: 90,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ]
+    })
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.antigravity?.status).toBe('ok')
+    expect(state.antigravity?.session?.usedPercent).toBe(90)
+    expect(state.antigravity?.buckets?.[0]?.name).toBe('Claude and GPT models (5h)')
+    // Why: the mirror must not overwrite a real read, and Gemini keeps its own numbers.
+    expect(state.gemini?.session?.usedPercent).toBe(42)
+  })
+
+  it('falls back to the mirror when no host holds an Antigravity sign-in', async () => {
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(42)
+  })
+
+  it('does not let a failed Antigravity read blank out a usable mirror', async () => {
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(
+      errorProvider('antigravity', 'Remote host did not answer.')
+    )
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(service.getState().antigravity?.status).toBe('ok')
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(42)
   })
 })

@@ -18,6 +18,7 @@ export function StatusBarVisibilityMenu({
   controller: StatusBarController
 }): React.JSX.Element {
   const {
+    antigravitySlotAvailable,
     detectedAgentIds,
     menuOpen,
     menuPoint,
@@ -74,7 +75,7 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
+        {antigravitySlotAvailable && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('antigravity')}
             onCheckedChange={() => {
