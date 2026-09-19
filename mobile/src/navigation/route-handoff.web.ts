@@ -102,10 +102,12 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
  * still-mounted view; Back reveals the page with nothing reloaded, and the multi-megabyte bundle is
  * never re-executed.
  *
- * The four members that can leave this document are wrapped and the rest are the router's own. The
- * three that carry a target are decided by one answer: the shell says which routes are the page's,
- * in `init`. `back` carries none and is decided by the document's own stack instead, because there
- * is no target to match — what it leaves for is whatever the shell pushed this page onto.
+ * Six members are wrapped and the rest are the router's own. Five carry a target — `push`,
+ * `replace`, `navigate`, `dismissTo` and `prefetch`, the set `WRAPPED_HREF_MEMBERS` pins — and four
+ * of those are decided by one answer: the shell says which routes are the page's, in `init`.
+ * `prefetch` is the fifth and is decided differently, below. `back` is the sixth and carries no
+ * target at all, so it is decided by this document's own stack instead — what it leaves for is
+ * whatever the shell pushed this page onto.
  *
  * The third answer is the one this file used not to have. `handOff` fails for two reasons that are
  * nothing like a page route — an href the protocol's own pattern drops, and a shell that answered
@@ -115,7 +117,7 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
  * the lesser failure, and the route policy is what keeps the case off a device in the first place:
  * a shell that grants no `navigate` renders no page route at all.
  *
- * `back` keeps a fallthrough the other three lost, and for the reason they lost theirs: it has no
+ * `back` keeps a fallthrough the target-takers lost, and for the reason they lost theirs: it has no
  * target to mount, so `router.back()` on a document holding one history entry is the same nothing
  * a refusal would have been.
  *
