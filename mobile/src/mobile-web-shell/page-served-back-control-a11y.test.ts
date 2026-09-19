@@ -17,10 +17,10 @@ import { describe, expect, it } from 'vitest'
  *
  * The label half of that predicate would be circular on its own — a control with the wrong label
  * and an opaque handler would simply not be found — which is what the presence assertion below is
- * for: a screen tree that yields no control at all fails. Two of the five depend on it today, the
- * host screen through `actions.leaveHost` and the preview through the hook's `requestBack`, so it
- * is load-bearing rather than decorative. The gap it leaves is a second Back control in a tree
- * that already has one.
+ * for: a screen that yields no control at all fails. One of the five depends on it today, the host
+ * screen, whose `actions.leaveHost` is a member access this rule does not follow; the other four
+ * are found behaviourally, the preview included, because the hook's `requestBack` is named for
+ * what it does. The gap it leaves is a second Back control in a screen that already has one.
  */
 const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
 const PAGE_ROUTE_REGISTRY = join(
@@ -31,14 +31,28 @@ const PAGE_ROUTE_REGISTRY = join(
   'mobile-web-page-routes.mjs'
 )
 
-/** One entry per route in MOBILE_WEB_PAGE_ROUTES: the tree whose chrome that route serves. */
+/**
+ * One entry per route in MOBILE_WEB_PAGE_ROUTES, naming the module that renders that route's Back.
+ * The module rather than its directory, because two routes share `src/files`: asserting presence
+ * per directory lets one of the pair answer for both, and the preview's Back could then be
+ * rewritten into a Close with nothing going red.
+ */
 const PAGE_SERVED_SCREENS = [
-  { pathname: '/h/[hostId]', tree: 'src/host-screen' },
-  { pathname: '/h/[hostId]/agent-history/[worktreeId]', tree: 'src/agent-history' },
-  { pathname: '/h/[hostId]/tasks', tree: 'src/tasks' },
-  { pathname: '/h/[hostId]/files/[worktreeId]', tree: 'src/files' },
-  { pathname: '/h/[hostId]/files/preview/[worktreeId]', tree: 'src/files' }
+  { pathname: '/h/[hostId]', screen: 'src/host-screen/host-screen-header.tsx' },
+  {
+    pathname: '/h/[hostId]/agent-history/[worktreeId]',
+    screen: 'src/agent-history/MobileAgentSessionHistoryPanel.tsx'
+  },
+  { pathname: '/h/[hostId]/tasks', screen: 'src/tasks/mobile-tasks-screen-chrome.tsx' },
+  { pathname: '/h/[hostId]/files/[worktreeId]', screen: 'src/files/MobileFileExplorerPanel.tsx' },
+  {
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    screen: 'src/files/MobileFilePreviewScreen.tsx'
+  }
 ]
+
+/** The rule reads whole trees, so a Back added beside a screen is ruled as well as the screen's. */
+const screenTree = (screen: string): string => screen.slice(0, screen.lastIndexOf('/'))
 
 const PRESSABLE_TAGS = new Set(['Pressable', 'TouchableOpacity'])
 /** `router.back()`, `goBack()`, `onBack()`; the leading class keeps `callback(` and `rollback(` out. */
@@ -182,7 +196,7 @@ function registeredPathnames(): string[] {
     .sort()
 }
 
-const SCREEN_TREES = [...new Set(PAGE_SERVED_SCREENS.map((screen) => screen.tree))]
+const SCREEN_TREES = [...new Set(PAGE_SERVED_SCREENS.map((entry) => screenTree(entry.screen)))]
 const CONTROLS = SCREEN_TREES.flatMap((tree) => backControlsUnder(tree))
 
 describe('Back controls in the screens the page serves', () => {
@@ -192,9 +206,11 @@ describe('Back controls in the screens the page serves', () => {
     expect(registeredPathnames()).toEqual(
       PAGE_SERVED_SCREENS.map((screen) => screen.pathname).sort()
     )
-    for (const tree of SCREEN_TREES) {
-      expect({ [tree]: backControlsUnder(tree).map(describeControl) }).not.toEqual({ [tree]: [] })
-    }
+    expect(
+      PAGE_SERVED_SCREENS.filter((entry) => backControlsIn(entry.screen).length === 0).map(
+        (entry) => `${entry.pathname} -> ${entry.screen}`
+      )
+    ).toEqual([])
   })
 
   it('gives every one of them the button role', () => {
