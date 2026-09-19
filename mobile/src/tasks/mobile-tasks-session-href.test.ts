@@ -22,10 +22,25 @@ function tasksSources(): string[] {
     .map((name) => join(TASKS_DIR, name))
 }
 
+/**
+ * Whether a source builds a `/h/...` route by hand with any segment left raw.
+ *
+ * Every interpolation in such a template, not just the first: checking only the leading one lets
+ * `` `/h/${encodeURIComponent(hostId)}/session/${worktreeId}` `` through, and a worktree id
+ * carrying `/`, `#`, `?` or whitespace breaks the href exactly as a host id does.
+ */
+function hasRawHostTemplate(source: string): boolean {
+  return [...source.matchAll(/`\/h\/[^`]*`/g)].some((match) =>
+    [...match[0].matchAll(/\$\{([^}]*)\}/g)].some(
+      (interpolation) => !interpolation[1].trimStart().startsWith('encodeURIComponent(')
+    )
+  )
+}
+
 describe('a session href built under the tasks tree', () => {
   it('is built by the shared route helper, never interpolated raw', () => {
     const offenders = tasksSources().filter((file) =>
-      /`\/h\/\$\{(?!encodeURIComponent)/.test(readFileSync(file, 'utf8'))
+      hasRawHostTemplate(readFileSync(file, 'utf8'))
     )
     expect(offenders.map((file) => file.slice(TASKS_DIR.length + 1))).toEqual([])
   })

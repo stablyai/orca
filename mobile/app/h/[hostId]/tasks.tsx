@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { BridgeInitRouteSchema } from '../../../src/mobile-web-shell/bridge/bridge-envelope'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
 import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { firstParam } from '../../../src/source-control/mobile-source-control-screen-state'
 import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
 
 /**
@@ -12,7 +13,14 @@ import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
  * its own URL before the first render.
  */
 export default function MobileTasksRoute() {
-  const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
+  // Through `firstParam`, as the agent-history switch does: expo-router hands back an array for a
+  // repeated query key, and a bare read builds `/h/host-a%2Chost-b/tasks` out of one.
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    taskSource?: string | string[]
+  }>()
+  const hostId = firstParam(params.hostId)
+  const taskSource = firstParam(params.taskSource)
   const enabled = useMobileWebShellEnabled()
   const native = <MobileTasksScreen />
 
@@ -23,7 +31,7 @@ export default function MobileTasksRoute() {
     pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
     // Omitted rather than empty: an absent provider lets the page pick its own default, where
     // `taskSource=` is a provider named nothing.
-    ...(taskSource === undefined || taskSource === '' ? {} : { params: { taskSource } })
+    ...(taskSource === '' ? {} : { params: { taskSource } })
   }
   if (!BridgeInitRouteSchema.safeParse(route).success) {
     return native

@@ -17,9 +17,11 @@ import {
  * The tasks page route in a real browser: its own file, as C1.10 split the harness for.
  *
  * What only a browser answers for this route: that every module in its closure evaluates under
- * React Native Web, that the provider param the shell names reaches the screen, that its chunk
- * arrives over the wire, and that the three seams this series added actually fire from a tap —
- * an external link, the Back button, and a clipboard write through the `native.` request.
+ * React Native Web, that the provider param the shell names reaches the screen, and that its chunk
+ * arrives over the wire.
+ *
+ * It does not cover the three seams this series added. The closing note below says why, and where
+ * each is proved instead.
  */
 
 const HOST_ROUTE = '/h/render-check-host'
@@ -77,7 +79,7 @@ afterAll(async () => {
 })
 
 /** A page carrying every signal these cases read: uncaught errors, console errors, script paths. */
-async function openPage({ shellRoute, shellGrants, shellPageRoutes = null, replies } = {}) {
+async function openPage({ shellRoute, shellGrants, shellPageRoutes = null } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   // At document start, where the native shell installs the real channel: the entry reads it while
   // its own script runs, so a channel added after `load` would already be too late.
@@ -91,8 +93,7 @@ async function openPage({ shellRoute, shellGrants, shellPageRoutes = null, repli
     faultGrant,
     // The harness falls back to the fault grant alone, which is the ungranted page.
     grants: shellGrants ?? [faultGrant],
-    pageRoutes: shellPageRoutes,
-    replies
+    pageRoutes: shellPageRoutes
   })
   const errors = []
   const scripts = []
@@ -169,8 +170,9 @@ async function openRoute(route, awaitText, options = {}) {
 
 describeRender('the tasks route in a real browser', () => {
   /**
-   * Every module in this route's closure — 425 of this repository's own, plus the shared
-   * components it reaches — imports and evaluates under React Native Web.
+   * Every module in this route's closure imports and evaluates under React Native Web. How many
+   * that is, and which, is pinned by `mobile-web-app-tasks-external-links.test.mjs`; repeating a
+   * count here would be a second number to keep in step with the first.
    *
    * The unit tests cannot say this: they mock react-native, safe-area, svg, lucide and the icon
    * assets away, because react-native is Flow source vitest will not parse. Import-time breakage
