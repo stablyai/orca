@@ -15,7 +15,13 @@ import { captureBridgeError } from './bridge-error-capture'
  * teardown path nobody wrote a catch for. Nothing here returns a promise, so nothing here can be
  * awaited into a rejection either.
  *
- * `notifyPageFault` is the exception and reads the session instead of requiring it: its one caller
+ * Only the two ungated notifies reach that throw. A grant is read off the session, so before `init`
+ * there is no grant either and `navigate` and `storage` answer false without asking: that is the
+ * same false they answer a shell that withheld the grant, and both callers already handle it —
+ * `useRouteHandoff` pushes inside the page instead, where a throw would take down a tap handler
+ * nobody wrapped.
+ *
+ * `notifyPageFault` reads the session instead of requiring it for a different reason: its one caller
  * is an error boundary, and a report that threw would replace the page's last word with an error
  * nobody catches.
  */
