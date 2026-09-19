@@ -4,12 +4,35 @@ export type MarkdownFenceTracker = {
   readonly insideFence: boolean
   // Returns true when the line was consumed as a fence delimiter.
   consume: (line: string) => boolean
+  consumeRange: (content: string, lineStart: number, lineEnd: number) => boolean
 }
 
 // Top-level fence delimiters may be indented by at most three spaces.
-const FENCE_LINE = /^[ ]{0,3}(`{3,}|~{3,})/
-// marked lets a closer trail a run of fence characters, e.g. ```~~~ closes a ``` block.
-const CLOSING_FENCE_SUFFIX = /^[~`]*[ \t\r]*$/
+const FENCE_LINE = /[ ]{0,3}(`{3,}|~{3,})/y
+function hasClosingSuffix(content: string, start: number, end: number): boolean {
+  let sawWhitespace = false
+  for (let index = start; index < end; index += 1) {
+    const character = content.charCodeAt(index)
+    if (character === 32) {
+      sawWhitespace = true
+      continue
+    }
+    if ((character === 126 || character === 96) && !sawWhitespace) {
+      continue
+    }
+    return false
+  }
+  return true
+}
+
+function hasBacktick(content: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index += 1) {
+    if (content.charCodeAt(index) === 96) {
+      return true
+    }
+  }
+  return false
+}
 
 /** Tracks fenced blocks using the editor parser's closing rules. */
 export function createMarkdownFenceTracker(): MarkdownFenceTracker {
@@ -21,23 +44,31 @@ export function createMarkdownFenceTracker(): MarkdownFenceTracker {
       return length > 0
     },
     consume(line: string): boolean {
-      const match = FENCE_LINE.exec(line)
-      if (!match) {
+      return this.consumeRange(line, 0, line.length)
+    },
+    consumeRange(content: string, lineStart: number, lineEnd: number): boolean {
+      FENCE_LINE.lastIndex = lineStart
+      const match = FENCE_LINE.exec(content)
+      if (!match || match.index !== lineStart || match[0].length > lineEnd - lineStart) {
         return false
       }
       const lineMarker = match[1][0]
       const lineLength = match[1].length
-      const suffix = line.slice(match[0].length)
+      const suffixStart = lineStart + match[0].length
 
       if (length > 0) {
-        if (lineMarker === marker && lineLength >= length && CLOSING_FENCE_SUFFIX.test(suffix)) {
+        if (
+          lineMarker === marker &&
+          lineLength >= length &&
+          hasClosingSuffix(content, suffixStart, lineEnd)
+        ) {
           marker = ''
           length = 0
         }
         return true
       }
 
-      if (lineMarker === '`' && suffix.includes('`')) {
+      if (lineMarker === '`' && hasBacktick(content, suffixStart, lineEnd)) {
         return false
       }
       marker = lineMarker
@@ -91,7 +122,7 @@ export function getMarkdownFenceRanges(content: string): MarkdownFenceRanges {
 
   forEachMarkdownLine(content, (lineStart, lineEnd, nextLineStart) => {
     const wasInside = tracker.insideFence
-    const isFenceLine = tracker.consume(content.slice(lineStart, lineEnd))
+    const isFenceLine = tracker.consumeRange(content, lineStart, lineEnd)
     if (!wasInside && isFenceLine) {
       openStart = lineStart
     } else if (wasInside && !tracker.insideFence) {

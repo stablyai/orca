@@ -24,6 +24,8 @@ export type Harness = {
   posted: string[]
   diagnostics: BridgeHostDiagnostic[]
   navigations: string[]
+  /** Every URL the page asked the shell to open outside the app, in order. */
+  externalLinks: string[]
   /** One entry per `navigate-back` the host answered, in order, with what the shell did. */
   backPops: BridgeNavigateBackOutcome[]
   storageWrites: { key: string; value: string | null }[]
@@ -55,6 +57,7 @@ export function harness(
   const posted: string[] = []
   const diagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
+  const externalLinks: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   let pageReadies = 0
@@ -78,6 +81,7 @@ export function harness(
     },
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onNavigate: options.onNavigate ?? ((href) => navigations.push(href)),
+    onExternalLink: (url) => externalLinks.push(url),
     onNavigateBack: () => {
       const outcome = options.onNavigateBack?.() ?? 'popped'
       backPops.push(outcome)
@@ -105,6 +109,7 @@ export function harness(
     posted,
     diagnostics,
     navigations,
+    externalLinks,
     backPops,
     storageWrites,
     pageReadyCount: () => pageReadies,

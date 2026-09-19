@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { clientFrame, createFakeRpcClient, flushBridge } from './bridge-host-test-fakes'
-import { BRIDGE_FAULT_GRANT, BRIDGE_NAVIGATE_BACK_NOTIFY } from './bridge/bridge-envelope'
+import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY
+} from './bridge/bridge-envelope'
 import { BRIDGE_NATIVE_GRANTS } from './bridge/bridge-init-frame'
 
 describe('notifications, refusals and the fence', () => {
@@ -255,5 +259,79 @@ describe('navigate-back', () => {
     expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
     bridge.host.receive(clientFrame({ type: 'ready' }))
     expect(bridge.last().type).toBe('init')
+  })
+})
+
+/**
+ * The one notify that leaves the app rather than the page.
+ *
+ * Nothing crosses back, so a refusal is only ever a log. Which is why the scheme is checked at the
+ * frame and not only at the page's call site: a page that skipped its own check would otherwise
+ * hand the device handler whatever it liked.
+ */
+describe('externalLink', () => {
+  const open = (url: string) =>
+    clientFrame({ type: 'notify', name: BRIDGE_EXTERNAL_LINK_GRANT, url })
+
+  it('hands an allowed URL to the caller and asks the client for nothing', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(open('https://github.com/stablyai/orca/pull/1'))
+    bridge.host.receive(open('mailto:someone@example.com'))
+    expect(bridge.externalLinks).toEqual([
+      'https://github.com/stablyai/orca/pull/1',
+      'mailto:someone@example.com'
+    ])
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.navigations).toEqual([])
+    expect(bridge.diagnostics).toEqual([])
+  })
+
+  it('hands over the URL the parser read, not the string the page sent', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // Each of these passes the scheme check and is not what a device handler should be given: the
+    // WHATWG parser strips tab, LF and CR anywhere and trims leading C0 and space.
+    bridge.host.receive(open('ht\ntps://example.com'))
+    bridge.host.receive(open('https://example.com/a\r\n'))
+    bridge.host.receive(open('  https://example.com/a  '))
+    bridge.host.receive(open('https:example.com'))
+    expect(bridge.externalLinks).toEqual([
+      'https://example.com/',
+      'https://example.com/a',
+      'https://example.com/a',
+      'https://example.com/'
+    ])
+  })
+
+  it('refuses a scheme the grant does not cover, as a frame the reader never accepts', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', 'orca-mobile-web://s/x']) {
+      bridge.host.receive(open(url))
+    }
+    expect(bridge.externalLinks).toEqual([])
+    // Dropped by the envelope rather than by the grant check, which is what keeps a page that
+    // skipped its own check from reaching the device handler at all. One per frame: the bound to
+    // a line per cause is the reporter's, and this harness reads what the host actually said.
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
+    )
+  })
+
+  it('refuses it from a page that has not asked for a session', () => {
+    const bridge = harness()
+    bridge.host.receive(open('https://example.com'))
+    expect(bridge.externalLinks).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_EXTERNAL_LINK_GRANT, why: 'before-ready' }
+    ])
+  })
+
+  it('is advertised under its own grant name, which a route can declare', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.grants.native).toContain(BRIDGE_EXTERNAL_LINK_GRANT)
   })
 })

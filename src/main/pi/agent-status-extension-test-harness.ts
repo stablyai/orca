@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 // TypeScript 7 is a native CLI; transpile tests still need the legacy JavaScript API.
 import ts from 'typescript-api'
@@ -6,7 +7,10 @@ import { vi } from 'vitest'
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
 export type HookContext = {
+  hasUI?: boolean
+  ui?: { setEditorText?: (text: string) => void }
   isIdle?: () => boolean
+  model?: { provider?: unknown; id?: unknown } | null
   sessionManager?: {
     getSessionId?: () => unknown
     getSessionFile?: () => unknown
@@ -16,6 +20,8 @@ export type HookContext = {
 export type HookHandler = (event?: unknown, context?: HookContext) => Promise<void> | void
 
 type FakeCurlChild = {
+  kill: ReturnType<typeof vi.fn>
+  emit: (event: string, ...args: unknown[]) => boolean
   on: ReturnType<typeof vi.fn>
   stdin: {
     on: ReturnType<typeof vi.fn>
@@ -66,6 +72,7 @@ export function createAgentStatusExtensionHarness(args: {
   existsSync?: (path: string) => boolean
   readFileSync?: (path: string, encoding: string) => string
   statSync?: (path: string) => { mtimeMs: number; size: number; ino: number }
+  curlExitCode?: number | null
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
 }): AgentStatusExtensionHarness {
   const fetchMock = vi.fn(
@@ -77,14 +84,20 @@ export function createAgentStatusExtensionHarness(args: {
 
   const spawnedChildren: FakeCurlChild[] = []
   const spawnMock = vi.fn(() => {
+    const emitter = new EventEmitter()
     const child: FakeCurlChild = {
-      on: vi.fn(),
+      emit: emitter.emit.bind(emitter),
+      kill: vi.fn(() => emitter.emit('close', null)),
+      on: vi.fn(emitter.on.bind(emitter)),
       stdin: {
         on: vi.fn(),
         end: vi.fn()
       }
     }
     spawnedChildren.push(child)
+    if (args.curlExitCode !== null) {
+      void Promise.resolve().then(() => emitter.emit('close', args.curlExitCode ?? 0))
+    }
     return child
   })
 

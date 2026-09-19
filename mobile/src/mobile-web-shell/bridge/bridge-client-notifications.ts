@@ -1,26 +1,28 @@
 import type { ForegroundNudgeReason } from '../../transport/types'
 import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage
 } from './bridge-envelope'
+import { readBridgeExternalLinkUrl } from './bridge-caps'
 import { captureBridgeError } from './bridge-error-capture'
 
 /**
  * Everything the page posts and hears nothing back about.
  *
- * Four of the five post through one guard, but only two reach its throw, and it is not the guard
+ * Five of the six post through one guard, but only two reach its throw, and it is not the guard
  * `sendRequest` uses. A call before `init` is a mount-order bug and throws; a call after `close` is
  * an unmounting screen posting one more nudge on its way out, which the native clients answer
  * inertly rather than by throwing into a teardown path nobody wrote a catch for. Nothing here
  * returns a promise, so nothing here can be awaited into a rejection either.
  *
  * Only the two ungated notifies reach that throw. A grant is read off the session, so before `init`
- * there is no grant either and `navigate`, `navigate-back` and `storage` answer false without
- * asking: that is the same false they answer a shell that withheld the grant, and every caller
- * already handles it — `useRouteHandoff` pushes or goes back inside the page instead, where a throw
- * would take down a tap handler nobody wrapped.
+ * there is no grant either and `navigate`, `navigate-back`, `externalLink` and `storage` answer
+ * false without asking: that is the same false they answer a shell that withheld the grant, and
+ * every caller already handles it — `useRouteHandoff` pushes or goes back inside the page instead,
+ * where a throw would take down a tap handler nobody wrapped.
  *
  * `notifyPageFault` reads the session instead of requiring it for a different reason: its one caller
  * is an error boundary, and a report that threw would replace the page's last word with an error
@@ -44,6 +46,7 @@ export type BridgeClientNotifications = {
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   notifyNavigate: (href: string) => boolean
   notifyNavigateBack: () => boolean
+  notifyExternalLink: (url: string) => boolean
   notifyStorageWrite: (key: string, value: string | null) => boolean
   notifyPageFault: (error: unknown) => boolean
 }
@@ -85,6 +88,25 @@ export function createBridgeClientNotifications(
     notifyNavigateBack: () =>
       deps.hasGrant('navigate') &&
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }),
+    // Checked here as well as at the frame, because the answer is what the caller reports: a page
+    // that posted a refused URL would be told the frame left and show a tap that went nowhere.
+    notifyExternalLink: (url) => {
+      if (!deps.hasGrant(BRIDGE_EXTERNAL_LINK_GRANT)) {
+        return false
+      }
+      // The parser's URL goes on the wire, never the caller's string: the two differ for anything
+      // carrying a stripped tab or newline, and the shell would open what the parser read anyway.
+      const target = readBridgeExternalLinkUrl(url)
+      if (target === null) {
+        return false
+      }
+      return post({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_EXTERNAL_LINK_GRANT,
+        url: target
+      })
+    },
     // The page's writes reach the app's own store, which is the only store it has: its `localStorage`
     // is off on Android and per-session on iOS, so a pin kept there would forget itself on remount.
     notifyStorageWrite: (key, value) =>

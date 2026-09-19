@@ -11,7 +11,6 @@ import {
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
@@ -251,7 +250,12 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {
-    if (!workspaceSessionReady || !hydrationSucceeded || !activeWorktreeId) {
+    if (
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !hydrationSucceeded ||
+      !activeWorktreeId
+    ) {
       return
     }
     if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
@@ -263,7 +267,20 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       return
     }
     startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
-    // Why: startup hydration restores the worktree without activateAndRevealWorktree, so orphaned live/quit records need a terminal-surface pass after cold restore.
-    resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
-  }, [activeWorktreeId, activeWorktreeHostAuthority, hydrationSucceeded, workspaceSessionReady])
+    // Startup recovery needs the same host census and in-flight gate as explicit activation.
+    void gateWorktreeAgentActivation(activeWorktreeId).then(
+      (outcome) => {
+        if (outcome === 'blocked') {
+          startupResumeWorktreeIdsRef.current.delete(activeWorktreeId)
+        }
+      },
+      () => startupResumeWorktreeIdsRef.current.delete(activeWorktreeId)
+    )
+  }, [
+    activeWorktreeId,
+    activeWorktreeHostAuthority,
+    hydrationSucceeded,
+    terminalStartupRestorationReady,
+    workspaceSessionReady
+  ])
 }

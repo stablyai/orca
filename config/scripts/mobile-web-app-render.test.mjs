@@ -1,14 +1,19 @@
-import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { fileURLToPath } from 'node:url'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-
-const projectDir = fileURLToPath(new URL('../..', import.meta.url))
+import {
+  createBundleServer,
+  installShellDouble,
+  parseCspDirectives,
+  projectDir,
+  readBridgeFaultGrant,
+  readBridgeProtocolVersion,
+  readShellCsp
+} from './mobile-web-app-render-harness.mjs'
 
 // Why a real browser: the route tree is handed to expo-router's own ExpoRoot through a synthesized
 // RequireContext. Nothing short of mounting it proves that object is the shape ExpoRoot reads.
@@ -53,159 +58,6 @@ let faultGrant = null
 const poisonedChunks = new Set()
 const POISON_MESSAGE = 'render check poisoned this route chunk'
 
-/**
- * Both CSP constants are a list of quoted directives with `//` comments between them, and those
- * comments quote directive text. Dropping comment lines first is what keeps a comment out of the
- * header this test serves.
- */
-export function parseCspDirectives(source, startMarker, endMarker) {
-  const start = source.indexOf(startMarker)
-  const end = source.indexOf(endMarker)
-  if (start === -1 || end < start) {
-    throw new Error(`could not find ${startMarker} .. ${endMarker}`)
-  }
-  const body = source
-    .slice(start, end)
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n')
-  const directives = [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1])
-  if (directives.length < 10) {
-    throw new Error('could not parse the shell CSP')
-  }
-  return directives.join('; ')
-}
-
-/**
- * The envelope version the page speaks, read from the contract rather than written down twice. A
- * bumped `v` would otherwise reach this file as a 30s timeout naming nothing.
- */
-async function readBridgeProtocolVersion() {
-  const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
-    'utf8'
-  )
-  const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
-  if (!match) {
-    throw new Error('could not read BRIDGE_PROTOCOL_VERSION')
-  }
-  return Number(match[1])
-}
-
-/** The grant the shell offers every page, read from the same source for the same reason. */
-async function readBridgeFaultGrant() {
-  const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
-    'utf8'
-  )
-  const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
-  if (!match) {
-    throw new Error('could not read BRIDGE_FAULT_GRANT')
-  }
-  return match[1]
-}
-
-/**
- * The shell's half of the bridge, as the page's channel sees it.
- *
- * The entry mounts nothing until `init` lands, so a render check with no shell renders no route at
- * all. This answers `ready` and refuses everything else: a real reply would make this file the
- * place domain behaviour is decided, and every screen below already has a state for an RPC that
- * failed. The one message that matters here is the one that lets the tree mount.
- */
-function installShellDouble({
-  version,
-  sessionId,
-  buildId,
-  route,
-  host,
-  storage,
-  faultGrant,
-  grants,
-  pageRoutes
-}) {
-  // Where the page's own fault reports land. Read back after the render, so a route that threw
-  // under the boundary names itself instead of timing out as a page that never mounted.
-  globalThis.__orcaRenderCheckFaults = []
-  // Every grant-gated notify the page posted, whole and in order. A control that decided to hand
-  // something to the shell and a control that did nothing look identical on the document; this is
-  // the only thing that tells them apart.
-  globalThis.__orcaRenderCheckNotifies = []
-  const channel = {
-    postMessage: (json) => {
-      const frame = JSON.parse(json)
-      const answer = (message) => {
-        // A microtask, not a task: the page posts `ready` while its script is still running, and
-        // this keeps the answer behind it without moving a timer the page's backoff reads.
-        queueMicrotask(() => {
-          channel.onmessage?.({ data: JSON.stringify(message) })
-        })
-      }
-      if (frame.type === 'ready') {
-        answer({
-          v: version,
-          type: 'init',
-          sessionId,
-          buildId,
-          connection: {
-            state: 'connected',
-            reconnectAttempt: 0,
-            lastConnectedAt: 1,
-            lastInboundAt: 1,
-            generation: 0
-          },
-          grants: {
-            rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-            native: grants
-          },
-          ...(pageRoutes === null ? {} : { pageRoutes }),
-          // Omitted for a shell too old to name one, which is the case the page has a panel for.
-          ...(route === null ? {} : { route }),
-          ...(host === null ? {} : { host }),
-          storage
-        })
-        return
-      }
-      if (frame.type === 'notify') {
-        globalThis.__orcaRenderCheckNotifies.push(frame)
-        if (frame.name === faultGrant) {
-          globalThis.__orcaRenderCheckFaults.push(frame.error.message)
-        }
-        return
-      }
-      if (frame.type === 'request' || frame.type === 'subscribe') {
-        answer({
-          v: version,
-          type: 'error',
-          id: frame.id,
-          error: {
-            category: 'RenderCheckShellDouble',
-            message: 'the render check answers no RPC',
-            isRpcDeliveryUnknown: false
-          }
-        })
-      }
-    },
-    onmessage: null
-  }
-  globalThis.orcaBridge = channel
-}
-
-/**
- * The shipped policy, read from the Kotlin source so this test cannot drift from what the shell
- * actually sends. Parsed rather than imported: the constant lives in a JVM module.
- */
-async function readShellCsp() {
-  const source = await readFile(
-    join(
-      projectDir,
-      'mobile/modules/orca-mobile-web-shell/android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellCsp.kt'
-    ),
-    'utf8'
-  )
-  return parseCspDirectives(source, 'listOf(', ').joinToString')
-}
-
 beforeAll(async () => {
   cspHeader = await readShellCsp()
   bridgeVersion = await readBridgeProtocolVersion()
@@ -217,48 +69,19 @@ beforeAll(async () => {
   const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   const { outDir } = built
   routeChunks = built.routeChunks
-  server = createServer((request, response) => {
-    const path = new URL(request.url, 'http://localhost').pathname
-    // A browser asks for this on its own and the shell's WebView never does. The bundle carries
-    // no icon, so a 404 would put a console error in every check that runs against a full Chrome
-    // -- which is what CI resolves -- and none against the bundled headless shell.
-    if (path === '/favicon.ico') {
-      response.writeHead(204)
-      response.end()
-      return
-    }
-    // A route path serves the entrypoint and the page routes client-side. A path naming a file
-    // has to come out of the bundle or 404, the same as the shell's manifest map: answering it
-    // with the document instead would hide a publicPath the script cannot fetch from.
-    const namesAFile = path.slice(path.lastIndexOf('/')).includes('.')
-    const file = namesAFile ? path.slice(1) : 'index.html'
-    readFile(join(outDir, file)).then(
-      (real) => {
-        // The real bytes with a throw in front: the module still links, so the importer resolves
-        // every export it asked for and then evaluation throws. A body replaced outright fails at
-        // link instead, which is a different failure from the one the boundary is here for.
-        const bytes = poisonedChunks.has(path)
-          ? `throw new Error(${JSON.stringify(POISON_MESSAGE)});\n${real.toString('utf8')}`
-          : real
-        const headers = {
-          'content-type': file.endsWith('.js') ? 'text/javascript' : 'text/html'
-        }
-        // The document carries the shell's real policy, so a directive the page violates fails
-        // here rather than on a phone. Assets carry none, exactly as the native handler does.
-        if (file === 'index.html' && cspHeader) {
-          headers['content-security-policy'] = cspHeader
-        }
-        response.writeHead(200, headers)
-        response.end(bytes)
-      },
-      () => {
-        response.writeHead(404)
-        response.end()
-      }
-    )
+  // The real bytes with a throw in front: the module still links, so the importer resolves
+  // every export it asked for and then evaluation throws. A body replaced outright fails at
+  // link instead, which is a different failure from the one the boundary is here for.
+  const served = await createBundleServer({
+    outDir,
+    cspHeader,
+    transformChunk: (path, real) =>
+      poisonedChunks.has(path)
+        ? `throw new Error(${JSON.stringify(POISON_MESSAGE)});\n${real.toString('utf8')}`
+        : real
   })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  origin = `http://127.0.0.1:${String(server.address().port)}`
+  server = served.server
+  origin = served.origin
   // CI runs this against the runner's Google Chrome rather than paying for a browser download,
   // the same reason and the same override shape as the orcad browser-provider job.
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
@@ -468,6 +291,46 @@ describe('the shell policy this page is tested under', () => {
     expect(cspHeader).toContain("script-src 'self';")
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
   })
+
+  it('admits data: for images and for nothing else', () => {
+    expect(cspHeader.split('; ').filter((entry) => entry.includes('data:'))).toEqual([
+      "img-src 'self' data:"
+    ])
+  })
+})
+
+/** A 1x1 PNG: the smallest payload that proves an image decoded rather than merely being allowed. */
+const DATA_URI_IMAGE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+describeRender('an image preview under the shell policy', () => {
+  it('decodes a data: URI, which is the only shape a file preview has', async () => {
+    // What a preview actually is: normalizeMobileFilePreviewResult composes
+    // `data:<mime>;base64,<content>` out of a reply the page already holds and hands it to React
+    // Native Web's Image, which paints it as a CSS background. The `new Image()` below is not a
+    // stand-in for that: react-native-web 0.21.2 loads through `ImageLoader.load`, which is
+    // `new window.Image()` with `onload`/`onerror` on it, and the hidden <img> the component also
+    // renders carries neither — it is there for the browser's image context menu and for
+    // `getBackgroundSize()`. So this is the same mechanism the screen's own load runs through, and
+    // its failure is what turns the screen into "Unable to load preview".
+    const { page, errors } = await openPage()
+    await page.goto(`${origin}/`, { waitUntil: 'load' })
+    const naturalWidth = await page.evaluate(
+      (uri) =>
+        new Promise((resolve) => {
+          const image = new Image()
+          image.addEventListener('load', () => resolve(image.naturalWidth))
+          image.addEventListener('error', () => resolve(0))
+          image.src = uri
+        }),
+      DATA_URI_IMAGE
+    )
+    await page.close()
+    expect({
+      naturalWidth,
+      refused: errors.filter((entry) => entry.includes('Content Security Policy'))
+    }).toEqual({ naturalWidth: 1, refused: [] })
+  })
 })
 
 describeRender('the page server this check runs against', () => {
@@ -505,6 +368,42 @@ describeRender('the Route A page in a real browser', () => {
     expect(text).toContain(SHELL_HOST.name)
     expect(text).not.toContain('Host not found')
     expect(text).not.toContain(UNMATCHED)
+  }, 60_000)
+
+  it('fills the view, so what it mounted is painted and takes a tap', async () => {
+    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
+    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
+    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
+    const layout = await opened.page.evaluate(() => {
+      // The one control this route paints with no RPC answered. Positioned against the bottom of
+      // the root, so it is also the element a collapsed root moves furthest.
+      const fab = [...document.querySelectorAll('[role="button"]')].find(
+        (element) => element.getAttribute('aria-label') === 'New workspace'
+      )
+      const box = fab?.getBoundingClientRect() ?? null
+      const hit =
+        box === null
+          ? null
+          : document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+      return {
+        rootHeight: document.getElementById('root').getBoundingClientRect().height,
+        viewportHeight: window.innerHeight,
+        fabTop: box?.top ?? null,
+        fabBottom: box?.bottom ?? null,
+        reachesTheControl: hit !== null && fab.contains(hit)
+      }
+    })
+    await opened.page.close()
+    expect(opened.errors).toEqual([])
+    // Nothing else here can see a collapsed root: the tree mounts, the text is in the DOM, and
+    // every assertion on `innerText` passes while the phone paints a blank list under the header.
+    // A height is the only thing that says the screen is on the screen.
+    expect(layout.rootHeight).toBe(layout.viewportHeight)
+    expect(layout.fabTop).toBeGreaterThan(0)
+    expect(layout.fabBottom).toBeLessThanOrEqual(layout.viewportHeight)
+    // Laid out is not reachable. A row inside a scroller the collapse clipped keeps its rect and
+    // takes no taps, which is what both phones found before this file could say so.
+    expect(layout.reachesTheControl).toBe(true)
   }, 60_000)
 
   it('routes a nested dynamic segment through the same context', async () => {

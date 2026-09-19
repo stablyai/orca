@@ -11,7 +11,7 @@ export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes
  * here renders its native screen instead: an old app against a new bundle lands on a screen that
  * works rather than on a tap that does nothing.
  */
-export const MOBILE_WEB_SHELL_GRANTS = ['navigate', 'storage'] as const
+export const MOBILE_WEB_SHELL_GRANTS = ['navigate', 'storage', 'externalLink'] as const
 
 export type MobileWebShellGrant = (typeof MOBILE_WEB_SHELL_GRANTS)[number]
 

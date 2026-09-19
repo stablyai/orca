@@ -2,8 +2,9 @@ import type { ConnectionState, RpcResponse } from '../transport/types'
 import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
-import { BRIDGE_MAX_SUBSCRIPTIONS } from './bridge/bridge-caps'
+import { BRIDGE_MAX_SUBSCRIPTIONS, readBridgeExternalLinkUrl } from './bridge/bridge-caps'
 import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
@@ -220,6 +221,18 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         const outcome = options.onNavigateBack()
         if (outcome !== 'popped') {
           options.onDiagnostic?.({ kind: 'navigate-back-refused', why: outcome })
+        }
+        return
+      }
+      if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
+        // Local as well: this one leaves the app entirely rather than reaching the desktop. Read
+        // rather than forwarded, because what the envelope accepted is the string and what it
+        // accepted it for is the parser's URL — a page posting an unnormalized one would otherwise
+        // hand the device handler something the check never looked at. Null cannot arrive here:
+        // the envelope refines on the same rule, and the branch is what says so.
+        const target = readBridgeExternalLinkUrl(message.url)
+        if (target !== null) {
+          options.onExternalLink(target)
         }
         return
       }

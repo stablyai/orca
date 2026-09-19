@@ -12,7 +12,11 @@ import {
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
-import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
+import {
+  claudeProjectsRootDirs,
+  ompSessionsRootDirs,
+  sessionRootDirs
+} from './session-scanner-roots'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
@@ -187,11 +191,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   omp: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.ompSessionsDir ?? OMP_SESSIONS_DIR, wslHomeDirs, [
-        '.omp',
-        'agent',
-        'sessions'
-      ]),
+      ompSessionsRootDirs({ ompSessionsDir: options.ompSessionsDir, wslHomeDirs }),
     extensions: ['.jsonl'],
     // Why: task subagent transcripts live inside the session's same-named
     // artifact directory (`<stamp>_<uuid>/`); surfaced as top-level rows they

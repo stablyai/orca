@@ -211,6 +211,8 @@ describe('the hybrid shell screen', () => {
     dependencies.lifecycle.length = 0
     dependencies.client = null
     dependencies.back.mockReset()
+    dependencies.openUrl.mockReset()
+    dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
     dependencies.canGoBack = true
     dependencies.pathname = '/h/host-1'
   })
@@ -403,6 +405,38 @@ describe('the hybrid shell screen', () => {
     expect(
       textOf(await render({ kind: 'failed', reason: 'document-load-failed', retriedOnce: true }))
     ).toContain('The downloaded workspace could not be opened.')
+  })
+
+  it('reports a URL nothing on this phone could open, which is the dead tap that survives', async () => {
+    dependencies.client = createFakeRpcClient()
+    const failure = new Error('no activity found')
+    // A fresh rejection per call, not one built here: `mockReturnValue(Promise.reject(...))` builds
+    // it now and nothing attaches a handler until the frame arrives, which is an unhandled
+    // rejection in the window between.
+    dependencies.openUrl.mockImplementation(() => Promise.reject(failure))
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
+      })
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: {
+          json: clientFrame({
+            type: 'notify',
+            name: 'externalLink',
+            url: 'mailto:someone@example.com'
+          })
+        }
+      })
+    })
+    // Nothing crosses back for a notify, so silence here is the one dead tap this verb does not
+    // rule out: the page was told the frame left and the phone opened nothing.
+    expect(warned.mock.calls).toContainEqual([
+      '[web-shell] could not open a URL for the page',
+      { url: 'mailto:someone@example.com', error: failure }
+    ])
+    warned.mockRestore()
   })
 
   it('pops its own stack when the page hands its back button over', async () => {

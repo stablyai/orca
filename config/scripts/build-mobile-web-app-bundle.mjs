@@ -79,6 +79,30 @@ export const MOBILE_WEB_APP_SHIMS = [
   }
 ]
 
+/**
+ * react-native-web's own root reset: the same declaration set and `id="expo-reset"` as Expo's web
+ * template (`@expo/cli/static/template/index.html`), minified — the template's own block is
+ * pretty-printed with comments, so this is 112 bytes against its 410. Nothing generates it for a
+ * document built here.
+ *
+ * Every box below the mount is `flex: 1` against its parent, so with no definite height on all
+ * three the root measures 0 and the collapse is silent: the screen still lays out, still reaches
+ * the accessibility tree at the right offsets, and never paints or hit-tests below the header.
+ * A phone showed the header over a blank list with every row readable to VoiceOver and no row
+ * tappable (lane C1.7, both platforms).
+ *
+ * Inline, because the shell's CSP already allows `style-src 'unsafe-inline'` for the sheet
+ * react-native-web injects at runtime; a linked asset would need a second round trip before the
+ * first frame and would paint the collapsed layout until it landed.
+ *
+ * Height, `overflow` and the root's flex box and nothing else, which is what the template carries:
+ * react-native-web emits `body{margin:0}` in that runtime sheet, so a copy here would only cover
+ * the frames before it lands and would make this string something to keep in step with two sources.
+ */
+export const MOBILE_WEB_APP_ROOT_RESET =
+  '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
+  '#root{display:flex;height:100%;flex:1}</style>'
+
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
   'src',
@@ -168,9 +192,10 @@ export function mobileWebAppBuildOptions(routes) {
       '.js',
       '.json'
     ],
-    // Images are emitted as same-origin assets, not data: URLs: the shell's CSP sets
-    // img-src 'self', which refuses data:. Content-hashed names keep the buildId reproducible.
-    // A font would fail the build here rather than silently ship under font-src 'none'.
+    // Images are emitted as same-origin assets, not data: URLs, so their content-hashed names keep
+    // the buildId reproducible and the bytes out of every chunk that imports one. The policy now
+    // admits data: for images, but that is for a preview the page composes at runtime, not for a
+    // bundled asset. A font would fail the build here rather than silently ship under font-src 'none'.
     loader: {
       ...ROUTE_SOURCE_LOADERS,
       '.png': 'file',
@@ -403,7 +428,7 @@ export async function buildMobileWebAppBundle({
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
-    '<title>Orca</title>\n</head>\n<body>\n<div id="root"></div>\n' +
+    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')
   const indexAsset = {

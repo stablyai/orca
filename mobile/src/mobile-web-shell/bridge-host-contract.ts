@@ -74,6 +74,16 @@ export type BridgeHostOptions = {
    */
   onNavigate: (href: string) => void
   /**
+   * Opens a URL outside the app, which is the whole of the `externalLink` grant. Required for the
+   * reason `onNavigate` is: the grant is issued on the strength of this existing.
+   *
+   * The URL has already been held to the allowed schemes by the envelope, so a caller is handed
+   * one it may open. It must not throw — this runs on the native frame handler — and it must
+   * report a URL it could not open: nothing crosses back to the page for a notify, so an open that
+   * failed is invisible on both sides unless the caller says so.
+   */
+  onExternalLink: (url: string) => void
+  /**
    * Pops the native stack this page was pushed onto. Required for the reason `onNavigate` is: the
    * `navigate` grant carries this verb too, and a page told it may hand its Back button over and
    * then handed it into nothing is the dead tap the grant exists to rule out.

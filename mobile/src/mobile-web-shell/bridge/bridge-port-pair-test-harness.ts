@@ -40,6 +40,8 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   hostDiagnostics: BridgeHostDiagnostic[]
   /** Every screen the page asked the shell to open, in order. */
   navigations: string[]
+  /** Every URL the page asked the shell to open outside the app, in order. */
+  externalLinks: string[]
   /** One entry per stack pop the page asked for, with what the shell did about it. */
   backPops: BridgeNavigateBackOutcome[]
   /** Every allowlisted key the page wrote through the shell, in order. */
@@ -149,6 +151,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const diagnostics: BridgeRpcClientDiagnostic[] = []
   const hostDiagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
+  const externalLinks: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
@@ -171,6 +174,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     route: options.route ?? { pathname: '/h/host-a' },
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     onNavigate: (href) => navigations.push(href),
+    onExternalLink: (url) => externalLinks.push(url),
     onNavigateBack: () => {
       // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
       backPops.push('popped')
@@ -211,6 +215,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     diagnostics,
     hostDiagnostics,
     navigations,
+    externalLinks,
     backPops,
     storageWrites,
     pageFaults,

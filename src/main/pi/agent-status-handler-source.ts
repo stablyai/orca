@@ -1,4 +1,6 @@
+import { getPiPrefillHandlerSourceLines } from './prefill-extension-source'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getOmpSessionOwnerHandlerSourceLines } from './omp-session-status-owner-source'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
@@ -7,7 +9,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
   const sessionStartHandler =
     kind !== 'omp'
       ? [
-          "  pi.on('session_start', (event, ctx) => {",
+          "  onStatus('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
           ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
           '    // Why: /reload re-registers the active session, but it is not a',
@@ -39,7 +41,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     kind === 'prime-agent'
       ? []
       : [
-          `  pi.on('tool_approval_requested', (event${ctxParam}) => {`,
+          `  onStatus('tool_approval_requested', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
           '    if (!isOmpRuntime()) return',
           "    post('tool_approval_requested', {",
@@ -49,7 +51,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '    })',
           '  })',
           '',
-          `  pi.on('tool_approval_resolved', (event${ctxParam}) => {`,
+          `  onStatus('tool_approval_resolved', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
           '    if (!isOmpRuntime()) return',
           "    post('tool_approval_resolved', {",
@@ -114,23 +116,39 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
+    '  resetPostQueue()',
+    ...(kind !== 'pi'
+      ? ["  pi.on('session_shutdown', () => { resetPostQueue(); clearPendingAgentEndCheck() })"]
+      : []),
+    ...(kind !== 'prime-agent'
+      ? [
+          "  pi.on('session_switch', (_event, ctx) => {",
+          '    if (!isOmpRuntime()) return',
+          '    resetPostQueue()',
+          '    clearPendingAgentEndCheck()',
+          '    updateRuntimeOmpSessionMetadata(ctx)',
+          '  })'
+        ]
+      : []),
+    ...getOmpSessionOwnerHandlerSourceLines(),
     ...sessionStartHandler,
-    `  pi.on('before_agent_start', (event${ctxParam}) => {`,
+    ...(kind === 'omp' ? getPiPrefillHandlerSourceLines('omp', true) : []),
+    `  onStatus('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",
     '  })',
     '',
-    `  pi.on('agent_start', (${bareCtxParams}) => {`,
+    `  onStatus('agent_start', (${bareCtxParams}) => {`,
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
-    '    agentEndReported = false',
+    '    runGeneration += 1',
     // Why: a turn cannot begin under a dialog holding input focus, so this is the one
     // boundary that can recover a modal whose close never arrived.
     ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
     "    post('agent_start')",
     '  })',
     '',
-    `  pi.on('tool_execution_start', (event${ctxParam}) => {`,
+    `  onStatus('tool_execution_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('tool_execution_start', {",
     '      tool_name: event.toolName,',
@@ -138,7 +156,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    })',
     '  })',
     '',
-    `  pi.on('tool_call', (event${ctxParam}) => {`,
+    `  onStatus('tool_call', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('tool_call', {",
     '      tool_name: event.toolName,',
@@ -146,7 +164,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    })',
     '  })',
     '',
-    `  pi.on('tool_execution_end', (event${ctxParam}) => {`,
+    `  onStatus('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('tool_execution_end', {",
     '      tool_name: event.toolName,',
@@ -159,7 +177,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',
     '  // it fires after the message is finalized (post-streaming).',
-    `  pi.on('message_end', (event${ctxParam}) => {`,
+    `  onStatus('message_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    if (event.message?.role !== 'assistant') return",
     '    const text = extractAssistantText(event.message)',
@@ -174,7 +192,15 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const AGENT_END_IDLE_RECHECK_MS = 25',
     '  const AGENT_END_IDLE_RECHECK_MAX_MS = 250',
     '  let agentSettledSupported = false',
-    '  let agentEndReported = false',
+    // Why: completion is a per-RUN fact. A sibling extension (the memory reminder is one)
+    // can start the next run from inside its own agent_settled handler, and Pi dispatches
+    // handlers in registration order, so this extension sees that run's agent_start
+    // BEFORE its own agent_settled for the run that just ended. A boolean "already
+    // posted" latch reset on agent_start then eats the newer run's completion and leaves
+    // the host stuck on that run's last working event.
+    '  let runGeneration = 0',
+    '  let endedRunGeneration = 0',
+    '  let completionPostedGeneration = -1',
     '  let agentEndIdleRecheckMs = AGENT_END_IDLE_RECHECK_MS',
     '  let pendingAgentEndCheck: ReturnType<typeof setTimeout> | null = null',
     '  let pendingAgentEndContext: { isIdle: () => boolean } | null = null',
@@ -186,12 +212,13 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  }',
     '',
     '  // Why: isIdle flips before agent_settled handlers run, so both paths',
-    '  // share a per-run guard instead of racing duplicate completion posts.',
+    '  // share a guard instead of racing duplicate completion posts — one keyed on the',
+    '  // generation of the run that ENDED, so a later run still reports its own end.',
     '  function postAgentEndOnce(): void {',
-    '    if (agentEndReported) return',
-    '    agentEndReported = true',
-    // Why: distinct from agentEndReported, which also dedupes the completion post and so
-    // starts false on a pane that has not run a turn yet — that pane is idle, not busy.
+    '    if (completionPostedGeneration === endedRunGeneration) return',
+    '    completionPostedGeneration = endedRunGeneration',
+    // Why: distinct from the completion guard, which holds the generation of the posted run
+    // and so starts clean on a pane that has not run a turn yet — that pane is idle, not busy.
     ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
     "    post('agent_end')",
     '  }',
@@ -199,7 +226,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  function checkPendingAgentEnd(): void {',
     '    pendingAgentEndCheck = null',
     '    const ctx = pendingAgentEndContext',
-    '    if (!ctx || agentSettledSupported || agentEndReported) {',
+    '    if (!ctx || agentSettledSupported || completionPostedGeneration === endedRunGeneration) {',
     '      pendingAgentEndContext = null',
     '      return',
     '    }',
@@ -218,19 +245,20 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    agentEndIdleRecheckMs = Math.min(agentEndIdleRecheckMs * 2, AGENT_END_IDLE_RECHECK_MAX_MS)',
     '  }',
     '',
-    `  pi.on('agent_settled', (${bareCtxParams}) => {`,
+    `  onStatus('agent_settled', (${bareCtxParams}) => {`,
     ...captureSessionMetadata,
     '    agentSettledSupported = true',
     '    clearPendingAgentEndCheck()',
     '    postAgentEndOnce()',
     '  })',
     '',
-    "  pi.on('agent_end', (event, ctx) => {",
+    "  onStatus('agent_end', (event, ctx) => {",
     ...captureSessionMetadata,
     '    if (event?.willContinue === true) {',
     '      clearPendingAgentEndCheck()',
     '      return',
     '    }',
+    '    endedRunGeneration = runGeneration',
     '    if (isOmpRuntime()) {',
     '      postAgentEndOnce()',
     '      return',

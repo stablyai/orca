@@ -62,6 +62,8 @@ export function useMobileWebShellBridge(args: {
   pageRoutes: readonly string[]
   /** Opens a screen the page does not render, over the still-mounted view. */
   onNavigate: (href: string) => void
+  /** Opens a URL outside the app, on the page's behalf. */
+  onExternalLink: (url: string) => void
   /** Pops the stack this page was pushed onto, and says so when it did not. */
   onNavigateBack: () => BridgeNavigateBackOutcome
   /**
@@ -95,6 +97,7 @@ export function useMobileWebShellBridge(args: {
   // Read through a ref for the same reason: the host is built once per session, and a caller's
   // fresh closure every render must not tear one down and settle its pendings.
   const navigateRef = useRef(args.onNavigate)
+  const externalLinkRef = useRef(args.onExternalLink)
   const navigateBackRef = useRef(args.onNavigateBack)
   const storageWriteRef = useRef(args.onStorageWrite)
   const readStorageRef = useRef(args.readStorage)
@@ -107,6 +110,7 @@ export function useMobileWebShellBridge(args: {
     routeRef.current = args.route
     pageRoutesRef.current = args.pageRoutes
     navigateRef.current = args.onNavigate
+    externalLinkRef.current = args.onExternalLink
     navigateBackRef.current = args.onNavigateBack
     storageWriteRef.current = args.onStorageWrite
     readStorageRef.current = args.readStorage
@@ -114,6 +118,7 @@ export function useMobileWebShellBridge(args: {
     pageReadyRef.current = args.onPageReady
     routeRefusedRef.current = args.onRouteRefused
   }, [
+    args.onExternalLink,
     args.onNavigate,
     args.onNavigateBack,
     args.onPageFault,
@@ -151,6 +156,9 @@ export function useMobileWebShellBridge(args: {
         navigateRef.current(href)
       },
       onNavigateBack: () => navigateBackRef.current(),
+      onExternalLink: (url) => {
+        externalLinkRef.current(url)
+      },
       host: snapshot.host,
       readStorage: () => readStorageRef.current(),
       onStorageWrite: (key, value) => {

@@ -17,8 +17,9 @@ const CONTENT_TYPE_BY_EXTENSION = {
   html: 'text/html; charset=utf-8',
   js: 'text/javascript; charset=utf-8',
   png: 'image/png',
-  // The Phase C app bundle emits images as same-origin assets rather than data: URLs, which the
-  // shell's img-src 'self' refuses. Fonts are absent by design: the policy sets font-src 'none'.
+  // The Phase C app bundle emits images as same-origin assets rather than data: URLs, so each one
+  // is content-hashed and served from here. Fonts are absent by design: the policy sets
+  // font-src 'none'.
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   gif: 'image/gif',

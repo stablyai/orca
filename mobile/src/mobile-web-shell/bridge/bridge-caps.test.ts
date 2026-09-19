@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BRIDGE_MAX_DEPTH,
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_METHOD_CHARS,
   BRIDGE_MAX_NODES,
@@ -9,6 +10,8 @@ import {
   BRIDGE_MAX_REPLY_PARTS,
   BRIDGE_DIRECTIONS,
   BRIDGE_MAX_SUBSCRIPTIONS,
+  isBridgeExternalLinkUrl,
+  readBridgeExternalLinkUrl,
   parseBridgeMessage,
   utf8ByteLength
 } from './bridge-caps'
@@ -222,5 +225,89 @@ describe('parseBridgeMessage direction', () => {
       ok: false,
       refusal: 'malformed-json'
     })
+  })
+})
+
+/**
+ * Which URLs the shell will open for a page.
+ *
+ * Parsed rather than prefix-matched on purpose: a scheme is what a URL parser says it is, and a
+ * `startsWith('https:')` reads one out of `javascript:alert("https://x")`. Both sides run this —
+ * the envelope refuses the frame and the page's seam refuses the call — so the rule lives once.
+ */
+describe('the URLs a page may hand to the shell', () => {
+  it('takes the three schemes a task source produces, on any host and any path', () => {
+    for (const url of [
+      'https://github.com/stablyai/orca/pull/1',
+      'http://localhost:3000/x?y=1#z',
+      'mailto:someone@example.com?subject=hi',
+      'https://user:pass@example.com/a%20b'
+    ]) {
+      expect(isBridgeExternalLinkUrl(url), url).toBe(true)
+    }
+  })
+
+  it('refuses every other scheme, including one hiding an allowed word', () => {
+    for (const url of [
+      'javascript:alert("https://example.com")',
+      'file:///etc/passwd',
+      'data:text/html,<script>1</script>',
+      'intent://scan/#Intent;scheme=zxing;end',
+      'orca-mobile-web://session/x',
+      'ftp://example.com/f'
+    ]) {
+      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
+    }
+  })
+
+  it('refuses a target that is not an absolute URL at all', () => {
+    for (const url of ['', '/h/host-a/tasks', '//example.com', 'example.com', 'https://']) {
+      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
+    }
+  })
+
+  it('holds the URL to the same cap a route href gets', () => {
+    const under = `https://example.com/${'a'.repeat(BRIDGE_MAX_EXTERNAL_LINK_CHARS - 20)}`
+    expect(under).toHaveLength(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    expect(isBridgeExternalLinkUrl(under)).toBe(true)
+    expect(isBridgeExternalLinkUrl(`${under}a`)).toBe(false)
+  })
+})
+
+/**
+ * What crosses is the parser's URL, not the page's string.
+ *
+ * The WHATWG parser strips tab, LF and CR from anywhere in a URL and trims leading and trailing C0
+ * and space before it reads the scheme. So a string the check accepts is not always the string a
+ * handler should be given: forwarding it raw hands the device a URL that reads as allowed here and
+ * as something else there. Normalizing is the fix; refusing anything that differs from its
+ * normalization is not, because `https://example.com` differs from its own href by a slash.
+ */
+describe('the URL that actually crosses', () => {
+  it('is the parsed href, for the four shapes that survive the scheme check unchanged', () => {
+    expect(readBridgeExternalLinkUrl('ht\ntps://example.com')).toBe('https://example.com/')
+    expect(readBridgeExternalLinkUrl('https://example.com/a\r\n')).toBe('https://example.com/a')
+    expect(readBridgeExternalLinkUrl('  https://example.com/a  ')).toBe('https://example.com/a')
+    expect(readBridgeExternalLinkUrl('https:example.com')).toBe('https://example.com/')
+  })
+
+  it('takes an ordinary URL that differs from its own href, rather than refusing it', () => {
+    // The whole reason this normalizes instead of comparing: a bare origin gains a path slash.
+    expect(readBridgeExternalLinkUrl('https://example.com')).toBe('https://example.com/')
+  })
+
+  it('answers null for exactly what the predicate refuses', () => {
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '/h/host-a/tasks', '']) {
+      expect(readBridgeExternalLinkUrl(url), url).toBeNull()
+      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
+    }
+  })
+
+  it('holds the normalized form to the cap, not just the string it was handed', () => {
+    // Percent-encoding expands, so a raw string inside the cap can normalize past it.
+    const raw = `https://example.com/${'\u00e9'.repeat(BRIDGE_MAX_EXTERNAL_LINK_CHARS - 21)}`
+    expect(raw.length).toBeLessThanOrEqual(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    expect(new URL(raw).href.length).toBeGreaterThan(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    expect(readBridgeExternalLinkUrl(raw)).toBeNull()
   })
 })

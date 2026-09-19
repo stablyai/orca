@@ -151,6 +151,31 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
+    // Why a route of its own: every other terminal-pane route names what BINDS a pane — the pty
+    // transports, the ssh reconnect ledgers, the park watchers. Nothing named what unbinds one,
+    // so the close/retire lifecycle reached main with e2e skipped outright. Unbinding is the half
+    // that can strand a PTY or leave a retired leaf mounted as a blank pane.
+    //
+    // Deliberately absent: src/renderer/src/runtime/runtime-rpc-client.ts, the transport these
+    // retirements call out through. It carries no close decision and churns ~3x these files, so
+    // routing on it would run this lane on unrelated runtime work.
+    id: 'terminal-pane.close-and-retirement',
+    specs: [
+      // Closing a tab whose pane is parked (never mounted) must retire that exact PTY.
+      'tests/e2e/terminal-parked-close-retirement.spec.ts',
+      // Closing one leaf of a split must leave root leaves, leaf→pty bindings, and live panes
+      // agreeing — the ghost-blank-pane shape a bad unbind produces.
+      'tests/e2e/terminal-pane-close-layout-consistency.spec.ts',
+      // The runtime half: a leaf the host retires must stop being mounted on a paired client.
+      'tests/e2e/paired-remote-split-pane-host-retired-ghost.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:retire-unbound-(?:ipc|runtime)-terminal-pane|terminal-pane-(?:close-admission|close-identity|lifecycle-close|pane-closed|retirement-ownership)|use-terminal-pane-close-actions)|src\/renderer\/src\/store\/(?:terminals\/terminal-tab-close(?:-providers)?|slices\/(?:terminal-tab-retirement|terminal-retirement-teardown-reservation|retired-terminal-tab-state-sweep)))\.ts$/.test(
+        file
+      )
+  },
+  {
     id: 'terminal-session.parked-cli-split',
     specs: ['tests/e2e/terminal-parked-cli-split.spec.ts'],
     matches: (file) =>
