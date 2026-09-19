@@ -17192,6 +17192,17 @@
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca"
         }
+      },
+      "agyInstall": {
+        "open": "Install",
+        "title": "Install Antigravity",
+        "description": "Press Enter in the terminal to run the official installer. Closing this terminal stops any command still running.",
+        "target": "Install location: {{location}}",
+        "thisDevice": "This device",
+        "terminal": "Antigravity installer",
+        "detected": "Antigravity is detected on PATH. Close the terminal when the installer has finished.",
+        "close": "Close terminal",
+        "recheck": "Re-check agents"
       }
     },
     "jiraUserPicker": {
