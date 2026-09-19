@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { cachedHostRepos } from '../host-screen/catalog/host-list-queries'
+import { hostQueryKey } from '../query/host-query-key'
+import {
+  cachedHostRepos,
+  HOST_LIST_TARGET,
+  hostRepoCatalogQuery,
+  NO_HOST_LIST_INPUT,
+  type HostRepoCatalog
+} from '../host-screen/catalog/host-list-queries'
 import { listHostRepos } from '../worktree/server-repos'
 import { useServerRepos } from '../worktree/use-server-repos'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
@@ -28,6 +35,7 @@ export function useNewWorkspaceRepositories(args: {
   allRepos: MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
+  upsertRepo: (repo: MobileWorkspaceRepo) => void
   loading: boolean
   /** Set when the project list failed to load and nothing is cached to show. */
   loadError: string | null
@@ -66,6 +74,40 @@ export function useNewWorkspaceRepositories(args: {
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
     [pickedRepo, repos]
+  )
+
+  // Why: a repo the phone just added must join the list and win the selection before the
+  // sheet's own fetch lands, or the last-visited default would grab the form first. The
+  // fetch keeps the row because the host registered it before answering.
+  const upsertRepo = useCallback(
+    (repo: MobileWorkspaceRepo) => {
+      setDesktopRepos((current) => {
+        const next = current.some((existing) => existing.id === repo.id)
+          ? current.map((existing) =>
+              existing.id === repo.id ? { ...existing, ...repo } : existing
+            )
+          : [...current, repo]
+        // Why setQueryData: the host repo catalog cache is the sheet's first-paint seed
+        // (cachedHostRepos below), so the added repo must land there too or a reopen
+        // of the sheet would briefly drop it again.
+        if (hostId) {
+          const key = hostQueryKey(
+            hostId,
+            hostRepoCatalogQuery.family,
+            HOST_LIST_TARGET,
+            NO_HOST_LIST_INPUT
+          )
+          const cached = queryClient.getQueryData<HostRepoCatalog>(key)
+          if (cached) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list rows and the catalog rows are the same host Repo records, the loose view cachedHostRepos reads them through.
+            queryClient.setQueryData(key, { ...cached, catalog: next as unknown as HostRepoCatalog['catalog'] })
+          }
+        }
+        return next
+      })
+      setSelectedRepo(repo)
+    },
+    [hostId, queryClient]
   )
 
   useEffect(() => {
@@ -139,6 +181,7 @@ export function useNewWorkspaceRepositories(args: {
     allRepos,
     selectedRepo,
     setSelectedRepo,
+    upsertRepo,
     loading: loading && repos.length === 0,
     // Cached rows stay usable, so a failed refresh only matters when there is nothing to pick.
     loadError: repos.length === 0 ? loadError : null,

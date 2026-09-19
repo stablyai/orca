@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import { storedHostDescriptor, type HostStoredDescriptor } from './identity/host-stored-identity'
+import type { MobileWorkspaceRepo } from '../components/new-worktree-modal-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
@@ -66,6 +67,14 @@ export function useHostScreenState(
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   const setNewWorktreeVisible = useCallback((visible: boolean) => setShowNewWorktree(visible), [])
+  // The Add project handoff's repo: upserted and preselected in the create form on the
+  // same open; cleared when the sheet closes or opens without one.
+  const [newWorktreePreselectedRepo, setNewWorktreePreselectedRepo] =
+    useState<MobileWorkspaceRepo | null>(null)
+  // The + button's two-choice sheet (New workspace / Add project), and the Add project
+  // sheet it opens — both plain drawer state, no route action behind them in v1.
+  const [showPlusActionSheet, setShowPlusActionSheet] = useState(false)
+  const [showAddProject, setShowAddProject] = useState(false)
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
@@ -113,15 +122,21 @@ export function useHostScreenState(
     setServedProjectSections,
     setDesktopRepos,
     setNewWorktreeVisible,
+    setNewWorktreePreselectedRepo,
     setSearch,
     setServerNotice,
     setServerWorkspaces,
+    setShowAddProject,
+    setShowPlusActionSheet,
     setShowWorkspaceOptions,
     setShowPinnedInGroups,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
+    newWorktreePreselectedRepo,
+    showAddProject,
     showNewWorktree,
+    showPlusActionSheet,
     showWorkspaceOptions,
     showPinnedInGroups,
     setView,

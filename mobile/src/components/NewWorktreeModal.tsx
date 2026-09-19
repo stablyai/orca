@@ -72,12 +72,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     hostLabelById,
     existingWorktreePaths,
     existingWorktrees,
+    preselectedRepo,
     openExternalUrl,
     onCreated,
     onClose,
     folderLaunch
   } = props
-  const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
+  const { repos, allRepos, selectedRepo, setSelectedRepo, upsertRepo, loading, loadError, retryLoad } =
     useNewWorkspaceRepositories({
       client: desktopClient,
       serverClients,
@@ -100,6 +101,15 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     'note'
   )
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (visible && preselectedRepo) {
+      // Why: this hook's effects run after useNewWorkspaceRepositories' own, so a repo
+      // just added from the phone overrides the last-visited default in the same commit.
+      upsertRepo(preselectedRepo)
+    }
+  }, [visible, preselectedRepo, upsertRepo])
+
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
   const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
   const {
