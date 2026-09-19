@@ -619,7 +619,7 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).toHaveBeenCalledTimes(1)
     expect(pane.terminal.write).toHaveBeenNthCalledWith(
       1,
-      '\x1b[2J\x1b[3J\x1b[H',
+      NORMAL_BUFFER_PROLOGUE,
       expect.any(Function)
     )
 
@@ -658,7 +658,7 @@ describe('connectPanePty', () => {
 
     callbacksRef.replay?.('authoritative replay')
     await flushAsyncTicks(8)
-    expect(writes).toEqual(['\x1b[2J\x1b[3J\x1b[H'])
+    expect(writes).toEqual([NORMAL_BUFFER_PROLOGUE])
 
     const acknowledgeLiveFrame = vi.fn()
     deliverTerminalDataWithDeferredCredit(acknowledgeLiveFrame, () => {

@@ -60,6 +60,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   onCommandStarted: (expectedAgent?: TuiAgent | null) => void
   /** True when pane identity must remain visible until an async shell confirmation. */
   onCommandFinished: () => boolean
+  resetForPtyReplacement: () => void
   dispose: () => void
 } {
   let disposed = false
@@ -259,6 +260,12 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   }
 
   return {
+    resetForPtyReplacement() {
+      cancelPendingRead()
+      hasForegroundAgentEvidence = false
+      hasKnownAgentEvidence = false
+      hasAgentExpectation = false
+    },
     // Why: onVisiblePtyBound refuses to schedule while a higher-authority
     // command read owns the pane, so "it scheduled nothing" must not be read
     // as "nothing will confirm this pane".

@@ -6,6 +6,7 @@ import type {
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean
   terminalHandle: string | null
+  incarnationId?: string | null
 }
 
 type TerminalHandleSubscriber = {
@@ -48,7 +49,8 @@ function resolveSubscriberUpdate(
     mirroredSurfaces.find((surface) => surface.status === 'ready')
   return {
     surfacePresent: true,
-    terminalHandle: readySurface?.terminal ?? null
+    terminalHandle: readySurface?.terminal ?? null,
+    ...(readySurface?.incarnationId ? { incarnationId: readySurface.incarnationId } : {})
   }
 }
 
