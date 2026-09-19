@@ -5,6 +5,7 @@ import type { KeybindingActionId, PluginKeybindingActionId } from '../keybinding
 export const PLUGIN_COMMAND_ALIAS_ACTION_IDS = [
   'worktree.history.back',
   'worktree.history.forward',
+  'worktree.jumpToNextAttention',
   'sidebar.left.toggle',
   'sidebar.sleepingWorkspaces.toggle',
   'floatingWorkspace.maximize',
