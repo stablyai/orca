@@ -1,128 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import {
   createMobileWebShellSession,
-  reduceMobileWebShellSession
-} from './mobile-web-shell-session'
-import type {
-  CachedGeneration,
-  MobileWebShellGates,
-  MobileWebShellManifestFacts,
-  MobileWebShellSession,
-  MobileWebShellSessionEvent,
-  MobileWebShellStep
-} from './mobile-web-shell-session-contract'
-
-function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebShellGates {
-  return {
-    statusPending: false,
-    statusReadable: true,
-    reachability: 'connected',
-    hostCapabilities: [MOBILE_WEB_BUNDLE_CAPABILITY],
-    hostStatus: { protocolVersion: 10, minCompatibleMobileVersion: 1 },
-    ...overrides
-  }
-}
-
-/** The route every session below is opened for, and the pattern the bundles list it under. */
-const ROUTE = '/h/host-1'
-const PAGE_ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
-
-const MANIFEST: MobileWebShellManifestFacts = {
-  buildId: 'b'.repeat(64),
-  schemaVersion: 1,
-  runtimeProtocolVersion: 5,
-  minCompatibleRuntimeProtocolVersion: 2,
-  totalBytes: 4096,
-  totalAssets: 4,
-  routes: PAGE_ROUTES
-}
-
-const CACHED: CachedGeneration = {
-  buildId: MANIFEST.buildId,
-  directory: '/cache/mobile-web/host/generations/b',
-  totalBytes: 4096,
-  routes: PAGE_ROUTES
-}
-
-/** An event as a test writes it. An effect result is stamped with the flow the session is on, which
- *  is what an in-order runner does; a test replaying a superseded run pins the flow itself. */
-type PendingEvent<E = MobileWebShellSessionEvent> = E extends { flow: number }
-  ? Omit<E, 'flow'> & { readonly flow?: number }
-  : E
-
-function stamp(flow: number, event: PendingEvent): MobileWebShellSessionEvent {
-  switch (event.type) {
-    case 'gates-changed':
-    case 'shell-failed':
-    case 'retry-pressed':
-    case 'document-loaded':
-    case 'page-ready':
-      return event
-    case 'cache-read':
-    case 'manifest-read':
-    case 'fetch-progress':
-    case 'download-staged':
-    case 'activated':
-    case 'remounted':
-    case 'download-failed':
-    case 'page-ready-deadline':
-      return { ...event, flow: event.flow ?? flow }
-  }
-}
-
-function run(
-  session: MobileWebShellSession,
-  ...events: readonly PendingEvent[]
-): MobileWebShellStep {
-  let step: MobileWebShellStep = { session, effects: [] }
-  for (const event of events) {
-    step = reduceMobileWebShellSession(step.session, stamp(step.session.flow, event))
-  }
-  return step
-}
-
-function started(overrides: Partial<MobileWebShellGates> = {}): MobileWebShellStep {
-  return run(createMobileWebShellSession(ROUTE), { type: 'gates-changed', gates: gates(overrides) })
-}
-
-/** Connected, capability present, cache read, manifest in flight. */
-function afterCacheRead(generation: CachedGeneration | null): MobileWebShellStep {
-  return run(started().session, { type: 'cache-read', generation })
-}
-
-function readySession(): MobileWebShellStep {
-  return run(
-    afterCacheRead(CACHED).session,
-    { type: 'manifest-read', manifest: MANIFEST },
-    {
-      type: 'activated',
-      generationDirectory: CACHED.directory,
-      sessionId: 'session-one',
-      buildId: MANIFEST.buildId,
-      totalBytes: MANIFEST.totalBytes,
-      elapsedMs: 12
-    }
-  )
-}
-
-/** The second half of a recovery: the refetch the delete queued, through to a mounted view. */
-function readyAgain(session: MobileWebShellSession, sessionId: string): MobileWebShellStep {
-  return run(
-    session,
-    { type: 'cache-read', generation: null },
-    { type: 'manifest-read', manifest: MANIFEST },
-    { type: 'download-staged' },
-    {
-      type: 'activated',
-      generationDirectory: '/cache/gen',
-      sessionId,
-      buildId: MANIFEST.buildId,
-      totalBytes: MANIFEST.totalBytes,
-      elapsedMs: 7
-    }
-  )
-}
+  readyAgain,
+  CACHED,
+  MANIFEST,
+  ROUTE,
+  afterCacheRead,
+  gates,
+  readySession,
+  run,
+  started
+} from './mobile-web-shell-session-test-fixtures'
 
 describe('the gates decide whether a step is taken at all', () => {
   it('waits while a connection is still being made', () => {
@@ -877,53 +765,5 @@ describe('the page has to speak for the document that loaded', () => {
       elapsedMs: 9
     })
     expect(reactivated.session.pageReady).toBe(false)
-  })
-})
-
-/**
- * A download that failed falls back to the generation on disk, and that generation's routes are
- * what it must be judged by — including its grants.
- *
- * The newer manifest is read before the download is attempted, so without this the session keeps
- * the newer bundle's grants and opens the older page under them: a cached route that never
- * declared the clipboard would be granted it by a manifest it is not running.
- */
-describe('falling back to the cached generation after a failed download', () => {
-  const cachedOnlyNavigate: CachedGeneration = { ...CACHED, routes: PAGE_ROUTES }
-  const manifestWithClipboard: MobileWebShellManifestFacts = {
-    ...MANIFEST,
-    routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.clipboard.read'] }]
-  }
-
-  it('opens it under its own grants, not the ones the newer manifest declared', () => {
-    const step = run(
-      afterCacheRead(cachedOnlyNavigate).session,
-      { type: 'manifest-read', manifest: manifestWithClipboard },
-      { type: 'download-failed', failure: 'transport' }
-    )
-    expect(step.session.state.kind).toBe('activating')
-    expect([...step.session.routeGrants]).toEqual(['navigate'])
-  })
-
-  it('carries a verb declared in the manifest through to the session grants', () => {
-    // The whole path a verb takes before a page can call one: the desktop's manifest contract
-    // admits the name, the phone's reader keeps it, and the route policy grants it because this
-    // build implements it.
-    const step = run(afterCacheRead(null).session, {
-      type: 'manifest-read',
-      manifest: {
-        ...MANIFEST,
-        routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.clipboard.write'] }]
-      }
-    })
-    expect([...step.session.routeGrants]).toEqual(['navigate', 'native.clipboard.write'])
-  })
-
-  it('had the newer grants before the download failed, so the case discriminates', () => {
-    const step = run(afterCacheRead(cachedOnlyNavigate).session, {
-      type: 'manifest-read',
-      manifest: manifestWithClipboard
-    })
-    expect([...step.session.routeGrants]).toEqual(['navigate', 'native.clipboard.read'])
   })
 })
