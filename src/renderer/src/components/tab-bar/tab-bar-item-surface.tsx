@@ -227,6 +227,44 @@ export function renderTabBarItems({
         />
       )
     }
+    if (item.type === 'agents') {
+      const agentsFile: OpenFile & { tabId: string } = {
+        id: item.id,
+        tabId: item.id,
+        filePath: 'Agents',
+        relativePath: 'Agents',
+        worktreeId,
+        language: 'agents',
+        isPreview: false,
+        isDirty: false,
+        mode: 'edit'
+      }
+      return (
+        <EditorFileTab
+          key={item.id}
+          file={agentsFile}
+          isActive={
+            !clientHostedRowOwnsActiveState && activeTabType === 'agents' && item.id === activeTabId
+          }
+          isPinned={true}
+          hasTabsToRight={index < items.length - 1}
+          hasTabsToLeft={index > 0}
+          tabCount={items.length}
+          statusByRelativePath={statusByRelativePath}
+          onActivate={() => activateRealTab(onActivateFile)(item.id)}
+          onClose={() => onCloseFile?.(item.id)}
+          onCloseOthers={() => onCloseOthers(item.id)}
+          onCloseToRight={() => onCloseToRight(item.id)}
+          onCloseToLeft={() => onCloseToLeft(item.id)}
+          onCloseAll={() => onCloseAllFiles?.()}
+          onMakePermanent={() => {}}
+          onTogglePin={() => togglePinned(item)}
+          dragData={dragData}
+          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+          includeTopTabBorder={includeTopTabBorder}
+        />
+      )
+    }
     if (item.type === 'agent-session') {
       const structuredTab: TerminalTab = {
         id: item.id,

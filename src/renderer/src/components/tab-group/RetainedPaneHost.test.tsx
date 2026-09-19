@@ -105,3 +105,41 @@ it('allows hidden terminal startup measurement without exposing input or startin
   expect(timeout).not.toHaveBeenCalled()
   timeout.mockRestore()
 })
+
+it('attaches no scroll listener at all when the pane has no agent-cards ancestor (I4)', () => {
+  const documentAddSpy = vi.spyOn(document, 'addEventListener')
+  const view = render(
+    <RetainedPaneHost groupId="left" isVisible>
+      <input />
+    </RetainedPaneHost>
+  )
+  expect(documentAddSpy).not.toHaveBeenCalledWith('scroll', expect.anything(), true)
+  view.unmount()
+  documentAddSpy.mockRestore()
+})
+
+it('scopes the fallback scroll listener to the agent-cards ancestor, not document (I4)', () => {
+  const grid = document.createElement('div')
+  grid.dataset.orcaAgentCards = 'wt-1'
+  anchors[0].remove()
+  grid.append(anchors[0])
+  document.body.append(grid)
+  const gridAddSpy = vi.spyOn(grid, 'addEventListener')
+  const gridRemoveSpy = vi.spyOn(grid, 'removeEventListener')
+
+  const view = render(
+    <RetainedPaneHost groupId="left" isVisible>
+      <input />
+    </RetainedPaneHost>
+  )
+  expect(gridAddSpy).toHaveBeenCalledWith('scroll', expect.any(Function), true)
+
+  anchors[0].getBoundingClientRect = () => new DOMRect(10, 10, 400, 568)
+  act(() => fireEvent.scroll(grid))
+  const host = view.container.firstElementChild as HTMLDivElement
+  expect(host.style.left).toBe('10px')
+
+  view.unmount()
+  expect(gridRemoveSpy).toHaveBeenCalledWith('scroll', expect.any(Function), true)
+  grid.remove()
+})

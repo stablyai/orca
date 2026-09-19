@@ -122,7 +122,12 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
+    if (
+      tab.contentType === 'simulator' ||
+      tab.contentType === 'agent-session' ||
+      tab.contentType === 'agents'
+    ) {
+      // Why: self-backed like simulator/agent-session; the Agents tab has no openFiles row.
       return true
     }
     return liveEditorIds.has(tab.entityId)
@@ -179,8 +184,14 @@ export function projectWorktreeTabModelReconciliation(
     baseNextLayout && validGroupIds.size > 0
       ? pruneTabGroupLayoutForGroups(baseNextLayout, validGroupIds)
       : baseNextLayout
+  // Why: never let the layout fallback promote a card group to be the layout root, which
+  // would render its own tab strip as the whole surface (the rejected V2 shape).
+  const cardGroupIds = new Set(state.agentCardGroupIdsByWorktree[worktreeId] ?? [])
+  const fallbackLayoutGroup =
+    nextGroups.find((group) => !cardGroupIds.has(group.id)) ?? nextGroups[0]
   const nextLayout =
-    prunedNextLayout ?? (nextGroups[0] ? { type: 'leaf', groupId: nextGroups[0].id } : undefined)
+    prunedNextLayout ??
+    (fallbackLayoutGroup ? { type: 'leaf', groupId: fallbackLayoutGroup.id } : undefined)
   const currentLayout = state.layoutByWorktree[worktreeId]
   const layoutChanged = nextLayout !== currentLayout
   let patch: Partial<AppState> = {}

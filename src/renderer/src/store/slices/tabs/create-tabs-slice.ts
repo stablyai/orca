@@ -11,12 +11,15 @@ import { createTabsMoveActions } from './tabs-move-actions'
 import { createTabsDropActions } from './tabs-drop-actions'
 import { createTabsSecondaryActions } from './tabs-secondary-actions'
 import { createTabsSessionActions } from './tabs-session-actions'
+import { createTabsAgentCardsActions } from './agent-cards-actions'
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
+  agentCardGroupIdsByWorktree: {},
+  maximizedGroupIdByWorktree: {},
   ...createTabsCreateActions(set, get),
   ...createTabsFocusActions(set, get),
   ...createTabsCloseActions(set, get),
@@ -26,5 +29,6 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   ...createTabsMoveActions(set, get),
   ...createTabsDropActions(set, get),
   ...createTabsSecondaryActions(set, get),
-  ...createTabsSessionActions(set, get)
+  ...createTabsSessionActions(set, get),
+  ...createTabsAgentCardsActions(set, get)
 })

@@ -92,6 +92,43 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     {
+      title: translate('auto.components.settings.experimental.search.bf279937eb', 'Tiled agents'),
+      description: translate(
+        'auto.components.settings.experimental.search.7c77a592ca',
+        "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time."
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.78182b1010',
+          'tile'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.b077c6a1f4',
+          'tiled'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.1029498b26',
+          'grid'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.fa72e71f05',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.00fa41b0bf',
+          'panes'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.968ed126d4',
+          'side by side'
+        )
+      ]
+    },
+    {
       title: translate(
         'auto.components.settings.experimental.search.9e4ddf776d',
         'Terminal attention'
@@ -184,7 +221,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   ]
 )
 
-// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
+// Why: title-keyed lookup avoids a fragile numeric-index invariant: the array
 // shape can change without breaking consumers, and a typo/rename throws loudly
 // instead of silently matching the wrong (or empty) entry.
 function findEntry(title: string): SettingsSearchEntry {
@@ -206,6 +243,9 @@ export function getExperimentalSearchEntry() {
         'auto.components.settings.experimental.search.agentDashboard.title',
         'Agent Dashboard'
       )
+    ),
+    tiledAgents: findEntry(
+      translate('auto.components.settings.experimental.search.bf279937eb', 'Tiled agents')
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

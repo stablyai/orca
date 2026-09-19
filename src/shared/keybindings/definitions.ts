@@ -61,7 +61,8 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
 // Why: these ids are single remappable rows whose chord is a representative — the digit canonicalizes to 1 but the binding fires for any 1-9.
 export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
   'tab.selectByIndex',
-  'workspace.selectByIndex'
+  'workspace.selectByIndex',
+  'tiling.focusPaneByIndex'
 ]
 
 export const DIGIT_INDEX_KEY_PATTERN = /^[1-9]$/

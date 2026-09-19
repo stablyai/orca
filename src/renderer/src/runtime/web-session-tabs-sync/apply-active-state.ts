@@ -219,7 +219,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
       : null
   const fallbackVisibleTabType =
     activeUnifiedTab !== null
-      ? toVisibleTabType(activeUnifiedTab)
+      ? toVisibleTabType(activeUnifiedTab, currentVisibleTabType ?? undefined)
       : nextActiveTerminalId
         ? ('terminal' as const)
         : nextActiveBrowserWorkspaceId

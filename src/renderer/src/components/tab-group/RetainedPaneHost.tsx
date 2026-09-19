@@ -103,9 +103,16 @@ export function RetainedPaneHost({
       resizeObserver.observe(parent)
     }
     window.addEventListener('resize', updateRect)
+    // Why the agent-cards grid specifically, not document: it is the one ancestor that can actually
+    // scroll under a retained pane host, and scroll does not bubble, so it still
+    // needs capture. Scoping here means a non-card worktree's fallback effect (every web-client
+    // pane) attaches no scroll listener at all (I4).
+    const scrollAncestor = body?.closest('[data-orca-agent-cards]')
+    scrollAncestor?.addEventListener('scroll', updateRect, true)
     return () => {
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateRect)
+      scrollAncestor?.removeEventListener('scroll', updateRect, true)
     }
   }, [anchorName, groupId, isVisible])
 

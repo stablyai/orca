@@ -3415,6 +3415,21 @@
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
+          },
+          "AgentCard": {
+            "restore": "Restore agent",
+            "enlarge": "Enlarge agent",
+            "close": "Close agent",
+            "plus": "Launch agent"
+          },
+          "AgentsTab": {
+            "label": "Agents"
+          },
+          "TiledAgentsCapNotification": {
+            "capToast": {
+              "title": "Showing the first 9 agents as cards",
+              "description": "Additional agents open as ordinary tabs."
+            }
           }
         },
         "bar": {
@@ -9573,7 +9588,14 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
-            }
+            },
+            "968ed126d4": "side by side",
+            "00fa41b0bf": "panes",
+            "1029498b26": "grid",
+            "b077c6a1f4": "tiled",
+            "78182b1010": "tile",
+            "7c77a592ca": "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time.",
+            "bf279937eb": "Tiled agents"
           }
         },
         "floating": {
@@ -12003,6 +12025,12 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "TiledAgentsExperimentalSetting": {
+          "cb6fcdae1e": "Toggle tiled agents",
+          "b74d584bc1": "Turns on automatically for any worktree with an agent, no further action needed. Up to nine agents as cards at once.",
+          "181757cf72": "Tiled agents",
+          "d1aa272497": "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time."
         }
       },
       "right": {

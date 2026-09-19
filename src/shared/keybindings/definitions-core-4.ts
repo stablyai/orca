@@ -66,5 +66,21 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'tiling.focusPaneByIndex',
+    title: 'Focus Tiled Pane 1 to 9',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'tile', 'tiled', 'pane', 'focus', 'grid', 'agents'],
+    defaultBindings: platformBindings(['Mod+Alt+1'])
+  },
+  {
+    id: 'tiling.toggleMaximizePane',
+    title: 'Toggle Maximize Tiled Pane',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'tile', 'tiled', 'pane', 'maximize', 'zoom', 'grid'],
+    defaultBindings: platformBindings(['Mod+Alt+Enter'])
   }
 ]

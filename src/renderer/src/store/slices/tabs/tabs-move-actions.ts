@@ -67,11 +67,12 @@ export function createTabsMoveActions(
           }
           if (group.id === targetGroupId) {
             const sanitizedTargetRecent = sanitizeRecentTabIds(group.recentTabIds, targetOrder)
+            const activatesInGroup = opts?.activate || opts?.activateInTargetGroup
             return {
               ...group,
-              activeTabId: opts?.activate ? tabId : group.activeTabId,
+              activeTabId: activatesInGroup ? tabId : group.activeTabId,
               tabOrder: targetOrder,
-              recentTabIds: opts?.activate
+              recentTabIds: activatesInGroup
                 ? pushRecentTabId(sanitizedTargetRecent, tabId)
                 : sanitizedTargetRecent
             }

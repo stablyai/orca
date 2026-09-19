@@ -84,7 +84,10 @@ export function deriveActiveSurfaceForWorktree(
         : browserTabStillOpen
           ? restoredBrowserTabId
           : (browserTabs[0]?.id ?? null)
-    activeTabType = toVisibleTabType(activeUnifiedTab.contentType)
+    activeTabType =
+      activeUnifiedTab.contentType === 'agents'
+        ? (state.activeTabTypeByWorktree[worktreeId] ?? restoredTabType ?? 'terminal')
+        : toVisibleTabType(activeUnifiedTab.contentType)
   } else if (hasGroupOwnedSurface) {
     activeFileId = fileStillOpen ? restoredFileId : null
     activeBrowserTabId = browserTabStillOpen ? restoredBrowserTabId : (browserTabs[0]?.id ?? null)

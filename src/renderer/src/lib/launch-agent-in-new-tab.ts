@@ -101,7 +101,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   const {
     agent,
     worktreeId,
-    groupId,
+    groupId: callerGroupId,
     prompt,
     agentArgs,
     initialCwd,
@@ -114,6 +114,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     beforeSurfaceOpen
   } = args
   const store = useAppStore.getState()
+  // Why: launch tests fake @/store with partial doubles, so guard like allWorktrees?.() below.
+  const groupId = store.resolveAgentLaunchGroupId?.(worktreeId, callerGroupId) ?? callerGroupId
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
   // Why: `store.repos.find` is host-blind and the same repo id can exist on local, SSH and runtime

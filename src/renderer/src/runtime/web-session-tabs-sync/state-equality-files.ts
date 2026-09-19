@@ -143,7 +143,13 @@ export function sameGroups(
   return left.every((group, index) => groupEqual(group, right[index]!))
 }
 
-export function toVisibleTabType(tab: Tab): WebSessionTabsSyncState['activeTabType'] {
+export function toVisibleTabType(
+  tab: Tab,
+  previous?: WebSessionTabsSyncState['activeTabType']
+): WebSessionTabsSyncState['activeTabType'] {
+  if (tab.contentType === 'agents') {
+    return previous ?? 'terminal'
+  }
   if (tab.contentType === 'agent-session') {
     return 'agent-session'
   }

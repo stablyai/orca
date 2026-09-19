@@ -22,6 +22,9 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   activate?: boolean
 }): Tab {
   const state = useAppStore.getState()
+  // Why: launch tests fake @/store with partial doubles that carry state but no tabs actions.
+  const targetGroupId =
+    state.resolveAgentLaunchGroupId?.(args.worktreeId, args.targetGroupId) ?? args.targetGroupId
   const tabId = structuredAgentSessionTabId(args.sessionId)
   const existing = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
     (candidate) =>
@@ -43,7 +46,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     agentSessionAgent: args.agent,
     label: defaultAgentChatLabel(args.agent),
-    ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+    ...(targetGroupId ? { targetGroupId } : {}),
     activate: args.activate !== false
   })
   if (args.activate !== false) {

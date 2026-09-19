@@ -417,7 +417,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         },
         unifiedTabsByWorktree,
         worktree: ownershipWorktrees[0],
-        worktreesByRepo: { repo: ownershipWorktrees }
+        worktreesByRepo: { repo: ownershipWorktrees },
+        agentCardGroupIdsByWorktree: {}
       },
       {
         agentStatusByPaneKey: {},
