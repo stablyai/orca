@@ -10,6 +10,7 @@ import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSecti
 import {
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
+  AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY,
   getGeneralNavigationSearchEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
@@ -75,9 +76,9 @@ export function getTabOrderControlSearchKeywords(
 }
 
 export function getAutoHideSingleTabStripSearchKeywords(
-  navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
+  entry: GeneralSearchEntry = AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY()
 ): string[] {
-  return flattenNavigationSearchEntry(navigationEntries[2])
+  return flattenNavigationSearchEntry(entry)
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -122,9 +123,7 @@ export function GeneralPane({
       activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
-  const autoHideStripKeywords = getAutoHideSingleTabStripSearchKeywords(
-    generalNavigationSearchEntries
-  )
+  const autoHideStripKeywords = getAutoHideSingleTabStripSearchKeywords()
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
     : []
