@@ -2,15 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shouldDeferStartupCommand } from './startup-command-load-gate'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type * as NodeOs from 'node:os'
 
 // Hoisted: vi.mock factories are lifted to module scope regardless of where
 // they appear, so it must be declared here to apply to the import graph.
 vi.mock('node:os', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:os')>()
+  const actual = await importOriginal<NodeOs>()
   const mocked = {
     ...actual,
     loadavg: (): number[] => [99, 0, 0],
-    cpus: () => new Array(8)
+    cpus: () => Array.from({ length: 8 })
   }
   return { ...mocked, default: mocked }
 })
@@ -40,8 +41,9 @@ const fixedInputs = (load1: number, cpuCount = 8, platform: NodeJS.Platform = 'd
 describe('shouldDeferStartupCommand', () => {
   it('never defers when the env var is unset or empty (default off)', () => {
     expect(shouldDeferStartupCommand({}, fixedInputs(99))).toEqual({ deferred: false })
-    expect(shouldDeferStartupCommand({ ORCA_STARTUP_COMMAND_MAX_LOAD_PER_CPU: '' }, fixedInputs(99)))
-      .toEqual({ deferred: false })
+    expect(
+      shouldDeferStartupCommand({ ORCA_STARTUP_COMMAND_MAX_LOAD_PER_CPU: '' }, fixedInputs(99))
+    ).toEqual({ deferred: false })
   })
 
   it('never defers on unparseable or non-positive values', () => {
@@ -54,10 +56,7 @@ describe('shouldDeferStartupCommand', () => {
 
   it('does not defer when 1-min load is within limit × cpus', () => {
     expect(
-      shouldDeferStartupCommand(
-        { ORCA_STARTUP_COMMAND_MAX_LOAD_PER_CPU: '2' },
-        fixedInputs(16, 8)
-      )
+      shouldDeferStartupCommand({ ORCA_STARTUP_COMMAND_MAX_LOAD_PER_CPU: '2' }, fixedInputs(16, 8))
     ).toEqual({ deferred: false })
   })
 
@@ -100,7 +99,7 @@ describe('TerminalHost startup command load gate', () => {
 
   let sub: SubprocessHandle
   let host: TerminalHost
-  let readinessEvents: Array<{ event: string; details: Record<string, unknown> }>
+  let readinessEvents: { event: string; details: Record<string, unknown> }[]
 
   beforeEach(() => {
     // Why: a runner-provided value would flip the "not configured" test.
@@ -114,8 +113,11 @@ describe('TerminalHost startup command load gate', () => {
   })
 
   afterEach(() => {
-    if (originalEnvValue === undefined) delete process.env[ENV_KEY]
-    else process.env[ENV_KEY] = originalEnvValue
+    if (originalEnvValue === undefined) {
+      delete process.env[ENV_KEY]
+    } else {
+      process.env[ENV_KEY] = originalEnvValue
+    }
   })
 
   it('delivers the startup command when the gate is not configured', async () => {
@@ -132,25 +134,31 @@ describe('TerminalHost startup command load gate', () => {
     expect(vi.mocked(sub.write)).toHaveBeenCalledWith(submit)
   })
 
-  it('defers delivery without writing anything to the shell when load exceeds the limit', async () => {
-    process.env[ENV_KEY] = '2' // limit = 2 × 8 = 16, mocked loadavg(1m) = 99
-    await host.createOrAttach({
-      sessionId: 's-gated',
-      cols: 80,
-      rows: 24,
-      command: 'run-heavy-tests',
-      shellReadySupported: false,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    // The session must be left a pristine idle shell: no command, no notice —
-    // anything written here goes to the child's stdin and would execute.
-    expect(vi.mocked(sub.write).mock.calls).toHaveLength(0)
-    const delivery = readinessEvents.find((e) => e.event === 'startup-command-delivery')
-    expect(delivery?.details.written).toBe(false)
-    expect(delivery?.details.deferredByLoad).toBe(true)
-    const deferred = readinessEvents.find((e) => e.event === 'startup-command-deferred-load')
-    expect(deferred).toBeDefined()
-    expect(deferred?.details.commandLength).toBe('run-heavy-tests'.length)
-    expect(deferred?.details.load1).toBe(99)
-  })
+  // Why skipIf: the gate disables itself on win32 (os.loadavg() is [0,0,0]
+  // there), so deferral cannot engage and this test would observe normal
+  // delivery instead. The unit tests cover the win32 decision explicitly.
+  it.skipIf(process.platform === 'win32')(
+    'defers delivery without writing anything to the shell when load exceeds the limit',
+    async () => {
+      process.env[ENV_KEY] = '2' // limit = 2 × 8 = 16, mocked loadavg(1m) = 99
+      await host.createOrAttach({
+        sessionId: 's-gated',
+        cols: 80,
+        rows: 24,
+        command: 'run-heavy-tests',
+        shellReadySupported: false,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      // The session must be left a pristine idle shell: no command, no notice —
+      // anything written here goes to the child's stdin and would execute.
+      expect(vi.mocked(sub.write).mock.calls).toHaveLength(0)
+      const delivery = readinessEvents.find((e) => e.event === 'startup-command-delivery')
+      expect(delivery?.details.written).toBe(false)
+      expect(delivery?.details.deferredByLoad).toBe(true)
+      const deferred = readinessEvents.find((e) => e.event === 'startup-command-deferred-load')
+      expect(deferred).toBeDefined()
+      expect(deferred?.details.commandLength).toBe('run-heavy-tests'.length)
+      expect(deferred?.details.load1).toBe(99)
+    }
+  )
 })
