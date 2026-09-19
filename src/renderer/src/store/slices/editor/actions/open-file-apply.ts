@@ -185,7 +185,8 @@ export function applyOpenFileToState(
         markdownRichModeSizeOverride: nextMarkdownRichModeSizeOverride,
         editorViewMode: nextEditorViewMode,
         markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
-        markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
+        markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
+        editorTextDirectionByFile: nextEditorTextDirectionByFile
       } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
       // Replace in-place to preserve tab position
       newFiles = s.openFiles.map((f, i) =>
@@ -248,6 +249,7 @@ export function applyOpenFileToState(
         editorViewMode: nextEditorViewMode,
         markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
         markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
+        editorTextDirectionByFile: nextEditorTextDirectionByFile,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
         recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
         ...previewTabBarUpdate,

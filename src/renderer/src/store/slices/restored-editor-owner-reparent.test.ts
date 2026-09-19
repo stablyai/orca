@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
-import { buildEditorSessionData } from '@/lib/workspace-session'
+import { buildEditorSessionData } from '@/lib/workspace-session-editor-data'
 import {
   createExternalWatchEventHandler,
   getEditorExternalWatchTargets,
@@ -402,7 +402,8 @@ describe('restored editor owner reparent', () => {
       state.editorDrafts,
       state.markdownFrontmatterVisible,
       state.activeFileIdByWorktree,
-      state.activeTabTypeByWorktree
+      state.activeTabTypeByWorktree,
+      state.editorTextDirectionByFile
     )
     expect(session.openFilesByWorktree?.[SOURCE]).toBeUndefined()
     expect(session.openFilesByWorktree?.[TARGET]?.[0]).toMatchObject({

@@ -79,6 +79,7 @@ describe('getDefaultSettings', () => {
 
   it('keeps file-editor word wrapping enabled by default', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
+    expect(getDefaultSettings('/tmp').editorTextDirection).toBe('ltr')
   })
 
   it('keeps rich Markdown spellcheck enabled by default', () => {

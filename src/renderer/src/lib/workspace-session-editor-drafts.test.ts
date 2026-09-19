@@ -18,6 +18,7 @@ function createSnapshot(
     openFiles: [],
     editorDrafts: {},
     markdownFrontmatterVisible: {},
+    editorTextDirectionByFile: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},

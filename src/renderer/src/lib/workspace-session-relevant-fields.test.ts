@@ -18,6 +18,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     openFiles: true,
     editorDrafts: true,
     markdownFrontmatterVisible: true,
+    editorTextDirectionByFile: true,
     activeFileIdByWorktree: true,
     activeTabTypeByWorktree: true,
     browserTabsByWorktree: true,

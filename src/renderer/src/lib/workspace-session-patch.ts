@@ -5,9 +5,9 @@ import type {
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
+import { buildEditorSessionData } from './workspace-session-editor-data'
 import {
   buildActiveConnectionIdsAtShutdown,
-  buildEditorSessionData,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
@@ -130,6 +130,7 @@ export function buildWorkspaceSessionPatch(
       'openFiles',
       'editorDrafts',
       'markdownFrontmatterVisible',
+      'editorTextDirectionByFile',
       'activeFileIdByWorktree',
       'activeTabTypeByWorktree'
     ] as const)
@@ -141,7 +142,8 @@ export function buildWorkspaceSessionPatch(
         snapshot.editorDrafts,
         snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
-        snapshot.activeTabTypeByWorktree
+        snapshot.activeTabTypeByWorktree,
+        snapshot.editorTextDirectionByFile
       )
     )
   }
