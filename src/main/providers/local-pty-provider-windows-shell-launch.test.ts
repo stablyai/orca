@@ -304,6 +304,31 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it('imports caller history settings into global-history WSL terminals', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'global-floating-terminal',
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian',
+        historyIsolationEnabled: false,
+        env: {
+          HISTFILE: '/home/jin/.custom_history',
+          fish_history: 'personal'
+        }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)![2].env
+      expect(spawnEnv.HISTFILE).toBe('/home/jin/.custom_history')
+      expect(spawnEnv.fish_history).toBe('personal')
+      expect(spawnEnv.WSLENV?.split(':')).toEqual(
+        expect.arrayContaining(['HISTFILE', 'fish_history'])
+      )
+    })
+
     it.each(['/home/jin/repo', '/a', '/c'])(
       'preserves a POSIX cwd through the preferred WSL distro (%s)',
       async (cwd) => {

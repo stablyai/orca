@@ -61,11 +61,72 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: '/tmp/floating-notes',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      env: { HISTFILE: '/home/me/.zsh_history' }
     })
 
-    const [, , options] = spawnMock.mock.calls.at(-1) as [string, string[], { cwd: string }]
+    const [, , options] = spawnMock.mock.calls.at(-1) as [
+      string,
+      string[],
+      { cwd: string; env: Record<string, string> }
+    ]
     expect(options.cwd).toBe('/tmp/floating-notes')
+    expect(options.env.HISTFILE).toBe('/home/me/.zsh_history')
+    expect(options.env.ORCA_HISTFILE).toBeUndefined()
+  })
+  it('keeps regular workspace terminal history isolated', async () => {
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/worktree',
+      worktreeId: 'repo-1::/tmp/worktree'
+    })
+
+    const [, , options] = spawnMock.mock.calls.at(-1) as [
+      string,
+      string[],
+      { env: Record<string, string> }
+    ]
+    expect(options.env.HISTFILE).toContain('terminal-history')
+    expect(options.env.ORCA_HISTFILE).toBe(options.env.HISTFILE)
+  })
+  it('uses global history for floating runtime-controller spawns', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => undefined)
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+    }
+
+    await controller.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/floating-notes',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      env: {}
+    })
+
+    const [, , options] = spawnMock.mock.calls.at(-1) as [
+      string,
+      string[],
+      { env: Record<string, string> }
+    ]
+    expect(options.env.HISTFILE).toBeUndefined()
+    expect(options.env.ORCA_HISTFILE).toBeUndefined()
   })
   it('rejects a renderer spawn while destructive worktree removal holds the gate', async () => {
     const removal = acquireWatcherRemovalGate('/repo/app')
