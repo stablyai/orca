@@ -5,6 +5,7 @@ import type { JSONContent } from '@tiptap/react'
 // draft would be lost on every TUI/GUI round-trip. Mirrors the attachment cache
 // so both halves of an unsent message survive toggles and reconnects.
 
+import { setAgentUnsentDraft } from '@/lib/agent-unsent-draft'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 const draftCache = new Map<string, { text: string; document?: JSONContent }>()
@@ -14,6 +15,9 @@ export function readNativeChatDraftCache(scopeKey: string): string {
 }
 
 export function writeNativeChatDraftCache(scopeKey: string, draft: string): void {
+  // The scope key is the pane key, so the sidebar can show that this pane holds
+  // an unsent message. Sending clears the draft, which clears the flag here too.
+  setAgentUnsentDraft(scopeKey, draft.trim() !== '')
   // An empty draft carries no state worth retaining; drop the entry so a stale
   // scope key never resurrects cleared text.
   if (draft === '') {

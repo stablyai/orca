@@ -7,6 +7,7 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
 import { buildWorktreeCardPresentation } from './worktree-card-presentation'
+import { buildWorktreeHoverFacts, WorktreeHoverFactsProvider } from './worktree-hover-facts-context'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
@@ -122,7 +123,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   )
 
   return (
-    <>
+    // Why: the hover cards inside this card read the workspace facts from here, so a
+    // portaled card body never has to re-resolve the review/issue caches itself.
+    <WorktreeHoverFactsProvider facts={buildWorktreeHoverFacts(card)}>
       {affiliateListMode ? (
         cardBody
       ) : (
@@ -146,6 +149,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             error={worktree.firstAgentMessageRenameError}
           />
         )}
-    </>
+    </WorktreeHoverFactsProvider>
   )
 }
