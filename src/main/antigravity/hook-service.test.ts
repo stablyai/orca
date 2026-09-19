@@ -57,6 +57,49 @@ describe('AntigravityHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
+  it.each(['darwin', 'win32'] as const)(
+    'reports and repairs a missing core script on %s',
+    (platform) => {
+      withPlatform(platform, () => {
+        const service = new AntigravityHookService()
+        expect(service.install().state).toBe('installed')
+        const filename = platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
+        rmSync(join(homeDir, '.orca', 'agent-hooks', filename))
+        expect(service.getStatus()).toMatchObject({ state: 'partial', managedHooksPresent: true })
+        expect(service.getStatus().detail).toContain(filename)
+        expect(service.install().state).toBe('installed')
+      })
+    }
+  )
+
+  it('reports and repairs a missing Windows event wrapper', () => {
+    withPlatform('win32', () => {
+      const service = new AntigravityHookService()
+      service.install()
+      rmSync(join(homeDir, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd'))
+      expect(service.getStatus()).toMatchObject({ state: 'partial', managedHooksPresent: true })
+      expect(service.getStatus().detail).toContain('antigravity-pre-tool-use.cmd')
+      expect(service.install().state).toBe('installed')
+    })
+  })
+
+  it('reinstalls a wiped bundle and missing scripts while preserving user hooks', () => {
+    withPlatform('win32', () => {
+      const service = new AntigravityHookService()
+      service.install()
+      const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
+      const userHooks = { 'user-hook': { Stop: [{ type: 'command', command: 'user-hook' }] } }
+      writeFileSync(configPath, JSON.stringify(userHooks))
+      rmSync(join(homeDir, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd'))
+      expect(service.getStatus().state).toBe('not_installed')
+      expect(service.install().state).toBe('installed')
+      expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject(userHooks)
+      expect(
+        readFileSync(join(homeDir, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd'), 'utf8')
+      ).toContain('ORCA_ANTIGRAVITY_EVENT=PreToolUse')
+    })
+  })
+
   it('installs Antigravity global hooks.json bundle and managed script', () => {
     const status = new AntigravityHookService().install()
 

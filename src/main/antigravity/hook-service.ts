@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -31,6 +32,14 @@ import {
   hasManagedCommand,
   removeInstalledConfig
 } from './hooks-json-bundle'
+
+function isManagedScriptFile(scriptPath: string): boolean {
+  try {
+    return statSync(scriptPath).isFile()
+  } catch {
+    return false
+  }
+}
 
 function getConfigPath(): string {
   // Why: Antigravity's hook docs define global hooks in ~/.gemini/config/hooks.json,
@@ -131,6 +140,23 @@ export class AntigravityHookService {
         missing.length > 0
           ? `Managed hook missing for events: ${missing.join(', ')}`
           : 'Stale managed hook entries need cleanup'
+    }
+    if (managedHooksPresent) {
+      const scriptNames = [
+        getManagedScriptFileName(),
+        ...(process.platform === 'win32'
+          ? ANTIGRAVITY_EVENTS.map((event) => event.windowsWrapperFileName)
+          : [])
+      ]
+      const unavailable = scriptNames.filter(
+        (name) => !isManagedScriptFile(getSharedManagedScriptPath(name))
+      )
+      if (unavailable.length > 0) {
+        state = 'partial'
+        detail = [detail, `Managed scripts unavailable: ${unavailable.join(', ')}`]
+          .filter(Boolean)
+          .join('; ')
+      }
     }
     return { agent: 'antigravity', state, configPath, managedHooksPresent, detail }
   }
