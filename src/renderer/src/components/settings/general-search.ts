@@ -161,7 +161,18 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
       'Ask before stopping a running agent or command when closing a terminal.'
     ),
-    keywords: ['running', 'terminal', 'agent', 'command', 'confirm', 'close', 'OMP']
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.running_terminal',
+        'running'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.agent', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.general.search.command', 'command'),
+      ...translateSearchKeyword('auto.components.settings.general.search.confirm', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.close', 'close'),
+      ...translateSearchKeyword('auto.components.settings.general.search.omp', 'OMP')
+    ]
   }
 ])
 
