@@ -57,7 +57,10 @@ async function createFeed() {
   const server = new AgentHookServer()
   const statusSink: StructuredAgentSessionStatusSink = {
     publish: vi.fn((summary, subject) => server.ingestStructuredStatus(summary, subject)),
-    forget: vi.fn((subject) => server.dropStructuredStatus(subject))
+    forget: vi.fn((subject) => server.dropStructuredStatus(subject)),
+    publishChildren: vi.fn((subject, evidence, provider) =>
+      server.ingestStructuredChildWork(subject, evidence, provider)
+    )
   }
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,

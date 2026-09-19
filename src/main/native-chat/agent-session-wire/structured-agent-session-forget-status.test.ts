@@ -150,7 +150,9 @@ async function workingSession(): Promise<{
     now: () => 1,
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
-      forget: (subject) => server.dropStructuredStatus(subject)
+      forget: (subject) => server.dropStructuredStatus(subject),
+      publishChildren: (subject, evidence, provider) =>
+        server.ingestStructuredChildWork(subject, evidence, provider)
     })
   })
   feed.publish(SESSION, journal)

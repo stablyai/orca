@@ -23,9 +23,9 @@ import {
   olderPeerAgentStatusLegacyMode
 } from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
-import { AgentHookServerIngestStructured } from './server-ingest-structured'
+import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
-export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructured {
+export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
   ingestRemote(
     envelope: {

@@ -21,7 +21,7 @@ const summary: AgentSessionStatusSummary = {
 
 describe('structured status owner address retention', () => {
   it('retains scope through record deletion and does not resurrect after forget', () => {
-    const sink = { publish: vi.fn(), forget: vi.fn() }
+    const sink = { publish: vi.fn(), forget: vi.fn(), publishChildren: vi.fn() }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     const subject = makeStructuredAgentStatusSubject(location, summary.sessionId)
     owner.publish(summary, location)
@@ -36,7 +36,7 @@ describe('structured status owner address retention', () => {
   })
 
   it('forgets the old exact scope before publishing a trusted location change', () => {
-    const sink = { publish: vi.fn(), forget: vi.fn() }
+    const sink = { publish: vi.fn(), forget: vi.fn(), publishChildren: vi.fn() }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     owner.publish(summary, location)
     const replacement = { ...location, executionHostId: 'ssh:second-host' as const }
@@ -58,7 +58,8 @@ describe('structured status owner address retention', () => {
       publish: vi.fn().mockImplementationOnce(() => {
         throw new Error('store down')
       }),
-      forget: vi.fn()
+      forget: vi.fn(),
+      publishChildren: vi.fn()
     }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     expect(() => owner.publish(summary, location)).toThrow('store down')
@@ -75,7 +76,8 @@ describe('structured status owner address retention', () => {
       publish: vi.fn(() => {
         throw new Error('observer failed')
       }),
-      forget: vi.fn()
+      forget: vi.fn(),
+      publishChildren: vi.fn()
     }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     expect(() => owner.publish(summary, location)).toThrow('observer failed')
@@ -86,7 +88,7 @@ describe('structured status owner address retention', () => {
   })
 
   it('does not fabricate location for an unknown session or an unavailable sink', () => {
-    const sink = { publish: vi.fn(), forget: vi.fn() }
+    const sink = { publish: vi.fn(), forget: vi.fn(), publishChildren: vi.fn() }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     owner.publish(summary)
     expect(sink.publish).not.toHaveBeenCalled()

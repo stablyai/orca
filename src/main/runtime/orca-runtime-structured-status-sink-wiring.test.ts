@@ -73,7 +73,11 @@ describe('every host that constructs a runtime wires the agent-status store', ()
 describe('structured status sink wiring', () => {
   it('hands the host the sink the runtime was constructed with', async () => {
     installed.deps = null
-    const sink: StructuredAgentSessionStatusSink = { publish: vi.fn(), forget: vi.fn() }
+    const sink: StructuredAgentSessionStatusSink = {
+      publish: vi.fn(),
+      forget: vi.fn(),
+      publishChildren: vi.fn()
+    }
     const runtime = new OrcaRuntimeService(null, undefined, { structuredAgentStatusSink: sink })
 
     await runtime.ensureStructuredAgentSessionHost()

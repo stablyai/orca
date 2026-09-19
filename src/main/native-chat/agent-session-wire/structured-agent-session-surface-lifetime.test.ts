@@ -232,7 +232,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   sink = null
   hostErrors = []
-  statusSink = { publish: vi.fn(), forget: vi.fn() }
+  statusSink = { publish: vi.fn(), forget: vi.fn(), publishChildren: vi.fn() }
   let generation = 0
   acquire = vi.fn(async ({ fence, spawnToken, events }) => {
     sink = events ?? null

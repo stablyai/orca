@@ -113,7 +113,9 @@ async function awaitingApproval() {
         published.push(summary)
         store.ingestStructuredStatus(summary, subject)
       },
-      forget: (sessionId) => store.dropStructuredStatus(sessionId)
+      forget: (sessionId) => store.dropStructuredStatus(sessionId),
+      publishChildren: (subject, evidence, provider) =>
+        store.ingestStructuredChildWork(subject, evidence, provider)
     })
   })
   feed.publish(SESSION, journal)

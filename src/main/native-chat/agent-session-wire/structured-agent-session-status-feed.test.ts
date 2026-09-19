@@ -771,7 +771,8 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     const forgotten: Parameters<StructuredAgentSessionStatusSink['forget']>[0][] = []
     const sink: StructuredAgentSessionStatusSink = {
       publish: (summary) => published.push(summary),
-      forget: (sessionId) => forgotten.push(sessionId)
+      forget: (sessionId) => forgotten.push(sessionId),
+      publishChildren: () => undefined
     }
     return { sink, published, forgotten }
   }
@@ -830,6 +831,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
       publish: () => {
         throw new Error('store down')
       },
+      publishChildren: () => undefined,
       forget: () => {
         throw new Error('store down')
       }

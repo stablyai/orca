@@ -20,6 +20,7 @@ import {
   type AgentSessionStatusEvent,
   type AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import { decodeStructuredChildWorkEvidence } from '../../../shared/agent-status-child-work-structured-evidence'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
@@ -193,10 +194,14 @@ export class StructuredAgentSessionStatusFeed {
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
         this.sink(summary, session.params.location)
       }
+      // A token-only child change leaves the summary equal by design, so the child
+      // roster is offered on every projection rather than behind that equality gate.
+      this.sinkChildren(sessionId, session)
       return
     }
     this.published.set(sessionId, summary)
     this.sink(summary, session.params.location)
+    this.sinkChildren(sessionId, session)
     this.broadcast({ type: 'status', session: summary })
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
@@ -262,6 +267,24 @@ export class StructuredAgentSessionStatusFeed {
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
+    }
+  }
+
+  /** The adapter's full roster, decoded inside the guard: `undefined` is a session the
+   *  adapter does not hold — absence of evidence, never an empty roster. */
+  private sinkChildren(sessionId: string, session: StatusFeedSession): void {
+    try {
+      const state = this.deps.readBackgroundTasks?.(sessionId)
+      if (state === undefined) {
+        return
+      }
+      this.ownership.publishChildren(
+        sessionId,
+        decodeStructuredChildWorkEvidence(state),
+        session.params.provider
+      )
+    } catch (error) {
+      console.warn('[structured-session-status] child work publish failed', error)
     }
   }
 
