@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatRepoListRead } from '../session/mobile-session-read-operations'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
@@ -18,6 +18,7 @@ export function useNewWorkspaceRepositories(args: {
   repos: MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
+  upsertRepo: (repo: MobileWorkspaceRepo) => void
   loading: boolean
 } {
   const { client, hostId, visible } = args
@@ -28,6 +29,27 @@ export function useNewWorkspaceRepositories(args: {
   const [selectedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
   const [loading, setLoading] = useState(initialRepos == null)
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
+
+  // Why: a repo the phone just added must join the list and win the selection before the
+  // sheet's own fetch lands, or the last-visited default would grab the form first. The
+  // fetch keeps the row because the host registered it before answering.
+  const upsertRepo = useCallback(
+    (repo: MobileWorkspaceRepo) => {
+      setRepos((current) => {
+        const next = current.some((existing) => existing.id === repo.id)
+          ? current.map((existing) =>
+              existing.id === repo.id ? { ...existing, ...repo } : existing
+            )
+          : [...current, repo]
+        if (hostId) {
+          setCachedRepos(hostId, next)
+        }
+        return next
+      })
+      setSelectedRepo(repo)
+    },
+    [hostId]
+  )
 
   useEffect(() => {
     if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
@@ -81,5 +103,11 @@ export function useNewWorkspaceRepositories(args: {
     }
   }, [visible, client, hostId])
 
-  return { repos, selectedRepo, setSelectedRepo, loading: loading && repos.length === 0 }
+  return {
+    repos,
+    selectedRepo,
+    setSelectedRepo,
+    upsertRepo,
+    loading: loading && repos.length === 0
+  }
 }

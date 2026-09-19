@@ -94,6 +94,7 @@ describe('a removal that failed', () => {
         embedded: false,
         fetchWorktrees: () => Promise.resolve(),
         forgetHostClient: () => {},
+        hostCapabilities: [],
         hostId: 'host-a',
         pathname: '/h/host-a',
         router: useRouter(),

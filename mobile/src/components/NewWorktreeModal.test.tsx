@@ -46,6 +46,7 @@ vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 import { setCachedRepos } from '../cache/repo-cache'
 import { getLocalExecutionHostLabel } from '../../../src/shared/execution-host'
 import { NewWorktreeModal } from './NewWorktreeModal'
+import { NewWorktreeFormSheet } from './NewWorktreeFormSheet'
 
 const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
 
@@ -538,5 +539,45 @@ describe('NewWorktreeModal project targets', () => {
     act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: true })))
 
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
+  })
+
+  it('upserts and selects a repo the phone just added over the list default', async () => {
+    setCachedRepos('host-added', repos)
+    const added = {
+      id: 'repo-added',
+      displayName: 'fresh-clone',
+      path: '/srv/fresh-clone',
+      kind: 'git'
+    }
+    // Why repo.list never answers: the cached rows already offer a default selection, so
+    // only the preselection can be what selected the added repo this early.
+    const sendRequest = vi.fn().mockImplementation((method: string) => {
+      if (method === 'status.get') {
+        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+      }
+      return new Promise(() => {})
+    })
+    const client = { sendRequest } as unknown as RpcClient
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-added',
+          preselectedRepo: added,
+          onCreated: () => {},
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    const sheet = renderer.root.findAll((node) => node.type === NewWorktreeFormSheet)[0]!
+    expect(sheet.props.project).toEqual(expect.objectContaining({ label: 'fresh-clone' }))
+    expect(pickerItems(renderer, 'Project')).toEqual([
+      expect.objectContaining({ label: 'orca' }),
+      expect.objectContaining({ label: 'fresh-clone' })
+    ])
   })
 })
