@@ -1,5 +1,10 @@
 import type { ConnectionState, RpcResponse } from '../transport/types'
-import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
+import {
+  BridgeCapExceededError,
+  BridgeNativeVerbRefusedError,
+  BridgeReplyUndeliverableError
+} from './bridge-host-errors'
+import { readBridgeNativeVerbCall } from './bridge/bridge-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { BRIDGE_MAX_SUBSCRIPTIONS, readBridgeExternalLinkUrl } from './bridge/bridge-caps'
@@ -154,12 +159,28 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     }
   }
 
+  /**
+   * One `native.` verb, answered here and never forwarded. The reply is built as an `RpcResponse`
+   * so it rides `sendReply` like any other: that is what applies `BRIDGE_MAX_REPLY_BYTES`, so a
+   * clipboard too large for the page is refused rather than truncated. No `_meta` — no runtime
+   * produced this, and `isRpcResponse` does not require one.
+   */
+  async function serveNative(id: string, method: string, params: unknown): Promise<RpcResponse> {
+    const call = readBridgeNativeVerbCall({ method, granted: BRIDGE_NATIVE_GRANTS, params })
+    if (!call.ok) {
+      throw new BridgeNativeVerbRefusedError(call.detail)
+    }
+    const result = await options.serveNativeVerb(call.verb, call.params)
+    return { id, ok: true, result }
+  }
+
   const requests = new BridgeHostRequests({
     client,
     isIdTaken: (id) => subscriptions.has(id),
     sendReply,
     sendError,
-    capExceeded: (message) => new BridgeCapExceededError(message)
+    capExceeded: (message) => new BridgeCapExceededError(message),
+    serveNative
   })
 
   // `wantsBinary` is read by the contract and acted on in C6, which owns the screencast encoder and

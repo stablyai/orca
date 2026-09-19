@@ -15,6 +15,7 @@ import type {
 } from './mobile-web-shell-session-contract'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { serveNativeClipboardVerb } from '../platform/native-clipboard'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -187,6 +188,8 @@ export function MobileWebShellScreen({
     // mail account. Reported rather than swallowed: nothing crosses back for a notify, so this is
     // the one dead tap the verb does not rule out, and silence is what would hide it. Still not
     // rethrown, because this runs on the native frame handler.
+    // Answered on this device and never forwarded; the host holds it to the verb table first.
+    serveNativeVerb: serveNativeClipboardVerb,
     onExternalLink: (url: string) => {
       void Linking.openURL(url).catch((error: unknown) => {
         console.warn('[web-shell] could not open a URL for the page', { url, error })

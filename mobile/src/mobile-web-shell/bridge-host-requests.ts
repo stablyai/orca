@@ -4,6 +4,7 @@ import type { RpcResponse } from '../transport/types'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
+import { isBridgeNativeMethod, type BridgeHostAuthoredReply } from './bridge/bridge-native-verbs'
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 
@@ -18,6 +19,8 @@ export type BridgeHostRequestDeps = {
   sendReply: (id: string, payload: RpcResponse) => void
   sendError: (id: string, error: unknown) => void
   capExceeded: (message: string) => Error
+  /** Answers a `native.` method on this device. Rejecting is how the seam refuses one. */
+  serveNative: (id: string, method: string, params: unknown) => Promise<RpcResponse>
 }
 
 /**
@@ -56,9 +59,15 @@ export class BridgeHostRequests {
   }
 
   /** The arity the page used, replayed exactly: `sendRequest(m)` and `sendRequest(m, undefined)`
-   *  are different calls to the golden recorder. */
+   *  are different calls to the golden recorder.
+   *
+   *  The `native.` fence is here because this is the one place a request reaches the client at all:
+   *  a check anywhere else would be a second gate to keep in step with this one. */
   private forward(message: RequestMessage): Promise<RpcResponse> {
     const { client } = this.deps
+    if (isBridgeNativeMethod(message.method)) {
+      return this.deps.serveNative(message.id, message.method, message.params)
+    }
     if (message.options !== undefined) {
       return client.sendRequest(message.method, message.params, message.options)
     }

@@ -57,6 +57,12 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+// Reaching the real one imports the Expo runtime this test does not have. The screen only passes
+// the handler through; what it does with a verb is `native-clipboard.test.ts`.
+vi.mock('expo-clipboard', () => ({
+  setStringAsync: () => Promise.resolve(true),
+  getStringAsync: () => Promise.resolve('')
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
 }))

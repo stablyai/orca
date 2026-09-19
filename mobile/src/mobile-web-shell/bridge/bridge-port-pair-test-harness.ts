@@ -175,6 +175,11 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
+    // The pair has no device: what a test reads here is that the host answered without forwarding.
+    serveNativeVerb: (verb) =>
+      Promise.resolve(
+        verb === 'native.clipboard.write' ? { written: true } : { value: 'pasteboard' }
+      ),
     onNavigateBack: () => {
       // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
       backPops.push('popped')

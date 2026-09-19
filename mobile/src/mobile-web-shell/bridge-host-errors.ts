@@ -26,3 +26,21 @@ export class BridgeReplyUndeliverableError extends Error {
     this.name = 'BridgeReplyUndeliverableError'
   }
 }
+
+/**
+ * A `native.` verb the shell will not serve, in the one vocabulary the desktop does not share.
+ *
+ * Distinct from the desktop's `forbidden`, which `MOBILE_RPC_METHOD_ALLOWLIST` answers for any
+ * method it does not list: a `native.` request that ever reached a desktop would come back under
+ * that code, so reusing it would make a leaked fence read as an ordinary scope refusal.
+ */
+export const BRIDGE_NATIVE_REFUSAL_CODE = 'native_verb_refused'
+
+export class BridgeNativeVerbRefusedError extends Error {
+  readonly code = BRIDGE_NATIVE_REFUSAL_CODE
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'BridgeNativeVerbRefusedError'
+  }
+}

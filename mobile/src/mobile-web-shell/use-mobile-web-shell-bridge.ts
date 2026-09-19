@@ -8,6 +8,7 @@ import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
+import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
@@ -64,6 +65,8 @@ export function useMobileWebShellBridge(args: {
   onNavigate: (href: string) => void
   /** Opens a URL outside the app, on the page's behalf. */
   onExternalLink: (url: string) => void
+  /** Serves one `native.` verb on this device, for a page that was granted it. */
+  serveNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   /** Pops the stack this page was pushed onto, and says so when it did not. */
   onNavigateBack: () => BridgeNavigateBackOutcome
   /**
@@ -98,6 +101,7 @@ export function useMobileWebShellBridge(args: {
   // fresh closure every render must not tear one down and settle its pendings.
   const navigateRef = useRef(args.onNavigate)
   const externalLinkRef = useRef(args.onExternalLink)
+  const nativeVerbRef = useRef(args.serveNativeVerb)
   const navigateBackRef = useRef(args.onNavigateBack)
   const storageWriteRef = useRef(args.onStorageWrite)
   const readStorageRef = useRef(args.readStorage)
@@ -111,6 +115,7 @@ export function useMobileWebShellBridge(args: {
     pageRoutesRef.current = args.pageRoutes
     navigateRef.current = args.onNavigate
     externalLinkRef.current = args.onExternalLink
+    nativeVerbRef.current = args.serveNativeVerb
     navigateBackRef.current = args.onNavigateBack
     storageWriteRef.current = args.onStorageWrite
     readStorageRef.current = args.readStorage
@@ -119,6 +124,7 @@ export function useMobileWebShellBridge(args: {
     routeRefusedRef.current = args.onRouteRefused
   }, [
     args.onExternalLink,
+    args.serveNativeVerb,
     args.onNavigate,
     args.onNavigateBack,
     args.onPageFault,
@@ -159,6 +165,7 @@ export function useMobileWebShellBridge(args: {
       onExternalLink: (url) => {
         externalLinkRef.current(url)
       },
+      serveNativeVerb: (verb, params) => nativeVerbRef.current(verb, params),
       host: snapshot.host,
       readStorage: () => readStorageRef.current(),
       onStorageWrite: (key, value) => {

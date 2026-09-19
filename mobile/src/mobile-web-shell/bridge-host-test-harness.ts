@@ -8,6 +8,7 @@ import {
 } from './bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
+import { BRIDGE_NATIVE_VERBS, clipboardWriteParamsSchema } from './bridge/bridge-native-verbs'
 import {
   readBridgeHostMessage,
   type BridgeHostMessage,
@@ -26,6 +27,8 @@ export type Harness = {
   navigations: string[]
   /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
+  /** Every text the page wrote to the pasteboard through a native verb, in order. */
+  clipboardWrites: string[]
   /** One entry per `navigate-back` the host answered, in order, with what the shell did. */
   backPops: BridgeNavigateBackOutcome[]
   storageWrites: { key: string; value: string | null }[]
@@ -51,6 +54,10 @@ export function harness(
     /** For the suites that need the map to change between two `init` answers. */
     readStorage?: () => Readonly<Record<string, string>>
     onPageFault?: (error: BridgeErrorCapture) => void
+    /** What the pasteboard answers a read with. */
+    clipboardText?: string
+    /** Replaces the whole verb handler, for the arm where a device call fails. */
+    serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   } = {}
 ): Harness {
   const client = options.client ?? createFakeRpcClient()
@@ -58,6 +65,7 @@ export function harness(
   const diagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
   const externalLinks: string[] = []
+  const clipboardWrites: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   let pageReadies = 0
@@ -82,6 +90,18 @@ export function harness(
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onNavigate: options.onNavigate ?? ((href) => navigations.push(href)),
     onExternalLink: (url) => externalLinks.push(url),
+    serveNativeVerb: (verb, params) => {
+      if (options.serveNativeVerb !== undefined) {
+        return options.serveNativeVerb(verb, params)
+      }
+      const read = BRIDGE_NATIVE_VERBS[verb].params.parse(params)
+      if (verb === 'native.clipboard.write') {
+        const { value } = clipboardWriteParamsSchema.parse(read)
+        clipboardWrites.push(value)
+        return Promise.resolve({ written: true })
+      }
+      return Promise.resolve({ value: options.clipboardText ?? '' })
+    },
     onNavigateBack: () => {
       const outcome = options.onNavigateBack?.() ?? 'popped'
       backPops.push(outcome)
@@ -110,6 +130,7 @@ export function harness(
     diagnostics,
     navigations,
     externalLinks,
+    clipboardWrites,
     backPops,
     storageWrites,
     pageReadyCount: () => pageReadies,

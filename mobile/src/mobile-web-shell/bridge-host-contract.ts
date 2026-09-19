@@ -2,6 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
+import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 
 /**
@@ -73,6 +74,14 @@ export type BridgeHostOptions = {
    * nothing is a dead tap, which is exactly what the grant is supposed to rule out.
    */
   onNavigate: (href: string) => void
+  /**
+   * Serves one `native.` verb on this device. Required, because the grant list advertises the verbs
+   * and a page told it may call one that reaches nothing is the dead tap the grants rule out.
+   *
+   * Rejecting is the refusal: the host turns it into an error frame the page's request rejects
+   * with. Nothing here reaches the desktop.
+   */
+  serveNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   /**
    * Opens a URL outside the app, which is the whole of the `externalLink` grant. Required for the
    * reason `onNavigate` is: the grant is issued on the strength of this existing.

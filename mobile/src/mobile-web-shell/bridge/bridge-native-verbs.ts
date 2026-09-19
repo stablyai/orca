@@ -50,13 +50,19 @@ export type BridgeNativeVerbSpec = {
  * what the transport already accepted. The read is bounded on the way out instead, by the reply
  * byte cap every forwarded reply gets.
  */
+/** Exported concretely as well as through the table: a handler parses with the schema for the verb
+ *  it is serving, so what it holds is typed without an assertion. The table's values are widened to
+ *  `ZodType`, which is all the host needs to refuse params before it dispatches. */
+export const clipboardWriteParamsSchema = z.object({ mime: mimeSchema, value: z.string() })
+export const clipboardReadParamsSchema = z.object({ mime: mimeSchema })
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
-    params: z.object({ mime: mimeSchema, value: z.string() }),
+    params: clipboardWriteParamsSchema,
     result: z.object({ written: z.boolean() })
   },
   'native.clipboard.read': {
-    params: z.object({ mime: mimeSchema }),
+    params: clipboardReadParamsSchema,
     result: z.object({ value: z.string() })
   }
 }
@@ -69,4 +75,59 @@ export function isBridgeNativeMethod(method: string): boolean {
 /** The verb a `native.` method names, or null when this shell has no row for it. */
 export function readBridgeNativeVerb(method: string): BridgeNativeVerb | null {
   return BRIDGE_NATIVE_VERB_NAMES.find((verb) => verb === method) ?? null
+}
+
+/**
+ * A reply this host authored, as opposed to one a runtime answered.
+ *
+ * `RpcSuccess` requires `_meta: { runtimeId }` in TypeScript, and these replies have no runtime to
+ * name. The wire is the looser of the two: `isRpcResponse` checks `id`, `ok` and the presence of
+ * `result`, and never reads `_meta`, so a reply without one is a reply the page's own reader
+ * accepts. This type says that in the one place it is true, instead of minting a runtime id that
+ * would be a lie or asserting past the difference.
+ *
+ * A page reader must not reach for `_meta` on a `native.*` reply; the type will offer it and it
+ * will not be there.
+ */
+export type BridgeHostAuthoredReply = { id: string; ok: true; result: unknown }
+
+/** Why the seam would not serve a `native.` method. Each is a different fault, so each is named. */
+export type BridgeNativeVerbRefusal = 'unknown-verb' | 'ungranted' | 'invalid-params'
+
+export type BridgeNativeVerbRead =
+  | { ok: true; verb: BridgeNativeVerb; params: unknown }
+  | { ok: false; refusal: BridgeNativeVerbRefusal; detail: string }
+
+/**
+ * The whole decision, as a function of what the page asked and what it was granted.
+ *
+ * Separate from the host so the `ungranted` arm can be exercised at all: every page is offered
+ * every verb this build implements, so through a real host that arm is unreachable today, and it
+ * is the whole point of the check the moment a grant is per-route.
+ */
+export function readBridgeNativeVerbCall(args: {
+  method: string
+  granted: readonly string[]
+  params: unknown
+}): BridgeNativeVerbRead {
+  const verb = readBridgeNativeVerb(args.method)
+  if (verb === null) {
+    return {
+      ok: false,
+      refusal: 'unknown-verb',
+      detail: `this build serves no verb named ${args.method}`
+    }
+  }
+  if (!args.granted.includes(verb)) {
+    return { ok: false, refusal: 'ungranted', detail: `the page was not granted ${verb}` }
+  }
+  const read = BRIDGE_NATIVE_VERBS[verb].params.safeParse(args.params)
+  if (!read.success) {
+    return {
+      ok: false,
+      refusal: 'invalid-params',
+      detail: `${verb} was called with params it does not take`
+    }
+  }
+  return { ok: true, verb, params: read.data }
 }
