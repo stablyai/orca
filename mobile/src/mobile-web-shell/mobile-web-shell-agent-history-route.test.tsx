@@ -119,28 +119,34 @@ describe('the native agent-history route that hands off to the shell', () => {
   })
 
   /**
-   * The ids encoding does not save, pinned rather than fixed.
+   * The ids encoding cannot save, which now keep the route native instead of failing it.
    *
-   * `encodeURIComponent('..')` is `'..'`, so a dot-segment id reaches `BRIDGE_ROUTE_PATHNAME_PATTERN`
-   * intact, fails the lookahead that stops a climb out of `/h/` (`bridge-caps.ts:68`), and the shell
-   * answers the refusal with `reportShellFailure` — a failure screen where this route would
-   * otherwise have rendered the native panel it already has.
-   *
-   * Pre-existing and not this series': `app/h/[hostId]/index.tsx` builds its pathname the same way
-   * and has the same hole, so fixing it here would fix one of two call sites and leave the shape
-   * this test would then stop describing. Pinned so the refusal is a decision on record, and so a
-   * later change that starts encoding dots fails here and has to say which screen it wants.
+   * `encodeURIComponent('..')` is `'..'`, so a dot-segment id reaches the bridge's own segment rule
+   * intact and `BridgeInitRouteSchema` refuses it. Before this the route handed it over anyway,
+   * `bridge-host.ts` dropped the route to null, and the page answered with "Update Orca to open
+   * this workspace" — a failure screen in place of the native panel sitting right behind the
+   * switch. The route decides first now, the way C3.1's files routes do.
    */
-  it('cannot save a dot-segment id, which the bridge then refuses rather than opens', async () => {
+  it('stays native for a dot-segment id the bridge would refuse', async () => {
     for (const hostId of ['.', '..']) {
       dependencies.params = { hostId, worktreeId: 'wt-1', name: 'n' }
       dependencies.routes.length = 0
+      dependencies.panels.length = 0
       await renderRoute()
-      const pathname = dependencies.routes[0]?.pathname ?? ''
-      // Encoded, and unchanged by it: the id is already the one shape encoding cannot alter.
-      expect(pathname, hostId).toBe(`/h/${hostId}/agent-history/wt-1`)
-      expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname), hostId).toBe(false)
+      expect(dependencies.routes, hostId).toEqual([])
+      expect(dependencies.panels.at(-1), hostId).toEqual({
+        hostId,
+        worktreeId: 'wt-1',
+        name: 'n'
+      })
     }
+  })
+
+  it('stays native for a dot-segment worktree id too, which is the other segment', async () => {
+    dependencies.params = { hostId: 'host-1', worktreeId: '..', name: 'n' }
+    await renderRoute()
+    expect(dependencies.routes).toEqual([])
+    expect(dependencies.panels.at(-1)).toEqual({ hostId: 'host-1', worktreeId: '..', name: 'n' })
   })
 
   it('encodes both dynamic segments, so a deep-linked id stays one segment each', async () => {
