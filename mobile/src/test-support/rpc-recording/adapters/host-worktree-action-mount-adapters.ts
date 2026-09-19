@@ -49,6 +49,8 @@ export function hostWorktreeActionMountAdapters(
           forgetHostClient: (() => {}) as unknown as Parameters<
             typeof useActions
           >[0]['forgetHostClient'],
+          // No advertised capabilities in a recording: the + entry must fall back to the
+          // create form, which is also the legacy-host behaviour this hook encodes.
           hostCapabilities: [],
           hostId: undefined,
           pathname: '/h/host-1',
