@@ -7,12 +7,19 @@ import {
   type EligiblePane
 } from './agent-hibernation-pane-eligibility'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+import { getEffectiveAgentHibernationIdleMs } from '../../../shared/agent-hibernation-idle'
 
 export type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
-export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000
-export const MIN_AGENT_HIBERNATION_IDLE_MS = 60 * 1000
-export const MAX_AGENT_HIBERNATION_IDLE_MS = 24 * 60 * 60 * 1000
+// Re-exported so existing importers keep their import site; the clamp itself
+// moved to shared/ because the main process needs the identical bounds for the
+// auto-resume menu grace.
+export {
+  DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+  MIN_AGENT_HIBERNATION_IDLE_MS,
+  MAX_AGENT_HIBERNATION_IDLE_MS,
+  getEffectiveAgentHibernationIdleMs
+} from '../../../shared/agent-hibernation-idle'
 
 export type AgentHibernationCandidate = {
   id: string
@@ -24,15 +31,6 @@ export type AgentHibernationCandidate = {
   targetPtyIds: string[]
   expectedRuntimePtyIds: string[]
   signature: string
-}
-
-export function getEffectiveAgentHibernationIdleMs(value: unknown): number {
-  return typeof value === 'number' &&
-    Number.isFinite(value) &&
-    value >= MIN_AGENT_HIBERNATION_IDLE_MS &&
-    value <= MAX_AGENT_HIBERNATION_IDLE_MS
-    ? value
-    : DEFAULT_AGENT_HIBERNATION_IDLE_MS
 }
 
 function getLivePtyIdsForTab(

@@ -108,6 +108,17 @@ function installWillQuitHandler(): void {
     }
     // A renderer can veto before-quit; push must survive until quit is committed.
     state.desktopPushService?.stop()
+    // Same reason, and nothing recreates these: the services are built once during
+    // ready startup, so disposing them in before-quit left a vetoed quit running
+    // for the rest of the session with no stall subscription and no armed waits.
+    state.unsubscribeUsageLimitStall?.()
+    state.unsubscribeUsageLimitStall = null
+    state.agentAutoResumeService?.dispose()
+    state.agentAutoResumeService = null
+    state.unsubscribeAgentIdleEdge?.()
+    state.unsubscribeAgentIdleEdge = null
+    state.scheduledMessageService?.dispose()
+    state.scheduledMessageService = null
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
     // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.

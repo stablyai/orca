@@ -22,6 +22,8 @@ import type { ProjectCollectionOperations } from './project-collection-operation
 import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import type { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
 import type { SparsePresetPersistence } from './sparse-preset-persistence'
+import type { ScheduledMessagePersistence } from './scheduled-message-persistence'
+import type { RateLimitWatcherPersistence } from './rate-limit-watcher-persistence'
 import type { AutomationPersistence } from './automation-persistence'
 import type { MetadataLineageOperations } from './metadata-lineage-operations'
 import type { ProfilePreferences } from './profile-preferences'
@@ -113,6 +115,8 @@ export interface Store
     RepoLifecycleOperations,
     MobileTabSelectionPersistence,
     SparsePresetPersistence,
+    ScheduledMessagePersistence,
+    RateLimitWatcherPersistence,
     AutomationPersistence,
     MetadataLineageOperations,
     ProfilePreferences,

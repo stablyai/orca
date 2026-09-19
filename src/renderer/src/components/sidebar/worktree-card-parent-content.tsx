@@ -8,6 +8,7 @@ import { WorktreeCardPortsDetails } from './WorktreeCardPorts'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSecondaryRows } from './worktree-card-secondary-rows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
+import { WorktreeCardScheduledMessagesBadge } from './WorktreeCardScheduledMessagesBadge'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function WorktreeCardParentContent({
@@ -150,6 +151,7 @@ export function WorktreeCardParentContent({
             newCardStyle={newCardStyle}
             hasBranchIdentity={Boolean(branchIdentityDisplay)}
           />
+          <WorktreeCardScheduledMessagesBadge worktreeId={worktree.id} />
         </div>
       ) : null}
 

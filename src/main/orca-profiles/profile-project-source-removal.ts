@@ -9,6 +9,7 @@ import {
   removeRepoFromWorkspaceSession
 } from './profile-project-session-state'
 import { isRepoWorktreeId, removeRepoWorktreeRecord } from './profile-project-worktree-identity'
+import { dropScheduledMessagesWhere } from '../persistence/scheduled-message-worktree-sweep'
 
 export function removeSourceRepo(
   state: TransferProfileState,
@@ -45,6 +46,8 @@ export function removeSourceRepo(
 }
 
 function removeRepoWorktreeMetadata(state: TransferProfileState, repoId: string): void {
+  // Not carried to the target: createTransferPayload copies no scheduledMessages.
+  dropScheduledMessagesWhere(state, (worktreeId) => isRepoWorktreeId(repoId, worktreeId))
   for (const key of Object.keys(state.worktreeMeta)) {
     if (isRepoWorktreeId(repoId, key)) {
       delete state.worktreeMeta[key]

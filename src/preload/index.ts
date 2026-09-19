@@ -75,6 +75,9 @@ import { nativeChatApi } from './api/native-chat-bridge'
 import { runtimeApi } from './api/runtime-bridge'
 import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
+import { agentAutoResumeApi } from './api/agent-auto-resume-bridge'
+import { scheduledMessagesApi } from './api/scheduled-messages-bridge'
+import { rateLimitWatcherApi } from './api/rate-limit-watcher-bridge'
 import { minimaxCredentialsApi } from './api/minimax-credentials-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
@@ -173,6 +176,9 @@ const api = {
   runtime: runtimeApi,
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,
+  agentAutoResume: agentAutoResumeApi,
+  scheduledMessages: scheduledMessagesApi,
+  rateLimitWatcher: rateLimitWatcherApi,
   minimaxCredentials: minimaxCredentialsApi,
   grokAccounts: grokAccountsApi,
   ssh: sshApi,
