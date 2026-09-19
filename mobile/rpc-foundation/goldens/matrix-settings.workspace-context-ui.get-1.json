@@ -3,7 +3,7 @@
   "family": "settings.workspace-context",
   "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"],
   "runnerVersion": 1,
-  "baseline": "47d24d324ef5b2c9c985fb83f355414c93e1d46d",
+  "baseline": "889c2b562f15b9c98604b28267d8a0aaf1aa361a",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
