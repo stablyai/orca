@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { RESUMABLE_TUI_AGENTS, type ResumableTuiAgent } from '../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import {
@@ -701,19 +702,10 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
   // Why: setAgentStatus writes an `origin: 'live'` anchor for EVERY resumable agent the
   // moment its turn ends, but only Pi/OMP/prime-agent were exempted from the
   // already-sleeping rejection — so no Claude or Codex pane could ever hibernate.
-  const NON_PI_AGENTS = [
-    'claude',
-    'codex',
-    'gemini',
-    'antigravity',
-    'opencode',
-    'mimo-code',
-    'droid',
-    'grok',
-    'devin',
-    'copilot',
-    'kimi'
-  ] as const
+  const LIVE_ANCHOR_EXEMPT_AGENTS = new Set<ResumableTuiAgent>(['pi', 'omp', 'prime-agent'])
+  const NON_PI_AGENTS = RESUMABLE_TUI_AGENTS.filter(
+    (agent) => !LIVE_ANCHOR_EXEMPT_AGENTS.has(agent)
+  )
 
   function liveAnchor(
     agent: string,

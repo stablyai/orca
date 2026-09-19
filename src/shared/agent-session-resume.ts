@@ -16,7 +16,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
-  'kimi'
+  'kimi',
+  'cursor'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -73,6 +74,7 @@ export type SleepingAgentSessionRecord = {
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
 const PROVIDER_SESSION_ID_MAX_LENGTH = 512
 
+/** True when a session id contains control characters that must not reach argv or the PTY. */
 export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i)
@@ -83,6 +85,7 @@ export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   return false
 }
 
+/** Reject empty, over-long, dashed, or control-character session ids before they become argv. */
 function normalizeSessionId(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
@@ -99,6 +102,7 @@ function normalizeSessionId(value: unknown): string | null {
   return trimmed
 }
 
+/** First usable session id among the payload keys this agent actually posts. */
 function readSessionId(record: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const key of keys) {
     const normalized = normalizeSessionId(record[key])
@@ -129,6 +133,7 @@ function readTranscriptPathFromKeys(
   return undefined
 }
 
+/** Attach a hook transcript path when present so native chat can open the real file. */
 function withTranscriptPath(
   metadata: AgentProviderSessionMetadata,
   payload: Record<string, unknown>,
@@ -138,10 +143,12 @@ function withTranscriptPath(
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
+/** True when quit/restore may inject a provider resume command into the pane. */
 export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent {
   return typeof value === 'string' && RESUMABLE_TUI_AGENT_SET.has(value)
 }
 
+/** Validate persisted or relayed session metadata with the same id rules as hook payloads. */
 export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessionMetadata | null {
   if (typeof raw !== 'object' || raw === null) {
     return null
@@ -178,6 +185,8 @@ export function agentProviderSessionsEqual(
   )
 }
 
+/** Read the CLI resume locator from a hook payload. Cursor's conversation_id is stored as
+ *  session_id because `cursor-agent --resume` takes that id, the same way Claude uses `--resume`. */
 export function extractAgentProviderSession(
   source: AgentHookSource,
   payload: Record<string, unknown>
@@ -235,14 +244,24 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: Cursor hook conversation_id (also session_id / camelCase) is the CLI --resume locator.
+    case 'cursor': {
+      const id = readSessionId(payload, [
+        'conversation_id',
+        'conversationId',
+        'session_id',
+        'sessionId'
+      ])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
-    case 'cursor':
     case 'command-code':
     case 'hermes':
       return null
   }
 }
 
+/** Argv for the agent's resume CLI. Cursor is `cursor-agent --resume <id>`, matching AI Vault. */
 export function getAgentResumeArgv(
   agent: ResumableTuiAgent,
   providerSession: AgentProviderSessionMetadata,
@@ -288,5 +307,8 @@ export function getAgentResumeArgv(
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
+    // Why: space-separated `--resume <id>` matches AI Vault's Cursor invocation.
+    case 'cursor':
+      return providerSession.key === 'session_id' ? ['cursor-agent', '--resume', id] : null
   }
 }
