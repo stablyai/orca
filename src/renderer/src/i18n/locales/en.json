@@ -1,4 +1,8 @@
 {
+  "dock": {
+    "completedConversations": "Completed, unread",
+    "noCompletedConversations": "No completed conversations to read"
+  },
   "sidebar": {
     "revealFiltered": {
       "title": "Reveal hidden workspace?",

@@ -13,6 +13,7 @@ import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
+import { registerCompletedConversationsMenu } from '../dock/completed-conversations-menu'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
 import { authorizeExternalPath } from './filesystem-auth'
@@ -309,6 +310,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
+
+  registerCompletedConversationsMenu()
 
   ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
     setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)

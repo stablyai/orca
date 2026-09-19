@@ -3,6 +3,8 @@ import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    selectedActivityPaneKey: null,
+    setSelectedActivityPaneKey: (paneKey) => set({ selectedActivityPaneKey: paneKey }),
     openActivityPage: () => {
       set((state) => ({
         activeView: 'activity',

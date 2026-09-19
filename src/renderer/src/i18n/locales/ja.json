@@ -1,4 +1,8 @@
 {
+  "dock": {
+    "completedConversations": "完了・未読",
+    "noCompletedConversations": "未読の完了した会話はありません"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",

@@ -9,6 +9,7 @@ import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
+import { useCompletedConversationsDockMenu } from './hooks/useCompletedConversationsDockMenu'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
@@ -37,6 +38,7 @@ function App(): React.JSX.Element {
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
   const clearUnreadDockBadge = useUnreadDockBadge()
+  useCompletedConversationsDockMenu()
 
   // Why enabled && open: the overlay only renders while the feature is on, and its panel is
   // aria-hidden while closed — so that pair is what "on screen" means for the floating workspace.

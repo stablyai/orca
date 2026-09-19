@@ -13,7 +13,11 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 
+import type { DockCompletedConversation } from '../../shared/dock-completed-conversations'
+
 export type AppApi = {
+  setDockCompletedConversations: (entries: DockCompletedConversation[]) => Promise<void>
+  onOpenDockCompletedConversation: (callback: (id: string) => void) => () => void
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
   /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;

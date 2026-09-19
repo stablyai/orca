@@ -49,6 +49,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
       {
         cacheKey,
         source: unsupported,
+        currentOnly: args.currentOnly,
         entry,
         orchestration: undefined,
         worktree: owner.worktree,
@@ -86,6 +87,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
       {
         cacheKey: `retained:${paneKey}`,
         source: retained,
+        currentOnly: args.currentOnly,
         entry: retained.entry,
         orchestration: args.runtimeAgentOrchestrationByPaneKey?.[paneKey],
         worktree: owner.worktree,

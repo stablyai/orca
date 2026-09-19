@@ -45,6 +45,10 @@ export type BuildActivityEventsArgs = {
   /** Per-pane "Clear completed" cutoffs; events stamped at or before the cutoff are hidden. */
   activityClearedAtByPaneKey?: Record<string, number>
   now: number
+  /** Dock needs one current turn per conversation, without the history view cap. */
+  currentOnly?: boolean
+  /** Keep a deep-linked conversation available outside the history view cap. */
+  selectedPaneKey?: string | null
 }
 
 export function buildActivityEvents(
@@ -99,6 +103,7 @@ export function buildActivityEvents(
       {
         cacheKey: `live:${paneKey}`,
         source: entry,
+        currentOnly: args.currentOnly,
         entry,
         orchestration,
         worktree: owner.worktree,
@@ -138,5 +143,14 @@ export function buildActivityEvents(
       }
     }
   }
-  return { events: capActivityEvents(events), liveAgentByPaneKey }
+  const visibleEvents = args.currentOnly ? events : capActivityEvents(events)
+  if (!args.currentOnly && args.selectedPaneKey) {
+    const included = new Set(visibleEvents.map((event) => event.id))
+    visibleEvents.push(
+      ...events.filter(
+        (event) => event.entry.paneKey === args.selectedPaneKey && !included.has(event.id)
+      )
+    )
+  }
+  return { events: visibleEvents, liveAgentByPaneKey }
 }

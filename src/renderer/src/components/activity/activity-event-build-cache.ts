@@ -16,6 +16,7 @@ import { buildPaneActivityEvents } from './activity-pane-events'
 
 type PaneActivityCacheEntry = {
   source: unknown
+  currentOnly?: boolean
   orchestration: AgentStatusOrchestrationContext | undefined
   acknowledgedAt: number
   clearedAt: number
@@ -38,6 +39,7 @@ export function createActivityEventBuildCache(): ActivityEventBuildCache {
 export type PaneBuildRequest = {
   cacheKey: string
   source: unknown
+  currentOnly?: boolean
   entry: AgentStatusEntry
   orchestration: AgentStatusOrchestrationContext | undefined
   worktree: Worktree
@@ -61,6 +63,7 @@ export function resolvePaneBuild(
   const inputsUnchanged =
     cached !== undefined &&
     cached.source === request.source &&
+    cached.currentOnly === request.currentOnly &&
     cached.orchestration === request.orchestration &&
     cached.acknowledgedAt === request.acknowledgedAt &&
     cached.clearedAt === request.clearedAt &&
@@ -89,6 +92,7 @@ export function resolvePaneBuild(
 
   // The live turn is itself an event, so a live change always rebuilds the pane's events.
   const events = buildPaneActivityEvents({
+    currentOnly: request.currentOnly,
     entry: rowEntry,
     worktree: request.worktree,
     repo: request.repo,
@@ -115,6 +119,7 @@ export function resolvePaneBuild(
 
   cache?.panes.set(request.cacheKey, {
     source: request.source,
+    currentOnly: request.currentOnly,
     orchestration: request.orchestration,
     acknowledgedAt: request.acknowledgedAt,
     clearedAt: request.clearedAt,

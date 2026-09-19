@@ -1,4 +1,8 @@
 {
+  "dock": {
+    "completedConversations": "완료됨, 읽지 않음",
+    "noCompletedConversations": "읽지 않은 완료된 대화가 없습니다"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",

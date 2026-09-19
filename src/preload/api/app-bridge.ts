@@ -12,7 +12,22 @@ import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
 import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
 
+import {
+  DOCK_CONVERSATIONS_UPDATE,
+  DOCK_CONVERSATION_OPEN,
+  type DockCompletedConversation
+} from '../../shared/dock-completed-conversations'
+
 export const appApi = {
+  setDockCompletedConversations: (entries: DockCompletedConversation[]): Promise<void> =>
+    process.platform === 'darwin'
+      ? ipcRenderer.invoke(DOCK_CONVERSATIONS_UPDATE, entries)
+      : Promise.resolve(),
+  onOpenDockCompletedConversation: (callback: (id: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, id: string): void => callback(id)
+    ipcRenderer.on(DOCK_CONVERSATION_OPEN, listener)
+    return () => ipcRenderer.removeListener(DOCK_CONVERSATION_OPEN, listener)
+  },
   getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
