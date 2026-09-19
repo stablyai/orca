@@ -28,5 +28,23 @@ export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
       'Connect task providers, install the Linear agent skill, and choose what appears in Tasks.'
     ),
     keywords: getTasksPaneSearchKeywords()
+  },
+  {
+    title: translate(
+      'auto.components.settings.tasks.search.assignUnassignedGitHubIssuesTitle',
+      'Assign unassigned GitHub issues to me when starting work'
+    ),
+    description: translate(
+      'auto.components.settings.tasks.search.assignUnassignedGitHubIssuesDescription',
+      'When you start a workspace from a GitHub issue that has no assignee, assign it to your signed-in GitHub account. Existing assignees are never changed. If assignment fails, the workspace is still created.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.tasks.search.assign', 'assign'),
+      ...translateSearchKeyword('auto.components.settings.tasks.search.assignee', 'assignee'),
+      ...translateSearchKeyword('auto.components.settings.tasks.search.unassigned', 'unassigned'),
+      ...translateSearchKeyword('auto.components.settings.tasks.search.github', 'github'),
+      ...translateSearchKeyword('auto.components.settings.tasks.search.start', 'start'),
+      ...translateSearchKeyword('auto.components.settings.tasks.search.me', 'me')
+    ]
   }
 ])

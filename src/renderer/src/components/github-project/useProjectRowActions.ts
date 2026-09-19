@@ -214,6 +214,11 @@ export function useProjectRowActions({
       void launchWorkItemDirect({
         item: workItem,
         repoId: resolution.repo.id,
+        sourceContext: buildTaskSourceContextFromRepo({
+          provider: 'github',
+          projectId: resolution.repo.id,
+          repo: resolution.repo
+        }),
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
         openModalFallback: () => {

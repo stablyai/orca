@@ -12,7 +12,7 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsRow, SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
@@ -265,6 +265,44 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
           )}
         </p>
       </section>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.TasksPane.assignUnassignedGitHubIssuesTitle',
+          'Assign unassigned GitHub issues to me when starting work'
+        )}
+        description={translate(
+          'auto.components.settings.TasksPane.assignUnassignedGitHubIssuesDescription',
+          'When you start a workspace from a GitHub issue that has no assignee, assign it to your signed-in GitHub account. Existing assignees are never changed. If assignment fails, the workspace is still created.'
+        )}
+        keywords={['assign', 'assignee', 'unassigned', 'github', 'start', 'tasks', 'me', '@me']}
+        className="max-w-none"
+      >
+        <SettingsRow
+          label={translate(
+            'auto.components.settings.TasksPane.assignUnassignedGitHubIssuesTitle',
+            'Assign unassigned GitHub issues to me when starting work'
+          )}
+          description={translate(
+            'auto.components.settings.TasksPane.assignUnassignedGitHubIssuesDescription',
+            'When you start a workspace from a GitHub issue that has no assignee, assign it to your signed-in GitHub account. Existing assignees are never changed. If assignment fails, the workspace is still created.'
+          )}
+          control={
+            <SettingsSwitch
+              checked={settings.assignUnassignedGitHubIssuesOnStart === true}
+              onChange={() => {
+                updateSettings({
+                  assignUnassignedGitHubIssuesOnStart: !settings.assignUnassignedGitHubIssuesOnStart
+                })
+              }}
+              ariaLabel={translate(
+                'auto.components.settings.TasksPane.assignUnassignedGitHubIssuesTitle',
+                'Assign unassigned GitHub issues to me when starting work'
+              )}
+            />
+          }
+        />
+      </SearchableSetting>
     </div>
   )
 }
