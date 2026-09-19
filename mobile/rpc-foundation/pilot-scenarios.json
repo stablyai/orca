@@ -7,13 +7,8 @@
       "operation": "workspace.file-inventory",
       "version": 1,
       "family": "legacy-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-file-search.ts"
-      ],
-      "schedules": [
-        "a-b-a",
-        "stale-inflight-cleanup"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["a-b-a", "stale-inflight-cleanup"],
       "steps": [
         {
           "action": "mount",
@@ -161,9 +156,7 @@
       "operation": "project.update-metadata",
       "version": 1,
       "family": "project-explicit-false",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -185,9 +178,7 @@
             "host": "github.enterprise.test",
             "number": 1,
             "updates": {
-              "addLabels": [
-                "recorded"
-              ]
+              "addLabels": ["recorded"]
             }
           },
           "reply": {
@@ -205,13 +196,8 @@
       "operation": "linear.issue-detail",
       "version": 1,
       "family": "linear-detail-barrier",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"
-      ],
-      "schedules": [
-        "issue-first",
-        "peer-pending"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
+      "schedules": ["issue-first", "peer-pending"],
       "steps": [
         {
           "action": "mount",
@@ -258,12 +244,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -311,10 +293,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex",
-              "claude"
-            ]
+            "result": ["codex", "claude"]
           }
         },
         {
@@ -327,9 +306,7 @@
       "operation": "settings.task-preferences",
       "version": 1,
       "family": "settings-best-effort",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -366,12 +343,8 @@
       "operation": "settings.bot-overrides",
       "version": 1,
       "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/session/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -389,17 +362,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -415,12 +381,8 @@
       "operation": "settings.bot-overrides",
       "version": 1,
       "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/session/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -452,12 +414,8 @@
       "operation": "settings.bot-overrides",
       "version": 1,
       "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/session/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -486,12 +444,8 @@
       "operation": "settings.workspace-context",
       "version": 1,
       "family": "settings.workspace-context",
-      "sites": [
-        "mobile/src/components/use-new-workspace-runtime-context.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -509,17 +463,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -567,21 +514,15 @@
           "checkpoint": "settled"
         }
       ],
-      "namedDeltas": [
-        "new-workspace-runtime-context-null-results-degrade-to-absent"
-      ]
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
       "id": "settings-workspace-context-refused",
       "operation": "settings.workspace-context",
       "version": 1,
       "family": "settings.workspace-context",
-      "sites": [
-        "mobile/src/components/use-new-workspace-runtime-context.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -645,21 +586,15 @@
           "checkpoint": "settled"
         }
       ],
-      "namedDeltas": [
-        "new-workspace-runtime-context-null-results-degrade-to-absent"
-      ]
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
       "id": "settings-workspace-context-transport-error",
       "operation": "settings.workspace-context",
       "version": 1,
       "family": "settings.workspace-context",
-      "sites": [
-        "mobile/src/components/use-new-workspace-runtime-context.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -720,21 +655,15 @@
           "checkpoint": "settled"
         }
       ],
-      "namedDeltas": [
-        "new-workspace-runtime-context-null-results-degrade-to-absent"
-      ]
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
       "id": "settings-home-providers-fulfilled",
       "operation": "settings.home-providers",
       "version": 1,
       "family": "settings.home-providers",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -752,17 +681,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -804,12 +726,8 @@
       "operation": "settings.home-providers",
       "version": 1,
       "family": "settings.home-providers",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -867,12 +785,8 @@
       "operation": "settings.home-providers",
       "version": 1,
       "family": "settings.home-providers",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -927,12 +841,8 @@
       "operation": "settings.resume-metadata",
       "version": 1,
       "family": "settings.resume-metadata",
-      "sites": [
-        "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -986,17 +896,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -1025,12 +928,8 @@
       "operation": "settings.resume-metadata",
       "version": 1,
       "family": "settings.resume-metadata",
-      "sites": [
-        "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -1111,12 +1010,8 @@
       "operation": "settings.resume-metadata",
       "version": 1,
       "family": "settings.resume-metadata",
-      "sites": [
-        "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -1194,12 +1089,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1261,17 +1152,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -1299,12 +1183,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1338,7 +1218,7 @@
                   "displayName": "Emoji",
                   "repoIcon": {
                     "type": "emoji",
-                    "emoji": "\ud83d\udc33"
+                    "emoji": "🐳"
                   },
                   "connectionId": "ssh-1"
                 },
@@ -1415,12 +1295,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1508,12 +1384,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1598,12 +1470,8 @@
       "operation": "settings.task-hydration",
       "version": 1,
       "family": "settings.task-hydration",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1617,9 +1485,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -1635,17 +1501,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -1699,12 +1558,8 @@
       "operation": "settings.task-hydration",
       "version": 1,
       "family": "settings.task-hydration",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1718,9 +1573,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -1788,12 +1641,8 @@
       "operation": "settings.task-hydration",
       "version": 1,
       "family": "settings.task-hydration",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1807,9 +1656,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -1874,12 +1721,8 @@
       "operation": "settings.workspace-submit",
       "version": 1,
       "family": "settings.workspace-submit",
-      "sites": [
-        "mobile/src/components/use-new-workspace-create-submit.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1901,17 +1744,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -1927,12 +1763,8 @@
       "operation": "settings.workspace-submit",
       "version": 1,
       "family": "settings.workspace-submit",
-      "sites": [
-        "mobile/src/components/use-new-workspace-create-submit.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -1968,12 +1800,8 @@
       "operation": "settings.workspace-submit",
       "version": 1,
       "family": "settings.workspace-submit",
-      "sites": [
-        "mobile/src/components/use-new-workspace-create-submit.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -2006,12 +1834,8 @@
       "operation": "settings.task-workspace",
       "version": 1,
       "family": "settings.task-workspace",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -2033,17 +1857,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -2059,12 +1876,8 @@
       "operation": "settings.task-workspace",
       "version": 1,
       "family": "settings.task-workspace",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -2100,12 +1913,8 @@
       "operation": "settings.task-workspace",
       "version": 1,
       "family": "settings.task-workspace",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "mount",
@@ -2138,9 +1947,7 @@
       "operation": "settings.task-workspace-create",
       "version": 1,
       "family": "settings.task-workspace-create",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -2214,9 +2021,7 @@
       "operation": "settings.task-workspace-create",
       "version": 1,
       "family": "settings.task-workspace-create",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -2309,12 +2114,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -2360,10 +2161,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex",
-              "claude"
-            ]
+            "result": ["codex", "claude"]
           }
         },
         {
@@ -2376,12 +2174,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "settings-first"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["settings-first"],
       "steps": [
         {
           "action": "load",
@@ -2424,10 +2218,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex",
-              "claude"
-            ]
+            "result": ["codex", "claude"]
           }
         },
         {
@@ -2440,13 +2231,8 @@
       "operation": "settings.home-providers",
       "version": 1,
       "family": "settings.home-providers",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
-      "schedules": [
-        "stale-inflight-cleanup",
-        "follow-up-cache-observation"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["stale-inflight-cleanup", "follow-up-cache-observation"],
       "steps": [
         {
           "action": "load",
@@ -2468,17 +2254,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -2522,17 +2301,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -2581,13 +2353,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "follow-up-cache-observation",
-        "timer-expiry"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["follow-up-cache-observation", "timer-expiry"],
       "steps": [
         {
           "action": "mount",
@@ -2649,17 +2416,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -2714,14 +2474,8 @@
       "operation": "workspace.file-inventory",
       "version": 1,
       "family": "legacy-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-file-search.ts"
-      ],
-      "schedules": [
-        "reset",
-        "unmount-remount",
-        "blur-retained-route"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["reset", "unmount-remount", "blur-retained-route"],
       "steps": [
         {
           "action": "mount",
@@ -2785,14 +2539,8 @@
       "operation": "workspace.file-inventory",
       "version": 1,
       "family": "legacy-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-file-search.ts"
-      ],
-      "schedules": [
-        "normalized-repeat",
-        "cache-cancels-debounce",
-        "cache-stales-inflight"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
       "steps": [
         {
           "action": "mount",
@@ -2931,12 +2679,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "single-ssh-host"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["single-ssh-host"],
       "steps": [
         {
           "action": "mount",
@@ -2979,12 +2723,8 @@
       "operation": "settings.bot-overrides",
       "version": 1,
       "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/session/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": [
-        "success-then-refused"
-      ],
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["success-then-refused"],
       "steps": [
         {
           "action": "mount",
@@ -3002,17 +2742,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -3051,12 +2784,8 @@
       "operation": "settings.workspace-context",
       "version": 1,
       "family": "settings.workspace-context",
-      "sites": [
-        "mobile/src/components/use-new-workspace-runtime-context.ts"
-      ],
-      "schedules": [
-        "success-then-refused"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["success-then-refused"],
       "steps": [
         {
           "action": "mount",
@@ -3074,17 +2803,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -3206,12 +2928,8 @@
       "operation": "settings.home-providers",
       "version": 1,
       "family": "settings.home-providers",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
-      "schedules": [
-        "success-then-refused"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["success-then-refused"],
       "steps": [
         {
           "action": "load",
@@ -3229,17 +2947,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -3333,12 +3044,8 @@
       "operation": "settings.resume-metadata",
       "version": 1,
       "family": "settings.resume-metadata",
-      "sites": [
-        "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"
-      ],
-      "schedules": [
-        "success-then-refused"
-      ],
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["success-then-refused"],
       "steps": [
         {
           "action": "load",
@@ -3392,17 +3099,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -3506,12 +3206,8 @@
       "operation": "settings.repo-metadata",
       "version": 1,
       "family": "settings.repo-metadata",
-      "sites": [
-        "mobile/src/host-screen/use-host-repo-metadata.ts"
-      ],
-      "schedules": [
-        "success-then-refused"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["success-then-refused"],
       "steps": [
         {
           "action": "mount",
@@ -3573,17 +3269,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -3689,12 +3378,8 @@
       "operation": "settings.task-hydration",
       "version": 1,
       "family": "settings.task-hydration",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"
-      ],
-      "schedules": [
-        "success-then-refused"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["success-then-refused"],
       "steps": [
         {
           "action": "mount",
@@ -3708,9 +3393,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -3726,17 +3409,10 @@
             "ok": true,
             "result": {
               "settings": {
-                "disabledTuiAgents": [
-                  "claude"
-                ],
+                "disabledTuiAgents": ["claude"],
                 "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": [
-                  "bot-user"
-                ],
-                "visibleTaskProviders": [
-                  "github",
-                  "linear"
-                ],
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
                 "hostSettingOverrides": {}
               }
             }
@@ -3801,9 +3477,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -3868,12 +3542,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "both-refused"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["both-refused"],
       "steps": [
         {
           "action": "load",
@@ -3935,12 +3605,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "refused-sibling-rejects"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["refused-sibling-rejects"],
       "steps": [
         {
           "action": "load",
@@ -3999,12 +3665,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "rejects-sibling-refused"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["rejects-sibling-refused"],
       "steps": [
         {
           "action": "load",
@@ -4063,12 +3725,8 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings-agent-read",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
-      "schedules": [
-        "null-sibling-refused"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["null-sibling-refused"],
       "steps": [
         {
           "action": "load",
@@ -4127,9 +3785,7 @@
       "operation": "source-control.branch-base-ref",
       "version": 1,
       "family": "git.base-ref-chain",
-      "sites": [
-        "mobile/src/source-control/mobile-branch-base-ref.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4195,9 +3851,7 @@
       "operation": "source-control.branch-base-ref",
       "version": 1,
       "family": "git.base-ref-chain",
-      "sites": [
-        "mobile/src/source-control/mobile-branch-base-ref.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4243,9 +3897,7 @@
       "operation": "source-control.branch-base-ref",
       "version": 1,
       "family": "git.base-ref-chain",
-      "sites": [
-        "mobile/src/source-control/mobile-branch-base-ref.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4292,9 +3944,7 @@
       "operation": "source-control.branch-base-ref",
       "version": 1,
       "family": "git.base-ref-chain",
-      "sites": [
-        "mobile/src/source-control/mobile-branch-base-ref.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4350,9 +4000,7 @@
       "operation": "source-control.git-history",
       "version": 1,
       "family": "git.history-read",
-      "sites": [
-        "mobile/src/source-control/mobile-git-history.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-git-history.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4377,9 +4025,7 @@
                   "displayId": "aaaaaaa",
                   "subject": "first",
                   "author": "dev",
-                  "parentIds": [
-                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-                  ],
+                  "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
                   "timestamp": 1767222000000
                 },
                 {
@@ -4402,9 +4048,7 @@
       "operation": "source-control.commit-message",
       "version": 1,
       "family": "git.commit-message-ai",
-      "sites": [
-        "mobile/src/source-control/mobile-commit-message-ai.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4437,9 +4081,7 @@
       "operation": "source-control.commit-message",
       "version": 1,
       "family": "git.commit-message-ai",
-      "sites": [
-        "mobile/src/source-control/mobile-commit-message-ai.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4490,9 +4132,7 @@
       "operation": "source-control.commit-message",
       "version": 1,
       "family": "git.commit-message-ai",
-      "sites": [
-        "mobile/src/source-control/mobile-commit-message-ai.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4519,9 +4159,7 @@
       "operation": "source-control.pr-link",
       "version": 1,
       "family": "worktree.review-link",
-      "sites": [
-        "mobile/src/source-control/mobile-pr-link.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4554,9 +4192,7 @@
       "operation": "source-control.pr-link",
       "version": 1,
       "family": "worktree.review-link",
-      "sites": [
-        "mobile/src/source-control/mobile-pr-link.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4604,9 +4240,7 @@
       "operation": "source-control.pr-link",
       "version": 1,
       "family": "worktree.review-link",
-      "sites": [
-        "mobile/src/source-control/mobile-pr-link.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4654,9 +4288,7 @@
       "operation": "source-control.session-diff-reveal",
       "version": 1,
       "family": "session.tab-reveal",
-      "sites": [
-        "mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"
-      ],
+      "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4725,9 +4357,7 @@
       "operation": "source-control.session-diff-reveal",
       "version": 1,
       "family": "session.tab-reveal",
-      "sites": [
-        "mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"
-      ],
+      "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4807,9 +4437,7 @@
       "operation": "source-control.review-git-preparation",
       "version": 1,
       "family": "git.review-preparation",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-git-preparation.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4859,9 +4487,7 @@
       "operation": "source-control.review-git-preparation",
       "version": 1,
       "family": "git.review-preparation",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-git-preparation.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4891,9 +4517,7 @@
       "operation": "source-control.review-git-preparation",
       "version": 1,
       "family": "git.review-preparation",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-git-preparation.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4924,9 +4548,7 @@
       "operation": "source-control.review-git-preparation",
       "version": 1,
       "family": "git.review-preparation",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-git-preparation.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4957,9 +4579,7 @@
       "operation": "source-control.review-git-preparation",
       "version": 1,
       "family": "git.review-preparation",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-git-preparation.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4990,9 +4610,7 @@
       "operation": "source-control.review-git-preparation",
       "version": 1,
       "family": "git.review-preparation",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-git-preparation.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5020,9 +4638,7 @@
       "operation": "source-control.remote-prerequisite",
       "version": 1,
       "family": "git.remote-prerequisite",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5057,9 +4673,7 @@
       "operation": "source-control.remote-prerequisite",
       "version": 1,
       "family": "git.remote-prerequisite",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5092,9 +4706,7 @@
       "operation": "source-control.remote-prerequisite",
       "version": 1,
       "family": "git.remote-prerequisite",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5128,9 +4740,7 @@
       "operation": "source-control.remote-prerequisite",
       "version": 1,
       "family": "git.remote-prerequisite",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5150,9 +4760,7 @@
       "operation": "source-control.hosted-review-eligibility",
       "version": 1,
       "family": "hostedReview.eligibility",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5196,9 +4804,7 @@
       "operation": "source-control.hosted-review-eligibility",
       "version": 1,
       "family": "hostedReview.eligibility",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5233,9 +4839,7 @@
       "operation": "source-control.hosted-review-eligibility",
       "version": 1,
       "family": "hostedReview.eligibility",
-      "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts"
-      ],
+      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -5592,9 +5196,7 @@
           "complete": "git.bulkStage#1",
           "params": {
             "worktree": "id:repo42::/p",
-            "filePaths": [
-              "src/new.ts"
-            ]
+            "filePaths": ["src/new.ts"]
           },
           "reply": {
             "ok": true,
@@ -5871,9 +5473,7 @@
           "complete": "git.bulkStage#1",
           "params": {
             "worktree": "id:repo42::/p",
-            "filePaths": [
-              "src/new.ts"
-            ]
+            "filePaths": ["src/new.ts"]
           },
           "reply": {
             "ok": true,
@@ -6098,9 +5698,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6134,9 +5732,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6170,9 +5766,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6224,9 +5818,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6258,9 +5850,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6289,9 +5879,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6318,9 +5906,7 @@
       "operation": "tasks.worktree-create-retry",
       "version": 1,
       "family": "worktree.create-retry",
-      "sites": [
-        "mobile/src/tasks/worktree-create-retry.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6409,9 +5995,7 @@
       "operation": "tasks.worktree-capabilities",
       "version": 1,
       "family": "worktree.runtime-capabilities",
-      "sites": [
-        "mobile/src/tasks/worktree-create-capability.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6426,10 +6010,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1",
-                "worktree.create-idempotency.v1"
-              ],
+              "capabilities": ["mobile.tasks.v1", "worktree.create-idempotency.v1"],
               "worktreeCreateIdempotency": {
                 "dedupeTtlMs": 45000
               },
@@ -6447,9 +6028,7 @@
       "operation": "tasks.worktree-capabilities",
       "version": 1,
       "family": "worktree.runtime-capabilities",
-      "sites": [
-        "mobile/src/tasks/worktree-create-capability.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6464,9 +6043,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "worktree.create-idempotency.v1"
-              ]
+              "capabilities": ["worktree.create-idempotency.v1"]
             }
           }
         },
@@ -6480,9 +6057,7 @@
       "operation": "tasks.worktree-capabilities",
       "version": 1,
       "family": "worktree.runtime-capabilities",
-      "sites": [
-        "mobile/src/tasks/worktree-create-capability.ts"
-      ],
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6511,9 +6086,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -6527,9 +6100,7 @@
       "operation": "tasks.composer-hosted-base",
       "version": 1,
       "family": "worktree.hosted-base",
-      "sites": [
-        "mobile/src/tasks/composer-source-base-resolve.ts"
-      ],
+      "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6582,9 +6153,7 @@
       "operation": "tasks.composer-hosted-base",
       "version": 1,
       "family": "worktree.hosted-base",
-      "sites": [
-        "mobile/src/tasks/composer-source-base-resolve.ts"
-      ],
+      "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6636,9 +6205,7 @@
       "operation": "tasks.setup-hook-trust",
       "version": 1,
       "family": "worktree.setup-hook-trust",
-      "sites": [
-        "mobile/src/tasks/setup-hook-trust.ts"
-      ],
+      "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6674,9 +6241,7 @@
       "operation": "tasks.setup-hook-trust",
       "version": 1,
       "family": "worktree.setup-hook-trust",
-      "sites": [
-        "mobile/src/tasks/setup-hook-trust.ts"
-      ],
+      "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6715,9 +6280,7 @@
       "operation": "tasks.smart-source-search",
       "version": 1,
       "family": "tasks.smart-source-search",
-      "sites": [
-        "mobile/src/tasks/smart-source-search-requests.ts"
-      ],
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6848,10 +6411,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "refs": [
-                "main",
-                "release"
-              ]
+              "refs": ["main", "release"]
             }
           }
         },
@@ -6911,9 +6471,7 @@
       "operation": "tasks.smart-source-search",
       "version": 1,
       "family": "tasks.smart-source-search",
-      "sites": [
-        "mobile/src/tasks/smart-source-search-requests.ts"
-      ],
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6969,9 +6527,7 @@
       "operation": "tasks.smart-source-search",
       "version": 1,
       "family": "tasks.smart-source-search",
-      "sites": [
-        "mobile/src/tasks/smart-source-search-requests.ts"
-      ],
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7037,9 +6593,7 @@
       "operation": "tasks.paste-lookup",
       "version": 1,
       "family": "tasks.paste-lookup",
-      "sites": [
-        "mobile/src/tasks/smart-source-paste-intent.ts"
-      ],
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7159,9 +6713,7 @@
       "operation": "tasks.paste-lookup",
       "version": 1,
       "family": "tasks.paste-lookup",
-      "sites": [
-        "mobile/src/tasks/smart-source-paste-intent.ts"
-      ],
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7198,9 +6750,7 @@
       "operation": "tasks.paste-lookup",
       "version": 1,
       "family": "tasks.paste-lookup",
-      "sites": [
-        "mobile/src/tasks/smart-source-paste-intent.ts"
-      ],
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7240,9 +6790,7 @@
       "operation": "tasks.workspace-source",
       "version": 1,
       "family": "tasks.workspace-source",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7261,9 +6809,7 @@
                 {
                   "id": "p1",
                   "name": "docs",
-                  "directories": [
-                    "docs"
-                  ]
+                  "directories": ["docs"]
                 }
               ]
             }
@@ -7286,9 +6832,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "refs": [
-                "main"
-              ]
+              "refs": ["main"]
             }
           }
         },
@@ -7302,9 +6846,7 @@
       "operation": "tasks.workspace-source",
       "version": 1,
       "family": "tasks.workspace-source",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7334,9 +6876,7 @@
       "operation": "tasks.workspace-sparse",
       "version": 1,
       "family": "tasks.workspace-sparse",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7372,9 +6912,7 @@
           "params": {
             "repo": "id:repo-1",
             "name": "docs",
-            "directories": [
-              "docs"
-            ]
+            "directories": ["docs"]
           },
           "reply": {
             "ok": true,
@@ -7382,9 +6920,7 @@
               "preset": {
                 "id": "p1",
                 "name": "docs",
-                "directories": [
-                  "docs"
-                ]
+                "directories": ["docs"]
               }
             }
           }
@@ -7399,9 +6935,7 @@
       "operation": "tasks.workspace-sparse",
       "version": 1,
       "family": "tasks.workspace-sparse",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7430,9 +6964,7 @@
           "params": {
             "repo": "id:repo-1",
             "name": "docs",
-            "directories": [
-              "docs"
-            ]
+            "directories": ["docs"]
           },
           "reply": {
             "ok": true,
@@ -7449,9 +6981,7 @@
       "operation": "tasks.workspace-ssh",
       "version": 1,
       "family": "tasks.workspace-ssh",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7465,9 +6995,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex"
-            ]
+            "result": ["codex"]
           }
         },
         {
@@ -7533,9 +7061,7 @@
       "operation": "tasks.workspace-ssh",
       "version": 1,
       "family": "tasks.workspace-ssh",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7607,9 +7133,7 @@
       "operation": "tasks.workspace-ssh",
       "version": 1,
       "family": "tasks.workspace-ssh",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7677,9 +7201,7 @@
       "operation": "tasks.workspace-ssh-local",
       "version": 1,
       "family": "tasks.workspace-ssh-local",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7693,10 +7215,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex",
-              "claude"
-            ]
+            "result": ["codex", "claude"]
           }
         },
         {
@@ -7709,9 +7228,7 @@
       "operation": "settings.task-preferences",
       "version": 1,
       "family": "settings-best-effort",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -7774,9 +7291,7 @@
       "operation": "files.mutation-ownership",
       "version": 1,
       "family": "files.mutation-ownership",
-      "sites": [
-        "mobile/src/files/mobile-file-mutation-ownership.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-mutation-ownership.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7794,9 +7309,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "files.mutation-ownership.v1"
-              ]
+              "capabilities": ["files.mutation-ownership.v1"]
             }
           }
         },
@@ -7842,9 +7355,7 @@
       "operation": "files.mutation-ownership",
       "version": 1,
       "family": "files.mutation-ownership",
-      "sites": [
-        "mobile/src/files/mobile-file-mutation-ownership.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-mutation-ownership.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7859,9 +7370,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "files.mutation-ownership.v1"
-              ]
+              "capabilities": ["files.mutation-ownership.v1"]
             }
           }
         },
@@ -8000,9 +7509,7 @@
       "operation": "files.preview-load",
       "version": 1,
       "family": "files.preview-load",
-      "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8034,9 +7541,7 @@
       "operation": "files.preview-load",
       "version": 1,
       "family": "files.preview-load",
-      "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8072,9 +7577,7 @@
       "operation": "files.preview-load",
       "version": 1,
       "family": "files.preview-load",
-      "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8200,9 +7703,7 @@
       "operation": "files.tab-doc",
       "version": 1,
       "family": "files.tab-doc",
-      "sites": [
-        "mobile/src/files/mobile-file-tab-doc.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-tab-doc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8273,9 +7774,7 @@
       "operation": "components.execution-target",
       "version": 1,
       "family": "components.execution-target",
-      "sites": [
-        "mobile/src/components/use-new-workspace-execution-target.ts"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-execution-target.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8309,9 +7808,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex"
-            ]
+            "result": ["codex"]
           }
         },
         {
@@ -8345,9 +7842,7 @@
       "operation": "components.execution-target-local",
       "version": 1,
       "family": "components.execution-target-local",
-      "sites": [
-        "mobile/src/components/use-new-workspace-execution-target.ts"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-execution-target.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8364,9 +7859,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "claude"
-            ]
+            "result": ["claude"]
           }
         },
         {
@@ -8379,9 +7872,7 @@
       "operation": "components.setup-script",
       "version": 1,
       "family": "components.setup-script",
-      "sites": [
-        "mobile/src/components/use-new-workspace-setup-script.ts"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-setup-script.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8420,9 +7911,7 @@
       "operation": "components.codex-reset-capability",
       "version": 1,
       "family": "components.codex-reset-capability",
-      "sites": [
-        "mobile/src/components/codex-reset-credit-capability.ts"
-      ],
+      "sites": ["mobile/src/components/codex-reset-credit-capability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8437,9 +7926,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "accounts.codex-reset-credit.v1"
-              ]
+              "capabilities": ["accounts.codex-reset-credit.v1"]
             }
           }
         },
@@ -8453,9 +7940,7 @@
       "operation": "host.view-settings",
       "version": 1,
       "family": "host.view-settings",
-      "sites": [
-        "mobile/src/host-screen/use-host-view-settings.ts"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-view-settings.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8511,9 +7996,7 @@
       "operation": "home.host-stats",
       "version": 1,
       "family": "home.host-stats",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8546,9 +8029,7 @@
       "operation": "worktree.home-catalog",
       "version": 1,
       "family": "worktree.home-catalog",
-      "sites": [
-        "mobile/src/worktree/home-host-worktree-fetch.ts"
-      ],
+      "sites": ["mobile/src/worktree/home-host-worktree-fetch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8594,9 +8075,7 @@
       "operation": "worktree.catalog-snapshot",
       "version": 1,
       "family": "worktree.catalog-snapshot",
-      "sites": [
-        "mobile/src/worktree/worktree-catalog-snapshot-client.ts"
-      ],
+      "sites": ["mobile/src/worktree/worktree-catalog-snapshot-client.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8637,9 +8116,7 @@
       "operation": "worktree.catalog-snapshot",
       "version": 1,
       "family": "worktree.catalog-snapshot",
-      "sites": [
-        "mobile/src/worktree/worktree-catalog-snapshot-client.ts"
-      ],
+      "sites": ["mobile/src/worktree/worktree-catalog-snapshot-client.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8670,9 +8147,7 @@
       "operation": "worktree.retired-names",
       "version": 1,
       "family": "worktree.retired-names",
-      "sites": [
-        "mobile/src/worktree/use-retired-worktree-names.ts"
-      ],
+      "sites": ["mobile/src/worktree/use-retired-worktree-names.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8691,10 +8166,7 @@
             "ok": true,
             "result": {
               "retiredNamesByRepo": {
-                "repo-1": [
-                  "marlin",
-                  "orca"
-                ]
+                "repo-1": ["marlin", "orca"]
               },
               "retiredNameTiersByRepo": {
                 "repo-1": 2
@@ -8712,9 +8184,7 @@
       "operation": "host.worktree-actions",
       "version": 1,
       "family": "host.worktree-actions",
-      "sites": [
-        "mobile/src/host-screen/use-host-worktree-actions.ts"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8789,9 +8259,7 @@
       "operation": "host.worktree-actions",
       "version": 1,
       "family": "host.worktree-actions",
-      "sites": [
-        "mobile/src/host-screen/use-host-worktree-actions.ts"
-      ],
+      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8829,9 +8297,7 @@
       "operation": "session.pr-reads",
       "version": 1,
       "family": "github.pr-read",
-      "sites": [
-        "mobile/src/session/github-pr-rpc.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9028,9 +8494,7 @@
       "operation": "session.pr-reads",
       "version": 1,
       "family": "github.pr-read",
-      "sites": [
-        "mobile/src/session/github-pr-rpc.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9136,9 +8600,7 @@
       "operation": "session.pr-reads",
       "version": 1,
       "family": "github.pr-read",
-      "sites": [
-        "mobile/src/session/github-pr-rpc.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9215,9 +8677,7 @@
       "operation": "session.pr-sidebar",
       "version": 1,
       "family": "session.pr-sidebar",
-      "sites": [
-        "mobile/src/session/mobile-pr-sidebar-state.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9317,9 +8777,7 @@
       "operation": "session.pr-sidebar",
       "version": 1,
       "family": "session.pr-sidebar",
-      "sites": [
-        "mobile/src/session/mobile-pr-sidebar-state.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9414,9 +8872,7 @@
       "operation": "session.pr-mutations",
       "version": 1,
       "family": "github.pr-mutation",
-      "sites": [
-        "mobile/src/session/github-pr-mutations.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9496,9 +8952,7 @@
           "params": {
             "repo": "id:repo-9",
             "prNumber": 12,
-            "reviewers": [
-              "octocat"
-            ]
+            "reviewers": ["octocat"]
           },
           "reply": {
             "ok": true,
@@ -9519,9 +8973,7 @@
           "params": {
             "repo": "id:repo-9",
             "prNumber": 12,
-            "reviewers": [
-              "octocat"
-            ]
+            "reviewers": ["octocat"]
           },
           "reply": {
             "ok": true,
@@ -9562,9 +9014,7 @@
       "operation": "session.pr-mutations",
       "version": 1,
       "family": "github.pr-mutation",
-      "sites": [
-        "mobile/src/session/github-pr-mutations.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9666,9 +9116,7 @@
       "operation": "session.pr-mutations",
       "version": 1,
       "family": "github.pr-comment-mutation",
-      "sites": [
-        "mobile/src/session/github-pr-mutations.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9796,9 +9244,7 @@
       "operation": "session.pr-mutations",
       "version": 1,
       "family": "github.pr-comment-mutation",
-      "sites": [
-        "mobile/src/session/github-pr-mutations.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9845,9 +9291,7 @@
       "operation": "session.pr-mutations",
       "version": 1,
       "family": "github.pr-title-mutation",
-      "sites": [
-        "mobile/src/session/github-pr-mutations.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9876,9 +9320,7 @@
       "operation": "session.pr-mutations",
       "version": 1,
       "family": "github.pr-title-mutation",
-      "sites": [
-        "mobile/src/session/github-pr-mutations.ts"
-      ],
+      "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9929,9 +9371,7 @@
       "operation": "session.pr-triage-launch",
       "version": 1,
       "family": "session.pr-triage",
-      "sites": [
-        "mobile/src/session/pr-ai-triage-launch.ts"
-      ],
+      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9987,9 +9427,7 @@
       "operation": "session.pr-triage-launch",
       "version": 1,
       "family": "session.pr-triage",
-      "sites": [
-        "mobile/src/session/pr-ai-triage-launch.ts"
-      ],
+      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10042,9 +9480,7 @@
       "operation": "session.pr-triage-launch",
       "version": 1,
       "family": "session.pr-triage",
-      "sites": [
-        "mobile/src/session/pr-ai-triage-launch.ts"
-      ],
+      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10078,9 +9514,7 @@
       "operation": "session.pr-branch-context",
       "version": 1,
       "family": "session.pr-branch-context",
-      "sites": [
-        "mobile/src/session/use-mobile-pr-branch-context.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10188,9 +9622,7 @@
       "operation": "session.pr-branch-context",
       "version": 1,
       "family": "session.pr-branch-context",
-      "sites": [
-        "mobile/src/session/use-mobile-pr-branch-context.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10221,9 +9653,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10362,9 +9792,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10394,9 +9822,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10479,9 +9905,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10567,9 +9991,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10619,9 +10041,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10737,9 +10157,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.diff-review",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10874,9 +10292,7 @@
       "operation": "transport.host-status-gates",
       "version": 1,
       "family": "transport.host-status-gates",
-      "sites": [
-        "mobile/src/transport/host-status-gates.ts"
-      ],
+      "sites": ["mobile/src/transport/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10894,10 +10310,7 @@
               "protocolVersion": 5,
               "minCompatibleMobileVersion": 1,
               "appVersion": "1.4.200",
-              "capabilities": [
-                "mobile.tasks.v1",
-                "push.v1"
-              ],
+              "capabilities": ["mobile.tasks.v1", "push.v1"],
               "floatingWorkspaceEnabled": true
             }
           }
@@ -10912,9 +10325,7 @@
       "operation": "transport.host-status-gates",
       "version": 1,
       "family": "transport.host-status-gates",
-      "sites": [
-        "mobile/src/transport/host-status-gates.ts"
-      ],
+      "sites": ["mobile/src/transport/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10944,9 +10355,7 @@
       "operation": "transport.host-status-gates",
       "version": 1,
       "family": "transport.host-status-gates",
-      "sites": [
-        "mobile/src/transport/host-status-gates.ts"
-      ],
+      "sites": ["mobile/src/transport/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10964,10 +10373,7 @@
               "protocolVersion": 5,
               "minCompatibleMobileVersion": 1,
               "appVersion": "1.4.200",
-              "capabilities": [
-                "mobile.tasks.v1",
-                "push.v1"
-              ],
+              "capabilities": ["mobile.tasks.v1", "push.v1"],
               "floatingWorkspaceEnabled": true
             }
           }
@@ -10992,9 +10398,7 @@
       "operation": "transport.capability-probe",
       "version": 1,
       "family": "transport.capability-probe",
-      "sites": [
-        "mobile/src/transport/runtime-capability-probe.ts"
-      ],
+      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11009,10 +10413,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "push.v1",
-                "codex.reset-credit"
-              ]
+              "capabilities": ["push.v1", "codex.reset-credit"]
             }
           }
         },
@@ -11026,9 +10427,7 @@
       "operation": "transport.capability-probe",
       "version": 1,
       "family": "transport.capability-probe",
-      "sites": [
-        "mobile/src/transport/runtime-capability-probe.ts"
-      ],
+      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11062,9 +10461,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "push.v1"
-              ]
+              "capabilities": ["push.v1"]
             }
           }
         },
@@ -11078,9 +10475,7 @@
       "operation": "transport.capability-probe",
       "version": 1,
       "family": "transport.capability-probe",
-      "sites": [
-        "mobile/src/transport/runtime-capability-probe.ts"
-      ],
+      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11095,10 +10490,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "push.v1",
-                7
-              ]
+              "capabilities": ["push.v1", 7]
             }
           }
         },
@@ -11119,9 +10511,7 @@
       "operation": "transport.pairing-race",
       "version": 1,
       "family": "transport.pairing-race",
-      "sites": [
-        "mobile/src/transport/pairing-candidate-race.ts"
-      ],
+      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11176,9 +10566,7 @@
       "operation": "transport.pairing-race",
       "version": 1,
       "family": "transport.pairing-race",
-      "sites": [
-        "mobile/src/transport/pairing-candidate-race.ts"
-      ],
+      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11233,9 +10621,7 @@
       "operation": "transport.pairing-race",
       "version": 1,
       "family": "transport.pairing-race",
-      "sites": [
-        "mobile/src/transport/pairing-candidate-race.ts"
-      ],
+      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11291,9 +10677,7 @@
       "operation": "transport.pairing-race",
       "version": 1,
       "family": "transport.pairing-race",
-      "sites": [
-        "mobile/src/transport/pairing-candidate-race.ts"
-      ],
+      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11350,9 +10734,7 @@
       "operation": "relay.credential-rotation",
       "version": 1,
       "family": "relay.credential-rotation",
-      "sites": [
-        "mobile/src/transport/mobile-relay-credential-rotation.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11444,9 +10826,7 @@
       "operation": "relay.credential-rotation",
       "version": 1,
       "family": "relay.credential-rotation",
-      "sites": [
-        "mobile/src/transport/mobile-relay-credential-rotation.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11499,9 +10879,7 @@
       "operation": "relay.direct-upgrade",
       "version": 1,
       "family": "relay.direct-upgrade",
-      "sites": [
-        "mobile/src/transport/mobile-relay-direct-upgrade.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11595,9 +10973,7 @@
       "operation": "relay.direct-upgrade",
       "version": 1,
       "family": "relay.direct-upgrade",
-      "sites": [
-        "mobile/src/transport/mobile-relay-direct-upgrade.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11630,9 +11006,7 @@
       "operation": "relay.pairing-recovery",
       "version": 1,
       "family": "relay.pairing-recovery",
-      "sites": [
-        "mobile/src/transport/mobile-relay-pairing-recovery.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11682,9 +11056,7 @@
       "operation": "relay.pairing-recovery",
       "version": 1,
       "family": "relay.pairing-recovery",
-      "sites": [
-        "mobile/src/transport/mobile-relay-pairing-recovery.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
       "steps": [
         {
@@ -12009,9 +11381,7 @@
       "operation": "transport.capability-probe",
       "version": 1,
       "family": "transport.capability-probe",
-      "sites": [
-        "mobile/src/transport/runtime-capability-probe.ts"
-      ],
+      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -12043,9 +11413,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "push.v1"
-              ]
+              "capabilities": ["push.v1"]
             }
           }
         },
@@ -12059,9 +11427,7 @@
       "operation": "tasks.item-detail-github",
       "version": 1,
       "family": "tasks.item-detail-github",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12081,16 +11447,12 @@
               "body": "body",
               "comments": [],
               "item": {
-                "labels": [
-                  "bug"
-                ],
+                "labels": ["bug"],
                 "reviewDecision": "APPROVED",
                 "reviewRequests": [],
                 "latestReviews": []
               },
-              "assignees": [
-                "octocat"
-              ],
+              "assignees": ["octocat"],
               "headSha": "head-sha",
               "baseSha": "base-sha",
               "pullRequestId": "PR_kwDO",
@@ -12109,9 +11471,7 @@
       "operation": "tasks.item-detail-github",
       "version": 1,
       "family": "tasks.item-detail-github",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12150,16 +11510,12 @@
                 }
               ],
               "item": {
-                "labels": [
-                  "bug"
-                ],
+                "labels": ["bug"],
                 "reviewDecision": "APPROVED",
                 "reviewRequests": [],
                 "latestReviews": []
               },
-              "assignees": [
-                "octocat"
-              ],
+              "assignees": ["octocat"],
               "headSha": "head-sha",
               "baseSha": "base-sha",
               "pullRequestId": "PR_kwDO",
@@ -12178,9 +11534,7 @@
       "operation": "tasks.item-detail-gitlab",
       "version": 1,
       "family": "tasks.item-detail-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12201,9 +11555,7 @@
               "body": "body",
               "comments": [],
               "item": {
-                "labels": [
-                  "bug"
-                ],
+                "labels": ["bug"],
                 "mergeable": "MERGEABLE"
               },
               "assignees": [],
@@ -12226,9 +11578,7 @@
       "operation": "tasks.item-detail-gitlab",
       "version": 1,
       "family": "tasks.item-detail-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12264,9 +11614,7 @@
                 }
               ],
               "item": {
-                "labels": [
-                  "bug"
-                ],
+                "labels": ["bug"],
                 "mergeable": "MERGEABLE"
               },
               "assignees": [],
@@ -12289,9 +11637,7 @@
       "operation": "tasks.item-detail-linear",
       "version": 1,
       "family": "tasks.item-detail-linear",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12360,9 +11706,7 @@
       "operation": "tasks.item-detail-metadata",
       "version": 1,
       "family": "tasks.item-detail-metadata",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-item-detail-metadata-effects.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-metadata-effects.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12376,10 +11720,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "bug",
-              "chore"
-            ]
+            "result": ["bug", "chore"]
           }
         },
         {
@@ -12408,9 +11749,7 @@
       "operation": "tasks.linear-team-context",
       "version": 1,
       "family": "tasks.linear-team-context",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-list-and-detail-effects.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-list-and-detail-effects.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12473,9 +11812,7 @@
       "operation": "tasks.provider-load",
       "version": 1,
       "family": "tasks.provider-load",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-provider-load-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-provider-load-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12532,9 +11869,7 @@
         {
           "complete": "settings.update#1",
           "params": {
-            "defaultLinearTeamSelection": [
-              "team-1"
-            ]
+            "defaultLinearTeamSelection": ["team-1"]
           },
           "reply": {
             "ok": true,
@@ -12610,9 +11945,7 @@
       "operation": "tasks.task-list-gitlab-todos",
       "version": 1,
       "family": "tasks.task-list-gitlab-todos",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12657,9 +11990,7 @@
       "operation": "tasks.task-list-gitlab-items",
       "version": 1,
       "family": "tasks.task-list-gitlab-items",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12710,9 +12041,7 @@
       "operation": "tasks.task-list-linear",
       "version": 1,
       "family": "tasks.task-list-linear",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12820,9 +12149,7 @@
       "operation": "tasks.linear-connect",
       "version": 1,
       "family": "tasks.linear-connect",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-pagination-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-pagination-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12855,9 +12182,7 @@
       "operation": "tasks.task-create-github",
       "version": 1,
       "family": "tasks.task-create-github",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12916,9 +12241,7 @@
       "operation": "tasks.task-create-gitlab",
       "version": 1,
       "family": "tasks.task-create-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12955,9 +12278,7 @@
       "operation": "tasks.task-create-linear",
       "version": 1,
       "family": "tasks.task-create-linear",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -12997,9 +12318,7 @@
       "operation": "tasks.item-comment-github",
       "version": 1,
       "family": "tasks.item-comment-github",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13041,9 +12360,7 @@
       "operation": "tasks.item-review-github",
       "version": 1,
       "family": "tasks.item-review-github",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13059,9 +12376,7 @@
           "params": {
             "prNumber": 12,
             "repo": "id:repo-1",
-            "reviewers": [
-              "octocat"
-            ]
+            "reviewers": ["octocat"]
           },
           "reply": {
             "ok": true,
@@ -13107,9 +12422,7 @@
       "operation": "tasks.item-comment-gitlab",
       "version": 1,
       "family": "tasks.item-comment-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13151,9 +12464,7 @@
       "operation": "tasks.item-comment-gitlab-mr",
       "version": 1,
       "family": "tasks.item-comment-gitlab-mr",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13195,9 +12506,7 @@
       "operation": "tasks.item-checks-files-github",
       "version": 1,
       "family": "tasks.item-checks-files",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-github-check-file-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-github-check-file-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13334,9 +12643,7 @@
       "operation": "tasks.item-reply-merge-github",
       "version": 1,
       "family": "tasks.item-reply-merge",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13456,9 +12763,7 @@
       "operation": "tasks.item-merge-gitlab",
       "version": 1,
       "family": "tasks.item-merge-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13494,9 +12799,7 @@
       "operation": "tasks.item-status-gitlab",
       "version": 1,
       "family": "tasks.item-status-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13537,12 +12840,8 @@
             "number": 9,
             "repo": "id:repo-1",
             "updates": {
-              "addLabels": [
-                "triage"
-              ],
-              "removeLabels": [
-                "bug"
-              ],
+              "addLabels": ["triage"],
+              "removeLabels": ["bug"],
               "title": "Renamed"
             }
           },
@@ -13563,9 +12862,7 @@
       "operation": "tasks.item-status-gitlab-mr",
       "version": 1,
       "family": "tasks.item-status-gitlab-mr",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13601,9 +12898,7 @@
       "operation": "tasks.item-metadata-github",
       "version": 1,
       "family": "tasks.item-metadata-github",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13641,9 +12936,7 @@
       "operation": "tasks.item-metadata-gitlab",
       "version": 1,
       "family": "tasks.item-metadata-gitlab",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13661,9 +12954,7 @@
             "projectRef": "group/project",
             "repo": "id:repo-1",
             "updates": {
-              "addLabels": [
-                "triage"
-              ],
+              "addLabels": ["triage"],
               "title": "Renamed"
             }
           },
@@ -13684,9 +12975,7 @@
       "operation": "tasks.item-metadata-gitlab-mr",
       "version": 1,
       "family": "tasks.item-metadata-gitlab-mr",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13704,9 +12993,7 @@
             "projectRef": "group/project",
             "repo": "id:repo-1",
             "updates": {
-              "addLabels": [
-                "triage"
-              ],
+              "addLabels": ["triage"],
               "body": {
                 "$undefined": true
               },
@@ -13733,9 +13020,7 @@
       "operation": "tasks.linear-item-actions",
       "version": 1,
       "family": "tasks.linear-item",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-linear-item-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-linear-item-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13837,9 +13122,7 @@
       "operation": "tasks.project-repo-slugs",
       "version": 1,
       "family": "tasks.project-repo-slugs",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-repository-resolution.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-repository-resolution.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -13870,9 +13153,7 @@
       "operation": "tasks.project-board-load",
       "version": 1,
       "family": "tasks.project-board-load",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-loading-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-loading-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14033,9 +13314,7 @@
       "operation": "tasks.project-row-detail",
       "version": 1,
       "family": "tasks.project-row-detail",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-detail-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-detail-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14081,9 +13360,7 @@
       "operation": "tasks.project-row-metadata-load",
       "version": 1,
       "family": "tasks.project-row-metadata-load",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-metadata-loading.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-loading.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14101,9 +13378,7 @@
             "ok": true,
             "result": {
               "ok": true,
-              "labels": [
-                "bug"
-              ]
+              "labels": ["bug"]
             }
           }
         },
@@ -14113,9 +13388,7 @@
             "host": "github.enterprise.test",
             "owner": "owner",
             "repo": "repo",
-            "seedLogins": [
-              "octocat"
-            ]
+            "seedLogins": ["octocat"]
           },
           "reply": {
             "ok": true,
@@ -14160,9 +13433,7 @@
       "operation": "tasks.project-row-fields",
       "version": 1,
       "family": "tasks.project-row-fields",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14247,9 +13518,7 @@
       "operation": "tasks.project-row-review-checks",
       "version": 1,
       "family": "tasks.project-row-review-checks",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-review-check-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-review-check-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14270,9 +13539,7 @@
               "repo": "repo"
             },
             "repo": "id:repo-1",
-            "reviewers": [
-              "octocat"
-            ]
+            "reviewers": ["octocat"]
           },
           "reply": {
             "ok": true,
@@ -14375,9 +13642,7 @@
       "operation": "tasks.project-row-threads",
       "version": 1,
       "family": "tasks.project-row-threads",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-thread-reply-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-thread-reply-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14509,9 +13774,7 @@
       "operation": "tasks.project-row-comments-issue",
       "version": 1,
       "family": "tasks.project-row-comments-issue",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14602,9 +13865,7 @@
       "operation": "tasks.project-row-comments-pr",
       "version": 1,
       "family": "tasks.project-row-comments-pr",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14643,9 +13904,7 @@
       "operation": "tasks.project-row-files-merge",
       "version": 1,
       "family": "tasks.project-row-files-merge",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -14803,9 +14062,7 @@
       "operation": "speech.setup-sheet",
       "version": 1,
       "family": "speech.setup-sheet",
-      "sites": [
-        "mobile/src/dictation/mobile-dictation-setup.ts"
-      ],
+      "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14899,9 +14156,7 @@
       "operation": "speech.setup-sheet",
       "version": 1,
       "family": "speech.setup-sheet",
-      "sites": [
-        "mobile/src/dictation/mobile-dictation-setup.ts"
-      ],
+      "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14950,9 +14205,7 @@
       "operation": "speech.setup-sheet",
       "version": 1,
       "family": "speech.setup-sheet",
-      "sites": [
-        "mobile/src/dictation/mobile-dictation-setup.ts"
-      ],
+      "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14980,9 +14233,7 @@
       "operation": "speech.setup-sheet",
       "version": 1,
       "family": "speech.setup-sheet",
-      "sites": [
-        "mobile/src/dictation/mobile-dictation-setup.ts"
-      ],
+      "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15010,9 +14261,7 @@
       "operation": "speech.desktop-start",
       "version": 1,
       "family": "speech.dictation-start",
-      "sites": [
-        "mobile/src/hooks/mobile-dictation-desktop-start.ts"
-      ],
+      "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15057,9 +14306,7 @@
       "operation": "speech.desktop-start",
       "version": 1,
       "family": "speech.dictation-start",
-      "sites": [
-        "mobile/src/hooks/mobile-dictation-desktop-start.ts"
-      ],
+      "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15088,9 +14335,7 @@
       "operation": "speech.desktop-start",
       "version": 1,
       "family": "speech.dictation-start",
-      "sites": [
-        "mobile/src/hooks/mobile-dictation-desktop-start.ts"
-      ],
+      "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15134,9 +14379,7 @@
       "operation": "speech.audio-chunk",
       "version": 1,
       "family": "speech.dictation-chunk",
-      "sites": [
-        "mobile/src/hooks/mobile-dictation-audio-chunk.ts"
-      ],
+      "sites": ["mobile/src/hooks/mobile-dictation-audio-chunk.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15167,9 +14410,7 @@
       "operation": "speech.dictation-session",
       "version": 1,
       "family": "speech.dictation-session",
-      "sites": [
-        "mobile/src/hooks/use-mobile-dictation.ts"
-      ],
+      "sites": ["mobile/src/hooks/use-mobile-dictation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15218,9 +14459,7 @@
       "operation": "speech.dictation-session",
       "version": 1,
       "family": "speech.dictation-session",
-      "sites": [
-        "mobile/src/hooks/use-mobile-dictation.ts"
-      ],
+      "sites": ["mobile/src/hooks/use-mobile-dictation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15269,9 +14508,7 @@
       "operation": "aiVault.history-scan",
       "version": 1,
       "family": "aiVault.history",
-      "sites": [
-        "mobile/src/agent-history/use-mobile-agent-history-state.ts"
-      ],
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15286,9 +14523,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -15297,9 +14532,7 @@
           "params": {
             "force": false,
             "limit": 500,
-            "scopePaths": [
-              "/repo/feature"
-            ]
+            "scopePaths": ["/repo/feature"]
           },
           "reply": {
             "ok": true,
@@ -15325,9 +14558,7 @@
       "operation": "aiVault.history-scan",
       "version": 1,
       "family": "aiVault.history",
-      "sites": [
-        "mobile/src/agent-history/use-mobile-agent-history-state.ts"
-      ],
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15342,9 +14573,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "mobile.tasks.v1"
-              ]
+              "capabilities": ["mobile.tasks.v1"]
             }
           }
         },
@@ -15358,9 +14587,7 @@
       "operation": "aiVault.history-scan",
       "version": 1,
       "family": "aiVault.history",
-      "sites": [
-        "mobile/src/agent-history/use-mobile-agent-history-state.ts"
-      ],
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15378,9 +14605,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -15399,9 +14624,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -15410,9 +14633,7 @@
           "params": {
             "force": false,
             "limit": 500,
-            "scopePaths": [
-              "/repo/feature"
-            ]
+            "scopePaths": ["/repo/feature"]
           },
           "reply": {
             "ok": true,
@@ -15438,9 +14659,7 @@
       "operation": "terminal.query-reply",
       "version": 1,
       "family": "terminal.query-reply",
-      "sites": [
-        "mobile/src/terminal/mobile-terminal-query-reply.ts"
-      ],
+      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15478,9 +14697,7 @@
       "operation": "terminal.query-reply",
       "version": 1,
       "family": "terminal.query-reply",
-      "sites": [
-        "mobile/src/terminal/mobile-terminal-query-reply.ts"
-      ],
+      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15592,9 +14809,7 @@
       "operation": "terminal.takeover-report",
       "version": 1,
       "family": "terminal.takeover-report",
-      "sites": [
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15639,9 +14854,7 @@
       "operation": "terminal.takeover-report",
       "version": 1,
       "family": "terminal.takeover-report",
-      "sites": [
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15670,9 +14883,7 @@
       "operation": "terminal.viewport-refit",
       "version": 1,
       "family": "terminal.viewport-refit",
-      "sites": [
-        "mobile/src/terminal/terminal-viewport-refit.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15717,9 +14928,7 @@
       "operation": "terminal.viewport-refit",
       "version": 1,
       "family": "terminal.viewport-refit",
-      "sites": [
-        "mobile/src/terminal/terminal-viewport-refit.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15764,9 +14973,7 @@
       "operation": "notifications.push-registration",
       "version": 1,
       "family": "notifications.push-registration",
-      "sites": [
-        "mobile/src/notifications/push-registration.ts"
-      ],
+      "sites": ["mobile/src/notifications/push-registration.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15815,9 +15022,7 @@
       "operation": "notifications.push-registration",
       "version": 1,
       "family": "notifications.push-registration",
-      "sites": [
-        "mobile/src/notifications/push-registration.ts"
-      ],
+      "sites": ["mobile/src/notifications/push-registration.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16167,9 +15372,7 @@
       "operation": "aiVault.resume-preparation",
       "version": 1,
       "family": "aiVault.resume-preparation",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-preparation.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16202,9 +15405,7 @@
       "operation": "aiVault.resume-preparation",
       "version": 1,
       "family": "aiVault.resume-preparation",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-preparation.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16237,9 +15438,7 @@
       "operation": "aiVault.resume-preparation",
       "version": 1,
       "family": "aiVault.resume-preparation",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-preparation.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16272,9 +15471,7 @@
       "operation": "aiVault.resume-preparation",
       "version": 1,
       "family": "aiVault.resume-preparation",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-preparation.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16291,9 +15488,7 @@
       "operation": "aiVault.resume-launch",
       "version": 1,
       "family": "aiVault.resume-launch",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-launch.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16308,9 +15503,7 @@
             "env": {
               "ORCA_RESUME": "1"
             },
-            "envToDelete": [
-              "CODEX_HOME"
-            ],
+            "envToDelete": ["CODEX_HOME"],
             "launchAgent": "codex",
             "navigation": "caller",
             "select": true,
@@ -16354,9 +15547,7 @@
       "operation": "aiVault.resume-launch",
       "version": 1,
       "family": "aiVault.resume-launch",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-launch.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16371,9 +15562,7 @@
             "env": {
               "ORCA_RESUME": "1"
             },
-            "envToDelete": [
-              "CODEX_HOME"
-            ],
+            "envToDelete": ["CODEX_HOME"],
             "launchAgent": "codex",
             "navigation": "caller",
             "select": true,
@@ -16417,9 +15606,7 @@
       "operation": "aiVault.resume-launch",
       "version": 1,
       "family": "aiVault.resume-launch",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-launch.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16452,9 +15639,7 @@
       "operation": "aiVault.resume-launch",
       "version": 1,
       "family": "aiVault.resume-launch",
-      "sites": [
-        "mobile/src/session/ai-vault-resume-launch.ts"
-      ],
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16469,9 +15654,7 @@
             "env": {
               "ORCA_RESUME": "1"
             },
-            "envToDelete": [
-              "CODEX_HOME"
-            ],
+            "envToDelete": ["CODEX_HOME"],
             "launchAgent": "codex",
             "navigation": "caller",
             "select": true,
@@ -16496,9 +15679,7 @@
       "operation": "clipboard.image-upload",
       "version": 1,
       "family": "clipboard.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-clipboard-image.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16540,9 +15721,7 @@
       "operation": "clipboard.image-upload",
       "version": 1,
       "family": "clipboard.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-clipboard-image.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16596,9 +15775,7 @@
       "operation": "clipboard.image-upload",
       "version": 1,
       "family": "clipboard.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-clipboard-image.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16655,9 +15832,7 @@
       "operation": "clipboard.image-upload",
       "version": 1,
       "family": "clipboard.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-clipboard-image.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16949,9 +16124,7 @@
       "operation": "nativeChat.image-paste",
       "version": 1,
       "family": "nativeChat.image-paste",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17008,9 +16181,7 @@
       "operation": "nativeChat.image-paste",
       "version": 1,
       "family": "nativeChat.image-paste",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17087,9 +16258,7 @@
       "operation": "nativeChat.image-paste",
       "version": 1,
       "family": "nativeChat.image-paste",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17146,9 +16315,7 @@
       "operation": "nativeChat.image-paste",
       "version": 1,
       "family": "nativeChat.image-paste",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17205,9 +16372,7 @@
       "operation": "nativeChat.terminal-write",
       "version": 1,
       "family": "nativeChat.terminal-write",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17256,9 +16421,7 @@
       "operation": "nativeChat.terminal-write",
       "version": 1,
       "family": "nativeChat.terminal-write",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17295,9 +16458,7 @@
       "operation": "nativeChat.terminal-write",
       "version": 1,
       "family": "nativeChat.terminal-write",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17330,9 +16491,7 @@
       "operation": "nativeChat.terminal-write",
       "version": 1,
       "family": "nativeChat.terminal-write",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17369,9 +16528,7 @@
       "operation": "nativeChat.terminal-write",
       "version": 1,
       "family": "nativeChat.terminal-write",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-send.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17489,9 +16646,7 @@
       "operation": "nativeChat.session-option-pick",
       "version": 1,
       "family": "nativeChat.session-option-pick",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-session-option-persistence.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17528,9 +16683,7 @@
       "operation": "nativeChat.session-option-pick",
       "version": 1,
       "family": "nativeChat.session-option-pick",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-session-option-persistence.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17568,9 +16721,7 @@
       "operation": "nativeChat.session-option-pick",
       "version": 1,
       "family": "nativeChat.session-option-pick",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-session-option-persistence.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17587,9 +16738,7 @@
       "operation": "session.tab-activation",
       "version": 1,
       "family": "session.tab-activation",
-      "sites": [
-        "mobile/src/session/mobile-session-tab-activation.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17639,9 +16788,7 @@
       "operation": "session.tab-activation",
       "version": 1,
       "family": "session.tab-activation",
-      "sites": [
-        "mobile/src/session/mobile-session-tab-activation.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17675,9 +16822,7 @@
       "operation": "session.tab-activation",
       "version": 1,
       "family": "session.tab-activation",
-      "sites": [
-        "mobile/src/session/mobile-session-tab-activation.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17704,9 +16849,7 @@
       "operation": "session.tabs-stream-health",
       "version": 1,
       "family": "session.tabs-stream-health",
-      "sites": [
-        "mobile/src/session/mobile-session-tabs-stream-health.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17743,9 +16886,7 @@
       "operation": "session.tabs-stream-health",
       "version": 1,
       "family": "session.tabs-stream-health",
-      "sites": [
-        "mobile/src/session/mobile-session-tabs-stream-health.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17779,9 +16920,7 @@
       "operation": "session.tabs-stream-health",
       "version": 1,
       "family": "session.tabs-stream-health",
-      "sites": [
-        "mobile/src/session/mobile-session-tabs-stream-health.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17822,9 +16961,7 @@
       "operation": "session.tabs-stream-health",
       "version": 1,
       "family": "session.tabs-stream-health",
-      "sites": [
-        "mobile/src/session/mobile-session-tabs-stream-health.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17855,9 +16992,7 @@
       "operation": "files.terminal-path-tap",
       "version": 1,
       "family": "files.terminal-path-tap",
-      "sites": [
-        "mobile/src/session/mobile-file-tap-open.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17924,9 +17059,7 @@
       "operation": "files.terminal-path-tap",
       "version": 1,
       "family": "files.terminal-path-tap",
-      "sites": [
-        "mobile/src/session/mobile-file-tap-open.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17960,9 +17093,7 @@
       "operation": "files.terminal-path-tap",
       "version": 1,
       "family": "files.terminal-path-tap",
-      "sites": [
-        "mobile/src/session/mobile-file-tap-open.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17996,9 +17127,7 @@
       "operation": "files.terminal-path-tap",
       "version": 1,
       "family": "files.terminal-path-tap",
-      "sites": [
-        "mobile/src/session/mobile-file-tap-open.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18053,9 +17182,7 @@
       "operation": "files.terminal-path-tap",
       "version": 1,
       "family": "files.terminal-path-tap",
-      "sites": [
-        "mobile/src/session/mobile-file-tap-open.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18094,9 +17221,7 @@
       "operation": "agentSession.structured-launch",
       "version": 1,
       "family": "agentSession.structured-launch",
-      "sites": [
-        "mobile/src/session/mobile-structured-agent-session-launch.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18127,9 +17252,7 @@
       "operation": "agentSession.structured-launch",
       "version": 1,
       "family": "agentSession.structured-launch",
-      "sites": [
-        "mobile/src/session/mobile-structured-agent-session-launch.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18160,9 +17283,7 @@
       "operation": "agentSession.structured-launch",
       "version": 1,
       "family": "agentSession.structured-launch",
-      "sites": [
-        "mobile/src/session/mobile-structured-agent-session-launch.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18214,9 +17335,7 @@
       "operation": "agentSession.structured-launch",
       "version": 1,
       "family": "agentSession.structured-launch",
-      "sites": [
-        "mobile/src/session/mobile-structured-agent-session-launch.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18269,9 +17388,7 @@
       "operation": "agentSession.structured-launch",
       "version": 1,
       "family": "agentSession.structured-launch",
-      "sites": [
-        "mobile/src/session/mobile-structured-agent-session-launch.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18340,9 +17457,7 @@
       "operation": "session.tab-documents",
       "version": 1,
       "family": "session.tab-documents",
-      "sites": [
-        "mobile/src/session/use-mobile-session-document-readers.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18375,9 +17490,7 @@
       "operation": "session.tab-documents",
       "version": 1,
       "family": "session.tab-documents",
-      "sites": [
-        "mobile/src/session/use-mobile-session-document-readers.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18423,9 +17536,7 @@
       "operation": "session.tab-documents",
       "version": 1,
       "family": "session.tab-documents",
-      "sites": [
-        "mobile/src/session/use-mobile-session-document-readers.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18456,9 +17567,7 @@
       "operation": "session.tab-documents",
       "version": 1,
       "family": "session.tab-documents",
-      "sites": [
-        "mobile/src/session/use-mobile-session-document-readers.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18490,9 +17599,7 @@
       "operation": "session.terminal-inventory",
       "version": 1,
       "family": "session.terminal-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-list.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18531,9 +17638,7 @@
       "operation": "session.terminal-inventory",
       "version": 1,
       "family": "session.terminal-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-list.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18572,9 +17677,7 @@
       "operation": "session.terminal-inventory",
       "version": 1,
       "family": "session.terminal-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-list.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18605,9 +17708,7 @@
       "operation": "session.terminal-inventory",
       "version": 1,
       "family": "session.terminal-inventory",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-list.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18637,9 +17738,7 @@
       "operation": "session.native-chat-readability",
       "version": 1,
       "family": "session.native-chat-readability",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-readability.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18673,9 +17772,7 @@
       "operation": "session.native-chat-readability",
       "version": 1,
       "family": "session.native-chat-readability",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-readability.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18709,9 +17806,7 @@
       "operation": "session.native-chat-readability",
       "version": 1,
       "family": "session.native-chat-readability",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-readability.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18741,9 +17836,7 @@
       "operation": "session.native-chat-stop",
       "version": 1,
       "family": "session.native-chat-stop",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-stop.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18817,9 +17910,7 @@
       "operation": "session.native-chat-stop",
       "version": 1,
       "family": "session.native-chat-stop",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-stop.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18878,9 +17969,7 @@
       "operation": "session.native-chat-stop",
       "version": 1,
       "family": "session.native-chat-stop",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-stop.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18931,9 +18020,7 @@
       "operation": "session.content-create",
       "version": 1,
       "family": "session.content-create",
-      "sites": [
-        "mobile/src/session/use-mobile-session-content-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18948,9 +18035,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "files.mutation-ownership.v1"
-              ]
+              "capabilities": ["files.mutation-ownership.v1"]
             }
           }
         },
@@ -19008,9 +18093,7 @@
       "operation": "session.content-create",
       "version": 1,
       "family": "session.content-create",
-      "sites": [
-        "mobile/src/session/use-mobile-session-content-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19025,9 +18108,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "files.mutation-ownership.v1"
-              ]
+              "capabilities": ["files.mutation-ownership.v1"]
             }
           }
         },
@@ -19100,9 +18181,7 @@
       "operation": "session.content-create",
       "version": 1,
       "family": "session.content-create",
-      "sites": [
-        "mobile/src/session/use-mobile-session-content-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19136,9 +18215,7 @@
       "operation": "session.content-create",
       "version": 1,
       "family": "session.content-create",
-      "sites": [
-        "mobile/src/session/use-mobile-session-content-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19170,9 +18247,7 @@
       "operation": "session.tab-close",
       "version": 1,
       "family": "session.tab-close",
-      "sites": [
-        "mobile/src/session/use-mobile-session-close-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19201,9 +18276,7 @@
       "operation": "session.tab-close",
       "version": 1,
       "family": "session.tab-close",
-      "sites": [
-        "mobile/src/session/use-mobile-session-close-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19233,9 +18306,7 @@
       "operation": "session.tab-close",
       "version": 1,
       "family": "session.tab-close",
-      "sites": [
-        "mobile/src/session/use-mobile-session-close-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19271,9 +18342,7 @@
       "operation": "session.tab-close",
       "version": 1,
       "family": "session.tab-close",
-      "sites": [
-        "mobile/src/session/use-mobile-session-close-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19631,9 +18700,7 @@
       "operation": "session.diff-notes",
       "version": 1,
       "family": "session.diff-notes",
-      "sites": [
-        "mobile/src/session/use-mobile-session-diff-comments.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19673,9 +18740,7 @@
       "operation": "session.diff-notes",
       "version": 1,
       "family": "session.diff-notes",
-      "sites": [
-        "mobile/src/session/use-mobile-session-diff-comments.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19705,9 +18770,7 @@
       "operation": "session.markdown-save",
       "version": 1,
       "family": "session.markdown-save",
-      "sites": [
-        "mobile/src/session/use-mobile-session-markdown-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19741,9 +18804,7 @@
       "operation": "session.markdown-save",
       "version": 1,
       "family": "session.markdown-save",
-      "sites": [
-        "mobile/src/session/use-mobile-session-markdown-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19776,9 +18837,7 @@
       "operation": "settings.quick-commands",
       "version": 1,
       "family": "settings.quick-commands",
-      "sites": [
-        "mobile/src/session/use-quick-commands.ts"
-      ],
+      "sites": ["mobile/src/session/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19838,9 +18897,7 @@
       "operation": "settings.quick-commands",
       "version": 1,
       "family": "settings.quick-commands",
-      "sites": [
-        "mobile/src/session/use-quick-commands.ts"
-      ],
+      "sites": ["mobile/src/session/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19894,9 +18951,7 @@
       "operation": "settings.quick-commands",
       "version": 1,
       "family": "settings.quick-commands",
-      "sites": [
-        "mobile/src/session/use-quick-commands.ts"
-      ],
+      "sites": ["mobile/src/session/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19926,9 +18981,7 @@
       "operation": "nativeChat.image-upload",
       "version": 1,
       "family": "nativeChat.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-attachment.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19959,9 +19012,7 @@
       "operation": "nativeChat.image-upload",
       "version": 1,
       "family": "nativeChat.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-attachment.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20015,9 +19066,7 @@
       "operation": "nativeChat.image-upload",
       "version": 1,
       "family": "nativeChat.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-attachment.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20108,9 +19157,7 @@
       "operation": "nativeChat.image-upload",
       "version": 1,
       "family": "nativeChat.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-attachment.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20178,9 +19225,7 @@
       "operation": "nativeChat.image-upload",
       "version": 1,
       "family": "nativeChat.image-upload",
-      "sites": [
-        "mobile/src/session/mobile-native-chat-image-attachment.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20197,9 +19242,7 @@
       "operation": "files.explorer-screen",
       "version": 1,
       "family": "files.explorer-screen",
-      "sites": [
-        "mobile/src/files/MobileFileExplorerPanel.tsx"
-      ],
+      "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -20258,9 +19301,7 @@
       "operation": "files.explorer-screen",
       "version": 1,
       "family": "files.explorer-screen",
-      "sites": [
-        "mobile/src/files/MobileFileExplorerPanel.tsx"
-      ],
+      "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -20300,9 +19341,7 @@
       "operation": "workspace.repositories",
       "version": 1,
       "family": "components.new-workspace-repositories",
-      "sites": [
-        "mobile/src/components/use-new-workspace-repositories.ts"
-      ],
+      "sites": ["mobile/src/components/use-new-workspace-repositories.ts"],
       "schedules": [],
       "deviceStore": {
         "orca:last-visited-worktree": "{\"hostId\":\"host-1\",\"worktreeId\":\"repo-b::/tmp/repo-b\"}"
@@ -20438,9 +19477,7 @@
       "operation": "accounts.codex-reset-credit",
       "version": 1,
       "family": "components.codex-reset-credit",
-      "sites": [
-        "mobile/src/storage/codex-reset-attempt-journal.ts"
-      ],
+      "sites": ["mobile/src/storage/codex-reset-attempt-journal.ts"],
       "schedules": [],
       "deviceStore": {
         "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e": "{\"v\":1,\"hostId\":\"host-1\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"},\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\"}"
@@ -20529,9 +19566,7 @@
       "operation": "notifications.push-dismissal",
       "version": 1,
       "family": "notifications.push-dismissal",
-      "sites": [
-        "mobile/src/notifications/push-dismissal-reconciliation.ts"
-      ],
+      "sites": ["mobile/src/notifications/push-dismissal-reconciliation.ts"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
@@ -20678,9 +19713,7 @@
       "operation": "session.terminal-clipboard",
       "version": 1,
       "family": "session.terminal-paste",
-      "sites": [
-        "mobile/src/session/use-mobile-terminal-paste.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-terminal-paste.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20742,9 +19775,7 @@
       "operation": "session.terminal-clipboard",
       "version": 1,
       "family": "session.worktree-connection",
-      "sites": [
-        "mobile/src/session/use-mobile-session-accessory-selection.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-accessory-selection.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20868,9 +19899,7 @@
       "operation": "session.terminal-input-send",
       "version": 1,
       "family": "session.terminal-input-send",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-send-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20918,9 +19947,7 @@
       "operation": "session.terminal-input-send",
       "version": 1,
       "family": "session.terminal-input-send",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-send-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20976,9 +20003,7 @@
       "operation": "home.host-accounts",
       "version": 1,
       "family": "home.host-accounts",
-      "sites": [
-        "mobile/src/home/mobile-home-host-requests.ts"
-      ],
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21029,9 +20054,7 @@
       "operation": "notifications.display-test-screen",
       "version": 1,
       "family": "notifications.display-test-screen",
-      "sites": [
-        "mobile/src/settings/notification-display-test.tsx"
-      ],
+      "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
@@ -21071,9 +20094,7 @@
       "operation": "notifications.display-test-screen",
       "version": 1,
       "family": "notifications.display-test-screen",
-      "sites": [
-        "mobile/src/settings/notification-display-test.tsx"
-      ],
+      "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
@@ -21114,9 +20135,7 @@
       "operation": "notifications.display-test-screen",
       "version": 1,
       "family": "notifications.display-test-screen",
-      "sites": [
-        "mobile/src/settings/notification-display-test.tsx"
-      ],
+      "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
@@ -21157,9 +20176,7 @@
       "operation": "notifications.display-test-screen",
       "version": 1,
       "family": "notifications.display-test-screen",
-      "sites": [
-        "mobile/src/settings/notification-display-test.tsx"
-      ],
+      "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
@@ -21200,9 +20217,7 @@
       "operation": "aiVault.history-screen",
       "version": 1,
       "family": "aiVault.history-screen",
-      "sites": [
-        "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"
-      ],
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -21251,9 +20266,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -21265,9 +20278,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -21281,9 +20292,7 @@
       "operation": "aiVault.history-screen",
       "version": 1,
       "family": "aiVault.history-screen",
-      "sites": [
-        "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"
-      ],
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -21332,9 +20341,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -21346,9 +20353,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "capabilities": [
-                "aiVault.v1"
-              ]
+              "capabilities": ["aiVault.v1"]
             }
           }
         },
@@ -21360,9 +20365,7 @@
           "params": {
             "force": false,
             "limit": 500,
-            "scopePaths": [
-              "/repo/feature"
-            ]
+            "scopePaths": ["/repo/feature"]
           },
           "reply": {
             "ok": true,
@@ -21407,9 +20410,7 @@
       "operation": "tasks.route-repo-list",
       "version": 1,
       "family": "tasks.route-repo-list",
-      "sites": [
-        "mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx"
-      ],
+      "sites": ["mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -21457,9 +20458,7 @@
       "operation": "linear.select-workspace-picker",
       "version": 1,
       "family": "linear.select-workspace-picker",
-      "sites": [
-        "mobile/src/tasks/mobile-tasks-filter-pickers.tsx"
-      ],
+      "sites": ["mobile/src/tasks/mobile-tasks-filter-pickers.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -21494,9 +20493,7 @@
       "operation": "session.live-worktree-name",
       "version": 1,
       "family": "live-worktree-name",
-      "sites": [
-        "mobile/src/session/use-live-worktree-name.ts"
-      ],
+      "sites": ["mobile/src/session/use-live-worktree-name.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21620,9 +20617,7 @@
       "operation": "worktree.host-refresh",
       "version": 1,
       "family": "host-worktree-refresh",
-      "sites": [
-        "mobile/src/worktree/host-worktree-refresh.ts"
-      ],
+      "sites": ["mobile/src/worktree/host-worktree-refresh.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21718,9 +20713,7 @@
       "operation": "source-control.changes-load",
       "version": 1,
       "family": "git.changes-load",
-      "sites": [
-        "mobile/src/source-control/use-mobile-source-control-loaders.ts"
-      ],
+      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21832,9 +20825,7 @@
       "operation": "source-control.history-commit-files",
       "version": 1,
       "family": "git.history-commit-files",
-      "sites": [
-        "mobile/src/source-control/MobileGitHistoryList.tsx"
-      ],
+      "sites": ["mobile/src/source-control/MobileGitHistoryList.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -21859,9 +20850,7 @@
                   "displayId": "aaaaaaa",
                   "subject": "first",
                   "author": "dev",
-                  "parentIds": [
-                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-                  ],
+                  "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
                   "timestamp": 1767222000000
                 }
               ]
@@ -21910,9 +20899,7 @@
       "operation": "source-control.branch-diff-preview",
       "version": 1,
       "family": "git.branch-diff-preview",
-      "sites": [
-        "mobile/src/source-control/use-mobile-source-control-openers.ts"
-      ],
+      "sites": ["mobile/src/source-control/use-mobile-source-control-openers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21957,9 +20944,7 @@
       "operation": "notifications.desktop-stream",
       "version": 1,
       "family": "notifications.desktop-stream",
-      "sites": [
-        "mobile/src/notifications/mobile-notifications.ts"
-      ],
+      "sites": ["mobile/src/notifications/mobile-notifications.ts"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
@@ -22102,9 +21087,7 @@
       "operation": "notifications.desktop-stream",
       "version": 1,
       "family": "notifications.desktop-stream",
-      "sites": [
-        "mobile/src/notifications/mobile-notifications.ts"
-      ],
+      "sites": ["mobile/src/notifications/mobile-notifications.ts"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
@@ -22267,9 +21250,7 @@
       "operation": "session.native-chat-page",
       "version": 1,
       "family": "session.native-chat-page",
-      "sites": [
-        "mobile/src/session/use-mobile-native-chat-session.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-native-chat-session.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22467,9 +21448,7 @@
       "operation": "session.terminal-gesture-input",
       "version": 1,
       "family": "session.terminal-gesture-input",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-input.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-input.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22556,9 +21535,7 @@
       "operation": "session.startup",
       "version": 1,
       "family": "session.startup",
-      "sites": [
-        "mobile/src/session/use-mobile-session-startup.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22637,9 +21614,7 @@
       "operation": "session.startup",
       "version": 1,
       "family": "session.startup",
-      "sites": [
-        "mobile/src/session/use-mobile-session-startup.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22666,18 +21641,14 @@
       "operation": "session.startup",
       "version": 1,
       "family": "session.startup",
-      "sites": [
-        "mobile/src/session/use-mobile-session-startup.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
       "steps": [
         {
           "action": "mount",
           "id": "mount",
           "args": {
-            "initialized": [
-              "terminal-0"
-            ]
+            "initialized": ["terminal-0"]
           }
         },
         {
@@ -22715,9 +21686,7 @@
       "operation": "session.startup",
       "version": 1,
       "family": "session.startup",
-      "sites": [
-        "mobile/src/session/use-mobile-session-startup.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22755,9 +21724,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22843,9 +21810,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22902,9 +21867,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22953,9 +21916,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23012,9 +21973,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23072,9 +22031,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23138,9 +22095,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23204,9 +22159,7 @@
       "operation": "session.create-terminal",
       "version": 1,
       "family": "session.create-terminal",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23279,9 +22232,7 @@
       "operation": "session.terminal-display-mode",
       "version": 1,
       "family": "session.terminal-display-mode",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-stream-display.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23339,9 +22290,7 @@
       "operation": "session.terminal-display-mode",
       "version": 1,
       "family": "session.terminal-display-mode",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-stream-display.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23392,9 +22341,7 @@
       "operation": "session.terminal-display-mode",
       "version": 1,
       "family": "session.terminal-display-mode",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-stream-display.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23465,9 +22412,7 @@
       "operation": "session.terminal-display-mode",
       "version": 1,
       "family": "session.terminal-display-mode",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-stream-display.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23517,9 +22462,7 @@
       "operation": "session.terminal-display-mode",
       "version": 1,
       "family": "session.terminal-display-mode",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-stream-display.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23572,9 +22515,7 @@
       "operation": "notifications.desktop-stream",
       "version": 1,
       "family": "notifications.desktop-stream",
-      "sites": [
-        "mobile/src/notifications/mobile-notifications.ts"
-      ],
+      "sites": ["mobile/src/notifications/mobile-notifications.ts"],
       "schedules": [],
       "deviceStore": {
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
@@ -23690,9 +22631,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.review-file-diff",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23775,9 +22714,7 @@
       "operation": "session.diff-review-load",
       "version": 1,
       "family": "session.review-branch-diff",
-      "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23950,9 +22887,7 @@
       "operation": "session.content-create",
       "version": 1,
       "family": "session.browser-tab-create",
-      "sites": [
-        "mobile/src/session/use-mobile-session-content-create-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23986,9 +22921,7 @@
       "operation": "agentSession.structured-launch",
       "version": 1,
       "family": "agentSession.structured-create",
-      "sites": [
-        "mobile/src/session/mobile-structured-agent-session-launch.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24040,9 +22973,7 @@
       "operation": "session.tab-close",
       "version": 1,
       "family": "session.tab-rename",
-      "sites": [
-        "mobile/src/session/use-mobile-session-close-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24078,9 +23009,7 @@
       "operation": "session.tab-close",
       "version": 1,
       "family": "session.tab-close-session",
-      "sites": [
-        "mobile/src/session/use-mobile-session-close-actions.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24111,9 +23040,7 @@
       "operation": "settings.new-tab-agents",
       "version": 1,
       "family": "settings.new-tab-local-agents",
-      "sites": [
-        "mobile/src/session/mobile-new-tab-agent-loader.ts"
-      ],
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24162,10 +23089,7 @@
           },
           "reply": {
             "ok": true,
-            "result": [
-              "codex",
-              "claude"
-            ]
+            "result": ["codex", "claude"]
           }
         },
         {
@@ -24178,9 +23102,7 @@
       "operation": "files.preview-load",
       "version": 1,
       "family": "files.preview-worktree-text",
-      "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24212,9 +23134,7 @@
       "operation": "files.preview-load",
       "version": 1,
       "family": "files.preview-worktree-image",
-      "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24250,9 +23170,7 @@
       "operation": "files.preview-load",
       "version": 1,
       "family": "files.preview-artifact-image",
-      "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts"
-      ],
+      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24289,9 +23207,7 @@
       "operation": "session.tab-documents",
       "version": 1,
       "family": "session.markdown-disk-fallback",
-      "sites": [
-        "mobile/src/session/use-mobile-session-document-readers.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24337,9 +23253,7 @@
       "operation": "session.tab-documents",
       "version": 1,
       "family": "session.markdown-disk-fallback",
-      "sites": [
-        "mobile/src/session/use-mobile-session-document-readers.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24372,9 +23286,7 @@
       "operation": "mobileWeb.bundle-manifest",
       "version": 1,
       "family": "mobileWeb.bundle-manifest",
-      "sites": [
-        "mobile/src/transport/mobile-web-bundle-operations.ts"
-      ],
+      "sites": ["mobile/src/transport/mobile-web-bundle-operations.ts"],
       "schedules": [],
       "steps": [
         {
