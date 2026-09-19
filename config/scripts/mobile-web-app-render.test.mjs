@@ -590,6 +590,47 @@ describeRender('the Route A page in a real browser', () => {
     }
   }, 60_000)
 
+  it('mounts the agent-history route, whose panel no unit test renders for real', async () => {
+    // The second page route, and the only place its module graph meets React Native Web: the unit
+    // tests mock react-native, safe-area, svg, lucide and the icon assets away, so a component in
+    // this closure with no web build would reach a device before it reached a test.
+    const route = `${HOST_ROUTE}/agent-history/wt-1`
+    const { errors, cspErrors, text, session, url } = await render(route, 'Agent Session History', {
+      shellRoute: { pathname: route, params: { name: 'my worktree' } }
+    })
+    expect(cspErrors).toEqual([])
+    expect(errors).toEqual([])
+    expect(session.sessionId).toBe(SHELL_SESSION_ID)
+    // The params half reaches the screen, not just the URL: the subtitle is the worktree label.
+    expect(url).toBe(`${route}?name=my+worktree`)
+    expect(text).toContain('Agent Session History')
+    expect(text).toContain('my worktree')
+    expect(text).not.toContain(UNMATCHED)
+  }, 60_000)
+
+  it("fetches the agent-history route's own chunk when the page navigates to it", async () => {
+    // C5 is the first series whose success path pulls a second chunk after the first paint, which
+    // on iOS goes through WKURLSchemeHandler under `script-src 'self'`.
+    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
+    const { page, errors, scripts } = opened
+    await page.goto(`${origin}/`, { waitUntil: 'load' })
+    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
+    const loadedForFirstRoute = [...scripts]
+    const route = `${HOST_ROUTE}/agent-history/wt-1`
+    await page.evaluate((to) => {
+      history.pushState(null, '', to)
+      dispatchEvent(new PopStateEvent('popstate'))
+    }, route)
+    await waitForRoute(opened, route, 'Agent Session History')
+    const chunk = routeChunks['./h/[hostId]/agent-history/[worktreeId].tsx']
+    expect(chunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
+    const fetchedOnNavigation = scripts.filter((path) => !loadedForFirstRoute.includes(path))
+    expect(fetchedOnNavigation, scripts.join(' ')).toContain(`/assets/${chunk}`)
+    expect(loadedForFirstRoute).not.toContain(`/assets/${chunk}`)
+    expect(errors).toEqual([])
+    await page.close()
+  }, 60_000)
+
   it('refuses a target the shell will not take, rather than opening it in the page', async () => {
     // The double grants only `fault`, so `notifyNavigate` answers false -- the shell-disposed and
     // older-shell cases reach the page the same way. Before C5.1 this left the host route and
