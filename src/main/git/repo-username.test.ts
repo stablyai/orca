@@ -286,6 +286,31 @@ describe('resolveLocalGitUsername', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
+  it('caches a timed-out passive lookup through the cooldown, then re-probes', async () => {
+    vi.useFakeTimers()
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(makeExecError('gh timeout', { code: 'ETIMEDOUT' }))
+      .mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
+
+    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
+      username: '',
+      authoritative: false
+    })
+    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
+      username: '',
+      authoritative: false
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1)
+    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
+      username: 'gh-demo',
+      authoritative: true
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects a timed-out branch-prefix lookup with its deterministic error code', async () => {
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
     ghExecFileAsyncMock.mockRejectedValueOnce(makeExecError('gh timeout', { code: 'ETIMEDOUT' }))
