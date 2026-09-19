@@ -32,7 +32,12 @@ export type RuntimePullRequestGenerationInput = {
 }
 
 export type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
-  Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>>
+  Partial<
+    Pick<
+      GlobalSettings,
+      'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
+    >
+  >
 
 export type RuntimeDiscoverCommitMessageModelsResult =
   | {
