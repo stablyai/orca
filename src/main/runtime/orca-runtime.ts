@@ -1,8 +1,22 @@
+import { hasEmptyTerminalTabRetirementOwner } from './empty-terminal-tab-retirement-owner'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 
-class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {}
+class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
+  hasEmptyTerminalTabRetirementOwner(worktreeId: string, tabId: string): boolean {
+    return hasEmptyTerminalTabRetirementOwner(
+      {
+        tabs: this.tabs,
+        leaves: this.leaves,
+        ptysById: this.ptysById,
+        mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree
+      },
+      worktreeId,
+      tabId
+    )
+  }
+}
 type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>
 const OrcaRuntimeServiceExport = OrcaRuntimeService as unknown as {
   new (...args: ConstructorParameters<typeof OrcaRuntimeService>): OrcaRuntimeServiceExport

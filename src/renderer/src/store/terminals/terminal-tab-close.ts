@@ -1,3 +1,4 @@
+import { requestEmptyTerminalTabRetirement } from './terminal-tab-close-empty'
 import { recordClosedTerminalTabTombstone } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
@@ -31,6 +32,7 @@ export function createTerminalTabCloseActions(
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
           : buildTerminalTabRetirementPlan(get(), tabId)
+      requestEmptyTerminalTabRetirement(get(), tabId, retirementPlan, closeReason)
       let closingWorktreeId: string | null = null
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)

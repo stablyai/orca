@@ -1,11 +1,17 @@
 import { ipcMain } from 'electron'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { retireEmptyTerminalTab } from './session-empty-terminal-tab-retirement'
 import type { Store } from '../persistence'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 
-export function registerSessionHandlers(store: Store): void {
+export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
+  ipcMain.handle('session:retire-empty-terminal-tab', (_event, args: unknown) => {
+    return retireEmptyTerminalTab(store, runtime, args)
+  })
+
   // Why: hostId is an optional second arg so an older renderer that invokes
   // these channels without it keeps reading/writing the 'local' partition
   // exactly as before. Channel names stay stable.

@@ -1,0 +1,73 @@
+{
+  "comparison": "Actual renderer close, preload, registered main IPC, Store and runtime; before reverses only fix.patch in memory",
+  "sourceHashes": {
+    "src/main/ipc/pty/pane/empty-terminal-tab-retirement-owner.ts": {
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "cc08ba75a3aa93fc83a8d3f20f562291795902a43b07bf828af14038eae63c2d"
+    },
+    "src/main/ipc/register-core-handlers/register-core-handlers.ts": {
+      "before": "8f84c4b9311e705e18e6fafab5fe52950292e9d33a09d1100582ad128e9d2270",
+      "after": "4a3c90890648407f648fce274c2c3bf881a9b7eeca1c0f567299b23063a69b0d"
+    },
+    "src/main/ipc/session-empty-terminal-tab-retirement.ts": {
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "77007e63c60696e46f8620a02f9f20ce9f1da9a0f359f6751fab39999fefb678"
+    },
+    "src/main/ipc/session.ts": {
+      "before": "0327cf95d9003fd66c17d95da5e17a2c3fa5d308a77ca13920760d42abbbefbb",
+      "after": "a64b26e098082378435b913f9d06e8cd4e400f88900ac700d96ce7f066401f17"
+    },
+    "src/main/runtime/empty-terminal-tab-retirement-owner.ts": {
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "4f3b32621a289d80ed5055c5ceb3c400deee71c34e3e073d34f7a7e124aa2abb"
+    },
+    "src/main/runtime/orca-runtime.ts": {
+      "before": "de1e82e14c1ea541f3d5100eade6af4786346c5370d6a18fc8a1848d28d0c459",
+      "after": "28084b4cce95506fb0f67a50bdef4287144806f65a6862e0fb3d3b8354a7db3b"
+    },
+    "src/preload/api/session-bridge.ts": {
+      "before": "347ae9f2a0a6f7dc4840e1f8d0b9c6f38abb489cc5b75a0360687682cea141b5",
+      "after": "5637b72cbac5f0f1cf59b3deb4a434b9d0a852bc9cc30c741f8321e74011d226"
+    },
+    "src/preload/api/workspace-session-api.ts": {
+      "before": "7dda01c01dbf487084acb48a8a27c6fa70bfa56cb833f5c8215016891dc7cd48",
+      "after": "5244f2d7a53d734520edf8062bf9dd8e6d7631aab2d6158a3faaa6e91331dba1"
+    },
+    "src/renderer/src/store/terminals/terminal-tab-close-empty.ts": {
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "92d598a04ed0f22dc1d72ff1e506fcbebc65dcd6f8ef29342b63321e68bc8ac7"
+    },
+    "src/renderer/src/store/terminals/terminal-tab-close.ts": {
+      "before": "b299252be75b2612fefd753807703863cd3e3984b9a72976b3d861557ce8f9c3",
+      "after": "00b764f8385ad58e38407cd9e3f70bb5d588d59f8ecec5ea194560861cdccadd"
+    },
+    "src/shared/empty-terminal-tab-retirement.ts": {
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "49037e815bb374e96a91035ebad9e95a79c33d4379dbb1bb340c81e40103daa4"
+    },
+    "docs/audits/local-empty-tab-retirement/renderer-store-fixture.ts": {
+      "current": "1efea414a91f39e80de057b09511fa7ad6022c4ba6a6a184c58e5f393c15082b"
+    },
+    "docs/audits/local-empty-tab-retirement/fixture.test.ts": {
+      "current": "0dc59517d86ac3b394496081523b7366f8f300691ff4e520caff3597eea6aeda"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "timedOut": false,
+    "passed": 8,
+    "failed": 2,
+    "failedCases": [
+      "direct empty repo close survives save and restart",
+      "direct empty folder close survives save and restart"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "timedOut": false,
+    "passed": 10,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

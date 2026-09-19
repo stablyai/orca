@@ -1,0 +1,448 @@
+--- /dev/null
++++ b/src/main/ipc/pty/pane/empty-terminal-tab-retirement-owner.ts
+@@ -0,0 +1,27 @@
++import { parsePaneKey } from '../../../../shared/stable-pane-id'
++import {
++  paneSpawnReservationsByOwnerKey,
++  pendingRuntimePaneCreatesByOwnerKey
++} from './spawn-reservation'
++import { stablePaneAdoptionsByOwnerKey } from './stable-owner'
++
++export function hasPendingTerminalTabOwner(tabId: string): boolean {
++  for (const owners of [
++    paneSpawnReservationsByOwnerKey,
++    pendingRuntimePaneCreatesByOwnerKey,
++    stablePaneAdoptionsByOwnerKey
++  ]) {
++    for (const ownerKey of owners.keys()) {
++      const identity: unknown = JSON.parse(ownerKey)
++      if (
++        Array.isArray(identity) &&
++        identity.length === 3 &&
++        typeof identity[2] === 'string' &&
++        parsePaneKey(identity[2])?.tabId === tabId
++      ) {
++        return true
++      }
++    }
++  }
++  return false
++}
+--- a/src/main/ipc/register-core-handlers/register-core-handlers.ts
++++ b/src/main/ipc/register-core-handlers/register-core-handlers.ts
+@@ -200,7 +200,7 @@
+   registerBrowserHandlers()
+   registerShellHandlers(store)
+   registerPetHandlers()
+-  registerSessionHandlers(store)
++  registerSessionHandlers(store, runtime)
+   registerUIHandlers(store, { isDashboardPopoutRenderer })
+   registerEmulatorFrameStreamHandlers()
+   registerEmulatorVideoStreamHandlers()
+--- /dev/null
++++ b/src/main/ipc/session-empty-terminal-tab-retirement.ts
+@@ -0,0 +1,106 @@
++import type { Store } from '../persistence'
++import type { OrcaRuntimeService } from '../runtime/orca-runtime'
++import {
++  captureEmptyTerminalTabRetirement,
++  hasTerminalTabBindingOrHistory,
++  isEmptyTerminalTabRetirementRequest,
++  type EmptyTerminalTabRetirementResult
++} from '../../shared/empty-terminal-tab-retirement'
++import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
++import { advanceTerminalTopologyRevision } from '../runtime/workspace-session-terminal-membership-authority'
++import {
++  createRepoRowExecutionHostLookup,
++  resolveWorktreeExecutionHost
++} from '../../shared/worktree-execution-host-resolution'
++import { resolveFolderWorkspaceHost } from '../../shared/folder-workspace-execution-host'
++import { parseWorkspaceKey } from '../../shared/workspace-scope'
++import { parseExecutionHostId } from '../../shared/execution-host'
++import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
++import { hasPendingTerminalTabOwner } from './pty/pane/empty-terminal-tab-retirement-owner'
++
++function isLocalWorkspace(store: Store, worktreeId: string): boolean {
++  const scope = parseWorkspaceKey(worktreeId)
++  if (scope?.type === 'folder') {
++    const state = {
++      repos: store.getRepos(),
++      folderWorkspaces: store.getFolderWorkspaces(),
++      projectGroups: store.getProjectGroups()
++    }
++    const folder = state.folderWorkspaces.find((row) => row.id === scope.folderWorkspaceId)
++    if (
++      !folder ||
++      (folder.executionHostId != null &&
++        parseExecutionHostId(folder.executionHostId)?.kind !== 'local')
++    ) {
++      return false
++    }
++    return resolveFolderWorkspaceHost(state, scope.folderWorkspaceId).kind === 'local'
++  }
++  const resolved = resolveWorktreeExecutionHost(
++    createRepoRowExecutionHostLookup(store.getRepos()),
++    {
++      repoId: getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
++    }
++  )
++  return resolved.kind === 'resolved' && resolved.hostId === 'local'
++}
++
++export function retireEmptyTerminalTab(
++  store: Store,
++  runtime: Pick<OrcaRuntimeService, 'hasEmptyTerminalTabRetirementOwner'> | undefined,
++  input: unknown
++): EmptyTerminalTabRetirementResult {
++  if (!isEmptyTerminalTabRetirementRequest(input)) {
++    return { closed: false, reason: 'invalid-identity' }
++  }
++  const { worktreeId, tabId, createdAt, generation } = input
++  if (!isLocalWorkspace(store, worktreeId)) {
++    return { closed: false, reason: 'not-local' }
++  }
++  const session = store.getWorkspaceSession('local')
++  if ((session.terminalTopologyRevisionByRepoId?.[getRepoIdFromWorktreeId(worktreeId)] ?? 0) <= 0) {
++    return { closed: false, reason: 'renderer-owned-membership' }
++  }
++  const unifiedOwners = Object.values(session.unifiedTabs ?? {})
++    .flat()
++    .filter((row) => row.id === tabId || row.entityId === tabId)
++  if (unifiedOwners.some((row) => row.structuredSessionId || row.viewMode === 'chat')) {
++    return { closed: false, reason: 'structured-owner' }
++  }
++  const owners = Object.entries(session.tabsByWorktree).flatMap(([worktree, tabs]) =>
++    tabs.filter((row) => row.id === tabId).map((row) => ({ worktree, row }))
++  )
++  if (owners.length > 1 || (owners[0] && owners[0].worktree !== worktreeId)) {
++    return { closed: false, reason: 'different-owner' }
++  }
++  const current = captureEmptyTerminalTabRetirement(session, worktreeId, tabId)
++  if (
++    owners.length > 0 &&
++    (!current || current.createdAt !== createdAt || current.generation !== generation)
++  ) {
++    return { closed: false, reason: 'stale-terminal' }
++  }
++  if (
++    owners.length === 0 &&
++    (unifiedOwners.length > 0 || hasTerminalTabBindingOrHistory(session, tabId))
++  ) {
++    return { closed: false, reason: 'unrepresented-owner' }
++  }
++  if (!runtime) {
++    return { closed: false, reason: 'runtime-unavailable' }
++  }
++  if (
++    runtime.hasEmptyTerminalTabRetirementOwner(worktreeId, tabId) ||
++    hasPendingTerminalTabOwner(tabId)
++  ) {
++    return { closed: false, reason: 'runtime-owner' }
++  }
++  const closed = closeTerminalTabInWorkspaceSession(session, worktreeId, tabId)
++  if (closed.pinned || closed.ptyIdsToKill.length > 0) {
++    return { closed: false, reason: 'stale-terminal' }
++  }
++  // No await separates owner admission from the durable membership change.
++  store.setWorkspaceSession(advanceTerminalTopologyRevision(closed.session, worktreeId), 'local')
++  store.flushOrThrow()
++  return { closed: true }
++}
+--- a/src/main/ipc/session.ts
++++ b/src/main/ipc/session.ts
+@@ -1,11 +1,17 @@
+ import { ipcMain } from 'electron'
++import type { OrcaRuntimeService } from '../runtime/orca-runtime'
++import { retireEmptyTerminalTab } from './session-empty-terminal-tab-retirement'
+ import type { Store } from '../persistence'
+ import type {
+   WorkspaceSessionPatch,
+   WorkspaceSessionState
+ } from '../../shared/workspace-session-state-types'
+ 
+-export function registerSessionHandlers(store: Store): void {
++export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
++  ipcMain.handle('session:retire-empty-terminal-tab', (_event, args: unknown) => {
++    return retireEmptyTerminalTab(store, runtime, args)
++  })
++
+   // Why: hostId is an optional second arg so an older renderer that invokes
+   // these channels without it keeps reading/writing the 'local' partition
+   // exactly as before. Channel names stay stable.
+--- /dev/null
++++ b/src/main/runtime/empty-terminal-tab-retirement-owner.ts
+@@ -0,0 +1,56 @@
++import type { RuntimeMobileSessionTabsSnapshot, RuntimeSyncedTab } from '../../shared/runtime-types'
++import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
++import { parsePaneKey } from '../../shared/stable-pane-id'
++import { deriveHeadlessLegacyTerminalLeafId } from './mobile-session-layout-projection'
++
++export type EmptyTabRuntimeOwners = {
++  tabs: ReadonlyMap<string, RuntimeSyncedTab>
++  leaves: ReadonlyMap<string, RuntimeLeafRecord>
++  ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
++  mobileSessionTabsByWorktree: ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
++}
++
++export function hasEmptyTerminalTabRetirementOwner(
++  host: EmptyTabRuntimeOwners,
++  worktreeId: string,
++  tabId: string
++): boolean {
++  const graphTab = host.tabs.get(tabId)
++  if (
++    graphTab &&
++    (graphTab.worktreeId !== worktreeId ||
++      graphTab.layout !== null ||
++      graphTab.activeLeafId !== null)
++  ) {
++    return true
++  }
++  for (const leaf of host.leaves.values()) {
++    if (leaf.tabId === tabId) {
++      return true
++    }
++  }
++  for (const pty of host.ptysById.values()) {
++    if (pty.tabId === tabId || parsePaneKey(pty.paneKey ?? '')?.tabId === tabId) {
++      return true
++    }
++  }
++  for (const [workspace, snapshot] of host.mobileSessionTabsByWorktree) {
++    for (const tab of snapshot.tabs) {
++      if (tab.type !== 'terminal' || tab.parentTabId !== tabId) {
++        continue
++      }
++      if (
++        workspace !== worktreeId ||
++        tab.isPinned ||
++        tab.viewMode === 'chat' ||
++        tab.ptyId ||
++        tab.parentLayout?.root ||
++        Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some(Boolean) ||
++        tab.leafId !== deriveHeadlessLegacyTerminalLeafId(tabId)
++      ) {
++        return true
++      }
++    }
++  }
++  return false
++}
+--- a/src/main/runtime/orca-runtime.ts
++++ b/src/main/runtime/orca-runtime.ts
+@@ -1,8 +1,22 @@
++import { hasEmptyTerminalTabRetirementOwner } from './empty-terminal-tab-retirement-owner'
+ import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
+ import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
+ import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
+ 
+-class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {}
++class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
++  hasEmptyTerminalTabRetirementOwner(worktreeId: string, tabId: string): boolean {
++    return hasEmptyTerminalTabRetirementOwner(
++      {
++        tabs: this.tabs,
++        leaves: this.leaves,
++        ptysById: this.ptysById,
++        mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree
++      },
++      worktreeId,
++      tabId
++    )
++  }
++}
+ type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>
+ const OrcaRuntimeServiceExport = OrcaRuntimeService as unknown as {
+   new (...args: ConstructorParameters<typeof OrcaRuntimeService>): OrcaRuntimeServiceExport
+--- a/src/preload/api/session-bridge.ts
++++ b/src/preload/api/session-bridge.ts
+@@ -2,6 +2,7 @@
+ import type { PreloadApi } from '../api-types'
+ 
+ export const sessionApi = {
++  retireEmptyTerminalTab: (args) => ipcRenderer.invoke('session:retire-empty-terminal-tab', args),
+   // hostId is optional; main defaults it to 'local' so existing omitting call sites keep the local session partition.
+   get: (hostId) => ipcRenderer.invoke('session:get', hostId),
+   set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
+--- a/src/preload/api/workspace-session-api.ts
++++ b/src/preload/api/workspace-session-api.ts
+@@ -3,6 +3,10 @@
+   WorkspaceSessionPatch,
+   WorkspaceSessionState
+ } from '../../shared/workspace-session-state-types'
++import type {
++  EmptyTerminalTabRetirementRequest,
++  EmptyTerminalTabRetirementResult
++} from '../../shared/empty-terminal-tab-retirement'
+ import type { ExecutionHostId } from '../../shared/execution-host'
+ import type {
+   RemoteWorkspaceChangedEvent,
+@@ -13,6 +17,9 @@
+ 
+ export type WorkspaceSessionApi = {
+   session: {
++    retireEmptyTerminalTab?: (
++      args: EmptyTerminalTabRetirementRequest
++    ) => Promise<EmptyTerminalTabRetirementResult>
+     // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
+     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
+     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+--- /dev/null
++++ b/src/renderer/src/store/terminals/terminal-tab-close-empty.ts
+@@ -0,0 +1,42 @@
++import { captureEmptyTerminalTabRetirement } from '../../../../shared/empty-terminal-tab-retirement'
++import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
++import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
++import type { AppState } from '../types'
++import type { TerminalTabRetirementPlan } from '../slices/terminal-tab-retirement'
++
++export function requestEmptyTerminalTabRetirement(
++  state: AppState,
++  tabId: string,
++  plan: TerminalTabRetirementPlan,
++  reason: string
++): void {
++  if (
++    typeof window === 'undefined' ||
++    reason !== 'user' ||
++    plan.ptyIds.length > 0 ||
++    !plan.worktreeId ||
++    getConnectionIdFromState(state, plan.worktreeId) !== null ||
++    getExecutionHostIdForWorktree(state, plan.worktreeId) !== 'local'
++  ) {
++    return
++  }
++  if (
++    Object.values(state.unifiedTabsByWorktree).some((tabs) =>
++      tabs.some(
++        (row) =>
++          (row.id === tabId || row.entityId === tabId) &&
++          (row.structuredSessionId || row.viewMode === 'chat')
++      )
++    )
++  ) {
++    return
++  }
++  const request = captureEmptyTerminalTabRetirement(state, plan.worktreeId, tabId)
++  const retire = window.api.session?.retireEmptyTerminalTab
++  if (!request || !retire) {
++    return
++  }
++  void retire(request).catch((error: unknown) =>
++    console.warn('Empty terminal tab retirement failed', error)
++  )
++}
+--- a/src/renderer/src/store/terminals/terminal-tab-close.ts
++++ b/src/renderer/src/store/terminals/terminal-tab-close.ts
+@@ -1,3 +1,4 @@
++import { requestEmptyTerminalTabRetirement } from './terminal-tab-close-empty'
+ import { recordClosedTerminalTabTombstone } from '../../../../shared/closed-terminal-tab-tombstones'
+ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+ import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+@@ -31,6 +32,7 @@
+         opts?.precomputedRetirementPlan?.tabId === tabId
+           ? opts.precomputedRetirementPlan
+           : buildTerminalTabRetirementPlan(get(), tabId)
++      requestEmptyTerminalTabRetirement(get(), tabId, retirementPlan, closeReason)
+       let closingWorktreeId: string | null = null
+       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
+       retireParkedTerminalTab(tabId)
+--- /dev/null
++++ b/src/shared/empty-terminal-tab-retirement.ts
+@@ -0,0 +1,96 @@
++import type { WorkspaceSessionState } from './workspace-session-state-types'
++
++export type EmptyTerminalTabRetirementRequest = {
++  worktreeId: string
++  tabId: string
++  createdAt: number
++  generation: number
++}
++export type EmptyTerminalTabRetirementResult =
++  | { closed: true }
++  | {
++      closed: false
++      reason:
++        | 'invalid-identity'
++        | 'not-local'
++        | 'renderer-owned-membership'
++        | 'structured-owner'
++        | 'different-owner'
++        | 'stale-terminal'
++        | 'unrepresented-owner'
++        | 'runtime-owner'
++        | 'runtime-unavailable'
++    }
++
++type EmptyTerminalTabState = Pick<
++  WorkspaceSessionState,
++  | 'tabsByWorktree'
++  | 'terminalLayoutsByTabId'
++  | 'remoteSessionIdsByTabId'
++  | 'terminalPtyIncarnationsByPaneKey'
++  | 'sleepingAgentSessionsByPaneKey'
++>
++
++export function hasTerminalTabBindingOrHistory(
++  session: EmptyTerminalTabState,
++  tabId: string
++): boolean {
++  const layout = session.terminalLayoutsByTabId[tabId]
++  return Boolean(
++    layout?.root ||
++    layout?.activeLeafId ||
++    layout?.expandedLeafId ||
++    session.remoteSessionIdsByTabId?.[tabId] ||
++    [layout?.ptyIdsByLeafId, layout?.buffersByLeafId, layout?.scrollbackRefsByLeafId].some(
++      (map) => Object.keys(map ?? {}).length > 0
++    ) ||
++    Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}).some((key) =>
++      key.startsWith(`${tabId}:`)
++    ) ||
++    Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).some(
++      ([key, value]) => key.startsWith(`${tabId}:`) || value.tabId === tabId
++    )
++  )
++}
++
++export function captureEmptyTerminalTabRetirement(
++  session: EmptyTerminalTabState,
++  worktreeId: string,
++  tabId: string
++): EmptyTerminalTabRetirementRequest | undefined {
++  const tabs = Object.values(session.tabsByWorktree)
++    .flat()
++    .filter((tab) => tab.id === tabId)
++  const row = session.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
++  if (
++    !row ||
++    tabs.length !== 1 ||
++    row.worktreeId !== worktreeId ||
++    row.ptyId ||
++    row.isPinned ||
++    row.viewMode === 'chat' ||
++    (row.generation ?? 0) !== 0 ||
++    hasTerminalTabBindingOrHistory(session, tabId)
++  ) {
++    return undefined
++  }
++  return { worktreeId, tabId, createdAt: row.createdAt, generation: 0 }
++}
++
++export function isEmptyTerminalTabRetirementRequest(
++  value: unknown
++): value is EmptyTerminalTabRetirementRequest {
++  return (
++    typeof value === 'object' &&
++    value !== null &&
++    'worktreeId' in value &&
++    typeof value.worktreeId === 'string' &&
++    'tabId' in value &&
++    typeof value.tabId === 'string' &&
++    'createdAt' in value &&
++    typeof value.createdAt === 'number' &&
++    Number.isFinite(value.createdAt) &&
++    'generation' in value &&
++    value.generation === 0
++  )
++}
