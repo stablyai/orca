@@ -38,7 +38,13 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
-    commandPath[0] === 'agent-context'
+    commandPath[0] === 'agent-context' ||
+    // Why: terminal commands run against the local runtime of the machine hosting the
+    // terminals. On headless servers deployed via orca serve (or inside scripts with
+    // ORCA_ENVIRONMENT set for host identification, e.g. prod-01), treating the ambient
+    // variable as a remote runtime selector fails closed with "Unknown environment" (#19343).
+    commandPath[0] === 'terminal' ||
+    commandPath[0] === 'diagnostics'
   )
 }
 

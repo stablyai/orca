@@ -274,6 +274,29 @@ describe('artifact runtime routing', () => {
   })
 })
 
+describe('terminal runtime routing', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+    process.exitCode = 0
+  })
+
+  it('ignores ambient ORCA_ENVIRONMENT for terminal list (#19343)', async () => {
+    vi.stubEnv('ORCA_ENVIRONMENT', 'prod-01')
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    callMock.mockResolvedValue(
+      okFixture('terminal-list', { status: 'ok', value: { terminals: [] } })
+    )
+    runtimeClientConstructorMock.mockClear()
+
+    await main(['terminal', 'list', '--json'], '/tmp/repo')
+
+    expect(process.exitCode).not.toBe(1)
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
+    expect(callMock).toHaveBeenCalledWith('terminal.list', expect.anything())
+  })
+})
+
 describe('unknown command surfaces a suggestion', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>
 
