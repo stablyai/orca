@@ -37,10 +37,8 @@ export type WebSocketTransportOptions = {
   preAuthTimeoutMs?: number
   // Why: the pairing server can also serve the browser client, avoiding a second static server.
   staticRoot?: string
-  // Why: devices paired while the fallback port was active point at it, so it must bind first on later launches or those pairings strand (STA-1511).
+  // Why: while the pinned port stays taken, rebinding the previously-assigned port keeps drifted pairings on one endpoint instead of a per-restart random one (STA-1511).
   fallbackPort?: number
-  // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
-  preferPinnedPort?: boolean
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -52,7 +50,6 @@ export class WebSocketTransport implements RpcTransport {
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
-  private readonly preferPinnedPort: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -73,8 +70,7 @@ export class WebSocketTransport implements RpcTransport {
     heartbeatNow,
     preAuthTimeoutMs,
     staticRoot,
-    fallbackPort,
-    preferPinnedPort
+    fallbackPort
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -88,7 +84,6 @@ export class WebSocketTransport implements RpcTransport {
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
-    this.preferPinnedPort = preferPinnedPort === true
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -138,17 +133,16 @@ export class WebSocketTransport implements RpcTransport {
       return
     }
 
-    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
+    // Why: the pin binds first so one transient conflict can't move this host off it for good; the persisted
+    // fallback only covers launches where the pin is still taken, which is what keeps those launches on a single
+    // stable port rather than a new OS-assigned one each time (STA-1511). Port 0 remains the last resort, and
+    // resolvedPort always reports what actually bound.
     const persistedFallbackPort =
       this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
         ? this.fallbackPort
         : undefined
     const candidatePorts =
-      persistedFallbackPort === undefined
-        ? [this.port]
-        : this.preferPinnedPort
-          ? [this.port, persistedFallbackPort]
-          : [persistedFallbackPort, this.port]
+      persistedFallbackPort === undefined ? [this.port] : [this.port, persistedFallbackPort]
     for (const port of candidatePorts) {
       try {
         await this.tryListen(port)

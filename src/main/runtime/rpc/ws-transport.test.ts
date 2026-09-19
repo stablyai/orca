@@ -609,9 +609,9 @@ describe('WebSocketTransport', () => {
     expect(wss.clients.size).toBe(0)
   }, 5_000)
 
-  // Why: paired mobile devices store ws://ip:port endpoints, so the fallback
-  // port must stay stable across restarts or pairings go permanently dead
-  // when the preferred port is held by another instance (STA-1511).
+  // Why: paired mobile devices store ws://ip:port endpoints, so a host that lands off its pinned
+  // port must keep landing on the SAME port for as long as the pin stays taken, or those pairings go
+  // dead on every restart (STA-1511).
   describe('fallback port stability', () => {
     async function reserveFreePort(): Promise<number> {
       const scratch = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
@@ -621,122 +621,60 @@ describe('WebSocketTransport', () => {
       return port
     }
 
-    it('binds the persisted fallback port even when the preferred port is free', async () => {
-      // Why: regression for the STA-1511 follow-up — devices paired while the
-      // fallback port was active store ws://ip:<fallback>. A later launch that
-      // finds the preferred port free must still bind the fallback, or those
-      // pairings go permanently dead until the user re-pairs.
-      const preferredPort = await reserveFreePort()
+    it('binds the pinned port when it is free, even with a persisted fallback on file', async () => {
+      // Why: this inverts what STA-1511's follow-up asserted. Preferring a persisted fallback forever
+      // made one transient conflict permanent — the host never returned to the pin. The cohort math
+      // favours the pin: nearly every device pairs on the default port, while only devices paired
+      // inside a drift window point at the fallback, and those can re-target the host by hand or reach
+      // it over the relay. Devices on the pin have no such escape if the host silently moves.
+      const pinnedPort = await reserveFreePort()
       const fallbackPort = await reserveFreePort()
 
       const transport = new WebSocketTransport({
         host: '127.0.0.1',
-        port: preferredPort,
+        port: pinnedPort,
         fallbackPort
       })
       transports.push(transport)
       await transport.start()
-      expect(transport.resolvedPort).toBe(fallbackPort)
+      expect(transport.resolvedPort).toBe(pinnedPort)
     })
 
-    it('binds the preferred port first when preferPinnedPort is set and both are free', async () => {
-      // Why: issue #8535 — `orca serve --port <P>` clients dial the pin. A
-      // free but stale mobile-ws-fallback-port.json must not pre-empt it.
-      const preferredPort = await reserveFreePort()
+    it('returns to the pinned port once the conflict on it clears', async () => {
+      // Why: the regression this ordering exists to prevent. A momentary holder on the pinned port
+      // used to strand the host on the fallback for every later launch; recovery must be automatic.
+      const pinHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(pinHolder)
+      await pinHolder.start()
+      const pinnedPort = pinHolder.resolvedPort
       const fallbackPort = await reserveFreePort()
 
-      const transport = new WebSocketTransport({
+      const drifted = new WebSocketTransport({
         host: '127.0.0.1',
-        port: preferredPort,
-        fallbackPort,
-        preferPinnedPort: true
-      })
-      transports.push(transport)
-      await transport.start()
-      expect(transport.resolvedPort).toBe(preferredPort)
-    })
-
-    it('falls back when preferPinnedPort is set but the preferred port is taken', async () => {
-      // Why: explicit pins still degrade to the STA-1511 fallback on
-      // EADDRINUSE so previously-paired mobile devices remain reachable.
-      const preferredHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
-      transports.push(preferredHolder)
-      await preferredHolder.start()
-      const preferredPort = preferredHolder.resolvedPort
-      const fallbackPort = await reserveFreePort()
-
-      const transport = new WebSocketTransport({
-        host: '127.0.0.1',
-        port: preferredPort,
-        fallbackPort,
-        preferPinnedPort: true
-      })
-      transports.push(transport)
-      await transport.start()
-      expect(transport.resolvedPort).toBe(fallbackPort)
-    })
-
-    it('binds the preferred port when the persisted fallback is taken', async () => {
-      const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
-      transports.push(fallbackHolder)
-      await fallbackHolder.start()
-      const takenFallbackPort = fallbackHolder.resolvedPort
-      const preferredPort = await reserveFreePort()
-
-      const transport = new WebSocketTransport({
-        host: '127.0.0.1',
-        port: preferredPort,
-        fallbackPort: takenFallbackPort
-      })
-      transports.push(transport)
-      await transport.start()
-      expect(transport.resolvedPort).toBe(preferredPort)
-    })
-
-    it('falls through to the preferred port when the fallback bind fails with a non-EADDRINUSE error', async () => {
-      // Why: a persisted fallback can land in an OS-reserved range on a later
-      // launch (Windows Hyper-V excluded ports → EACCES). That must degrade to
-      // the preferred port instead of disabling the transport for the session.
-      const preferredPort = await reserveFreePort()
-      const fallbackPort = await reserveFreePort()
-      const transport = new WebSocketTransport({
-        host: '127.0.0.1',
-        port: preferredPort,
+        port: pinnedPort,
         fallbackPort
       })
-      transports.push(transport)
-      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
-      const realTryListen = withListen.tryListen.bind(transport)
-      withListen.tryListen = (port: number) =>
-        port === fallbackPort
-          ? Promise.reject(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
-          : realTryListen(port)
+      transports.push(drifted)
+      await drifted.start()
+      expect(drifted.resolvedPort).toBe(fallbackPort)
 
-      await transport.start()
-      expect(transport.resolvedPort).toBe(preferredPort)
-    })
+      await drifted.stop()
+      await pinHolder.stop()
 
-    it('still throws when EACCES did not come from listening on the preferred port', async () => {
-      const preferredPort = await reserveFreePort()
-      const transport = new WebSocketTransport({
+      // Same persisted entry, next launch: the pin is free again and must win.
+      const relaunched = new WebSocketTransport({
         host: '127.0.0.1',
-        port: preferredPort
+        port: pinnedPort,
+        fallbackPort
       })
-      transports.push(transport)
-      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
-      withListen.tryListen = () =>
-        Promise.reject(
-          Object.assign(new Error('open EACCES'), {
-            code: 'EACCES',
-            syscall: 'open',
-            port: preferredPort
-          })
-        )
-
-      await expect(transport.start()).rejects.toThrow('open EACCES')
+      transports.push(relaunched)
+      await relaunched.start()
+      expect(relaunched.resolvedPort).toBe(pinnedPort)
     })
 
-    it('retries the persisted fallback port before an OS-assigned one', async () => {
+    it('binds the persisted fallback while the pinned port stays taken', async () => {
+      // Why: STA-1511's actual guarantee. Every launch that still finds the pin taken lands on one
+      // stable port instead of a fresh OS-assigned one, so drift-window pairings survive restarts.
       const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       transports.push(holder)
       await holder.start()
@@ -753,7 +691,73 @@ describe('WebSocketTransport', () => {
       expect(transport.resolvedPort).toBe(fallbackPort)
     })
 
-    it('falls back to an OS-assigned port when the persisted port is also taken', async () => {
+    it('binds the pinned port when the persisted fallback is taken', async () => {
+      const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(fallbackHolder)
+      await fallbackHolder.start()
+      const takenFallbackPort = fallbackHolder.resolvedPort
+      const pinnedPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: pinnedPort,
+        fallbackPort: takenFallbackPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(pinnedPort)
+    })
+
+    it('falls through to an OS-assigned port when the fallback fails with a non-EADDRINUSE error', async () => {
+      // Why: a persisted fallback can land in an OS-reserved range on a later launch (Windows Hyper-V
+      // excluded ports -> EACCES). That must degrade to the next candidate instead of disabling the
+      // transport for the session.
+      const pinHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(pinHolder)
+      await pinHolder.start()
+      const pinnedPort = pinHolder.resolvedPort
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: pinnedPort,
+        fallbackPort
+      })
+      transports.push(transport)
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      const realTryListen = withListen.tryListen.bind(transport)
+      withListen.tryListen = (port: number) =>
+        port === fallbackPort
+          ? Promise.reject(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
+          : realTryListen(port)
+
+      await transport.start()
+      expect(transport.resolvedPort).not.toBe(pinnedPort)
+      expect(transport.resolvedPort).not.toBe(fallbackPort)
+      expect(transport.resolvedPort).toBeGreaterThan(0)
+    })
+
+    it('still throws when EACCES did not come from listening on the pinned port', async () => {
+      const pinnedPort = await reserveFreePort()
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: pinnedPort
+      })
+      transports.push(transport)
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      withListen.tryListen = () =>
+        Promise.reject(
+          Object.assign(new Error('open EACCES'), {
+            code: 'EACCES',
+            syscall: 'open',
+            port: pinnedPort
+          })
+        )
+
+      await expect(transport.start()).rejects.toThrow('open EACCES')
+    })
+
+    it('falls back to an OS-assigned port when the pinned and persisted ports are both taken', async () => {
       const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       transports.push(holder, fallbackHolder)
