@@ -128,46 +128,36 @@ describe('fetchGrokRateLimits', () => {
     expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
-  // Why: #15740 — an absent creditUsagePercent alongside explicitly-emitted zero
-  // credit fields means "not reported", never 0%.
-  it('reports usage as unavailable when the credits view omits the percent but emits explicit zero credit fields', async () => {
+  // Why: SuperGrok omits creditUsagePercent at genuine 0% while still emitting
+  // nested onDemandUsed/prepaidBalance zeros. Those zeros are not the weekly
+  // meter and must not hide the bar.
+  it('maps an omitted percentage as zero when a confirmed weekly period also emits on-demand zeros', async () => {
     authState.file = freshAuthJson()
-    netFetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({
-          config: {
-            currentPeriod: {
-              type: 'USAGE_PERIOD_TYPE_WEEKLY',
-              start: '2026-08-16T12:54:39.515635+00:00',
-              end: '2026-08-23T12:54:39.515635+00:00'
-            },
-            onDemandCap: { val: 100 },
-            onDemandUsed: { val: 0 },
-            isUnifiedBillingUser: true,
-            prepaidBalance: { val: 0 },
-            topUpMethod: 'TOP_UP_METHOD_SAVED_PAYMENT_METHOD',
-            billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
-            billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00'
-          }
-        })
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          config: {
-            monthlyLimit: { val: 0 },
-            used: { val: 37.5 },
-            billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
-            billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00'
-          }
-        })
-      )
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-08-16T12:54:39.515635+00:00',
+            end: '2026-08-23T12:54:39.515635+00:00'
+          },
+          onDemandCap: { val: 100 },
+          onDemandUsed: { val: 0 },
+          isUnifiedBillingUser: true,
+          prepaidBalance: { val: 0 },
+          topUpMethod: 'TOP_UP_METHOD_SAVED_PAYMENT_METHOD',
+          billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
+          billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00'
+        }
+      })
+    )
 
     const result = await fetchGrokRateLimits()
-    expect(result.status).toBe('unavailable')
-    expect(result.weekly).toBeNull()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+    expect(result.weekly?.resetsAt).toBe(Date.parse('2026-08-23T12:54:39.515635+00:00'))
     expect(result.monthly).toBeUndefined()
-    expect(result.error).toMatch(/did not report a usage percentage/i)
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   // Why: the monthly budget pair is a monthly window wherever it arrives — the

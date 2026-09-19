@@ -109,15 +109,6 @@ function usageScalars(config: GrokBillingConfig): (GrokMoneyVal | undefined)[] {
   ]
 }
 
-// Why: proto3 JSON drops default zeros, so an omitted percent can mean zero —
-// but only an explicitly-emitted zero proves this encoder keeps them. #15740
-// ships `onDemandUsed: {val: 0}`, so there the omission means "not reported"
-// and must never render as 0%. Non-zero money fields prove nothing either way,
-// so #9214/#9219 accounts that carry only those keep their genuine 0%.
-function emitsExplicitZeroScalar(config: GrokBillingConfig): boolean {
-  return usageScalars(config).some((value) => parseMoneyVal(value) === 0)
-}
-
 function reportsAnyUsageScalar(config: GrokBillingConfig): boolean {
   return usageScalars(config).some((value) => parseMoneyVal(value) !== null)
 }
@@ -130,10 +121,11 @@ function resolveWeeklyPercent(config: GrokBillingConfig): number | null {
   if (reported !== undefined) {
     return null
   }
-  // Why: infer the dropped zero only when nothing else in the payload speaks
-  // for consumption — an explicit zero proves the encoder keeps defaults, and a
-  // computable budget pair is a real monthly number this must not shadow.
-  if (emitsExplicitZeroScalar(config) || mapMonthlyUsage(config) !== null) {
+  // Why: SuperGrok omits scalar creditUsagePercent at genuine 0% (proto3) while
+  // still emitting nested onDemandUsed: {val: 0}. Nested money zeros are a
+  // different encoder and must not block the weekly 0%. A computable monthly
+  // pair is a real number this must not shadow.
+  if (mapMonthlyUsage(config) !== null) {
     return null
   }
   return hasConfirmedWeeklyPeriod(config) ? 0 : null
