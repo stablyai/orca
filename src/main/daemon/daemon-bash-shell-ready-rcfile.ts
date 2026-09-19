@@ -118,6 +118,16 @@ __orca_osc133_epilogue() {
     __orca_ready_marker=""
   fi
 }
+# Install before array composition strands bash-preexec's scalar-only installer in a later element.
+if [[ -n "\${bash_preexec_imported:-}\${__bp_imported:-}" && -n "\${__bp_install_string:-}" && "\${PROMPT_COMMAND[*]:-}" == *"$__bp_install_string"* ]]; then
+  # Why the install string rather than its body: 0.6.0 hands off the live DEBUG
+  # trap through __bp_trap_string, 0.7.0+ expands to \`__bp_install "$_"\` and reads
+  # the trap itself. Hardcoding either shape drops the user's trap on the other.
+  eval "$__bp_install_string"
+  # Installing ends in bash-preexec's own __bp_interactive_mode, which would bill
+  # the rest of this rcfile as the user's first command; clear it the way it does.
+  __bp_preexec_interactive_mode=""
+fi
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 __orca_append_prompt_command '__orca_in_debug_capture=1; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace __orca_in_debug_capture'
