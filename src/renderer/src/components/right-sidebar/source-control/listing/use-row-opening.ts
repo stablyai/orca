@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
@@ -155,6 +155,47 @@ export function useSourceControlRowOpening({
     },
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
+
+  // Bridge the editor's F7/Shift+F7 diff-change nav across file edges: at the
+  // file's last/first change, advance to the adjacent file in this panel's
+  // order. Refs keep the registration stable (useEffectEvent can't be handed
+  // to a keyboard handler); synced in a layout effect so a discarded render
+  // never publishes uncommitted entries to the navigator.
+  const setChangedFileDiffNavigator = useAppStore((s) => s.setChangedFileDiffNavigator)
+  const visibleSelectionEntriesRef = useRef(visibleSelectionEntries)
+  const activeOpenRowKeysRef = useRef(activeOpenRowKeys)
+  const handleOpenDiffRef = useRef(handleOpenDiff)
+  useLayoutEffect(() => {
+    visibleSelectionEntriesRef.current = visibleSelectionEntries
+    activeOpenRowKeysRef.current = activeOpenRowKeys
+    handleOpenDiffRef.current = handleOpenDiff
+  })
+  useEffect(() => {
+    const navigate = (direction: 'next' | 'previous'): boolean => {
+      const entries = visibleSelectionEntriesRef.current
+      const activeKeys = activeOpenRowKeysRef.current
+      // Why: activeOpenRowKeys may hold both unstaged:: and untracked:: keys for
+      // one path, but git makes those row kinds mutually exclusive per path, so
+      // first match is the only match.
+      const currentIndex = entries.findIndex((entry) => activeKeys.has(entry.key))
+      if (currentIndex === -1) {
+        return false
+      }
+      const adjacent = entries[direction === 'next' ? currentIndex + 1 : currentIndex - 1]
+      if (!adjacent) {
+        return false
+      }
+      handleOpenDiffRef.current(adjacent.entry)
+      return true
+    }
+    setChangedFileDiffNavigator(navigate)
+    return () => {
+      // Identity guard: a late unmount must not wipe a newer panel's registration.
+      if (useAppStore.getState().changedFileDiffNavigator === navigate) {
+        setChangedFileDiffNavigator(null)
+      }
+    }
+  }, [setChangedFileDiffNavigator])
 
   return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }
 }
