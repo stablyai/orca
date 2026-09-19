@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type * as HooksModule from '../../../hooks'
 
-const { getSshFilesystemProviderMock, getEffectiveHooksMock } = vi.hoisted(() => ({
-  getSshFilesystemProviderMock: vi.fn(),
-  getEffectiveHooksMock: vi.fn()
-}))
+const { getSshFilesystemProviderMock, getEffectiveHooksMock, requireSshGitProviderMock } =
+  vi.hoisted(() => ({
+    getSshFilesystemProviderMock: vi.fn(),
+    getEffectiveHooksMock: vi.fn(),
+    requireSshGitProviderMock: vi.fn()
+  }))
 vi.mock('../../../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
+vi.mock('../../../providers/ssh-git-dispatch', () => ({
+  requireSshGitProvider: requireSshGitProviderMock
 }))
 // Only `getEffectiveHooks` is stubbed: the module under test also imports `parseOrcaYaml` from
 // here, and replacing it wholesale made the parse throw into the fail-open catch — which answers
@@ -17,7 +22,7 @@ vi.mock('../../../hooks', async () => ({
   getEffectiveHooks: getEffectiveHooksMock
 }))
 
-import { getArchiveHooksForRemoval } from './worktree-archive-hook'
+import { getArchiveHooksForRemoval, runRemoteArchiveHook } from './worktree-archive-hook'
 
 const REMOTE_REPO: Repo = {
   id: 'r',
@@ -89,5 +94,99 @@ describe('getArchiveHooksForRemoval owner resolution', () => {
     })
 
     await expect(getArchiveHooksForRemoval(REMOTE_REPO, 'ssh-target')).resolves.toEqual(null)
+  })
+})
+
+describe('runRemoteArchiveHook', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requireSshGitProviderMock.mockReset()
+  })
+
+  it('runs through the explicitly named provider when the repo has no connectionId', async () => {
+    const execNonInteractive = vi.fn().mockResolvedValue({
+      stdout: 'archived',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    })
+    requireSshGitProviderMock.mockImplementation((connectionId: string) => {
+      if (connectionId === 'ssh-target') {
+        return { execNonInteractive }
+      }
+      return undefined
+    })
+
+    const result = await runRemoteArchiveHook(
+      REMOTE_REPO,
+      'ssh-target',
+      '/home/orca/repo/worktree',
+      'archive.sh'
+    )
+
+    expect(requireSshGitProviderMock).toHaveBeenCalledWith('ssh-target')
+    expect(result).toEqual({ success: true, output: 'archived', exitCode: 0 })
+  })
+
+  it('retains a numeric non-zero exit code in the failed result', async () => {
+    requireSshGitProviderMock.mockReturnValue({
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: 'archive failed',
+        exitCode: 7,
+        timedOut: false
+      })
+    })
+
+    const result = await runRemoteArchiveHook(
+      REMOTE_REPO,
+      'ssh-target',
+      '/home/orca/repo/worktree',
+      'archive.sh'
+    )
+
+    expect(result).toEqual({
+      success: false,
+      output: 'archive failed\narchive hook exited 7',
+      exitCode: 7
+    })
+  })
+
+  it('omits the exit code when the hook times out', async () => {
+    requireSshGitProviderMock.mockReturnValue({
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: 'partial output',
+        stderr: '',
+        exitCode: null,
+        timedOut: true
+      })
+    })
+
+    const result = await runRemoteArchiveHook(
+      REMOTE_REPO,
+      'ssh-target',
+      '/home/orca/repo/worktree',
+      'archive.sh'
+    )
+
+    expect(result).toEqual({
+      success: false,
+      output: 'partial output\narchive hook timed out'
+    })
+  })
+
+  it('omits the exit code when the hook cannot spawn', async () => {
+    requireSshGitProviderMock.mockReturnValue({
+      execNonInteractive: vi.fn().mockRejectedValue(new Error('spawn failed'))
+    })
+
+    const result = await runRemoteArchiveHook(
+      REMOTE_REPO,
+      'ssh-target',
+      '/home/orca/repo/worktree',
+      'archive.sh'
+    )
+
+    expect(result).toEqual({ success: false, output: 'spawn failed' })
   })
 })

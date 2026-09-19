@@ -1,11 +1,19 @@
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
+import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { cleanupUnusedWorktreePushTargetRemoteSsh } from '../ipc/worktree-remote'
+import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
+import {
+  getArchiveHooksForRemoval,
+  runRemoteArchiveHook
+} from '../ipc/worktrees/removal/worktree-archive-hook'
+import { gateWorktreeRemovalOnArchiveHook } from '../worktree-archive-hook-gate'
+import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
-import { gateRemovalWhereArchiveHookCannotRun } from '../worktree-archive-hook-gate'
 
 export async function removeRuntimeRegisteredRemoteWorktree(args: {
   repo: Repo
@@ -16,9 +24,8 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   provider: SshGitProvider
   /** From the resolved removal route; `repo.connectionId!` answered null for an `ssh:`-only row. */
   connectionId: string
-  /** #19334: this path runs no archive hook, so the gate below decides what that means. */
   runHooks: boolean
-  /** Explicit waiver for that refusal; without it the block has no exit on this path. */
+  /** Explicit waiver for a FAILED archive hook. Never implied by `force` — see #19334. */
   allowFailedArchiveHook: boolean
   force: boolean
   allowUnverifiedPtyStop: boolean
@@ -36,29 +43,51 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   finishRemoval: (result: RemoveWorktreeResult) => void
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, target, registeredWorktree, provider, connectionId } = args
-  // Precondition, before anything is stopped or deleted: no archive hook runs here, so a removal
-  // that asked for one refuses rather than deleting with the archive step silently skipped.
-  const hookGate = await gateRemovalWhereArchiveHookCannotRun({
-    repo,
-    connectionId,
-    worktreePath: registeredWorktree.path,
-    runHooks: args.runHooks,
-    allowFailedArchiveHook: args.allowFailedArchiveHook
-  })
+  const canonicalPath = registeredWorktree.path
+  const hooks = await getArchiveHooksForRemoval(repo, connectionId)
+  const archiveScript = hooks?.scripts.archive
+  let warning: string | undefined
+  let archiveHookOverride: ArchiveHookOverride | undefined
+
+  if (archiveScript && args.runHooks) {
+    const result = await runRemoteArchiveHook(repo, connectionId, canonicalPath, archiveScript)
+    archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
+      worktreePath: canonicalPath,
+      result,
+      allowFailure: args.allowFailedArchiveHook
+    })
+  } else if (archiveScript) {
+    warning = `orca.yaml archive hook skipped for ${canonicalPath}; pass --run-hooks to run it.`
+    console.warn(`[hooks] ${warning}`)
+  }
+
+  const refreshedWorktrees = await provider.listWorktrees(repo.path)
+  const refreshed = findRegisteredDeletableWorktree(repo.path, canonicalPath, refreshedWorktrees)
+  if (!refreshed) {
+    throw new Error(
+      `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
+    )
+  }
+  try {
+    assertWorktreeUnlockedForRemoval(refreshed)
+  } catch (error) {
+    throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
+  }
+
   const removeOptions = !args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}
-  const gate = await args.acquireWatcherRemoval(registeredWorktree.path, connectionId)
+  const gate = await args.acquireWatcherRemoval(refreshed.path, connectionId)
   let rawResult: RemoveWorktreeResult | undefined
   let completed = false
   try {
     await args.stopPtys()
     rawResult = await (Object.keys(removeOptions).length > 0
-      ? provider.removeWorktree(registeredWorktree.path, args.force, removeOptions)
-      : provider.removeWorktree(registeredWorktree.path, args.force))
+      ? provider.removeWorktree(refreshed.path, args.force, removeOptions)
+      : provider.removeWorktree(refreshed.path, args.force))
     completed = true
   } finally {
     await gate.finish(completed)
   }
-  const result = args.preserveBranchHead(rawResult, registeredWorktree.head)
+  const result = args.preserveBranchHead(rawResult, refreshed.head)
   await cleanupUnusedWorktreePushTargetRemoteSsh(
     provider,
     repo.path,
@@ -70,7 +99,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   args.finishRemoval(result)
   return {
     ...result,
-    ...(hookGate.override ? { archiveHookOverride: hookGate.override } : {}),
-    ...(hookGate.warning ? { warning: hookGate.warning } : {})
+    ...(archiveHookOverride ? { archiveHookOverride } : {}),
+    ...(warning ? { warning } : {})
   }
 }

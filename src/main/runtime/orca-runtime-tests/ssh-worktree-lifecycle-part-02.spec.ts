@@ -22,6 +22,7 @@ import {
   unregisterSshFilesystemProvider,
   unregisterSshGitProvider
 } from '../orca-runtime-test-mocks.spec'
+import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
@@ -425,6 +426,152 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(`${TEST_REPO_ID}::/remote/feature`)
+  })
+  it('runs an SSH archive hook before stopping PTYs and deleting the worktree', async () => {
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const remoteStore = { ...store, getRepos: () => [remoteRepo], getRepo: () => remoteRepo }
+    const gitProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature',
+          head: 'abc',
+          branch: 'feature/foo',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: 'archived',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      }),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    registerSshGitProvider('ssh-1', gitProvider as never)
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
+      scripts: { archive: 'echo archive' }
+    })
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([
+        {
+          id: 'pty-remote',
+          cwd: '/remote/feature',
+          title: 'shell',
+          worktreeId: `${TEST_REPO_ID}::/remote/feature`
+        }
+      ]),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
+
+    try {
+      await runtime.removeManagedWorktree('path:/remote/feature', {
+        force: true,
+        runHooks: true
+      })
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+      vi.mocked(getEffectiveHooksFromConfig).mockReset().mockReturnValue(null)
+    }
+
+    expect(gitProvider.execNonInteractive).toHaveBeenCalledWith(
+      '/bin/bash',
+      ['-lc', 'echo archive'],
+      '/remote/feature',
+      expect.any(Number),
+      undefined,
+      expect.anything()
+    )
+    expect(gitProvider.execNonInteractive.mock.invocationCallOrder[0]).toBeLessThan(
+      ptyProvider.shutdown.mock.invocationCallOrder[0]
+    )
+    expect(ptyProvider.shutdown.mock.invocationCallOrder[0]).toBeLessThan(
+      gitProvider.removeWorktree.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('warns and skips the SSH archive hook when runHooks is false', async () => {
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const remoteStore = { ...store, getRepos: () => [remoteRepo], getRepo: () => remoteRepo }
+    const gitProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature',
+          head: 'abc',
+          branch: 'feature/foo',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      }),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    registerSshGitProvider('ssh-1', gitProvider as never)
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
+      scripts: { archive: 'echo archive' }
+    })
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([]),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
+
+    let result: RemoveWorktreeResult & { warning?: string }
+    try {
+      result = await runtime.removeManagedWorktree('path:/remote/feature', {
+        force: true,
+        runHooks: false
+      })
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+      vi.mocked(getEffectiveHooksFromConfig).mockReset().mockReturnValue(null)
+    }
+
+    expect(result.warning).toBe(
+      'orca.yaml archive hook skipped for /remote/feature; pass --run-hooks to run it.'
+    )
+    expect(gitProvider.execNonInteractive).not.toHaveBeenCalled()
+    expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
   })
 
   // Regression: `repoId::path` ids repeat across hosts, so the SSH delete's runtime sweep used to
