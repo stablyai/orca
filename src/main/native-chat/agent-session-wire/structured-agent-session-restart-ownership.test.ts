@@ -540,6 +540,45 @@ it('retains acquisition through slow continuation settlement, then releases it',
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
+// The offer's real death. Reopening the chat hands the provider back at the same proved cursor,
+// which is everything reconnecting would have done — so it must not be advertised again, and must
+// not be written back for the next launch to advertise either.
+it('stops offering a chat the user recovered by reopening it', async () => {
+  const { host, root, store } = await interruptedRestart()
+  expect(await host.restartResume.list()).toHaveLength(1)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  await host.hold(SESSION, 'pane')
+  host.release(SESSION, 'pane')
+  await vi.advanceTimersByTimeAsync(GRACE)
+  // The whole eviction, not just the provider stop: the lease returns to `released` on the step
+  // before the last, and until it does the offer is refused for a reason that is not recovery.
+  await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+  expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+  vi.useRealTimers()
+
+  expect(await host.restartResume.list()).toEqual([])
+  await host.restartResume.recordMarkers()
+  expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toEqual([])
+})
+
+// The snooze, through the real quit path rather than a session map that cannot move: eviction
+// forgets sessions BEFORE the write-back runs, so a marker whose journal is only reachable while
+// the host still indexes it is exactly what a mock harness cannot catch.
+it('carries a snoozed offer through a real teardown', async () => {
+  const { host, root } = await interruptedRestart()
+  expect(await host.restartResume.list()).toHaveLength(1)
+  await host.flushAllStreamedEvents({ trigger: 'quit' })
+  expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toHaveLength(1)
+})
+
+// Nothing claimed the capsule this launch, so it is still exactly as the last teardown left it and
+// no journal here was opened to judge it. Answering for it anyway deletes an offer nobody was shown.
+it('keeps a durable offer intact through a teardown that never claimed it', async () => {
+  const { host, root } = await interruptedRestart()
+  await host.flushAllStreamedEvents({ trigger: 'quit' })
+  expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toHaveLength(1)
+})
+
 it('shares one real-file take across concurrent first recovery requests', async () => {
   const { host, root } = await interruptedRestart()
   const take = vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'take')

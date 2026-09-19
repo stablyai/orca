@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { Info, RotateCcw } from 'lucide-react'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
@@ -17,15 +17,22 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../shared/agent-session-restart-continuation'
 import { ResumeOnRestartGroups } from './NativeChatResumeOnRestartGroups'
 import {
+  announceRestartDismissUnconfirmed,
   announceRestartResults,
   announceRestartUnconfirmed,
   type RestartActionOutcome
 } from './native-chat-restart-action-notifications'
+import { selectedResumeSessionIds } from './native-chat-resume-on-restart-grouping'
 import {
-  allResumeSessionIds,
-  selectedResumeSessionIds,
-  type ResumeCandidate
-} from './native-chat-resume-on-restart-grouping'
+  consumeNativeChatResumeOnRestartDialogRequest,
+  getNativeChatResumeOnRestartDialogRequest,
+  subscribeNativeChatResumeOnRestartDialog
+} from './native-chat-resume-on-restart-dialog'
+import {
+  clearNativeChatRestartOffer,
+  settleNativeChatRestartOffer,
+  useNativeChatRestartOffer
+} from './native-chat-resume-on-restart-store'
 
 /**
  * What would be reconnected, shown before anything runs.
@@ -39,9 +46,10 @@ import {
  * Reconnecting restores the session at the point it stopped; it does NOT continue the interrupted
  * reply — that was measured. Every user-facing string here has to keep saying so.
  *
- * Turning the offer down spends the markers. A prompt that returns at every launch is worse than
- * the problem it solves, and nothing is lost: opening a chat takes a resume-capable hold, which
- * re-acquires the provider at the same cursor.
+ * Closing is a SNOOZE: the host keeps the offer and the status bar keeps a way back to it, so
+ * looking around before deciding cannot cost the recovery. Dismiss all is the only path that spends
+ * it, and even that loses nothing — opening a chat takes a resume-capable hold, which re-acquires
+ * the provider at the same cursor and retires the offer for it.
  */
 
 // Structured sessions run on the machine hosting the runtime; both launch resolvers refuse anything
@@ -93,90 +101,49 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   const structuredEnabled = useAppStore(
     (store) => store.settings?.experimentalStructuredNativeChat === true
   )
-  const launchOffer = useRef<Promise<ResumeCandidate[]> | null>(null)
+  const { candidates, listedAt } = useNativeChatRestartOffer(structuredEnabled)
+  // Open is an external one-shot request, never mirrored into local state: the launch load and the
+  // status-bar entry both raise it, and a copy here would go stale against whichever raised it last.
+  const open = useSyncExternalStore(
+    subscribeNativeChatResumeOnRestartDialog,
+    getNativeChatResumeOnRestartDialogRequest,
+    getNativeChatResumeOnRestartDialogRequest
+  )
   const updateSettings = useAppStore((store) => store.updateSettings)
-  const [candidates, setCandidates] = useState<ResumeCandidate[]>([])
-  /** Clock stamped when the list arrived. Row ages read against this rather than a render-time
-   *  `Date.now()`, so they stay stable across re-renders and the render stays pure. */
-  const [listedAt, setListedAt] = useState(0)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [resolved, setResolved] = useState(false)
   /**
-   * Which of the OFFERED chats to act on. Defaults to all, and is only ever narrowed by the user.
+   * Which of the OFFERED chats to leave out. Tracked as EXCLUSIONS rather than a selection because
+   * the list is the host's and arrives — and shrinks — under an open dialog; a stored selection
+   * would need seeding from an effect every time it changed.
    *
-   * This changes which eligible chats are acted on, never what is eligible: ids are seeded from the
-   * host's own answer, `selectedResumeSessionIds` intersects back against it before any call, and
-   * the host re-derives the predicate regardless of what is sent.
+   * This changes which eligible chats are acted on, never what is eligible: the ids below are
+   * intersected back against the host's own list, and the host re-derives the predicate regardless.
    */
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set())
+  const selected = useMemo(
+    () =>
+      new Set(
+        candidates
+          .map((candidate) => candidate.sessionId)
+          .filter((sessionId) => !excluded.has(sessionId))
+      ),
+    [candidates, excluded]
+  )
 
   const toggleSelected = useCallback((sessionId: string, checked: boolean) => {
-    setSelected((current) => {
+    setExcluded((current) => {
       const next = new Set(current)
       if (checked) {
-        next.add(sessionId)
-      } else {
         next.delete(sessionId)
+      } else {
+        next.add(sessionId)
       }
       return next
     })
   }, [])
 
-  useEffect(() => {
-    if (!structuredEnabled || resolved) {
-      return
-    }
-    let cancelled = false
-    // Fetched after mount, never awaited by startup: the workspace is usable first.
-    const loadOffer = async (): Promise<ResumeCandidate[]> => {
-      // The preference belongs to this launch's request; later saves cannot dispatch another.
-      const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
-      try {
-        const offered = await callStructuredAgentSession<{ sessions: ResumeCandidate[] }>(
-          LOCAL,
-          'agentSession.restartResumable'
-        )
-        if (offered.sessions.length === 0) {
-          return []
-        }
-        if (autoResume) {
-          // Identical call to the buttons below; the host re-derives eligibility either way.
-          const result = await callStructuredAgentSession<{ results: RestartActionOutcome[] }>(
-            LOCAL,
-            'agentSession.restartResume',
-            {}
-          ).catch(() => {
-            announceRestartUnconfirmed(offered.sessions.length, 'reconnect')
-            return null
-          })
-          if (!result) {
-            return []
-          }
-          // Automatic must never be silent: someone who ticked the box months ago still sees this.
-          announceRestartResults(allResumeSessionIds(offered.sessions), result.results, 'reconnect')
-          return []
-        }
-        return offered.sessions
-      } catch {
-        // A host that cannot answer offers nothing. There is no failure worth a modal of its own.
-        return []
-      }
-    }
-    launchOffer.current ??= loadOffer()
-    void launchOffer.current.then((offered) => {
-      if (!cancelled) {
-        setListedAt(Date.now())
-        setCandidates(offered)
-        setSelected(new Set(allResumeSessionIds(offered)))
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [resolved, structuredEnabled])
-
-  /** Applied on whichever action the user takes, so the box means the same thing either way. */
+  /** Applied on whichever action the user takes, so the box means the same thing every way out. */
   const persistPreference = useCallback(async (): Promise<void> => {
     if (dontAskAgain) {
       await updateSettings({ nativeChatResumeWorkOnRestart: true }).catch(() => undefined)
@@ -184,34 +151,29 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   }, [dontAskAgain, updateSettings])
 
   const resume = useCallback(
-    async (sessionIds?: string[]): Promise<void> => {
+    async (sessionIds: string[]): Promise<void> => {
       setBusy(true)
       try {
         void persistPreference()
         const result = await callStructuredAgentSession<{ results: RestartActionOutcome[] }>(
           LOCAL,
           'agentSession.restartResume',
-          sessionIds ? { sessionIds } : {}
+          { sessionIds }
         )
         const settled = new Set(result.results.map((entry) => entry.sessionId))
-        const remaining = candidates.filter((candidate) => !settled.has(candidate.sessionId))
-        announceRestartResults(
-          sessionIds ?? allResumeSessionIds(candidates),
-          result.results,
-          'reconnect'
-        )
-        setCandidates(remaining)
+        announceRestartResults(sessionIds, result.results, 'reconnect')
+        settleNativeChatRestartOffer([...settled])
         // An empty result means the host settled none of them — never leave the dialog sitting open
         // behind a button that did nothing.
-        if (remaining.length === 0 || result.results.length === 0) {
-          setResolved(true)
+        if (
+          settled.size === 0 ||
+          candidates.every((candidate) => settled.has(candidate.sessionId))
+        ) {
+          consumeNativeChatResumeOnRestartDialogRequest()
         }
       } catch {
-        announceRestartUnconfirmed(
-          (sessionIds ?? allResumeSessionIds(candidates)).length,
-          'reconnect'
-        )
-        setResolved(true)
+        announceRestartUnconfirmed(sessionIds.length, 'reconnect')
+        consumeNativeChatResumeOnRestartDialogRequest()
       } finally {
         setBusy(false)
       }
@@ -232,30 +194,50 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
       try {
         void persistPreference()
         const result = await callStructuredAgentSession<{
+          /** Which chats the host actually reconnected, and so which claims it spent. Optional
+           *  because the payload is unvalidated: a shape this side did not expect must not turn a
+           *  delivered continuation into a failure report. */
+          resumed?: RestartActionOutcome[]
           continued: RestartActionOutcome[]
         }>(LOCAL, 'agentSession.restartContinue', { sessionIds })
         announceRestartResults(sessionIds, result.continued, 'continue')
-        setResolved(true)
+        // Continuing spends the same claims reconnecting does, so the offer has to shrink the same
+        // way — otherwise the status bar keeps counting chats the host has already handed back.
+        settleNativeChatRestartOffer((result.resumed ?? []).map((entry) => entry.sessionId))
       } catch {
         announceRestartUnconfirmed(sessionIds.length, 'continue')
-        setResolved(true)
       } finally {
         setBusy(false)
+        consumeNativeChatResumeOnRestartDialogRequest()
       }
     },
     [persistPreference]
   )
 
-  /** Any close is a decline, and a decline spends the markers so this cannot return every launch. */
-  const decline = useCallback(async (): Promise<void> => {
-    setResolved(true)
+  /** Closing is a snooze: the host keeps the offer and the status bar keeps the way back to it. */
+  const snooze = useCallback((): void => {
+    consumeNativeChatResumeOnRestartDialogRequest()
     void persistPreference()
-    await callStructuredAgentSession(LOCAL, 'agentSession.restartResumableDismiss', {}).catch(
-      () => undefined
-    )
   }, [persistPreference])
 
-  if (!structuredEnabled || resolved || candidates.length === 0) {
+  /** The only path that spends the markers. */
+  const dismissAll = useCallback(async (): Promise<void> => {
+    setBusy(true)
+    void persistPreference()
+    // The dismissal is the user's and lands here, whatever the host answers. A write Orca cannot
+    // confirm is reported rather than allowed to trap the dialog open behind a rejected promise.
+    consumeNativeChatResumeOnRestartDialogRequest()
+    try {
+      await callStructuredAgentSession(LOCAL, 'agentSession.restartResumableDismiss', {})
+      clearNativeChatRestartOffer()
+    } catch {
+      announceRestartDismissUnconfirmed()
+    } finally {
+      setBusy(false)
+    }
+  }, [persistPreference])
+
+  if (!structuredEnabled || !open || candidates.length === 0) {
     return null
   }
 
@@ -268,7 +250,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
       open
       onOpenChange={(next) => {
         if (!next && !busy) {
-          void decline()
+          snooze()
         }
       }}
     >
@@ -325,12 +307,12 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
           />
         </div>
 
-        {/* Says the quiet part: declining is not destructive, because opening the chat still
-            re-acquires it at the same cursor. */}
+        {/* Names both exits, because they are not the same: one keeps the offer, one spends it.
+            Neither loses the chats themselves. */}
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.NativeChatResumeOnRestartModal.notNowHint',
-            'Not now keeps everything — you can reopen any chat later and carry on from the same point.'
+            'Not now keeps this list in the status bar. Dismiss all clears it — either way you can reopen any chat later and carry on from the same point.'
           )}
         </p>
 
@@ -359,10 +341,21 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
           </span>
         </label>
 
+        {/* Two groups, not three buttons: the exits stay together on the left so "Not now" is not
+            stranded between them and the actions. */}
         <DialogFooter className="sm:justify-between">
-          <Button variant="secondary" size="sm" disabled={busy} onClick={() => void decline()}>
-            {translate('auto.components.NativeChatResumeOnRestartModal.notNow', 'Not now')}
-          </Button>
+          <span className="flex items-center gap-1.5">
+            {/* Quiet, not destructive: this spends an offer, and opening a chat still reconnects it. */}
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void dismissAll()}>
+              {translate(
+                'auto.components.NativeChatResumeOnRestartModal.dismissAll',
+                'Dismiss all'
+              )}
+            </Button>
+            <Button variant="secondary" size="sm" disabled={busy} onClick={snooze}>
+              {translate('auto.components.NativeChatResumeOnRestartModal.notNow', 'Not now')}
+            </Button>
+          </span>
           <span className="flex items-center gap-1.5">
             <ContinuationExplainer />
             {/* Secondary, never the default: continuing sends a message, reconnecting does not. */}

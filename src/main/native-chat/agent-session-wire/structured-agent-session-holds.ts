@@ -23,6 +23,8 @@ export type StructuredAgentSessionHoldsDeps = {
   hasProviderChild: (sessionId: string) => boolean
   isTurnActive: (sessionId: string) => boolean
   evict: (sessionId: string) => Promise<void>
+  /** A resume-capable hold now HAS a provider child. Bookkeeping only — see the call site. */
+  onResumeCapableAcquisition?: (sessionId: string) => void
   onError?: (input: { sessionId: string; error: unknown }) => void
   graceMs?: number
 }
@@ -60,23 +62,32 @@ export class StructuredAgentSessionHolds {
     // Unconditional, not only on the first-holder edge: a second surface arriving during the grace
     // window must cancel the pending release too.
     this.clock.cancel(sessionId)
-    if (options.resume === false || this.deps.hasProviderChild(sessionId)) {
+    if (options.resume === false) {
       return
     }
+    if (!this.deps.hasProviderChild(sessionId)) {
+      try {
+        await this.deps.resume(sessionId)
+        if (!this.deps.hasProviderChild(sessionId)) {
+          throw new Error('agent_session_ownership_unknown')
+        }
+        // The last surface can disconnect before acquisition makes a child available to release.
+        if (!this.disposed && !this.holders.isHeld(sessionId)) {
+          this.clock.arm(sessionId)
+        }
+      } catch (error) {
+        if (!alreadyHeld && incarnation !== undefined) {
+          this.release(sessionId, holderId, incarnation)
+        }
+        throw error
+      }
+    }
+    // Announced only once the child exists, and never allowed to undo the hold that made it: a
+    // surface that re-acquired the provider has recovered the session whatever the bookkeeping does.
     try {
-      await this.deps.resume(sessionId)
-      if (!this.deps.hasProviderChild(sessionId)) {
-        throw new Error('agent_session_ownership_unknown')
-      }
-      // The last surface can disconnect before acquisition makes a child available to release.
-      if (!this.disposed && !this.holders.isHeld(sessionId)) {
-        this.clock.arm(sessionId)
-      }
+      this.deps.onResumeCapableAcquisition?.(sessionId)
     } catch (error) {
-      if (!alreadyHeld && incarnation !== undefined) {
-        this.release(sessionId, holderId, incarnation)
-      }
-      throw error
+      this.deps.onError?.({ sessionId, error })
     }
   }
 

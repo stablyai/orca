@@ -192,9 +192,11 @@ export function createStructuredAgentSessionHolds(
     reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
     attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
     close: (sessionId: string) => Promise<void>
+    onResumeCapableAcquisition: (sessionId: string) => void
   }
 ): StructuredAgentSessionHolds {
   return new StructuredAgentSessionHolds({
+    onResumeCapableAcquisition: input.onResumeCapableAcquisition,
     resume: (sessionId) =>
       resumeStructuredAgentSessionForHold(
         { ...context, reconcileLeases: input.reconcileLeases },

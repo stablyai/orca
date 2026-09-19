@@ -60,6 +60,16 @@ export function announceRestartUnconfirmed(count: number, action: 'reconnect' | 
   )
 }
 
+/** A dismissal Orca could not confirm. The offer belongs to the host, so say it may still be there. */
+export function announceRestartDismissUnconfirmed(): void {
+  toast(
+    translate(
+      'auto.components.NativeChatResumeOnRestartModal.dismissUnconfirmed',
+      'Dismissing the reconnect offer was not confirmed — it may still be in the status bar.'
+    )
+  )
+}
+
 export function announceRestartResults(
   requested: readonly string[],
   results: readonly RestartActionOutcome[],

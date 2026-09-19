@@ -1957,7 +1957,7 @@
         "notNow": "Not now",
         "untitled": "Untitled chat",
         "listLabel": "Chats that would be reconnected",
-        "notNowHint": "Not now keeps everything — you can reopen any chat later and carry on from the same point.",
+        "notNowHint": "Not now keeps this list in the status bar. Dismiss all clears it — either way you can reopen any chat later and carry on from the same point.",
         "dontAskAgain": "Don't ask again — reconnect automatically next time",
         "dontAskAgainHint": "Qualifying chats will be reconnected automatically after a restart, and Orca will tell you when it happens. You can turn this off in Settings → Experimental → Chat UI.",
         "resumedOne": "Reconnected 1 chat",
@@ -1983,7 +1983,9 @@
         "continueRefused_other": "{{value0}} chats could not be continued. Open them to continue manually.",
         "reconnectRefused": "{{value0}} chats could not be reconnected. You can still open them normally.",
         "reconnectRefused_one": "{{value0}} chat could not be reconnected. You can still open it normally.",
-        "reconnectRefused_other": "{{value0}} chats could not be reconnected. You can still open them normally."
+        "reconnectRefused_other": "{{value0}} chats could not be reconnected. You can still open them normally.",
+        "dismissAll": "Dismiss all",
+        "dismissUnconfirmed": "Dismissing the reconnect offer was not confirmed — it may still be in the status bar."
       },
       "StarNagCard": {
         "92b0f9d921": "is authenticated and try again.",
@@ -4073,6 +4075,13 @@
             "contact_note": "The host may still be running; only the Orca connection is unavailable.",
             "last_connected": "Last connected {{value0}}",
             "reconnect_attempt": "Attempt {{value0}}"
+          },
+          "NativeChatResumeStatusSegment": {
+            "labelOne": "1 chat to reconnect",
+            "label": "{{value0}} chats to reconnect",
+            "ariaLabelOne": "1 chat available to reconnect",
+            "ariaLabel": "{{value0}} chats available to reconnect",
+            "tooltip": "Open interrupted chats available to reconnect"
           }
         }
       },

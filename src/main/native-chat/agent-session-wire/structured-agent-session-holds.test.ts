@@ -174,6 +174,51 @@ describe('holds', () => {
     holds.dispose()
   })
 
+  // What retires a restart recovery offer: the chat is back, however it got there.
+  it('announces a resume-capable acquisition and never a retained one', async () => {
+    let child = false
+    const acquired = vi.fn()
+    const holds = new StructuredAgentSessionHolds({
+      resume: async () => {
+        child = true
+      },
+      hasProviderChild: () => child,
+      isTurnActive: () => false,
+      evict: async () => {},
+      onResumeCapableAcquisition: acquired,
+      graceMs: 1
+    })
+
+    await holds.hold('session-1', 'stream-1', { resume: false })
+    expect(acquired).not.toHaveBeenCalled()
+
+    await holds.hold('session-1', 'chat-1')
+    expect(acquired.mock.calls).toEqual([['session-1']])
+
+    // A surface arriving on a child that already exists has the session back just the same.
+    await holds.hold('session-1', 'chat-2')
+    expect(acquired.mock.calls).toEqual([['session-1'], ['session-1']])
+    holds.dispose()
+  })
+
+  it('never announces an acquisition that proved no provider child', async () => {
+    const acquired = vi.fn()
+    const holds = new StructuredAgentSessionHolds({
+      resume: async () => {},
+      hasProviderChild: () => false,
+      isTurnActive: () => false,
+      evict: async () => {},
+      onResumeCapableAcquisition: acquired,
+      graceMs: 1
+    })
+
+    await expect(holds.hold('session-1', 'chat-1')).rejects.toThrow(
+      'agent_session_ownership_unknown'
+    )
+    expect(acquired).not.toHaveBeenCalled()
+    holds.dispose()
+  })
+
   it('fails a write-capable hold when resume proves no provider child', async () => {
     const holds = new StructuredAgentSessionHolds({
       resume: async () => {},

@@ -119,7 +119,10 @@ export class StructuredAgentSessionHost {
     this.holds = createStructuredAgentSessionHolds(this.lifetimeContext(), {
       reconcileLeases: this.reconcileLeases,
       attach: (params) => this.attach({ callerKey: 'trusted-local:surface-hold' }, params),
-      close: (sessionId) => this.close(sessionId)
+      close: (sessionId) => this.close(sessionId),
+      // Reopening a chat IS the recovery the restart offer would have performed, so the offer for
+      // it stops here rather than waiting out the marker's TTL and returning every launch.
+      onResumeCapableAcquisition: (sessionId) => this.restartResume.recoveredByHold(sessionId)
     })
     this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
       reconcile: this.reconcileLeases,

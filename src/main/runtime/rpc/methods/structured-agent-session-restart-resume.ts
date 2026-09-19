@@ -22,8 +22,8 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Spends the markers without resuming; see the collaborator for why turning the offer down
-    // consumes it rather than leaving it to return at every launch.
+    // Explicitly abandons the markers without resuming. Closing the dialog is a snooze and does
+    // not call this method, so the status-bar entry can reopen the offer later.
     name: 'agentSession.restartResumableDismiss',
     params: RestartResumableParams,
     handler: async (_params, ctx) => {

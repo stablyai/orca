@@ -334,17 +334,147 @@ describe('the restart-resume surface', () => {
     expect(held).toEqual([])
   })
 
-  // Quitting while the prompt is open: the offered session has no provider child in THIS
-  // generation, so teardown mints no marker for it and the replace-the-whole-set write clears the
-  // old one. The offer is discarded rather than resurrected, and nothing can double-fire.
-  it('leaves no marker behind when the user quits with the offer still open', async () => {
-    const { restartResume, live, recorded } = surface({})
+  // A launch that never read the offer must not answer for it — the flag was off, the first read
+  // failed, the window never mounted. NO SESSION IS INDEXED here, which is the whole point: that is
+  // what an unread offer looks like, and re-deriving against it refuses every marker, which is
+  // indistinguishable from deleting a recovery the user was never shown.
+  it('leaves a durable offer this launch never claimed intact at teardown', async () => {
+    const { restartResume, live, recorded } = surface({ sessions: new Map() })
 
     restartResume.captureMarkers('quit')
     await restartResume.recordMarkers()
 
+    expect(recorded).toEqual([[expect.objectContaining({ sessionId: SESSION })]])
+    expect([...live.keys()]).toEqual([SESSION])
+  })
+
+  // Teardown is RETRIED when a phase fails, and its own write-back read must not make the second
+  // attempt look like a launch that had read the offer — that would re-derive against a session map
+  // eviction has already emptied, and answer "nothing is resumable" for every carried marker.
+  it('carries the same unread offer again when teardown is repeated', async () => {
+    const { restartResume, live, recorded } = surface({ sessions: new Map() })
+
+    await restartResume.recordMarkers()
+    await restartResume.recordMarkers()
+
+    expect(recorded.map((entry) => entry.map((marker) => marker.sessionId))).toEqual([
+      [SESSION],
+      [SESSION]
+    ])
+    expect([...live.keys()]).toEqual([SESSION])
+  })
+
+  // A take that failed is not an empty offer. The markers are still on disk, unread and unknowable,
+  // and an empty write over them deletes exactly the recovery nobody was shown.
+  it('writes nothing over a durable offer it could not read', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { restartResume, live, recorded } = surface({ clearFails: true, sessions: new Map() })
+
+      restartResume.captureMarkers('quit')
+      await restartResume.recordMarkers()
+
+      expect(recorded).toEqual([])
+      expect([...live.keys()]).toEqual([SESSION])
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  // ...but a witness from THIS teardown still has to reach disk, whatever the take did.
+  it('still records this teardown witness after a take it could not read', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { restartResume, recorded } = surface({
+        clearFails: true,
+        sessions: new Map([
+          [SESSION, { journal: journal([turnItem('turn-2', 'running')]), hasProviderChild: true }]
+        ])
+      })
+
+      restartResume.captureMarkers('update')
+      restartResume.confirmStoppedMarker(SESSION)
+      await restartResume.recordMarkers()
+
+      expect(recorded[0]).toMatchObject([
+        { sessionId: SESSION, work: { kind: 'turn', id: 'turn-2' } }
+      ])
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  it('persists a snoozed claimed offer across the next teardown', async () => {
+    const { restartResume, recorded } = surface({})
+
+    expect(await restartResume.list()).toHaveLength(1)
+    await restartResume.recordMarkers()
+
+    expect(recorded).toEqual([
+      [
+        expect.objectContaining({
+          sessionId: SESSION,
+          recordedAt: NOW,
+          trigger: 'quit'
+        })
+      ]
+    ])
+  })
+
+  // Both markers pass the predicate here, so nothing but PRECEDENCE decides which one is kept — and
+  // a stale claim that outranks this teardown's own witness makes the next launch refuse the chat
+  // that was actually mid-turn.
+  it('keeps this teardown witness over the stale claim for the same chat', async () => {
+    const { restartResume, recorded } = surface({
+      sessions: new Map([
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'interrupted')], false, [
+              submission('msg-2', 'pending')
+            ]),
+            hasProviderChild: true
+          }
+        ]
+      ])
+    })
+
+    expect(await restartResume.list()).toHaveLength(1)
+    restartResume.captureMarkers('update')
+    restartResume.confirmStoppedMarker(SESSION)
+    await restartResume.recordMarkers()
+
+    expect(recorded[0]).toMatchObject([
+      { sessionId: SESSION, work: { kind: 'submission', id: 'msg-2' }, trigger: 'update' }
+    ])
+  })
+
+  // Re-derived, not round-tripped: a marker this host would no longer offer is not handed to the
+  // next launch to refuse all over again.
+  it('does not carry a snoozed marker its own predicate now refuses', async () => {
+    const { restartResume, recorded } = surface({
+      sessions: new Map([
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: false }]
+      ])
+    })
+
+    expect(await restartResume.list()).toEqual([])
+    await restartResume.recordMarkers()
+
     expect(recorded).toEqual([[]])
-    expect(live.size).toBe(0)
+  })
+
+  // Recovery ends the ADVERTISING, not the evidence: the chat is back, so it must not be offered or
+  // written back, while a user looking at it can still ask the agent to carry on.
+  it('stops offering and stops persisting a chat a hold recovered', async () => {
+    const { restartResume, recorded } = surface({})
+
+    expect(await restartResume.list()).toHaveLength(1)
+    restartResume.recoveredByHold(SESSION)
+
+    expect(await restartResume.list()).toEqual([])
+    await restartResume.recordMarkers()
+    expect(recorded).toEqual([[]])
   })
 
   it('re-marks a session whose resume is already running when the next quit lands', async () => {

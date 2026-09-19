@@ -109,6 +109,16 @@ describe('non-backed-up recovery capsule', () => {
     }
   )
 
+  it.each(['{', JSON.stringify({ version: 1, markers: [marker(), { sessionId: 5 }] })])(
+    'clears the corrupt capsule it refused so a later take is not refused too: %s',
+    async (raw) => {
+      await writeFile(filePath, raw)
+      await expect(capsule.take(NOW)).rejects.toThrow()
+      expect(await new AgentSessionRecoveryCapsule(directory).take(NOW)).toEqual([])
+      expect(await capsule.take(NOW)).toEqual([])
+    }
+  )
+
   it('refuses failed reads', async () => {
     await mkdir(filePath)
     await expect(capsule.take(NOW)).rejects.toThrow()
