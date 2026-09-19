@@ -144,6 +144,7 @@ describe('BaseRefPicker keyboard navigation', () => {
     ])
     expect(getActiveOption()).toBeNull()
     expect(getInput().getAttribute('aria-activedescendant')).toBeNull()
+    expect(getInput().getAttribute('aria-label')).toBe('Base branch')
   })
 
   it('moves the highlight with ArrowDown and ArrowUp and mirrors it in aria-activedescendant', async () => {
@@ -304,6 +305,20 @@ describe('BaseRefPicker keyboard navigation', () => {
     expect(await pressKey('Enter', imeMark)).toBe(false)
 
     expect(onSelect).not.toHaveBeenCalled()
+    expect(getActiveRef()).toBe('origin/main')
+  })
+
+  it.each([
+    ['isComposing', { isComposing: true }],
+    ['keyCode 229', { keyCode: 229 }]
+  ])('leaves arrow keys to the IME during composition (%s)', async (_label, imeMark) => {
+    await render(vi.fn())
+    await searchFor('origin')
+    await pressKey('ArrowDown')
+
+    expect(await pressKey('ArrowDown', imeMark)).toBe(false)
+    expect(await pressKey('ArrowUp', imeMark)).toBe(false)
+
     expect(getActiveRef()).toBe('origin/main')
   })
 

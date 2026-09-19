@@ -193,13 +193,17 @@ export function BaseRefPicker({
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    // Why: while composing, arrows and Enter belong to the IME (candidate navigation, confirm).
+    if (isImeCompositionKeyDown(event)) {
+      return
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       moveActiveIndex(event.key === 'ArrowDown' ? 1 : -1)
       return
     }
-    // Why: an IME-confirming Enter, or one pressed over a stale list mid-search, must not pick a ref.
-    if (event.key === 'Enter' && !isImeCompositionKeyDown(event) && showResults) {
+    // Why: mid-search the visible list is stale, so Enter must not pick from it.
+    if (event.key === 'Enter' && showResults) {
       const activeRef = baseRefResults[activeIndex]
       if (activeRef === undefined) {
         return
@@ -279,6 +283,10 @@ export function BaseRefPicker({
         onChange={(e) => setBaseRefQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         role="combobox"
+        aria-label={translate(
+          'auto.components.right.sidebar.CreateHostedReviewBasePicker.205ef284fa',
+          'Base branch'
+        )}
         aria-autocomplete="list"
         aria-expanded={showResults}
         aria-controls={showResults ? resultsId : undefined}
