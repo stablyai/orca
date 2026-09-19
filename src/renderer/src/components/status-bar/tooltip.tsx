@@ -35,14 +35,27 @@ export {
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return 'just now'
+    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return `${mins}m ago`
+    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{value0}}m ago', {
+      value0: mins
+    })
   }
   const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{value0}}h ago', {
+    value0: hours
+  })
+}
+
+export function formatLocalizedResetCountdown(ms: number): string {
+  const duration = formatResetDuration(ms)
+  return duration === 'now'
+    ? translate('auto.components.status.bar.tooltip.resetsNow', 'Resets now')
+    : translate('auto.components.status.bar.tooltip.resetsIn', 'Resets in {{value0}}', {
+        value0: duration
+      })
 }
 
 // Re-export so existing tooltip consumers/tests keep their import path; the
@@ -220,7 +233,7 @@ function ProviderRateLimitWindowSection({
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const resetLabel = window.resetsAt ? formatLocalizedResetCountdown(window.resetsAt - now) : null
 
   return (
     <div className="space-y-1">
@@ -303,7 +316,11 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+  const updatedAgo = p.updatedAt
+    ? translate('auto.components.status.bar.tooltip.updatedTimeAgo', 'Updated {{value0}}', {
+        value0: formatTimeAgo(p.updatedAt)
+      })
+    : translate('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)

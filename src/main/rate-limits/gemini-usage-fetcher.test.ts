@@ -6,11 +6,13 @@ import {
   quotaResponse
 } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
-  readFileMock: vi.fn(),
-  extractCredsMock: vi.fn(),
-  netFetchMock: vi.fn()
-}))
+const { readFileMock, extractCredsMock, netFetchMock, fetchAntigravityLocalRateLimitsMock } =
+  vi.hoisted(() => ({
+    readFileMock: vi.fn(),
+    extractCredsMock: vi.fn(),
+    netFetchMock: vi.fn(),
+    fetchAntigravityLocalRateLimitsMock: vi.fn()
+  }))
 
 // Why: mock the extractor at the module boundary rather than re-routing every
 // child_process/fs call. The extractor is a self-contained dependency with a
@@ -27,6 +29,9 @@ vi.mock('node:fs/promises', () => ({
   rename: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+vi.mock('./antigravity-local-usage-fetcher', () => ({
+  fetchAntigravityLocalRateLimits: fetchAntigravityLocalRateLimitsMock
+}))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 
@@ -37,6 +42,8 @@ describe('fetchGeminiRateLimits', () => {
     readFileMock.mockReset()
     extractCredsMock.mockReset()
     netFetchMock.mockReset()
+    fetchAntigravityLocalRateLimitsMock.mockReset()
+    fetchAntigravityLocalRateLimitsMock.mockResolvedValue(null)
     netFetchMock.mockImplementation((url: string) => {
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
@@ -213,5 +220,24 @@ describe('fetchGeminiRateLimits', () => {
     expect(result.status).toBe('ok')
     // The second quota call should have been made with the refreshed token.
     expect(quotaCallCount).toBe(2)
+  })
+
+  it('returns local Antigravity rate limits when available without OAuth fallback', async () => {
+    fetchAntigravityLocalRateLimitsMock.mockResolvedValue({
+      provider: 'gemini',
+      session: { usedPercent: 20, windowMinutes: 300, resetsAt: Date.now() + 1000 },
+      weekly: { usedPercent: 10, windowMinutes: 10080, resetsAt: Date.now() + 5000 },
+      planType: 'Pro',
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+
+    const result = await fetchGeminiRateLimits(true)
+    expect(result.status).toBe('ok')
+    expect(result.planType).toBe('Pro')
+    expect(result.session?.usedPercent).toBe(20)
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
   })
 })

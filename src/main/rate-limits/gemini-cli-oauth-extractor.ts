@@ -19,36 +19,34 @@ async function fileExists(filePath: string): Promise<boolean> {
 const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 
 async function resolveGeminiBinary(): Promise<string | null> {
-  const [lookup, args] =
-    process.platform === 'win32' ? ['where.exe', ['gemini']] : ['which', ['gemini']]
-  try {
-    // execFile, not exec: `exec` implies `shell: true`, which silently makes
-    // windowsHide a no-op (see run-process.ts, #14543), so the console-subsystem
-    // `where` would still flash a conhost (#10488).
-    const { stdout } = await execFileAsync(lookup, args, {
-      encoding: 'utf-8',
-      windowsHide: true
-    })
-    const fromPath = stdout.trim().split(/\r?\n/)[0]
-    if (fromPath && (await fileExists(fromPath))) {
-      return fromPath
+  const binaryNames = ['agy', 'antigravity', 'gemini']
+  for (const bin of binaryNames) {
+    const [lookup, args] =
+      process.platform === 'win32' ? ['where.exe', [bin]] : ['which', [bin]]
+    try {
+      const { stdout } = await execFileAsync(lookup, args, {
+        encoding: 'utf-8',
+        windowsHide: true
+      })
+      const fromPath = stdout.trim().split(/\r?\n/)[0]
+      if (fromPath && (await fileExists(fromPath))) {
+        return fromPath
+      }
+    } catch {
+      // ignore which/where failure
     }
-  } catch {
-    // ignore which/where failure
   }
 
   // Why: on macOS/Linux GUI apps, the PATH might not include the binary.
   // Checking common installation prefixes as fallbacks.
   if (process.platform !== 'win32') {
-    const fallbacks = [
-      '/usr/local/bin/gemini',
-      '/opt/homebrew/bin/gemini',
-      path.join(homedir(), '.local', 'bin', 'gemini'),
-      path.join(homedir(), 'bin', 'gemini')
-    ]
-    for (const candidate of fallbacks) {
-      if (await fileExists(candidate)) {
-        return candidate
+    const prefixes = ['/usr/local/bin', '/opt/homebrew/bin', path.join(homedir(), '.local', 'bin'), path.join(homedir(), 'bin')]
+    for (const bin of binaryNames) {
+      for (const prefix of prefixes) {
+        const candidate = path.join(prefix, bin)
+        if (await fileExists(candidate)) {
+          return candidate
+        }
       }
     }
   }
@@ -87,7 +85,7 @@ async function tryReadCredentials(
   }
 }
 
-// Why: these are the known stable layouts for every major Gemini CLI install method.
+// Why: these are the known stable layouts for every major Gemini CLI and Antigravity CLI install method.
 // Checking explicit paths is fast and avoids walking the entire directory tree.
 async function extractFromKnownPaths(
   realGeminiPath: string
@@ -95,47 +93,24 @@ async function extractFromKnownPaths(
   const binDir = path.dirname(realGeminiPath)
   const baseDir = path.dirname(binDir)
 
-  const candidates = [
-    // Homebrew: bin -> Cellar/<ver>/bin, real files live under libexec/lib
-    path.join(
-      baseDir,
-      'libexec',
-      'lib',
-      'node_modules',
-      '@google',
-      'gemini-cli',
-      'node_modules',
-      '@google',
-      'gemini-cli-core',
-      OAUTH2_SUBPATH
-    ),
-    // Homebrew alternate (some versions skip the extra nesting)
-    path.join(
-      baseDir,
-      'lib',
-      'node_modules',
-      '@google',
-      'gemini-cli',
-      'node_modules',
-      '@google',
-      'gemini-cli-core',
-      OAUTH2_SUBPATH
-    ),
-    // Nix package layout
-    path.join(
-      baseDir,
-      'share',
-      'gemini-cli',
-      'node_modules',
-      '@google',
-      'gemini-cli-core',
-      OAUTH2_SUBPATH
-    ),
-    // npm/bun global install: gemini-cli-core is a sibling of gemini-cli
+  const packages = ['@google/antigravity-cli', '@google/gemini-cli', 'antigravity-cli', 'antigravity']
+  const candidates: string[] = []
+
+  for (const pkg of packages) {
+    candidates.push(
+      path.join(baseDir, 'libexec', 'lib', 'node_modules', pkg, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH),
+      path.join(baseDir, 'lib', 'node_modules', pkg, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH),
+      path.join(baseDir, 'share', pkg, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH),
+      path.join(baseDir, 'node_modules', pkg, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH),
+      path.join(baseDir, 'node_modules', pkg, OAUTH2_SUBPATH)
+    )
+  }
+
+  // Common direct sibling layouts
+  candidates.push(
     path.join(baseDir, '..', 'gemini-cli-core', OAUTH2_SUBPATH),
-    // npm nested inside gemini-cli
     path.join(baseDir, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH)
-  ]
+  )
 
   for (const candidate of candidates) {
     const creds = await tryReadCredentials(path.normalize(candidate))
@@ -147,39 +122,54 @@ async function extractFromKnownPaths(
   return null
 }
 
-// Why: newer Gemini CLI versions (>=0.38) ship everything bundled into hash-named
+// Why: newer Gemini/Antigravity CLI versions ship everything bundled into hash-named
 // chunks with no oauth2.js source file. Scanning the bundle dir for the credential
 // constants is the only reliable fallback for those installs.
 async function extractFromBundleDir(
   geminiCliPackageRoot: string
 ): Promise<{ clientId: string; clientSecret: string } | null> {
-  const bundleDir = path.join(geminiCliPackageRoot, 'bundle')
-  if (!(await fileExists(bundleDir))) {
-    return null
-  }
+  const bundleDirs = [
+    path.join(geminiCliPackageRoot, 'bundle'),
+    path.join(geminiCliPackageRoot, 'dist'),
+    path.join(geminiCliPackageRoot, 'out')
+  ]
 
-  let entries: string[]
-  try {
-    entries = (await readdir(bundleDir)).filter((f) => f.endsWith('.js'))
-  } catch {
-    return null
-  }
+  for (const bundleDir of bundleDirs) {
+    if (!(await fileExists(bundleDir))) {
+      continue
+    }
 
-  for (const entry of entries) {
-    const creds = await tryReadCredentials(path.join(bundleDir, entry))
-    if (creds) {
-      return creds
+    let entries: string[]
+    try {
+      entries = (await readdir(bundleDir)).filter((f) => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.cjs'))
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      const creds = await tryReadCredentials(path.join(bundleDir, entry))
+      if (creds) {
+        return creds
+      }
     }
   }
 
   return null
 }
 
-// Resolves the gemini-cli package root directory by walking up the directory
-// tree from the real binary path, looking for package.json with the right name,
-// or the global Node layout under lib/node_modules.
+// Resolves the CLI package root directory by walking up the directory
+// tree from the real binary path, looking for package.json with recognized names,
+// or global Node layouts.
 async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | null> {
   const MAX_ASCENTS = 8
+  const validNames = new Set([
+    '@google/antigravity-cli',
+    '@google/gemini-cli',
+    '@google/agy',
+    'antigravity',
+    'antigravity-cli',
+    'gemini-cli'
+  ])
   let current = path.dirname(realGeminiPath)
 
   for (let i = 0; i <= MAX_ASCENTS; i++) {
@@ -188,7 +178,7 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
       try {
         const raw = await readFile(pkgJson, 'utf-8')
         const pkg = JSON.parse(raw) as { name?: string }
-        if (pkg.name === '@google/gemini-cli') {
+        if (pkg.name && validNames.has(pkg.name)) {
           return current
         }
       } catch {
@@ -196,29 +186,17 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
       }
     }
 
-    // Global Node layout: <current>/lib/node_modules/@google/gemini-cli
-    const globalPkg = path.join(
-      current,
-      'lib',
-      'node_modules',
-      '@google',
-      'gemini-cli',
-      'package.json'
-    )
-    if (await fileExists(globalPkg)) {
-      return path.join(current, 'lib', 'node_modules', '@google', 'gemini-cli')
-    }
+    // Global Node layout checks
+    for (const pkgName of ['@google/antigravity-cli', '@google/gemini-cli', '@google/agy', 'antigravity']) {
+      const globalPkg = path.join(current, 'lib', 'node_modules', pkgName, 'package.json')
+      if (await fileExists(globalPkg)) {
+        return path.join(current, 'lib', 'node_modules', pkgName)
+      }
 
-    // Windows global install layout: <current>/node_modules/@google/gemini-cli
-    const windowsGlobalPkg = path.join(
-      current,
-      'node_modules',
-      '@google',
-      'gemini-cli',
-      'package.json'
-    )
-    if (await fileExists(windowsGlobalPkg)) {
-      return path.join(current, 'node_modules', '@google', 'gemini-cli')
+      const windowsGlobalPkg = path.join(current, 'node_modules', pkgName, 'package.json')
+      if (await fileExists(windowsGlobalPkg)) {
+        return path.join(current, 'node_modules', pkgName)
+      }
     }
 
     const parent = path.dirname(current)
@@ -235,6 +213,13 @@ export async function extractOAuthClientCredentials(): Promise<{
   clientId: string
   clientSecret: string
 } | null> {
+  // Allow environment variable overrides
+  const envClientId = process.env.ANTIGRAVITY_CLIENT_ID || process.env.GEMINI_CLIENT_ID
+  const envClientSecret = process.env.ANTIGRAVITY_CLIENT_SECRET || process.env.GEMINI_CLIENT_SECRET
+  if (envClientId && envClientSecret) {
+    return { clientId: envClientId, clientSecret: envClientSecret }
+  }
+
   const geminiPath = await resolveGeminiBinary()
   if (!geminiPath) {
     return null
