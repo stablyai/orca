@@ -1,5 +1,8 @@
 import { DOMSerializer, type Slice } from '@tiptap/pm/model'
+import type { JSONContent } from '@tiptap/core'
 import type { EditorView } from '@tiptap/pm/view'
+
+export type MarkdownSliceSerializer = (content: JSONContent | JSONContent[]) => string
 
 export function serializeRichMarkdownSliceForClipboard(
   view: EditorView,
@@ -14,4 +17,12 @@ export function serializeRichMarkdownSliceForClipboard(
   const container = document.createElement('div')
   container.appendChild(fragment)
   return { html: container.innerHTML }
+}
+
+export function serializeRichMarkdownSliceAsMarkdown(
+  slice: Slice,
+  serialize: MarkdownSliceSerializer
+): string {
+  const content = slice.content.toJSON()
+  return Array.isArray(content) ? serialize({ type: 'doc', content }) : ''
 }

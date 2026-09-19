@@ -15,6 +15,28 @@ import {
 
 export function createTiptapMarkedFacade(): typeof marked {
   const registry = new Marked()
+  registry.use({
+    tokenizer: {
+      link(src) {
+        const token = Tokenizer.prototype.link.call(this, src)
+        const label = token ? this.rules.inline.link.exec(src)?.[1] : undefined
+        if (token?.type === 'image' && label !== undefined) {
+          token.text = label.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, '$1')
+        }
+        if (token?.type === 'link' && label && /\\(?:\[|\])/.test(label)) {
+          // Preserve label escapes before nested inline parsing can reinterpret them as links.
+          const wasInLink = this.lexer.state.inLink
+          this.lexer.state.inLink = true
+          try {
+            token.tokens = this.lexer.inlineTokens(label)
+          } finally {
+            this.lexer.state.inLink = wasInLink
+          }
+        }
+        return token
+      }
+    }
+  })
 
   // Why: Tiptap 3.22.5 registers on the injected instance but parses with
   // `new instance.Lexer()`, so the constructor must retain the private registry.

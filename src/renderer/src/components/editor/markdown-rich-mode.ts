@@ -1,5 +1,11 @@
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import { defaultSchema } from 'rehype-sanitize'
+import { normalizeDetailsOpeningTag } from './details-markdown-html'
+import { stripMarkdownCode } from './markdown-code-stripping'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
+import { getRichMarkdownHtmlValidationOutput } from './markdown-rich-html-validation'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
@@ -36,6 +42,17 @@ export type MarkdownRichModeEligibilityDecision = {
 
 const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
 
+// Mirrors marked's declaration rules: `<![A-Z]…>` and `<![CDATA[…]]>`.
+const HTML_DECLARATION_PATTERN = /<!(?:\[CDATA\[[\s\S]*?\]\]|[A-Za-z][^>]*)>/
+const ANCHORED_HTML_DECLARATION_PATTERN = new RegExp(HTML_DECLARATION_PATTERN, 'y')
+
+function getHtmlDeclarationEnd(content: string, startIndex: number): number | null {
+  ANCHORED_HTML_DECLARATION_PATTERN.lastIndex = startIndex
+  return ANCHORED_HTML_DECLARATION_PATTERN.test(content)
+    ? ANCHORED_HTML_DECLARATION_PATTERN.lastIndex
+    : null
+}
+
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
     reason: 'html-or-jsx',
@@ -58,7 +75,12 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains reference-style links.'
       )
     },
-    pattern: /^\[[^\]]+\]:\s+\S+/m
+    // Why: a cheap, linear-time pre-filter — a single non-nested character
+    // class, so it can't backtrack. It deliberately over-admits shapes no
+    // container nesting produces (e.g. `1) [x]:`); `[label]: ` also opens
+    // ordinary prose, so `hasLinkReferenceDefinition` confirms a real
+    // definition per CommonMark.
+    pattern: /^[ \t>*+\-\d.)]*\[(?:\\.|[^\]\\\n])+\]:/m
   },
   {
     reason: 'footnotes',
@@ -90,7 +112,8 @@ export function resolveMarkdownRichModeUnsupportedMessage(
 }
 
 export function getMarkdownRichModeUnsupportedReason(
-  content: string
+  content: string,
+  { validateHtmlRoundTrip = true }: { validateHtmlRoundTrip?: boolean } = {}
 ): MarkdownRichModeUnsupportedReason | null {
   // Why: front-matter is handled externally — stripped before the rich editor
   // sees the content and displayed as a read-only block. Only the body needs
@@ -113,15 +136,25 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
-    if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.reason
+    if (!matcher.pattern.test(contentWithoutCode)) {
+      continue
     }
+    if (matcher.reason === 'reference-links' && !hasLinkReferenceDefinition(contentWithoutCode)) {
+      continue
+    }
+    return matcher.reason
   }
 
   if (hasHtml) {
-    // Why: the round-trip check creates a throwaway TipTap Editor synchronously
-    // on the main thread. For large files this blocks for seconds, so we skip it and conservatively block rich mode for HTML files
-    // above this threshold.
+    if (!validateHtmlRoundTrip) {
+      return htmlMatcher!.reason
+    }
+    // The source codec recognizes multiline code spans that the cheap scan can misclassify.
+    const htmlOutput = getRichMarkdownHtmlValidationOutput(body)
+    if (htmlOutput && preservesEmbeddedHtml(body, htmlOutput)) {
+      return null
+    }
+    // Other HTML still needs a full editor round trip; cap it to avoid blocking the UI.
     const roundTripOutput = body.length <= 50_000 ? getRichMarkdownRoundTripOutput(body) : null
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
@@ -134,14 +167,16 @@ export function getMarkdownRichModeUnsupportedReason(
 
 export function getMarkdownRichModeEligibilityDecision({
   content,
-  sizeOverridden
+  sizeOverridden,
+  validateHtmlRoundTrip = true
 }: {
   content: string
   sizeOverridden: boolean
+  validateHtmlRoundTrip?: boolean
 }): MarkdownRichModeEligibilityDecision {
   return {
     exceedsSizeLimit: !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content),
-    unsupportedReason: getMarkdownRichModeUnsupportedReason(content)
+    unsupportedReason: getMarkdownRichModeUnsupportedReason(content, { validateHtmlRoundTrip })
   }
 }
 
@@ -156,10 +191,60 @@ export function getMarkdownRichModeEligibility(params: {
   }
 }
 
+const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
+
+// Why: only an mdast `definition` node proves a `[label]:` line is a link
+// reference definition and not prose. Definitions can sit inside blockquotes
+// and list items, so the whole tree is walked. Above the same size cap as the
+// HTML round-trip check, parsing is skipped and the pre-filter match is
+// trusted as a definition, since blocking rich mode is the safe default.
+function hasLinkReferenceDefinition(content: string): boolean {
+  // Definitions inside transported HTML comments are comment text, not
+  // Markdown definitions. Remove complete comments before the bounded probe.
+  const commentStripped = content.replace(/<!--[\s\S]*?-->/g, '')
+  if (!/^[ \t>*+\-\d.)]*\[(?:\\.|[^\]\\\n])+\]:/m.test(commentStripped)) {
+    return false
+  }
+  if (commentStripped.length > 50_000) {
+    // Probe candidate paragraphs separately; document size alone is not syntax evidence.
+    return commentStripped
+      .split(/\r?\n[ \t]*\r?\n/)
+      .some(
+        (block) =>
+          /^[ \t>*+\-\d.)]*\[(?:\\.|[^\]\\\n])+\]:/m.test(block) &&
+          containsDefinitionNode(linkReferenceDefinitionProcessor.parse(block))
+      )
+  }
+  const tree = linkReferenceDefinitionProcessor.parse(commentStripped)
+  return containsDefinitionNode(tree)
+}
+
+function containsDefinitionNode(node: { type: string; children?: unknown[] }): boolean {
+  // The rich editor treats footnote definitions as the same unsupported
+  // reference-style syntax, matching its existing fallback classification.
+  if (node.type === 'definition' || node.type === 'footnoteDefinition') {
+    return true
+  }
+  if (!Array.isArray(node.children)) {
+    return false
+  }
+  return node.children.some((child) => isDefinitionTreeNode(child) && containsDefinitionNode(child))
+}
+
+function isDefinitionTreeNode(value: unknown): value is { type: string; children?: unknown[] } {
+  return (
+    typeof value === 'object' && value !== null && 'type' in value && typeof value.type === 'string'
+  )
+}
+
 function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
   // A missing closer after the first opener rules out every later opener.
   const commentStart = content.indexOf('<!--')
   if (commentStart !== -1 && content.includes('-->', commentStart + 4)) {
+    return true
+  }
+  // `<!DOCTYPE …>` and `<![CDATA[…]]>` match no tag pattern but are still escaped on save.
+  if (HTML_DECLARATION_PATTERN.test(content)) {
     return true
   }
   for (const match of content.matchAll(new RegExp(pattern, 'g'))) {
@@ -185,41 +270,20 @@ function isHtmlOrJsxFragment(fragment: string): boolean {
   return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
 }
 
-function stripMarkdownCode(content: string): string {
-  let sanitized = ''
-  let activeFence: '`' | '~' | null = null
-  let lineStart = 0
-
-  while (lineStart <= content.length) {
-    const newlineIndex = content.indexOf('\n', lineStart)
-    const index = newlineIndex === -1 ? content.length : newlineIndex
-    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
-    const line = content.slice(lineStart, lineEnd)
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
-    if (fenceMatch) {
-      const fenceMarker = fenceMatch[1][0] as '`' | '~'
-      activeFence = activeFence === fenceMarker ? null : fenceMarker
-    } else if (!activeFence) {
-      sanitized += line.replace(/`+[^`\n]*`+/g, '')
-    }
-
-    if (index < content.length) {
-      sanitized += '\n'
-    }
-    lineStart = index + 1
-  }
-
-  return sanitized
-}
-
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
   let searchIndex = 0
   return forEachEmbeddedHtmlFragment(contentWithoutCode, (fragment) => {
-    const foundIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    const normalized = normalizeDetailsOpeningTag(fragment)
+    const exactIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    const normalizedIndex =
+      normalized === fragment ? -1 : roundTripOutput.indexOf(normalized, searchIndex)
+    const useNormalized =
+      normalizedIndex !== -1 && (exactIndex === -1 || normalizedIndex < exactIndex)
+    const foundIndex = useNormalized ? normalizedIndex : exactIndex
     if (foundIndex === -1) {
       return false
     }
-    searchIndex = foundIndex + fragment.length
+    searchIndex = foundIndex + (useNormalized ? normalized.length : fragment.length)
     return true
   })
 }
@@ -238,6 +302,8 @@ function forEachEmbeddedHtmlFragment(
     if (content.startsWith('<!--', index)) {
       const commentEnd = index + 4 <= lastCommentClose ? content.indexOf('-->', index + 4) : -1
       fragmentEnd = commentEnd === -1 ? null : commentEnd + 3
+    } else if (content.charCodeAt(index + 1) === 33) {
+      fragmentEnd = getHtmlDeclarationEnd(content, index)
     } else {
       fragmentEnd = getHtmlTagEnd(content, index)
     }

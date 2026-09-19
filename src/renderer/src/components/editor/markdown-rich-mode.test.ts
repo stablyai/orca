@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as roundTrip from './markdown-round-trip'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import {
   getMarkdownRichModeEligibility,
@@ -20,6 +21,53 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
 
   it('allows common raw html in markdown files', () => {
     expect(getMarkdownRichModeUnsupportedMessage('Before <span>hi</span> after\n')).toBeNull()
+  })
+
+  it.each(['', ' open', ' open="open"', " data-orca-toggle='heading-2' open"])(
+    'allows editable details blocks with attributes %s',
+    (attributes) => {
+      const content = `<details${attributes}>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+    }
+  )
+
+  it('allows nested plain details blocks', () => {
+    const inner = '<details>\n<summary>Inner</summary>\n\nBody\n\n</details>'
+    const content = `<details open>\n<summary>Outer</summary>\n\n${inner}\n\n</details>\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it('checks mixed editable and passthrough details blocks in source order', () => {
+    const content = [
+      '<details>\n<summary>Editable</summary>\n\nBody\n\n</details>',
+      '<details>\n<summary><span>Passthrough</span></summary>\n\nBody\n\n</details>',
+      '<details class="orca-details" open>\n<summary>Authored</summary>\n\nBody\n\n</details>'
+    ].join('\n\n')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it.each([' id="keep"', ' class="custom"', ' data-orca-toggle="heading-6"', ' open'])(
+    'rejects a details round trip that loses attributes %s',
+    (attributes) => {
+      const content = `<details${attributes}>\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+      vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput').mockReturnValue(
+        '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      )
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    }
+  )
+
+  it('still rejects unrelated HTML lost alongside a normalized details tag', () => {
+    const content = '<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n<span>Tail</span>'
+    vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput').mockReturnValue(
+      '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>\nTail'
+    )
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
   })
 
   it('allows markdown autolinks wrapped in angle brackets', () => {
@@ -120,6 +168,68 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(usedGlobalHtmlFragmentMatch).toBe(false)
   })
 
+  it('allows a minimal bare details block with no pre-existing styling class', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage('<details><summary>x</summary>\n\nbody\n\n</details>\n')
+    ).toBeNull()
+  })
+
+  it('allows a minimal bare details block with the open attribute', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        '<details open><summary>x</summary>\n\nbody\n\n</details>\n'
+      )
+    ).toBeNull()
+  })
+
+  it('allows a details block already carrying the legacy orca-details class', () => {
+    // Why: a file saved by an earlier Orca version has this class in its
+    // source; the round-trip eligibility check must still recognize it.
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        '<details class="orca-details"><summary>x</summary>\n\nbody\n\n</details>\n'
+      )
+    ).toBeNull()
+  })
+
+  it('allows a document with front matter, prose, and two details blocks', () => {
+    const content = [
+      '---',
+      'title: Details Disclosure Test',
+      '---',
+      '',
+      '# Heading',
+      '',
+      'Some prose before the first toggle.',
+      '',
+      '<details>',
+      '<summary>First toggle</summary>',
+      '',
+      '**Bold text** and a [link](./target%20file.md).',
+      '',
+      '- one',
+      '- two',
+      '',
+      '```ts',
+      'const answer = 42',
+      '```',
+      '',
+      '</details>',
+      '',
+      'A paragraph between the two toggles.',
+      '',
+      '<details open>',
+      '<summary>Second toggle</summary>',
+      '',
+      'Short body.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
   it('keeps unsupported content blocked when it also exceeds the size limit', () => {
     const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)}<Widget />`
 
@@ -130,6 +240,117 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(getMarkdownRichModeEligibility({ content, sizeOverridden: true })).toEqual({
       exceedsSizeLimit: false,
       unsupportedMessage: expect.any(String)
+    })
+  })
+
+  describe('reference-style link definitions', () => {
+    it('blocks a definition whose label contains an escaped closing bracket', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('[foo\\]]: https://example.com\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks an escaped-bracket definition in an oversized document', () => {
+      const content = `${'a'.repeat(50_001)}\n\n[foo\\]]: https://example.com\n`
+      expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    })
+
+    it('blocks a real link reference definition', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('[id]: https://example.com\n')).not.toBeNull()
+    })
+
+    it('blocks a link reference definition with an angle-bracket destination and title', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('[id]: <https://example.com> "Title"\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition with a relative destination and single-quoted title', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage("[id]: ./relative/path 'title'\n")
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition indented up to three spaces', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('   [id]: https://example.com\n')).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a blockquote', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('> [id]: https://example.com\n> uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a list item', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('- [id]: https://example.com\n  uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a blockquote inside a list item', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('- > [id]: https://example.com\n  > uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a list item inside a blockquote', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('> - [id]: https://example.com\n>   uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested three levels deep', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage(
+          '> - > [id]: https://example.com\n>   > uses [id] here\n'
+        )
+      ).not.toBeNull()
+    })
+
+    it('allows a bracketed label followed by prose, not a link destination', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('[Bug]: text with spaces\n')).toBeNull()
+    })
+
+    it('allows a real GFM task list item', () => {
+      // A task-list checkbox is `[ ]`/`[x]` followed directly by whitespace
+      // and text, with no colon — `- [x]: done` is CommonMark's link
+      // reference definition syntax (label `x`, destination `done`), not a
+      // task item.
+      expect(getMarkdownRichModeUnsupportedMessage('- [x] done\n')).toBeNull()
+    })
+
+    it('allows a bracketed label followed by prose starting with "this is"', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('[note]: this is prose\n')).toBeNull()
+    })
+
+    it('allows the reported issue title line', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage(
+          "[Bug]: Backspace at the start of the first line under a heading merges that line's text into the heading\n"
+        )
+      ).toBeNull()
+    })
+
+    it('does not infer a reference definition from document size', () => {
+      const content = `${'a'.repeat(50_001)}\n[Bug]: text with spaces\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+    })
+
+    it('still parses to confirm a pre-filter match at or under the parse-size guard', () => {
+      const content = `${'a'.repeat(49_970)}\n[Bug]: text with spaces\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+    })
+
+    it('scans a long non-matching indented line without catastrophic backtracking', () => {
+      const content = `${' '.repeat(200)}x\n`
+
+      const start = performance.now()
+      getMarkdownRichModeUnsupportedMessage(content)
+      const elapsed = performance.now() - start
+
+      expect(elapsed).toBeLessThan(50)
     })
   })
 })

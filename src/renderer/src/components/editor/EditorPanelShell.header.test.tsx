@@ -10,7 +10,11 @@ vi.mock('./EditorPanelHeader', () => ({
 }))
 
 vi.mock('./EditorContent', () => ({
-  EditorContent: () => <div data-editor-content />
+  EditorContent: ({ onOpenMarkdownPreview }: { onOpenMarkdownPreview?: () => void }) => (
+    <div data-editor-content>
+      {onOpenMarkdownPreview && <button onClick={onOpenMarkdownPreview}>Open preview</button>}
+    </div>
+  )
 }))
 
 vi.mock('./UntitledFileRenameDialog', () => ({
@@ -48,7 +52,7 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
     availableEditorToggleModes: [],
     effectiveToggleValue: 'edit',
     canOpenPreviewToSide: false,
-    canShowMarkdownPreview: false,
+    canShowMarkdownPreview: file.language === 'markdown' && file.mode === 'edit',
     canShowMarkdownTableOfContents: false,
     isMarkdownTableOfContentsDisabled: false,
     shouldShowMarkdownExportAction: false,
@@ -121,4 +125,10 @@ describe('EditorPanelShell path header', () => {
     expect(renderShell(openFile('check-details'))).toContain('data-editor-content')
     expect(renderShell(openFile('edit'))).toContain('data-editor-content')
   })
+})
+
+it('offers Markdown preview through the shell even when HTML side preview is unavailable', () => {
+  const file = { ...openFile('edit'), language: 'markdown' }
+  expect(renderShell(file)).toContain('Open preview')
+  expect(renderShell(openFile('edit'))).not.toContain('Open preview')
 })

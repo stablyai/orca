@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   extractDetailsSummaryHtml,
-  isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
+  normalizeDetailsOpeningTag,
   parseDetailsAttributes,
   parseToggleHeadingVariant,
   type DetailsHtmlBlock
 } from './details-markdown-html'
+import { isEditableDetailsHtmlBlock } from './details-markdown-editability'
 
 function nestedToggles(depth: number): string {
   let html = '<details class="orca-details" open>\n<summary>leaf</summary>\n\nBody\n\n</details>'
@@ -26,6 +27,45 @@ afterEach(() => {
 })
 
 describe('details markdown html', () => {
+  it.each([
+    ['<details>', '<details>'],
+    ['<details open="open">', '<details open>'],
+    ['<details CLASS="orca-details">', '<details class="orca-details">'],
+    ["<details Class='orca-details'>", '<details class="orca-details">'],
+    ['<details cLaSs=orca-details>', '<details class="orca-details">'],
+    [
+      "<details open data-orca-toggle = 'heading-2' class='orca-details'>",
+      '<details class="orca-details" data-orca-toggle="heading-2" open>'
+    ]
+  ])('normalizes supported opening tag %s like the serializer', (input, expected) => {
+    expect(normalizeDetailsOpeningTag(input)).toBe(expected)
+  })
+
+  it.each([
+    '<details id="keep">',
+    '<details class="custom">',
+    '<details class="ORCA-DETAILS">',
+    "<details CLASS='Orca-Details'>",
+    '<details Class=ORCA-DETAILS>',
+    '<details data-orca-toggle="heading-6">',
+    '<details open="false">',
+    '<detailsish>',
+    '</details>',
+    '<summary>',
+    '<!-- <details> -->'
+  ])('leaves noncanonical or unrelated fragment %s unchanged', (fragment) => {
+    expect(normalizeDetailsOpeningTag(fragment)).toBe(fragment)
+  })
+
+  it.each(['ORCA-DETAILS', 'Orca-Details'])(
+    'keeps case-sensitive class %s out of editable details nodes',
+    (className) => {
+      expect(
+        isEditableHtml(`<details class="${className}"><summary>Toggle</summary>Body</details>`)
+      ).toBe(false)
+    }
+  )
+
   it('extracts leading summary html without regex capture', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
     const inner = `\n<SUMMARY>${'Heading line\n'.repeat(1_000)}</SUMMARY><p>Body</p>`
@@ -120,6 +160,41 @@ describe('details markdown html', () => {
   it('rejects nesting past the recursion guard instead of recursing without bound', () => {
     expect(isEditableHtml(nestedToggles(17))).toBe(false)
     expect(isEditableHtml(nestedToggles(400))).toBe(false)
+  })
+
+  it('stays editable when the body mentions a details pair inside a code span', () => {
+    expect(
+      isEditableHtml(
+        '<details><summary>T</summary><p>Mentions `<details>text</details>` inline.</p></details>'
+      )
+    ).toBe(true)
+  })
+
+  it('stays editable when the body holds a fenced block containing details tags', () => {
+    const html = [
+      '<details><summary>T</summary><p>Body</p>',
+      '',
+      '```',
+      '<details>',
+      '</details>',
+      '```',
+      '',
+      '</details>'
+    ].join('\n')
+
+    expect(isEditableHtml(html)).toBe(true)
+  })
+
+  it('keeps a real nested toggle editable after a code-span mention', () => {
+    const html = [
+      '<details><summary>Outer</summary><p>Mentions `<details>` inline.</p>',
+      '',
+      '<details><summary>Inner</summary><p>Body</p></details>',
+      '',
+      '</details>'
+    ].join('\n')
+
+    expect(isEditableHtml(html)).toBe(true)
   })
 
   it('rejects unbalanced and non-toggle tags that start with details', () => {

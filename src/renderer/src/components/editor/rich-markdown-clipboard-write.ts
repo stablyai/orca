@@ -21,14 +21,18 @@ export function writeRichMarkdownSliceToClipboard(
     return false
   }
   const serialized = serializeRichMarkdownSliceForClipboard(view, slice)
+  const markdownText =
+    (typeof view.someProp === 'function'
+      ? view.someProp('clipboardTextSerializer', (serializer) => serializer(slice, view))
+      : undefined) || visibleText
   clipboardData.setData('text/html', serialized.html)
-  clipboardData.setData('text/plain', visibleText)
+  clipboardData.setData('text/plain', markdownText)
   // Why: if the clipboard rejected the write we must not delete, and we must
   // surface the same cut-limit feedback so the no-op is not silent.
   if (
     typeof clipboardData.getData === 'function' &&
     (clipboardData.getData('text/html') !== serialized.html ||
-      clipboardData.getData('text/plain') !== visibleText)
+      clipboardData.getData('text/plain') !== markdownText)
   ) {
     showRichMarkdownSourceOwningCutLimitError()
     return false

@@ -8,6 +8,7 @@ import {
 type EligibilityCacheEntry = {
   content: string
   sizeOverridden: boolean
+  validateHtmlRoundTrip: boolean
   decision: MarkdownRichModeEligibilityDecision
 }
 
@@ -36,6 +37,7 @@ const entries: EligibilityCacheEntry[] = []
 export function getCachedMarkdownRichModeEligibility(params: {
   content: string
   sizeOverridden: boolean
+  validateHtmlRoundTrip?: boolean
 }): MarkdownRichModeEligibility {
   const decision = getCachedMarkdownRichModeEligibilityDecision(params)
   return {
@@ -47,11 +49,16 @@ export function getCachedMarkdownRichModeEligibility(params: {
 function getCachedMarkdownRichModeEligibilityDecision(params: {
   content: string
   sizeOverridden: boolean
+  validateHtmlRoundTrip?: boolean
 }): MarkdownRichModeEligibilityDecision {
-  const { content, sizeOverridden } = params
+  const { content, sizeOverridden, validateHtmlRoundTrip = true } = params
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
-    if (entry.sizeOverridden !== sizeOverridden || entry.content !== content) {
+    if (
+      entry.sizeOverridden !== sizeOverridden ||
+      entry.validateHtmlRoundTrip !== validateHtmlRoundTrip ||
+      entry.content !== content
+    ) {
       continue
     }
     if (index > 0) {
@@ -61,8 +68,12 @@ function getCachedMarkdownRichModeEligibilityDecision(params: {
     return entry.decision
   }
 
-  const decision = getMarkdownRichModeEligibilityDecision({ content, sizeOverridden })
-  entries.unshift({ content, sizeOverridden, decision })
+  const decision = getMarkdownRichModeEligibilityDecision({
+    content,
+    sizeOverridden,
+    validateHtmlRoundTrip
+  })
+  entries.unshift({ content, sizeOverridden, validateHtmlRoundTrip, decision })
   if (entries.length > MAX_ENTRIES) {
     entries.length = MAX_ENTRIES
   }

@@ -5,11 +5,11 @@ import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
+import { createRichMarkdownTable } from './rich-markdown-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
-import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
+import { BlockMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
 import {
@@ -37,7 +37,11 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownCodeSpanPadding } from './rich-markdown-code-span-padding'
+import { RichMarkdownListItem } from './rich-markdown-list-item'
+import { RichMarkdownProseEntities } from './rich-markdown-prose-entities'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
+import { RichMarkdownInlineMath } from './rich-markdown-inline-math'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
@@ -72,6 +76,7 @@ export function createRichMarkdownExtensions({
       link: false,
       code: false,
       codeBlock: false,
+      listItem: false,
       orderedList: false,
       paragraph: false
     }),
@@ -213,18 +218,19 @@ export function createRichMarkdownExtensions({
       inline: true
     }),
     RichMarkdownOrderedList,
+    RichMarkdownListItem,
     RichMarkdownTaskList,
     TaskItem.configure({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    Table.configure({
+    createRichMarkdownTable(codec).configure({
       resizable: false
     }),
     TableRow,
     TableHeader,
     TableCell,
-    InlineMath.configure({
+    RichMarkdownInlineMath.configure({
       katexOptions: {
         throwOnError: false
       }
@@ -249,6 +255,8 @@ export function createRichMarkdownExtensions({
         gfm: true
       }
     }),
+    RichMarkdownCodeSpanPadding,
+    RichMarkdownProseEntities,
     createRichMarkdownAnnotationHighlightExtension()
   ]
 

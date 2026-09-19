@@ -36,6 +36,7 @@ import {
   getRichMarkdownSelectionLinkBubble,
   openSelectedHtmlSuperscriptLink
 } from './rich-markdown-selected-link-actions'
+import { serializeRichMarkdownSliceAsMarkdown } from './rich-markdown-clipboard-serialization'
 
 export type EditorConfigParams = {
   codec: RichMarkdownEditorCodec
@@ -137,6 +138,12 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       attributes: {
         class: 'rich-markdown-editor',
         spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
+      },
+      clipboardTextSerializer: (slice) => {
+        const markdown = editorRef.current?.markdown
+        return markdown
+          ? serializeRichMarkdownSliceAsMarkdown(slice, (content) => markdown.serialize(content))
+          : ''
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut

@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as htmlValidation from './markdown-rich-html-validation'
+import * as roundTrip from './markdown-round-trip'
 import type { OpenFile } from '@/store/slices/editor'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
+
+afterEach(() => vi.restoreAllMocks())
 
 function markdownFile(overrides: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -61,6 +65,41 @@ function htmlFile(overrides: Partial<OpenFile> = {}): OpenFile {
     ...overrides
   }
 }
+
+describe('getEditorPanelRenderModel rich-mode fallback toggle', () => {
+  it('skips HTML validation round trips for source mode', () => {
+    const htmlValidationSpy = vi.spyOn(htmlValidation, 'getRichMarkdownHtmlValidationOutput')
+    const roundTripSpy = vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput')
+
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'source' },
+      fileContents: {
+        '/repo/README.md': textContent({ content: '<span>source-mode-only</span>\n' })
+      }
+    })
+
+    expect(model.mdViewMode).toBe('source')
+    expect(model.inlineMarkdownRenderState?.renderMode).toBe('source')
+    expect(htmlValidationSpy).not.toHaveBeenCalled()
+    expect(roundTripSpy).not.toHaveBeenCalled()
+  })
+
+  it('offers Preview once rich mode falls back for this content', () => {
+    const model = renderModel({
+      fileContents: {
+        '/repo/README.md': textContent({ content: '[reference]: https://example.com' })
+      }
+    })
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich', 'preview', 'changes'])
+  })
+
+  it('omits Preview for ordinary markdown content', () => {
+    const model = renderModel({})
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich', 'changes'])
+  })
+})
 
 describe('getEditorPanelRenderModel HTML preview affordance', () => {
   it('enables preview for HTML edit tabs', () => {
@@ -248,4 +287,13 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
       }).canExportMarkdownToPdf
     ).toBe(false)
   })
+})
+
+it('offers the live Markdown preview while a fallback draft is unsaved', () => {
+  const model = renderModel({
+    editorDrafts: { '/repo/README.md': '[reference]: https://example.com' }
+  })
+  expect(model.availableEditorToggleModes).toContain('preview')
+  expect(model.canShowMarkdownPreview).toBe(true)
+  expect(model.canOpenPreviewToSide).toBe(false)
 })

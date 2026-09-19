@@ -163,6 +163,7 @@ export function EditorPanelShell({
           showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+          onOpenMarkdownPreview={model.canShowMarkdownPreview ? onOpenMarkdownPreview : undefined}
         />
       </Suspense>
       <UntitledFileRenameDialog

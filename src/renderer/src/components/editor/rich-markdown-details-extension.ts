@@ -7,7 +7,7 @@ import {
   detailsBodyHtmlToMarkdown,
   escapeDetailsHtml,
   extractDetailsSummaryHtml,
-  isEditableDetailsHtmlBlock,
+  findDetailsBlockStart,
   matchDetailsHtmlBlock,
   parseDetailsAttributes,
   parseToggleHeadingVariant,
@@ -15,6 +15,7 @@ import {
   type DetailsHtmlToken,
   type ToggleHeadingVariant
 } from './details-markdown-html'
+import { isEditableDetailsHtmlBlock } from './details-markdown-editability'
 
 const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
 const TOGGLE_TEXT_PLACEHOLDER = 'text'
@@ -213,6 +214,15 @@ const OrcaDetails = Details.extend({
           const parsed = parseToggleHeadingVariant(variant)
           return parsed ? { 'data-orca-toggle': parsed } : {}
         }
+      },
+      // Why: a block saved by an Orca version that wrote `class="orca-details"`
+      // into markdown must keep carrying that class on every subsequent save,
+      // or the round-trip eligibility check no longer recognizes its own file.
+      // Not a DOM attribute — the rendered class comes from HTMLAttributes.
+      hasLegacyStylingClass: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: () => ({})
       }
     }
   },
@@ -228,7 +238,7 @@ const OrcaDetails = Details.extend({
   markdownTokenizer: {
     name: 'details',
     level: 'block',
-    start: '<details',
+    start: findDetailsBlockStart,
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {
@@ -281,8 +291,9 @@ const OrcaDetails = Details.extend({
     )
     const body = helpers.renderChildren(content?.content ?? [], '\n\n').trim()
     const attrs = renderDetailsAttributes(node.attrs)
+    const openingTag = attrs ? `<details ${attrs}>` : '<details>'
 
-    return `<details ${attrs}>\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
+    return `${openingTag}\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
   }
 })
 

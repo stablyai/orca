@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as htmlValidation from './markdown-rich-html-validation'
+import * as roundTrip from './markdown-round-trip'
 import { i18n } from '@/i18n/i18n'
 import { getMarkdownRichModeEligibility } from './markdown-rich-mode'
 import {
@@ -71,6 +73,21 @@ describe('getCachedMarkdownRichModeEligibility', () => {
     expect(getCachedMarkdownRichModeEligibility({ content, sizeOverridden: true })).toEqual(
       getMarkdownRichModeEligibility({ content, sizeOverridden: true })
     )
+  })
+
+  it('supports a conservative source-mode decision without HTML round trips', () => {
+    const htmlValidationSpy = vi.spyOn(htmlValidation, 'getRichMarkdownHtmlValidationOutput')
+    const roundTripSpy = vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput')
+
+    const result = getCachedMarkdownRichModeEligibility({
+      content: '<span>edited</span>\n',
+      sizeOverridden: false,
+      validateHtmlRoundTrip: false
+    })
+
+    expect(result.unsupportedMessage).not.toBeNull()
+    expect(htmlValidationSpy).not.toHaveBeenCalled()
+    expect(roundTripSpy).not.toHaveBeenCalled()
   })
 
   it('stays correct once the corpus exceeds the cache capacity', () => {
