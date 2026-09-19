@@ -25,7 +25,7 @@ import {
   type KeybindingActionId,
   type KeybindingMatchOptions
 } from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { dispatchGlobalPluginAliasActions } from './global-plugin-alias-dispatch'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -239,10 +239,17 @@ export function useGlobalKeybindings(args: {
       if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }
-      for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
-        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
-          return
-        }
+      // Why: terminal owns Mod+Alt+Arrow. After isActive remount the global
+      // capture listener can be first, so skip history here; the terminal
+      // handler moves to a neighbor or dispatches history at a layout edge.
+      if (
+        dispatchGlobalPluginAliasActions({
+          context,
+          matchShortcut,
+          runAction: (actionId) => handlers.get(actionId)?.() ?? false
+        })
+      ) {
+        return
       }
 
       // Unbound by default, so it runs after the built-in alias handlers above; only consumes the chord when the active worktree has unsent notes.

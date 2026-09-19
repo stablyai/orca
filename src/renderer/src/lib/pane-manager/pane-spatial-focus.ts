@@ -134,6 +134,29 @@ export function applySpatialPaneFocusKey(
   return true
 }
 
+export type WorktreeHistoryNavigateDirection = 'back' | 'forward'
+
+// Why: global capture may run before the terminal listener after an isActive
+// remount. Terminal owns left/right: move if a neighbor exists, otherwise
+// navigate worktree history itself so the chord is never handled twice.
+export function claimSpatialPaneFocusOrWorktreeHistory(
+  event: SpatialFocusKeyEvent,
+  manager: SpatialFocusPaneManager,
+  direction: SpatialFocusDirection,
+  navigateWorktreeHistory: (direction: WorktreeHistoryNavigateDirection) => void
+): boolean {
+  if (applySpatialPaneFocusKey(event, manager, direction)) {
+    return true
+  }
+  if (direction !== 'left' && direction !== 'right') {
+    return false
+  }
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  navigateWorktreeHistory(direction === 'left' ? 'back' : 'forward')
+  return true
+}
+
 function hasPositiveArea(pane: SpatialPaneRect): boolean {
   return pane.width > 0 && pane.height > 0
 }
