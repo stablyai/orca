@@ -1,3 +1,4 @@
+import { canCreateRendererSessionPartition } from './renderer-workspace-session-admission'
 import { ipcMain } from 'electron'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
@@ -47,17 +48,30 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
 
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {
     let ok = true
+    let admissionOk = true
     try {
       for (const { state, hostId } of args.sessions) {
-        store.stageWorkspaceSessionBeforeUnload(state, hostId)
+        let admitted: boolean
+        try {
+          admitted = canCreateRendererSessionPartition(store, hostId)
+        } catch (error) {
+          console.error('[app] Failed to establish runtime session partition authority:', error)
+          admissionOk = false
+          continue
+        }
+        if (admitted) {
+          store.stageWorkspaceSessionBeforeUnload(state, hostId)
+        }
       }
       store.updateUI(args.ui)
     } catch (error) {
       console.error('[app] Failed to stage renderer state before unload:', error)
       ok = false
     }
-    pendingCheckpoint = ok ? flushStagedStateWithDeadline(store) : Promise.resolve({ ok: false })
-    event.returnValue = { ok }
+    pendingCheckpoint = ok
+      ? flushStagedStateWithDeadline(store).then((result) => ({ ok: result.ok && admissionOk }))
+      : Promise.resolve({ ok: false })
+    event.returnValue = { ok: ok && admissionOk }
   })
 
   ipcMain.handle(

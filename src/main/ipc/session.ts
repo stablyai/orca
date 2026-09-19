@@ -1,3 +1,4 @@
+import { canCreateRendererSessionPartition } from './renderer-workspace-session-admission'
 import { ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { retireEmptyTerminalTab } from './session-empty-terminal-tab-retirement'
@@ -20,11 +21,15 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   })
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
-    store.setWorkspaceSession(args, hostId)
+    if (isRendererSessionAdmitted(store, hostId)) {
+      store.setWorkspaceSession(args, hostId)
+    }
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    store.patchWorkspaceSession(args, hostId)
+    if (isRendererSessionAdmitted(store, hostId)) {
+      store.patchWorkspaceSession(args, hostId)
+    }
   })
 
   ipcMain.handle('session:flush', () => {
@@ -38,9 +43,19 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   // data (including terminal scrollback buffers) is persisted to disk
   // before the window closes — regardless of before-quit ordering.
   ipcMain.on('session:set-sync', (event, args: WorkspaceSessionState, hostId?: string | null) => {
-    store.setWorkspaceSession(args, hostId)
+    let admitted = false
+    let admissionOk = true
+    try {
+      admitted = canCreateRendererSessionPartition(store, hostId)
+    } catch (error) {
+      console.error('[session] Failed to establish runtime session partition authority:', error)
+      admissionOk = false
+    }
+    if (admitted) {
+      store.setWorkspaceSession(args, hostId)
+    }
     store.flush()
-    event.returnValue = true
+    event.returnValue = admissionOk
   })
 
   ipcMain.on(
@@ -50,4 +65,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
         typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
     }
   )
+}
+
+function isRendererSessionAdmitted(store: Store, hostId?: string | null): boolean {
+  try {
+    return canCreateRendererSessionPartition(store, hostId)
+  } catch (error) {
+    console.error('[session] Failed to establish runtime session partition authority:', error)
+    return false
+  }
 }

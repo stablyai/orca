@@ -1,3 +1,5 @@
+import { hasMainOwnedRuntimeSessionNamespace } from '../runtime/runtime-workspace-session-namespace-custody'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -105,6 +107,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error('Choose another Active Server in Advanced before removing this server.')
       }
+      const hostId = toRuntimeExecutionHostId(environment.id)
+      const preserveMainNamespace = hasMainOwnedRuntimeSessionNamespace(store, hostId)
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       clearRuntimeEnvironmentCapabilityEvidence(removed.id)
       clearRuntimeEnvironmentManualDisconnect(removed.id)
@@ -122,6 +126,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       }).catch((error) => {
         console.warn('[runtime-environments] browser partition storage clear failed:', error)
       })
+      if (!preserveMainNamespace) {
+        store.removeRuntimeWorkspaceSessionPartition(hostId)
+      }
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )

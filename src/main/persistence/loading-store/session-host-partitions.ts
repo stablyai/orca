@@ -4,6 +4,7 @@ import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobil
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -11,7 +12,11 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import {
+  collectTerminalScrollbackSnapshotRefs,
+  deleteTerminalScrollbackSnapshotSync,
+  readTerminalScrollbackSnapshotSync
+} from '../../terminal-scrollback-snapshots'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
@@ -31,7 +36,11 @@ import type { TerminalBindingRecoveryOperations } from './terminal-binding-recov
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'flushOrThrow'
+  | 'writesFrozen'
+  | 'quitFlushStarted'
 >
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
@@ -78,6 +87,25 @@ export class SessionHostPartitionOperations {
       }
     }
     return [...hostIds]
+  }
+
+  removeRuntimeWorkspaceSessionPartition(hostId: ExecutionHostId): boolean {
+    if (
+      parseExecutionHostId(hostId)?.kind !== 'runtime' ||
+      !hasPersistedWorkspaceSession(this, hostId)
+    ) {
+      return false
+    }
+    const prior = this.getWorkspaceSession(hostId)
+    const partitions = {
+      ...this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId
+    }
+    delete partitions[hostId]
+    this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = partitions
+    invalidateLocalWorktreeMetadataPruneInputs()
+    scheduleSave(this[sessionHostPartitionOperationsContext].scheduling)
+    releaseRemovedHostScrollbackSnapshots(this, prior)
+    return true
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
@@ -216,4 +244,38 @@ export function installSessionHostPartitionOperationsContext(
   Object.defineProperty(target, sessionHostPartitionOperationsContext, {
     value: source[sessionHostPartitionOperationsContext]
   })
+}
+
+function releaseRemovedHostScrollbackSnapshots(
+  owner: SessionHostPartitionOperations,
+  prior: WorkspaceSessionState
+): void {
+  const { runtime } = owner[sessionHostPartitionOperationsContext]
+  const refs = collectTerminalScrollbackSnapshotRefs(prior)
+  if (refs.size === 0 || runtime.writesFrozen || runtime.quitFlushStarted) {
+    return
+  }
+  for (const hostId of owner.getWorkspaceSessionHostIds()) {
+    for (const ref of collectTerminalScrollbackSnapshotRefs(owner.getWorkspaceSession(hostId))) {
+      refs.delete(ref)
+    }
+  }
+  if (refs.size === 0) {
+    return
+  }
+  try {
+    // Never remove files while the durable profile can still reference them.
+    runtime.flushOrThrow()
+  } catch (error) {
+    console.warn(
+      '[terminal-scrollback] Retaining removed host snapshots after save failure:',
+      error
+    )
+    return
+  }
+  // Legacy fallback files can still belong to another profile.
+  const storage = { ...runtime.terminalScrollbackSnapshotStorage, fallbackSnapshotRoot: null }
+  for (const ref of refs) {
+    deleteTerminalScrollbackSnapshotSync(ref, storage)
+  }
 }
