@@ -1,11 +1,8 @@
 import type { Socket } from 'node:net'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
-import {
-  clampToSafeSplitIndex,
-  encodeStreamDataEvent,
-  writeStreamDataEvents
-} from './daemon-stream-data-split'
+import { clampToSafeSplitIndex, writeStreamDataEvents } from './daemon-stream-data-split'
+import { DaemonStreamHeldRefill } from './daemon-stream-held-refill'
 import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
 import type { DaemonEvent } from './types'
 import { appendDaemonStreamData, type DaemonStreamEnqueueOptions } from './daemon-stream-data-entry'
@@ -44,6 +41,7 @@ type DaemonStreamDataBatcherOptions = {
 
 export class DaemonStreamDataBatcher {
   private pendingByClient = new Map<string, PendingStreamDataBatch>()
+  private readonly heldRefill = new DaemonStreamHeldRefill((clientId) => this.flush(clientId))
   private getClient: (clientId: string) => StreamDataClient | undefined
   private maxLineBytes: number
   private onAfterSocketWrite: (() => void) | undefined
@@ -229,24 +227,14 @@ export class DaemonStreamDataBatcher {
     if (retained.length > 0) {
       batch.queue = retained
       // 'drain' only fires when the buffer fully empties (one gate-depth/turn = seconds for multi-MB backlogs); arm a no-op data event whose flush callback re-flushes while bytes are still in flight.
-      this.armHeldQueueRefill(socket, clientId, retained[0].sessionId)
+      if (!socket.destroyed) {
+        this.heldRefill.arm(clientId, retained[0].sessionId, (line, complete) =>
+          socket.write(line, complete)
+        )
+      }
       return
     }
     this.pendingByClient.delete(clientId)
-  }
-
-  private refillArmedClients = new Set<string>()
-
-  private armHeldQueueRefill(socket: Socket, clientId: string, sessionId: string): void {
-    if (this.refillArmedClients.has(clientId) || socket.destroyed) {
-      return
-    }
-    this.refillArmedClients.add(clientId)
-    // Must be a real protocol no-op line, not an empty write: an empty write's callback fires immediately, defeating the in-flight re-flush.
-    socket.write(encodeStreamDataEvent(sessionId, ''), () => {
-      this.refillArmedClients.delete(clientId)
-      this.flush(clientId)
-    })
   }
 
   private queuedCharsForSession(
@@ -324,6 +312,7 @@ export class DaemonStreamDataBatcher {
   }
 
   clear(clientId?: string): void {
+    this.heldRefill.clear(clientId)
     const batches =
       clientId === undefined
         ? Array.from(this.pendingByClient.entries())
