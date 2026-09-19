@@ -30,6 +30,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   aug: 'Auggie',
   cline: 'Cline',
   codebuff: 'Codebuff',
+  freebuff: 'Freebuff',
   'command-code': 'Command Code',
   continue: 'Continue',
   cursor: 'Cursor',
