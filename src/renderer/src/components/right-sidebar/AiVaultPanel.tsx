@@ -241,7 +241,8 @@ export default function AiVaultPanel(): React.JSX.Element {
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,
-    hideEmptySessions
+    hideEmptySessions,
+    historySessions: searching ? history : undefined
   })
 
   const copyText = useCallback(async (text: string, label: string): Promise<void> => {

@@ -149,6 +149,46 @@ describe('AI Vault session list custom titles', () => {
     expect(resolveAiVaultSessionListTitle(index, session)).toBe('Retained rename')
   })
 
+  it('prefers the current tab rename over a frozen retained snapshot', () => {
+    const entry = makeEntry({ state: 'done' })
+    const index = buildAiVaultOriginalPaneIndex(
+      makeState({
+        retainedAgentsByPaneKey: {
+          [entry.paneKey]: {
+            entry,
+            worktreeId: 'wt-1',
+            tab: makeTab('Frozen retained name'),
+            agentType: 'codex',
+            startedAt: 1
+          }
+        },
+        tabsByWorktree: { 'wt-1': [makeTab('Renamed after finish')] }
+      })
+    )
+
+    expect(resolveAiVaultSessionListTitle(index, session)).toBe('Renamed after finish')
+  })
+
+  it('drops a cleared rename when the retained snapshot still has one', () => {
+    const entry = makeEntry({ state: 'done' })
+    const index = buildAiVaultOriginalPaneIndex(
+      makeState({
+        retainedAgentsByPaneKey: {
+          [entry.paneKey]: {
+            entry,
+            worktreeId: 'wt-1',
+            tab: makeTab('Frozen retained name'),
+            agentType: 'codex',
+            startedAt: 1
+          }
+        },
+        tabsByWorktree: { 'wt-1': [makeTab(null)] }
+      })
+    )
+
+    expect(resolveAiVaultSessionListTitle(index, session)).toBe('First user prompt')
+  })
+
   it('uses a sleeping tab rename when no live or retained tab claims the session', () => {
     const record: SleepingAgentSessionRecord = {
       paneKey: makePaneKey('tab-1', LEAF_ID),

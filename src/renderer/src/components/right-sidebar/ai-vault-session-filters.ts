@@ -40,40 +40,26 @@ export function useAiVaultPanelSessions(
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,
-    hideEmptySessions
-  }: AiVaultSessionFilterState
+    hideEmptySessions,
+    /** Full history list used to find rename-only matches during desktop search. */
+    historySessions
+  }: AiVaultSessionFilterState & { historySessions?: readonly AiVaultSession[] }
 ) {
   const { getSessionDisplayTitle } = useAiVaultOriginalPaneActions()
+  const titleSourceSessions = searching && historySessions ? historySessions : sessions
   const sessionDisplayTitleById = useMemo(() => {
     const titles = new Map<string, string>()
-    for (const session of sessions) {
+    for (const session of titleSourceSessions) {
       const title = getSessionDisplayTitle(session)
       if (title !== session.title) {
         titles.set(session.id, title)
       }
     }
     return titles
-  }, [getSessionDisplayTitle, sessions])
+  }, [getSessionDisplayTitle, titleSourceSessions])
 
-  const filteredSessions = useMemo(
-    () =>
-      searching
-        ? sessions
-        : filterAiVaultSessions(sessions, {
-            query,
-            agents,
-            scope,
-            sort,
-            activeWorktreePaths,
-            activeProjectKey,
-            sessionProjectById,
-            projectLabelByKey,
-            hideEmptySessions,
-            sessionDisplayTitleById
-          }),
-    [
-      searching,
-      sessions,
+  const filteredSessions = useMemo(() => {
+    const filterInput = {
       query,
       agents,
       scope,
@@ -84,8 +70,37 @@ export function useAiVaultPanelSessions(
       projectLabelByKey,
       hideEmptySessions,
       sessionDisplayTitleById
-    ]
-  )
+    }
+    if (!searching) {
+      return filterAiVaultSessions(sessions, filterInput)
+    }
+    // Desktop search answers the query in the main process, which cannot see
+    // renderer tab renames. Keep main-process hits, then union history rows
+    // that match via the Orca overlay title (shared filter branch).
+    const byId = new Map(sessions.map((session) => [session.id, session]))
+    if (historySessions && historySessions.length > 0 && query.trim().length > 0) {
+      for (const session of filterAiVaultSessions(historySessions, filterInput)) {
+        if (!byId.has(session.id)) {
+          byId.set(session.id, session)
+        }
+      }
+    }
+    return [...byId.values()]
+  }, [
+    searching,
+    sessions,
+    historySessions,
+    query,
+    agents,
+    scope,
+    sort,
+    activeWorktreePaths,
+    activeProjectKey,
+    sessionProjectById,
+    projectLabelByKey,
+    hideEmptySessions,
+    sessionDisplayTitleById
+  ])
   const groups = useMemo(
     () =>
       searching

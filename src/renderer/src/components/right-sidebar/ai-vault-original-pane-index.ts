@@ -46,6 +46,7 @@ function appendToIndex<T>(index: Map<string, T[]>, key: string, value: T): void 
   }
 }
 
+/** Index live/retained/sleeping panes and their current Orca custom titles. */
 export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVaultOriginalPaneIndex {
   const liveByProvider: ProviderIndex<LiveEntry> = new Map()
   const liveWithoutProviderByAgent: AgentIndex<LiveEntry> = new Map()
@@ -90,7 +91,13 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
       appendToIndex(retainedByProvider, key, retained)
       if (!liveClaimed.has(key)) {
         retainedClaimed.add(key)
-        const title = retained.tab.customTitle?.trim()
+        // Prefer the live tab object when it still exists — retained.tab is a
+        // disappearance-time snapshot and will miss later renames/clears.
+        const tabId = paneTabId(retained.entry.tabId ?? retained.tab.id, retained.entry.paneKey)
+        const currentTab = tabId ? tabsById.get(tabId) : undefined
+        const title = currentTab
+          ? currentTab.customTitle?.trim() || undefined
+          : retained.tab.customTitle?.trim() || undefined
         if (title && !customTitleByProvider.has(key)) {
           customTitleByProvider.set(key, title)
         }
@@ -240,6 +247,7 @@ export function findAiVaultSessionLiveStateInIndex(
   return promptMatchedStates.length === 1 ? promptMatchedStates[0] : null
 }
 
+/** Orca tab rename for a vault session, or null when none / subagent. */
 export function findAiVaultSessionCustomTitle(
   index: AiVaultOriginalPaneIndex,
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'subagent'>
@@ -250,6 +258,7 @@ export function findAiVaultSessionCustomTitle(
   return index.customTitleByProvider.get(providerKey(session.agent, session.sessionId)) ?? null
 }
 
+/** List-row title: Orca rename wins over the scanner title (not for subagents). */
 export function resolveAiVaultSessionListTitle(
   index: AiVaultOriginalPaneIndex,
   session: AiVaultSession

@@ -48,6 +48,7 @@ export type AiVaultSessionFilterState = {
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
   /** Orca tab renames keyed by vault session id; searched without mutating session.title. */
+  /** Optional Orca tab rename overlay keyed by session id (searchable). */
   sessionDisplayTitleById?: ReadonlyMap<string, string>
 }
 
