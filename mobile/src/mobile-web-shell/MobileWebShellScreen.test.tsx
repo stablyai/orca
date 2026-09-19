@@ -211,6 +211,8 @@ describe('the hybrid shell screen', () => {
     dependencies.lifecycle.length = 0
     dependencies.client = null
     dependencies.back.mockReset()
+    dependencies.openUrl.mockReset()
+    dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
     dependencies.canGoBack = true
     dependencies.pathname = '/h/host-1'
   })
@@ -408,7 +410,10 @@ describe('the hybrid shell screen', () => {
   it('reports a URL nothing on this phone could open, which is the dead tap that survives', async () => {
     dependencies.client = createFakeRpcClient()
     const failure = new Error('no activity found')
-    dependencies.openUrl.mockReturnValue(Promise.reject(failure))
+    // A fresh rejection per call, not one built here: `mockReturnValue(Promise.reject(...))` builds
+    // it now and nothing attaches a handler until the frame arrives, which is an unhandled
+    // rejection in the window between.
+    dependencies.openUrl.mockImplementation(() => Promise.reject(failure))
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const tree = await render(readyState('session-one'))
     await act(async () => {
