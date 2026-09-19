@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BRIDGE_MAX_DEPTH,
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_METHOD_CHARS,
   BRIDGE_MAX_NODES,
@@ -9,6 +10,7 @@ import {
   BRIDGE_MAX_REPLY_PARTS,
   BRIDGE_DIRECTIONS,
   BRIDGE_MAX_SUBSCRIPTIONS,
+  isBridgeExternalLinkUrl,
   parseBridgeMessage,
   utf8ByteLength
 } from './bridge-caps'
@@ -222,5 +224,51 @@ describe('parseBridgeMessage direction', () => {
       ok: false,
       refusal: 'malformed-json'
     })
+  })
+})
+
+/**
+ * Which URLs the shell will open for a page.
+ *
+ * Parsed rather than prefix-matched on purpose: a scheme is what a URL parser says it is, and a
+ * `startsWith('https:')` reads one out of `javascript:alert("https://x")`. Both sides run this —
+ * the envelope refuses the frame and the page's seam refuses the call — so the rule lives once.
+ */
+describe('the URLs a page may hand to the shell', () => {
+  it('takes the three schemes a task source produces, on any host and any path', () => {
+    for (const url of [
+      'https://github.com/stablyai/orca/pull/1',
+      'http://localhost:3000/x?y=1#z',
+      'mailto:someone@example.com?subject=hi',
+      'https://user:pass@example.com/a%20b'
+    ]) {
+      expect(isBridgeExternalLinkUrl(url), url).toBe(true)
+    }
+  })
+
+  it('refuses every other scheme, including one hiding an allowed word', () => {
+    for (const url of [
+      'javascript:alert("https://example.com")',
+      'file:///etc/passwd',
+      'data:text/html,<script>1</script>',
+      'intent://scan/#Intent;scheme=zxing;end',
+      'orca-mobile-web://session/x',
+      'ftp://example.com/f'
+    ]) {
+      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
+    }
+  })
+
+  it('refuses a target that is not an absolute URL at all', () => {
+    for (const url of ['', '/h/host-a/tasks', '//example.com', 'example.com', 'https://']) {
+      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
+    }
+  })
+
+  it('holds the URL to the same cap a route href gets', () => {
+    const under = `https://example.com/${'a'.repeat(BRIDGE_MAX_EXTERNAL_LINK_CHARS - 20)}`
+    expect(under).toHaveLength(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    expect(isBridgeExternalLinkUrl(under)).toBe(true)
+    expect(isBridgeExternalLinkUrl(`${under}a`)).toBe(false)
   })
 })

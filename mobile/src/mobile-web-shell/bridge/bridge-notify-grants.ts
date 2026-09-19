@@ -1,4 +1,5 @@
 import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   type BridgeClientMessage
@@ -28,6 +29,7 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
   storage: 'storage',
+  [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
   [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
 }
 

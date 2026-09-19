@@ -4,6 +4,7 @@ import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { BRIDGE_MAX_SUBSCRIPTIONS } from './bridge/bridge-caps'
 import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
@@ -221,6 +222,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         if (outcome !== 'popped') {
           options.onDiagnostic?.({ kind: 'navigate-back-refused', why: outcome })
         }
+        return
+      }
+      if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
+        // Local as well: this one leaves the app entirely rather than reaching the desktop. The
+        // envelope has already held the URL to the allowed schemes, so nothing is re-checked here.
+        options.onExternalLink(message.url)
         return
       }
       if (message.name === 'storage') {

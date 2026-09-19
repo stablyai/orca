@@ -82,6 +82,40 @@ export const BRIDGE_ROUTE_HREF_PATTERN = new RegExp(
   String.raw`^${ROUTE_PATH_SOURCE}(?:\?[^#\s]*)?$`
 )
 export const BRIDGE_MAX_ROUTE_HREF_CHARS = 2048
+
+/**
+ * The schemes a page may ask the shell to open in the system browser, and the only three.
+ *
+ * `https:` and `http:` are what every provider's task source is, and `mailto:` is what a review
+ * thread produces. Everything else — `javascript:`, `data:`, `file:`, `intent:`, the shell's own
+ * `orca-mobile-web:` — is a way to reach something the page was never granted, so the list is
+ * closed. Broad inside it on purpose: any host and any path, because a grant that named GitHub
+ * would have to grow a row per provider.
+ */
+export const BRIDGE_EXTERNAL_LINK_SCHEMES: readonly string[] = ['https:', 'http:', 'mailto:']
+
+/** The same bound a route href gets: one cap for every URL that crosses, in either direction. */
+export const BRIDGE_MAX_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
+
+/**
+ * Whether the shell will open this URL. Both sides run it: the envelope refuses the frame, and the
+ * page's seam refuses the call so a tap knows it went nowhere.
+ *
+ * Parsed rather than prefix-matched, because a scheme is what a URL parser says it is and
+ * `startsWith('https:')` reads one out of `javascript:alert("https://x")`. `URL` with no base
+ * accepts only an absolute URL, which is the rest of the rule: a relative target is a route, and
+ * routes go back over `navigate`.
+ */
+export function isBridgeExternalLinkUrl(url: string): boolean {
+  if (url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
+    return false
+  }
+  try {
+    return BRIDGE_EXTERNAL_LINK_SCHEMES.includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
 export const BRIDGE_MAX_PAGE_ROUTES = 64
 /** A host id, its name and its endpoint. Bounded because the page renders all three. */
 export const BRIDGE_MAX_HOST_FIELD_CHARS = 1024

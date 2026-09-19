@@ -37,7 +37,7 @@ describe('init and state', () => {
           maxSubscriptions: BRIDGE_MAX_SUBSCRIPTIONS
         },
         // What the shell will do for the page, and what makes its `navigate` frame acceptable.
-        native: [BRIDGE_FAULT_GRANT, 'navigate', 'storage']
+        native: [BRIDGE_FAULT_GRANT, 'navigate', 'storage', 'externalLink']
       },
       route: ROUTE,
       pageRoutes: PAGE_ROUTES,

@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -181,6 +181,11 @@ export function MobileWebShellScreen({
     // download and no second `init`.
     onNavigate: (href: string) => {
       router.push(href)
+    },
+    // Straight to the system handler. The envelope allowlisted the scheme before this ran, and the
+    // rejection is swallowed because this is a native frame handler with nowhere to put a throw.
+    onExternalLink: (url: string) => {
+      void Linking.openURL(url).catch(() => {})
     },
     // The page's own Back goes nowhere: it holds the one history entry the entry wrote, so the only
     // stack to pop is this one.

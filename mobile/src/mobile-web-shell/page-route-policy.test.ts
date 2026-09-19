@@ -69,6 +69,6 @@ describe('the grants this app implements', () => {
   it('names exactly what the shell honours over the bridge', () => {
     // The same list `init.grants.native` gives the page. A name here with nothing behind it is a
     // route the desktop will hand over and the page will find it cannot use.
-    expect([...MOBILE_WEB_SHELL_GRANTS]).toEqual(['navigate', 'storage'])
+    expect([...MOBILE_WEB_SHELL_GRANTS]).toEqual(['navigate', 'storage', 'externalLink'])
   })
 })
