@@ -66,6 +66,8 @@ export function harness(
      */
     /** What the mounted route declared; everything this shell implements unless a case narrows it. */
     routeGrants?: readonly string[]
+    /** Stands for a host rebuilt under a page whose session already handshook. */
+    sessionEstablished?: boolean
     ready?: boolean
     /** What the pasteboard answers a read with. */
     clipboardText?: string
@@ -95,6 +97,7 @@ export function harness(
     route: options.route ?? ROUTE,
     pageRoutes: PAGE_ROUTES,
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
+    sessionEstablished: options.sessionEstablished ?? false,
     host: HOST,
     readStorage: options.readStorage ?? (() => options.storage ?? {}),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),

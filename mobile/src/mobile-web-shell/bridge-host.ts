@@ -65,7 +65,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // Whether this host has ever answered a `ready`. Not the same as `serving`, which starts true so
   // the first document's frames are not refused for arriving in the same batch as its `ready`: this
   // one starts false, because a page that has been told no grants holds none.
-  let initSent = false
+  // Seeded from the session rather than started false: this host may be a rebuild taking over a
+  // session that handshook with the one before it.
+  let initSent = options.sessionEstablished
   let postFailureReported = false
   let notifyFailureReported = false
 
@@ -321,10 +323,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       options.onDiagnostic?.({ kind: 'frame-after-close' })
       return
     }
-    // A page that has not asked for a session has been told no caps, no grants and no route, so
-    // anything it opens is a frame from a document this host has said nothing to. The notify path
-    // has refused that since C0 under the same name; requests and streams did not.
-    if (!initSent && message.type === 'request') {
+    // A page whose session has never handshook has been told no caps, no grants and no route, so
+    // anything it opens is a frame from a document nothing has answered. The notify path has
+    // refused that since C0 under the same name; requests and streams did not. Keyed on the
+    // session, so a host rebuilt under a live page serves it rather than refusing until reload.
+    if (!initSent && (message.type === 'request' || message.type === 'subscribe')) {
       options.onDiagnostic?.({ kind: 'notify-refused', name: message.method, why: 'before-ready' })
       sendError(message.id, new BridgeCapExceededError('before-ready'))
       return

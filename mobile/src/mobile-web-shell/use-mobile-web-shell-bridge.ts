@@ -100,6 +100,8 @@ export function useMobileWebShellBridge(args: {
   const routeRef = useRef(args.route)
   const pageRoutesRef = useRef(args.pageRoutes)
   const routeGrantsRef = useRef(args.routeGrants)
+  /** The session that has completed a handshake, so a host rebuilt for it inherits that. */
+  const establishedSessionRef = useRef<string | null>(null)
   // Read through a ref for the same reason: the host is built once per session, and a caller's
   // fresh closure every render must not tear one down and settle its pendings.
   const navigateRef = useRef(args.onNavigate)
@@ -155,10 +157,12 @@ export function useMobileWebShellBridge(args: {
       route: routeRef.current,
       pageRoutes: pageRoutesRef.current,
       routeGrants: routeGrantsRef.current,
+      sessionEstablished: establishedSessionRef.current === sessionId,
       onPageFault: (error) => {
         pageFaultRef.current(error)
       },
       onPageReady: () => {
+        establishedSessionRef.current = sessionId
         pageReadyRef.current()
       },
       onRouteRefused: (issue) => {

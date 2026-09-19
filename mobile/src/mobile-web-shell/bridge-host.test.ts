@@ -223,7 +223,7 @@ describe('replies too big for one frame', () => {
 
 describe('subscriptions', () => {
   it('forwards with the arity the recorder reads and streams events from seq 1', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     expect(bridge.client.streams[0]?.method).toBe('terminal.subscribe')
     bridge.client.streams[0]?.emit({ chunk: 'a' })
@@ -235,19 +235,19 @@ describe('subscriptions', () => {
   })
 
   it('admits exactly the subscription cap and refuses the next', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
       bridge.host.receive(subscribeFrame(bridgeId(index)))
     }
     expect(bridge.client.streams).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
-    expect(bridge.posted).toHaveLength(0)
+    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
     bridge.host.receive(subscribeFrame(bridgeId(BRIDGE_MAX_SUBSCRIPTIONS)))
     expect(bridge.client.streams).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
     expect(bridge.last().type).toBe('error')
   })
 
   it('reopens a slot when a stream is cancelled', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
       bridge.host.receive(subscribeFrame(bridgeId(index)))
     }
@@ -257,7 +257,7 @@ describe('subscriptions', () => {
   })
 
   it('unsubscribes on cancel, says so, and delivers nothing after', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     bridge.client.streams[0]?.emit({ chunk: 'a' })
     bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'subscription' }))
@@ -287,6 +287,7 @@ describe('subscriptions', () => {
     const client = createFakeRpcClient()
     let unsubscribes = 0
     const bridge = harness({
+      ready: true,
       client: {
         ...client,
         subscribe: (_method, _params, onData) => {
@@ -298,7 +299,9 @@ describe('subscriptions', () => {
       }
     })
     bridge.host.receive(subscribeFrame(ID))
-    expect(bridge.frames()).toEqual([{ v: 1, type: 'end', id: ID, reason: 'overflow' }])
+    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([
+      { v: 1, type: 'end', id: ID, reason: 'overflow' }
+    ])
     // The stream was already retired when its unsubscribe arrived, so storing it on the record
     // would leak the client's stream with nothing left to read it.
     expect(unsubscribes).toBe(1)
@@ -313,7 +316,7 @@ describe('backpressure', () => {
   }
 
   it('sends exactly the unacked frame window and then ends with overflow', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
     expect(bridge.frames().filter((frame) => frame.type === 'event')).toHaveLength(
@@ -325,7 +328,7 @@ describe('backpressure', () => {
   })
 
   it('reopens the window on ack', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: BRIDGE_MAX_UNACKED_FRAMES }))
@@ -336,7 +339,7 @@ describe('backpressure', () => {
   })
 
   it('acks only up to the seq it was given', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: 1 }))
@@ -349,7 +352,7 @@ describe('backpressure', () => {
   })
 
   it('ends on the unacked byte window well before the frame window is reached', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
     const ended = (): boolean => (bridge.posted.at(-1) ?? '').includes('"type":"end"')
@@ -368,7 +371,7 @@ describe('backpressure', () => {
   })
 
   it('reopens the byte window on ack, not just the frame window', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
     // What fits under the byte window, which leaves the next frame of this size to overflow it.
@@ -391,14 +394,14 @@ describe('backpressure', () => {
   })
 
   it('ends rather than posting an event the page would refuse as oversized', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     bridge.client.streams[0]?.emit('z'.repeat(BRIDGE_MAX_MESSAGE_BYTES))
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
   it('keeps each stream on its own window', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     bridge.host.receive(subscribeFrame(OTHER))
     for (let index = 0; index <= BRIDGE_MAX_UNACKED_FRAMES; index += 1) {
@@ -450,11 +453,11 @@ describe('teardown', () => {
   })
 
   it('is idempotent', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
     bridge.host.dispose()
     bridge.host.dispose()
-    expect(bridge.frames()).toHaveLength(1)
+    expect(bridge.frames()).toHaveLength(2)
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
   })
 

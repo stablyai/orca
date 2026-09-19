@@ -380,12 +380,14 @@ describe('teardown', () => {
 
   it('disposes when the session leaves ready, and answers nothing after', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
     await mounted.update({ kind: 'failed', reason: 'render-process-gone', retriedOnce: false })
     expect(fakeClient().streams[0]?.unsubscribes).toBe(1)
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.frames('session-one')).toEqual([])
+    // The `init` the session opened with, and nothing after the host left ready.
+    expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([])
     expect(fakeClient().requests).toEqual([])
   })
 
@@ -509,9 +511,6 @@ describe('client changes', () => {
     const next = createFakeRpcClient()
     doubles.client = next
     await mounted.update(readyState('session-one'))
-    // The rebuilt host has issued no `init` of its own, and a host serves no request before it
-    // has. See the report: nothing makes a live page re-ask after a client swap.
-    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(next.requests).toHaveLength(1)
     expect(first.requests).toHaveLength(0)

@@ -99,6 +99,29 @@ describe('a request before the page has asked for a session', () => {
     expect(refusal(bridge)?.message).toContain('before-ready')
   })
 
+  it('serves a session that handshook with the host this one replaced', async () => {
+    // A client swap rebuilds the host under a live page. The page does not know: the session id is
+    // the same, so it neither re-handshakes nor hears that the shell was replaced. Refusing it
+    // would leave a working page dead until reload, which the gate is not for.
+    const bridge = harness({ sessionEstablished: true, clipboardText: 'still mine' })
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { value: 'still mine' } })
+  })
+
+  it('serves a stream for such a session too, since the rule is the session and not the frame', () => {
+    const bridge = harness({ sessionEstablished: true })
+    bridge.host.receive(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
+    expect(bridge.client.streams).toHaveLength(1)
+  })
+
+  it('refuses a stream on a session that never handshook', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
+    expect(bridge.client.streams).toEqual([])
+    expect(refusal(bridge)?.message).toContain('before-ready')
+  })
+
   it('serves the same request once the page has asked', async () => {
     const bridge = harness({ clipboardText: 'ready now' })
     bridge.host.receive(clientFrame({ type: 'ready' }))

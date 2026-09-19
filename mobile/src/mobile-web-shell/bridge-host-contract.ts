@@ -66,6 +66,15 @@ export type BridgeHostOptions = {
    * navigation does not get the clipboard because some other route needs it.
    */
   routeGrants: readonly string[]
+  /**
+   * Whether this session already completed a handshake before this host existed.
+   *
+   * A host is rebuilt when the client under it changes, and the page on the other side does not
+   * know: the session id is the same, so it neither re-handshakes nor hears `BridgeShellReplaced`.
+   * The pre-handshake refusal is about the session, not this object, so a rebuilt host inherits
+   * what the session already established and serves it.
+   */
+  sessionEstablished: boolean
   /** The host the page is showing, minus the credential the bridge already carries for it. */
   host: BridgeInitHost
   /**
