@@ -64,6 +64,12 @@ export type BridgeRpcClient = RpcClient & {
    * distinguishable from here, so the caller falls back to its own router for both.
    */
   notifyNavigateBack: () => boolean
+  /**
+   * Asks the shell to open a URL outside the app. False when the shell granted no `externalLink`,
+   * or when the URL is not one the grant covers — the caller has to do something else with it, and
+   * a throw inside a tap handler is not that.
+   */
+  notifyExternalLink: (url: string) => boolean
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -309,6 +315,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyForeground: notifications.notifyForeground,
     notifyNavigate: notifications.notifyNavigate,
     notifyNavigateBack: notifications.notifyNavigateBack,
+    notifyExternalLink: notifications.notifyExternalLink,
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyPageFault: notifications.notifyPageFault,
     close,

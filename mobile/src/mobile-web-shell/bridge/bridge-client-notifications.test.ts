@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BridgeClientNotReadyError } from './bridge-client-errors'
 import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION
@@ -79,6 +80,7 @@ describe('the notify guard before init', () => {
     const beforeNotifies = page.sent.length
     expect(page.client.notifyNavigate('/h/host-1')).toBe(false)
     expect(page.client.notifyNavigateBack()).toBe(false)
+    expect(page.client.notifyExternalLink('https://example.com')).toBe(false)
     expect(page.client.notifyStorageWrite('orca:last-visited-worktree', 'value')).toBe(false)
     expect(page.sent).toHaveLength(beforeNotifies)
   })
@@ -143,5 +145,54 @@ describe('navigate-back', () => {
     page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
     page.client.close()
     expect(page.client.notifyNavigateBack()).toBe(false)
+  })
+})
+
+/**
+ * The verb whose refusal the caller has to hear about.
+ *
+ * Nothing crosses back for a notify, so the boolean is the only answer a tap gets. A URL outside
+ * the three schemes is refused here rather than posted and dropped at the frame, because the page
+ * reporting "opened" into a frame the shell threw away is the dead tap the grant exists to rule out.
+ */
+describe('externalLink', () => {
+  function granted(): ReturnType<typeof createPageClient> {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_EXTERNAL_LINK_GRANT] } })
+    return page
+  }
+
+  it('posts an allowed URL under its own grant', () => {
+    const page = granted()
+    expect(page.client.notifyExternalLink('https://github.com/stablyai/orca')).toBe(true)
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'notify',
+      name: BRIDGE_EXTERNAL_LINK_GRANT,
+      url: 'https://github.com/stablyai/orca'
+    })
+  })
+
+  it('answers false for a scheme the grant does not cover, and posts nothing', () => {
+    const page = granted()
+    const beforeNotify = page.sent.length
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '/h/host-a/tasks']) {
+      expect(page.client.notifyExternalLink(url), url).toBe(false)
+    }
+    expect(page.sent).toHaveLength(beforeNotify)
+  })
+
+  it('stays quiet against a shell that granted no externalLink', () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate', 'storage'] } })
+    const beforeNotify = page.sent.length
+    expect(page.client.notifyExternalLink('https://example.com')).toBe(false)
+    expect(page.sent).toHaveLength(beforeNotify)
+  })
+
+  it('answers false after close rather than throwing into a teardown', () => {
+    const page = granted()
+    page.client.close()
+    expect(page.client.notifyExternalLink('https://example.com')).toBe(false)
   })
 })
