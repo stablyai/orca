@@ -30,21 +30,45 @@ import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
  * lasts at most as long as the screen that took it. That bound is what makes one latch over the
  * whole stack safe — without it a discarded pop would leave Back dead for the rest of the session.
  */
+/**
+ * Module-scoped, because the stack is. `MobileWebShellScreen` mounts at both the worktree list and
+ * the embedded browser route, and one is deep-linkable over the other, so a latch per screen leaves
+ * two shells holding one each while the pops they queue land on the same stack.
+ *
+ * Holds which screen took it, so only that screen can give it back: a shell whose own route
+ * commits must not release a pop another shell is still waiting on.
+ */
+let pendingPop: symbol | null = null
+
 export function useShellStackPop(): () => BridgeNavigateBackOutcome {
   const router = useRouter()
   const pathname = usePathname()
-  const popPending = useRef(false)
+  const holder = useRef<symbol | null>(null)
+
+  function releaseHeldPop(): void {
+    if (holder.current !== null && pendingPop === holder.current) {
+      pendingPop = null
+    }
+    holder.current = null
+  }
+
+  // On the committed route, and on the way out. Unmounting is what bounds the two pops the clear
+  // above never hears about: a latch nobody is left to release would outlive the stack it guards.
   useEffect(() => {
-    popPending.current = false
+    releaseHeldPop()
+    return releaseHeldPop
   }, [pathname])
+
   return useCallback(() => {
-    if (popPending.current) {
+    if (pendingPop !== null) {
       return 'pop-pending'
     }
     if (!router.canGoBack()) {
       return 'nothing-to-pop'
     }
-    popPending.current = true
+    const token = Symbol('shell-stack-pop')
+    pendingPop = token
+    holder.current = token
     router.back()
     return 'popped'
   }, [router])

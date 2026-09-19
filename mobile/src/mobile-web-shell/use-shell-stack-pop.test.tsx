@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 
 type RoutingModule = {
@@ -81,6 +81,10 @@ import { useShellStackPop } from './use-shell-stack-pop'
 
 type Harness = {
   pop: () => BridgeNavigateBackOutcome
+  /** A second `MobileWebShellScreen` over the same native stack, which `/h/a/web` makes reachable. */
+  mountSecondShell: () => () => BridgeNavigateBackOutcome
+  /** Drops the screen that took the latch, leaving the second one mounted. */
+  unmountHolder: () => void
   screens: string[]
   drain: () => void
   commitRoute: (pathname: string) => void
@@ -90,9 +94,19 @@ function mount(screens: string[]): Harness {
   const ref = stackRef(screens)
   const routing = loadRoutingModule(ref)
   router.value = { canGoBack: routing.canGoBack, back: () => routing.goBack() }
-  const held: { pop: (() => BridgeNavigateBackOutcome) | null } = { pop: null }
+  const held: {
+    pop: (() => BridgeNavigateBackOutcome) | null
+    second: (() => BridgeNavigateBackOutcome) | null
+  } = {
+    pop: null,
+    second: null
+  }
   function Screen(): null {
     held.pop = useShellStackPop()
+    return null
+  }
+  function SecondShell(): null {
+    held.second = useShellStackPop()
     return null
   }
   const rendered: { tree: ReturnType<typeof create> | null } = { tree: null }
@@ -100,6 +114,9 @@ function mount(screens: string[]): Harness {
     rendered.tree = create(<Screen />)
   })
   const tree = rendered.tree
+  if (tree !== null) {
+    mounted.push(tree)
+  }
   const pop = held.pop
   if (tree === null) {
     throw new Error('nothing rendered')
@@ -109,6 +126,26 @@ function mount(screens: string[]): Harness {
   }
   return {
     pop,
+    mountSecondShell: () => {
+      act(() => {
+        tree.update(
+          <>
+            <Screen />
+            <SecondShell />
+          </>
+        )
+      })
+      const second = held.second
+      if (second === null) {
+        throw new Error('the second shell did not mount')
+      }
+      return second
+    },
+    unmountHolder: () => {
+      act(() => {
+        tree.update(<SecondShell />)
+      })
+    },
     screens,
     drain: () => {
       routing.routingQueue.run(ref)
@@ -122,8 +159,20 @@ function mount(screens: string[]): Harness {
   }
 }
 
+/** Unmounted between cases, because the latch outlives a tree that is only dropped: one stack, one
+ *  pending pop, and a screen that never went away is a screen still holding it. */
+const mounted: ReturnType<typeof create>[] = []
+
 beforeEach(() => {
   router.pathname = '/h/host-a/tasks'
+})
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
 })
 
 describe('a page that asks to go back twice in one batch', () => {
@@ -153,5 +202,33 @@ describe('a page that asks to go back twice in one batch', () => {
     expect(harness.pop()).toBe('nothing-to-pop')
     harness.drain()
     expect(harness.screens).toEqual(['home'])
+  })
+})
+
+/**
+ * One native stack, so one pending pop.
+ *
+ * `MobileWebShellScreen` mounts at both `app/h/[hostId]/index.tsx` and `app/h/[hostId]/web.tsx`,
+ * and `/h/a/web` is deep-linkable over `/h/a`, so two shells can be mounted over one stack. A latch
+ * per screen leaves each of them holding its own and two frames still unwind two screens.
+ */
+describe('two shells over one stack', () => {
+  it('share the latch, so the second one cannot pop what the first already queued', () => {
+    const harness = mount(['home', 'host', 'tasks'])
+    const second = harness.mountSecondShell()
+    expect(harness.pop()).toBe('popped')
+    expect(second()).toBe('pop-pending')
+    harness.drain()
+    expect(harness.screens).toEqual(['home', 'host'])
+  })
+
+  it('release the latch when the screen holding it goes away, so a stick cannot outlive it', () => {
+    const harness = mount(['home', 'host', 'tasks'])
+    const second = harness.mountSecondShell()
+    expect(harness.pop()).toBe('popped')
+    // The pop is discarded rather than committed, which is what `routingQueue.run` does when the
+    // container ref is gone: no route commits, so nothing else would ever clear this.
+    harness.unmountHolder()
+    expect(second()).toBe('popped')
   })
 })

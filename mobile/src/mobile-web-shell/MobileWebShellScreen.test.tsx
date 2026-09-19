@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
@@ -146,7 +146,20 @@ async function render(state: MobileWebShellSessionState): Promise<ReactTestRende
   if (rendered.tree === null) {
     throw new Error('screen did not render')
   }
+  mounted.push(rendered.tree)
   return rendered.tree
+}
+
+/** Unmounted between cases: the shell's stack latch is one per stack, so a screen left mounted is
+ *  a screen still holding whatever pop it took. */
+const mounted: ReactTestRenderer[] = []
+
+function unmountRenderedScreens(): void {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
 }
 
 function readyState(sessionId: string): MobileWebShellSessionState {
@@ -184,6 +197,8 @@ function textOf(tree: ReactTestRenderer): string {
     .map((node) => node.children.filter((child) => typeof child === 'string').join(''))
     .join('\n')
 }
+
+afterEach(unmountRenderedScreens)
 
 describe('the hybrid shell screen', () => {
   beforeEach(() => {
