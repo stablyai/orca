@@ -80,8 +80,10 @@ export const MOBILE_WEB_APP_SHIMS = [
 ]
 
 /**
- * react-native-web's own root reset, the bytes Expo's web template ships
- * (`@expo/cli/static/template/index.html`), which nothing generates for a document built here.
+ * react-native-web's own root reset: the same declaration set and `id="expo-reset"` as Expo's web
+ * template (`@expo/cli/static/template/index.html`), minified — the template's own block is
+ * pretty-printed with comments, so this is 112 bytes against its 410. Nothing generates it for a
+ * document built here.
  *
  * Every box below the mount is `flex: 1` against its parent, so with no definite height on all
  * three the root measures 0 and the collapse is silent: the screen still lays out, still reaches
