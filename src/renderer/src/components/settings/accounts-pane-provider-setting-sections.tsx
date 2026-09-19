@@ -101,10 +101,10 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
           'OpenCode Go Session Cookie'
         )}
         description={translate(
-          'auto.components.settings.AccountsPane.b2b1aa936d',
-          'Paste your opencode.ai session cookie for rate limit fetching.'
+          'auto.components.settings.AccountsPane.0335bd31d5',
+          'Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.'
         )}
-        keywords={['opencode', 'cookie', 'session', 'rate limit', 'status bar']}
+        keywords={['opencode', 'cookie', 'session', 'console', 'rate limit', 'status bar']}
         className="space-y-2"
       >
         <Label>
@@ -120,8 +120,8 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
             onEdit={() => recordOpenCodeSettingEdit('cookie')}
             commit={(opencodeSessionCookie) => updateSettings({ opencodeSessionCookie })}
             placeholder={translate(
-              'auto.components.settings.AccountsPane.a7e38affcd',
-              'Fe26.2**… token or auth=Fe26.2**… header'
+              'auto.components.settings.AccountsPane.37b4b4a3f7',
+              'auth=…; __Host-console_session=…'
             )}
             spellCheck={false}
             className="flex-1 text-xs"
@@ -142,22 +142,13 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
         </div>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.AccountsPane.0023cc336e',
-            'Paste either the raw token value (e.g.'
+            'auto.components.settings.AccountsPane.62ab430f94',
+            "Paste the full Cookie header from your browser's DevTools → Network → any opencode.ai request, including __Host-console_session (e.g."
           )}{' '}
-          <code className="text-xs">
-            {translate('auto.components.settings.AccountsPane.922b51e02d', 'Fe26.2**…')}
-          </code>
+          <code className="text-xs">auth=…; __Host-console_session=…</code>
           {translate(
-            'auto.components.settings.AccountsPane.338820326a',
-            ') or the full cookie header (e.g.'
-          )}{' '}
-          <code className="text-xs">
-            {translate('auto.components.settings.AccountsPane.8951c5309f', 'auth=Fe26.2**…')}
-          </code>
-          {translate(
-            'auto.components.settings.AccountsPane.7ce0e1907c',
-            "). Find it in your browser's DevTools → Network → any opencode.ai request → Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals."
+            'auto.components.settings.AccountsPane.d5267cce63',
+            '). The auth cookie still covers workspace discovery; auth alone is not enough for usage. OpenCode Go auth is web-based and shared across Windows and WSL terminals.'
           )}
         </p>
       </SearchableSetting>
