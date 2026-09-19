@@ -25,10 +25,9 @@ import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore, ResolvedRelayAssignment } from './assignment-store.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
 import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
-import { HostCloseReasonMemory } from './host-close-reason-memory.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import {
@@ -174,10 +173,6 @@ export const CONTROL_LEASE_JITTER_MS = 30 * 60 * 1000
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
-  // Why it outlives `sessions`: the orphan grace deletes the session within 30s,
-  // but a signed-out desktop never comes back, so the phone that asks minutes
-  // later would otherwise find nothing to explain its rejection with.
-  private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
   private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
   private draining = false
   private readonly drainTimers = new Set<ReturnType<typeof setTimeout>>()
@@ -379,6 +374,9 @@ export class HostSessionRegistry {
       stageMs[stage] = at - stageCursor
       stageCursor = at
     }
+    // Kept past the admission check: it carries the reason this host is absent, which the
+    // rejection below would otherwise have to fetch in a round trip of its own.
+    let resolvedAssignment: ResolvedRelayAssignment | null = null
     if (this.config.role === 'cell') {
       // Each lookup is its own pooled round trip; stop between them once the phone
       // has left instead of running the rest of the chain for nobody.
@@ -397,6 +395,7 @@ export class HostSessionRegistry {
         this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
         return
       }
+      resolvedAssignment = assignment
       if (abandonedByClient('assignment')) return
     }
     markStage('assignment')
@@ -422,11 +421,15 @@ export class HostSessionRegistry {
       await this.store.failReservation(reservation)
       // The only rejection that can name a cause: the host is genuinely absent.
       // The attach-deadline 4404 below fires while control is still connected.
-      this.rejectClient(
-        socket,
-        RELAY_CLOSE_CODE.HOST_OFFLINE,
-        this.hostCloseReasons.read(sessionKey)
-      )
+      // A cell already holds the row from its admission check above; only `combined`, which
+      // runs no such check, pays a lookup, and only on this path.
+      const hostCloseReason = resolvedAssignment
+        ? resolvedAssignment.lastHostCloseReason
+        : await this.assignments.readHostCloseReason({
+            userId: reservation.userId,
+            relayHostId: hostId
+          })
+      this.rejectClient(socket, RELAY_CLOSE_CODE.HOST_OFFLINE, hostCloseReason)
       return
     }
     if (session.activeConnIds.size + session.pendingConns.size >= 8) {
@@ -1174,6 +1177,12 @@ export class HostSessionRegistry {
       return
     }
     if (existing) this.observer.recordReconnect()
+    // The last point both admissions share: a rebind below returns without ever reaching the new
+    // session built at the end. A host that proved itself is not signed out, whatever it said
+    // last, and a close within the orphan grace leaves a session a later rebind reuses. Not
+    // awaited: the row is fenced on this timestamp, so no ordering against a close still being
+    // written can leave a reason on a host that proved itself at or after it.
+    this.clearHostCloseReason({ userId: identity.sub, relayHostId: identity.relayHostId })
     if (rebind && existing) {
       const previousSocket = existing.socket
       if (existing.orphanTimer) clearTimeout(existing.orphanTimer)
@@ -1254,8 +1263,6 @@ export class HostSessionRegistry {
       regionalDrainExpiresAt: null
     }
     const sessionKey = this.key(identity.sub, identity.relayHostId)
-    // A host that proved itself again is not signed out, whatever it said last.
-    this.hostCloseReasons.forget(sessionKey)
     this.sessions.set(sessionKey, session)
     this.wireActiveControl(session)
     this.sendHelloAck(session)
@@ -1279,7 +1286,10 @@ export class HostSessionRegistry {
       // Guarded on identity: a predecessor retired by a rebind must not stamp a
       // cause onto the live session that replaced it.
       if (session.socket === socket) {
-        this.hostCloseReasons.record(this.key(session.identity.sub, session.relayHostId), reason)
+        this.recordHostCloseReason(
+          { userId: session.identity.sub, relayHostId: session.relayHostId },
+          reason
+        )
       }
       // One line per control close makes reconnect churners attributable by
       // host digest without exposing the raw relay host id.
@@ -1761,6 +1771,26 @@ export class HostSessionRegistry {
       { userId: session.identity.sub, relayHostId: session.relayHostId },
       session.controlActivityId
     )
+  }
+
+  // Both writes are best effort and unawaited: neither is on the path of a frame anyone is
+  // waiting for, and a transient SQL failure while a socket closes must not become an unhandled
+  // rejection that kills the cell. Losing either degrades to the generic verdict, never a wrong
+  // one, because the row is fenced on the timestamps these pass.
+  private recordHostCloseReason(identity: RelayIdentityKey, reason: unknown): void {
+    void this.assignments.recordHostCloseReason(identity, reason, this.now()).catch(() => {
+      console.warn(
+        `[orca-relay] host close reason not persisted host=${relayHostLogDigest(identity.relayHostId)}`
+      )
+    })
+  }
+
+  private clearHostCloseReason(identity: RelayIdentityKey): void {
+    void this.assignments.clearHostCloseReason(identity, this.now()).catch(() => {
+      console.warn(
+        `[orca-relay] host close reason not cleared host=${relayHostLogDigest(identity.relayHostId)}`
+      )
+    })
   }
 
   private releaseActivityBestEffort(identity: RelayIdentityKey, activityId: string): void {
