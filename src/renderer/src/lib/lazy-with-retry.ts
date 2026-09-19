@@ -101,12 +101,20 @@ const MAX_RELOAD_REQUESTS_PER_DOCUMENT = 2
 let reloadRequestsThisDocument = 0
 let reloadRequestInFlight = false
 
+// One exhaustion record per document: every later call site reports the same spent-recovery fact,
+// and the main-process breadcrumb ring only holds 30 entries.
+let exhaustionRecordedThisDocument = false
+
 export function resetLazyChunkReloadRequestsForTest(): void {
   reloadRequestsThisDocument = 0
   reloadRequestInFlight = false
+  exhaustionRecordedThisDocument = false
 }
 
-type ReloadBreadcrumbName = 'lazy_chunk_reload' | 'lazy_chunk_reload_vetoed'
+type ReloadBreadcrumbName =
+  | 'lazy_chunk_reload'
+  | 'lazy_chunk_reload_vetoed'
+  | 'lazy_chunk_recovery_exhausted'
 
 function recordReloadBreadcrumb(
   name: ReloadBreadcrumbName,
@@ -135,6 +143,23 @@ function containedChunkFailure(lastError: unknown, reloadKey: string): unknown {
   return isKnownDynamicImportFailure(lastError)
     ? new LazyChunkLoadError(lastError, reloadKey)
     : lastError
+}
+
+/**
+ * Why: this branch used to throw silently, so a bundle ended at `lazy_chunk_reload` with no record
+ * that the reload had landed and failed again (field bundle F0C17E8TVU0). Without it, a blank
+ * window and a working one that lost one lazy surface read identically.
+ */
+function recordRecoveryExhausted(
+  reloadKey: string,
+  failureMessage: string,
+  outcome: 'reload-landed' | 'reload-cap-spent'
+): void {
+  if (exhaustionRecordedThisDocument) {
+    return
+  }
+  exhaustionRecordedThisDocument = true
+  recordReloadBreadcrumb('lazy_chunk_recovery_exhausted', reloadKey, failureMessage, outcome)
 }
 
 function isKnownDynamicImportFailure(error: unknown): boolean {
@@ -221,6 +246,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
   }
 
   if (reloadGuardState === 'reload-landed') {
+    recordRecoveryExhausted(reloadKey, failureMessage, 'reload-landed')
     throw containedChunkFailure(lastError, reloadKey)
   }
 
@@ -242,6 +268,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
 
   if (reloadGuardState === 'not-attempted') {
     // The per-document reload cap is spent; further failures cannot recover.
+    recordRecoveryExhausted(reloadKey, failureMessage, 'reload-cap-spent')
     throw containedChunkFailure(lastError, reloadKey)
   }
 
