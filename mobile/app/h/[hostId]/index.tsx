@@ -15,6 +15,10 @@ import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobi
  *
  * `enabled === null` is the flag read still settling, and it renders the native screen: a store
  * build never reaches storage at all, so that is the only frame it ever paints here.
+ *
+ * Encoded, not interpolated raw, for the reason `web.tsx` states: a deep-linked host id carrying
+ * `?`, `#` or whitespace would build a pathname the page refuses, and a refusal here is a failure
+ * screen rather than the native list this route already has.
  */
 function HostListScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
@@ -26,7 +30,7 @@ function HostListScreen() {
   return (
     <MobileWebShellScreen
       hostId={hostId}
-      route={{ pathname: `/h/${hostId}` }}
+      route={{ pathname: `/h/${encodeURIComponent(hostId)}` }}
       fallback={<HostScreen />}
     />
   )
