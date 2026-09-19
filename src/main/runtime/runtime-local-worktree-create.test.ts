@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   resolveShared: vi.fn<() => Promise<string[]>>(),
   resolveInclude: vi.fn<() => Promise<string[]>>(),
+  materializeWsl: vi.fn().mockResolvedValue(undefined),
   copyPaths: vi.fn<() => Promise<string[]>>(),
   created: {
     path: '/worktrees/app',
@@ -77,6 +78,9 @@ vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeCopiedPaths: mocks.copyPaths,
   createWorktreeLinkedPaths: vi.fn(),
   createWorktreeSharedPaths: vi.fn()
+}))
+vi.mock('../ipc/wsl-worktree-path-materialization', () => ({
+  materializeWslWorktreePaths: mocks.materializeWsl
 }))
 
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
@@ -209,8 +213,21 @@ describe('runtime create Git priority', () => {
       expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ options }))
       expect(mocks.pushTarget).toHaveBeenCalledWith('/worktrees/app', 'app', target, options)
       expect(mocks.listing).toHaveBeenCalledWith('/repo', '/worktrees/app', 'app', options)
-      expect(mocks.resolveShared).toHaveBeenCalledWith('/repo', options)
-      expect(mocks.resolveInclude).toHaveBeenCalledWith('/repo', options)
+      if (wslDistro) {
+        expect(mocks.materializeWsl).toHaveBeenCalledWith(
+          wslDistro,
+          '/repo',
+          '/worktrees/app',
+          [],
+          undefined,
+          []
+        )
+        expect(mocks.resolveShared).not.toHaveBeenCalled()
+        expect(mocks.resolveInclude).not.toHaveBeenCalled()
+      } else {
+        expect(mocks.resolveShared).toHaveBeenCalledWith('/repo')
+        expect(mocks.materializeWsl).not.toHaveBeenCalled()
+      }
     }
   )
 

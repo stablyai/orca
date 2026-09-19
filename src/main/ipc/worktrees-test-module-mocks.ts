@@ -180,11 +180,13 @@ export const sshFilesystemDispatchModuleMock = () => ({
 
 export const worktreeSymlinksModuleMock = (): {
   createWorktreeCopiedPaths: ModuleMock
+  createWorktreeSharedPaths: ModuleMock
   createWorktreeLinkedPaths: ModuleMock
   findExistingWorktreeSymlinkPaths: ModuleMock
   removeWorktreeLinkedPaths: ModuleMock
 } => ({
-  createWorktreeCopiedPaths: vi.fn(),
+  createWorktreeCopiedPaths: vi.fn().mockResolvedValue([]),
+  createWorktreeSharedPaths: vi.fn(),
   createWorktreeLinkedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock

@@ -90,6 +90,7 @@ export type WslResult = {
   stdout: string
   stderr: string
   timedOut: boolean
+  outputTruncated?: boolean
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
@@ -255,6 +256,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     code: result.code,
     stdout: result.stdout,
     stderr: result.stderr,
-    timedOut: result.timedOut
+    timedOut: result.timedOut,
+    outputTruncated: result.outputTruncated ?? false
   }
 }

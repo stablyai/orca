@@ -188,7 +188,9 @@ describe('registerWorktreeHandlers', () => {
     getActiveMultiplexerMock.mockReturnValue({ request: vi.fn(), notify: vi.fn() })
 
     await handlers['worktrees:remove'](null, { worktreeId, hostId: 'ssh:conn-1' })
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
     const result = await handlers['worktrees:forceDeletePreservedBranch'](null, {
       worktreeId,
       branchName: 'feature/test',

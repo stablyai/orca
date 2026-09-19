@@ -25,6 +25,12 @@ import {
   mockSelectedWslProjectRuntime
 } from './worktrees-test-fixtures'
 
+vi.mock('./wsl-worktree-path-materialization', () => ({
+  materializeWslWorktreePaths: vi.fn().mockResolvedValue(undefined),
+  inspectWslWorktreeSharedLinks: vi.fn().mockResolvedValue([]),
+  removeWslWorktreeSharedLinks: vi.fn().mockResolvedValue(undefined)
+}))
+
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )

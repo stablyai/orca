@@ -1,3 +1,4 @@
+import type { WorktreeSharedLinks } from '../../shared/worktree-path-materialization'
 import type { GitStatusResult } from '../../shared/git-status-types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -83,7 +84,11 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
   async removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+    options?: {
+      deleteBranch?: boolean
+      forceBranchDelete?: boolean
+      sharedLinks?: WorktreeSharedLinks
+    }
   ): Promise<RemoveWorktreeResult> {
     return this.runWithGitReadInvalidation(
       async () =>
@@ -97,23 +102,36 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
 
   async worktreeIsClean(
     worktreePath: string,
-    options: { includeUntracked?: boolean } = {}
+    options: { includeUntracked?: boolean; sharedLinks?: WorktreeSharedLinks } = {}
   ): Promise<{ clean: boolean; stdout?: string }> {
     return this.worktreeIsCleanCapabilityCache.runWithFallback(
       WORKTREE_IS_CLEAN_CAPABILITY,
       async () => {
-        const result = (await this.mux.request('git.worktreeIsClean', {
+        const result = await this.mux.request('git.worktreeIsClean', {
           worktreePath,
-          ...(options.includeUntracked === false ? { includeUntracked: false } : {})
-        })) as { clean: boolean; stdout?: string }
+          ...(options.includeUntracked === false ? { includeUntracked: false } : {}),
+          ...(options.sharedLinks ? { sharedLinks: options.sharedLinks } : {})
+        })
+        if (
+          !result ||
+          typeof result !== 'object' ||
+          !('clean' in result) ||
+          typeof result.clean !== 'boolean' ||
+          ('stdout' in result && result.stdout !== undefined && typeof result.stdout !== 'string')
+        ) {
+          throw new Error('Invalid host worktree cleanliness response')
+        }
+        const stdout =
+          'stdout' in result && typeof result.stdout === 'string' ? result.stdout : undefined
+        const cleanResult = { clean: result.clean, ...(stdout !== undefined ? { stdout } : {}) }
         if (options.includeUntracked === false) {
-          if (!result.clean && result.stdout === undefined) {
-            return result
+          if (!cleanResult.clean && cleanResult.stdout === undefined) {
+            return cleanResult
           }
-          const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+          const trackedStdout = filterUntrackedPorcelainStatus(cleanResult.stdout)
           return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
         }
-        return result
+        return cleanResult
       },
       async () => {
         if (!this.loggedWorktreeIsCleanFallback) {

@@ -13,13 +13,24 @@ import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
   isWindowsRelayPlatform,
-  relayArtifactFilenames
+  relayArtifactFilenames,
+  relayOptionalArtifactFilenames
 } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 // Its own tree: building into out/relay would clobber a developer's build and
 // race the suites that read it.
 const relayOutDir = mkdtempSync(join(tmpdir(), 'orca-relay-contract-'))
+
+function emittedArtifacts(platform) {
+  const isWindows = isWindowsRelayPlatform(platform)
+  return [
+    ...relayArtifactFilenames(isWindows),
+    ...relayOptionalArtifactFilenames(isWindows).filter((name) =>
+      existsSync(join(relayOutDir, platform, name))
+    )
+  ]
+}
 
 beforeAll(() => {
   execFileSync('node', [join(projectDir, 'config', 'scripts', 'build-relay.mjs')], {
@@ -36,7 +47,7 @@ afterAll(() => {
 describe('packaged relay artifact manifest', () => {
   it.each([...RELAY_BUILD_PLATFORMS])('emits exactly the declared artifacts for %s', (platform) => {
     const outDir = join(relayOutDir, platform)
-    const expected = relayArtifactFilenames(isWindowsRelayPlatform(platform))
+    const expected = emittedArtifacts(platform)
 
     for (const filename of expected) {
       expect(existsSync(join(outDir, filename)), `${platform}/${filename} missing`).toBe(true)
@@ -52,7 +63,7 @@ describe('packaged relay artifact manifest', () => {
   it.each([...RELAY_BUILD_PLATFORMS])('hashes every declared artifact for %s', (platform) => {
     const outDir = join(relayOutDir, platform)
     const hash = createHash('sha256')
-    for (const filename of relayArtifactFilenames(isWindowsRelayPlatform(platform))) {
+    for (const filename of emittedArtifacts(platform)) {
       hash.update(readFileSync(join(outDir, filename)))
     }
     const version = readFileSync(join(outDir, RELAY_VERSION_FILENAME), 'utf8')

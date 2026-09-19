@@ -103,6 +103,8 @@ export type Repo = {
    *  on macOS when possible, otherwise symlinked, into newly created worktrees.
    *  Undefined/empty means no shared paths are created for this repo. */
   symlinkPaths?: string[]
+  /** Personal copies for this repository/host; additive to .worktreeinclude. */
+  worktreeCopyPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null
   /** User-authored ordering inside the project group or ungrouped bucket. */

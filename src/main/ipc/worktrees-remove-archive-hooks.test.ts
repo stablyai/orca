@@ -340,7 +340,9 @@ describe('registerWorktreeHandlers', () => {
         ORCA_WORKTREE_PATH: '/remote/feature-wt'
       })
     )
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
     expect(runtimeStub.closeFileWatchersForRemoval).toHaveBeenCalledWith(
       '/remote/feature-wt',
       'conn-1'
@@ -466,7 +468,9 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(provider.worktreeIsClean).not.toHaveBeenCalled()
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
   })
 
   // Was "continues SSH worktree removal when the archive hook fails" (#19334): it now refuses.
@@ -698,7 +702,9 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(provider.execNonInteractive).not.toHaveBeenCalled()
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
   })
 
   // Regression cover for #19334: a failed archive hook is a blocking precondition, not an advisory.

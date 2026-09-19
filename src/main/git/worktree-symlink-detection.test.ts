@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { findExistingWorktreeSymlinkPaths, getSafeRelativePath } from './worktree-symlink-detection'
 
 describe('getSafeRelativePath', () => {
+  it.each(['.//cache', '.\\/cache', './\\cache', '/././/cache', './cache//./'])(
+    'keeps %s relative after normalization',
+    (path) => {
+      expect(getSafeRelativePath(path)).toEqual({ safe: true, rel: 'cache' })
+    }
+  )
   // The only case in this file that binds the production change: every one of
   // these is admitted by at least one host's `path.isAbsolute` — the
   // drive-relative spellings are admitted by *every* host's, Windows included.

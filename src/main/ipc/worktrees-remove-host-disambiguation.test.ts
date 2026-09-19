@@ -141,7 +141,9 @@ describe('registerWorktreeHandlers', () => {
       hostId: 'ssh:conn-1'
     })
 
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
 

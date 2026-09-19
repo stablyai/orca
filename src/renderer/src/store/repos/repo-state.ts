@@ -41,6 +41,7 @@ export type RepoUpdate = Partial<
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
+    | 'worktreeCopyPaths'
     | 'issueSourcePreference'
     | 'forkSyncMode'
     | 'externalWorktreeVisibilityPromptDismissedAt'
@@ -256,7 +257,7 @@ export type RepoSlice = {
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
   updateRepo: (
     projectId: string,
-    updates: RepoUpdate,
+    updates: RepoUpdate | ((repo: Repo) => RepoUpdate),
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void

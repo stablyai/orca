@@ -1,3 +1,4 @@
+import { materializeWslWorktreePaths } from '../ipc/wsl-worktree-path-materialization'
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
@@ -6,19 +7,12 @@ import type { GitWorktreeInfo, GitPushTarget, Worktree } from '../../shared/work
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import {
   getWorktreeCreationLayout,
   mergeWorktree,
   resolveWorktreeCreateDisplayNameMeta
 } from '../ipc/worktree-logic'
-import {
-  createWorktreeCopiedPaths,
-  createWorktreeLinkedPaths,
-  createWorktreeSharedPaths
-} from '../ipc/worktree-symlinks'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { materializeHostWorktreePaths } from '../ipc/worktree-path-materialization'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -26,7 +20,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 export async function materializeRuntimeLocalWorktree<T>(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo
-  store: RuntimeStore
+  store: Pick<RuntimeStore, 'setWorktreeMeta' | 'getProjectHostSetups'>
   settings: Parameters<typeof getWorktreeCreationLayout>[1]
   created: GitWorktreeInfo
   remoteTrackingBase: RemoteTrackingBase | null
@@ -133,29 +127,24 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   }
   const metadataResult = args.onMetadataPersisted(worktree)
 
-  if ((repo.symlinkPaths ?? []).length > 0) {
-    await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths ?? [])
+  if (localWorktreeGitOptions.wslDistro) {
+    const includeCopyWarning = await materializeWslWorktreePaths(
+      localWorktreeGitOptions.wslDistro,
+      repo.path,
+      created.path,
+      repo.symlinkPaths ?? [],
+      undefined,
+      repo.worktreeCopyPaths ?? []
+    )
+    return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
   }
-  // These discoveries are read-only; overlap them, but keep the shared-path
-  // mutation ahead of include copies below.
-  const [sharedDirectories, worktreeIncludePaths] = await Promise.all([
-    resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions),
-    resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
-  ])
-  if (sharedDirectories.length > 0) {
-    await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
-  }
-  if (worktreeIncludePaths.length === 0) {
-    return { worktree, metadataResult }
-  }
-  const skippedIncludePaths = await createWorktreeCopiedPaths(
+
+  const includeCopyWarning = await materializeHostWorktreePaths(
     repo.path,
     created.path,
-    worktreeIncludePaths
+    repo.symlinkPaths ?? [],
+    undefined,
+    repo.worktreeCopyPaths ?? []
   )
-  const includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
-  if (includeCopyWarning) {
-    console.warn(`[worktree-include] ${includeCopyWarning}`)
-  }
   return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
 }
