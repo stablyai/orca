@@ -41,4 +41,37 @@ describe('workspace status document drop', () => {
     expect(pinOne).not.toHaveBeenCalled()
     expect(moveOne).not.toHaveBeenCalled()
   })
+
+  it('passes host-qualified pin targets through document drops', () => {
+    const pinMany = vi.fn()
+    const targets = [{ worktreeId: 'shared', executionHostId: 'ssh:host-b' as const }]
+
+    commitWorkspaceStatusDocumentDrop({
+      worktreeIds: ['shared'],
+      pinTargets: targets,
+      status: null,
+      isPinDrop: true,
+      onMoveWorktreeToStatus: vi.fn(),
+      onPinWorktree: vi.fn(),
+      onPinWorktrees: pinMany
+    })
+
+    expect(pinMany).toHaveBeenCalledWith(targets)
+  })
+
+  it('does not fall back to bare ids when qualified pin targets are unavailable', () => {
+    const pinMany = vi.fn()
+
+    commitWorkspaceStatusDocumentDrop({
+      worktreeIds: ['shared'],
+      pinTargets: [],
+      status: null,
+      isPinDrop: true,
+      onMoveWorktreeToStatus: vi.fn(),
+      onPinWorktree: vi.fn(),
+      onPinWorktrees: pinMany
+    })
+
+    expect(pinMany).not.toHaveBeenCalled()
+  })
 })

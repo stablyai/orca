@@ -1,4 +1,5 @@
 import type React from 'react'
+import type { WorkspacePinTarget } from '../../../../store/slices/worktree-helpers'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
@@ -47,5 +48,5 @@ export type WorktreeDropCommitContext = {
     draggedIds: readonly string[]
     dropIndex: number
   }) => void
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onPinWorktrees: (targets: readonly WorkspacePinTarget[]) => void
 }

@@ -10,6 +10,7 @@ import {
 } from '../../worktree-sidebar-pointer-drag-dom'
 import { getWorktreeSidebarDragRectsForGroup } from '../../worktree-sidebar-drag-autoscroll'
 import { getWorktreeSidebarDragGrab } from '../../worktree-sidebar-drag-geometry'
+import { getWorktreePinTarget } from '../../worktree-drag-units'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './drop-commit-context'
 import type {
   WorktreeDropCommitContext,
@@ -180,10 +181,12 @@ export function useWorktreePointerDrag(args: {
       ) {
         return
       }
-      const draggedIds =
+      const draggedWorktrees =
         selectedWorktreeIds.has(getWorktreeHostIdentity(worktree)) && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((worktree) => worktree.id)
-          : [worktreeId]
+          ? selectedWorktrees
+          : [worktree]
+      const draggedIds = draggedWorktrees.map((draggedWorktree) => draggedWorktree.id)
+      const pinTargets = draggedWorktrees.map(getWorktreePinTarget)
       const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)
       const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
         sourceGroupKey,
@@ -198,6 +201,7 @@ export function useWorktreePointerDrag(args: {
         currentY: event.clientY,
         worktreeId,
         draggedIds,
+        pinTargets,
         reorderDraggedIds,
         reorderUnitDraggedIds,
         sourceGroupKey,
