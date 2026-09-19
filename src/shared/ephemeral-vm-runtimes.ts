@@ -19,6 +19,17 @@ export const EphemeralVmRuntimeStatusSchema = z.enum([
 
 export type EphemeralVmRuntimeStatus = z.infer<typeof EphemeralVmRuntimeStatusSchema>
 
+/**
+ * Whether a runtime in this status may still have a reachable sandbox whose transport is worth
+ * re-establishing without running any lifecycle command. `running` is the ordinary case; a failed
+ * suspend leaves the sandbox up. Everything else either never finished provisioning, is
+ * deliberately down (`suspended` / `resume_failed` are the resume recipe's job), or is past
+ * cleanup — dialing those would surface a connection error for a sandbox that is not there.
+ */
+export function mayReconnectEphemeralVmRuntimeTransport(status: EphemeralVmRuntimeStatus): boolean {
+  return status === 'running' || status === 'suspend_failed'
+}
+
 export const EphemeralVmCleanupStatusSchema = z.enum([
   'not_started',
   'disabled',
