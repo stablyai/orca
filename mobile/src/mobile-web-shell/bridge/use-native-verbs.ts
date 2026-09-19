@@ -2,12 +2,10 @@ import { useMemo } from 'react'
 import { z } from 'zod'
 import { usePageBridgeClient } from '../../transport/client-context.web'
 import {
-  BRIDGE_NATIVE_VERBS,
-  clipboardReadParamsSchema,
   clipboardReadResultSchema,
-  clipboardWriteParamsSchema,
   clipboardWriteResultSchema,
-  type BridgeClipboardMime
+  type BridgeClipboardMime,
+  type BridgeNativeVerb
 } from './bridge-native-verbs'
 
 /**
@@ -71,12 +69,27 @@ export function useNativeVerbs(): NativeVerbs {
     const has = (verb: string): boolean =>
       client.getShellSession()?.grants.native.includes(verb) === true
 
-    async function call(verb: keyof typeof BRIDGE_NATIVE_VERBS, params: unknown): Promise<unknown> {
+    /**
+     * One parse of the result, with the verb's own schema, inside the catch.
+     *
+     * The host validated the same shape before it answered; this is the page's own check that the
+     * shell it is talking to is the build it expects. Parsing again at a caller would sit outside
+     * this catch and escape as a bare `ZodError`, which is the one shape this surface promises not
+     * to throw.
+     */
+    async function call<Value>(
+      verb: BridgeNativeVerb,
+      params: unknown,
+      result: z.ZodType<Value>
+    ): Promise<Value> {
       if (!has(verb)) {
         throw new NativeVerbError('ungranted', `this shell did not grant ${verb}`)
       }
       try {
-        return await sendVerb(verb, params)
+        // No `ok: false` arm: a refusal crosses as an `error` frame and rejects this await, and a
+        // `native.` method is never forwarded, so there is no host `RpcFailure` to carry back.
+        const reply = await client.callNativeVerb(verb, params)
+        return result.parse(reply.result)
       } catch (error) {
         throw error instanceof NativeVerbError
           ? error
@@ -87,29 +100,13 @@ export function useNativeVerbs(): NativeVerbs {
       }
     }
 
-    async function sendVerb(
-      verb: keyof typeof BRIDGE_NATIVE_VERBS,
-      params: unknown
-    ): Promise<unknown> {
-      // No `ok: false` arm: a refusal crosses as an `error` frame and rejects this await, and a
-      // `native.` method is never forwarded, so there is no host `RpcFailure` to carry back.
-      const reply = await client.callNativeVerb(verb, params)
-      return BRIDGE_NATIVE_VERBS[verb].result.parse(reply.result)
-    }
-
     const mime: BridgeClipboardMime = 'text'
     return {
       granted: has('native.clipboard.write') && has('native.clipboard.read'),
-      writeClipboardText: async (value) => {
-        const params = clipboardWriteParamsSchema.parse({ mime, value })
-        const result = await call('native.clipboard.write', params)
-        return clipboardWriteResultSchema.parse(result).written
-      },
-      readClipboardText: async () => {
-        const params = clipboardReadParamsSchema.parse({ mime })
-        const result = await call('native.clipboard.read', params)
-        return clipboardReadResultSchema.parse(result).value
-      }
+      writeClipboardText: async (value) =>
+        (await call('native.clipboard.write', { mime, value }, clipboardWriteResultSchema)).written,
+      readClipboardText: async () =>
+        (await call('native.clipboard.read', { mime }, clipboardReadResultSchema)).value
     }
   }, [client])
 }
