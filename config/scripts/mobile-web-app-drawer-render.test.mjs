@@ -79,16 +79,20 @@ afterAll(async () => {
   }
 })
 
-/** The sheet itself: the handle's nearest ancestor carrying the drawer's own top radius. */
+/**
+ * The sheet itself, by the name it gives itself.
+ *
+ * Not by its corner radius: that selected the sheet through a styling token, so a design change
+ * to the radius would have turned this pin into `sheet: false` -- a failure naming the wrong
+ * thing entirely. `testID` on the RN side renders as `data-testid`
+ * (react-native-web createDOMProps/index.js:832).
+ */
 function readDrawer() {
   const handle = document.querySelector('[aria-label="Dismiss drawer"]')
   if (!handle) {
     return { open: false }
   }
-  let sheet = handle
-  while (sheet && getComputedStyle(sheet).borderTopLeftRadius !== '16px') {
-    sheet = sheet.parentElement
-  }
+  const sheet = document.querySelector('[data-testid="bottom-drawer-sheet"]')
   if (!sheet) {
     return { open: true, sheet: false }
   }

@@ -382,6 +382,8 @@ export function MountedBottomDrawer({
           <Animated.View
             // Why: remount per window hand-back — see the windowEpoch effect.
             key={windowEpoch}
+            // The sheet names itself so a check can find it without reading its styling.
+            testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,
