@@ -1,6 +1,7 @@
 import type { TaskPageProviderMetadataModel } from './use-task-page-provider-metadata'
 import { useEffect } from 'react'
 import type { GitLabWorkItem, GitLabTodo } from '../../../shared/gitlab-types'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 import {
   getTaskPageRepoSourceContext,
   isGitLabIssueFilter,
@@ -54,7 +55,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
       gitlabView === 'issues'
         ? (repo: (typeof eligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
-            return window.api.gl
+            return routedGitLab
               .listIssues({
                 repoPath: repo.path,
                 repoId: repo.id,
@@ -81,7 +82,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
               })
           }
         : (repo: (typeof eligibleRepos)[0]) =>
-            window.api.gl
+            routedGitLab
               .listMRs({
                 repoPath: repo.path,
                 repoId: repo.id,
@@ -157,7 +158,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     }
     let stale = false
     setGitlabTodosLoading(true)
-    void window.api.gl
+    void routedGitLab
       .todos({
         repoPath: primaryRepo.path,
         repoId: primaryRepo.id,
