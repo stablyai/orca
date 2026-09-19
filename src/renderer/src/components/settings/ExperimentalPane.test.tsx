@@ -425,6 +425,39 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
+  it('updates the Native Chat send shortcut independently of the default view', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({
+      updateSettings,
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        experimentalNativeChat: true,
+        nativeChatSendShortcut: 'enter'
+      }
+    })
+
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Native Chat send shortcut"]')
+    ).not.toBeNull()
+
+    const modifierOption = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-item"][data-value="cmd-or-ctrl-enter"]'
+    )
+    if (!modifierOption) {
+      throw new Error('Native Chat send shortcut option was not rendered')
+    }
+
+    await act(async () => {
+      modifierOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      nativeChatSendShortcut: 'cmd-or-ctrl-enter'
+    })
+    expect(updateSettings).not.toHaveBeenCalledWith({ openAgentTabsInChatByDefault: true })
+    root.unmount()
+  })
+
   it('renders the agent sleep idle duration as configurable minutes', async () => {
     const updateSettings = vi.fn()
     const settings = {

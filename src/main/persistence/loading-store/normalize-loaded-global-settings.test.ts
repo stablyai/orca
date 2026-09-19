@@ -35,3 +35,18 @@ describe('retired Agents sidebar setting', () => {
     expect(normalized.agentsSidebarMigratedFromExperimental).toBe(true)
   })
 })
+
+describe('native chat send shortcut', () => {
+  it('defaults legacy profiles to Enter and preserves the supported modifier shortcut', () => {
+    expect(normalizeLegacyProfile({}).nativeChatSendShortcut).toBe('enter')
+    expect(
+      normalizeLegacyProfile({ nativeChatSendShortcut: 'cmd-or-ctrl-enter' }).nativeChatSendShortcut
+    ).toBe('cmd-or-ctrl-enter')
+  })
+
+  it('normalizes malformed persisted values to Enter', () => {
+    expect(
+      normalizeLegacyProfile({ nativeChatSendShortcut: 'bad-value' }).nativeChatSendShortcut
+    ).toBe('enter')
+  })
+})

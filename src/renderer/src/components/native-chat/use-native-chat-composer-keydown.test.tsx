@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   applyPickerSuggestion,
   deriveComposerAutocomplete,
@@ -10,6 +10,7 @@ import {
 } from './native-chat-composer-state'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import type { NativeChatSendShortcut } from '../../../../shared/native-chat-send-shortcut'
 
 const COMMAND = {
   kind: 'command' as const,
@@ -20,6 +21,7 @@ const COMMAND = {
   skillCollision: false
 }
 
+/** Builds slash-picker state for keyboard-handler tests. */
 function picker(items = [COMMAND]): Extract<ComposerAutocomplete, { mode: 'slash' }> {
   return {
     mode: 'slash',
@@ -35,7 +37,13 @@ function picker(items = [COMMAND]): Extract<ComposerAutocomplete, { mode: 'slash
   }
 }
 
-function setup(autocomplete: ComposerAutocomplete = picker(), composing = false, draft = '/') {
+/** Renders the keyboard handler with controlled test callbacks and state. */
+function setup(
+  autocomplete: ComposerAutocomplete = picker(),
+  composing = false,
+  draft = '/',
+  nativeChatSendShortcut: NativeChatSendShortcut = 'enter'
+) {
   const callbacks = {
     completePickerItem: vi.fn(),
     dispatchPickerCommand: vi.fn(),
@@ -50,6 +58,7 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false,
   const hook = renderHook(() =>
     useNativeChatComposerKeyDown({
       autocomplete,
+      nativeChatSendShortcut,
       activeSuggestion: 0,
       draft,
       history: EMPTY_HISTORY,
@@ -60,15 +69,28 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false,
   return { handler: hook.result.current, callbacks }
 }
 
-function keyEvent(key: string, isComposing = false) {
+/** Creates a keyboard event fixture with optional platform modifiers. */
+function keyEvent(
+  key: string,
+  isComposing = false,
+  modifiers: Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>> = {}
+) {
   return {
     key,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
     shiftKey: false,
+    ...modifiers,
     keyCode: isComposing ? 229 : 0,
     nativeEvent: { isComposing },
     preventDefault: vi.fn()
   }
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('useNativeChatComposerKeyDown', () => {
   it('dispatches command Enter but completes command Tab', () => {
@@ -87,6 +109,133 @@ describe('useNativeChatComposerKeyDown', () => {
     const { handler, callbacks } = setup(picker([]))
     handler(keyEvent('Enter') as never)
     expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
+  it('sends plain Enter from an empty slash picker in Enter mode', () => {
+    const { handler, callbacks } = setup(picker([]))
+    const event = keyEvent('Enter')
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
+  it('leaves plain Enter available for newlines from an empty slash picker in modifier mode', () => {
+    const { handler, callbacks } = setup(picker([]), false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter')
+
+    handler(event as never)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('sends the configured chord from an empty slash picker in modifier mode', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const { handler, callbacks } = setup(picker([]), false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter', false, { ctrlKey: true })
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
+  it('does not send an unmatched mid-prompt slash token on plain Enter in modifier mode', () => {
+    const profile = getNativeChatAgentProfile('codex')
+    const autocomplete = deriveComposerAutocomplete('inspect /unknown', 16, [], [], profile)
+    expect(autocomplete).toMatchObject({ mode: 'slash', items: [] })
+    const { handler, callbacks } = setup(
+      autocomplete,
+      false,
+      'inspect /unknown',
+      'cmd-or-ctrl-enter'
+    )
+    const event = keyEvent('Enter')
+
+    handler(event as never)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('sends an unmatched mid-prompt slash token on the configured chord in modifier mode', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const profile = getNativeChatAgentProfile('codex')
+    const autocomplete = deriveComposerAutocomplete('inspect /unknown', 16, [], [], profile)
+    expect(autocomplete).toMatchObject({ mode: 'slash', items: [], dispatchable: false })
+    const { handler, callbacks } = setup(
+      autocomplete,
+      false,
+      'inspect /unknown',
+      'cmd-or-ctrl-enter'
+    )
+    const event = keyEvent('Enter', false, { ctrlKey: true })
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['Macintosh', { metaKey: true }],
+    ['Windows NT', { ctrlKey: true }],
+    ['Linux', { ctrlKey: true }]
+  ] as const)('sends the configured platform chord on %s', (userAgent, modifiers) => {
+    vi.stubGlobal('navigator', { userAgent })
+    const { handler, callbacks } = setup({ mode: 'none' }, false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter', false, modifiers)
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
+  it('leaves plain Enter available for newlines in modifier mode', () => {
+    const { handler, callbacks } = setup({ mode: 'none' }, false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter')
+
+    handler(event as never)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('preserves slash command Enter behavior in modifier mode', () => {
+    const { handler, callbacks } = setup(picker(), false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter')
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.dispatchPickerCommand).toHaveBeenCalledWith(COMMAND)
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('preserves slash picker precedence for the configured send chord', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const { handler, callbacks } = setup(picker(), false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter', false, { ctrlKey: true })
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(callbacks.dispatchPickerCommand).toHaveBeenCalledWith(COMMAND)
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('does not send or consume an invalid modifier chord', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const { handler, callbacks } = setup({ mode: 'none' }, false, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter', false, { metaKey: true })
+
+    handler(event as never)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(callbacks.send).not.toHaveBeenCalled()
   })
 
   it.each(['claude', 'openclaude', 'codex', 'grok'] as const)(
@@ -132,6 +281,17 @@ describe('useNativeChatComposerKeyDown', () => {
     handler(event as never)
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('does not send a configured chord while IME composition is active', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const { handler, callbacks } = setup({ mode: 'none' }, true, '/', 'cmd-or-ctrl-enter')
+    const event = keyEvent('Enter', true, { ctrlKey: true })
+
+    handler(event as never)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(callbacks.send).not.toHaveBeenCalled()
   })
 })

@@ -24,6 +24,7 @@ import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selecti
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+import { normalizeNativeChatSendShortcut } from '../../../../shared/native-chat-send-shortcut'
 
 export function mergeWebUIState(
   base: PersistedUIState,
@@ -129,6 +130,7 @@ export function mergeOsc52ClipboardNoticePending(
   )
 }
 
+/** Merges web preference updates and normalizes the resulting settings. */
 export function mergeSettings(
   base: GlobalSettings,
   updates: Partial<GlobalSettings>,
@@ -163,7 +165,10 @@ export function mergeSettings(
     terminalCustomThemes: normalizeTerminalCustomThemes(
       updates.terminalCustomThemes ?? base.terminalCustomThemes
     ),
-    uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
+    uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage),
+    nativeChatSendShortcut: normalizeNativeChatSendShortcut(
+      updates.nativeChatSendShortcut ?? base.nativeChatSendShortcut
+    )
   }
   return {
     ...merged,
