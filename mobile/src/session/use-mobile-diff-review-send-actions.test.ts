@@ -89,8 +89,16 @@ describe('useMobileDiffReviewSendActions', () => {
     })
   }
 
+  /** Copying reaches no client, so the cases below mount without one rather than stubbing it. */
+  async function mountWithoutClient(): Promise<void> {
+    mountedClient = null
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+  }
+
   it('copies the notes through the platform seam and says so', async () => {
-    await mount({ sendRequest: vi.fn() } as unknown as RpcClient)
+    await mountWithoutClient()
     await act(async () => {
       await actions?.copyNotes()
     })
@@ -102,7 +110,7 @@ describe('useMobileDiffReviewSendActions', () => {
     // The pasteboard answering `false` is the case the seam exists to surface: on the web the verb
     // is refused when the route was not granted it, and the only caller is a floating promise.
     clipboardMock.setStringAsync.mockResolvedValue(false)
-    await mount({ sendRequest: vi.fn() } as unknown as RpcClient)
+    await mountWithoutClient()
     await act(async () => {
       await actions?.copyNotes()
     })
