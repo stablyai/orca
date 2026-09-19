@@ -12,8 +12,11 @@ describe('classifyInputSourceId', () => {
     expect(classifyInputSourceId('com.apple.keylayout.US')).toBe('meta')
   })
 
-  it('allowlists US International PC as meta', () => {
-    expect(classifyInputSourceId('com.apple.keylayout.USInternational-PC')).toBe('meta')
+  it('classifies US International PC as compose (Option+C → ç repro)', () => {
+    // The International variant is picked precisely to type accented
+    // characters, and its Option layer composes them: Option+C → ç,
+    // Option+Shift+C → Ç, Option+A → å, Option+E → dead acute.
+    expect(classifyInputSourceId('com.apple.keylayout.USInternational-PC')).toBe('compose')
   })
 
   it('is case-insensitive on the allowlist (defaults differ between macOS versions)', () => {
@@ -38,9 +41,9 @@ describe('classifyInputSourceId', () => {
   })
 
   it('classifies every other Apple-shipped layout as compose (default-deny)', () => {
-    // Matches Ghostty: only US and USInternational-PC are allowlisted;
-    // everything else (Dvorak, Colemak, German, French, Turkish, Spanish,
-    // Swedish, every CJK Roman IME) falls back to compose.
+    // Only plain US is allowlisted; everything else (Dvorak, Colemak,
+    // German, French, Turkish, Spanish, Swedish, every CJK Roman IME)
+    // falls back to compose.
     expect(classifyInputSourceId('com.apple.keylayout.Dvorak')).toBe('compose')
     expect(classifyInputSourceId('com.apple.keylayout.Colemak')).toBe('compose')
     expect(classifyInputSourceId('com.apple.keylayout.German')).toBe('compose')
