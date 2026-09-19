@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import {
+  getGlobalWindowsExecutionRuntimeContext,
   getLocalAgentPreflightContext,
   getLocalPreflightContext,
   getLocalProjectExecutionRuntimeContext,
@@ -375,18 +376,156 @@ describe('local preflight context', () => {
     expect(localPreflightContextKey(context)).toBe('local-project:wsl:Ubuntu')
   })
 
-  it('does not use the global runtime default for active SSH projects', () => {
+  it('keeps the global WSL runtime for local agent checks inside an active SSH project', () => {
     const state = {
       ...makeState({
         repoPath: '/home/alice/repo',
-        repo: { connectionId: 'builder', executionHostId: 'ssh:builder' }
+        worktreePath: '/home/alice/repo',
+        repo: { connectionId: 'builder', executionHostId: 'ssh:builder' },
+        worktree: { hostId: 'ssh:builder' }
       }),
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       }
     } as unknown as AppState
 
-    expect(getLocalAgentPreflightContext(state, 'win32')).toBeUndefined()
+    // Why: the SSH host owns remote execution, but the local CLIs this probe
+    // looks for still live in the configured Windows runtime, not the raw host.
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe(
+      'local-project:wsl:Ubuntu'
+    )
+  })
+
+  it('keeps the global WSL runtime when the active repo id has no repo row', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: 'ghost',
+      activeWorktreeId: null,
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe(
+      'local-project:wsl:Ubuntu'
+    )
+  })
+
+  it('lets a local project own the runtime instead of the global default', () => {
+    const state = {
+      ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
+      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } }],
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    expect(getGlobalWindowsExecutionRuntimeContext(state, undefined, 'win32')).toBeUndefined()
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe(
+      'repo-1:windows-host'
+    )
+  })
+
+  it('falls back to the host when the global WSL default needs a distro inside an SSH project', () => {
+    const state = {
+      ...makeState({
+        repoPath: '/home/alice/repo',
+        worktreePath: '/home/alice/repo',
+        repo: { connectionId: 'builder', executionHostId: 'ssh:builder' },
+        worktree: { hostId: 'ssh:builder' }
+      }),
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
+      }
+    } as unknown as AppState
+
+    // Why: main rejects detection for a repair-required runtime, and an SSH
+    // workspace has no project runtime setting to repair it from (#18837).
+    expect(getGlobalWindowsExecutionRuntimeContext(state, undefined, 'win32')).toBeUndefined()
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe('host')
+  })
+
+  it('falls back to the host when the configured global distro is missing inside an SSH project', () => {
+    const state = {
+      ...makeState({
+        repoPath: '/home/alice/repo',
+        worktreePath: '/home/alice/repo',
+        repo: { connectionId: 'builder', executionHostId: 'ssh:builder' },
+        worktree: { hostId: 'ssh:builder' }
+      }),
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+    const wslContext = { wslAvailable: true, availableWslDistros: ['Debian'] }
+
+    expect(
+      localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32', wslContext))
+    ).toBe('host')
+  })
+
+  it('still surfaces the global repair when no workspace is open', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: null,
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
+      }
+    } as unknown as AppState
+
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe(
+      'local-project:repair:wsl-distro-required:default'
+    )
+  })
+
+  it('keeps the global WSL runtime for a local repo whose worktree lives on a remote host', () => {
+    const state = {
+      ...makeState({
+        repoPath: 'C:\\Users\\alice\\repo',
+        worktreePath: '/home/alice/repo',
+        worktree: { hostId: 'ssh:builder' }
+      }),
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe(
+      'local-project:wsl:Ubuntu'
+    )
+  })
+
+  it('keeps the global WSL runtime inside an active paired-runtime project', () => {
+    const state = {
+      ...makeState({
+        repoPath: '/srv/repo',
+        worktreePath: '/srv/repo',
+        repo: { executionHostId: 'runtime:env-1' },
+        worktree: { hostId: 'runtime:env-1' }
+      }),
+      settings: {
+        activeRuntimeEnvironmentId: 'env-1',
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    expect(localPreflightContextKey(getLocalAgentPreflightContext(state, 'win32'))).toBe(
+      'local-project:wsl:Ubuntu'
+    )
+  })
+
+  it('keeps Floating on the host when it is the active worktree and no target is named', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    expect(getGlobalWindowsExecutionRuntimeContext(state, undefined, 'win32')).toBeUndefined()
   })
 
   it('uses the project override over legacy agent location for local agent checks', () => {
