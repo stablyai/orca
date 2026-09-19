@@ -8,7 +8,11 @@ enum MobileWebShellCsp {
     // Phase C page cannot paint under 'self' alone (measured: the render check under this exact
     // header). This relaxes styling only; script-src 'self' is untouched.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self'",
+    // `data:` because a file preview has no other shape: the desktop answers a base64 body and the
+    // page composes `data:<mime>;base64,<content>` from a reply it is already holding, so this
+    // admits only what the page itself built. Images are the one fetch source it is granted to;
+    // script-src and connect-src stay 'self'.
+    "img-src 'self' data:",
     "font-src 'none'",
     // The origin is one read-only directory behind the manifest map, so 'self' reaches nothing the
     // page cannot already read, and the bootstrap page reads ./manifest.json through it. This is

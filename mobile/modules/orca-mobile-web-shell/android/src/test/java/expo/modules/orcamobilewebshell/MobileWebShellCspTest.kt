@@ -13,7 +13,9 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("script-src 'self'"))
     // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
     assertTrue(directives.contains("style-src 'self' 'unsafe-inline'"))
-    assertTrue(directives.contains("img-src 'self'"))
+    // A file preview is a `data:<mime>;base64,` URI the page composed from a reply it already
+    // holds; see MobileWebShellCsp.
+    assertTrue(directives.contains("img-src 'self' data:"))
     // The bootstrap page reads ./manifest.json from its own origin, which is one read-only
     // directory behind the manifest map, so 'self' reaches nothing it cannot already read.
     assertTrue(directives.contains("connect-src 'self'"))
@@ -37,7 +39,12 @@ class MobileWebShellCspTest {
     )
     assertTrue(directives.contains("script-src 'self'"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("unsafe-eval"))
-    assertFalse(MOBILE_WEB_SHELL_CSP.contains("data:"))
+    // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
+    // directive that grew one would fail here instead of passing a blanket absence check.
+    assertEquals(
+      listOf("img-src 'self' data:"),
+      directives.filter { it.contains("data:") }
+    )
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("blob:"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("http"))
   }

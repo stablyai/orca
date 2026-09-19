@@ -168,9 +168,10 @@ export function mobileWebAppBuildOptions(routes) {
       '.js',
       '.json'
     ],
-    // Images are emitted as same-origin assets, not data: URLs: the shell's CSP sets
-    // img-src 'self', which refuses data:. Content-hashed names keep the buildId reproducible.
-    // A font would fail the build here rather than silently ship under font-src 'none'.
+    // Images are emitted as same-origin assets, not data: URLs, so their content-hashed names keep
+    // the buildId reproducible and the bytes out of every chunk that imports one. The policy now
+    // admits data: for images, but that is for a preview the page composes at runtime, not for a
+    // bundled asset. A font would fail the build here rather than silently ship under font-src 'none'.
     loader: {
       ...ROUTE_SOURCE_LOADERS,
       '.png': 'file',

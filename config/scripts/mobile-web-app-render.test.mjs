@@ -440,6 +440,43 @@ describe('the shell policy this page is tested under', () => {
     expect(cspHeader).toContain("script-src 'self';")
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
   })
+
+  it('admits data: for images and for nothing else', () => {
+    expect(cspHeader.split('; ').filter((entry) => entry.includes('data:'))).toEqual([
+      "img-src 'self' data:"
+    ])
+  })
+})
+
+/** A 1x1 PNG: the smallest payload that proves an image decoded rather than merely being allowed. */
+const DATA_URI_IMAGE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+describeRender('an image preview under the shell policy', () => {
+  it('decodes a data: URI, which is the only shape a file preview has', async () => {
+    // What a preview actually is: normalizeMobileFilePreviewResult composes
+    // `data:<mime>;base64,<content>` out of a reply the page already holds and hands it to React
+    // Native Web's Image, which paints it as a CSS background and hangs its onError on a hidden
+    // <img> of the same URI. That element is the oracle — its failure is what turns the screen
+    // into "Binary preview unavailable" — and under img-src 'self' alone it never loads.
+    const { page, errors } = await openPage()
+    await page.goto(`${origin}/`, { waitUntil: 'load' })
+    const naturalWidth = await page.evaluate(
+      (uri) =>
+        new Promise((resolve) => {
+          const image = new Image()
+          image.addEventListener('load', () => resolve(image.naturalWidth))
+          image.addEventListener('error', () => resolve(0))
+          image.src = uri
+        }),
+      DATA_URI_IMAGE
+    )
+    await page.close()
+    expect({
+      naturalWidth,
+      refused: errors.filter((entry) => entry.includes('Content Security Policy'))
+    }).toEqual({ naturalWidth: 1, refused: [] })
+  })
 })
 
 describeRender('the page server this check runs against', () => {
