@@ -1,5 +1,4 @@
 import { WebSocketTransport } from '../rpc/ws-transport'
-import { writeWsFallbackPort } from '../rpc/ws-fallback-port-store'
 import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
 import { WS_BIND_HOST_ALL_INTERFACES, WS_BIND_HOST_LOOPBACK } from './runtime-rpc-pairing-types'
 
@@ -50,11 +49,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       // Connections never iterates a dead transport; the new listener re-attaches to the SAME wiring.
       this.detachWebSocketWiring?.()
       await current.stop()
-      widened = await this.startWebSocketTransport({
-        host: WS_BIND_HOST_ALL_INTERFACES,
-        port: previousPort,
-        preferPinnedPort: true
-      })
+      widened = await this.rebindWebSocketTransport(WS_BIND_HOST_ALL_INTERFACES, previousPort)
     } catch (error) {
       // Why: the wide bind failed after the loopback listener was already stopped. Restore a serving
       // loopback listener on the same port (wsBoundHost stays loopback so a later offer retries), then
@@ -71,11 +66,6 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: widened.endpoint }
     }
     try {
-      // Why: a rebind that lands on a different port (same-port bind refused) must be persisted so a
-      // later reconnect from a device paired to this port matches on the next launch (STA-1511).
-      if (this.wsPort !== 0 && widened.transport.resolvedPort !== this.wsPort) {
-        writeWsFallbackPort(this.userDataPath, widened.transport.resolvedPort)
-      }
       this.writeMetadata()
     } catch (persistError) {
       // Why: the wide listener is live and tracked; a persistence failure must not tear it down. Keep
@@ -95,11 +85,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
   ): Promise<void> {
     let restored: { transport: WebSocketTransport; endpoint: string }
     try {
-      restored = await this.startWebSocketTransport({
-        host: WS_BIND_HOST_LOOPBACK,
-        port: previousPort,
-        preferPinnedPort: true
-      })
+      restored = await this.rebindWebSocketTransport(WS_BIND_HOST_LOOPBACK, previousPort)
     } catch (recoveryError) {
       // Why: even the loopback restore failed — drop the dead WebSocket transport so we never advertise an
       // endpoint with no listener. The Unix socket keeps serving and a restart re-establishes the listener.

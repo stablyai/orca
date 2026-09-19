@@ -1,4 +1,5 @@
 import { mkdtempSync } from 'node:fs'
+import { connect } from 'node:net'
 import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,11 +27,58 @@ vi.mock('../git/worktree', () => {
   }
 })
 
+type WebSocketTransportBindInternals = {
+  host: string
+  tryListen(port: number): Promise<void>
+}
+
 describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
   const wsTransportOf = (server: OrcaRuntimeRpcServer): WebSocketTransport | undefined =>
     (server['activeTransports'] as unknown[]).find(
       (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
     )
+
+  // Why: assert on a real TCP accept, not on transport bookkeeping — the STA-7721 field symptom was an empty
+  // netstat on the advertised port, which only a connection attempt can tell apart from bookkeeping.
+  async function accepts(port: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const socket = connect({ host: '127.0.0.1', port })
+      socket.once('connect', () => {
+        socket.destroy()
+        resolve(true)
+      })
+      socket.once('error', () => {
+        socket.destroy()
+        resolve(false)
+      })
+    })
+  }
+
+  // Why: inject at the listen syscall, not at startWebSocketTransport — the bug lives in the transport's
+  // candidate loop, so a seam above it never runs that loop and cannot tell the fix from its absence.
+  // Only the advertised port fails: rejecting every wide bind would also reject the port-0 relocation, so a
+  // regression would still look like a refusal and these tests would pass blind.
+  function failWideBindOnPort(port: number): { restore: () => void } {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: tryListen is private, so this cast ERASES typechecking of the shape rather than enforcing it — tsc stays green if the member is renamed. Drift is caught at runtime instead: vi.spyOn throws `The property "tryListen" is not defined on the object.`
+    const prototype = WebSocketTransport.prototype as unknown as WebSocketTransportBindInternals
+    const realTryListen = prototype.tryListen
+    const spy = vi.spyOn(prototype, 'tryListen').mockImplementation(function (
+      this: WebSocketTransportBindInternals,
+      candidatePort: number
+    ) {
+      if (this.host === '0.0.0.0' && candidatePort === port) {
+        return Promise.reject(
+          Object.assign(new Error(`listen EADDRINUSE: address already in use 0.0.0.0:${port}`), {
+            code: 'EADDRINUSE',
+            syscall: 'listen',
+            port
+          })
+        )
+      }
+      return realTryListen.call(this, candidatePort)
+    })
+    return { restore: () => spy.mockRestore() }
+  }
 
   it('binds the listener to loopback on a fresh desktop with no paired device', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -382,21 +430,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     })
 
     await server.start()
+    const loopbackPort = wsTransportOf(server)!.resolvedPort
+    // Why: force the wide bind to throw AFTER the loopback listener is stopped, then let the loopback
+    // recovery bind through — proving no stranded/closed socket and a retry-able state.
+    const wideBind = failWideBindOnPort(loopbackPort)
     try {
-      const loopbackPort = wsTransportOf(server)?.resolvedPort
-      // Why: force the wide bind to throw AFTER the loopback listener is stopped, then let the loopback
-      // recovery bind through — proving no stranded/closed socket and a retry-able state.
-      const target = server as unknown as {
-        startWebSocketTransport: (opts: { host: string }) => Promise<unknown>
-        wsBoundHost: string | null
-      }
-      const original = target.startWebSocketTransport.bind(server)
-      vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
-        if (opts.host === '0.0.0.0') {
-          throw new Error('injected wide bind failure')
-        }
-        return original(opts)
-      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: wsBoundHost is protected; nothing public exposes it, and the retry it gates has no other observable.
+      const target = server as unknown as { wsBoundHost: string | null }
 
       const offer = await server.createMobilePairingOffer({
         address: '100.64.1.20',
@@ -411,9 +451,44 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       // Why: the listener must keep serving on loopback (same port) rather than being left stranded/closed.
       expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
       expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+      expect(await accepts(loopbackPort)).toBe(true)
       // Why: wsBoundHost stays loopback so a later pairing offer retries the widen.
       expect(target.wsBoundHost).toBe('127.0.0.1')
     } finally {
+      // Why: restore in finally — a prototype spy that survives a failed assertion poisons every later test
+      // in this file, which turns one real failure into a cascade that hides which case actually broke.
+      wideBind.restore()
+      await server.stop()
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('widens on a later attempt once the port is free again', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    const loopbackPort = wsTransportOf(server)!.resolvedPort
+    const wideBind = failWideBindOnPort(loopbackPort)
+    try {
+      await expect(server.ensureNetworkExposure()).rejects.toThrow(/EADDRINUSE/)
+      wideBind.restore()
+
+      // Why: STA-7721 — the failed widen must leave the bind on loopback rather than latching to 0.0.0.0.
+      // When it silently relocated to an OS-assigned port it latched, and ensureNetworkExposure then
+      // short-circuited for the rest of the session, so the user could never retry.
+      await server.ensureNetworkExposure()
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+    } finally {
+      // Why: idempotent — restore() runs here too in case the rejects assertion above failed first.
+      wideBind.restore()
       await server.stop()
       errorSpy.mockRestore()
     }

@@ -773,5 +773,48 @@ describe('WebSocketTransport', () => {
       expect(transport.resolvedPort).not.toBe(takenFallbackPort)
       expect(transport.resolvedPort).toBeGreaterThan(0)
     })
+
+    // Why: STA-7721 — a rebind of a listener whose port is already advertised cannot relocate. Binding an
+    // OS-assigned port there reports success while nothing serves the endpoint devices and metadata point at.
+    describe('allowOsAssignedPortFallback: false', () => {
+      it('rejects instead of relocating when the only candidate port is taken', async () => {
+        const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+        transports.push(holder)
+        await holder.start()
+        const takenPort = holder.resolvedPort
+
+        const transport = new WebSocketTransport({
+          host: '127.0.0.1',
+          port: takenPort,
+          preferPinnedPort: true,
+          allowOsAssignedPortFallback: false
+        })
+        transports.push(transport)
+
+        await expect(transport.start()).rejects.toThrow(/EADDRINUSE/)
+        // Why: no listener at all is the honest outcome; a non-null host would mean it moved somewhere.
+        expect(transport.resolvedHost).toBeNull()
+      })
+
+      it('still binds a persisted fallback port before giving up', async () => {
+        const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+        transports.push(holder)
+        await holder.start()
+        const takenPort = holder.resolvedPort
+        const fallbackPort = await reserveFreePort()
+
+        const transport = new WebSocketTransport({
+          host: '127.0.0.1',
+          port: takenPort,
+          fallbackPort,
+          preferPinnedPort: true,
+          allowOsAssignedPortFallback: false
+        })
+        transports.push(transport)
+
+        await transport.start()
+        expect(transport.resolvedPort).toBe(fallbackPort)
+      })
+    })
   })
 })
