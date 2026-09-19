@@ -9,7 +9,7 @@ import {
 } from '../project-runtime-git-options'
 import { resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
-import { resolveLocalGitUsername } from '../git/git-username'
+import { resolveGitUsernameForBranchPrefix } from '../git/git-username'
 import { computeWorkspaceRoot, getWorktreePathSettings } from '../ipc/worktree-logic'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -61,7 +61,7 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
   // both before awaiting removes one serial git/config round trip from create.
   const usernamePromise =
     !request.branchNameOverride && settings.branchPrefix === 'git-username'
-      ? resolveLocalGitUsername(repo.path)
+      ? resolveGitUsernameForBranchPrefix(repo.path)
       : Promise.resolve('')
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: request.baseBranch,

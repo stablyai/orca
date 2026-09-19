@@ -1,6 +1,7 @@
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { GIT_USERNAME_PROBE_TIMEOUT_ERROR_CODE } from '../../../../../git/git-username'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -22,6 +23,7 @@ export type WorkerEffect = {
   terminalId?: string
   surface?: 'visible' | 'background'
   warning?: string
+  branch?: string
 }
 
 export type WorkerSetupReceipt = {
@@ -206,6 +208,9 @@ export function isUnknownWorkerStartOutcome(error: unknown, stage: string): bool
       : ''
   if (code === 'operation_unknown') {
     return true
+  }
+  if (code === GIT_USERNAME_PROBE_TIMEOUT_ERROR_CODE) {
+    return false
   }
   if (stage !== 'worktree_create') {
     return false
