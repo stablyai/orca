@@ -13,30 +13,26 @@ import {
 } from './terminal-tui-wheel-drain-support'
 
 test.describe('terminal TUI wheel report drain', () => {
-  test('dense trackpad-like wheel stream reaches the PTY while the gesture happens', async ({
+  test('aggressive alternating trackpad-like gesture does not replay after input ends', async ({
     orcaPage
   }) => {
     // Why: the dense CDP wheel stream is throughput-bound on loaded CI runners.
     test.slow()
-    const logPath = path.join(os.tmpdir(), `tui-wheel-drain-${Date.now()}.log`)
+    const logPath = path.join(os.tmpdir(), `tui-wheel-drain-alt-${Date.now()}.log`)
     await startHeavyTuiFixture(orcaPage, logPath)
 
     const target = await terminalWheelTarget(orcaPage)
     const input = await dispatchTrackpadWheelStream(orcaPage, {
-      alternate: false,
+      alternate: true,
       events: WHEEL_EVENTS,
       deltaY: Math.min(49, target.cellHeight)
     })
-    // Give a laggy drain ample time to expose itself before reading the log.
     await orcaPage.waitForTimeout(8000)
 
     const summary = summarizeArrivals(readReportArrivalLog(logPath), input)
     fs.rmSync(logPath, { force: true })
-    console.log(`[tui-wheel-drain] dense: ${JSON.stringify(summary)}`)
+    console.log(`[tui-wheel-drain] alternate: ${JSON.stringify(summary)}`)
 
-    // The full gesture distance must reach the TUI (no dead/eaten scrolls)...
-    expect(summary.totalReports, JSON.stringify(summary)).toBeGreaterThanOrEqual(WHEEL_EVENTS - 10)
-    // ...while the gesture happens, not replayed 1-by-1 afterwards.
     expect(summary.arrivalLagMs, JSON.stringify(summary)).toBeLessThanOrEqual(MAX_ARRIVAL_LAG_MS)
   })
 })
