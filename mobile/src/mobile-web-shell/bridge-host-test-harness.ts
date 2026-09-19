@@ -58,6 +58,12 @@ export function harness(
     /** For the suites that need the map to change between two `init` answers. */
     readStorage?: () => Readonly<Record<string, string>>
     onPageFault?: (error: BridgeErrorCapture) => void
+    /**
+     * Whether to answer a `ready` before the case runs, which is what a real page does first: the
+     * host serves no request until it has issued an `init`. Off by default so a case about the
+     * pre-ready refusals can still be written.
+     */
+    ready?: boolean
     /** What the pasteboard answers a read with. */
     clipboardText?: string
     /** Replaces the whole verb handler, for the arm where a device call fails. */
@@ -117,6 +123,9 @@ export function harness(
     },
     onDiagnostic: (diagnostic) => diagnostics.push(diagnostic)
   })
+  if (options.ready === true) {
+    host.receive(clientFrame({ type: 'ready' }))
+  }
   // Read back through the page's own reader: a frame the host sends that the page would refuse is
   // a frame that never arrives, and this is the only place both halves meet in one test.
   const frames = (): BridgeHostMessage[] =>

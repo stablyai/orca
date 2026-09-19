@@ -318,6 +318,14 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       options.onDiagnostic?.({ kind: 'frame-after-close' })
       return
     }
+    // A page that has not asked for a session has been told no caps, no grants and no route, so
+    // anything it opens is a frame from a document this host has said nothing to. The notify path
+    // has refused that since C0 under the same name; requests and streams did not.
+    if (!initSent && message.type === 'request') {
+      options.onDiagnostic?.({ kind: 'notify-refused', name: message.method, why: 'before-ready' })
+      sendError(message.id, new BridgeCapExceededError('before-ready'))
+      return
+    }
     switch (message.type) {
       case 'request':
         requests.open(message)

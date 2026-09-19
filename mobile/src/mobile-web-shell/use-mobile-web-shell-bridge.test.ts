@@ -86,7 +86,9 @@ function FakeShellView(props: {
  * still has passive work queued, and it is the only window this suite can address.
  */
 function DeliverDuringCommit(props: {
-  deliver: string | null
+  /** Delivered in order from the parent's layout effect, so a session can be opened and used in
+   *  one commit — which is what a native batch carrying both frames looks like. */
+  deliver: readonly string[]
   posted: PostedFrame[]
   probe: Probe
   faults: BridgeErrorCapture[]
@@ -94,8 +96,8 @@ function DeliverDuringCommit(props: {
 }): ReactElement {
   const { deliver, probe } = props
   useLayoutEffect(() => {
-    if (deliver !== null) {
-      probe.view?.onBridgeMessage({ nativeEvent: { json: deliver } })
+    for (const json of deliver) {
+      probe.view?.onBridgeMessage({ nativeEvent: { json } })
     }
   }, [deliver, probe])
   return createElement(Harness, {
@@ -293,6 +295,7 @@ describe('the bridge channel', () => {
 
   it('does not rebuild the host for a route object the caller built again', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     // Same session, re-rendered: the harness passes a fresh `{ pathname }` every time. A rebuilt
     // host would have settled that request delivery-unknown on its way out.
@@ -340,6 +343,7 @@ describe('the bridge channel', () => {
 
   it('forwards to the client the hook was given', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
   })
@@ -385,19 +389,20 @@ describe('teardown', () => {
 
   it('disposes on unmount and settles what was in flight as delivery-unknown', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     await act(async () => {
       mounted.tree.unmount()
     })
     // The commit tears the host down while its own view is still attached, so the page hears why
     // its request will never answer instead of being left holding it.
-    expect(mounted.frames('session-one')).toEqual([
+    expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([
       expect.objectContaining({ type: 'error', id: ID })
     ])
     expect(warned).not.toHaveBeenCalled()
     fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     await flushBridge()
-    expect(mounted.posted).toHaveLength(1)
+    expect(mounted.posted).toHaveLength(2)
   })
 
   it('ignores a frame that arrives for a session the hook has moved past', async () => {
@@ -498,9 +503,13 @@ describe('client changes', () => {
   it('rebuilds the host on a new client, so nothing crosses to the one that was replaced', async () => {
     const first = fakeClient()
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     const next = createFakeRpcClient()
     doubles.client = next
     await mounted.update(readyState('session-one'))
+    // The rebuilt host has issued no `init` of its own, and a host serves no request before it
+    // has. See the report: nothing makes a live page re-ask after a client swap.
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(next.requests).toHaveLength(1)
     expect(first.requests).toHaveLength(0)
@@ -516,18 +525,24 @@ describe('client changes', () => {
       backPops: 0,
       storageWrites: []
     }
-    const render = (deliver: string | null): ReactElement =>
+    const render = (deliver: readonly string[]): ReactElement =>
       createElement(DeliverDuringCommit, { deliver, posted, probe, faults: [], readies: [] })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(render(null))
+      rendered.tree = create(render([]))
     })
     const next = createFakeRpcClient()
     doubles.client = next
     // The session id does not change, so the handler's own fence does not apply: only handing the
-    // host over in the commit keeps this frame off the client that was replaced.
+    // host over in the commit keeps this frame off the client that was replaced. The `ready` rides
+    // with it because the rebuilt host has issued no `init` and serves no request before one.
     await act(async () => {
-      rendered.tree?.update(render(clientFrame({ type: 'request', id: ID, method: 'status.get' })))
+      rendered.tree?.update(
+        render([
+          clientFrame({ type: 'ready' }),
+          clientFrame({ type: 'request', id: ID, method: 'status.get' })
+        ])
+      )
     })
     expect(first.requests).toHaveLength(0)
     expect(next.requests).toHaveLength(1)

@@ -76,6 +76,38 @@ describe('a native method on a frame that is not a request', () => {
   })
 })
 
+/**
+ * A page that has not asked for a session has been told no caps, no grants and no route, so a
+ * request from it is a frame from a document this host has said nothing to. The notify path has
+ * refused that since C0; requests did not, for forwarded and native methods alike.
+ */
+describe('a request before the page has asked for a session', () => {
+  it('is refused rather than forwarded to the desktop', async () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    await flushBridge()
+    expect(reachedTheDesktop(bridge)).toEqual([])
+    expect(refusal(bridge)?.message).toContain('before-ready')
+  })
+
+  it('is refused for a native verb too, before the table is even read', async () => {
+    const bridge = harness()
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(reachedTheDesktop(bridge)).toEqual([])
+    expect(bridge.clipboardWrites).toEqual([])
+    expect(refusal(bridge)?.message).toContain('before-ready')
+  })
+
+  it('serves the same request once the page has asked', async () => {
+    const bridge = harness({ clipboardText: 'ready now' })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { value: 'ready now' } })
+  })
+})
+
 describe('a native method the page asks for', () => {
   it('is answered by the shell and never forwarded to the desktop', async () => {
     const bridge = harness({ clipboardText: 'from the pasteboard' })

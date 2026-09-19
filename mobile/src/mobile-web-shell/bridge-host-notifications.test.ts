@@ -176,7 +176,7 @@ describe('notifications, refusals and the fence', () => {
   it('forwards to the client it was built with, whatever the frame names', () => {
     const mine = createFakeRpcClient()
     const theirs = createFakeRpcClient()
-    const bridge = harness({ client: mine })
+    const bridge = harness({ ready: true, client: mine })
     harness({ client: theirs })
     bridge.host.receive(
       clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
@@ -186,7 +186,7 @@ describe('notifications, refusals and the fence', () => {
   })
 
   it('carries no host name into the client message it parsed', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(
       clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
     )
