@@ -50,6 +50,10 @@ describe('OMP session status ownership', () => {
       await settle()
       const bodies = harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body))
       expect(bodies.map((body) => body.payload.session_id)).toEqual(['root', 'root'])
+      expect(bodies.map((body) => body.payload.session_file)).toEqual([
+        '/root.jsonl',
+        '/root.jsonl'
+      ])
       expect(bodies.at(-1).payload.hook_event_name).toBe('agent_end')
     }
   )

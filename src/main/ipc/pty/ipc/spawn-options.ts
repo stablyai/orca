@@ -18,7 +18,7 @@ import {
 } from '../pane/spawn-reservation'
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
-import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function buildPtyIpcSpawnOptions(
@@ -119,12 +119,9 @@ export async function buildPtyIpcSpawnOptions(
       ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
       : undefined
   }
-  const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
-  if (startupTerminalColorQueryReplyColors) {
-    ctx.spawnOptions.startupIngress = {
-      colors: startupTerminalColorQueryReplyColors,
-      deadlineMs: 5_000
-    }
+  const startupIngress = getStartupTerminalIngressIntent(args)
+  if (startupIngress) {
+    ctx.spawnOptions.startupIngress = startupIngress
   }
   const resolvedPaneSpawnReservationKey = makePaneSpawnReservationKey(
     args.worktreeId,

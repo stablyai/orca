@@ -37,6 +37,8 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     : undefined
   session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
   session.transportOptions = {
+    terminalKittyKeyboardProtocol:
+      session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
     ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
       ? { bufferInputUntilConnect: true }

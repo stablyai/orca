@@ -491,7 +491,7 @@ export type PtyEnvAugmenter = (ctx: {
   env: Record<string, string>
   command?: string
   launchAgent?: TuiAgent
-}) => Record<string, string>
+}) => Record<string, string> | Promise<Record<string, string>>
 
 export type RelayPtyWorktreeRemovalCoordinator = {
   beginWorktreePtySpawn(operationPath: string): () => void
@@ -783,7 +783,7 @@ export class PtyHandler {
   }
 
   /** Build augmented spawn env; augmenter values win over process.env/renderer env. Shared by spawn()/revive() so precedence can't drift. */
-  private buildSpawnEnv(
+  private async buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
     ctx: {
       id: string
@@ -793,7 +793,7 @@ export class PtyHandler {
       launchAgent?: TuiAgent
     },
     envToDelete: readonly string[] = []
-  ): Record<string, string> {
+  ): Promise<Record<string, string>> {
     const baseEnv = mergeGitConfigEnvProtocol(
       {
         ...stripInheritedBuildModeEnv(process.env),
@@ -809,7 +809,7 @@ export class PtyHandler {
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
-        Object.assign(augmented, augmenter({ ...ctx, env: baseEnv }))
+        Object.assign(augmented, await augmenter({ ...ctx, env: baseEnv }))
       } catch (err) {
         process.stderr.write(
           `[pty-handler] env augmenter threw: ${err instanceof Error ? err.message : String(err)}\n`
@@ -1876,7 +1876,7 @@ export class PtyHandler {
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(
+    const spawnEnv = await this.buildSpawnEnv(
       env,
       { id, paneKey, shell, command, launchAgent },
       envToDelete
@@ -3020,7 +3020,7 @@ export class PtyHandler {
         ? entry.terminalWindowsWslDistro
         : null
     const historyIsolationEnabled = entry.historyIsolationEnabled === true
-    const spawnEnv = this.buildSpawnEnv(
+    const spawnEnv = await this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete

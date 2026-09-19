@@ -58,8 +58,9 @@ const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   'prime-agent': '.prime'
 }
 
-function getDefaultPiAgentDir(kind: PiAgentKind): string {
-  return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
+function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
+  const root = kind === 'omp' ? configDirName || AGENT_HOME_DIR_NAME.omp : AGENT_HOME_DIR_NAME[kind]
+  return join(homedir(), root, PI_AGENT_SUBDIR)
 }
 
 function toSafeOverlayDirName(ptyId: string): string {
@@ -177,9 +178,12 @@ export class PiTitlebarExtensionService {
     ptyId: string,
     existingAgentDir: string | undefined,
     kind: PiAgentKind,
-    options?: { materializeDefaultHome?: boolean }
+    options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): Record<string, string> {
-    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
+    // The caller resolves the effective launch environment. Reading the
+    // daemon's ambient PI_CONFIG_DIR here can select the host profile for a
+    // guest/WSL launch whose environment has not been hydrated yet.
+    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
     if (kind !== 'prime-agent') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)

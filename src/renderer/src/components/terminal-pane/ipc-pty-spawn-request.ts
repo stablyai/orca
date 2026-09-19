@@ -34,6 +34,7 @@ export async function spawnIpcPty(
     shellOverride,
     projectRuntime,
     terminalColorQueryReplies,
+    terminalKittyKeyboardProtocol,
     telemetry
   } = transportOptions
   const shouldSendLocalCwdFallback =
@@ -77,6 +78,7 @@ export async function spawnIpcPty(
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+    ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
     ...(telemetry ? { telemetry } : {})
   }) as Promise<IpcPtySpawnResponse>
 }

@@ -113,6 +113,7 @@ export function useMonacoMarkdownAnnotations(params: {
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
     comments: shouldShowMarkdownAnnotations ? markdownComments : [],
+    pendingCommentTarget: commentPopover,
     onAddCommentClick: ({ lineNumber, startLine, top }) => {
       setSelectionAnnotationTarget(null)
       setCommentPopover({

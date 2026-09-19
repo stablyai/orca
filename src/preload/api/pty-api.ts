@@ -39,6 +39,7 @@ export type PtyApi = {
     // Why: lets a single tab open in a different shell than the user's default.
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean

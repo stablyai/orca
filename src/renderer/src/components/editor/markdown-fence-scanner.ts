@@ -13,15 +13,12 @@ function hasClosingSuffix(content: string, start: number, end: number): boolean 
   let sawWhitespace = false
   for (let index = start; index < end; index += 1) {
     const character = content.charCodeAt(index)
-    if (character === 32 || character === 9 || character === 13) {
+    if (character === 32) {
       sawWhitespace = true
       continue
     }
     if ((character === 126 || character === 96) && !sawWhitespace) {
       continue
-    }
-    if (character !== 126 && character !== 96) {
-      return false
     }
     return false
   }

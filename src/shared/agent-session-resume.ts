@@ -224,10 +224,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
-    // Why: OMP's managed extension reports the authoritative CLI resume id.
+    // OMP keeps id-based resume while optionally locating its native-chat transcript.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
-      return id ? { key: 'session_id', id } : null
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file']) : null
     }
     // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
     // directory name, so the same id is the CLI's resume locator.

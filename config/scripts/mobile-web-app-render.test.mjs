@@ -1,14 +1,19 @@
-import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { fileURLToPath } from 'node:url'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-
-const projectDir = fileURLToPath(new URL('../..', import.meta.url))
+import {
+  createBundleServer,
+  installShellDouble,
+  parseCspDirectives,
+  projectDir,
+  readBridgeFaultGrant,
+  readBridgeProtocolVersion,
+  readShellCsp
+} from './mobile-web-app-render-harness.mjs'
 
 // Why a real browser: the route tree is handed to expo-router's own ExpoRoot through a synthesized
 // RequireContext. Nothing short of mounting it proves that object is the shape ExpoRoot reads.
@@ -53,159 +58,6 @@ let faultGrant = null
 const poisonedChunks = new Set()
 const POISON_MESSAGE = 'render check poisoned this route chunk'
 
-/**
- * Both CSP constants are a list of quoted directives with `//` comments between them, and those
- * comments quote directive text. Dropping comment lines first is what keeps a comment out of the
- * header this test serves.
- */
-export function parseCspDirectives(source, startMarker, endMarker) {
-  const start = source.indexOf(startMarker)
-  const end = source.indexOf(endMarker)
-  if (start === -1 || end < start) {
-    throw new Error(`could not find ${startMarker} .. ${endMarker}`)
-  }
-  const body = source
-    .slice(start, end)
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n')
-  const directives = [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1])
-  if (directives.length < 10) {
-    throw new Error('could not parse the shell CSP')
-  }
-  return directives.join('; ')
-}
-
-/**
- * The envelope version the page speaks, read from the contract rather than written down twice. A
- * bumped `v` would otherwise reach this file as a 30s timeout naming nothing.
- */
-async function readBridgeProtocolVersion() {
-  const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
-    'utf8'
-  )
-  const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
-  if (!match) {
-    throw new Error('could not read BRIDGE_PROTOCOL_VERSION')
-  }
-  return Number(match[1])
-}
-
-/** The grant the shell offers every page, read from the same source for the same reason. */
-async function readBridgeFaultGrant() {
-  const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
-    'utf8'
-  )
-  const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
-  if (!match) {
-    throw new Error('could not read BRIDGE_FAULT_GRANT')
-  }
-  return match[1]
-}
-
-/**
- * The shell's half of the bridge, as the page's channel sees it.
- *
- * The entry mounts nothing until `init` lands, so a render check with no shell renders no route at
- * all. This answers `ready` and refuses everything else: a real reply would make this file the
- * place domain behaviour is decided, and every screen below already has a state for an RPC that
- * failed. The one message that matters here is the one that lets the tree mount.
- */
-function installShellDouble({
-  version,
-  sessionId,
-  buildId,
-  route,
-  host,
-  storage,
-  faultGrant,
-  grants,
-  pageRoutes
-}) {
-  // Where the page's own fault reports land. Read back after the render, so a route that threw
-  // under the boundary names itself instead of timing out as a page that never mounted.
-  globalThis.__orcaRenderCheckFaults = []
-  // Every grant-gated notify the page posted, whole and in order. A control that decided to hand
-  // something to the shell and a control that did nothing look identical on the document; this is
-  // the only thing that tells them apart.
-  globalThis.__orcaRenderCheckNotifies = []
-  const channel = {
-    postMessage: (json) => {
-      const frame = JSON.parse(json)
-      const answer = (message) => {
-        // A microtask, not a task: the page posts `ready` while its script is still running, and
-        // this keeps the answer behind it without moving a timer the page's backoff reads.
-        queueMicrotask(() => {
-          channel.onmessage?.({ data: JSON.stringify(message) })
-        })
-      }
-      if (frame.type === 'ready') {
-        answer({
-          v: version,
-          type: 'init',
-          sessionId,
-          buildId,
-          connection: {
-            state: 'connected',
-            reconnectAttempt: 0,
-            lastConnectedAt: 1,
-            lastInboundAt: 1,
-            generation: 0
-          },
-          grants: {
-            rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-            native: grants
-          },
-          ...(pageRoutes === null ? {} : { pageRoutes }),
-          // Omitted for a shell too old to name one, which is the case the page has a panel for.
-          ...(route === null ? {} : { route }),
-          ...(host === null ? {} : { host }),
-          storage
-        })
-        return
-      }
-      if (frame.type === 'notify') {
-        globalThis.__orcaRenderCheckNotifies.push(frame)
-        if (frame.name === faultGrant) {
-          globalThis.__orcaRenderCheckFaults.push(frame.error.message)
-        }
-        return
-      }
-      if (frame.type === 'request' || frame.type === 'subscribe') {
-        answer({
-          v: version,
-          type: 'error',
-          id: frame.id,
-          error: {
-            category: 'RenderCheckShellDouble',
-            message: 'the render check answers no RPC',
-            isRpcDeliveryUnknown: false
-          }
-        })
-      }
-    },
-    onmessage: null
-  }
-  globalThis.orcaBridge = channel
-}
-
-/**
- * The shipped policy, read from the Kotlin source so this test cannot drift from what the shell
- * actually sends. Parsed rather than imported: the constant lives in a JVM module.
- */
-async function readShellCsp() {
-  const source = await readFile(
-    join(
-      projectDir,
-      'mobile/modules/orca-mobile-web-shell/android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellCsp.kt'
-    ),
-    'utf8'
-  )
-  return parseCspDirectives(source, 'listOf(', ').joinToString')
-}
-
 beforeAll(async () => {
   cspHeader = await readShellCsp()
   bridgeVersion = await readBridgeProtocolVersion()
@@ -217,48 +69,19 @@ beforeAll(async () => {
   const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   const { outDir } = built
   routeChunks = built.routeChunks
-  server = createServer((request, response) => {
-    const path = new URL(request.url, 'http://localhost').pathname
-    // A browser asks for this on its own and the shell's WebView never does. The bundle carries
-    // no icon, so a 404 would put a console error in every check that runs against a full Chrome
-    // -- which is what CI resolves -- and none against the bundled headless shell.
-    if (path === '/favicon.ico') {
-      response.writeHead(204)
-      response.end()
-      return
-    }
-    // A route path serves the entrypoint and the page routes client-side. A path naming a file
-    // has to come out of the bundle or 404, the same as the shell's manifest map: answering it
-    // with the document instead would hide a publicPath the script cannot fetch from.
-    const namesAFile = path.slice(path.lastIndexOf('/')).includes('.')
-    const file = namesAFile ? path.slice(1) : 'index.html'
-    readFile(join(outDir, file)).then(
-      (real) => {
-        // The real bytes with a throw in front: the module still links, so the importer resolves
-        // every export it asked for and then evaluation throws. A body replaced outright fails at
-        // link instead, which is a different failure from the one the boundary is here for.
-        const bytes = poisonedChunks.has(path)
-          ? `throw new Error(${JSON.stringify(POISON_MESSAGE)});\n${real.toString('utf8')}`
-          : real
-        const headers = {
-          'content-type': file.endsWith('.js') ? 'text/javascript' : 'text/html'
-        }
-        // The document carries the shell's real policy, so a directive the page violates fails
-        // here rather than on a phone. Assets carry none, exactly as the native handler does.
-        if (file === 'index.html' && cspHeader) {
-          headers['content-security-policy'] = cspHeader
-        }
-        response.writeHead(200, headers)
-        response.end(bytes)
-      },
-      () => {
-        response.writeHead(404)
-        response.end()
-      }
-    )
+  // The real bytes with a throw in front: the module still links, so the importer resolves
+  // every export it asked for and then evaluation throws. A body replaced outright fails at
+  // link instead, which is a different failure from the one the boundary is here for.
+  const served = await createBundleServer({
+    outDir,
+    cspHeader,
+    transformChunk: (path, real) =>
+      poisonedChunks.has(path)
+        ? `throw new Error(${JSON.stringify(POISON_MESSAGE)});\n${real.toString('utf8')}`
+        : real
   })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  origin = `http://127.0.0.1:${String(server.address().port)}`
+  server = served.server
+  origin = served.origin
   // CI runs this against the runner's Google Chrome rather than paying for a browser download,
   // the same reason and the same override shape as the orcad browser-provider job.
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
