@@ -33,15 +33,18 @@ export type NativeVerbs = {
 /**
  * Every way a verb can fail, in one shape a caller can switch on.
  *
- * `reason` is the shell's own code where there is one — `native_verb_refused` for anything the seam
- * declined, or the frame refusal such as `reply-too-large` for a reply the page could never have
- * received. `ungranted` is this side's, decided before a frame is sent. The message stays the
- * shell's words, because that is what says which verb and why, but nothing should switch on it.
+ * `reason` is always a member of `NATIVE_VERB_REASONS`: one per fault the seam names, plus
+ * `ungranted` which this side decides before a frame is sent, plus the frame refusals such as
+ * `reply-too-large`. A code from a shell newer than this page floors to `unreported` rather than
+ * crossing verbatim, so a `switch` over the list stays exhaustive.
+ *
+ * The message is not a contract. It is the shell's words where it had any, which say which verb
+ * and roughly why; a handler's own words never cross, so nothing may be read out of it.
  */
 export class NativeVerbError extends Error {
-  readonly reason: string
+  readonly reason: NativeVerbReason
 
-  constructor(reason: string, message: string) {
+  constructor(reason: NativeVerbReason, message: string) {
     super(message)
     this.name = 'NativeVerbError'
     this.reason = reason
@@ -81,9 +84,21 @@ export const NATIVE_VERB_REASONS = [
   'unreported'
 ] as const
 
-function nativeVerbReason(error: unknown): string {
+export type NativeVerbReason = (typeof NATIVE_VERB_REASONS)[number]
+
+const reasonSchema = z.enum(NATIVE_VERB_REASONS)
+
+/**
+ * Floored, not passed through: a shell newer than this page can name a code this build has never
+ * heard of, and handing it to a caller switching over the list would fall off the end silently.
+ */
+function nativeVerbReason(error: unknown): NativeVerbReason {
   const coded = shellCodedErrorSchema.safeParse(error)
-  return coded.success ? coded.data.code : 'unreported'
+  if (!coded.success) {
+    return 'unreported'
+  }
+  const known = reasonSchema.safeParse(coded.data.code)
+  return known.success ? known.data : 'unreported'
 }
 
 export function useNativeVerbs(): NativeVerbs {

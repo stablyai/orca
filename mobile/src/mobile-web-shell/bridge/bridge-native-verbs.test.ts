@@ -63,7 +63,15 @@ describe('reading a native verb call', () => {
   })
 
   it('names params the verb does not take, before any handler sees them', () => {
-    for (const params of [{}, { mime: 'text' }, { mime: 'audio', value: 'x' }, null]) {
+    for (const params of [
+      {},
+      { mime: 'text' },
+      { mime: 'audio', value: 'x' },
+      null,
+      // A key the shell does not know. Stripped rather than refused, a page believing it meant
+      // something would have been served as if it had not sent it.
+      { mime: 'text', value: 'x', unexpected: true }
+    ]) {
       const read = readBridgeNativeVerbCall({
         method: 'native.clipboard.write',
         granted: ALL,

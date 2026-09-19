@@ -53,11 +53,14 @@ export type BridgeNativeVerbSpec = {
 /** Exported concretely as well as through the table: a handler parses with the schema for the verb
  *  it is serving, so what it holds is typed without an assertion. The table's values are widened to
  *  `ZodType`, which is all the host needs to refuse params before it dispatches. */
-export const clipboardWriteParamsSchema = z.object({ mime: mimeSchema, value: z.string() })
-export const clipboardReadParamsSchema = z.object({ mime: mimeSchema })
+// Strict, not stripping: `z.object` drops a key it does not know, so a call carrying one it thinks
+// is meaningful would dispatch as if it had not. The page and the shell are separate builds, and a
+// param the shell silently ignores is the shape of a verb that changed under a page.
+export const clipboardWriteParamsSchema = z.strictObject({ mime: mimeSchema, value: z.string() })
+export const clipboardReadParamsSchema = z.strictObject({ mime: mimeSchema })
 
-export const clipboardWriteResultSchema = z.object({ written: z.boolean() })
-export const clipboardReadResultSchema = z.object({ value: z.string() })
+export const clipboardWriteResultSchema = z.strictObject({ written: z.boolean() })
+export const clipboardReadResultSchema = z.strictObject({ value: z.string() })
 
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {

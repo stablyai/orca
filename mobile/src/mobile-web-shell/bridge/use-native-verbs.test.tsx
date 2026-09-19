@@ -15,6 +15,8 @@ vi.mock('../../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../../transport/client-context.web'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
+import { BRIDGE_NATIVE_VERB_NAMES } from './bridge-native-verbs'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
 import {
@@ -215,5 +217,46 @@ describe('a verb the shell refuses', () => {
       throw new Error('nothing mounted')
     }
     await expect(verbs.readClipboardText()).rejects.toMatchObject({ reason: 'ungranted' })
+  })
+})
+
+describe('a code this page has never heard of', () => {
+  it('floors to unreported rather than crossing verbatim', async () => {
+    // Delivered as a frame, not through the pair: this build's host normalises an unknown code to
+    // `native_verb_failed` before it leaves, so the only way to be a page reading a shell newer
+    // than itself is to be handed the frame such a shell would send.
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: [...BRIDGE_NATIVE_VERB_NAMES] } })
+    act(() => {
+      create(
+        <RpcClientProvider client={page.client}>
+          <Screen />
+        </RpcClientProvider>
+      )
+    })
+    const verbs = held.verbs
+    if (verbs === null) {
+      throw new Error('nothing mounted')
+    }
+    const read = verbs.readClipboardText().catch((error: unknown) => error)
+    const sent = page.frames().filter((frame) => frame.type === 'request')
+    const id = sent.at(-1)?.type === 'request' ? sent.at(-1)?.id : undefined
+    if (id === undefined) {
+      throw new Error('no request went out')
+    }
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'error',
+      id,
+      error: {
+        category: 'BridgeNativeVerbRefusedError',
+        code: 'native_verb_something_new',
+        message: 'a verb from a later build',
+        isRpcDeliveryUnknown: false
+      }
+    })
+    const caught = await read
+    expect(caught).toBeInstanceOf(NativeVerbError)
+    expect(caught instanceof NativeVerbError && caught.reason).toBe('unreported')
   })
 })
