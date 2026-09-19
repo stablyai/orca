@@ -57,6 +57,13 @@ export type BridgeRpcClient = RpcClient & {
    * to do something else, and a thrown error in a tap handler is not that.
    */
   notifyNavigate: (href: string) => boolean
+  /**
+   * Asks the shell to pop the native stack this page was pushed onto, which is the only stack a
+   * document holding one history entry has. False when the shell granted no `navigate`; a shell
+   * that granted one but is too old to know this verb refuses the frame instead, and neither is
+   * distinguishable from here, so the caller falls back to its own router for both.
+   */
+  notifyNavigateBack: () => boolean
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -301,6 +308,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onStateChange: (listener) => cache.onStateChange(listener),
     notifyForeground: notifications.notifyForeground,
     notifyNavigate: notifications.notifyNavigate,
+    notifyNavigateBack: notifications.notifyNavigateBack,
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyPageFault: notifications.notifyPageFault,
     close,

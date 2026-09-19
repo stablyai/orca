@@ -42,6 +42,11 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
  * still-mounted view; Back reveals the page with nothing reloaded, and the multi-megabyte bundle is
  * never re-executed.
  *
+ * The four members that can leave this document are wrapped and the rest are the router's own. The
+ * three that carry a target are decided by one answer: the shell says which routes are the page's,
+ * in `init`. `back` carries none and is decided by the document's own stack instead, because there
+ * is no target to match — what it leaves for is whatever the shell pushed this page onto.
+ *
  * The third answer is the one this file used not to have. `handOff` fails for two reasons that are
  * nothing like a page route — an href the protocol's own pattern drops, and a shell that answered
  * no — and falling through to the local router for either mounts a screen this page does not serve:
@@ -49,6 +54,10 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
  * `session/[worktreeId]` on React Native Web inside the shell. Staying put and naming the reason is
  * the lesser failure, and the route policy is what keeps the case off a device in the first place:
  * a shell that grants no `navigate` renders no page route at all.
+ *
+ * `back` keeps a fallthrough the other three lost, and for the reason they lost theirs: it has no
+ * target to mount, so `router.back()` on a document holding one history entry is the same nothing
+ * a refusal would have been.
  *
  * Whether the target names a screen that exists is nobody's business here; the shape is all this
  * can check, and C1.7 is where a real route-existence check belongs.
@@ -96,6 +105,16 @@ export function useRouteHandoff(): RouteHandoff {
       replace: (href) => {
         if (handOff(href) === 'local') {
           router.replace(href)
+        }
+      },
+      // The one member whose handoff needs no target: inside the page there is nothing behind this
+      // document, because the entry wrote its single history entry with `replaceState`. A stack the
+      // page did grow it pops itself; otherwise the stack that has somewhere to go is the native
+      // one the shell pushed this page onto, and a shell that cannot pop it leaves Back exactly as
+      // dead as it already was.
+      back: () => {
+        if (router.canGoBack() || !client.notifyNavigateBack()) {
+          router.back()
         }
       },
       // The list's own way out of the host. Inside the page there is no stack to pop to: the phone's

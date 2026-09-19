@@ -5,6 +5,7 @@ import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { BRIDGE_MAX_SUBSCRIPTIONS } from './bridge/bridge-caps'
 import {
   BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
   BridgeInitRouteSchema,
   readBridgeClientMessage,
@@ -210,6 +211,16 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         // Not routed to the client: this one never leaves the phone. The page asked for a screen
         // it does not render, and the caller pushes it over the still-mounted view.
         options.onNavigate(message.href)
+        return
+      }
+      if (message.name === BRIDGE_NAVIGATE_BACK_NOTIFY) {
+        // Local too, and the one notify with no argument: the shell pops what it pushed. A pop the
+        // shell did not make is reported rather than answered, because the page is told nothing
+        // either way and a Back button that does nothing is what would otherwise go unnoticed.
+        const outcome = options.onNavigateBack()
+        if (outcome !== 'popped') {
+          options.onDiagnostic?.({ kind: 'navigate-back-refused', why: outcome })
+        }
         return
       }
       if (message.name === 'storage') {

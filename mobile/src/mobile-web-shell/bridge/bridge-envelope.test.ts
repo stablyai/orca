@@ -26,6 +26,7 @@ import {
   BRIDGE_CONNECTION_STATES,
   BRIDGE_FAULT_GRANT,
   BRIDGE_FOREGROUND_NUDGE_REASONS,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
   readBridgeHostMessage,
@@ -128,6 +129,7 @@ describe('client messages', () => {
         error: { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
       }
     ],
+    ['a navigate-back notify', { type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }],
     ['close', { type: 'close' }]
   ] as const
 
@@ -136,6 +138,22 @@ describe('client messages', () => {
       expect(readClient(client(fields)).ok).toBe(true)
     })
   }
+
+  it('drops a target a page attached to a navigate-back, rather than carrying it to the shell', () => {
+    // Additive fields are dropped and never refused, which is what keeps a newer desktop's bundle
+    // working against an older shell — so the absence has to be read off the parsed frame.
+    const read = readClient(
+      client({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY, href: '/h/host-a' })
+    )
+    expect(read).toEqual({
+      ok: true,
+      message: {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_NAVIGATE_BACK_NOTIFY
+      }
+    })
+  })
 
   const refused = [
     ['a version this shell does not speak', { ...client({ type: 'ready' }), v: 2 }],

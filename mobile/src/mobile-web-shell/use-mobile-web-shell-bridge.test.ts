@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
 import {
   BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
   readBridgeHostMessage,
   type BridgeHostMessage
 } from './bridge/bridge-envelope'
@@ -40,6 +41,7 @@ type PostedFrame = { sessionId: string; json: string }
 type Probe = {
   view: MobileWebShellBridgeView | null
   navigations: string[]
+  backPops: number
   storageWrites: { key: string; value: string | null }[]
 }
 
@@ -118,6 +120,10 @@ function Harness(props: {
     route: { pathname: '/h/host-1' },
     pageRoutes: ['/h/[hostId]'],
     onNavigate: (href) => props.probe.navigations.push(href),
+    onNavigateBack: () => {
+      props.probe.backPops += 1
+      return 'popped'
+    },
     snapshot: SNAPSHOT,
     readStorage: () => STORAGE,
     onStorageWrite: (key, value) => props.probe.storageWrites.push({ key, value }),
@@ -169,7 +175,7 @@ let warned: MockInstance<typeof console.warn>
 
 async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
   const posted: PostedFrame[] = []
-  const probe: Probe = { view: null, navigations: [], storageWrites: [] }
+  const probe: Probe = { view: null, navigations: [], backPops: 0, storageWrites: [] }
   const faults: BridgeErrorCapture[] = []
   const readies: string[] = []
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -256,6 +262,14 @@ describe('the bridge channel', () => {
       clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-1/session/wt-1' })
     )
     expect(mounted.probe.navigations).toEqual(['/h/host-1/session/wt-1'])
+  })
+
+  it('pops the stack the page was pushed onto, through the caller that owns it', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }))
+    expect(mounted.probe.backPops).toBe(1)
+    expect(mounted.probe.navigations).toEqual([])
   })
 
   it('does not rebuild the host for a route object the caller built again', async () => {
@@ -417,7 +431,7 @@ describe('the callbacks a render passes', () => {
     const first: BridgeErrorCapture[] = []
     const second: BridgeErrorCapture[] = []
     const posted: PostedFrame[] = []
-    const probe: Probe = { view: null, navigations: [], storageWrites: [] }
+    const probe: Probe = { view: null, navigations: [], backPops: 0, storageWrites: [] }
     // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
     // second render's callback to a frame that arrives after it.
     const render = (faults: BridgeErrorCapture[]): ReactElement =>
@@ -470,7 +484,7 @@ describe('client changes', () => {
   it('hands the host over in the commit, so no frame reaches the replaced client', async () => {
     const first = fakeClient()
     const posted: PostedFrame[] = []
-    const probe: Probe = { view: null, navigations: [], storageWrites: [] }
+    const probe: Probe = { view: null, navigations: [], backPops: 0, storageWrites: [] }
     const render = (deliver: string | null): ReactElement =>
       createElement(DeliverDuringCommit, { deliver, posted, probe, faults: [], readies: [] })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }

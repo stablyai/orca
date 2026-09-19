@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { clientFrame, createFakeRpcClient, flushBridge } from './bridge-host-test-fakes'
-import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import { BRIDGE_FAULT_GRANT, BRIDGE_NAVIGATE_BACK_NOTIFY } from './bridge/bridge-envelope'
 import { BRIDGE_NATIVE_GRANTS } from './bridge/bridge-init-frame'
 
 describe('notifications, refusals and the fence', () => {
@@ -187,5 +187,73 @@ describe('notifications, refusals and the fence', () => {
       clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
     )
     expect(bridge.client.requests[0]?.args).toEqual(['status.get'])
+  })
+})
+
+/**
+ * The one notify whose sink is the shell's own stack rather than the client or the app store.
+ *
+ * Nothing crosses back, so the only thing that can tell a pop from a page tapping into a stack that
+ * has nothing left is the diagnostic: a dead Back button is exactly what silence here would hide.
+ */
+describe('navigate-back', () => {
+  const back = clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY })
+
+  it('pops the shell stack and asks the client for nothing', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual(['popped'])
+    expect(bridge.navigations).toEqual([])
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.diagnostics).toEqual([])
+  })
+
+  it('reports the pop that found nothing, because the page hears nothing either way', () => {
+    const bridge = harness({ onNavigateBack: () => 'nothing-to-pop' })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual(['nothing-to-pop'])
+    expect(bridge.diagnostics).toEqual([{ kind: 'navigate-back-refused', why: 'nothing-to-pop' }])
+  })
+
+  it('names a pop refused for a pop already pending, which is a different bug', () => {
+    const bridge = harness({ onNavigateBack: () => 'pop-pending' })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(back)
+    expect(bridge.diagnostics).toEqual([{ kind: 'navigate-back-refused', why: 'pop-pending' }])
+  })
+
+  it('refuses it from a page that has not asked for a session', () => {
+    const bridge = harness()
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_NAVIGATE_BACK_NOTIFY, why: 'before-ready' }
+    ])
+  })
+
+  it('is carried by the navigate grant this host already issues, under no name of its own', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.grants.native).toContain('navigate')
+    expect(init.type === 'init' && init.grants.native).not.toContain(BRIDGE_NAVIGATE_BACK_NOTIFY)
+  })
+
+  it('reports a screen that threw on the pop once, and keeps reading', () => {
+    const failure = new Error('the stack is gone')
+    const bridge = harness({
+      onNavigateBack: () => {
+        throw failure
+      }
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // The frame arrives on a native event handler, and a throw that escapes takes it down.
+    bridge.host.receive(back)
+    bridge.host.receive(back)
+    expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
   })
 })

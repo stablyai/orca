@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
@@ -14,6 +14,10 @@ type ScreenDependencies = {
   storageRefreshes: number
   openUrl: Mock
   push: Mock
+  back: Mock
+  /** What the native stack answers: false is a page opened as the first screen on it. */
+  canGoBack: boolean
+  pathname: string
   pageRoutes: readonly string[]
   lifecycle: string[]
   state: MobileWebShellSessionState
@@ -34,6 +38,9 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     storageRefreshes: 0,
     openUrl: vi.fn(),
     push: vi.fn(),
+    back: vi.fn(),
+    canGoBack: true,
+    pathname: '/h/host-1',
     pageRoutes: ['/h/[hostId]'],
     lifecycle: [],
     state: { kind: 'checking' },
@@ -55,7 +62,13 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
-  useRouter: () => ({ push: dependencies.push })
+  useRouter: () => ({
+    push: dependencies.push,
+    back: dependencies.back,
+    canGoBack: () => dependencies.canGoBack
+  }),
+  // Read by the pop latch, which clears on the route this shell is mounted at changing.
+  usePathname: () => dependencies.pathname
 }))
 // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
 // and a mount/unmount log is the only thing that can tell a remount from a prop update.
@@ -107,7 +120,7 @@ vi.mock('./use-mobile-web-shell-session', () => ({
 }))
 
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import { BRIDGE_FAULT_GRANT, BRIDGE_NAVIGATE_BACK_NOTIFY } from './bridge/bridge-envelope'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
 
 /** The caller's native screen, as a component so `findAllByType` can name it without a host string. */
@@ -133,7 +146,20 @@ async function render(state: MobileWebShellSessionState): Promise<ReactTestRende
   if (rendered.tree === null) {
     throw new Error('screen did not render')
   }
+  mounted.push(rendered.tree)
   return rendered.tree
+}
+
+/** Unmounted between cases: the shell's stack latch is one per stack, so a screen left mounted is
+ *  a screen still holding whatever pop it took. */
+const mounted: ReactTestRenderer[] = []
+
+function unmountRenderedScreens(): void {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
 }
 
 function readyState(sessionId: string): MobileWebShellSessionState {
@@ -172,6 +198,8 @@ function textOf(tree: ReactTestRenderer): string {
     .join('\n')
 }
 
+afterEach(unmountRenderedScreens)
+
 describe('the hybrid shell screen', () => {
   beforeEach(() => {
     dependencies.retry.mockReset()
@@ -182,6 +210,9 @@ describe('the hybrid shell screen', () => {
     dependencies.storageRefreshes = 0
     dependencies.lifecycle.length = 0
     dependencies.client = null
+    dependencies.back.mockReset()
+    dependencies.canGoBack = true
+    dependencies.pathname = '/h/host-1'
   })
 
   it('renders the update wall for a bundle verdict, with no shell view', async () => {
@@ -372,6 +403,43 @@ describe('the hybrid shell screen', () => {
     expect(
       textOf(await render({ kind: 'failed', reason: 'document-load-failed', retriedOnce: true }))
     ).toContain('The downloaded workspace could not be opened.')
+  })
+
+  it('pops its own stack when the page hands its back button over', async () => {
+    dependencies.client = createFakeRpcClient()
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
+      })
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }) }
+      })
+    })
+    expect(dependencies.back).toHaveBeenCalledTimes(1)
+    expect(dependencies.push).not.toHaveBeenCalled()
+  })
+
+  it('pops nothing when this page is the first screen on the stack, rather than dismissing it', async () => {
+    dependencies.client = createFakeRpcClient()
+    dependencies.canGoBack = false
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
+      })
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }) }
+      })
+    })
+    expect(dependencies.back).not.toHaveBeenCalled()
+    // The page is told nothing either way, so the log is the only thing a dead Back button leaves.
+    expect(warned.mock.calls).toContainEqual([
+      '[web-shell-bridge] did not pop the stack for a page going back',
+      { why: 'nothing-to-pop' }
+    ])
+    warned.mockRestore()
   })
 
   it('shows a build id prefix and never the whole one, the cache path, or the host id', async () => {

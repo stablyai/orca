@@ -13,6 +13,8 @@ const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 // Why a real browser: the route tree is handed to expo-router's own ExpoRoot through a synthesized
 // RequireContext. Nothing short of mounting it proves that object is the shape ExpoRoot reads.
 const HOST_ROUTE = '/h/render-check-host'
+/** The pattern `init.pageRoutes` names, which is what the page matches a navigation against. */
+const HOST_ROUTE_PATTERN = '/h/[hostId]'
 
 // What the double answers `ready` with. Asserted on the document, so a page that mounted against
 // some other session, or against none, fails here rather than on a phone.
@@ -111,10 +113,24 @@ async function readBridgeFaultGrant() {
  * place domain behaviour is decided, and every screen below already has a state for an RPC that
  * failed. The one message that matters here is the one that lets the tree mount.
  */
-function installShellDouble({ version, sessionId, buildId, route, host, storage, faultGrant }) {
+function installShellDouble({
+  version,
+  sessionId,
+  buildId,
+  route,
+  host,
+  storage,
+  faultGrant,
+  grants,
+  pageRoutes
+}) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
   globalThis.__orcaRenderCheckFaults = []
+  // Every grant-gated notify the page posted, whole and in order. A control that decided to hand
+  // something to the shell and a control that did nothing look identical on the document; this is
+  // the only thing that tells them apart.
+  globalThis.__orcaRenderCheckNotifies = []
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)
@@ -140,8 +156,9 @@ function installShellDouble({ version, sessionId, buildId, route, host, storage,
           },
           grants: {
             rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-            native: [faultGrant]
+            native: grants
           },
+          ...(pageRoutes === null ? {} : { pageRoutes }),
           // Omitted for a shell too old to name one, which is the case the page has a panel for.
           ...(route === null ? {} : { route }),
           ...(host === null ? {} : { host }),
@@ -149,8 +166,11 @@ function installShellDouble({ version, sessionId, buildId, route, host, storage,
         })
         return
       }
-      if (frame.type === 'notify' && frame.name === faultGrant) {
-        globalThis.__orcaRenderCheckFaults.push(frame.error.message)
+      if (frame.type === 'notify') {
+        globalThis.__orcaRenderCheckNotifies.push(frame)
+        if (frame.name === faultGrant) {
+          globalThis.__orcaRenderCheckFaults.push(frame.error.message)
+        }
         return
       }
       if (frame.type === 'request' || frame.type === 'subscribe') {
@@ -265,7 +285,13 @@ const UNMATCHED = 'Unmatched Route'
  * No `shellRoute` installs no double at all, which is the page that never mounts; a null one
  * installs a shell that named no screen.
  */
-async function openPage({ shellRoute, shellHost = SHELL_HOST, shellStorage = {} } = {}) {
+async function openPage({
+  shellRoute,
+  shellHost = SHELL_HOST,
+  shellStorage = {},
+  shellGrants,
+  shellPageRoutes = null
+} = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   if (shellRoute !== undefined) {
     // At document start, where the native shell installs the real channel: the entry reads it
@@ -277,7 +303,9 @@ async function openPage({ shellRoute, shellHost = SHELL_HOST, shellStorage = {} 
       route: shellRoute,
       host: shellHost,
       storage: shellStorage,
-      faultGrant
+      faultGrant,
+      grants: shellGrants ?? [faultGrant],
+      pageRoutes: shellPageRoutes
     })
   }
   const errors = []
@@ -581,6 +609,11 @@ describeRender('the Route A page in a real browser', () => {
     const text = await page.evaluate(() => document.body.innerText)
     expect(text).toContain(SHELL_HOST.name)
     expect(text).not.toContain(UNMATCHED)
+    // The absence that says refused rather than handed off. A page that stayed put because the
+    // notify crossed and the shell did the pushing looks identical on this document otherwise;
+    // the case below it grants `navigate` and asserts this same frame present.
+    const notifies = await page.evaluate(() => globalThis.__orcaRenderCheckNotifies ?? [])
+    expect(notifies.filter((frame) => frame.name === 'navigate')).toEqual([])
     // Not a page fault either: a refused target is the page declining to move, not a throw.
     expect(await page.evaluate(() => globalThis.__orcaRenderCheckFaults ?? [])).toEqual([])
     expect(errors).toEqual([])
@@ -614,5 +647,94 @@ describeRender('the Route A page in a real browser', () => {
     expect(text).not.toContain(UNMATCHED)
     expect(errors).toEqual([])
     await page.close()
+  }, 60_000)
+})
+
+/**
+ * What `useRouteHandoff().back()` rests on, measured in a browser rather than assumed.
+ *
+ * The handoff keeps a back this document can serve and hands the rest to the shell, and it asks
+ * expo-router's `canGoBack()` which of the two it is holding. That answer is React Navigation's
+ * (`expo-router/build/global-state/routing.js` returns `navigationRef.current.canGoBack()`), so it
+ * is a fact about a mounted tree in a browser and no unit test can settle it.
+ *
+ * Read through `router.back()` rather than through `canGoBack()` directly, because the page exposes
+ * no handle to call it on and a global added for a test is a surface the shipped page would carry
+ * forever. `goBack()` queues React Navigation's `GO_BACK`, which is exactly what `canGoBack()`
+ * gates: a Back that moves the page proves the answer was true, one that does not proves it was
+ * false. `/h/[hostId]/edit` is the call site — a real route of this tree whose chevron is
+ * expo-router's own `back()`, which is what the handoff falls through to.
+ *
+ * The first case is the presence precondition for the two below it. A tap that moved nothing and a
+ * tap that never reached a handler look identical on the document, so one tap on this same screen
+ * family is asserted to reach the shell before any absence is read as an answer.
+ */
+describeRender('the stack the page Back button rests on', () => {
+  const EDIT_ROUTE = `${HOST_ROUTE}/edit`
+  const BACK_ON_EDIT = '[aria-label="Back"]'
+
+  /** Clicks and then lets the router settle; a `GO_BACK` that changes nothing settles too. */
+  async function clickAndSettle(page, selector) {
+    await page.click(selector)
+    await page.waitForTimeout(500)
+    return page.evaluate(() => location.pathname + location.search)
+  }
+
+  it('carries a handoff the shell granted across the bridge from a real tap', async () => {
+    // The `navigate` grant is what `navigate-back` rides, and this chevron is the one control in
+    // the page tree that reaches the shell through `useRouteHandoff` today. It proves taps land,
+    // handlers run and a notify crosses — the mechanism `navigate-back` uses, and the reason the
+    // two absences below are evidence rather than silence.
+    const opened = await openPage({
+      shellRoute: { pathname: HOST_ROUTE },
+      shellGrants: [faultGrant, 'navigate'],
+      shellPageRoutes: [HOST_ROUTE_PATTERN]
+    })
+    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
+    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
+    const url = await clickAndSettle(opened.page, '[aria-label="Back to hosts"]')
+    const notifies = await opened.page.evaluate(() => globalThis.__orcaRenderCheckNotifies ?? [])
+    expect(notifies.filter((frame) => frame.name === 'navigate')).toEqual([
+      { v: bridgeVersion, type: 'notify', name: 'navigate', href: '/' }
+    ])
+    // Handed over, not taken: the page stayed where it was rather than routing to a screen it does
+    // not carry, which is what a fallthrough to the local router would have painted.
+    expect(url).toBe(HOST_ROUTE)
+    expect(opened.errors).toEqual([])
+    await opened.page.close()
+  }, 60_000)
+
+  it('cannot go back on the document the shell just opened, which is the one screen it has', async () => {
+    const opened = await openPage({ shellRoute: { pathname: EDIT_ROUTE } })
+    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
+    await waitForRoute(opened, EDIT_ROUTE, 'Edit host')
+    // One control, so the tap below is known to be this route's chevron and not another screen's.
+    expect(await opened.page.locator(BACK_ON_EDIT).count()).toBe(1)
+    expect(await clickAndSettle(opened.page, BACK_ON_EDIT)).toBe(EDIT_ROUTE)
+    expect(opened.errors).toEqual([])
+    await opened.page.close()
+  }, 60_000)
+
+  it('is given no stack by a location change either, only by a push this page makes itself', async () => {
+    // The entry opens every document with `replaceState`, and a later location change resets the
+    // router's state rather than stacking on it: the same chevron still has nowhere to go with a
+    // second entry in `history`. So `canGoBack()` is false for everything the shell or the browser
+    // can do to this page, and the handoff's local branch belongs to a push the page makes through
+    // `useRouteHandoff` — of which this tree has none today.
+    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
+    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
+    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
+    const entriesBefore = await opened.page.evaluate(() => history.length)
+    await opened.page.evaluate((to) => {
+      history.pushState(null, '', to)
+      dispatchEvent(new PopStateEvent('popstate'))
+    }, EDIT_ROUTE)
+    await waitForRoute(opened, EDIT_ROUTE, 'Edit host')
+    expect(await opened.page.evaluate(() => history.length)).toBe(entriesBefore + 1)
+    expect(await clickAndSettle(opened.page, BACK_ON_EDIT)).toBe(EDIT_ROUTE)
+    // This case drives a synthetic `popstate`, so a throw under the fault boundary would leave the
+    // page exactly where the assertion above wants it and read as the absence this claims.
+    expect(opened.errors).toEqual([])
+    await opened.page.close()
   }, 60_000)
 })
