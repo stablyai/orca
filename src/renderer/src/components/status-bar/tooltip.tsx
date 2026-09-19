@@ -18,6 +18,8 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { formatWindowLabel } from '@/lib/window-label-formatter'
+import { sortAntigravityBuckets } from './antigravity-usage-format'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -139,11 +141,26 @@ function ErrorMessage({
 // Window section derivation
 // ---------------------------------------------------------------------------
 
-export function getWindowSections(
-  p: ProviderRateLimits
-): { label: string; window: RateLimitWindow | null }[] {
+export function getWindowSections(p: ProviderRateLimits): {
+  label: string
+  window: RateLimitWindow | null
+  groupName?: string
+  groupDescription?: string | null
+}[] {
   if (p.buckets?.length) {
-    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    const bucketSections = p.buckets.map((b) => ({
+      label:
+        p.provider === 'antigravity'
+          ? b.windowMinutes === 300
+            ? translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
+            : b.windowMinutes === 10080
+              ? translate('auto.components.status.bar.tooltip.252c096536', 'Weekly')
+              : b.windowLabel || formatWindowLabel(b.windowMinutes)
+          : b.name,
+      window: b,
+      ...(b.groupName ? { groupName: b.groupName } : {}),
+      ...(b.groupDescription !== undefined ? { groupDescription: b.groupDescription } : {})
+    }))
     return [
       ...bucketSections,
       {
@@ -285,7 +302,14 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    !p.session &&
+    !p.weekly &&
+    !p.fableWeekly &&
+    !p.monthly &&
+    !p.buckets?.length
+  ) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
@@ -312,6 +336,34 @@ export function ProviderPanel({
     resetCreditCount != null
       ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
+  const groupedAntigravitySections =
+    p.provider === 'antigravity'
+      ? [...new Set(windowSections.map((section) => section.groupName ?? ''))].map((groupName) => ({
+          groupName,
+          sections: sortAntigravityBuckets(
+            windowSections
+              .filter((section) => (section.groupName ?? '') === groupName)
+              .map((section) => ({
+                name: section.label,
+                windowMinutes: section.window?.windowMinutes ?? 0,
+                section
+              }))
+          ).map(({ section }) => section)
+        }))
+      : []
+
+  const renderWindowSection = (s: (typeof windowSections)[number]) => (
+    <ProviderRateLimitWindowSection
+      key={`${s.groupName ?? 'default'}:${s.label}`}
+      window={s.window}
+      label={s.label}
+      textClass={textClass}
+      mutedClass={mutedClass}
+      emptyBarClass={emptyBarClass}
+      usagePercentageDisplay={usagePercentageDisplay}
+      now={now}
+    />
+  )
 
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
@@ -340,23 +392,19 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      {windowSections.map((s) => (
-        <ProviderRateLimitWindowSection
-          key={s.label}
-          window={s.window}
-          label={s.label}
-          textClass={textClass}
-          mutedClass={mutedClass}
-          emptyBarClass={emptyBarClass}
-          usagePercentageDisplay={usagePercentageDisplay}
-          now={now}
-        />
-      ))}
+      {p.provider === 'antigravity'
+        ? groupedAntigravitySections.map(({ groupName, sections }) => (
+            <div key={groupName || 'default'} className="space-y-3">
+              {groupName ? <div className={`font-medium ${textClass}`}>{groupName}</div> : null}
+              {sections.map(renderWindowSection)}
+            </div>
+          ))
+        : windowSections.map(renderWindowSection)}
 
       {p.error ? (
         <ErrorMessage
           message={p.error}
-          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
+          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)}
           inverted={inverted}
         />
       ) : null}
