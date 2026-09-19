@@ -7,7 +7,10 @@ import path from 'node:path'
 import { build } from 'esbuild'
 import { expect, test } from '@playwright/test'
 import { DaemonClient } from '../../src/main/daemon/client'
+import { DaemonGenerationRetirementScheduler } from '../../src/main/daemon/daemon-generation-retirement'
+import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../src/main/daemon/daemon-protocol-version'
 import { DaemonPtyAdapter } from '../../src/main/daemon/daemon-pty-adapter'
+import { DaemonPtyRouter } from '../../src/main/daemon/daemon-pty-router'
 import {
   getDaemonPidPath,
   getDaemonSocketPath,
@@ -69,9 +72,16 @@ async function launchFixture(
       socketPath,
       '--token',
       tokenPath,
-      ...(protocolVersion >= PROTOCOL_VERSION
-        ? ['--pid-record', pidPath, '--launch-nonce', launchNonce]
-        : [])
+      // Why unconditional and not gated on protocolVersion >= PROTOCOL_VERSION (as
+      // this used to read): every generation, current or legacy, writes its own pid
+      // record in production (daemon-legacy-adapters.ts's readLegacyDaemonPid reads
+      // one for every previous protocol version too) -- the retirement scheduler's
+      // recycled-pid guard depends on that record existing for a LEGACY generation
+      // specifically, which the cross-generation retirement test below exercises.
+      '--pid-record',
+      pidPath,
+      '--launch-nonce',
+      launchNonce
     ],
     {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
@@ -256,5 +266,123 @@ test('v22 stays reattachable while v24 retires after its last empty client disco
   }
   if (cleanupErrors.length > 0) {
     throw new AggregateError(cleanupErrors, 'Lifecycle fixture cleanup failed')
+  }
+})
+
+// Distinct from the same-launch never-adopted case above (a same-PROTOCOL_VERSION
+// daemon that self-retires on an idle timeout after never being adopted): this is
+// cross-generation retirement, an OLD-PROTOCOL daemon whose idle session is handed
+// off to `current` by DaemonGenerationRetirementScheduler, then retired by signal
+// once verification proves it owns nothing left (design doc sections 4.2-4.4).
+test('an idle legacy session hands off to current, then its old-protocol daemon retires by SIGTERM', async () => {
+  // Why a short prefix: the daemon server binds a scratch Unix socket under
+  // daemonDir before its final rename, and macOS caps sockaddr_un.sun_path at 104
+  // bytes -- the existing test's own 'orca-daemon-lifecycle-' prefix is the proven
+  // budget this reuses rather than a longer, more descriptive one that overflows it.
+  const rootDir = mkdtempSync(path.join(tmpdir(), 'orca-gen-retire-'))
+  const daemonDir = path.join(rootDir, 'daemon')
+  mkdirSync(daemonDir, { recursive: true })
+  const entryPath = path.join(rootDir, 'entry.cjs')
+  const fixtures: FixtureDaemon[] = []
+  let testError: unknown
+
+  try {
+    await build({
+      entryPoints: [path.join(process.cwd(), 'tests/e2e/fixtures/daemon-lifecycle-entry.ts')],
+      outfile: entryPath,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      target: 'node20',
+      external: ['node-pty'],
+      logLevel: 'silent'
+    })
+
+    // Why below the seed-transfer floor: canHandoffDaemonHistory() (the version gate
+    // the retirement scheduler's Tier-1 handoff reuses unchanged from the existing
+    // explicit-close path) requires the legacy owner below
+    // HISTORY_SEED_TRANSFER_PROTOCOL_VERSION and `current` at or above it.
+    const legacyProtocolVersion = HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
+    const legacy = await launchFixture(entryPath, daemonDir, legacyProtocolVersion)
+    fixtures.push(legacy)
+    const legacyClient = new DaemonClient({
+      socketPath: legacy.socketPath,
+      tokenPath: legacy.tokenPath,
+      protocolVersion: legacyProtocolVersion
+    })
+    await legacyClient.ensureConnected()
+    await expect(
+      legacyClient.request('createOrAttach', { sessionId: 'idle-to-migrate', cols: 80, rows: 24 })
+    ).resolves.toMatchObject({ isNew: true })
+    legacyClient.disconnect()
+
+    const current = await launchFixture(entryPath, daemonDir, PROTOCOL_VERSION)
+    fixtures.push(current)
+
+    const legacyAdapter = new DaemonPtyAdapter({
+      socketPath: legacy.socketPath,
+      tokenPath: legacy.tokenPath,
+      pidPath: legacy.pidPath,
+      runtimeDir: daemonDir,
+      protocolVersion: legacyProtocolVersion
+    })
+    const currentAdapter = new DaemonPtyAdapter({
+      socketPath: current.socketPath,
+      tokenPath: current.tokenPath,
+      pidPath: current.pidPath,
+      runtimeDir: daemonDir
+    })
+    const router = new DaemonPtyRouter({ current: currentAdapter, legacy: [legacyAdapter] })
+    await router.discoverLegacySessions()
+
+    const scheduler = new DaemonGenerationRetirementScheduler({ router, runtimeDir: daemonDir })
+
+    // Why polling tick(): retirement is a multi-step async pipeline (handoff, then
+    // verify-empty, then health-probe-then-SIGTERM-then-wait); a single pass can
+    // legitimately need more than one scheduler tick to converge under real IPC
+    // timing, matching "retried on the next scheduler pass" (design doc section 4.3).
+    await waitFor(
+      'legacy daemon process exit after cross-generation handoff',
+      async () => {
+        await scheduler.tick()
+        return legacy.child.exitCode !== null
+      },
+      15_000
+    )
+
+    expect(existsSync(legacy.tokenPath)).toBe(false)
+    expect(existsSync(legacy.pidPath)).toBe(false)
+    if (process.platform !== 'win32') {
+      await expect(connectsTo(legacy.socketPath)).resolves.toBe(false)
+    }
+
+    // Why current.hasPty and not a fresh attach: the handoff must already have
+    // spawned and confirmed the replacement PTY alive under `current` BEFORE the
+    // legacy generation was ever allowed to retire (verification 4.3.3, "never the
+    // reverse order") -- this proves that ordering held, not merely that some PTY
+    // exists somewhere.
+    expect(currentAdapter.hasPty('idle-to-migrate')).toBe(true)
+    expect(current.child.exitCode).toBeNull()
+  } catch (error) {
+    testError = error
+  }
+
+  const results = await Promise.allSettled(fixtures.map((fixture) => stopFixture(fixture)))
+  const cleanupErrors = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : []
+  )
+  try {
+    rmSync(rootDir, { recursive: true, force: true })
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+  if (testError !== undefined && cleanupErrors.length > 0) {
+    throw new AggregateError([testError, ...cleanupErrors], 'Retirement test and cleanup failed')
+  }
+  if (testError !== undefined) {
+    throw testError
+  }
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(cleanupErrors, 'Retirement fixture cleanup failed')
   }
 })

@@ -27,6 +27,7 @@ export type MockAdapter = {
   fanoutSyntheticExits: Mock
   listProcesses: Mock
   listSessions: Mock
+  hasChildProcesses: Mock
   establishLifecycleLease: Mock
   shutdown: Mock
   dispose: Mock
@@ -126,6 +127,7 @@ export type DaemonInitMockState = {
   replaceDaemonPidFileMock: Mock<(...args: unknown[]) => boolean>
   getDaemonCommandLineMock: Mock<(pid: number) => Promise<string | null>>
   unlinkOwnedDaemonPidFileMock: Mock<(...args: unknown[]) => boolean>
+  unlinkOwnedDaemonTokenFileMock: Mock<(...args: unknown[]) => boolean>
   launchedStartedAtMs: { current: number }
   readLaunchedDaemonIdentity: () => LaunchedDaemonIdentity | null
   daemonClientMock: Mock<(...args: unknown[]) => unknown>

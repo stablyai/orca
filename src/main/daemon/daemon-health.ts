@@ -21,7 +21,19 @@ export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'ORCA_E2E_FORCE_DAEMON_HE
 // also covers a live-but-wedged daemon that simply missed the RPC budget.
 export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
-export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
+// Why protocolVersion defaults to the current constant rather than being required:
+// every existing call site checks the CURRENT daemon and stays unchanged. A caller
+// checking a LEGACY generation (daemon-generation-retirement.ts's recycled-pid
+// guard) must pass that generation's OWN protocolVersion -- the hello handshake
+// below declares itself as that version, and a daemon speaking a DIFFERENT one
+// answers 'rejected' regardless of whether it is otherwise perfectly healthy, per
+// the same version-declaration contract getMacDaemonSystemResolverHealth below
+// already follows for the identical reason.
+export function checkDaemonHealth(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<DaemonHealth> {
   return new Promise((resolve) => {
     if (process.env[E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV] === '1') {
       resolve('unreachable')
@@ -62,7 +74,7 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
     const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
-        version: PROTOCOL_VERSION,
+        version: protocolVersion,
         token,
         clientId: 'health-check',
         role: 'control'
