@@ -28,6 +28,7 @@ type TargetChangeActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setSelectedProjectHostSetupOverrideId'
+  | 'setSelectedProjectIdOverride'
   | 'setSparseDirectories'
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
@@ -76,6 +77,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectIdOverride,
     setSparseDirectories,
     setSparseEnabled,
     setSparseSelectedPresetId,
@@ -90,6 +92,9 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       options: { preserveStartFrom?: boolean; forceResetStartFrom?: boolean } = {}
     ): void => {
       setProjectError(null)
+      // Why (STA-6080): a chosen checkout answers the pending "which setup?" question — leaving it
+      // pending would re-open it for the old project the next time the setup override is cleared.
+      setSelectedProjectIdOverride(null)
       if (value === repoId && !options.forceResetStartFrom) {
         if (!options.preserveStartFrom) {
           setSelectedProjectHostSetupOverrideId(null)
@@ -189,6 +194,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setSelectedProjectHostSetupOverrideId,
       setSparseDirectories,
       setSparseEnabled,
+      setSelectedProjectIdOverride,
       setSparseSelectedPresetId,
       setStartFromResetHint,
       smartGitHubPrStartPointSelectionRef
