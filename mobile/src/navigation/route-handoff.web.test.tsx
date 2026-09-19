@@ -9,7 +9,6 @@ import {
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RouteHandoff } from './route-handoff'
-import { WRAPPED_HREF_MEMBERS } from './route-handoff.web'
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
@@ -37,7 +36,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { useRouteHandoff } from './route-handoff.web'
+import { useRouteHandoff, WRAPPED_HREF_MEMBERS } from './route-handoff.web'
 
 const INIT = {
   v: BRIDGE_PROTOCOL_VERSION,
