@@ -220,17 +220,39 @@ describe('orca repo add project kind', () => {
     process.exitCode = priorExitCode
   })
 
-  it('rejects a --kind value that is neither git nor folder before reaching the runtime', async () => {
+  // `--kind=` reaches the parser as an empty string, and reading it as "no kind given" would let a
+  // damaged flag pick the kind by detection instead of failing the way a typo'd value does.
+  it.each([
+    ['worktree', '--kind must be git or folder'],
+    ['', '--kind must be git or folder']
+  ])(
+    'rejects --kind %j before reaching the runtime',
+    async (value: string, expectedMessage: string) => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+
+      await main(['repo', 'add', '--path', FOLDER_PATH, `--kind=${value}`, '--json'], '/tmp')
+
+      expect(callMock).not.toHaveBeenCalled()
+      expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+        expectedMessage
+      )
+      expect(process.exitCode).toBe(1)
+
+      process.exitCode = priorExitCode
+    }
+  )
+
+  it('rejects a --kind passed with no value at all', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
 
-    await main(['repo', 'add', '--path', FOLDER_PATH, '--kind', 'worktree', '--json'], '/tmp')
+    await main(['repo', 'add', '--path', FOLDER_PATH, '--kind', '--json'], '/tmp')
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      '--kind must be git or folder'
-    )
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain('--kind')
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
