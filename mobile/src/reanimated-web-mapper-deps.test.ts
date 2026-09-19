@@ -19,7 +19,15 @@ const sourceExtensions = new Set(['.ts', '.tsx'])
  * never again, freezing whatever the first frame wrote. That is silent: the throw Reanimated has
  * for this case is behind `__DEV__`, which the bundle builds out.
  */
-const MAPPER_HOOKS = new Set(['useAnimatedStyle', 'useAnimatedProps', 'useDerivedValue'])
+const MAPPER_HOOKS = new Map([
+  ['useAnimatedStyle', { updaters: [0], dependencies: 1 }],
+  ['useAnimatedProps', { updaters: [0], dependencies: 1 }],
+  ['useDerivedValue', { updaters: [0], dependencies: 1 }],
+  // Third argument, not second: `useAnimatedReaction(prepare, react, dependencies)`. Both
+  // callbacks run inside the one mapper it starts (hook/useAnimatedReaction.js:38-50), so both
+  // are updaters.
+  ['useAnimatedReaction', { updaters: [0, 1], dependencies: 2 }]
+])
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -44,8 +52,9 @@ function callsMissingDependencies(path: string, source: string): string[] {
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
       const name = node.expression.text
-      if (MAPPER_HOOKS.has(name)) {
-        const dependencies = node.arguments[1]
+      const hook = MAPPER_HOOKS.get(name)
+      if (hook) {
+        const dependencies = node.arguments[hook.dependencies]
         if (!dependencies || !ts.isArrayLiteralExpression(dependencies)) {
           const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
           missing.push(`${relative(mobileDirectory, path)}:${String(line + 1)} ${name}`)
@@ -76,6 +85,20 @@ describe('reanimated mapper hooks in the web bundle', () => {
       'const style = useAnimatedStyle(() => ({ opacity: progress.value }))\n'
     )
     expect(found).toEqual(['fixture.tsx:1 useAnimatedStyle'])
+  })
+
+  it('reads useAnimatedReaction dependencies from its third argument, not its second', () => {
+    const missing = callsMissingDependencies(
+      'fixture.tsx',
+      'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v })\n'
+    )
+    expect(missing).toEqual(['fixture.tsx:1 useAnimatedReaction'])
+    expect(
+      callsMissingDependencies(
+        'fixture.tsx',
+        'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n'
+      )
+    ).toEqual([])
   })
 
   it('accepts one that has a dependency array', () => {
