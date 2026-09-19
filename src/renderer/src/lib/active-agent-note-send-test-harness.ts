@@ -12,6 +12,7 @@ export type NoteSendAppState = {
   activeTabId: string | null
   activeTabIdByWorktree: Record<string, string | null>
   tabsByWorktree: Record<string, { id: string; launchAgent?: string }[]>
+  getTab: (tabId: string) => { id: string; viewMode?: 'terminal' | 'chat' } | null
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   terminalLayoutsByTabId: Record<
@@ -36,6 +37,7 @@ export function createNoteSendAppState(): NoteSendAppState {
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1' }]
     },
+    getTab: () => null,
     ptyIdsByTabId: {
       'tab-1': ['pty-1']
     },

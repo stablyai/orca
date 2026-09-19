@@ -58,18 +58,21 @@ export function sendNativeChatMessageWithImageAttachments(
         )) {
           sendRuntimePtyInput(settings, ptyId, payload)
         }
+        // Honor the user's resolved chat:submit gesture; a remapped Enter would read
+        // the default CR as a newline and never submit the image message.
+        const submitBytes = options?.submitBytes ?? NATIVE_CHAT_SUBMIT
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
             sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
             delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+              sendRuntimePtyInput(settings, ptyId, submitBytes)
               markSubmitted()
             })
           })
           return
         }
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+          sendRuntimePtyInput(settings, ptyId, submitBytes)
           markSubmitted()
         })
       })

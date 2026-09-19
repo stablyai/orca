@@ -74,6 +74,27 @@ describe('sendNativeChatMessage', () => {
     ])
   })
 
+  it('submits with the provided submitBytes instead of a bare CR', () => {
+    sendNativeChatMessage(SETTINGS, PTY, 'hi', { submitBytes: '\x1b\r' })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('hi'),
+      '\x1b\r'
+    ])
+  })
+
+  it('submits multi-line text with blank lines using the provided submitBytes', () => {
+    const body = 'first\n\n\nsecond'
+    sendNativeChatMessage(SETTINGS, PTY, body, { submitBytes: '\x1b\r' })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes(body),
+      '\x1b\r'
+    ])
+  })
+
   it('cancels the delayed Enter and re-clears an unsubmitted body', () => {
     const handle = sendNativeChatMessage(SETTINGS, PTY, 'hi')
     handle.cancel()
@@ -436,6 +457,70 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       '\x1b[200~/tmp/orca-paste-image.png\x1b[201~ ',
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
     ])
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits an image + text message with the resolved gesture bytes, not the default CR', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', ['/tmp/a.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits an attachment-only message with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', ['/tmp/a.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits several attachments (no text) with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', ['/tmp/a.png', '/tmp/b.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits several attachments + text with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(
+      SETTINGS,
+      PTY,
+      'compare these',
+      ['/tmp/a.png', '/tmp/b.png'],
+      { submitBytes: altEnter }
+    )
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits an attachment + multi-line text (blank lines) with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'first\n\n\nsecond', ['/tmp/a.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
     expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
       false
     )

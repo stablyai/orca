@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useClaudeSubmitGestureMatch } from '../native-chat/use-claude-submit-gesture'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -62,6 +63,7 @@ export function DiffCommentCard({
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
+  const matchesSubmitGesture = useClaudeSubmitGestureMatch()
   const cardRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
@@ -298,7 +300,7 @@ export function DiffCommentCard({
                   handleCancel()
                   return
                 }
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+                if (!e.nativeEvent.isComposing && matchesSubmitGesture(e)) {
                   e.preventDefault()
                   if (!canSubmit) {
                     return
