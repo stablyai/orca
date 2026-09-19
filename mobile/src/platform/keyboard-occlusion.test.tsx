@@ -4,10 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Listener = (event: { endCoordinates: { height: number } }) => void
 
-const keyboard = vi.hoisted(() => ({
-  listeners: new Map<string, Listener>(),
-  removed: [] as string[],
-  platform: 'ios' as 'ios' | 'android'
+type KeyboardHarness = {
+  listeners: Map<string, Listener>
+  removed: string[]
+  platform: 'ios' | 'android'
+}
+
+const keyboard = vi.hoisted((): KeyboardHarness => ({
+  listeners: new Map(),
+  removed: [],
+  platform: 'ios'
 }))
 
 vi.mock('react-native', () => ({
