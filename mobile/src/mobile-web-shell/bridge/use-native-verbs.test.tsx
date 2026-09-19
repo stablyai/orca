@@ -117,3 +117,22 @@ describe('a shell that granted no native verbs', () => {
     expect(verbs.granted).toBe(true)
   })
 })
+
+/**
+ * The member exists so the raw port stays inside the module that owns it. That is only true while
+ * it cannot be used as a raw port: a desktop method sent through it would reach the desktop, and
+ * the inventory would not see it, because a bare-identifier call is not a shape the scan counts.
+ */
+describe('the native verb member on the client', () => {
+  it('refuses a method outside the prefix instead of sending it to the desktop', async () => {
+    const pair = createFakeBridgePortPair()
+    await pair.flush()
+    // Typed `BridgeNativeVerb`, so this is a compile error too; the runtime check is what holds a
+    // caller that reached the member through a widened type.
+    await expect(pair.client.callNativeVerb('worktree.list' as never, { a: 1 })).rejects.toThrow(
+      /not a native verb/
+    )
+    await pair.flush()
+    expect(pair.rpc.requests).toEqual([])
+  })
+})

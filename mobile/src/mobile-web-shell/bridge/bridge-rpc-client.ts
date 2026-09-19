@@ -9,6 +9,7 @@ import { createBridgeInitHandshake } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
+  BridgeClientNotNativeVerbError,
   BridgeClientNotReadyError,
   BridgeSendFailedError,
   BridgeShellReplacedError
@@ -17,6 +18,7 @@ import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
+import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
 import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
@@ -77,7 +79,7 @@ export type BridgeRpcClient = RpcClient & {
    * port inside the module that owns it — a native verb is bridge machinery, not an RPC to a
    * runtime, so it has no `RpcOperation` and no entry in the desktop's method catalog.
    */
-  callNativeVerb: (verb: string, params: unknown) => Promise<RpcResponse>
+  callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcResponse>
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -324,7 +326,16 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyNavigate: notifications.notifyNavigate,
     notifyNavigateBack: notifications.notifyNavigateBack,
     notifyExternalLink: notifications.notifyExternalLink,
-    callNativeVerb: (verb, params) => sendRequest(verb, params),
+    callNativeVerb: (verb, params) => {
+      // Typed to the table, and checked anyway: the type is the fence for every caller the
+      // compiler can see, and this is the one for a caller that reached the member through a
+      // widened one. Without it the member is a raw port the inventory cannot count, because a
+      // bare-identifier call is not a shape its scan looks for.
+      if (!isBridgeNativeMethod(verb)) {
+        return Promise.reject(new BridgeClientNotNativeVerbError(verb))
+      }
+      return sendRequest(verb, params)
+    },
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyPageFault: notifications.notifyPageFault,
     close,

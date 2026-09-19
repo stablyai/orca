@@ -52,3 +52,12 @@ export class BridgeSendFailedError extends Error {
     this.name = 'BridgeSendFailedError'
   }
 }
+
+/** A method sent through the native-verb member that is not one. The member is typed, so this is
+ *  reachable only from a caller that widened it; refusing keeps the member from being a raw port. */
+export class BridgeClientNotNativeVerbError extends Error {
+  constructor(method: string) {
+    super(`${method} is not a native verb`)
+    this.name = 'BridgeClientNotNativeVerbError'
+  }
+}
