@@ -298,8 +298,8 @@ export default function EditorFileTab({
             )}
             defaultValue={basename(file.filePath)}
             // Why: keep the inline field compact enough for the titlebar while
-            // giving filenames a little more room than the static tab label.
-            className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+            // giving filenames more room to edit without premature truncation.
+            className="mr-1 h-5 w-[18ch] min-w-[96px] max-w-[200px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
             spellCheck={false}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
