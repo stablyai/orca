@@ -1,5 +1,6 @@
+import { POSIX_HOOK_BOUNDED_STDIN } from '../agent-hooks/posix-hook-bounded-stdin'
 import {
-  buildPosixHookPayloadCapture,
+  createStrictPosixHookJsonStdinReader,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue,
@@ -7,6 +8,8 @@ import {
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
+
+const ANTIGRAVITY_POSIX_STDIN = createStrictPosixHookJsonStdinReader(POSIX_HOOK_BOUNDED_STDIN)
 
 // Why (#15117): PowerShell cost ~300ms of startup per event, which is what made the console
 // the agent allocates for each hook last long enough to see.
@@ -55,7 +58,12 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'esac',
     // Why: some Antigravity events arrive without stdin but still need a
     // status post, so the shared capture maps empty input to an object.
-    ...buildPosixHookPayloadCapture('empty-object'),
+    ...ANTIGRAVITY_POSIX_STDIN.prelude,
+    `if payload=$(${ANTIGRAVITY_POSIX_STDIN.reader}); then`,
+    `  [ -n "$payload" ] || payload='{}'`,
+    'else',
+    '  exit 0',
+    'fi',
     ...buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',

@@ -1,3 +1,4 @@
+import { POSIX_HOOK_BOUNDED_STDIN } from './posix-hook-bounded-stdin'
 // Why: stdin ownership is a cross-agent process contract; one executable
 // matrix catches an unread early exit without duplicating template assertions.
 // Exception (#11549): Windows batch hooks give up stdin ownership on the
@@ -64,6 +65,7 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
+  createStrictPosixHookJsonStdinReader,
   POSIX_HOOK_JSON_STDIN_PRELUDE,
   POSIX_HOOK_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
@@ -563,11 +565,14 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
+      const captureScript = script.replace(POSIX_HOOK_BOUNDED_STDIN.prelude.join('\n'), '')
+      const strictReader = createStrictPosixHookJsonStdinReader(POSIX_HOOK_BOUNDED_STDIN)
       const captureIndex = Math.max(
-        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+        captureScript.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
+        captureScript.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`),
+        captureScript.indexOf(`payload=$(${strictReader.reader})`)
       )
-      const firstExitIndex = script.indexOf('exit 0')
+      const firstExitIndex = captureScript.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
       // Why: the JSON reader dereferences a variable the prelude sets, so a script

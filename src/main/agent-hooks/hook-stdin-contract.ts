@@ -20,58 +20,66 @@ export const POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS = 1.5
 //
 // Three invariants this script must hold, because the shell chains a second
 // reader behind it and a reader that consumed bytes cannot be retried:
-//  1. A non-zero exit implies stdin was never read, so the `||` fallback still
-//     sees the whole stream. Everything after the imports is therefore guarded.
+//  1. Default-mode failures imply stdin was never read. Strict mode reserves
+//     exit 65 for incomplete consumed input, which its launcher never retries.
 //  2. Decoding is incremental. A multi-byte character straddling two reads must
 //     not raise, or a CJK/emoji payload falls through to `cat` and hangs.
 //  3. The payload is emitted unchanged. Re-serialising would rewrite non-ASCII
 //     as \uXXXX and reorder keys behind the agent's back.
-const POSIX_HOOK_JSON_STDIN_PYTHON = [
-  'import codecs, json, os, select',
-  'text = ""',
-  'try:',
-  '    decoder = codecs.getincrementaldecoder("utf-8")("replace")',
-  `    timeout = ${POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS}.0`,
-  '    while 1:',
-  '        if not select.select([0], [], [], timeout)[0]:',
-  '            text += decoder.decode(b"", True)',
-  '            break',
-  '        chunk = os.read(0, 65536)',
-  '        if not chunk:',
-  '            text += decoder.decode(b"", True)',
-  '            break',
-  `        timeout = ${POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS}`,
-  '        text += decoder.decode(chunk)',
-  // raw_decode does not skip leading whitespace, so a padded payload would
-  // otherwise never complete and would wait out the idle timeout.
-  '        value = text.lstrip()',
-  '        if not value:',
-  '            continue',
-  '        try:',
-  '            end = json.JSONDecoder().raw_decode(value)[1]',
-  '        except ValueError:',
-  '            continue',
-  '        text = value[:end]',
-  '        break',
-  'except Exception:',
-  '    pass',
-  'try:',
-  // os.write skips the locale-dependent stdout encoder, which raises under
-  // LC_ALL=C for a non-ASCII payload.
-  '    data = text.encode("utf-8")',
-  '    written = 0',
-  '    while written < len(data):',
-  '        written += os.write(1, data[written:])',
-  'except Exception:',
-  '    pass'
-].join('\n')
+function jsonStdinPython(
+  rejectIncomplete = false,
+  idleTimeoutSeconds = POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS
+): string {
+  return [
+    'import codecs, json, os, select',
+    ...(rejectIncomplete ? ['import sys', 'complete = False'] : []),
+    'text = ""',
+    'try:',
+    '    decoder = codecs.getincrementaldecoder("utf-8")("replace")',
+    `    timeout = ${POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS}.0`,
+    '    while 1:',
+    '        if not select.select([0], [], [], timeout)[0]:',
+    '            text += decoder.decode(b"", True)',
+    '            break',
+    '        chunk = os.read(0, 65536)',
+    '        if not chunk:',
+    '            text += decoder.decode(b"", True)',
+    '            break',
+    `        timeout = ${idleTimeoutSeconds}`,
+    '        text += decoder.decode(chunk)',
+    // raw_decode does not skip leading whitespace, so a padded payload would
+    // otherwise never complete and would wait out the idle timeout.
+    '        value = text.lstrip()',
+    '        if not value:',
+    '            continue',
+    '        try:',
+    '            end = json.JSONDecoder().raw_decode(value)[1]',
+    '        except ValueError:',
+    '            continue',
+    '        text = value[:end]',
+    ...(rejectIncomplete ? ['        complete = True'] : []),
+    '        break',
+    'except Exception:',
+    '    pass',
+    ...(rejectIncomplete ? ['if text.strip() and not complete:', '    sys.exit(65)'] : []),
+    'try:',
+    // os.write skips the locale-dependent stdout encoder, which raises under
+    // LC_ALL=C for a non-ASCII payload.
+    '    data = text.encode("utf-8")',
+    '    written = 0',
+    '    while written < len(data):',
+    '        written += os.write(1, data[written:])',
+    'except Exception:',
+    '    pass'
+  ].join('\n')
+}
 
 // Why a variable rather than two inline copies: the script is embedded twice in
 // the reader chain, and `-c '<600 chars>'` twice is an EDR oversized-command-line
 // signal as well as unreadable in the generated hook.
 const POSIX_HOOK_JSON_STDIN_PYTHON_VAR = 'orca_hook_json_stdin_py'
 export const POSIX_HOOK_JSON_STDIN_PRELUDE: readonly string[] = [
-  `${POSIX_HOOK_JSON_STDIN_PYTHON_VAR}='${POSIX_HOOK_JSON_STDIN_PYTHON}'`
+  `${POSIX_HOOK_JSON_STDIN_PYTHON_VAR}='${jsonStdinPython()}'`
 ]
 
 const jsonStdinInterpreter = (name: string): string =>
@@ -99,6 +107,29 @@ export type PosixHookStdinReader = {
 export const POSIX_HOOK_JSON_STDIN: PosixHookStdinReader = {
   reader: POSIX_HOOK_JSON_STDIN_READER,
   prelude: POSIX_HOOK_JSON_STDIN_PRELUDE
+}
+
+export function createStrictPosixHookJsonStdinReader(
+  fallback: PosixHookStdinReader
+): PosixHookStdinReader {
+  return {
+    prelude: [
+      `${POSIX_HOOK_JSON_STDIN_PYTHON_VAR}='${jsonStdinPython(true, POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS)}'`,
+      ...fallback.prelude,
+      'orca_read_hook_json() {',
+      ...['python3', 'python'].flatMap((name) => [
+        `  ${jsonStdinInterpreter(name)}`,
+        '  case $? in',
+        '    0) return 0 ;;',
+        // Exit 65 consumed incomplete input; another reader would lose its prefix.
+        '    65) return 65 ;;',
+        '  esac'
+      ]),
+      `  ${fallback.reader}`,
+      '}'
+    ],
+    reader: `${POSIX_HOOK_JSON_STDIN_HOME_GUARD}; orca_read_hook_json`
+  }
 }
 
 // Why: every POSIX hook must own stdin before any no-op exit; sharing this
