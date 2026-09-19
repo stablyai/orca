@@ -8,7 +8,7 @@ import type { BridgeHostDiagnostic } from './bridge-host'
  * the first would otherwise bury the second for the life of the host.
  */
 function diagnosticKey(diagnostic: BridgeHostDiagnostic): string {
-  return diagnostic.kind === 'notify-refused'
+  return diagnostic.kind === 'notify-refused' || diagnostic.kind === 'navigate-back-refused'
     ? `${diagnostic.kind}:${diagnostic.why}`
     : diagnostic.kind
 }
@@ -52,6 +52,14 @@ export function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnos
       // Named, because the key is the whole evidence: it says which host's list the page reached for.
       console.warn('[web-shell-bridge] refused a page write to a key it was not handed', {
         key: diagnostic.key
+      })
+      return
+    }
+    if (diagnostic.kind === 'navigate-back-refused') {
+      // Named, because the two are different bugs: an empty stack is a page opened as the first
+      // screen, and a pending pop is a page posting the frame twice in one batch.
+      console.warn('[web-shell-bridge] did not pop the stack for a page going back', {
+        why: diagnostic.why
       })
       return
     }

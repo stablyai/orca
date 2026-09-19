@@ -161,6 +161,16 @@ export const BridgeInitStorageSchema = z
  */
 export const BRIDGE_FAULT_GRANT = 'fault'
 
+/**
+ * The `navigate` grant's second verb, and the first notify whose name is not its grant's.
+ *
+ * The page is served at `/` with one history entry written by `replaceState`, so its own Back goes
+ * nowhere: the only stack to pop is the native one the shell pushed the page onto. It rides
+ * `navigate` rather than a name of its own because an app that can open a screen can close one, and
+ * a new grant name would leave every route that declares it native on every shell already shipped.
+ */
+export const BRIDGE_NAVIGATE_BACK_NOTIFY = 'navigate-back'
+
 /** Pinned against `SendRequestOptions` in this module's test. */
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
@@ -253,6 +263,13 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       type: z.literal('notify'),
       name: z.literal('navigate'),
       href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
+    }),
+    // Behind the same `navigate` grant, and carrying no target: the shell pops what it pushed, and
+    // a page naming where to go back to would be naming a screen it cannot see.
+    z.object({
+      v: versionSchema,
+      type: z.literal('notify'),
+      name: z.literal(BRIDGE_NAVIGATE_BACK_NOTIFY)
     }),
     // Behind the `storage` grant, for the same reason `navigate` is behind its own.
     z.object({

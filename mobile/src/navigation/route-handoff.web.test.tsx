@@ -2,7 +2,10 @@ import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
+import {
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
+  BRIDGE_PROTOCOL_VERSION
+} from '../mobile-web-shell/bridge/bridge-envelope'
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RouteHandoff } from './route-handoff'
@@ -11,7 +14,9 @@ const router = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   dismissTo: vi.fn(),
-  back: vi.fn()
+  back: vi.fn(),
+  /** What the page's own stack answers. One entry is what the entry's `replaceState` leaves. */
+  canGoBack: vi.fn(() => false)
 }))
 
 vi.mock('expo-router', () => ({ useRouter: () => router }))
@@ -105,6 +110,12 @@ function navigations(posted: readonly string[]): unknown[] {
     .filter((frame: { name?: string }) => frame.name === 'navigate')
 }
 
+function backs(posted: readonly string[]): unknown[] {
+  return posted
+    .map((json) => JSON.parse(json))
+    .filter((frame: { name?: string }) => frame.name === BRIDGE_NAVIGATE_BACK_NOTIFY)
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   held.handoff = null
@@ -112,6 +123,8 @@ beforeEach(() => {
   router.replace.mockClear()
   router.dismissTo.mockClear()
   router.back.mockClear()
+  router.canGoBack.mockClear()
+  router.canGoBack.mockReturnValue(false)
 })
 
 afterEach(() => {
@@ -166,10 +179,12 @@ describe('a route the page does render', () => {
 })
 
 describe('the members that stay inside this document', () => {
-  it('are the router own members, untouched', () => {
-    const { handoff } = mount(INIT)
+  it('keeps a back this document can serve itself', () => {
+    router.canGoBack.mockReturnValue(true)
+    const { posted, handoff } = mount(INIT)
     handoff.back()
     expect(router.back).toHaveBeenCalled()
+    expect(backs(posted)).toEqual([])
   })
 
   it('hand the way out of the host over, since home is a native route', () => {
@@ -258,5 +273,41 @@ describe('a target the shell would refuse', () => {
     handoff.push(href)
     expect(navigations(posted)).toEqual([])
     expect(router.push).toHaveBeenCalledWith(href)
+  })
+})
+
+/**
+ * The Back button the page could not serve.
+ *
+ * The document holds the one history entry the entry wrote with `replaceState`, so `history.back()`
+ * goes nowhere and the Tasks header's `onPress={() => router.back()}`
+ * (`src/tasks/mobile-tasks-screen-chrome.tsx`) is dead inside the page. The stack that has
+ * somewhere to go is the native one the shell pushed this page onto.
+ */
+describe('a back this document cannot serve', () => {
+  it('hands the pop to the shell rather than going nowhere', () => {
+    const { posted, handoff } = mount(INIT)
+    // Exactly the call the Tasks header makes from its own tap handler.
+    handoff.back()
+    expect(backs(posted)).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }
+    ])
+    expect(router.back).not.toHaveBeenCalled()
+  })
+
+  it('falls through to this document when the shell granted no navigate', () => {
+    const { posted, handoff } = mount({
+      ...INIT,
+      grants: { ...INIT.grants, native: [] },
+      pageRoutes: []
+    })
+    handoff.back()
+    expect(backs(posted)).toEqual([])
+    expect(router.back).toHaveBeenCalled()
+  })
+
+  it('does not throw out of a tap handler when there is nowhere to post', () => {
+    const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] } })
+    expect(() => handoff.back()).not.toThrow()
   })
 })

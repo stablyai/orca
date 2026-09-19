@@ -12,7 +12,17 @@ internal val MOBILE_WEB_SHELL_CSP = listOf(
   // Phase C page cannot paint under 'self' alone (measured: the render check under this exact
   // header). This relaxes styling only; script-src 'self' is untouched.
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self'",
+  // `data:` because a file preview has no other shape: the desktop answers a base64 body and the
+  // page composes `data:<mime>;base64,<content>` for React Native Web's Image.
+  //
+  // The bound is the destination, not the provenance. CSP matches `data:` as a scheme, so this
+  // admits any `data:` image URL and cannot tell one the page composed from one it was handed;
+  // the mime type and the body are both the host's, and the page only checks the mime type is a
+  // non-empty string. What holds is that the URL is never fetched as anything but an image:
+  // img-src is the only directive admitting it, an image fetch executes nothing (an SVG inside
+  // an <img> runs no script), and script-src 'self', connect-src 'self' and object-src 'none'
+  // are untouched.
+  "img-src 'self' data:",
   "font-src 'none'",
   // The origin is one read-only directory behind the manifest map, so 'self' reaches nothing the
   // page cannot already read, and the bootstrap page reads ./manifest.json through it. This is the

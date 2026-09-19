@@ -2,7 +2,11 @@
  *  answers when the shell granted nothing or the port refused the frame. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BridgeClientNotReadyError } from './bridge-client-errors'
-import { BRIDGE_FAULT_GRANT, BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
+import {
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
+  BRIDGE_PROTOCOL_VERSION
+} from './bridge-envelope'
 import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
 
 beforeEach(() => {
@@ -74,6 +78,7 @@ describe('the notify guard before init', () => {
     // Against what the handshake already put on the port, so this counts the notifies alone.
     const beforeNotifies = page.sent.length
     expect(page.client.notifyNavigate('/h/host-1')).toBe(false)
+    expect(page.client.notifyNavigateBack()).toBe(false)
     expect(page.client.notifyStorageWrite('orca:last-visited-worktree', 'value')).toBe(false)
     expect(page.sent).toHaveLength(beforeNotifies)
   })
@@ -96,5 +101,47 @@ describe('the notify guard before init', () => {
       name: 'navigate',
       href: '/h/host-1'
     })
+  })
+})
+
+/**
+ * The second verb of one grant, which is the only reason the page can ask for it at all.
+ *
+ * A shell too old to know the name still granted `navigate`, so the page posts and that shell
+ * refuses the whole frame as `unrecognised-message`. Nothing here can tell those two apart: the
+ * caller falls back to its own router either way, which on the page goes nowhere and is exactly
+ * what a Back button already did.
+ */
+describe('navigate-back', () => {
+  it('posts under the navigate grant, with no target of its own', () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
+    expect(page.client.notifyNavigateBack()).toBe(true)
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'notify',
+      name: BRIDGE_NAVIGATE_BACK_NOTIFY
+    })
+  })
+
+  it('stays quiet against a shell that granted no navigate', () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: ['storage'] } })
+    const beforeNotify = page.sent.length
+    expect(page.client.notifyNavigateBack()).toBe(false)
+    expect(page.sent).toHaveLength(beforeNotify)
+  })
+
+  it('asks for no grant of its own, which no route may declare', () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_NAVIGATE_BACK_NOTIFY] } })
+    expect(page.client.notifyNavigateBack()).toBe(false)
+  })
+
+  it('answers false after close rather than throwing into a teardown', () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
+    page.client.close()
+    expect(page.client.notifyNavigateBack()).toBe(false)
   })
 })

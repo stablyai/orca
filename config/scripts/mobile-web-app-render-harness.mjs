@@ -78,7 +78,10 @@ export async function readBridgeFaultGrant() {
  * The entry mounts nothing until `init` lands, so a render check with no shell renders no route at
  * all. This answers `ready`, answers the methods `replies` names, and refuses everything else: a
  * real reply would make this file the place domain behaviour is decided, and every screen below
- * already has a state for an RPC that failed.
+ * already has a state for an RPC that failed. `grants` and `pageRoutes` are what the shell would
+ * have negotiated, and every notify the page posts is kept whole in `__orcaRenderCheckNotifies`,
+ * because a control that handed something to the shell and one that did nothing look the same on
+ * the document.
  *
  * Serialized as a page init script, so it takes plain data and closes over nothing.
  */
@@ -90,11 +93,17 @@ export function installShellDouble({
   host,
   storage,
   faultGrant,
+  grants,
+  pageRoutes = null,
   replies
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
   globalThis.__orcaRenderCheckFaults = []
+  // Every grant-gated notify the page posted, whole and in order. A control that decided to hand
+  // something to the shell and a control that did nothing look identical on the document; this is
+  // the only thing that tells them apart.
+  globalThis.__orcaRenderCheckNotifies = []
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)
@@ -120,8 +129,11 @@ export function installShellDouble({
           },
           grants: {
             rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-            native: [faultGrant]
+            // The fault grant alone unless the caller named a set: every check needs that one,
+            // and a check that names none must not be handed an undefined list.
+            native: grants ?? [faultGrant]
           },
+          ...(pageRoutes === null ? {} : { pageRoutes }),
           // Omitted for a shell too old to name one, which is the case the page has a panel for.
           ...(route === null ? {} : { route }),
           ...(host === null ? {} : { host }),
@@ -129,8 +141,11 @@ export function installShellDouble({
         })
         return
       }
-      if (frame.type === 'notify' && frame.name === faultGrant) {
-        globalThis.__orcaRenderCheckFaults.push(frame.error.message)
+      if (frame.type === 'notify') {
+        globalThis.__orcaRenderCheckNotifies.push(frame)
+        if (frame.name === faultGrant) {
+          globalThis.__orcaRenderCheckFaults.push(frame.error.message)
+        }
         return
       }
       // The result the caller named for this method, carried in the envelope a real host uses.

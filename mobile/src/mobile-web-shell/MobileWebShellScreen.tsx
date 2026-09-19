@@ -15,6 +15,7 @@ import type {
 } from './mobile-web-shell-session-contract'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 
@@ -138,6 +139,7 @@ export function MobileWebShellScreen({
 }: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const popShellStack = useShellStackPop()
   const { state, pageRoutes, retry, reportShellFailure, reportDocumentLoaded, reportPageReady } =
     useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } =
@@ -179,7 +181,10 @@ export function MobileWebShellScreen({
     // download and no second `init`.
     onNavigate: (href: string) => {
       router.push(href)
-    }
+    },
+    // The page's own Back goes nowhere: it holds the one history entry the entry wrote, so the only
+    // stack to pop is this one.
+    onNavigateBack: popShellStack
   })
 
   // A profile read that rejected never becomes a host, so the session would otherwise sit in

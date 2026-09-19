@@ -1,5 +1,6 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
+import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
 import {
   readBridgeClientMessage,
@@ -39,6 +40,8 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   hostDiagnostics: BridgeHostDiagnostic[]
   /** Every screen the page asked the shell to open, in order. */
   navigations: string[]
+  /** One entry per stack pop the page asked for, with what the shell did about it. */
+  backPops: BridgeNavigateBackOutcome[]
   /** Every allowlisted key the page wrote through the shell, in order. */
   storageWrites: { key: string; value: string | null }[]
   /** Every fault the page reported, in order, as the shell received it. */
@@ -146,6 +149,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const diagnostics: BridgeRpcClientDiagnostic[] = []
   const hostDiagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
+  const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
   let pageReadies = 0
@@ -167,6 +171,11 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     route: options.route ?? { pathname: '/h/host-a' },
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     onNavigate: (href) => navigations.push(href),
+    onNavigateBack: () => {
+      // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
+      backPops.push('popped')
+      return 'popped'
+    },
     host: { id: 'host-a', name: 'Host A', endpoint: 'ws://host-a', lastConnected: 0 },
     readStorage: () => options.storage ?? {},
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
@@ -202,6 +211,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     diagnostics,
     hostDiagnostics,
     navigations,
+    backPops,
     storageWrites,
     pageFaults,
     pageReadyCount: () => pageReadies,
