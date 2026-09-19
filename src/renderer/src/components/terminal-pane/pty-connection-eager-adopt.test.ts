@@ -437,6 +437,92 @@ describe('connectPanePty eager adopt', () => {
     expect(resizedAfterLiveWrite[0]).toBe(true)
   })
 
+  it('holds fit and resize while deferred live TUI bytes parse slower than the settle timeout', async () => {
+    const eagerPtyId = 'auto-eager-pty'
+    const eagerFrame = 'Cursor Agent\r\n→ prompt text'
+    const liveFrame = 'slow live TUI row during adopt'
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === eagerPtyId
+        ? {
+            peek: () => eagerFrame,
+            flush: () => eagerFrame,
+            dispose: () => {},
+            captureDims: { cols: 120, rows: 40 }
+          }
+        : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        const buffered = getEagerPtyBufferHandle(existingPtyId)?.flush() ?? ''
+        if (buffered) {
+          callbacks?.onReplayData?.(buffered, { clearBeforeReplay: true })
+        }
+        callbacks?.onData?.(liveFrame)
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+      ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })) as never
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = 80
+      pane.terminal.rows = 24
+    })
+    // Why FIFO: xterm parses writes in order, so a parse probe queued after the
+    // slow live frame cannot complete before that frame does.
+    const parseQueue: { data: string; callback: () => void }[] = []
+    let liveFrameParseReleased = false
+    pane.terminal.write = function write(data: string, callback?: () => void): void {
+      parseQueue.push({ data, callback: callback ?? (() => {}) })
+    } as typeof pane.terminal.write
+    const parseAvailable = async (): Promise<void> => {
+      for (let step = 0; step < 40; step += 1) {
+        const next = parseQueue[0]
+        if (next && (next.data !== liveFrame || liveFrameParseReleased)) {
+          parseQueue.shift()
+          next.callback()
+        }
+        await flushAsyncTicks(2)
+      }
+    }
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await parseAvailable()
+    expect(parseQueue[0]?.data).toBe(liveFrame)
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await parseAvailable()
+    expect(transport.resize).not.toHaveBeenCalled()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+
+    liveFrameParseReleased = true
+    await parseAvailable()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    await parseAvailable()
+    expect(transport.resize).toHaveBeenCalledWith(80, 24)
+  })
+
   it('does not pre-resize when adopting an eager buffer without capture dims', async () => {
     const eagerPtyId = 'auto-eager-pty'
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>

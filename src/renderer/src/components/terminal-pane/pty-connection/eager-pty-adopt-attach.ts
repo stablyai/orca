@@ -75,10 +75,15 @@ export function attachDetachedOrEagerPty(
     if (isEagerAdopt) {
       // Why: live TUI bytes deferred across replay are re-enqueued on the
       // async output path; wait for them to parse at capture dims before
-      // fit/SIGWINCH can change the grid under that frame.
+      // fit/SIGWINCH can change the grid under that frame — past the settle
+      // timeout too, since a slow parse is exactly when the race bites.
       void session.replayWriteQueue
         .catch(() => undefined)
-        .then(() => waitForTerminalOutputParsed(session.pane.terminal))
+        .then(() =>
+          waitForTerminalOutputParsed(session.pane.terminal, {
+            keepWaiting: () => !session.disposed
+          })
+        )
         .then(finishEagerAdopt)
     }
     const attachedPtyId = session.transport.getPtyId() ?? attachPtyId
