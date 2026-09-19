@@ -52,30 +52,9 @@ const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
 }
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
-export function isNativeChatSkillForAgent(
-  agent: AgentType,
-  skill: DiscoveredSkill,
-  result?: Pick<SkillDiscoveryResult, 'sources'>
-): boolean {
-  const profile = getNativeChatAgentProfile(agent)
-  if (!profile) {
-    return false
-  }
-  if (!result) {
-    return (
-      agent === 'codex' &&
-      (skill.providers.includes('codex') || skill.providers.includes('agent-skills'))
-    )
-  }
-  // Why: canonical-path dedup keeps one row per file, but a symlinked skill can
-  // be reachable through several roots; any shared or agent-owned root grants
-  // visibility regardless of which root the scanner happened to list first.
-  const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-  return rootPaths.some((rootPath) => {
-    const source = result.sources.find((entry) => entry.path === rootPath)
-    return source?.owner === null || source?.owner === profile.skillSourceOwner
-  })
-}
+import { isNativeChatSkillForAgent } from '../../../../shared/native-chat-skill-visibility'
+
+export { isNativeChatSkillForAgent }
 
 export function useNativeChatSkills(
   agent: AgentType,

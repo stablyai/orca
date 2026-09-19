@@ -6,6 +6,7 @@ import type { AgentType } from './agent-status-types'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type { SlashCommandSuggestion } from './native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionSlashCommand } from './agent-session-wire'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {
   name: 'model',
@@ -94,12 +95,19 @@ function structuredRecognizedCommands(agent: AgentType): readonly SlashCommandSu
  *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
-  agent: AgentType = 'codex'
+  agent: AgentType = 'codex',
+  reported?: readonly AgentSessionSlashCommand[]
 ): boolean {
   const command = commandParts(text)
-  return Boolean(
-    command && structuredRecognizedCommands(agent).some((entry) => entry.name === command.name)
-  )
+  if (!command) {
+    return false
+  }
+  // The session's own report is authoritative for names the curated catalogs
+  // never knew — commands and skills both dispatch as control sends.
+  if (reported?.some((entry) => entry.name.toLowerCase() === command.name)) {
+    return true
+  }
+  return structuredRecognizedCommands(agent).some((entry) => entry.name === command.name)
 }
 
 function unavailable(name: string): StructuredAgentSessionCommandOutcome {
