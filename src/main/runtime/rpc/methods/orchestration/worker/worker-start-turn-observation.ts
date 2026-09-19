@@ -77,10 +77,9 @@ export async function observeWorkerTurnStart(args: {
 export function describeUnobservedWorkerTurnStart(agent: string | null): string {
   const name = agent ?? 'the agent'
   return (
-    `Dispatch input was written and submitted, but ${name}'s turn start could not be verified ` +
-    `during observation (up to ${Math.round(AGENT_PROMPT_EFFECT_TIMEOUT_MS / 1000)}s). This is unverifiable, not proof the ` +
-    'worker is dead: the agent may still be starting, may be wedged (for example waiting on ' +
-    'network), or may be holding the task unsent in its composer. If the worker recovers and ' +
-    'reports, this Dispatch settles normally.'
+    `Dispatch input (text and Enter) was written, but ${name}'s turn start was not observed ` +
+    `within ${Math.round(AGENT_PROMPT_EFFECT_TIMEOUT_MS / 1000)}s. The prompt may still be unsent ` +
+    'in the composer: check with `terminal read` before resending. This is unverifiable, not ' +
+    'proof the worker is dead. If the worker recovers and reports, this Dispatch settles normally.'
   )
 }

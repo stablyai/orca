@@ -351,7 +351,7 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'start_unknown',
       stage: 'turn_start_unobserved',
-      last_error: expect.stringContaining('turn start could not be verified')
+      last_error: expect.stringContaining('turn start was not observed')
     })
     const persistedEffects = JSON.parse(
       persisted.getWorkerDispatch(dispatchId)?.effects ?? '[]'
