@@ -32,6 +32,9 @@ const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
 /** The sidebar both routes render, and the reason each declares the grant on its own account. */
 const PR_COMMENT_CARD = 'src/components/pr-sidebar/PRCommentCard.tsx'
 
+/** The clipboard seam, as the web build resolves it. */
+const CLIPBOARD_SEAM = 'src/platform/clipboard.web.ts'
+
 describeClosure(
   'the source-control and review page closures',
   () => {
@@ -58,6 +61,41 @@ describeClosure(
       expect(hub.local).toContain(PR_COMMENT_CARD)
       expect(review.local).toContain(PR_COMMENT_CARD)
     })
+  },
+  240_000
+)
+
+/**
+ * Neither route writes the clipboard through the browser's own.
+ *
+ * `expo-clipboard` resolves to `ExpoClipboard.web.js`, which is `navigator.clipboard`: it needs a
+ * secure context, and the iOS shell serves the page from a custom scheme while Android serves
+ * `https`, so that path works on one platform and silently not on the other. Both routes copy —
+ * the conflict section's refresh commands, and the review sheet's notes — so both are granted
+ * `native.clipboard.write` and both must reach it through the seam.
+ *
+ * Asserted as the module's absence from the closure rather than as a count of importers: a new
+ * import anywhere in the tree puts the file back, whoever writes it and whatever they name it.
+ */
+describeClosure(
+  'the clipboard the source-control and review pages reach',
+  () => {
+    it.each([HUB, REVIEW])(
+      "does not carry expo-clipboard's web module at all: %s",
+      async (route) => {
+        const closure = await mobileWebAppRouteClosure(route)
+        expect(closure.modules.filter((file) => file.endsWith('ExpoClipboard.web.js'))).toEqual([])
+      }
+    )
+
+    it.each([HUB, REVIEW])(
+      'carries the seam that replaced it, so the absence above is not vacuous: %s',
+      async (route) => {
+        // An empty list is also what a closure reaching no clipboard code at all would produce.
+        const closure = await mobileWebAppRouteClosure(route)
+        expect(closure.local).toContain(CLIPBOARD_SEAM)
+      }
+    )
   },
   240_000
 )

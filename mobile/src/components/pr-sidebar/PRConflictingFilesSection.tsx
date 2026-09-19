@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
+import { useClipboardWriter } from '../../platform/clipboard'
 import { colors } from '../../theme/mobile-theme'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { PRSection } from './PRSection'
@@ -29,6 +29,9 @@ type Props = {
 // list is not yet available. Ports the desktop ConflictingFilesSection +
 // MergeConflictNotice into the mobile card shell.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is.
+  const clipboard = useClipboardWriter()
   const [commandsCopied, setCommandsCopied] = useState(false)
   const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const conflict = resolveConflictDisplay(pr)
@@ -57,7 +60,7 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
       return
     }
     try {
-      await Clipboard.setStringAsync(conflict.mergeabilityRefreshCommands)
+      await clipboard.writeText(conflict.mergeabilityRefreshCommands)
     } catch {
       return
     }
