@@ -157,6 +157,7 @@ describe('navigation Escape during an open tool call', () => {
   })
 
   it.each([
+    ['antigravity', 'PreToolUse'],
     ['pi', 'tool_call'],
     ['prime-agent', 'tool_execution_start']
   ])('leaves %s work running when Escape closes an overlay mid-%s', (agentType, hookEventName) => {
@@ -173,6 +174,37 @@ describe('navigation Escape during an open tool call', () => {
     vi.setSystemTime(1_200)
     expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+  })
+
+  it('keeps Antigravity working through repeated navigation Escape until its Stop event', () => {
+    const server = new AgentHookServer()
+    const turn = { source: 'antigravity', prompt: 'inspect files', agentType: 'antigravity' }
+    ingest(server, { ...turn, hookEventName: 'PreInvocation', state: 'working' })
+    const published = collectPublishedStates(server)
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'plain-escape', 2)).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+    expect(published).toEqual([])
+    vi.setSystemTime(1_500)
+    ingest(server, { ...turn, hookEventName: 'Stop', state: 'done' })
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'done' })
+  })
+
+  it('still accepts Ctrl+C for Antigravity work', () => {
+    const server = new AgentHookServer()
+    ingest(server, {
+      source: 'antigravity',
+      hookEventName: 'PreInvocation',
+      state: 'working',
+      prompt: 'inspect files',
+      agentType: 'antigravity'
+    })
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'ctrl-c')).toBe(true)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      state: 'done',
+      interrupted: true
+    })
   })
 
   it('leaves OMP work running when Escape lands between approval and execution (#9208)', () => {

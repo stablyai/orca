@@ -348,7 +348,7 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it.each([['claude'], ['omp'], ['pi'], ['prime-agent']] as const)(
+  it.each([['claude'], ['omp'], ['pi'], ['prime-agent'], ['antigravity']] as const)(
     'never asks main to interrupt %s on a single Escape while working',
     (agentType) => {
       // Why: Escape is ambiguous at the source for these TUIs, so the renderer does not spend a
@@ -372,33 +372,36 @@ describe('agent interrupt inference', () => {
     }
   )
 
-  it.each([['claude'], ['omp']] as const)('still forwards Ctrl+C for %s', (agentType) => {
-    vi.useFakeTimers()
-    let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
-    const inferInterrupt = vi.fn().mockReturnValue(true)
-    const tracker = createAgentInterruptInference({
-      paneKey: PANE_KEY,
-      getStatusEntry: () => entry,
-      inferInterrupt,
-      now: () => 1_100
-    })
+  it.each([['claude'], ['omp'], ['antigravity']] as const)(
+    'still forwards Ctrl+C for %s',
+    (agentType) => {
+      vi.useFakeTimers()
+      let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
+      const inferInterrupt = vi.fn().mockReturnValue(true)
+      const tracker = createAgentInterruptInference({
+        paneKey: PANE_KEY,
+        getStatusEntry: () => entry,
+        inferInterrupt,
+        now: () => 1_100
+      })
 
-    tracker.observeInputIntent('ctrl-c')
-    vi.advanceTimersByTime(500)
+      tracker.observeInputIntent('ctrl-c')
+      vi.advanceTimersByTime(500)
 
-    expect(inferInterrupt).toHaveBeenCalledWith({
-      paneKey: PANE_KEY,
-      baselineUpdatedAt: 1_000,
-      baselineStateStartedAt: 900,
-      baselinePrompt: 'write tests',
-      baselineAgentType: agentType,
-      intent: 'ctrl-c'
-    })
-    tracker.dispose()
-    entry = undefined
-  })
+      expect(inferInterrupt).toHaveBeenCalledWith({
+        paneKey: PANE_KEY,
+        baselineUpdatedAt: 1_000,
+        baselineStateStartedAt: 900,
+        baselinePrompt: 'write tests',
+        baselineAgentType: agentType,
+        intent: 'ctrl-c'
+      })
+      tracker.dispose()
+      entry = undefined
+    }
+  )
 
-  it.each([['claude'], ['omp'], ['pi'], ['prime-agent']] as const)(
+  it.each([['claude'], ['omp'], ['pi'], ['prime-agent'], ['antigravity']] as const)(
     'keeps a pending Ctrl+C for %s when a navigation Escape lands before it settles',
     (agentType) => {
       // Why: Escape is not a retraction. The user asked to interrupt; dismissing an overlay
