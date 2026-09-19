@@ -51,7 +51,8 @@ export function getFileExplorerIgnoredQueryRelativePaths(
         continue
       }
       relativePaths.push(row.relativePath)
-      if (row.isDirectory && expanded.has(row.path)) {
+      // Git checks the link itself; descendants inherit its ignored state.
+      if (row.isDirectory && !row.isSymlink && expanded.has(row.path)) {
         visitChildren(row.path)
       }
     }
