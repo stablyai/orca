@@ -20,6 +20,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   'Accounts:',
   '  account add               Add a managed Claude or Codex account on this Orca host',
   '  account list              List managed Claude and Codex accounts on this Orca host',
+  '  usage                     Show provider rate-limit/quota (Claude, Codex, Gemini)',
   '',
   'Skills:',
   '  skills installed          List installed skill selectors',
