@@ -298,6 +298,21 @@ describe('settings navigation metadata', () => {
     )
   })
 
+  it('indexes the display-awake toggle for macOS desktops only', () => {
+    const hasDisplayEntry = (options: { isMac: boolean; isWebClient: boolean }) =>
+      buildSettingsNavigationMetadata({
+        ...options,
+        isWindows: false,
+        repos: [repo]
+      })
+        .find((section) => section.id === 'agents')
+        ?.searchEntries.some((entry) => entry.title === 'Keep the display awake')
+
+    expect(hasDisplayEntry({ isMac: true, isWebClient: false })).toBe(true)
+    expect(hasDisplayEntry({ isMac: false, isWebClient: false })).toBe(false)
+    expect(hasDisplayEntry({ isMac: true, isWebClient: true })).toBe(false)
+  })
+
   it('does not expose local runtime settings from a remote Windows host', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,

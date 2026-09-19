@@ -23,6 +23,7 @@ type PlatformAwakeAssertion = {
   start: (reason: string) => boolean | void
   stop: (reason: string) => void
   dispose: () => void
+  setKeepDisplayAwake?: (keepDisplayAwake: boolean) => void
 }
 
 type PowerMonitorEventSource = {
@@ -34,6 +35,7 @@ type Logger = Pick<Console, 'debug' | 'warn'>
 
 type AgentAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
+  keepDisplayAwake?: boolean
   linuxAssertion?: PlatformAwakeAssertion
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
@@ -44,6 +46,7 @@ type AgentAwakeServiceOptions = {
 
 export class AgentAwakeService {
   private mode: ComputerAwakeMode = 'off'
+  private keepDisplayAwake: boolean
   private blockerId: number | null = null
   private readonly statusListeners = new Set<(status: ComputerAwakeStatus) => void>()
   private lastPublishedStatus: ComputerAwakeStatus | null = null
@@ -58,6 +61,7 @@ export class AgentAwakeService {
 
   constructor(options: AgentAwakeServiceOptions = {}) {
     this.blocker = options.blocker ?? powerSaveBlocker
+    this.keepDisplayAwake = options.keepDisplayAwake ?? false
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
     this.statusLease = new AgentAwakeStatusLease(this.now, () => this.refresh('stale-expiry'))
@@ -73,6 +77,7 @@ export class AgentAwakeService {
     this.macosAssertion =
       options.macosAssertion ??
       new MacosSystemSleepAssertion({
+        keepDisplayAwake: this.keepDisplayAwake,
         logger: this.logger,
         now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
@@ -99,6 +104,22 @@ export class AgentAwakeService {
     }
     this.mode = normalized
     this.refresh('settings-change')
+  }
+
+  /** macOS-only: caffeinate argv is fixed at spawn, so an active assertion must be replaced. */
+  setKeepDisplayAwake(keepDisplayAwake: boolean): void {
+    if (this.keepDisplayAwake === keepDisplayAwake) {
+      return
+    }
+    this.keepDisplayAwake = keepDisplayAwake
+    this.macosAssertion.setKeepDisplayAwake?.(keepDisplayAwake)
+    if (this.platform === 'darwin' && this.getStatus().active) {
+      this.stopMacosAssertion('display-preference-change')
+      // Why: when caffeinate failed the Electron blocker is the live macOS
+      // assertion, so an active period must be re-asserted with the new type too.
+      this.stopBlocker('display-preference-change')
+      this.refresh('display-preference-change')
+    }
   }
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
@@ -190,7 +211,14 @@ export class AgentAwakeService {
       }
     }
     try {
-      const id = this.blocker.start('prevent-display-sleep')
+      // Off macOS this blocker is the only assertion and already keeps the display
+      // awake; on macOS it runs as the caffeinate fallback, where keepDisplayAwake
+      // owns whether display sleep is blocked.
+      const type =
+        this.keepDisplayAwake || this.platform !== 'darwin'
+          ? 'prevent-display-sleep'
+          : 'prevent-app-suspension'
+      const id = this.blocker.start(type)
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {
