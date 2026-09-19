@@ -167,6 +167,31 @@ describe('buildPRCommentBatchConversationReplyBody', () => {
     )
   })
 
+  it('neutralizes mentions and issue references echoed from the source comment', () => {
+    const body = buildPRCommentBatchConversationReplyBody([
+      comment({ author: 'alice', body: '@greptileai please re-review, see #123' }),
+      comment({ author: 'bob', body: 'Off by one.', path: 'src/a.ts', line: 12 })
+    ])
+
+    expect(body).toContain('- @alice: comment — `@greptileai` please re-review, see `#123`')
+    // Why: a bare @handle in the snippet re-pings that bot and burns a review credit.
+    expect(body).not.toMatch(/[^`]@greptileai/)
+    expect(body).not.toMatch(/[^`]#123/)
+  })
+
+  it('leaves a numeric prefix inside a longer token alone', () => {
+    const body = buildPRCommentBatchConversationReplyBody([
+      comment({ author: 'alice', body: 'Use #123abc for the border, tracked in #123-followup' }),
+      comment({ author: 'bob', body: 'Off by one.', path: 'src/a.ts', line: 12 })
+    ])
+
+    // Why: GitHub does not linkify `#123abc`, so wrapping its numeric head would
+    // corrupt a hex colour for no gain. `#123-followup` *is* linkified, so it stays wrapped.
+    expect(body).toContain(
+      '- @alice: comment — Use #123abc for the border, tracked in `#123`-followup'
+    )
+  })
+
   it('truncates long bodies instead of quoting the whole comment', () => {
     const body = buildPRCommentBatchConversationReplyBody([
       comment({ author: 'alice', body: 'a'.repeat(200) }),
