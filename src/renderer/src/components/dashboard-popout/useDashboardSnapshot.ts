@@ -23,6 +23,11 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }
 
+function documentIsHidden(): boolean {
+  // Why: backgrounded documents can reject ViewTransition.ready before a pop-out is visible.
+  return document.visibilityState === 'hidden'
+}
+
 /** Why: View Transition snapshots render in the browser top layer, which paints
  *  above any z-index — so a card morphing columns would flicker OVER the open
  *  terminal dialog (a z-50 Radix portal). Skip the transition while it's open;
@@ -114,6 +119,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       const startViewTransition = document.startViewTransition?.bind(document)
       if (
         !layoutChanged ||
+        documentIsHidden() ||
         prefersReducedMotion() ||
         terminalDialogIsOpen() ||
         !startViewTransition
@@ -125,7 +131,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       // callback — the browser captures the "after" state from it.
       startViewTransition(() => {
         flushSync(() => setSnapshot(next))
-      })
+      }).ready.catch(() => {})
     }
 
     const unsubscribe = window.api.dashboard.onSnapshot(apply)
