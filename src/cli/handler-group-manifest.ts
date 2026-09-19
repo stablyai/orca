@@ -23,6 +23,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
+    name: 'resource',
+    keys: ['resource status'],
+    load: async () => (await import('./handlers/resource.js')).RESOURCE_HANDLERS
+  },
+  {
     name: 'artifacts',
     keys: [
       'artifacts list',
