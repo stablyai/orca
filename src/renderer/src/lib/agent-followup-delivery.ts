@@ -7,7 +7,15 @@ import {
   isExpectedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+
+function aliasesForExpectedProcess(expectedProcess: string): readonly string[] {
+  const config = Object.values(TUI_AGENT_CONFIG).find(
+    (entry) => entry.expectedProcess === expectedProcess || entry.detectCmd === expectedProcess
+  )
+  return config?.detectCmdAliases ?? []
+}
 
 type RuntimeOwnerSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
@@ -42,7 +50,13 @@ async function waitForAgentForeground(
     try {
       const process = await inspectRuntimeTerminalProcess(settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
+      if (
+        isExpectedAgentProcess(
+          foreground,
+          expectedProcess,
+          aliasesForExpectedProcess(expectedProcess)
+        )
+      ) {
         return true
       }
       // Why: interpreter-wrapped agents (aider, mistral-vibe are pip console

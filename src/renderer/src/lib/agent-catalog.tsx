@@ -99,6 +99,14 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://mimo.xiaomi.com/coder'
   },
   {
+    id: 'gajae-code',
+    label: translate('auto.lib.agent.catalog.gajae_code_label', 'Gajae Code'),
+    cmd: 'gjc',
+    searchAliases: ['gajae-code'],
+    faviconDomain: 'gajae-code.com',
+    homepageUrl: 'https://gajae-code.com/docs/getting-started.html'
+  },
+  {
     id: 'ante',
     label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
     cmd: 'ante',

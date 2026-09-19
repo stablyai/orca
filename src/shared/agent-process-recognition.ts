@@ -257,16 +257,18 @@ function recognizePythonEntrypoint(
 
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
-  expectedProcess: string
+  expectedProcess: string,
+  aliases: readonly string[] = []
 ): boolean {
   const normalizedProcess = normalizeProcessName(processName)
-  const normalizedExpected = normalizeProcessName(expectedProcess)
-  if (!normalizedProcess || !normalizedExpected) {
+  if (!normalizedProcess) {
     return false
   }
-  return (
-    normalizedProcess === normalizedExpected ||
-    normalizedProcess.startsWith(`${normalizedExpected}.`)
+  const names = [expectedProcess, ...aliases]
+    .map((name) => normalizeProcessName(name))
+    .filter((name): name is string => Boolean(name))
+  return names.some(
+    (name) => normalizedProcess === name || normalizedProcess.startsWith(`${name}.`)
   )
 }
 

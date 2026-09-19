@@ -107,4 +107,21 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
     expect(delivered).toBe(true)
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r')
   })
+
+  it('accepts a gajae-code foreground when the launch expected process is gjc', async () => {
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'gajae-code',
+      hasChildProcesses: true
+    })
+
+    const delivered = await sendFollowupPromptWhenAgentReady({
+      ptyId: 'pty-1',
+      expectedProcess: TUI_AGENT_CONFIG['gajae-code'].expectedProcess,
+      prompt: 'ship it',
+      settings: null
+    })
+
+    expect(delivered).toBe(true)
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r')
+  })
 })

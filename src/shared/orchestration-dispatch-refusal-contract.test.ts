@@ -15,8 +15,9 @@ describe('buildInjectRejectionMessage', () => {
     expect(message).toContain('no recognized agent detected')
   })
 
-  it('names every agent Orca recognizes, including agy', () => {
+  it('names every agent Orca recognizes, including agy and gjc', () => {
     expect(message).toMatch(/\bagy\b/)
+    expect(message).toMatch(/\bgjc\b/)
     for (const config of Object.values(TUI_AGENT_CONFIG)) {
       expect(message).toContain(config.expectedProcess)
     }

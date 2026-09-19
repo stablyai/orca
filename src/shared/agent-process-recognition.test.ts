@@ -217,6 +217,39 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes Gajae Code by its gjc binary and gajae-code alias', () => {
+    expect(recognizeAgentProcess('gjc')).toEqual({
+      agent: 'gajae-code',
+      processName: 'gjc'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/gjc')).toEqual({
+      agent: 'gajae-code',
+      processName: 'gjc'
+    })
+    expect(recognizeAgentProcess('gajae-code')).toEqual({
+      agent: 'gajae-code',
+      processName: 'gajae-code'
+    })
+    expect(
+      recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\gajae-code.exe`)
+    ).toEqual({
+      agent: 'gajae-code',
+      processName: 'gajae-code'
+    })
+    expect(recognizeAgentProcessFromCommandLine('gjc')).toEqual({
+      agent: 'gajae-code',
+      processName: 'gjc'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/gjc', 'gjc')).toBe(true)
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/gajae-code', 'gjc', ['gajae-code'])).toBe(
+      true
+    )
+    expect(isRecognizedAgentType('gjc')).toBe(true)
+    expect(isRecognizedAgentType('gajae-code')).toBe(true)
+    expect(recognizeAgentProcess('mimo')).toEqual({ agent: 'mimo-code', processName: 'mimo' })
+    expect(recognizeAgentProcess('claude')).toEqual({ agent: 'claude', processName: 'claude' })
+  })
+
   it('recognizes Kimi Code by the kimi-code process its launcher becomes', () => {
     expect(recognizeAgentProcess('/home/dev/.kimi-code/bin/kimi')).toEqual({
       agent: 'kimi',

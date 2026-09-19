@@ -557,7 +557,7 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
-  it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
+  it('keeps opencode, mimo-code, and gajae-code on the cursor-gated paste draft route', () => {
     expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
       'render-cursor-after-bracketed-paste'
     )
@@ -568,7 +568,12 @@ describe('tui agent startup plans', () => {
     )
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptFlag).toBeUndefined()
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptEnvVar).toBeUndefined()
-    // Why: no native draft launch plan means both agents fall through to the
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPromptEnvVar).toBeUndefined()
+    // Why: no native draft launch plan means these agents fall through to the
     // cursor-gated paste-after-ready route, where the new signal applies.
     expect(
       buildAgentDraftLaunchPlan({
@@ -586,6 +591,31 @@ describe('tui agent startup plans', () => {
         platform: 'darwin'
       })
     ).toBeNull()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'gajae-code',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('launches Gajae Code as bare gjc and delivers the prompt after start', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'gajae-code',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'gajae-code',
+      launchCommand: 'gjc',
+      expectedProcess: 'gjc',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'gjc', agentArgs: '', agentEnv: {} }
+    })
   })
 
   it('keeps grok on the composer-glyph paste draft route', () => {

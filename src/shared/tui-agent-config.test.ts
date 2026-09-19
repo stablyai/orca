@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 
 describe('TUI_AGENT_CONFIG', () => {
@@ -16,6 +16,18 @@ describe('TUI_AGENT_CONFIG', () => {
       launchCmd: 'codex',
       expectedProcess: 'codex'
     })
+  })
+
+  it('maps Gajae Code detection onto both gjc and gajae-code', () => {
+    expect(TUI_AGENT_CONFIG['gajae-code']).toMatchObject({
+      detectCmd: 'gjc',
+      detectCmdAliases: ['gajae-code'],
+      launchCmd: 'gjc',
+      expectedProcess: 'gjc',
+      promptInjectionMode: 'stdin-after-start',
+      draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+    })
+    expect(getTuiAgentDetectCommands(TUI_AGENT_CONFIG['gajae-code'])).toEqual(['gjc', 'gajae-code'])
   })
 
   it('keeps explicit overrides where the launch line or process differs from the binary', () => {

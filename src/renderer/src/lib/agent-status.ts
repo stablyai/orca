@@ -105,6 +105,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   autohand: true,
   opencode: true,
   'mimo-code': true,
+  'gajae-code': true,
   pi: true,
   omp: true,
   'prime-agent': true,

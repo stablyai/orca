@@ -15,6 +15,7 @@ export const AGENT_KIND_VALUES = [
   'autohand',
   'opencode',
   'mimo-code',
+  'gajae-code',
   'pi',
   'omp',
   'prime-agent',

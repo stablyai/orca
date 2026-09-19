@@ -20,6 +20,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   autohand: 'autohand-code',
   opencode: 'opencode',
   'mimo-code': null,
+  'gajae-code': null,
   pi: 'pi',
   omp: null,
   'prime-agent': null,

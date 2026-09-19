@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import grokUrl from '../../../shared/agent-icons/grok.png?url'
 import mimoCodeUrl from '../../../shared/agent-icons/mimo-code.png?url'
+import gajaeCodeUrl from '../../../shared/agent-icons/gajae-code.png?url'
 import anteUrl from '../../../shared/agent-icons/ante.png?url'
 import traeUrl from '../../../shared/agent-icons/trae.png?url'
 import primeAgentUrl from '../../../shared/agent-icons/prime-agent.png?url'
@@ -35,6 +36,7 @@ import openclawUrl from '../../../shared/agent-icons/openclaw.png?url'
 export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   grok: grokUrl,
   'mimo-code': mimoCodeUrl,
+  'gajae-code': gajaeCodeUrl,
   ante: anteUrl,
   trae: traeUrl,
   'prime-agent': primeAgentUrl,
