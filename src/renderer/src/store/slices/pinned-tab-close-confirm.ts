@@ -7,6 +7,8 @@ export type PinnedTabCloseConfirmRequest = {
   tabLabel: string
   onConfirm: () => void
   onCancel?: () => void
+  /** Set only for the Agents tab: how many live agents confirming will close. */
+  agentCount?: number
 }
 
 export type PinnedTabCloseConfirmSlice = {

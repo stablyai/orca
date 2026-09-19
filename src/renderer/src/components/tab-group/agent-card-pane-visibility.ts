@@ -18,21 +18,30 @@ function emitHiddenChange(): void {
 
 /** IntersectionObserver reports: hidden cards must not paint outside the grid rect (F2). */
 export function reportAgentCardHidden(worktreeId: string, groupId: string, hidden: boolean): void {
-  let ids = hiddenByWorktree.get(worktreeId)
-  if (!ids) {
-    ids = new Set()
-    hiddenByWorktree.set(worktreeId, ids)
-  }
-  const wasHidden = ids.has(groupId)
-  if (hidden === wasHidden) {
+  const ids = hiddenByWorktree.get(worktreeId)
+  if (hidden === (ids?.has(groupId) ?? false)) {
     return
   }
-  if (hidden) {
-    ids.add(groupId)
-  } else {
+  if (!hidden && ids) {
     ids.delete(groupId)
+    // Why: every card reports visible on unmount, so without this each worktree that ever showed
+    // cards would keep an empty Set for the rest of the session.
+    if (ids.size === 0) {
+      hiddenByWorktree.delete(worktreeId)
+    }
+  } else if (hidden) {
+    if (ids) {
+      ids.add(groupId)
+    } else {
+      hiddenByWorktree.set(worktreeId, new Set([groupId]))
+    }
   }
   emitHiddenChange()
+}
+
+/** Worktrees with at least one hidden card; empty entries are dropped, so this is exact. */
+export function trackedAgentCardHiddenWorktreeIdsForTests(): readonly string[] {
+  return [...hiddenByWorktree.keys()].sort()
 }
 
 export function subscribeAgentCardHidden(onStoreChange: () => void): () => void {

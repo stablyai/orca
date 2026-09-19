@@ -73,6 +73,12 @@ export function useTiledAgentsShortcuts(): void {
       if (!matched) {
         return
       }
+      // Why: a held Mod+Alt+Enter repeats keydown, and each repeat toggling maximize would make
+      // the final state depend on how long the key was held. Focus-by-index is idempotent, so it
+      // stays unguarded.
+      if (matched.type === 'toggleMaximize' && event.repeat) {
+        return
+      }
       const store = useAppStore.getState()
       let handled = false
       if (matched.type === 'focusPane') {

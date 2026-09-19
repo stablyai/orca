@@ -19,11 +19,11 @@ export function TiledAgentsExperimentalSetting({
   return (
     <SearchableSetting
       title={translate(
-        'auto.components.settings.TiledAgentsExperimentalSetting.181757cf72',
+        'auto.components.settings.TiledAgentsExperimentalSetting.title',
         'Tiled agents'
       )}
       description={translate(
-        'auto.components.settings.TiledAgentsExperimentalSetting.d1aa272497',
+        'auto.components.settings.TiledAgentsExperimentalSetting.description',
         "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time."
       )}
       keywords={getExperimentalSearchEntry().tiledAgents.keywords}
@@ -34,13 +34,13 @@ export function TiledAgentsExperimentalSetting({
         <div className="min-w-0 shrink space-y-0.5">
           <Label>
             {translate(
-              'auto.components.settings.TiledAgentsExperimentalSetting.181757cf72',
+              'auto.components.settings.TiledAgentsExperimentalSetting.title',
               'Tiled agents'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.TiledAgentsExperimentalSetting.b74d584bc1',
+              'auto.components.settings.TiledAgentsExperimentalSetting.rowDescription',
               'Turns on automatically for any worktree with an agent, no further action needed. Up to nine agents as cards at once.'
             )}
           </p>
@@ -48,7 +48,7 @@ export function TiledAgentsExperimentalSetting({
         <SettingsSwitch
           checked={enabled}
           ariaLabel={translate(
-            'auto.components.settings.TiledAgentsExperimentalSetting.cb6fcdae1e',
+            'auto.components.settings.TiledAgentsExperimentalSetting.toggleAriaLabel',
             'Toggle tiled agents'
           )}
           onChange={() => updateSettings({ experimentalTiledAgents: !enabled })}

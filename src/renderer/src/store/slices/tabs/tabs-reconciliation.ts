@@ -156,9 +156,20 @@ export function projectWorktreeTabModelReconciliation(
       ? group
       : { ...group, tabOrder, activeTabId, recentTabIds }
   })
+  const cardGroupIds = new Set(state.agentCardGroupIdsByWorktree[worktreeId] ?? [])
+  // Why: never prune the last non-card group. A card group may not root the layout (it would
+  // render its own tab strip as the whole surface, the rejected V2 shape), so without a home
+  // group the layout leaf would name a group that no longer exists.
+  const retainedHomeGroupId = nextGroupsWithEmpty.some(
+    (group) => group.tabOrder.length > 0 && !cardGroupIds.has(group.id)
+  )
+    ? null
+    : (nextGroupsWithEmpty.find((group) => !cardGroupIds.has(group.id))?.id ?? null)
   const prunedGroups =
     validTabs.length > 0
-      ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
+      ? nextGroupsWithEmpty.filter(
+          (group) => group.tabOrder.length > 0 || group.id === retainedHomeGroupId
+        )
       : nextGroupsWithEmpty
   const groupsChanged =
     prunedGroups.length !== groups.length ||
@@ -184,11 +195,9 @@ export function projectWorktreeTabModelReconciliation(
     baseNextLayout && validGroupIds.size > 0
       ? pruneTabGroupLayoutForGroups(baseNextLayout, validGroupIds)
       : baseNextLayout
-  // Why: never let the layout fallback promote a card group to be the layout root, which
-  // would render its own tab strip as the whole surface (the rejected V2 shape).
-  const cardGroupIds = new Set(state.agentCardGroupIdsByWorktree[worktreeId] ?? [])
-  const fallbackLayoutGroup =
-    nextGroups.find((group) => !cardGroupIds.has(group.id)) ?? nextGroups[0]
+  // Why: the retained home group above guarantees a live non-card group here, so the fallback
+  // never roots the layout on a card group (the rejected V2 shape) and never dangles.
+  const fallbackLayoutGroup = nextGroups.find((group) => !cardGroupIds.has(group.id))
   const nextLayout =
     prunedNextLayout ??
     (fallbackLayoutGroup ? { type: 'leaf', groupId: fallbackLayoutGroup.id } : undefined)

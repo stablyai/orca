@@ -175,6 +175,8 @@ export type TabsSlice = {
   restoreAgentCardsAsTabs: (worktreeId: string) => boolean
   focusAgentCardByIndex: (worktreeId: string, index: number) => boolean
   toggleMaximizedAgentCard: (worktreeId: string, cardGroupId?: string) => string | null
+  /** Closes every agent hosted by the Agents tab; returns how many were closed. */
+  closeAllAgentCards: (worktreeId: string) => number
 }
 
 type TabsStateCreator = StateCreator<AppState, [], [], TabsSlice>

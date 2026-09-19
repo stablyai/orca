@@ -187,7 +187,7 @@ describe('agents strip item', () => {
     )
   })
 
-  it('renders a pinned EditorFileTab with no close button and no middle-click close', () => {
+  it('renders a pinned EditorFileTab that opts back into a close button', () => {
     const onCloseFile = vi.fn()
     const agentsTab = makeAgentsTab()
     const agentsItem = makeAgentsItem()
@@ -207,6 +207,9 @@ describe('agents strip item', () => {
     }
     expect(agentsNode.props).toMatchObject({
       isPinned: true,
+      // Why it opts in: closing this tab is a real action that prompts about the agents it
+      // hosts, so hiding the control would leave the user with no way to ask for it.
+      showCloseWhenPinned: true,
       isActive: true,
       file: { filePath: 'Agents', language: 'agents' }
     })
@@ -230,7 +233,8 @@ describe('agents strip item', () => {
       join(__dirname, 'EditorFileTab.tsx'),
       'utf8'
     ).replaceAll('\r\n', '\n')
-    expect(editorFileTabSource).toContain('{!isPinned && (')
+    expect(editorFileTabSource).toContain('{(!isPinned || showCloseWhenPinned) && (')
+    // Middle-click still bails on every pinned tab; only the explicit X is offered here.
     expect(editorFileTabSource).toContain('if (isPinned) {\n            return\n          }')
     expect(onCloseFile).not.toHaveBeenCalled()
   })

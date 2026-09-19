@@ -156,6 +156,20 @@ describe('AgentCard', () => {
     expect(launcher.getAttribute('data-source')).toBe('agent_card_plus')
   })
 
+  it('focuses the card group when keyboard focus reaches a header control', () => {
+    const { focusGroup } = setState()
+    render(
+      <AgentCard
+        worktreeId={WORKTREE_ID}
+        cardGroupId={CARD_GROUP_ID}
+        tabId={TAB_ID}
+        isMaximized={false}
+      />
+    )
+    fireEvent.focusIn(screen.getByLabelText('Close agent'))
+    expect(focusGroup).toHaveBeenCalledWith(WORKTREE_ID, CARD_GROUP_ID)
+  })
+
   it('uses the dot-palette frame classes for a blocked tone', () => {
     setState()
     const { container } = render(

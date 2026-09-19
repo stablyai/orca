@@ -92,9 +92,12 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     {
-      title: translate('auto.components.settings.experimental.search.bf279937eb', 'Tiled agents'),
+      title: translate(
+        'auto.components.settings.experimental.search.tiledAgentsTitle',
+        'Tiled agents'
+      ),
       description: translate(
-        'auto.components.settings.experimental.search.7c77a592ca',
+        'auto.components.settings.experimental.search.tiledAgentsDescription',
         "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time."
       ),
       keywords: [
@@ -103,15 +106,15 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
           'experimental'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.78182b1010',
+          'auto.components.settings.experimental.search.tiledAgentsKeywordTile',
           'tile'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.b077c6a1f4',
+          'auto.components.settings.experimental.search.tiledAgentsKeywordTiled',
           'tiled'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.1029498b26',
+          'auto.components.settings.experimental.search.tiledAgentsKeywordGrid',
           'grid'
         ),
         ...translateSearchKeyword(
@@ -119,11 +122,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
           'agents'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.00fa41b0bf',
+          'auto.components.settings.experimental.search.tiledAgentsKeywordPanes',
           'panes'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.968ed126d4',
+          'auto.components.settings.experimental.search.tiledAgentsKeywordSideBySide',
           'side by side'
         )
       ]
@@ -245,7 +248,7 @@ export function getExperimentalSearchEntry() {
       )
     ),
     tiledAgents: findEntry(
-      translate('auto.components.settings.experimental.search.bf279937eb', 'Tiled agents')
+      translate('auto.components.settings.experimental.search.tiledAgentsTitle', 'Tiled agents')
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

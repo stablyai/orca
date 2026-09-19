@@ -54,6 +54,21 @@ function modAltDigitInit(digit: number): KeyboardEventInit {
   }
 }
 
+// Mod+Alt+Enter: meta+alt on darwin, control+alt elsewhere (mirrors tiled-agents-shortcuts.test.ts).
+function modAltEnterInit(repeat: boolean): KeyboardEventInit {
+  const isMac = process.platform === 'darwin'
+  return {
+    key: 'Enter',
+    metaKey: isMac,
+    ctrlKey: !isMac,
+    altKey: true,
+    shiftKey: false,
+    repeat,
+    bubbles: true,
+    cancelable: true
+  }
+}
+
 beforeEach(() => {
   // Why reset, not clear: a few tests below set focusAgentCardByIndex's mockImplementation,
   // which a mere clear would leak into the next test's call.
@@ -227,5 +242,39 @@ describe('useTiledAgentsShortcuts routes real DOM/composer focus after focusPane
     window.dispatchEvent(new KeyboardEvent('keydown', modAltDigitInit(9)))
 
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+  })
+})
+
+describe('useTiledAgentsShortcuts ignores a held toggleMaximize repeat (C3)', () => {
+  // Why count deltas, not toHaveBeenCalledTimes: earlier tests in this file mount the hook
+  // without unmounting it, so their listeners stay attached and would also answer a dispatch
+  // on window, inflating any absolute call count. A delta isolates this test's own dispatch.
+  it('toggles maximize on the initial (non-repeat) keydown', () => {
+    renderHook(() => useTiledAgentsShortcuts())
+    const before = store.toggleMaximizedAgentCard.mock.calls.length
+
+    window.dispatchEvent(new KeyboardEvent('keydown', modAltEnterInit(false)))
+
+    expect(store.toggleMaximizedAgentCard.mock.calls.length).toBeGreaterThan(before)
+    expect(store.toggleMaximizedAgentCard).toHaveBeenCalledWith('wt-1')
+  })
+
+  it('does not re-toggle on the repeated keydowns a held key emits', () => {
+    renderHook(() => useTiledAgentsShortcuts())
+    window.dispatchEvent(new KeyboardEvent('keydown', modAltEnterInit(false)))
+    const afterInitial = store.toggleMaximizedAgentCard.mock.calls.length
+
+    window.dispatchEvent(new KeyboardEvent('keydown', modAltEnterInit(true)))
+    window.dispatchEvent(new KeyboardEvent('keydown', modAltEnterInit(true)))
+
+    expect(store.toggleMaximizedAgentCard.mock.calls.length).toBe(afterInitial)
+  })
+
+  it('still focuses a pane by index on a repeated keydown, since that branch is unguarded', () => {
+    renderHook(() => useTiledAgentsShortcuts())
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { ...modAltDigitInit(1), repeat: true }))
+
+    expect(store.focusAgentCardByIndex).toHaveBeenCalledWith('wt-1', 0)
   })
 })

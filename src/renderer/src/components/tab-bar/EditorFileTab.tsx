@@ -50,11 +50,15 @@ export default function EditorFileTab({
   onTogglePin,
   dragData,
   dropIndicator,
-  includeTopTabBorder = true
+  includeTopTabBorder = true,
+  showCloseWhenPinned = false
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
   isPinned: boolean
+  /** Pinned tabs hide their close button; the Agents tab opts back in, since closing it is a
+   *  real action that prompts about the agents it hosts rather than a slip to guard against. */
+  showCloseWhenPinned?: boolean
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
@@ -368,7 +372,7 @@ export default function EditorFileTab({
         {file.isDirty && (
           <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
         )}
-        {!isPinned && (
+        {(!isPinned || showCloseWhenPinned) && (
           <EditorFileTabCloseButton
             fileIsDirty={file.isDirty}
             showsSelectionChrome={isActive}

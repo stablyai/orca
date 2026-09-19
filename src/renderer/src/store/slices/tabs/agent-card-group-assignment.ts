@@ -50,6 +50,24 @@ export function createAgentCardGroup(
   return newGroupId
 }
 
+/** Undoes createAgentCardGroup for a group that never received its tab. */
+function removeAgentCardGroup(set: TabsSliceSet, worktreeId: string, groupId: string): void {
+  set((state) => ({
+    groupsByWorktree: {
+      ...state.groupsByWorktree,
+      [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).filter(
+        (group) => group.id !== groupId
+      )
+    },
+    agentCardGroupIdsByWorktree: {
+      ...state.agentCardGroupIdsByWorktree,
+      [worktreeId]: (state.agentCardGroupIdsByWorktree[worktreeId] ?? []).filter(
+        (id) => id !== groupId
+      )
+    }
+  }))
+}
+
 export function assignAgentCardGroups(
   get: TabsSliceGet,
   set: TabsSliceSet,
@@ -69,6 +87,8 @@ export function assignAgentCardGroups(
     }
     const cardGroupId = createAgentCardGroup(set, worktreeId, { activate: false })
     if (!get().moveUnifiedTabToGroup(tab.id, cardGroupId, TILE_MINT_MOVE_OPTS)) {
+      // Why roll back: the id never reaches the returned list, so no later prune can reach it.
+      removeAgentCardGroup(set, worktreeId, cardGroupId)
       continue
     }
     cardGroupIds.push(cardGroupId)

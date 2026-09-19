@@ -652,5 +652,51 @@ describe('TabsSlice', () => {
       expect(layoutRootGroupId).not.toBeNull()
       expect(state.agentCardGroupIdsByWorktree[WT] ?? []).not.toContain(layoutRootGroupId)
     })
+
+    it('never promotes a card group to the layout root when every surviving group is a card group (C1)', () => {
+      const homeGroupId = 'g-home'
+      const cardGroupId = 'g-card-1'
+      // Why: models the pinned Agents tab already gone from its home group (e.g. closed as the
+      // group's only tab), leaving only the tiled card group behind for the layout fallback.
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'agent-1',
+              entityId: 'agent-1',
+              groupId: cardGroupId,
+              worktreeId: WT,
+              contentType: 'agent-session',
+              label: 'Agent 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            { id: homeGroupId, worktreeId: WT, activeTabId: null, tabOrder: [] },
+            { id: cardGroupId, worktreeId: WT, activeTabId: 'agent-1', tabOrder: ['agent-1'] }
+          ]
+        },
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId: homeGroupId } },
+        activeGroupIdByWorktree: { [WT]: homeGroupId },
+        agentCardGroupIdsByWorktree: { [WT]: [cardGroupId] },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      const state = store.getState()
+      const layout = state.layoutByWorktree[WT]
+      const layoutRootGroupId = layout?.type === 'leaf' ? layout.groupId : null
+      expect(layoutRootGroupId).not.toBeNull()
+      expect(state.agentCardGroupIdsByWorktree[WT] ?? []).not.toContain(layoutRootGroupId)
+      // Why: refusing the card group is only half the guarantee. A layout rooted at a group that
+      // pruning deleted renders an empty pane and persists, so assert the root is still live.
+      expect(state.groupsByWorktree[WT].map((group) => group.id)).toContain(layoutRootGroupId)
+    })
   })
 })

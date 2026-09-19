@@ -22,9 +22,6 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   activate?: boolean
 }): Tab {
   const state = useAppStore.getState()
-  // Why: launch tests fake @/store with partial doubles that carry state but no tabs actions.
-  const targetGroupId =
-    state.resolveAgentLaunchGroupId?.(args.worktreeId, args.targetGroupId) ?? args.targetGroupId
   const tabId = structuredAgentSessionTabId(args.sessionId)
   const existing = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
     (candidate) =>
@@ -40,6 +37,11 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     }
     return existing
   }
+  // Why below the reuse return: resolving mints an agent card group, and a re-opened session
+  // that lands on its existing tab would leave that group registered but forever empty.
+  // Why optional call: launch tests fake @/store with partial doubles that have no tabs actions.
+  const targetGroupId =
+    state.resolveAgentLaunchGroupId?.(args.worktreeId, args.targetGroupId) ?? args.targetGroupId
   const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
     id: tabId,
     entityId: args.sessionId,

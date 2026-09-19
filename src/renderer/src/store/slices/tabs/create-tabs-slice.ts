@@ -12,6 +12,7 @@ import { createTabsDropActions } from './tabs-drop-actions'
 import { createTabsSecondaryActions } from './tabs-secondary-actions'
 import { createTabsSessionActions } from './tabs-session-actions'
 import { createTabsAgentCardsActions } from './agent-cards-actions'
+import { createTabsAgentCardsTeardownActions } from './agent-cards-teardown'
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
@@ -30,5 +31,6 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   ...createTabsDropActions(set, get),
   ...createTabsSecondaryActions(set, get),
   ...createTabsSessionActions(set, get),
-  ...createTabsAgentCardsActions(set, get)
+  ...createTabsAgentCardsActions(set, get),
+  ...createTabsAgentCardsTeardownActions(get)
 })

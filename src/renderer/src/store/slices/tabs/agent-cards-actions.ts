@@ -1,5 +1,3 @@
-import { translate } from '@/i18n/i18n'
-import type { Tab } from '../../../../../shared/tab-types'
 import {
   AGENT_CARDS_MAX,
   isAgentOnlyGroup,
@@ -11,6 +9,7 @@ import {
   collectLayoutLeafGroupIds,
   projectAgentCardsToOrdinaryTabs
 } from './agent-cards-projection'
+import { ensureAgentsTab, resolveAgentsTabHomeGroupId } from './agents-tab-placement'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 
 function withoutWorktreeKey<T>(map: Record<string, T>, worktreeId: string): Record<string, T> {
@@ -25,19 +24,6 @@ function sameIdOrder(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index])
 }
 
-function ensureAgentsTab(get: TabsSliceGet, worktreeId: string, homeGroupId: string): Tab {
-  const existing = selectAgentsTab(get().unifiedTabsByWorktree[worktreeId] ?? [])
-  if (existing) {
-    return existing
-  }
-  return get().createUnifiedTab(worktreeId, 'agents', {
-    entityId: `agents:${worktreeId}`,
-    label: translate('auto.components.tab.group.AgentsTab.label', 'Agents'),
-    isPinned: true,
-    targetGroupId: homeGroupId
-  })
-}
-
 function pruneEmptyCardGroups(
   set: TabsSliceSet,
   worktreeId: string,
@@ -49,7 +35,7 @@ function pruneEmptyCardGroups(
     const nextGroups = groups.filter(
       (group) => !cardIdSet.has(group.id) || group.tabOrder.length > 0
     )
-    if (nextGroups === groups || nextGroups.length === groups.length) {
+    if (nextGroups.length === groups.length) {
       return state
     }
     return {
@@ -137,10 +123,11 @@ export function createTabsAgentCardsActions(
         return { carded: false, overflowTabIds: [] }
       }
 
-      const homeGroupId =
-        selectAgentsTab(get().unifiedTabsByWorktree[worktreeId] ?? [])?.groupId ??
-        agentTabs[0].groupId
-      ensureAgentsTab(get, worktreeId, homeGroupId)
+      ensureAgentsTab(
+        get,
+        worktreeId,
+        resolveAgentsTabHomeGroupId(get, worktreeId, agentTabs[0].groupId)
+      )
 
       const extras = (get().unifiedTabsByWorktree[worktreeId] ?? []).filter(
         (tab) => tab.contentType === 'agents'
@@ -212,6 +199,11 @@ export function createTabsAgentCardsActions(
         terminalTabs
       })
       if (projected.tabs === tabs && projected.groups === groups) {
+        // Why: with no layout the projection is a deliberate no-op, not "nothing to restore",
+        // so dropping the registry here would leave live card groups off-layout and untracked.
+        if (layout === undefined && cardGroupIds.length > 0) {
+          return false
+        }
         set((state) => ({
           agentCardGroupIdsByWorktree: withoutWorktreeKey(
             state.agentCardGroupIdsByWorktree,

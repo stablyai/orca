@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Maximize2, Minimize2, Plus, X } from 'lucide-react'
 import { QuickLaunchAgentMenuItems } from '../tab-bar/QuickLaunchButton'
@@ -72,6 +72,9 @@ export function AgentCard({
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
   const focusGroup = useAppStore((state) => state.focusGroup)
   const activateTab = useAppStore((state) => state.activateTab)
+  const focusCardGroup = useCallback(() => {
+    focusGroup(worktreeId, cardGroupId)
+  }, [cardGroupId, focusGroup, worktreeId])
   const bodyAnchorName = tabGroupBodyAnchorName(cardGroupId)
   const bodyAnchorStyle = useMemo(
     () => ({ anchorName: bodyAnchorName }) as React.CSSProperties,
@@ -106,9 +109,9 @@ export function AgentCard({
   return (
     <div
       className={cn('flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden', frameClassName)}
-      onPointerDown={() => {
-        focusGroup(worktreeId, cardGroupId)
-      }}
+      onPointerDown={focusCardGroup}
+      // Why: keyboard/AT focus can enter a card without a pointer event, so sync group focus to DOM focus for card shortcuts.
+      onFocusCapture={focusCardGroup}
     >
       <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-2">
         <AgentIcon agent={agent} size={14} />

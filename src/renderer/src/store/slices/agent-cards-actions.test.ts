@@ -232,6 +232,131 @@ describe('agent card actions', () => {
     })
   })
 
+  describe('card group lifecycle', () => {
+    it('rolls the minted group back when the tab move into it fails', () => {
+      enableAgentCards(store)
+      createAgentTabs(1)
+      store.setState({ moveUnifiedTabToGroup: () => false })
+
+      store.getState().syncAgentCards(WT)
+
+      const state = store.getState()
+      expect(state.agentCardGroupIdsByWorktree[WT] ?? []).toEqual([])
+      expect(state.groupsByWorktree[WT].every((group) => group.tabOrder.length > 0)).toBe(true)
+    })
+
+    it('keeps the card registry when there is no layout to restore into', () => {
+      enableAgentCards(store)
+      createAgentTabs(1)
+      store.getState().syncAgentCards(WT)
+      const cardGroupIds = store.getState().agentCardGroupIdsByWorktree[WT] ?? []
+      expect(cardGroupIds).toHaveLength(1)
+      store.setState((current) => {
+        const { [WT]: _removed, ...rest } = current.layoutByWorktree
+        return { layoutByWorktree: rest }
+      })
+
+      expect(store.getState().restoreAgentCardsAsTabs(WT)).toBe(false)
+
+      const state = store.getState()
+      expect(state.agentCardGroupIdsByWorktree[WT]).toEqual(cardGroupIds)
+      expect(state.groupsByWorktree[WT].some((group) => group.id === cardGroupIds[0])).toBe(true)
+    })
+
+    it('un-cards once a layout exists again, so the no-layout wait cannot become permanent', () => {
+      enableAgentCards(store)
+      createAgentTabs(1)
+      store.getState().syncAgentCards(WT)
+      const cardGroupIds = store.getState().agentCardGroupIdsByWorktree[WT] ?? []
+      const layout = store.getState().layoutByWorktree[WT]
+      store.setState((current) => {
+        const { [WT]: _removed, ...rest } = current.layoutByWorktree
+        return { layoutByWorktree: rest }
+      })
+      expect(store.getState().restoreAgentCardsAsTabs(WT)).toBe(false)
+
+      // Why: the early return holds the registry rather than wiping it, so disabling the
+      // experiment must still take effect the moment a layout is written back.
+      store.setState((current) => ({
+        layoutByWorktree: { ...current.layoutByWorktree, [WT]: layout }
+      }))
+
+      expect(store.getState().restoreAgentCardsAsTabs(WT)).toBe(true)
+      const state = store.getState()
+      expect(state.agentCardGroupIdsByWorktree[WT]).toBeUndefined()
+      expect(state.groupsByWorktree[WT].some((group) => cardGroupIds.includes(group.id))).toBe(
+        false
+      )
+    })
+
+    it('recreates a missing Agents tab in a group the layout renders, not in a card group', () => {
+      enableAgentCards(store)
+      // The exact shape seen live after the pinned Agents tab is closed: the agents already sit
+      // in off-layout card groups and the only rendered group is the now-empty home group.
+      const homeGroupId = 'g-home'
+      const cardGroupIds = ['g-card-0', 'g-card-1']
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: cardGroupIds.map((groupId, index) => ({
+            id: `a${index}`,
+            entityId: `a${index}`,
+            groupId,
+            worktreeId: WT,
+            contentType: 'agent-session',
+            label: `Agent ${index}`,
+            customLabel: null,
+            color: null,
+            sortOrder: index,
+            createdAt: index + 1
+          }))
+        },
+        groupsByWorktree: {
+          [WT]: [
+            { id: homeGroupId, worktreeId: WT, activeTabId: null, tabOrder: [] },
+            ...cardGroupIds.map((id, index) => ({
+              id,
+              worktreeId: WT,
+              activeTabId: `a${index}`,
+              tabOrder: [`a${index}`]
+            }))
+          ]
+        },
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId: homeGroupId } },
+        activeGroupIdByWorktree: { [WT]: homeGroupId },
+        agentCardGroupIdsByWorktree: { [WT]: cardGroupIds },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      store.getState().syncAgentCards(WT)
+
+      const state = store.getState()
+      const agentsTab = (state.unifiedTabsByWorktree[WT] ?? []).find(
+        (tab) => tab.contentType === 'agents'
+      )
+      expect(agentsTab).toBeDefined()
+      // Why this matters: falling back to an agent tab's group would put the Agents tab inside a
+      // card group, which is deliberately off-layout, so nothing would render it.
+      expect(agentsTab?.groupId).toBe(homeGroupId)
+      expect(collectLayoutLeafGroupIds(state.layoutByWorktree[WT]).has(agentsTab!.groupId)).toBe(
+        true
+      )
+      expect(cardGroupIds).not.toContain(agentsTab?.groupId)
+    })
+
+    it('still clears a stale registry when the worktree has no cards to restore', () => {
+      enableAgentCards(store)
+      store.setState({
+        agentCardGroupIdsByWorktree: { [WT]: [] },
+        maximizedGroupIdByWorktree: { [WT]: 'stale-card' }
+      })
+
+      expect(store.getState().restoreAgentCardsAsTabs(WT)).toBe(false)
+
+      expect(store.getState().agentCardGroupIdsByWorktree[WT]).toBeUndefined()
+      expect(store.getState().maximizedGroupIdByWorktree[WT]).toBeUndefined()
+    })
+  })
+
   it('does not record agents in activeTabTypeByWorktree', () => {
     enableAgentCards(store)
     createAgentTabs(1)

@@ -6,7 +6,8 @@ import {
   parseAgentCardPaneVisibility,
   reportAgentCardHidden,
   resetAgentCardHiddenForTests,
-  selectAgentCardPaneVisibilityKey
+  selectAgentCardPaneVisibilityKey,
+  trackedAgentCardHiddenWorktreeIdsForTests
 } from './agent-card-pane-visibility'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -131,6 +132,28 @@ describe('selectAgentCardPaneVisibilityKey', () => {
       '1|card-1|card-1'
     )
     expect(hiddenAgentCardGroupIds(WORKTREE_ID)).toEqual(['card-1'])
+  })
+})
+
+describe('reportAgentCardHidden', () => {
+  afterEach(() => {
+    resetAgentCardHiddenForTests()
+  })
+
+  it('tracks no worktree for a card that only ever reports visible', () => {
+    reportAgentCardHidden(WORKTREE_ID, 'card-1', false)
+    expect(trackedAgentCardHiddenWorktreeIdsForTests()).toEqual([])
+  })
+
+  it('drops the worktree once its last hidden card scrolls back into view', () => {
+    reportAgentCardHidden(WORKTREE_ID, 'card-1', true)
+    reportAgentCardHidden(WORKTREE_ID, 'card-2', true)
+    expect(trackedAgentCardHiddenWorktreeIdsForTests()).toEqual([WORKTREE_ID])
+
+    reportAgentCardHidden(WORKTREE_ID, 'card-1', false)
+    expect(trackedAgentCardHiddenWorktreeIdsForTests()).toEqual([WORKTREE_ID])
+    reportAgentCardHidden(WORKTREE_ID, 'card-2', false)
+    expect(trackedAgentCardHiddenWorktreeIdsForTests()).toEqual([])
   })
 })
 

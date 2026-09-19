@@ -72,12 +72,14 @@ export function AgentCardsSurface({
             ) : (
               // Why zero-size, not visibility:hidden or display:none: collapses the sibling's
               // anchor body to 0x0 so anchor-size() collapses its live overlay too, without the
-              // corrupted xterm fit a display:none rect would cause.
+              // corrupted xterm fit a display:none rect would cause. inert is what takes the
+              // zero-size card's controls out of the tab order; overflow-hidden does not.
               <div
                 key={cardGroupId}
                 data-orca-agent-card={cardGroupId}
                 className="h-0 w-0 overflow-hidden pointer-events-none"
                 aria-hidden={true}
+                inert={true}
               >
                 {renderCard(cardGroupId, tabId)}
               </div>
@@ -93,7 +95,9 @@ export function AgentCardsSurface({
       data-orca-agent-cards={worktreeId}
       className="absolute inset-0 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-sleek"
     >
-      <div className="grid min-h-full box-border grid-cols-[repeat(auto-fit,minmax(420px,1fr))] auto-rows-[minmax(300px,1fr)] content-start gap-3 p-3">
+      {/* Why min(): a split pane narrower than the track floor would otherwise clip each card's
+          right edge, including its header controls, behind the pane's hidden horizontal overflow. */}
+      <div className="grid min-h-full box-border grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] auto-rows-[minmax(300px,1fr)] content-start gap-3 p-3">
         {slots.map(({ cardGroupId, tabId }) => (
           <div
             key={cardGroupId}

@@ -20,7 +20,6 @@ import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDra
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { tabGroupPanelFrameClassName } from './tab-group-panel-frame-class-name'
 import { resolveTabGroupPanelActiveTabProps } from './tab-group-panel-active-tab-props'
-import { tiledPaneFrameClassName, type TiledPaneFrameTone } from './tiled-pane-attention'
 import { AgentCardsSurface } from './AgentCardsSurface'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
@@ -47,9 +46,7 @@ export default function TabGroupPanel({
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
-  hoveredTabInsertion = null,
-  hasAgentAttention = false,
-  agentFrameTone
+  hoveredTabInsertion = null
 }: {
   groupId: string
   worktreeId: string
@@ -66,12 +63,9 @@ export default function TabGroupPanel({
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
-  hasAgentAttention?: boolean
-  agentFrameTone?: TiledPaneFrameTone
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
-  const tiledFrameClassName = tiledPaneFrameClassName(agentFrameTone)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -221,9 +215,7 @@ export default function TabGroupPanel({
         suppressLeftBorder,
         suppressRightBorder,
         suppressBottomBorder,
-        isFocused,
-        hasAgentAttention,
-        tiledFrameClassName
+        isFocused
       })}
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.

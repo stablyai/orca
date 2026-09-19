@@ -100,6 +100,8 @@ describe('AgentCardsSurface', () => {
       expect(hiddenCell?.className).toContain('h-0')
       expect(hiddenCell?.className).toContain('w-0')
       expect(hiddenCell?.getAttribute('aria-hidden')).toBe('true')
+      // Why: zero size and overflow-hidden still leave the card's controls in the tab order.
+      expect(hiddenCell?.hasAttribute('inert')).toBe(true)
     }
   })
 
@@ -118,7 +120,9 @@ describe('AgentCardsSurface', () => {
     expect(scrollContainer?.className).toContain('overflow-y-auto')
     expect(container.querySelectorAll('[data-orca-agent-card]')).toHaveLength(9)
     const track = container.querySelector('.grid')
-    expect(track?.className).toContain('grid-cols-[repeat(auto-fit,minmax(420px,1fr))]')
+    // Why min(): the track floor must collapse in a split pane narrower than a card, or the
+    // card's right edge and header controls end up behind the pane's hidden overflow.
+    expect(track?.className).toContain('grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))]')
     expect(track?.className).toContain('auto-rows-[minmax(300px,1fr)]')
     expect(track?.className).toContain('min-h-full')
   })

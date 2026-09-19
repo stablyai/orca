@@ -247,6 +247,7 @@ export function renderTabBarItems({
             !clientHostedRowOwnsActiveState && activeTabType === 'agents' && item.id === activeTabId
           }
           isPinned={true}
+          showCloseWhenPinned
           hasTabsToRight={index < items.length - 1}
           hasTabsToLeft={index > 0}
           tabCount={items.length}

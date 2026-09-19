@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
-/** TabGroupPanel's root className: pane borders/dimming plus an optional tiled-agent frame tint,
- *  composed via cn() so no computed fragment is ever spliced into another template literal. */
+/** TabGroupPanel's root className: pane borders/dimming, composed via cn() so no computed
+ *  fragment is ever spliced into another template literal. */
 export function tabGroupPanelFrameClassName(args: {
   hasSplitGroups: boolean
   touchesLeftEdge: boolean
@@ -11,8 +11,6 @@ export function tabGroupPanelFrameClassName(args: {
   suppressRightBorder: boolean
   suppressBottomBorder: boolean
   isFocused: boolean
-  hasAgentAttention: boolean
-  tiledFrameClassName: string
 }): string {
   const {
     hasSplitGroups,
@@ -22,9 +20,7 @@ export function tabGroupPanelFrameClassName(args: {
     suppressLeftBorder,
     suppressRightBorder,
     suppressBottomBorder,
-    isFocused,
-    hasAgentAttention,
-    tiledFrameClassName
+    isFocused
   } = args
   return cn(
     // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in
@@ -41,8 +37,6 @@ export function tabGroupPanelFrameClassName(args: {
             isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
           } ${isFocused ? '' : 'opacity-95'}`
         : ''
-    }`,
-    hasAgentAttention && 'ring-1 ring-inset ring-agent-question/60',
-    tiledFrameClassName
+    }`
   )
 }
