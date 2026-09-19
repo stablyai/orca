@@ -715,7 +715,10 @@ jobs:
             config/scripts/mobile-web-app-drawer-render.test.mjs \
             config/scripts/mobile-web-app-agent-history-render.test.mjs \
             config/scripts/mobile-web-app-tasks-render.test.mjs \
-            config/scripts/mobile-web-app-tasks-external-links.test.mjs
+            config/scripts/mobile-web-app-tasks-external-links.test.mjs \
+            config/scripts/mobile-web-app-files-external-links.test.mjs \
+            config/scripts/mobile-web-app-files-render.test.mjs \
+            config/scripts/mobile-web-app-page-closure-families.test.mjs
 
   cross-version-wire:
     name: cross-version wire compatibility

@@ -14,6 +14,7 @@ import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-di
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
+import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
 import {
@@ -62,6 +63,12 @@ export function buildPtyHostEnv(
   })
 
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
+  const shouldInstallPiExtensions =
+    opts.agentStatusHooksEnabled && isTuiAgentEnabled('pi', opts.disabledTuiAgents)
+  const shouldInstallOmpExtensions =
+    opts.agentStatusHooksEnabled && isTuiAgentEnabled('omp', opts.disabledTuiAgents)
+  const shouldInstallPrimeAgentExtensions =
+    opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
   // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
@@ -150,7 +157,7 @@ export function buildPtyHostEnv(
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
     // otherwise install only into an existing agent dir (or userData for OMP
     // status so a typed `omp` still gets the shell wrapper extension).
-    if (piAgentKind === 'pi') {
+    if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
         materializeDefaultHome: explicitPiAgentKind === 'pi'
       })
@@ -158,7 +165,7 @@ export function buildPtyHostEnv(
       exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
     }
 
-    if (shouldPrepareOmpShadow) {
+    if (shouldInstallOmpExtensions && shouldPrepareOmpShadow) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp', {
         materializeDefaultHome: explicitPiAgentKind === 'omp',
         // WSL loads the host-rooted managed extension through drvfs; guest storage stays separate.
@@ -170,9 +177,13 @@ export function buildPtyHostEnv(
       })
       Object.assign(baseEnv, ompEnv)
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
+    } else if (shouldPrepareOmpShadow) {
+      // Keep guarded OMP launches supplied with a fresh config even when its
+      // managed status extension is disabled.
+      Object.assign(baseEnv, piTitlebarExtensionService.buildFreshOmpEnv())
     }
 
-    if (piAgentKind === 'prime-agent' && !opts.isWsl) {
+    if (shouldInstallPrimeAgentExtensions && piAgentKind === 'prime-agent' && !opts.isWsl) {
       const primeEnv = piTitlebarExtensionService.buildPtyEnv(
         id,
         preexistingPrimeAgentDir,

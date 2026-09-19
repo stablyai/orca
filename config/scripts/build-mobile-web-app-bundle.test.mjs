@@ -72,6 +72,26 @@ async function withScratch(run) {
   }
 }
 
+/**
+ * Every page route this bundle declares, written out rather than read from the source that
+ * produces it: the point is to pin the list, and comparing the manifest to its own input would
+ * pass whatever that input became. Shared by the two assertions below, which is also what keeps
+ * this file under the 600-line cap.
+ */
+const EXPECTED_PAGE_ROUTES = [
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
+  { pathname: '/h/[hostId]/agent-history/[worktreeId]', grants: ['navigate', 'storage'] },
+  {
+    pathname: '/h/[hostId]/tasks',
+    grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
+  },
+  { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage', 'externalLink'] },
+  {
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink']
+  }
+]
+
 describe('the page routes the manifest declares', () => {
   it('turns a route key into the URL pattern expo-router gives it', () => {
     expect(routePathnameFromKey('./h/[hostId]/index.tsx')).toBe('/h/[hostId]')
@@ -88,14 +108,7 @@ describe('the page routes the manifest declares', () => {
 
   it('declares only routes the bundle has a module for', async () => {
     const keys = await collectMobileWebAppRouteKeys(appDir)
-    expect(resolveMobileWebPageRoutes(keys)).toEqual([
-      { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
-      { pathname: '/h/[hostId]/agent-history/[worktreeId]', grants: ['navigate', 'storage'] },
-      {
-        pathname: '/h/[hostId]/tasks',
-        grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
-      }
-    ])
+    expect(resolveMobileWebPageRoutes(keys)).toEqual(EXPECTED_PAGE_ROUTES)
   })
 
   it('fails the build on a declaration the bundle cannot render', () => {
@@ -114,14 +127,7 @@ describe('the page routes the manifest declares', () => {
     async () => {
       await withScratch(async (scratch) => {
         const { manifest } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
-        expect(manifest.routes).toEqual([
-          { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
-          { pathname: '/h/[hostId]/agent-history/[worktreeId]', grants: ['navigate', 'storage'] },
-          {
-            pathname: '/h/[hostId]/tasks',
-            grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
-          }
-        ])
+        expect(manifest.routes).toEqual(EXPECTED_PAGE_ROUTES)
         // The routes are derived from the same tree the script is built from, so the assets
         // already decide them and the id has no reason to carry them as well.
         expect(manifest.buildId).toBe(computeMobileWebBundleBuildId(manifest.assets))
@@ -392,6 +398,21 @@ describeBundling('the app bundle', () => {
     expect(shipped).not.toContain('react-native-web')
     expect(shipped).not.toContain('lucide')
   })
+
+  it('ships no haptic that reaches for the DOM', async () => {
+    // expo-haptics' web build fakes an iOS haptic by appending a hidden
+    // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
+    // once per call. The file explorer calls triggerSelection on every row tap, and C1.9 already
+    // traced a swallowed long press on the worktree list to that stray click. `haptics.web.ts` is
+    // what keeps the whole shim out of the bundle, so this reads the bytes rather than the import.
+    for (const source of allScriptSource(await bundleMobileWebApp())) {
+      // The shim's own fingerprint, not `navigator.vibrate`: react-native-web's Vibration export
+      // calls that too, and it touches no DOM until something invokes it.
+      expect(source).not.toContain('ariaHidden')
+      expect(source).not.toContain('pointer: coarse')
+      expect(source).not.toContain('setAttribute("switch"')
+    }
+  }, 120_000)
 
   it('embeds no absolute path from this checkout', async () => {
     // Every chunk, not only the entry: the route manifest names each route by absolute path, and

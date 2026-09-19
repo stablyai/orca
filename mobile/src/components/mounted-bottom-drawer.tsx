@@ -194,7 +194,11 @@ export function MountedBottomDrawer({
   }, [onClose, progress])
 
   useEffect(() => {
-    if (!visible || !interactive) {
+    // Native only: react-native-web's `BackHandler.addEventListener` logs "BackHandler is not
+    // supported on web and should not be used." and hands back an inert subscription, so inside the
+    // shell's page every drawer that opened put that line on the console and armed nothing. There
+    // is no hardware back to intercept in a WebView; the shell owns the one the phone has.
+    if (!visible || !interactive || Platform.OS === 'web') {
       return
     }
 

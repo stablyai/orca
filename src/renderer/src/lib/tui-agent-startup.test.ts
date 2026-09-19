@@ -409,6 +409,8 @@ describe('isShellProcess', () => {
     expect(isShellProcess('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
     expect(isShellProcess('/bin/zsh')).toBe(true)
+    expect(isShellProcess('/bin/ksh')).toBe(true)
+    expect(isShellProcess('dash')).toBe(true)
     expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
       true
     )

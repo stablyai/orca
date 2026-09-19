@@ -1,6 +1,6 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { delimiter } from 'node:path'
@@ -59,6 +59,55 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('does not install managed Pi extensions when Pi is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      buildPtyHostEnv(
+        'pty-pi-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['pi']
+        }
+      )
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+
+    it('does not install managed OMP extensions when OMP is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      const env = buildPtyHostEnv(
+        'pty-omp-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          launchCommand: 'omp',
+          launchAgent: 'omp',
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['omp']
+        }
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+    })
+
+    it('threads disabled Pi settings through a bare PTY spawn', async () => {
+      piBuildPtyEnvMock.mockClear()
+
+      await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        agentStatusHooksEnabled: true,
+        disabledTuiAgents: ['pi']
+      }))
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
     it('prepares fresh OMP settings even when status hooks are disabled', () => {
       const env = buildPtyHostEnv(
         'fresh-without-hooks',

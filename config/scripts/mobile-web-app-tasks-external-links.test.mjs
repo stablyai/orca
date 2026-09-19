@@ -17,23 +17,13 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import {
+  EXTERNAL_LINK_SEAM as SEAM,
+  reachesReactNativeLinking
+} from './mobile-web-app-external-link-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip
-
-/** The seam, as the web build resolves it: `.web.ts` wins under the builder's resolveExtensions,
- *  and it is the one module in this closure allowed to reach react-native's `Linking`. */
-const SEAM = 'src/platform/external-link.web.ts'
-
-/** Whether a module reaches react-native's own `Linking`, by name or through a namespace import. */
-function reachesReactNativeLinking(source) {
-  const named = /import\s*\{[^}]*\bLinking\b[^}]*\}\s*from\s*'react-native'/s
-  const namespace = /import\s*\*\s*as\s*(\w+)\s*from\s*'react-native'/
-  const asNamespace = namespace.exec(source)
-  return (
-    named.test(source) || (asNamespace !== null && source.includes(`${asNamespace[1]}.Linking`))
-  )
-}
 
 describeClosure(
   'the tasks page closure',
