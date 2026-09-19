@@ -24,6 +24,9 @@ export type UsageSection = { label: string; window: RateLimitWindow }
 // partial/rehydrated provider can also carry an undefined window; both must be
 // dropped so downstream consumers never dereference `window.usedPercent`.
 function usedSections(p: ProviderRateLimits): UsageSection[] {
+  if (p.isUnlimited) {
+    return []
+  }
   return getWindowSections(p).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )

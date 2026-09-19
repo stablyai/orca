@@ -35,6 +35,7 @@ type UsageProviderId = ProviderRateLimits['provider']
 
 function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
+    provider.isUnlimited ||
     provider.session ||
     provider.weekly ||
     provider.fableWeekly ||

@@ -70,6 +70,27 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).not.toContain('···')
   })
 
+  it('renders stale unlimited Codex usage instead of a refresh failure', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      planType: 'business',
+      isUnlimited: true,
+      updatedAt: Date.now(),
+      error: 'temporary failure',
+      status: 'error'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={true} display="used" mode="compact" />
+    )
+
+    expect(markup).toContain('Unlimited')
+    expect(markup).not.toContain('Refresh failed')
+  })
+
   it('shows only the highest-used window when several windows exist', async () => {
     const { ProviderSegment } = await import('./StatusBar')
 
