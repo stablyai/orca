@@ -293,8 +293,8 @@ describe('getSmartGitHubSubmitResolution', () => {
         url: 'https://github.com/stablyai/orca/pull/2049'
       })
     ).toEqual({
-      workspaceName: 'fix-smart-resolution-delay',
-      displayName: 'Fix smart resolution delay',
+      workspaceName: '2049-fix-smart-resolution-delay',
+      displayName: '#2049 Fix smart resolution delay',
       linkedWorkItem: {
         type: 'pr',
         number: 2049,
@@ -314,8 +314,8 @@ describe('getSmartGitHubSubmitResolution', () => {
       url: 'https://github.com/stablyai/orca/issues/2050'
     })
 
-    expect(resolution.workspaceName).toBe('make-create-feel-instant')
-    expect(resolution.displayName).toBe('Make create feel instant')
+    expect(resolution.workspaceName).toBe('2050-make-create-feel-instant')
+    expect(resolution.displayName).toBe('#2050 Make create feel instant')
     expect(resolution.linkedIssueNumber).toBe(2050)
     expect(resolution.linkedPR).toBeNull()
   })
@@ -329,8 +329,8 @@ describe('getSmartGitHubSubmitResolution', () => {
         url: 'https://github.com/stablyai/orca/issues/6933'
       })
     ).toEqual({
-      workspaceName: 'the-board-columns-are-displayed-backwards',
-      displayName: 'The board columns are displayed backwards',
+      workspaceName: '6933-the-board-columns-are-displayed-backwards',
+      displayName: '#6933 The board columns are displayed backwards',
       linkedWorkItem: {
         type: 'issue',
         number: 6933,
