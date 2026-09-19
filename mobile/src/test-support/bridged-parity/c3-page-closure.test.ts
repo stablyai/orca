@@ -79,8 +79,14 @@ describe('the C3 page closure', () => {
     // `settings-repo-metadata-icons` in C1's file leaves this case green and reds seven others —
     // the class totals and the exclusion counts in C2's suite and this one, both cross-series
     // agreements, and C5's own inheritance case, which compares against an independent literal
-    // rather than a spread. Redeclaring `settings.repo-metadata` in the preview half reds this one
-    // along with five more.
+    // rather than a spread.
+    //
+    // Redeclaring `settings.repo-metadata` in the preview half always reds this case; how many
+    // others go with it depends on the shape of the redeclaration, so the number is not the claim.
+    // Measured: one golden under the family's name reds seven, because it also shrinks the census
+    // to 114 and leaves that family with no byte-identical golden. The family copied verbatim with
+    // a single verdict flipped reds five, the census unmoved at 125. Both keep the load-bearing
+    // half — the spread takes the last table's entry, and this case is what sees it.
     //
     // C2's rule does not reproduce these pins — measured here, it disagrees on 13 of the 103,
     // being `tasks.smart-source-search` 7, `host-worktree-refresh` 5 and
