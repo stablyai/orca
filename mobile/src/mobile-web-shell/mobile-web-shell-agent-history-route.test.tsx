@@ -118,6 +118,31 @@ describe('the native agent-history route that hands off to the shell', () => {
     })
   })
 
+  /**
+   * The ids encoding does not save, pinned rather than fixed.
+   *
+   * `encodeURIComponent('..')` is `'..'`, so a dot-segment id reaches `BRIDGE_ROUTE_PATHNAME_PATTERN`
+   * intact, fails the lookahead that stops a climb out of `/h/` (`bridge-caps.ts:68`), and the shell
+   * answers the refusal with `reportShellFailure` — a failure screen where this route would
+   * otherwise have rendered the native panel it already has.
+   *
+   * Pre-existing and not this series': `app/h/[hostId]/index.tsx` builds its pathname the same way
+   * and has the same hole, so fixing it here would fix one of two call sites and leave the shape
+   * this test would then stop describing. Pinned so the refusal is a decision on record, and so a
+   * later change that starts encoding dots fails here and has to say which screen it wants.
+   */
+  it('cannot save a dot-segment id, which the bridge then refuses rather than opens', async () => {
+    for (const hostId of ['.', '..']) {
+      dependencies.params = { hostId, worktreeId: 'wt-1', name: 'n' }
+      dependencies.routes.length = 0
+      await renderRoute()
+      const pathname = dependencies.routes[0]?.pathname ?? ''
+      // Encoded, and unchanged by it: the id is already the one shape encoding cannot alter.
+      expect(pathname, hostId).toBe(`/h/${hostId}/agent-history/wt-1`)
+      expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname), hostId).toBe(false)
+    }
+  })
+
   it('encodes both dynamic segments, so a deep-linked id stays one segment each', async () => {
     for (const hostId of ['a?b', 'a#b', 'a b', 'a/b', 'a\\b']) {
       dependencies.params = { hostId, worktreeId: 'wt/1', name: 'n' }

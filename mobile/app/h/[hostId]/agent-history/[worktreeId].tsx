@@ -16,6 +16,11 @@ import { firstParam } from '../../../../src/source-control/mobile-source-control
  * decoded value, and a worktree id or a deep-linked host id carrying `/`, `?`, `#` or whitespace
  * would otherwise stop being the single segment `matchesRoutePattern` reads it as. A route with no
  * worktree names no screen the shell could open, so it stays native.
+ *
+ * Encoding does not save a `.` or `..` id, which it leaves unchanged: that pathname fails the
+ * bridge's own segment rule and the shell answers with a failure screen rather than the native
+ * panel. `index.tsx` builds its pathname the same way and has the same hole; the route test pins
+ * the refusal rather than this series fixing one of the two call sites.
  */
 export default function MobileAgentSessionHistoryScreen() {
   const params = useLocalSearchParams<{
