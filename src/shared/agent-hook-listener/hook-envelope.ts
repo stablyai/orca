@@ -3,7 +3,11 @@ import type { IncomingHttpHeaders } from 'node:http'
 
 import type { AgentHookSource } from '../agent-hook-relay'
 import { parsePaneKey } from '../stable-pane-id'
-import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
+import {
+  MAX_PANE_KEY_LEN,
+  warnOnHookEnvOrVersionMismatch,
+  warnOnHookPayloadParseFailure
+} from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import { parseAgentHookJson } from './request-body'
 
@@ -129,6 +133,7 @@ export function parseHookEnvelope(
           try {
             return parseAgentHookJson(rawPayload)
           } catch {
+            warnOnHookPayloadParseFailure(state, source)
             return null
           }
         })()

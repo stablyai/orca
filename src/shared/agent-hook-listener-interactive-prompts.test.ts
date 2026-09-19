@@ -41,31 +41,33 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
-  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
-    const event = normalizeHookPayload(
-      state,
-      'cursor',
-      {
-        paneKey: PANE_KEY,
-        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
-      },
-      'production'
-    )
+  it('normalizes BOM-prefixed Cursor hook payloads to a working state', () => {
+    // Why: Cursor's Windows transport delivers one or two leading U+FEFFs (#21421).
+    for (const bomCount of [1, 2]) {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        {
+          paneKey: PANE_KEY,
+          payload: `${'\uFEFF'.repeat(bomCount)}{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}`
+        },
+        'production'
+      )
 
-    expect(event?.payload).toMatchObject({
-      agentType: 'cursor',
-      state: 'working',
-      prompt: 'Synthetic Cursor prompt'
-    })
-    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+      expect(event?.payload).toMatchObject({
+        agentType: 'cursor',
+        state: 'working',
+        prompt: 'Synthetic Cursor prompt'
+      })
+      expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+    }
   })
 
-  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
-  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+  // Why: pins the allowance to leading U+FEFFs only — a trim would also accept a space-then-BOM prefix.
+  it('still rejects a hook payload that is malformed once leading BOMs are removed', () => {
     const bom = '\uFEFF'
     const body = '{"hook_event_name":"beforeSubmitPrompt"}'
     for (const payload of [
-      `${bom}${bom}${body}`,
       `${bom}not json`,
       ` ${bom}${body}`,
       `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
@@ -77,6 +79,32 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
       expect(event).toBeNull()
+    }
+  })
+
+  it('warns once per source when a string hook payload fails to parse', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      for (let i = 0; i < 3; i += 1) {
+        normalizeHookPayload(
+          state,
+          'cursor',
+          { paneKey: PANE_KEY, payload: 'not json' },
+          'production'
+        )
+      }
+      normalizeHookPayload(
+        state,
+        'claude',
+        { paneKey: PANE_KEY, payload: 'also not json' },
+        'production'
+      )
+      const payloadWarns = warn.mock.calls.filter((call) =>
+        String(call[0]).includes('payload field failed JSON validation')
+      )
+      expect(payloadWarns).toHaveLength(2)
+    } finally {
+      warn.mockRestore()
     }
   })
 

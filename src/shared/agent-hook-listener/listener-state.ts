@@ -16,6 +16,7 @@ import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 export type HookListenerState = {
   warnedVersions: Set<string>
   warnedEnvs: Set<string>
+  warnedHookPayloadParseSources: Set<string>
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
   /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
@@ -88,6 +89,7 @@ export function createHookListenerState(
   const state: HookListenerState = {
     warnedVersions: new Set(),
     warnedEnvs: new Set(),
+    warnedHookPayloadParseSources: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
     lastStatusByPaneKey: adapter.view,
@@ -303,6 +305,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeConsumedCompactPromptIdByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
+  state.warnedHookPayloadParseSources.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()

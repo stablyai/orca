@@ -495,6 +495,48 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  // Why (#21421): Cursor's Windows hook pipes the payload through PowerShell, which prepends two
+  // UTF-8 BOMs; the form field then starts with two U+FEFFs and must still parse into a status row.
+  it('accepts a double-BOM form payload on /hook/cursor', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const params = new URLSearchParams({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        env: 'production',
+        version: env.ORCA_AGENT_HOOK_VERSION ?? '',
+        payload: `\uFEFF\uFEFF${JSON.stringify({
+          hook_event_name: 'beforeSubmitPrompt',
+          prompt: 'cursor double bom'
+        })}`
+      })
+
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/cursor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: params
+      })
+      expect(response.status).toBe(204)
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          agentType: 'cursor',
+          prompt: 'cursor double bom'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('tracks Codex agent statuses from form-encoded managed hook posts', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

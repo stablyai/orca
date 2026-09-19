@@ -1,5 +1,5 @@
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../agent-hook-types'
-import { REMOTE_AGENT_HOOK_ENV } from '../agent-hook-relay'
+import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../agent-hook-relay'
 import type { HookListenerState } from './listener-state'
 
 /** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */
@@ -77,5 +77,19 @@ export function warnOnHookEnvOrVersionMismatch(
           'Likely a stale terminal from another Orca install.'
       )
     }
+  }
+}
+
+/** Warn-once per source when a string `payload` field fails to parse (invalid JSON or over the structure limits); the route still answers 204, so without this the drop is invisible. Never log the payload or parse error — both can carry user prompt text. */
+export function warnOnHookPayloadParseFailure(
+  state: HookListenerState,
+  source: AgentHookSource
+): void {
+  if (
+    !state.warnedHookPayloadParseSources.has(source) &&
+    state.warnedHookPayloadParseSources.size < MAX_WARNED_KEYS
+  ) {
+    state.warnedHookPayloadParseSources.add(source)
+    console.warn(`[agent-hooks] dropped ${source} hook: payload field failed JSON validation`)
   }
 }

@@ -262,6 +262,7 @@ describe('agent hook extraction boundaries', () => {
     const state = createHookListenerState()
     state.warnedVersions.add('old-version')
     state.warnedEnvs.add('development->production')
+    state.warnedHookPayloadParseSources.add('cursor')
     state.lastPromptByPaneKey.set(PANE, 'prompt')
     state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
@@ -271,6 +272,7 @@ describe('agent hook extraction boundaries', () => {
 
     expect(state.warnedVersions.size).toBe(0)
     expect(state.warnedEnvs.size).toBe(0)
+    expect(state.warnedHookPayloadParseSources.size).toBe(0)
     expect(state.lastPromptByPaneKey.size).toBe(0)
     expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
     expect(state.codexLeadStateByPaneKey.size).toBe(0)

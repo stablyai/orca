@@ -161,12 +161,14 @@ describe('shared agent-hook-listener', () => {
     expectRequestParserListenersReleased(req)
   })
 
-  it('strips exactly one outer JSON BOM', async () => {
-    const req = createReadableRequest({ 'content-type': 'application/json' })
-    const body = readRequestBody(req as unknown as IncomingMessage)
-    req.emit('data', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"ok":true}')]))
-    req.emit('end')
-    await expect(body).resolves.toEqual({ ok: true })
+  it('strips leading BOMs from an outer JSON body', async () => {
+    for (const bomCount of [1, 2]) {
+      const req = createReadableRequest({ 'content-type': 'application/json' })
+      const body = readRequestBody(req as unknown as IncomingMessage)
+      req.emit('data', Buffer.from(`${'\uFEFF'.repeat(bomCount)}{"ok":true}`, 'utf8'))
+      req.emit('end')
+      await expect(body).resolves.toEqual({ ok: true })
+    }
   })
 
   it('rejects JSON beyond the nesting-depth limit', async () => {
