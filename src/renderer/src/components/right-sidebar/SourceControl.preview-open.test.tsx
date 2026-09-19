@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => {
   const calls = {
     openDiff: vi.fn(),
     openFile: vi.fn(),
+    setEditorViewMode: vi.fn(),
     openConflictFile: vi.fn(),
     openBranchDiff: vi.fn(),
     createEmptySplitGroup: vi.fn(),
@@ -141,6 +142,7 @@ function noopAsync(value: unknown = undefined): () => Promise<unknown> {
 function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.calls.createEmptySplitGroup.mockReturnValue('group-2')
+  mocks.calls.openFile.mockImplementation((file: { filePath: string }) => file.filePath)
   mocks.calls.discardRuntimeGitPath.mockResolvedValue(undefined)
   mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
@@ -194,7 +196,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     trackConflictPath: vi.fn(),
     openDiff: mocks.calls.openDiff,
     openFile: mocks.calls.openFile,
-    setEditorViewMode: vi.fn(),
+    setEditorViewMode: mocks.calls.setEditorViewMode,
     setMarkdownViewMode: vi.fn(),
     setPendingEditorReveal: vi.fn(),
     openConflictFile: mocks.calls.openConflictFile,
@@ -349,7 +351,7 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('passes preview through markdown edit-in-changes and conflict file opens', () => {
+  it('opens unstaged Markdown against the index and preserves conflict file opens', () => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
@@ -373,15 +375,52 @@ describe('SourceControl preview row opens', () => {
         relativePath: 'docs/readme.md',
         worktreeId: mocks.activeWorktree.id,
         language: 'markdown',
-        mode: 'edit'
+        mode: 'edit',
+        changesAgainstIndex: true
       },
       { targetGroupId: undefined, preview: true }
     )
+    expect(mocks.calls.setEditorViewMode).toHaveBeenCalledWith('/repo/wt/docs/readme.md', 'changes')
     expect(mocks.calls.openConflictFile).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
       '/repo/wt',
       expect.objectContaining({ path: 'src/conflict.ts' }),
       'typescript',
+      { targetGroupId: undefined, preview: true }
+    )
+  })
+
+  it('keeps both sides of a staged-then-modified Markdown file separate', () => {
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'docs/readme.md', area: 'unstaged' }),
+          gitEntry({ path: 'docs/readme.md', area: 'staged' })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const unstagedRow = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="docs/readme.md"][data-source-control-area="unstaged"]'
+    )
+    const stagedRow = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="docs/readme.md"][data-source-control-area="staged"]'
+    )
+    expect(unstagedRow).not.toBeNull()
+    expect(stagedRow).not.toBeNull()
+    act(() => {
+      unstagedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      stagedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.calls.openFile).toHaveBeenCalledTimes(1)
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt/docs/readme.md',
+      'docs/readme.md',
+      'markdown',
+      true,
       { targetGroupId: undefined, preview: true }
     )
   })
