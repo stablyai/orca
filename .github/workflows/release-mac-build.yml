@@ -77,6 +77,26 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
+      # Why: `uses: ./…` resolves from the checked-out tag, not from the workflow
+      # ref, so a tag cut from a ref whose tree predates a composite action fails
+      # with "Can't find 'action.yml'". release-cut.yml's build job restores the
+      # actions directory the same way; this workflow checks out the tag on its
+      # own, so it needs its own copy of the guard.
+      - name: Restore composite actions from the workflow ref
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          action_path=.github/actions/install-mobile-dependencies/action.yml
+          if [ -f "$action_path" ]; then
+            echo "Composite actions already present at the release tag."
+            exit 0
+          fi
+          echo "Release tag predates $action_path; restoring from $WORKFLOW_SHA."
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- .github/actions
+          test -f "$action_path"
+
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
