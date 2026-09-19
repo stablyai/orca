@@ -177,6 +177,10 @@ export function buildPtyHostEnv(
       })
       Object.assign(baseEnv, ompEnv)
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
+    } else if (shouldPrepareOmpShadow) {
+      // Keep guarded OMP launches supplied with a fresh config even when its
+      // managed status extension is disabled.
+      Object.assign(baseEnv, piTitlebarExtensionService.buildFreshOmpEnv())
     }
 
     if (shouldInstallPrimeAgentExtensions && piAgentKind === 'prime-agent' && !opts.isWsl) {

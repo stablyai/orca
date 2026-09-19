@@ -80,7 +80,7 @@ describe('registerPtyHandlers', () => {
     it('does not install managed OMP extensions when OMP is disabled', () => {
       piBuildPtyEnvMock.mockClear()
 
-      buildPtyHostEnv(
+      const env = buildPtyHostEnv(
         'pty-omp-disabled',
         {},
         {
@@ -95,6 +95,7 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
     })
 
     it('threads disabled Pi settings through a bare PTY spawn', async () => {
