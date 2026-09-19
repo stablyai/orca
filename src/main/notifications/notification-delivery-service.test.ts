@@ -151,6 +151,47 @@ describe('createNotificationDeliveryService', () => {
     expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
+  describe('per-event mobile dedupe', () => {
+    it('fans out once per completion even when the coarse burst key differs', () => {
+      const harness = makeHarness(makeSettings())
+      const service = createNotificationDeliveryService(harness.deps)
+      const key = 'local\u0000session-1\u0000turn-1'
+
+      // Two windows raise the SAME completion, and the coarse per-workspace gate cannot hold the
+      // second: that key includes agentState, which the two windows read from their own row and
+      // can disagree about. Only the event identity makes this one push rather than two.
+      service.dispatch(makeRequest({ mobileDedupeKey: key, agentState: 'done' }))
+      service.dispatch(makeRequest({ mobileDedupeKey: key, agentState: 'working' }))
+
+      expect(harness.dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    })
+
+    it('holds a repeat of one completion open-endedly, not for a burst window', () => {
+      const harness = makeHarness(makeSettings())
+      const service = createNotificationDeliveryService(harness.deps)
+      const key = 'local\u0000session-1\u0000turn-1'
+
+      service.dispatch(makeRequest({ mobileDedupeKey: key, agentState: 'done' }))
+      // Long past the coarse burst window. The same completion is still the same completion.
+      now += 60_000
+      service.dispatch(makeRequest({ mobileDedupeKey: key, agentState: 'working' }))
+
+      expect(harness.dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    })
+
+    it('still fans out for a genuinely different completion', () => {
+      const harness = makeHarness(makeSettings())
+      const service = createNotificationDeliveryService(harness.deps)
+
+      service.dispatch(makeRequest({ mobileDedupeKey: 'local\u0000session-1\u0000turn-1' }))
+      service.dispatch(
+        makeRequest({ mobileDedupeKey: 'local\u0000session-2\u0000turn-1', worktreeId: 'wt-2' })
+      )
+
+      expect(harness.dispatchMobileNotification).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('reports blocked-by-system on macOS when permission is undecided', async () => {
     const harness = makeHarness(makeSettings())
     harness.deps.platform = 'darwin'

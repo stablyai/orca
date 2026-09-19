@@ -20,6 +20,7 @@ import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
+import { StructuredTurnCompletionAttention } from './StructuredTurnCompletionAttention'
 
 // Re-exported so the bridge stays the one import site its consumers already know.
 export { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
@@ -203,6 +204,11 @@ export function StructuredAgentSessionStatusBridge(): React.JSX.Element {
     <>
       {tabs.map((tab) => (
         <StructuredAgentSessionStatusProjection key={`${tab.id}:${tab.entityId}`} tab={tab} />
+      ))}
+      {/* Attention rides the same global tab enumeration: a chat that is not on screen is
+          precisely the one whose completion has to be able to light an indicator. */}
+      {tabs.map((tab) => (
+        <StructuredTurnCompletionAttention key={`attention:${tab.id}:${tab.entityId}`} tab={tab} />
       ))}
     </>
   )

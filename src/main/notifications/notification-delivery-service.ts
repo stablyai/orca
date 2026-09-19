@@ -14,6 +14,7 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { reserveNotificationCooldown } from '../ipc/notification-burst-cooldown'
+import { reserveNotificationEventOnce } from '../../shared/notification-event-dedupe'
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings
@@ -48,6 +49,7 @@ export function createNotificationDeliveryService(
 ): NotificationDeliveryService {
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
+  const mobileEventsSeen = new Set<string>()
 
   const dedupeKeyFor = (request: NotificationDispatchRequest): string =>
     request.worktreeId ?? request.worktreeLabel ?? 'global'
@@ -71,7 +73,16 @@ export function createNotificationDeliveryService(
       const notificationOptions = buildNotificationOptions(request)
 
       // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
-      if (deps.dispatchMobileNotification && request.source !== 'test') {
+      //
+      // Two gates, not one. A sender that names its event identity gets at-most-once per event,
+      // with no expiry: several windows can be connected to the same execution host and each
+      // dispatches the same completion, and only this process sees all of them. The coarse
+      // per-workspace burst gate below still applies on top, so naming an event never loosens
+      // the existing policy.
+      const mobileEventAdmitted =
+        request.mobileDedupeKey === undefined ||
+        reserveNotificationEventOnce(mobileEventsSeen, request.mobileDedupeKey)
+      if (deps.dispatchMobileNotification && request.source !== 'test' && mobileEventAdmitted) {
         if (
           reserveNotificationCooldown(
             recentMobileNotifications,

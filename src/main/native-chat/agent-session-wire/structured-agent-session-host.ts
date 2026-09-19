@@ -53,6 +53,7 @@ import {
   type StructuredAgentSessionRestartResume
 } from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
+import type { StructuredTurnCompletionSubscriber } from './structured-turn-completion-feed'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -335,6 +336,11 @@ export class StructuredAgentSessionHost {
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.clientDelivery.subscribeStatus(subscriber)
+
+  /** Root turns settling from now on, so a client can raise attention for a chat it is not
+   *  showing. Retains nothing and replays nothing — see the feed for why recovery is live-only. */
+  subscribeTurnCompletions = (subscriber: StructuredTurnCompletionSubscriber): (() => void) =>
+    this.clientDelivery.subscribeTurnCompletions(subscriber)
 
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)

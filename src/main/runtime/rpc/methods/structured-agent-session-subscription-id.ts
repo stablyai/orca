@@ -27,3 +27,9 @@ export function structuredAgentSessionSubscriptionId(ctx: RpcContext, sessionId:
 export function structuredAgentSessionStatusSubscriptionId(ctx: RpcContext): string {
   return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.status:${ctx.connectionId ?? 'local'}`)
 }
+
+/** The turn-completion feed, per connection like the status feed and namespaced apart from it so
+ *  one client can hold both. */
+export function structuredAgentSessionTurnCompletionSubscriptionId(ctx: RpcContext): string {
+  return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.turnCompletion:${ctx.connectionId ?? 'local'}`)
+}

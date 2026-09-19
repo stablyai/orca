@@ -105,6 +105,24 @@ export function subscribeStructuredAgentSession(
   )
 }
 
+/** Root turns settling on one runtime from now on. Raw because the caller validates: an event
+ *  this build cannot place must be dropped rather than handed on as a completion. */
+export function subscribeStructuredAgentSessionTurnCompletion(
+  target: RuntimeClientTarget,
+  onEvent: (event: unknown) => void,
+  onError: (error: unknown) => void,
+  onClose: () => void
+): Promise<{ unsubscribe: () => void }> {
+  return subscribeStructuredAgentSessionMethod(
+    target,
+    'agentSession.subscribeTurnCompletion',
+    {},
+    onEvent,
+    onError,
+    onClose
+  )
+}
+
 /** Every structured session's projected status on one runtime, as the host publishes it. */
 export function subscribeStructuredAgentSessionStatus(
   target: RuntimeClientTarget,

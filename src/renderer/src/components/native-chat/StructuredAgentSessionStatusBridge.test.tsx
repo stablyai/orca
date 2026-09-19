@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
     setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
   },
   subscribeStatus: vi.fn(),
+  subscribeTurnCompletion: vi.fn(),
+  unsubscribeTurnCompletion: vi.fn(),
   subscribeTranscript: vi.fn(),
   supportsCapability: vi.fn(),
   unsubscribe: vi.fn()
@@ -58,7 +60,8 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSession: mocks.subscribeTranscript,
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
+  subscribeStructuredAgentSessionTurnCompletion: mocks.subscribeTurnCompletion
 }))
 
 import {
@@ -66,6 +69,7 @@ import {
   StructuredAgentSessionStatusBridge
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredTurnCompletionFeedsForTests } from '@/runtime/structured-turn-completion-feed'
 
 const structuredTab = {
   id: 'structured-tab-1',
@@ -115,7 +119,11 @@ describe('StructuredAgentSessionStatusBridge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
+    resetStructuredTurnCompletionFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
+    mocks.subscribeTurnCompletion.mockResolvedValue({
+      unsubscribe: mocks.unsubscribeTurnCompletion
+    })
     mocks.supportsCapability.mockResolvedValue(true)
     mocks.store?.setState({
       agentStatusByPaneKey: {},
@@ -127,6 +135,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
   afterEach(() => {
     cleanup()
     resetStructuredAgentSessionStatusFeedsForTests()
+    resetStructuredTurnCompletionFeedsForTests()
   })
 
   it('reuses the structured-tab projection for an unchanged tab map', () => {
@@ -531,6 +540,8 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
     expect(statuses()).toEqual([])
     await waitFor(() => expect(mocks.unsubscribe).toHaveBeenCalledOnce())
+    // The completion stream is held by the same tab enumeration, so it goes with the tab.
+    await waitFor(() => expect(mocks.unsubscribeTurnCompletion).toHaveBeenCalledOnce())
   })
 
   it('reconnects after the host ends the stream', async () => {

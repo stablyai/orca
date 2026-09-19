@@ -79,5 +79,6 @@ export const ADMISSION_METHODS = [
   { method: 'agentSession.subscribe', params: { sessionId: SESSION } },
   { method: 'agentSession.hold', params: { sessionId: SESSION, holderId: 'surface-1' } },
   { method: 'agentSession.reveal', params: { sessionId: SESSION } },
-  { method: 'agentSession.subscribeStatus', params: null }
+  { method: 'agentSession.subscribeStatus', params: null },
+  { method: 'agentSession.subscribeTurnCompletion', params: null }
 ] as const

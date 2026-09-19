@@ -31,6 +31,12 @@ export type NotificationDispatchRequest = {
   worktreeId?: string
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
+  /**
+   * Exact identity of the event behind this dispatch, when the sender has one, so mobile fan-out
+   * is at most once per event no matter how many windows dispatched it. Additive: without it the
+   * coarse per-workspace burst dedupe is the only mobile gate, exactly as before.
+   */
+  mobileDedupeKey?: string
   repoLabel?: string
   worktreeLabel?: string
   /** Legacy senders may still provide this; project labels are now always shown. */

@@ -10,12 +10,17 @@ import {
   createStructuredAgentSessionHostStatusFeed,
   type StructuredAgentSessionStatusSubscriber
 } from './structured-agent-session-status-feed'
+import {
+  StructuredTurnCompletionFeed,
+  type StructuredTurnCompletionSubscriber
+} from './structured-turn-completion-feed'
 
 /** Owns every host-to-client publication edge, including compatibility waits. */
 export class StructuredAgentSessionClientDelivery {
   readonly subscribers: AgentSessionSubscribers
   readonly waitForSendSettlement: StructuredAgentSessionSendSettlement['wait']
   private readonly statusFeed
+  private readonly turnCompletions
   private readonly sendSettlement
 
   constructor(
@@ -24,6 +29,7 @@ export class StructuredAgentSessionClientDelivery {
     deps: () => StructuredAgentSessionHostDeps
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
+    this.turnCompletions = new StructuredTurnCompletionFeed({ sessions, now })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.requireJournal(sessionId)
     )
@@ -34,26 +40,38 @@ export class StructuredAgentSessionClientDelivery {
     })
   }
 
-  publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
+  // Why every status edge only baselines: a status publication is not a journal commit, so a
+  // terminal turn first seen here is one this feed was not watching when it landed. Baselining is
+  // also how an attaching session gets its live-only start, since attach publishes status.
+  publishStatus = (sessionId: string): void => {
+    this.statusFeed.publish(sessionId)
+    this.turnCompletions.baseline(sessionId)
+  }
 
   publishStatusAndSettlement = (sessionId: string): void => {
-    this.statusFeed.publish(sessionId)
+    this.publishStatus(sessionId)
     const journal = this.sessions.get(sessionId)?.journal
     if (journal) {
       this.sendSettlement.publish(sessionId, journal)
     }
   }
 
-  publishRestored = (sessionId: string): void =>
+  publishRestored = (sessionId: string): void => {
     this.statusFeed.publish(sessionId, undefined, { replay: true })
+    this.turnCompletions.baseline(sessionId)
+  }
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)
   forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
 
+  subscribeTurnCompletions = (subscriber: StructuredTurnCompletionSubscriber): (() => void) =>
+    this.turnCompletions.subscribe(subscriber)
+
   closeSession(sessionId: string): void {
     this.sendSettlement.closeSession(sessionId)
     this.statusFeed.close(sessionId)
+    this.turnCompletions.forget(sessionId)
   }
 
   closeAll(): void {
@@ -62,6 +80,8 @@ export class StructuredAgentSessionClientDelivery {
 
   private publishJournal(sessionId: string, journal: AgentSessionJournal): void {
     this.statusFeed.publish(sessionId, journal)
+    // The one edge that may announce a completion: this is journal commit.
+    this.turnCompletions.observe(sessionId, journal)
     this.sendSettlement.publish(sessionId, journal)
   }
 
