@@ -137,18 +137,18 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
-    id: 'gemini',
-    label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
-    cmd: 'gemini',
-    faviconDomain: 'gemini.google.com',
-    homepageUrl: 'https://github.com/google-gemini/gemini-cli'
-  },
-  {
     id: 'antigravity',
     label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
     cmd: 'agy',
     faviconDomain: 'antigravity.google',
     homepageUrl: 'https://antigravity.google/docs/cli-overview'
+  },
+  {
+    id: 'gemini',
+    label: translate('auto.lib.agent.catalog.geminiLegacy', 'Gemini CLI (legacy)'),
+    cmd: 'gemini',
+    faviconDomain: 'gemini.google.com',
+    homepageUrl: 'https://github.com/google-gemini/gemini-cli'
   },
   {
     id: 'aider',

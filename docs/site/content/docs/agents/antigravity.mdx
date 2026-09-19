@@ -7,6 +7,20 @@ Orca launches Google's **Antigravity CLI**, whose command is `agy`. Installing t
 Antigravity desktop application alone does not establish that this command is available.
 The separate `gemini` command is a different agent entry in Orca.
 
+## Existing Gemini CLI sessions
+
+Orca labels the Gemini CLI integration as **legacy** and recommends Antigravity for
+new Google CLI sessions. If both CLIs are detected and no preferred agent is selected,
+Antigravity comes before Gemini in automatic selection. An explicit Gemini preference
+still launches Gemini; disabling or not installing Antigravity does not remove the
+Gemini fallback.
+
+Existing Gemini history, session resume, and account settings remain available.
+Gemini account settings do not authenticate Antigravity, and a Gemini session ID
+cannot be reused as an Antigravity conversation ID. Authenticate `agy` separately
+on its execution host. Gemini model names returned by `agy models` are still valid
+Antigravity model names; the legacy label refers to the CLI provider.
+
 ## Check the CLI first
 
 Install the CLI using [Google's current instructions](https://antigravity.google/docs/cli-overview).

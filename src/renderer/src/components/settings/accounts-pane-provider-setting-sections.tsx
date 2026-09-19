@@ -15,20 +15,20 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
       <div className="space-y-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <GeminiIcon size={16} />
-          {translate('auto.components.settings.AccountsPane.0c64dc2a64', 'Gemini')}
+          {translate('auto.components.settings.AccountsPane.geminiLegacy', 'Gemini CLI (legacy)')}
         </h3>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.AccountsPane.973741a871',
-            'Configure Gemini provider settings.'
+            'auto.components.settings.AccountsPane.geminiLegacyDescription',
+            'For new Google CLI sessions, use Antigravity (agy). These settings remain available for existing Gemini CLI accounts and do not sign you into Antigravity.'
           )}
         </p>
       </div>
 
       <SearchableSetting
         title={translate(
-          'auto.components.settings.AccountsPane.0c7f915b01',
-          'Use Gemini CLI credentials'
+          'auto.components.settings.AccountsPane.geminiLegacyCredentials',
+          'Use Gemini CLI credentials (legacy)'
         )}
         description={translate(
           'auto.components.settings.AccountsPane.d676c41fc6',

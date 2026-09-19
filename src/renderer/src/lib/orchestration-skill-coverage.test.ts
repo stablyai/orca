@@ -58,7 +58,7 @@ describe('orchestration skill agent coverage', () => {
       )
     ).toEqual([
       { agent: 'codex', label: 'Codex', installed: true },
-      { agent: 'gemini', label: 'Gemini', installed: true },
+      { agent: 'gemini', label: 'Gemini CLI (legacy)', installed: true },
       { agent: 'droid', label: 'Droid', installed: true }
     ])
   })

@@ -99,8 +99,8 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.accounts.search.d819755b02',
-      'Use Gemini CLI credentials'
+      'auto.components.settings.accounts.search.geminiLegacy',
+      'Use Gemini CLI credentials (legacy)'
     ),
     description: translate(
       'auto.components.settings.accounts.search.bada4a3218',

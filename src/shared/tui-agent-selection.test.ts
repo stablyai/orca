@@ -6,6 +6,12 @@ import {
 } from './tui-agent-selection'
 
 describe('pickTuiAgent', () => {
+  it('prefers Antigravity for new Google CLI sessions but preserves explicit Gemini choices', () => {
+    expect(pickTuiAgent(null, ['gemini', 'antigravity'])).toBe('antigravity')
+    expect(pickTuiAgent('gemini', ['gemini', 'antigravity'])).toBe('gemini')
+    expect(pickTuiAgent(null, ['gemini', 'antigravity'], ['antigravity'])).toBe('gemini')
+    expect(pickTuiAgent(null, ['gemini'])).toBe('gemini')
+  })
   it('uses an installed preferred agent', () => {
     expect(pickTuiAgent('codex', ['claude', 'codex'])).toBe('codex')
   })
