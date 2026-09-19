@@ -85,6 +85,12 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     session.synchronizedForegroundMarkerTail = synchronizedForegroundScan?.markerTail ?? ''
     const startupWrite =
       opts?.liveStartupBatch && data.length > 0 ? session.startupTiming?.firstWrite() : undefined
+    const onParsed = presentInteractiveSynchronizedFrame
+      ? () => {
+          startupWrite?.onParsed()
+          forceFullViewportPresent(session.pane.terminal)
+        }
+      : startupWrite?.onParsed
     writeTerminalOutput(session.pane.terminal, data, {
       foreground: foregroundOutput,
       beforeWrite: startupWrite
@@ -93,12 +99,9 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
             startupWrite.beforeWrite()
           }
         : session.beforeTerminalOutputWrite,
-      ...(startupWrite ? { onParsed: startupWrite.onParsed } : {}),
+      ...(onParsed ? { onParsed } : {}),
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
-      onParsed: presentInteractiveSynchronizedFrame
-        ? () => forceFullViewportPresent(session.pane.terminal)
-        : undefined,
       onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,
       latencySensitive:
         !foreground || parseHiddenStartupOutput
