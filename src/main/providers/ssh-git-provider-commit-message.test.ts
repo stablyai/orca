@@ -16,7 +16,7 @@ describe('SshGitProvider', () => {
   })
 
   it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
-    mux.request.mockImplementation(async (method, payload) => {
+    mux._response.mockImplementation(async (method, payload) => {
       expect(method).toBe('git.exec')
       if (payload.args[1] === '--show-current') {
         return { stdout: 'feature/ai-commit\n' }
@@ -37,15 +37,19 @@ describe('SshGitProvider', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: 'diff --git a/README.md b/README.md\n+hello'
     })
-    expect(mux.request).toHaveBeenCalledWith('git.exec', {
-      args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      cwd: '/home/user/repo',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.exec',
+      {
+        args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        cwd: '/home/user/repo',
+        __streamResponse: true
+      },
+      { beforeResolve: expect.any(Function) }
+    )
   })
 
   it('getStagedCommitContext returns null when nothing is staged', async () => {
-    mux.request.mockImplementation(async (_method, payload) => {
+    mux._response.mockImplementation(async (_method, payload) => {
       if (payload.args[1] === '--show-current') {
         return { stdout: 'main\n' }
       }
@@ -57,7 +61,7 @@ describe('SshGitProvider', () => {
   })
 
   it('getStagedCommitContext falls back when the remote staged patch overflows', async () => {
-    mux.request.mockImplementation(async (_method, payload) => {
+    mux._response.mockImplementation(async (_method, payload) => {
       if (payload.args[1] === '--show-current') {
         return { stdout: 'feature/ai-commit\n' }
       }
@@ -75,7 +79,7 @@ describe('SshGitProvider', () => {
   })
 
   it('getStagedCommitContext rethrows remote patch failures that are not buffer overflows', async () => {
-    mux.request.mockImplementation(async (_method, payload) => {
+    mux._response.mockImplementation(async (_method, payload) => {
       if (payload.args[1] === '--show-current') {
         return { stdout: 'feature/ai-commit\n' }
       }
@@ -99,7 +103,7 @@ describe('SshGitProvider', () => {
         exitCode: 0,
         timedOut: false
       }
-      mux.request.mockImplementation((_method, _payload, options) => {
+      mux._response.mockImplementation((_method, _payload, options) => {
         return new Promise((resolve, reject) => {
           const timeout = setTimeout(
             () => reject(new Error('transport request timed out')),
@@ -156,7 +160,7 @@ describe('SshGitProvider', () => {
       exitCode: 0,
       timedOut: false
     }
-    mux.request.mockResolvedValue(execResult)
+    mux._response.mockResolvedValue(execResult)
 
     const result = await provider.executeCommitMessagePlan(
       {
@@ -186,7 +190,7 @@ describe('SshGitProvider', () => {
 
   it('keeps SSH commit-message and pull-request execution lanes separate', async () => {
     const completeRequests: (() => void)[] = []
-    mux.request.mockImplementation((method) => {
+    mux._response.mockImplementation((method) => {
       if (method === 'agent.cancelExec') {
         return Promise.resolve({ canceled: true })
       }
