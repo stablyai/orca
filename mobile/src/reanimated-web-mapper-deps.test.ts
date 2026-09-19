@@ -49,7 +49,16 @@ function isWriteTarget(node: ts.PropertyAccessExpression): boolean {
       parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment
     )
   }
-  return ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)
+  if (ts.isPrefixUnaryExpression(parent)) {
+    // Only `++x` and `--x` mutate. `!x.value`, `-x.value`, `+x.value` and `~x.value` are reads,
+    // and taking every prefix operator for a write dropped those from the array's requirement.
+    return (
+      parent.operator === ts.SyntaxKind.PlusPlusToken ||
+      parent.operator === ts.SyntaxKind.MinusMinusToken
+    )
+  }
+  // Postfix has no other operators: `x.value++` and `x.value--` are the whole set.
+  return ts.isPostfixUnaryExpression(parent)
 }
 
 /**
@@ -250,6 +259,30 @@ describe('reanimated mapper hooks in the web bundle', () => {
       `${FROM}const s = useAnimatedStyle(() => { offset.value = offset.value + 1; return {} }, [])\n`
     )
     expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle omits offset'])
+  })
+
+  it('still asks for a value read under a negation, which is not a write', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      `${FROM}const s = useAnimatedStyle(() => ({ opacity: !hidden.value ? 1 : 0 }), [])\n`
+    )
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle omits hidden'])
+  })
+
+  it('and one read under a unary minus', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      `${FROM}const s = useAnimatedStyle(() => ({ top: -offset.value }), [])\n`
+    )
+    expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle omits offset'])
+  })
+
+  it('does not ask for one that is only incremented', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      `${FROM}const s = useAnimatedStyle(() => { count.value++; return {} }, [])\n`
+    )
+    expect(found).toEqual([])
   })
 
   it('accepts one that has a dependency array', () => {
