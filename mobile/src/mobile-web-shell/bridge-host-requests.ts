@@ -61,8 +61,9 @@ export class BridgeHostRequests {
   /** The arity the page used, replayed exactly: `sendRequest(m)` and `sendRequest(m, undefined)`
    *  are different calls to the golden recorder.
    *
-   *  The `native.` fence is here because this is the one place a request reaches the client at all:
-   *  a check anywhere else would be a second gate to keep in step with this one. */
+   *  The `native.` fence is here because this is the one place a *request* reaches the client. A
+   *  `subscribe` reaches it by another door and is fenced in `handleSubscribe`; the two together
+   *  are the whole boundary, and a test that reads only `client.requests` sees only this half. */
   private forward(message: RequestMessage): Promise<RpcResponse> {
     const { client } = this.deps
     if (isBridgeNativeMethod(message.method)) {

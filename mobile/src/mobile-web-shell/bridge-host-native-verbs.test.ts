@@ -30,13 +30,45 @@ function refusal(bridge: ReturnType<typeof harness>): { code?: unknown; message:
   return frame.type === 'error' ? { code: frame.error.code, message: frame.error.message } : null
 }
 
+/**
+ * The fence is about the method name, not the frame kind.
+ *
+ * `client.requests` staying empty is only half an oracle: a `subscribe` reaches the same client by
+ * another door and leaves that list untouched, so every case below reads the streams too.
+ */
+function reachedTheDesktop(bridge: ReturnType<typeof harness>): unknown[] {
+  return [...bridge.client.requests, ...bridge.client.streams]
+}
+
+describe('a native method on a frame that is not a request', () => {
+  it('opens no stream on the desktop client', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({ type: 'subscribe', id: ID, method: 'native.clipboard.read', params: {} })
+    )
+    expect(reachedTheDesktop(bridge)).toEqual([])
+    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+  })
+
+  it('refuses an unknown native method on subscribe too, rather than streaming it', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({ type: 'subscribe', id: ID, method: 'native.dictation.listen', params: {} })
+    )
+    expect(reachedTheDesktop(bridge)).toEqual([])
+    expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
+  })
+})
+
 describe('a native method the page asks for', () => {
   it('is answered by the shell and never forwarded to the desktop', async () => {
     const bridge = harness({ clipboardText: 'from the pasteboard' })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
     await flushBridge()
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
     expect(replyPayload(bridge)).toEqual({
       id: ID,
       ok: true,
@@ -60,7 +92,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(request('native.clipboard.write', { mime: 'text', value: 'copied' }))
     await flushBridge()
     expect(bridge.clipboardWrites).toEqual(['copied'])
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
     expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { written: true } })
   })
 
@@ -69,7 +101,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(request('native.dictation.start', {}))
     await flushBridge()
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
     expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
   })
 
@@ -78,7 +110,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(request('native.clipboard.write', { mime: 'text' }))
     await flushBridge()
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
     expect(refusal(bridge)?.code).toBe(BRIDGE_NATIVE_REFUSAL_CODE)
   })
 
@@ -89,7 +121,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
     await flushBridge()
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
     expect(refusal(bridge)?.message).toContain('the pasteboard is unavailable')
   })
 
@@ -102,7 +134,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
     expect(bridge.last().type).toBe('error')
     await flushBridge()
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
   })
 
   it('refuses a read the page could never receive, rather than truncating it', async () => {
@@ -110,7 +142,7 @@ describe('a native method the page asks for', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
     await flushBridge()
-    expect(bridge.client.requests).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
     // The reply byte cap every forwarded reply gets, applied by the same `sendReply`.
     expect(refusal(bridge)?.message).toContain('reply-too-large')
   })
