@@ -41,8 +41,9 @@ function loadRoutingModule(ref: NavigationRef): RoutingModule {
     loaded
   )
   const { canGoBack, goBack, routingQueue } = loaded.exports
-  // Read rather than asserted: a stub that stopped covering an import would leave these undefined,
-  // and a test driving a half-evaluated module is worse than one that says so.
+  // Read rather than asserted, and what it catches is an expo-router upgrade that renames or drops
+  // one of these three. A missing stub does not reach here: the module assigns its exports whatever
+  // its imports resolved to, so that failure is a `TypeError` about `navigationRef` at call time.
   if (canGoBack === undefined || goBack === undefined || routingQueue === undefined) {
     throw new Error('the routing module did not define canGoBack, goBack and routingQueue')
   }
