@@ -270,4 +270,34 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
   })
+
+  it('unblocks connecting state and marks phase ended when resolvePane returns terminal_not_found (#21344)', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    runtimeCall.mockImplementation((request: { method: string }) => {
+      if (request.method === 'terminal.resolvePane') {
+        return Promise.reject(new Error('terminal_not_found'))
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-missing',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+    })
+
+    expect(transport.getRecoveryState?.().phase).toBe('ended')
+  })
 })
