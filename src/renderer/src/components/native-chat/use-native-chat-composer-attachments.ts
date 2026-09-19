@@ -8,6 +8,7 @@ import {
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatResolvedPathOptions } from './native-chat-resolved-path-ownership'
+import { useNativeChatComposerPathAttach } from './use-native-chat-composer-path-attach'
 import { useNativeChatResolvedPathAttachments } from './use-native-chat-resolved-path-attachments'
 
 export type UseNativeChatComposerAttachmentsArgs = {
@@ -125,6 +126,7 @@ export function useNativeChatComposerAttachments({
       setNotice,
       textareaRef
     })
+  useNativeChatComposerPathAttach(attachmentScopeKey, attachResolvedPaths, disabled)
 
   // Placeholder chip shown the instant a paste starts, so a clipboard image that
   // takes a beat to save (or upload over SSH) never reads as a dropped paste.

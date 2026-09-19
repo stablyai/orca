@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Globe,
   ListCollapse,
+  Paperclip,
   Pencil,
   Search,
   SquareTerminal,
@@ -29,7 +30,9 @@ import { openFileInBrowserTab } from '@/lib/file-preview'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { translate } from '@/i18n/i18n'
 import type { FileExplorerRowProps } from './FileExplorerRow'
+import { attachExplorerFileAsContext } from './file-explorer-attach-as-context'
 import {
+  shouldShowAttachAsContextAction,
   shouldShowCollapseFolderAction,
   shouldShowCopyFileAction,
   shouldShowFindInFolderAction,
@@ -222,6 +225,15 @@ export function FileExplorerRowContextMenu({
         <ContextMenuItem onSelect={onViewFile}>
           <File />
           {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
+        </ContextMenuItem>
+      )}
+      {shouldShowAttachAsContextAction(node) && (
+        <ContextMenuItem onSelect={() => attachExplorerFileAsContext(node.path, connectionId)}>
+          <Paperclip />
+          {translate(
+            'auto.components.right.sidebar.FileExplorerRow.attachAsContext',
+            'Attach as context'
+          )}
         </ContextMenuItem>
       )}
       {!node.isDirectory && activeWorktreeId && canOpenInOrcaBrowser && (
