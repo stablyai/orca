@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { z } from 'zod'
 import { usePageBridgeClient } from '../../transport/client-context.web'
 import {
   BRIDGE_NATIVE_VERBS,
@@ -49,10 +50,18 @@ export class NativeVerbError extends Error {
   }
 }
 
-/** Reads the code the shell attached, which `reconstructBridgeError` copies onto the rejection. */
+/**
+ * The shell's own code, which `reconstructBridgeError` copies onto the rejection it builds.
+ *
+ * `code` is not a property of `Error`, so it is parsed into a named shape rather than reached for:
+ * the rejection is whatever crossed the bridge, and a schema says what this reads without
+ * asserting the rest of it away.
+ */
+const shellCodedErrorSchema = z.object({ code: z.string() })
+
 function nativeVerbReason(error: unknown): string {
-  const code: unknown = error instanceof Error ? Reflect.get(error, 'code') : undefined
-  return typeof code === 'string' ? code : 'unknown'
+  const coded = shellCodedErrorSchema.safeParse(error)
+  return coded.success ? coded.data.code : 'unknown'
 }
 
 export function useNativeVerbs(): NativeVerbs {
