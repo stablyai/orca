@@ -32,6 +32,14 @@ function historyBackInput(): Record<string, unknown> {
   }
 }
 
+function emitBeforeInput(
+  handler: ((...args: unknown[]) => void) | undefined,
+  preventDefault: () => void,
+  input: Record<string, unknown>
+): void {
+  handler?.({ preventDefault }, input)
+}
+
 function mountMainWindow(): {
   windowHandlers: Record<string, (...args: unknown[]) => void>
   webContents: { send: ReturnType<typeof vi.fn> }
@@ -66,10 +74,7 @@ function mountMainWindow(): {
   browserWindowMock.mockImplementation(function () {
     return browserWindowInstance
   })
-  createMainWindow({
-    getUI: () => ({}),
-    getSettings: () => ({ windowBackgroundBlur: false })
-  } as never)
+  createMainWindow(null)
   return { windowHandlers, webContents }
 }
 
@@ -83,7 +88,7 @@ describe('createMainWindow spatial pane focus shortcuts', () => {
   it('still intercepts worktree history when a terminal is not focused', () => {
     const { windowHandlers, webContents } = mountMainWindow()
     const preventDefault = vi.fn()
-    windowHandlers['before-input-event']({ preventDefault } as never, historyBackInput() as never)
+    emitBeforeInput(windowHandlers['before-input-event'], preventDefault, historyBackInput())
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')
@@ -95,10 +100,10 @@ describe('createMainWindow spatial pane focus shortcuts', () => {
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
     expect(setFocusedListener).toBeTypeOf('function')
-    setFocusedListener?.({ sender: webContents } as never, true)
+    setFocusedListener?.({ sender: webContents }, true)
 
     const preventDefault = vi.fn()
-    windowHandlers['before-input-event']({ preventDefault } as never, historyBackInput() as never)
+    emitBeforeInput(windowHandlers['before-input-event'], preventDefault, historyBackInput())
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')

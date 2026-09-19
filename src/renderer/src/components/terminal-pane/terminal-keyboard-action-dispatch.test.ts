@@ -25,6 +25,8 @@ function dispatchContext() {
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),
     setSearchOpen: vi.fn(),
+    focusSearchInput: vi.fn(),
+    searchOpenRef: { current: false },
     onRequestClosePane: vi.fn(),
     onClearPaneScrollback: vi.fn(),
     onSetTitle: vi.fn(),
@@ -48,20 +50,21 @@ function twoPaneManager(): { manager: PaneManager; root: HTMLDivElement } {
   paneB.className = 'pane'
   root.append(paneA, divider, paneB)
   document.body.append(root)
-  paneA.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 100 }) as DOMRect
-  paneB.getBoundingClientRect = () => ({ x: 110, y: 0, width: 100, height: 100 }) as DOMRect
+  paneA.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 100, height: 100 })
+  paneB.getBoundingClientRect = () => DOMRect.fromRect({ x: 110, y: 0, width: 100, height: 100 })
   const panes = [
     { id: 1, container: paneA },
     { id: 2, container: paneB }
   ]
-  return {
-    root,
-    manager: {
-      getPanes: () => panes,
-      getActivePane: () => panes[0],
-      setActivePane: vi.fn()
-    } as unknown as PaneManager
+  const setActivePane = vi.fn()
+  const stub = {
+    getPanes: () => panes,
+    getActivePane: () => panes[0],
+    setActivePane
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spatial dispatch only reads getPanes/getActivePane/setActivePane; extra PaneManager methods must fail if touched.
+  const manager = stub as unknown as PaneManager
+  return { root, manager }
 }
 
 describe('dispatchTerminalShortcutAction spatial focus', () => {
@@ -69,11 +72,7 @@ describe('dispatchTerminalShortcutAction spatial focus', () => {
     goBackWorktree.mockClear()
     goForwardWorktree.mockClear()
     const { manager, root } = twoPaneManager()
-    const event = {
-      preventDefault: vi.fn(),
-      stopImmediatePropagation: vi.fn(),
-      repeat: false
-    } as unknown as KeyboardEvent
+    const event = new KeyboardEvent('keydown', { cancelable: true })
 
     dispatchTerminalShortcutAction(
       { type: 'focusPane', direction: 'right' },
@@ -92,11 +91,7 @@ describe('dispatchTerminalShortcutAction spatial focus', () => {
     goBackWorktree.mockClear()
     goForwardWorktree.mockClear()
     const { manager, root } = twoPaneManager()
-    const event = {
-      preventDefault: vi.fn(),
-      stopImmediatePropagation: vi.fn(),
-      repeat: false
-    } as unknown as KeyboardEvent
+    const event = new KeyboardEvent('keydown', { cancelable: true })
 
     dispatchTerminalShortcutAction(
       { type: 'focusPane', direction: 'left' },
@@ -108,7 +103,7 @@ describe('dispatchTerminalShortcutAction spatial focus', () => {
     expect(manager.setActivePane).not.toHaveBeenCalled()
     expect(goBackWorktree).toHaveBeenCalledTimes(1)
     expect(goForwardWorktree).not.toHaveBeenCalled()
-    expect(event.preventDefault).toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(true)
     root.remove()
   })
 })
