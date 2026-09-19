@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '../../src/shared/child-process/run-process'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
+// The macOS native builds the launcher runs in parallel.
+const PARALLEL_BUILDS = 4
 const directories = []
 const children = []
 const buildPids = new Set()
@@ -136,7 +138,10 @@ function startBuild(mode, options = {}) {
     for (const pid of pids) {
       buildPids.add(pid)
     }
-    if (pids.length === 3 && (!mode.startsWith('descendant') || descendantPids.length === 3)) {
+    if (
+      pids.length === PARALLEL_BUILDS &&
+      (!mode.startsWith('descendant') || descendantPids.length === PARALLEL_BUILDS)
+    ) {
       readyResolve()
     }
   })
@@ -179,10 +184,14 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
   it('starts every independent build before any completes', async () => {
     const build = startBuild('success')
     await build.ready
-    expect(build.events().map(({ event }) => event)).toEqual(['started', 'started', 'started'])
+    expect(build.events().map(({ event }) => event)).toEqual(
+      Array.from({ length: PARALLEL_BUILDS }, () => 'started')
+    )
     build.release()
     expect(await build.closed).toMatchObject({ code: 0, signal: null })
-    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(
+      PARALLEL_BUILDS
+    )
   })
 
   it.each(['SIGINT', 'SIGTERM', 'SIGHUP'])(
@@ -192,7 +201,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       await build.ready
       build.child.kill(signal)
       expect(await build.closed).toMatchObject({ code: null, signal })
-      expect(build.events().filter(({ event }) => event === signal)).toHaveLength(3)
+      expect(build.events().filter(({ event }) => event === signal)).toHaveLength(PARALLEL_BUILDS)
     }
   )
 
@@ -201,7 +210,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 7, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(
+      PARALLEL_BUILDS - 1
+    )
   })
 
   it('reports the first failure, not the status of siblings it cancelled', async () => {
@@ -209,7 +220,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 7, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(
+      PARALLEL_BUILDS - 1
+    )
   })
 
   it('re-raises the signal that killed a build', async () => {
@@ -217,7 +230,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: null, signal: 'SIGALRM' })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(
+      PARALLEL_BUILDS - 1
+    )
   })
 
   it('fails when the signal that killed a build is one the launcher ignores', async () => {
@@ -225,7 +240,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 1, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(
+      PARALLEL_BUILDS - 1
+    )
   })
 
   it('lets siblings finish SIGINT cleanup when one child uses the default handler', async () => {
@@ -233,7 +250,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.child.kill('SIGINT')
     expect(await build.closed).toMatchObject({ code: null, signal: 'SIGINT' })
-    expect(build.events().filter(({ event }) => event === 'SIGINT')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGINT')).toHaveLength(
+      PARALLEL_BUILDS - 1
+    )
   })
 
   it('forces a sibling that ignores graceful cancellation to exit', async () => {
@@ -273,7 +292,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       const result = await build.closed
       expect(result).toMatchObject({ code: 1, signal: null })
       expect(result.stderr).not.toContain('Unhandled')
-      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(
+        PARALLEL_BUILDS
+      )
     }
   )
 
@@ -297,7 +318,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 0, signal: null })
-    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(
+      PARALLEL_BUILDS
+    )
     for (const pid of build.descendants()) {
       expect(() => process.kill(pid, 0)).toThrow()
     }

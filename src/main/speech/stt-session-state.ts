@@ -1,7 +1,16 @@
 import type { Worker } from 'node:worker_threads'
 import type { ModelManager } from './model-manager'
-import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'
+
+/**
+ * A transcription backend that runs outside the sherpa worker — the OpenAI
+ * client or the macOS SpeechAnalyzer helper. Both are fed the same audio and
+ * both are drained by `finish`.
+ */
+export type ProviderTranscriptionSession = {
+  feedAudio: (samples: Float32Array, sampleRate: number) => void
+  finish: () => Promise<string>
+}
 
 export type StopInFlight = {
   worker: Worker
@@ -11,7 +20,7 @@ export type StopInFlight = {
 
 export type SttSessionState = {
   worker: Worker | null
-  cloudSession: OpenAiTranscriptionSession | null
+  providerSession: ProviderTranscriptionSession | null
   modelManager: ModelManager
   activeModelId: string | null
   activeHotwordsFilePath: string | undefined
@@ -30,7 +39,7 @@ export type SttSessionState = {
 export function createSttSessionState(modelManager: ModelManager): SttSessionState {
   return {
     worker: null,
-    cloudSession: null,
+    providerSession: null,
     modelManager,
     activeModelId: null,
     activeHotwordsFilePath: undefined,

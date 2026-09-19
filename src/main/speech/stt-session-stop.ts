@@ -13,7 +13,7 @@ export async function stopSttDictation(
   if (options.cancelStarting !== false && state.startingOwner === owner) {
     state.canceledOwners.add(owner)
   }
-  if (!state.worker && !state.cloudSession) {
+  if (!state.worker && !state.providerSession) {
     return
   }
   const currentOwner = state.activeOwner ?? state.startingOwner
@@ -21,11 +21,11 @@ export async function stopSttDictation(
     throw new Error('dictation_owner_mismatch')
   }
 
-  if (state.cloudSession) {
+  if (state.providerSession) {
     state.stopping = true
     try {
-      const session = state.cloudSession
-      state.cloudSession = null
+      const session = state.providerSession
+      state.providerSession = null
       try {
         const text = await session.finish()
         if (text) {
