@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import {
+  PRESSABLE_TAGS,
+  readAttribute,
+  type Read
+} from '../mobile-web-shell/pressable-control-source-reader'
 
 /**
  * This header renders two toolbars and the phone sees the narrow one. Its controls carried no role
@@ -15,7 +20,6 @@ import { describe, expect, it } from 'vitest'
  */
 const HEADER = 'src/host-screen/host-screen-header.tsx'
 const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
-const PRESSABLE_TAGS = new Set(['Pressable', 'TouchableOpacity'])
 
 /**
  * One entry per control both toolbars render, keyed by the handler it presses, which is what makes
@@ -32,41 +36,7 @@ const SHARED_CONTROLS = [
   '() => state.setShowSearch((s) => !s)'
 ]
 
-type Read = { known: true; value: string } | { known: false }
-const SPREAD: Read = { known: false }
-
 type Control = { line: number; press: Read; role: Read; label: Read }
-
-/** Formatting differs between the branches, so compare what the expression says, not how it wraps. */
-function normalize(source: string): string {
-  return source.replace(/\s+/g, ' ').trim()
-}
-
-function spreadsProps(element: ts.JsxOpeningLikeElement): boolean {
-  return element.attributes.properties.some((property) => ts.isJsxSpreadAttribute(property))
-}
-
-function readAttribute(element: ts.JsxOpeningLikeElement, name: string): Read {
-  if (spreadsProps(element)) {
-    return SPREAD
-  }
-  for (const property of element.attributes.properties) {
-    if (ts.isJsxAttribute(property) && property.name.getText() === name) {
-      const initializer = property.initializer
-      if (!initializer) {
-        return { known: true, value: '' }
-      }
-      if (ts.isStringLiteral(initializer)) {
-        return { known: true, value: initializer.text }
-      }
-      if (ts.isJsxExpression(initializer) && initializer.expression) {
-        return { known: true, value: normalize(initializer.expression.getText()) }
-      }
-      return { known: true, value: normalize(initializer.getText()) }
-    }
-  }
-  return { known: true, value: '' }
-}
 
 function headerControls(): Control[] {
   const source = ts.createSourceFile(
