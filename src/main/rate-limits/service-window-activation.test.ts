@@ -131,6 +131,9 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
 
     window.emit('focus')
+    // Why: resolveCodexHome is async even with no resolver registered, adding
+    // one more microtask tick before the fetch cycle proceeds.
+    await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
 

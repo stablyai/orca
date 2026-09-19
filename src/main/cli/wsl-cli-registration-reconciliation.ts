@@ -1,5 +1,5 @@
 import type { CliInstallState, CliInstallStatus } from '../../shared/cli-install-types'
-import { listWslDistrosAsync } from '../wsl'
+import { listRunningWslDistrosAsync, listWslDistrosAsync } from '../wsl'
 import { CliInstaller } from './cli-installer'
 import {
   getWslCliRegistrationCandidates,
@@ -7,7 +7,10 @@ import {
   type WslCliRegistrationObservation
 } from './wsl-cli-registration-registry'
 import { WslCliInstaller } from './wsl-cli-installer'
-import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
+import {
+  normalizeWslDistroKey,
+  runSerializedWslCliRegistrationOperation
+} from './wsl-cli-registration-operation'
 
 // Why: candidate distros can each boot a stopped WSL VM; a small cap staggers
 // those boots instead of spiking RAM/CPU for every distro at once at startup.
@@ -40,6 +43,7 @@ type WslCliRegistrationReconciliationOptions = {
   userDataPath: string
   appVersion?: string
   listDistros?: () => Promise<string[]>
+  listRunningDistros?: () => Promise<string[]>
   createInstaller?: (distro: string) => ManagedWslCliInstaller
   getHostLauncherTarget?: () => Promise<string | null>
   registry?: WslCliRegistrationRegistry
@@ -101,7 +105,21 @@ export async function reconcileManagedWslCliRegistrations(
     ? await getHostLauncherTarget().catch(() => null)
     : null
   const appVersion = options.appVersion ?? ''
-  const distros = await registry.getCandidates(availableDistros, { currentTarget, appVersion })
+  const candidates = await registry.getCandidates(availableDistros, { currentTarget, appVersion })
+  if (candidates.length === 0) {
+    return []
+  }
+  // Why: repairManagedRegistration() execs into the distro, which boots it if
+  // stopped. A CLI-bridge staleness check must never do that on its own — only
+  // reconcile distros already running for some other reason; a distro that
+  // stays stopped just waits for its bridge to be repaired next time it's
+  // running (or via the on-demand Settings install/repair action) (#20184).
+  const runningDistroKeys = new Set(
+    (await (options.listRunningDistros ?? listRunningWslDistrosAsync)()).map(normalizeWslDistroKey)
+  )
+  const distros = candidates.filter((distro) =>
+    runningDistroKeys.has(normalizeWslDistroKey(distro))
+  )
   if (distros.length === 0) {
     return []
   }

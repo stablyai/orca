@@ -101,7 +101,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(warnSpy).not.toHaveBeenCalled()
 
     expect(service.isHostSystemDefaultRealHome()).toBe(false)
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath1
     })

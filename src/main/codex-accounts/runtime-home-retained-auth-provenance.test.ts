@@ -74,8 +74,8 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     rmSync(getSystemCodexAuthPath())
 
-    service.prepareForRateLimitFetch()
-    service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(managedAuth)
   })
 
@@ -120,8 +120,8 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
 
-    service.prepareForRateLimitFetch()
-    service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(refreshedSystemAuth)
   })
 
@@ -178,7 +178,7 @@ describe('CodexRuntimeHomeService', () => {
     setShellStartupEnvProbeSupportedForTest(true)
     writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
 
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -195,8 +195,8 @@ describe('CodexRuntimeHomeService', () => {
     const originalInode = statSync(provenancePath).ino
 
     setShellStartupEnvProbeSupportedForTest(true)
-    service.prepareForRateLimitFetch()
-    service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
 
     expect(statSync(provenancePath).ino).toBe(originalInode)
   })
@@ -209,7 +209,7 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
     setShellStartupEnvProbeSupportedForTest(true)
     rmSync(getSystemCodexAuthPath())
-    service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
     const metadataPaths = [
       getSharedRuntimeAuthProvenancePath(),
       join(testState.userDataDir, 'codex-runtime-home', 'system-default-auth.json'),
@@ -217,8 +217,8 @@ describe('CodexRuntimeHomeService', () => {
     ]
     const originalInodes = metadataPaths.map((path) => statSync(path).ino)
 
-    service.prepareForRateLimitFetch()
-    service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
+    await service.prepareForRateLimitFetch()
 
     expect(metadataPaths.map((path) => statSync(path).ino)).toEqual(originalInodes)
   })
@@ -269,12 +269,12 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
 
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -296,7 +296,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
     writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
 
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -317,7 +317,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
     rmSync(getSystemCodexAuthPath())
 
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -346,7 +346,7 @@ describe('CodexRuntimeHomeService', () => {
 
     setShellStartupEnvProbeSupportedForTest(true)
     writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -389,7 +389,7 @@ describe('CodexRuntimeHomeService', () => {
 
     setShellStartupEnvProbeSupportedForTest(true)
     rmSync(getSystemCodexAuthPath())
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -411,7 +411,7 @@ describe('CodexRuntimeHomeService', () => {
 
     setShellStartupEnvProbeSupportedForTest(true)
     writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -429,14 +429,14 @@ describe('CodexRuntimeHomeService', () => {
     setShellStartupEnvProbeSupportedForTest(true)
     const service = new CodexRuntimeHomeService(store as never)
     rmSync(getSystemCodexAuthPath())
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
 
     writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })
@@ -473,7 +473,7 @@ describe('CodexRuntimeHomeService', () => {
 
       expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
       writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
-      expect(restartedService.prepareForRateLimitFetch()).toEqual({
+      expect(await restartedService.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getSystemCodexHomePath()
       })
@@ -531,8 +531,8 @@ describe('CodexRuntimeHomeService', () => {
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
     restartedService.syncForCurrentSelection()
 
-    restartedService.prepareForRateLimitFetch()
-    restartedService.prepareForRateLimitFetch()
+    await restartedService.prepareForRateLimitFetch()
+    await restartedService.prepareForRateLimitFetch()
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(reloginAuth)
   })
 

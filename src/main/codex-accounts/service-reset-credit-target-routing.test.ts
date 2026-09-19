@@ -168,7 +168,7 @@ describe('CodexAccountService config sync', () => {
       consumeCodexRateLimitResetCredit: consume
     }
     const runtimeHome = createRuntimeHome()
-    runtimeHome.prepareForRateLimitFetch.mockReturnValue({ kind: 'ready', codexHomePath: null })
+    runtimeHome.prepareForRateLimitFetch.mockResolvedValue({ kind: 'ready', codexHomePath: null })
     const { CodexAccountService } = await import('./service')
     const service = new CodexAccountService(
       createStore(settings) as never,
@@ -502,5 +502,42 @@ describe('CodexAccountService config sync', () => {
     await expect(resetting).rejects.toThrow('target changed')
     expect(consume).not.toHaveBeenCalled()
     expect(runtimeHome.prepareForRateLimitFetch).not.toHaveBeenCalled()
+  })
+
+  // Regression: prepareForRateLimitFetch awaits listing running WSL distros, a
+  // gap long enough for the active target to change under an in-flight reset.
+  // The pre-await guard alone doesn't protect the provider mutation after it.
+  it('rejects a system-default reset if the target changed while home resolution was pending', async () => {
+    const settings = createSettings()
+    const state = createResetRateLimitState(createResetCreditLimits())
+    const consume = vi.fn()
+    const rateLimits = {
+      ...createRateLimits(),
+      getState: vi.fn(() => state),
+      consumeCodexRateLimitResetCredit: consume
+    }
+    const runtimeHome = createRuntimeHome()
+    let resolveHome: ((value: { kind: 'ready'; codexHomePath: null }) => void) | undefined
+    runtimeHome.prepareForRateLimitFetch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveHome = resolve
+        })
+    )
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      createStore(settings) as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    const resetting = service.consumeCurrentRateLimitResetCredit()
+    await vi.waitFor(() => expect(runtimeHome.prepareForRateLimitFetch).toHaveBeenCalledOnce())
+    // Why: the active target changes while home resolution is still pending.
+    state.codexTarget = { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    resolveHome?.({ kind: 'ready', codexHomePath: null })
+
+    await expect(resetting).rejects.toThrow('target changed')
+    expect(consume).not.toHaveBeenCalled()
   })
 })

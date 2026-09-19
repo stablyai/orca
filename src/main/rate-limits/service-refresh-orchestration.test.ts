@@ -282,7 +282,9 @@ describe('RateLimitService', () => {
     const refresh = service.refresh().then(() => {
       refreshResolved = true
     })
-    await flushMicrotasks()
+    // Why: resolveCodexHome is now async (awaited twice per cycle) even with
+    // no resolver registered, pushing non-Grok settlement past the default flush count.
+    await flushMicrotasks(8)
 
     const pendingGrokState = service.getState()
     expect(pendingGrokState.claude?.status).toBe('ok')

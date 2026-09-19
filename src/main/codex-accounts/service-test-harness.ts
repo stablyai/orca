@@ -79,14 +79,14 @@ export function createRateLimits(): RateLimitsStub {
 export type RuntimeHomeStub = {
   syncForCurrentSelection: Mock<(...args: unknown[]) => void>
   clearLastWrittenAuthJson: Mock<(...args: unknown[]) => void>
-  prepareForRateLimitFetch: Mock<(...args: unknown[]) => CodexRateLimitHomeResolution>
+  prepareForRateLimitFetch: Mock<(...args: unknown[]) => Promise<CodexRateLimitHomeResolution>>
 }
 
 export function createRuntimeHome(): RuntimeHomeStub {
   return {
     syncForCurrentSelection: vi.fn(),
     clearLastWrittenAuthJson: vi.fn(),
-    prepareForRateLimitFetch: vi.fn((): CodexRateLimitHomeResolution => ({
+    prepareForRateLimitFetch: vi.fn(async (): Promise<CodexRateLimitHomeResolution> => ({
       kind: 'ready',
       codexHomePath: null
     }))
