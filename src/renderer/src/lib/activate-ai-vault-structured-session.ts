@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorkspace } from './worktree-activation'
 import { activateStructuredAgentSessionById } from './structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
@@ -34,6 +34,7 @@ export type StructuredSessionRevealOutcome =
 
 type StructuredSessionActivationDeps = {
   activate: typeof activateStructuredAgentSessionById
+  activateWorkspace: typeof activateAndRevealWorkspace
   refresh: (worktreeId: string) => Promise<void>
   reveal: (target: {
     worktreeId: string
@@ -46,6 +47,7 @@ type StructuredSessionActivationDeps = {
 
 const defaultDeps: StructuredSessionActivationDeps = {
   activate: activateStructuredAgentSessionById,
+  activateWorkspace: activateAndRevealWorkspace,
   refresh: refreshStructuredSessionTabs,
   reveal: revealStructuredSession,
   unavailable: () => {
@@ -145,7 +147,7 @@ async function activateStructuredSession(
     }
   }
   if (useAppStore.getState().activeWorktreeId !== structured.workspaceId) {
-    activateAndRevealWorktree(structured.workspaceId)
+    deps.activateWorkspace(structured.workspaceId)
   }
   return true
 }

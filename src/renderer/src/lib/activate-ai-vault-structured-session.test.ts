@@ -11,6 +11,7 @@ const structuredSession = {
 function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSession>[1]> = {}) {
   return {
     activate: vi.fn(() => true),
+    activateWorkspace: vi.fn(() => ({ primaryTabId: null })),
     refresh: vi.fn(async () => undefined),
     reveal: vi.fn(async () => 'revealed' as const),
     unavailable: vi.fn(),
@@ -164,6 +165,21 @@ describe('activateAiVaultStructuredSession', () => {
     await expect(activateAiVaultStructuredSession({} as AiVaultSession, parts)).resolves.toBe(false)
 
     expect(parts.reveal).not.toHaveBeenCalled()
+  })
+
+  it('routes a folder workspace key through generic workspace activation', async () => {
+    const parts = deps()
+
+    await expect(
+      activateAiVaultStructuredSession(
+        {
+          structuredSession: { sessionId: 'session-folder', workspaceId: 'folder:workspace-1' }
+        },
+        parts
+      )
+    ).resolves.toBe(true)
+
+    expect(parts.activateWorkspace).toHaveBeenCalledWith('folder:workspace-1')
   })
 })
 
