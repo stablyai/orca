@@ -9,6 +9,8 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
+import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
@@ -74,14 +76,26 @@ export function buildTitleDerivedAgentRows(args: {
     const paneTitles = runtimePaneTitlesByTabId[tab.id]
     const paneTitleEntries =
       paneTitles && Object.keys(paneTitles).length > 0
-        ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
+        ? Object.entries(paneTitles).sort(compareRuntimePaneTitleSlots)
         : []
 
     if (paneTitleEntries.length > 0) {
+      // Why: hoisted per tab — the leaf lists are layout-derived, not pane-derived.
+      const leafIds = collectLeafIds(layout?.root ?? null)
+      const liveSlotIds = paneTitleEntries
+        .map(([paneId]) => Number(paneId))
+        .filter((paneId) => paneId >= FIRST_PANE_ID)
+      // Why: pane ids only encode creation order while they are the dense sequence a
+      // fresh mount or replay allocates; an in-session pane close leaves them sparse.
+      const liveSlotsAreDense =
+        liveSlotIds.length === leafIds.length &&
+        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
       for (const [paneId, title] of paneTitleEntries) {
         const leafId = resolveLeafIdForTitleFallback({
           layout,
-          paneTitleEntries,
+          leafIds,
+          liveSlotIds,
+          liveSlotsAreDense,
           paneId: Number(paneId),
           title
         })
@@ -297,12 +311,56 @@ function titleStatusToRowState(
   return 'idle'
 }
 
+/**
+ * Orders runtime pane-title slots so live PaneManager ids claim their leaf before
+ * the synthetic slots a parked tab minted for the same leaf. Revealing a parked tab
+ * mounts new live slots without clearing the parked ones, so both id spaces coexist
+ * and the stale parked title must never win the row.
+ */
+function compareRuntimePaneTitleSlots([a]: [string, string], [b]: [string, string]): number {
+  const paneIdA = Number(a)
+  const paneIdB = Number(b)
+  const isLiveA = paneIdA >= FIRST_PANE_ID
+  if (isLiveA !== paneIdB >= FIRST_PANE_ID) {
+    return isLiveA ? -1 : 1
+  }
+  return paneIdA - paneIdB
+}
+
+/**
+ * Resolves the layout leaf that owns a runtime pane title.
+ *
+ * `runtimePaneTitlesByTabId` mixes two disjoint id spaces: live PaneManager ids
+ * (`>= FIRST_PANE_ID`, allocated in pane-creation order) and the `-(leafIndex + 1)`
+ * slots parked tabs mint in `fallbackParkedPaneCandidates`. Neither space is ordered
+ * like the layout's in-order leaf traversal, so attributing a title by its position
+ * in the slot list lands one pane's status on a sibling's row.
+ */
 function resolveLeafIdForTitleFallback(args: {
   layout: TerminalLayoutSnapshot | undefined
-  paneTitleEntries: [string, string][]
+  leafIds: string[]
+  liveSlotIds: number[]
+  liveSlotsAreDense: boolean
   paneId: number
   title: string
 }): string | null {
+  if (args.leafIds.length === 1) {
+    return args.leafIds[0]
+  }
+  if (args.paneId < FIRST_PANE_ID) {
+    // Parked slots are defined off the in-order leaf list, so invert that definition.
+    return args.leafIds[-args.paneId - 1] ?? null
+  }
+  if (args.liveSlotsAreDense) {
+    const creationOrderLeafId = resolveRuntimePaneTitleLeafIdFromRoot(
+      args.layout?.root,
+      String(args.paneId)
+    )
+    if (creationOrderLeafId) {
+      return creationOrderLeafId
+    }
+  }
+
   const matchingTitleLeafIds = Object.entries(args.layout?.titlesByLeafId ?? {})
     .filter(([, title]) => title === args.title)
     .map(([leafId]) => leafId)
@@ -310,13 +368,10 @@ function resolveLeafIdForTitleFallback(args: {
     return matchingTitleLeafIds[0]
   }
 
-  const leafIds = collectLeafIds(args.layout?.root ?? null)
-  if (leafIds.length === 1) {
-    return leafIds[0]
-  }
-
-  const paneIndex = args.paneTitleEntries.findIndex(([paneId]) => Number(paneId) === args.paneId)
-  return paneIndex !== -1 ? (leafIds[paneIndex] ?? null) : null
+  // Why: in-session pane closes leave the survivors' ids sparse, which creation order
+  // cannot resolve. Index within the LIVE slots only — never across both id spaces.
+  const paneIndex = args.liveSlotIds.indexOf(args.paneId)
+  return paneIndex !== -1 ? (args.leafIds[paneIndex] ?? null) : null
 }
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null): string[] {
