@@ -594,6 +594,36 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
+  it('reports a scheduled draft only when a prompt draft was actually queued', async () => {
+    // The dispatch gate arms on this flag: a blank prompt queues no draft, so
+    // awaiting a delivery verdict would never resolve.
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const queued = await launchAgentBackgroundSession({
+      agent: 'aider',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    expect(queued?.scheduledDraftDelivery).toBe(true)
+
+    mockPasteDraftWhenAgentReady.mockClear()
+    const blank = await launchAgentBackgroundSession({
+      agent: 'aider',
+      worktreeId: 'wt-1',
+      prompt: '   '
+    })
+    expect(blank?.scheduledDraftDelivery).toBe(false)
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+
+    const argv = await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    expect(argv?.scheduledDraftDelivery).toBe(false)
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
   it('passes Hermes automation prompts through the native startup query', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
