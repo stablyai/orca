@@ -18,19 +18,26 @@ import { _internals } from './hook-service'
 
 /**
  * OpenCode loads a plugin file either through a named factory export or through the
- * module default export. The default-export loader rejects the module outright unless
+ * module default export. The V1 default-export loader rejects the module outright unless
  * the default is an object exposing `server()` — verified against opencode 1.18.18,
  * which logs `failed to load plugin … must default export an object with server()` for
- * a default of `{ id, setup }` and accepts `{ id, server }`. These tests execute the
- * generated module so the shipped file is checked against both loaders, not a substring.
+ * a default of `{ id, setup }` and accepts `{ id, server }`. The OpenCode V2 loader
+ * instead requires `id` plus `setup()` (or `effect()`) and ignores `server()`, so the
+ * default export carries all three and these tests execute the generated module against
+ * both loaders, not a substring.
  */
 describe('OpenCode status plugin module contract', () => {
   type PluginHooks = {
     event: (input: { event: unknown }) => Promise<void>
     dispose?: () => Promise<void>
   }
+  type PluginHooksCleanup = () => Promise<void>
   type PluginModule = {
-    default?: { id?: unknown; server?: (ctx: unknown) => Promise<PluginHooks> }
+    default?: {
+      id?: unknown
+      server?: (ctx: unknown) => Promise<PluginHooks>
+      setup?: (ctx: unknown) => Promise<PluginHooksCleanup>
+    }
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
@@ -150,5 +157,80 @@ describe('OpenCode status plugin module contract', () => {
       paneKey: 'tab-1:leaf-1',
       payload: { hook_event_name: 'SessionBusy' }
     })
+  })
+
+  it('exposes a callable setup() on the default export for the OpenCode V2 loader', async () => {
+    const module = await loadPluginModule()
+
+    // Why: OpenCode V2 rejects a plugin whose default export has no `setup` or
+    // `effect` — the exact regression that left Orca status dark after the V1 to
+    // V2 migration. `server()` stays for V1; `setup()` is the V2 entrypoint.
+    expect(module.default?.setup).toBeTypeOf('function')
+    expect(module.default?.server).toBeTypeOf('function')
+  })
+
+  it('drives session status through setup() over the V2 event stream', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const posts: { url: string; body: unknown }[] = []
+    globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
+      posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) })
+      return { ok: true } as Response
+    }) as unknown as typeof globalThis.fetch
+
+    async function* events() {
+      yield { type: 'session.created', properties: { info: { id: 'ses_root' } } }
+      yield {
+        type: 'session.status',
+        properties: { sessionID: 'ses_root', status: { type: 'busy' } }
+      }
+    }
+    const ctx = {
+      event: { subscribe: () => events() },
+      session: { get: async ({ sessionID }: { sessionID: string }) => ({ id: sessionID }) },
+      options: {}
+    }
+
+    const module = await loadPluginModule()
+    const cleanup = await module.default?.setup?.(ctx)
+    expect(cleanup).toBeTypeOf('function')
+    // Why: the subscription pump runs in the background; let it drain the stream.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await cleanup?.()
+
+    const hookPosts = posts.filter((post) => post.url.includes('/hook/opencode'))
+    expect(hookPosts.length).toBeGreaterThan(0)
+    expect(hookPosts.map((post) => (post.body as { payload: { hook_event_name: string } }).payload.hook_event_name)).toContain('SessionBusy')
+  })
+
+  it('bridges V2 form.* events to the question attention path through setup()', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const posts: { url: string; body: unknown }[] = []
+    globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
+      posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) })
+      return { ok: true } as Response
+    }) as unknown as typeof globalThis.fetch
+
+    // Why: OpenCode V2 removed question.asked/replied/rejected in favour of
+    // form.created/replied/cancelled; without this bridge the dashboard never
+    // learns a question tool is waiting on the pane owner.
+    async function* events() {
+      yield {
+        type: 'form.created',
+        data: { form: { id: 'req-1', sessionID: 'ses_root', title: 'Pick one' } }
+      }
+    }
+    const ctx = {
+      event: { subscribe: () => events() },
+      session: { get: async ({ sessionID }: { sessionID: string }) => ({ id: sessionID }) },
+      options: {}
+    }
+
+    const module = await loadPluginModule()
+    const cleanup = await module.default?.setup?.(ctx)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await cleanup?.()
+
+    const hookPosts = posts.filter((post) => post.url.includes('/hook/opencode'))
+    expect(hookPosts.map((post) => (post.body as { payload: { hook_event_name: string } }).payload.hook_event_name)).toContain('AskUserQuestion')
   })
 })
