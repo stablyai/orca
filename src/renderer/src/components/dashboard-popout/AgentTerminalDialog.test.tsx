@@ -144,6 +144,36 @@ describe('AgentTerminalDialog', () => {
     expect(screen.getByText(/Claude · Done/)).toBeInTheDocument()
   })
 
+  it('does not treat a live structured chat as a closed terminal', () => {
+    const onReveal = vi.fn()
+    render(
+      <AgentTerminalDialog
+        card={card({
+          ptyId: null,
+          hostKind: 'local',
+          surfaceKind: 'structured-chat',
+          structuredSessionId: 'session-1',
+          leafId: null
+        })}
+        onOpenChange={() => {}}
+        onReveal={onReveal}
+      />
+    )
+
+    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
+    expect(screen.getByText(/structured chat session/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }))
+    expect(onReveal).toHaveBeenCalledWith({
+      repoId: 'r1',
+      worktreeId: 'w1',
+      executionHostId: undefined,
+      tabId: 'tab1',
+      leafId: null,
+      surfaceKind: 'structured-chat',
+      structuredSessionId: 'session-1'
+    })
+  })
+
   it('preserves the execution host when revealing a colliding worktree ID', () => {
     const onReveal = vi.fn()
     render(

@@ -47,8 +47,9 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      revealDashboardAgent(args)
-      onClose()
+      if (revealDashboardAgent(args)) {
+        onClose()
+      }
     },
     [onClose]
   )

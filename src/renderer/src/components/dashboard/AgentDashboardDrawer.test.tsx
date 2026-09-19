@@ -131,6 +131,7 @@ describe('AgentDashboardDrawer', () => {
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
       flashFocusedPane: true
     })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
   })
 
   it('activates a parked SSH workspace before reaching for its pane', () => {
@@ -151,5 +152,6 @@ describe('AgentDashboardDrawer', () => {
     revealFromBoard('ssh:devbox')
 
     expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true)
   })
 })

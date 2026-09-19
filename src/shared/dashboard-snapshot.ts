@@ -79,12 +79,19 @@ export type DashboardWorkspace = {
   review?: DashboardCardReview
 }
 
+export const DASHBOARD_CARD_SURFACE_KINDS = ['terminal', 'structured-chat'] as const
+export type DashboardCardSurfaceKind = (typeof DASHBOARD_CARD_SURFACE_KINDS)[number]
+
 export type DashboardCard = {
   /** Stable identity for React keys. */
   paneKey: string
   /** Resolved live PTY id for the terminal preview, or null when the agent has
    *  no live pane (e.g. a retained/done row whose pane is gone). */
   ptyId: string | null
+  /** Additive discriminator; older pop-outs treat missing as terminal-backed. */
+  surfaceKind?: DashboardCardSurfaceKind
+  /** Native Chat session id used to reveal a structured card. */
+  structuredSessionId?: string
   agentType: AgentType
   bucket: DashboardBucket
   dotState: DashboardCardDotState
@@ -174,6 +181,13 @@ export type DashboardCardTerminalInput = {
   kittyKeyboardAdvertised: boolean
 }
 
+/** Structured chat is live without a PTY; missing surfaceKind stays terminal-backed. */
+export function isDashboardStructuredChatCard(
+  card: Pick<DashboardCard, 'surfaceKind' | 'ptyId'>
+): boolean {
+  return card.surfaceKind === 'structured-chat' && card.ptyId == null
+}
+
 export type DashboardFilterOption = {
   id: string
   label: string
@@ -222,6 +236,9 @@ export type DashboardRevealAgentArgs = {
   executionHostId?: ExecutionHostId
   tabId: string
   leafId: string | null
+  /** Additive; older hosts ignore it and keep terminal reveal. */
+  surfaceKind?: DashboardCardSurfaceKind
+  structuredSessionId?: string
 }
 
 export type DashboardSpawnAgentArgs = {

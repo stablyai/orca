@@ -578,4 +578,40 @@ describe('dashboard payload validation', () => {
       isDashboardRevealAgentArgs({ repoId: 'repo-1', worktreeId: 'worktree-1', tabId: '' })
     ).toBe(false)
   })
+
+  it('accepts structured-chat reveal routing and rejects unknown surfaces', () => {
+    expect(
+      isDashboardRevealAgentArgs({
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        tabId: 'tab-1',
+        leafId: null,
+        surfaceKind: 'structured-chat',
+        structuredSessionId: 'session-1'
+      })
+    ).toBe(true)
+    expect(
+      isDashboardRevealAgentArgs({
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        tabId: 'tab-1',
+        leafId: null,
+        surfaceKind: 'browser'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps structured-chat cards on the board', () => {
+    const structuredCard = {
+      ...SNAPSHOT.cards[0],
+      ptyId: null,
+      leafId: null,
+      surfaceKind: 'structured-chat' as const,
+      structuredSessionId: 'session-1'
+    }
+    expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [structuredCard] })).toBe(true)
+    const invalidCard = { ...structuredCard }
+    Object.assign(invalidCard, { surfaceKind: 'browser' })
+    expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [invalidCard] })).toBe(false)
+  })
 })
