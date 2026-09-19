@@ -37,12 +37,27 @@ test('@golden opens, edits, saves, and reopens a tracked file', async ({
   await expect(readmeRow).toBeVisible({ timeout: 10_000 })
   await readmeRow.click()
 
-  await expect(orcaPage.locator('.editor-header-path').first()).toContainText(README_PATH, {
+  const editorHeaderPath = orcaPage.locator('.editor-header-path').first()
+  await expect(editorHeaderPath).toContainText(README_PATH, {
     timeout: 20_000
   })
   const editor = orcaPage.locator('.rich-markdown-editor')
   await expect(editor).toBeVisible({ timeout: 25_000 })
   await expect(editor).toContainText('Orca E2E Test Repo')
+
+  await editorHeaderPath.locator('.editor-header-path-segment-current').click()
+  const packageEntry = orcaPage.locator('[data-editor-header-path-entry="package.json"]')
+  await expect(packageEntry).toBeVisible()
+  await packageEntry.click()
+  await expect(orcaPage.locator('.editor-header-path').first()).toContainText('package.json')
+  await expect(orcaPage.locator('.monaco-editor').first()).toBeVisible({ timeout: 25_000 })
+
+  await editorHeaderPath.locator('.editor-header-path-segment-current').click()
+  const readmeEntry = orcaPage.locator(`[data-editor-header-path-entry="${README_PATH}"]`)
+  await expect(readmeEntry).toBeVisible()
+  await readmeEntry.click()
+  await expect(orcaPage.locator('.editor-header-path').first()).toContainText(README_PATH)
+
   await editor.click()
   await orcaPage.keyboard.press('ControlOrMeta+End')
   await orcaPage.keyboard.press('Enter')
@@ -51,7 +66,7 @@ test('@golden opens, edits, saves, and reopens a tracked file', async ({
 
   await expect.poll(() => readFileSync(readmePath, 'utf8'), { timeout: 10_000 }).toContain(sentinel)
   const readmeTab = orcaPage.locator('[data-tab-id]').filter({ hasText: README_PATH }).last()
-  await readmeTab.getByRole('button', { name: 'Close tab' }).click()
+  await readmeTab.locator('[data-tab-close-button="true"]').click()
   await expect(
     orcaPage.locator('.editor-header-path').filter({ hasText: README_PATH })
   ).toHaveCount(0)

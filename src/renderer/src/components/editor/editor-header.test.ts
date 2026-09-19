@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getEditorHeaderCopyState, getEditorHeaderOpenFileState } from './editor-header'
+import { canNavigateEditorHeaderPath } from './editor-header-path-segments'
 import type { OpenFile } from '@/store/slices/editor'
 
 function makeOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
@@ -18,8 +19,6 @@ function makeOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
 describe('getEditorHeaderCopyState', () => {
   it('shows the absolute file path for normal file tabs', () => {
     expect(getEditorHeaderCopyState(makeOpenFile())).toEqual({
-      copyText: '/repo/file.ts',
-      copyToastLabel: 'File path copied',
       pathLabel: '/repo/file.ts',
       pathTitle: '/repo/file.ts'
     })
@@ -35,8 +34,6 @@ describe('getEditorHeaderCopyState', () => {
         })
       )
     ).toEqual({
-      copyText: '/repo/file.ts',
-      copyToastLabel: 'File path copied',
       pathLabel: '/repo/file.ts (diff)',
       pathTitle: '/repo/file.ts (diff)'
     })
@@ -52,8 +49,6 @@ describe('getEditorHeaderCopyState', () => {
         })
       )
     ).toEqual({
-      copyText: '/repo/file.ts',
-      copyToastLabel: 'File path copied',
       pathLabel: '/repo/file.ts (staged diff)',
       pathTitle: '/repo/file.ts (staged diff)'
     })
@@ -83,8 +78,6 @@ describe('getEditorHeaderCopyState', () => {
         })
       )
     ).toEqual({
-      copyText: null,
-      copyToastLabel: 'Check details copied',
       pathLabel: 'verify',
       pathTitle: 'verify'
     })
@@ -102,11 +95,19 @@ describe('getEditorHeaderCopyState', () => {
         })
       )
     ).toEqual({
-      copyText: '/repo/worktree',
-      copyToastLabel: 'Worktree path copied',
       pathLabel: 'All Changes',
       pathTitle: '/repo/worktree'
     })
+  })
+})
+
+describe('canNavigateEditorHeaderPath', () => {
+  it('is only true for real file tabs', () => {
+    expect(canNavigateEditorHeaderPath(makeOpenFile({ mode: 'edit' }))).toBe(true)
+    expect(canNavigateEditorHeaderPath(makeOpenFile({ mode: 'markdown-preview' }))).toBe(true)
+    expect(canNavigateEditorHeaderPath(makeOpenFile({ mode: 'diff' }))).toBe(false)
+    expect(canNavigateEditorHeaderPath(makeOpenFile({ mode: 'conflict-review' }))).toBe(false)
+    expect(canNavigateEditorHeaderPath(makeOpenFile({ mode: 'check-details' }))).toBe(false)
   })
 })
 
