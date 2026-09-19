@@ -12,8 +12,9 @@
  * `c1-page-closure.ts` rather than derived again. That is not tidiness: deriving them from C2's
  * classification rule disagrees with the committed file on 13 pins, in three ways that are each a
  * true statement read too far — all 7 in `tasks.smart-source-search`, all 5 in
- * `host-worktree-refresh`, and `worktree-catalog-snapshot`. `tasks.smart-source-search` is a `params-undefined` family and the
- * rule's list of those is the five families C2 adds, not C1's one. `host-worktree-refresh` carries
+ * `host-worktree-refresh`, and `worktree-catalog-snapshot`. `tasks.smart-source-search` is a
+ * `params-undefined` family and the rule's list of those is the five families C2 adds, not C1's
+ * one. `host-worktree-refresh` carries
  * `write-ordinal` and `result-absent-stream-release` goldens, classes the rule does not model
  * because no family C2 adds carries one. And "a scenario scripting `{ ok: true }` with no result"
  * is a property of the scenario a golden derives from, not of its family, so reading it family-wide
