@@ -419,11 +419,20 @@ describeBundling('the app bundle', () => {
       await buildMobileWebAppBundle({ outDir })
       const html = await readFile(join(outDir, 'index.html'), 'utf8')
       expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
-      const declared = MOBILE_WEB_APP_ROOT_RESET.replace(/\s+/g, '')
-      // All three, because the chain is only as definite as its weakest link: a height on #root
-      // alone resolves against a body that has none, and percent of auto is auto.
-      expect(declared).toContain('html,body{height:100%')
-      expect(declared).toContain('#root{display:flex;height:100%')
+      // Literals rather than substrings taken off the constant, which would read it back against
+      // itself and follow any rule dropped from it. Every rule, because the chain is only as
+      // definite as its weakest link: a height on #root alone resolves against a body that has
+      // none, and percent of auto is auto. Named one by one so a failure says which rule went.
+      for (const rule of [
+        'html,body{height:100%}',
+        'body{overflow:hidden}',
+        '#root{display:flex;height:100%;flex:1}'
+      ]) {
+        expect(MOBILE_WEB_APP_ROOT_RESET, rule).toContain(rule)
+      }
+      // The id travels with the rules: it is what marks this block as the template's reset rather
+      // than something the page grew its own copy of.
+      expect(MOBILE_WEB_APP_ROOT_RESET).toContain('<style id="expo-reset">')
       // In the document itself, not a linked asset: the CSP that allows it is the one already
       // relaxed for react-native-web's runtime sheet.
       expect(html).not.toContain('<link rel="stylesheet"')
