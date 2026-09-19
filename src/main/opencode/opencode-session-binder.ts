@@ -118,10 +118,16 @@ function toCorrelatedClients(
 
 /** Pure round core: correlate unbound sessions against panes and clients. */
 export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult {
-  const panes: CorrelatedPane[] = deps.panes.map((pane) => ({
-    paneKey: pane.paneKey,
-    directory: pane.directory
-  }))
+  // Why dedupe by key, newest wins: remints and reattachments can leave a
+  // stale registry row beside the live one; counting rows instead of panes
+  // would turn every same-pane tie into a false ambiguous and nothing would
+  // ever bind, while the oldest row would point the candidate set at a dead
+  // worktree.
+  const paneByKey = new Map<string, CorrelatedPane>()
+  for (const pane of deps.panes) {
+    paneByKey.set(pane.paneKey, { paneKey: pane.paneKey, directory: pane.directory })
+  }
+  const panes = [...paneByKey.values()]
   const clients = toCorrelatedClients(deps.processes, deps.panes, deps.nowMs)
   const sessions: CorrelatedSession[] = deps.sessions.map((row) => ({
     id: row.id,

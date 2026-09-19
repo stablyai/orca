@@ -52,6 +52,12 @@ export const OPENCODE_CREATE_SKEW_MS = 2 * 60 * 1000
 
 function normalizeDir(directory: string): string {
   let out = directory.trim().replace(/\\/g, '/')
+  // Why: macOS resolves /tmp to /private/tmp (and opencode records whichever
+  // spelling the process saw). Strip the well-known prefix so both spellings
+  // meet; no legitimate cross-platform path depends on it.
+  if (out === '/private' || out.startsWith('/private/')) {
+    out = out.slice('/private'.length) || '/'
+  }
   while (out.endsWith('/') && out.length > 1) {
     out = out.slice(0, -1)
   }

@@ -68,6 +68,21 @@ describe('correlateOpenCodeSessionOwners', () => {
     ])
   })
 
+  it('strips the macOS /private prefix so both spellings meet', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [
+        { id: 'ses_1', directory: '/tmp/binder-e2e', createdAtMs: NOW - 60_000, parentId: null }
+      ],
+      panes: [{ paneKey: 'pane-a', directory: '/private/tmp/binder-e2e' }],
+      clients: [client('pane-a', NOW - 120_000)],
+      knownOwners: new Map(),
+      nowMs: NOW
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
+    ])
+  })
+
   it('leaves a session unbound when no client brackets it', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 60_000)],

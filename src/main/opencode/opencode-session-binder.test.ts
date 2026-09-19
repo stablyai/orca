@@ -77,6 +77,22 @@ describe('runOpenCodeBinderRound', () => {
     ])
   })
 
+  it('dedupes same-key snapshots newest-wins', () => {
+    const { ownerships } = runOpenCodeBinderRound({
+      nowMs: NOW,
+      dbPath: '/tmp/opencode.db',
+      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
+      panes: [
+        { ...pane(PANE_A, 100), directory: '/elsewhere' },
+        { ...pane(PANE_A, 101), directory: DIR }
+      ],
+      processes: [proc(100, 1, ['zsh']), proc(101, 1, ['zsh']), proc(102, 101, ['opencode'], NOW - 90_000)],
+      knownOwners: new Map(),
+      parentBySessionId: new Map()
+    })
+    expect(ownerships).toEqual([{ sessionId: 'ses_1', paneKey: PANE_A, basis: 'single-pane-directory' }])
+  })
+
   it('advances the watermark past seen sessions', () => {
     const { watermarkMs } = runOpenCodeBinderRound({
       nowMs: NOW,
