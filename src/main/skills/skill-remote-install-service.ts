@@ -15,7 +15,7 @@ import {
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
-  SKILL_INSTALL_PROVIDERS_CAPABILITY,
+  supportsSelectedSkillProviders,
   SKILL_UPLOAD_CAPABILITY
 } from '../../shared/skill-install-capability'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
@@ -122,10 +122,7 @@ export async function installSkillOnRemoteRuntime(input: {
   signal?: AbortSignal
 }): Promise<SkillInstallResult> {
   const request = input.request
-  if (
-    request.providers !== undefined &&
-    !input.capabilities.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)
-  ) {
+  if (!supportsSelectedSkillProviders(input.capabilities, request.providers)) {
     throw new Error('skill-install-remote-update-required')
   }
   if (request.ingress.kind !== 'download-grant') {
@@ -195,10 +192,7 @@ export async function installSkillBundleOnRemoteRuntime(input: {
   onProgress?: (progress: SkillBundleInstallProgress) => void
 }): Promise<SkillBundleInstallResult> {
   const request = input.request
-  if (
-    request.providers !== undefined &&
-    !input.capabilities.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)
-  ) {
+  if (!supportsSelectedSkillProviders(input.capabilities, request.providers)) {
     throw new Error('skill-bundle-remote-update-required')
   }
   if (request.ingress.kind !== 'download-grant') {

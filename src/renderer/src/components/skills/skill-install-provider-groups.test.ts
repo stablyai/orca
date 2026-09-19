@@ -26,6 +26,19 @@ describe('groupSkillInstallProviders', () => {
     )
   })
 
+  it('offers Antigravity globally and includes it automatically in workspaces', () => {
+    expect(
+      groupSkillInstallProviders('workspace').canonical.map((provider) => provider.id)
+    ).toContain('antigravity')
+    expect(groupSkillInstallProviders('global').selectable).toContainEqual(
+      expect.objectContaining({
+        provider: expect.objectContaining({ id: 'antigravity' }),
+        directory: '~/.gemini/config/skills'
+      })
+    )
+    expect(defaultSelectedSkillProviders(['antigravity'])).toEqual(new Set(['antigravity']))
+  })
+
   it('labels a directory relative to the scope it is shown under', () => {
     expect(skillProviderDirectoryLabel(['.claude', 'skills'], 'workspace')).toBe('.claude/skills')
     expect(skillProviderDirectoryLabel(['.claude', 'skills'], 'global')).toBe('~/.claude/skills')

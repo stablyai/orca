@@ -117,6 +117,7 @@ describe('SkillInstallHandler', () => {
     expect(SKILL_RELAY_CAPABILITIES).toEqual([
       'skills.install.v1',
       'skills.install-providers.v1',
+      'skills.install-antigravity.v1',
       'skills.install.bundle.v1',
       'skills.preview.bundle.v1',
       'skills.install-progress.v1',

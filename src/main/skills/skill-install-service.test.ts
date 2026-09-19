@@ -56,6 +56,42 @@ afterEach(async () => {
 })
 
 describe('skill install service', () => {
+  it.each(['global', 'workspace'] as const)(
+    'installs and removes Antigravity skills at %s scope',
+    async (scope) => {
+      const { root, input } = await fixture()
+      const install = {
+        ...input,
+        scope,
+        workspaceDirectory: join(root, 'workspace'),
+        detectedProviders: ['antigravity']
+      }
+      const result = await installSharedSkill(install)
+      const canonical = join(
+        scope === 'global' ? input.homeDirectory : install.workspaceDirectory,
+        '.agents',
+        'skills',
+        'test-skill'
+      )
+      const destination =
+        scope === 'global'
+          ? join(input.homeDirectory, '.gemini', 'config', 'skills', 'test-skill')
+          : canonical
+      expect(result.status).toBe('installed')
+      expect(await realpath(destination)).toBe(await realpath(canonical))
+      await removeSharedSkill({
+        scope,
+        homeDirectory: install.homeDirectory,
+        workspaceDirectory: install.workspaceDirectory,
+        orcaStateDirectory: install.orcaStateDirectory,
+        detectedProviders: install.detectedProviders,
+        operationId: 'remove-agy',
+        skillName: 'test-skill'
+      })
+      await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+  )
+
   it('installs one canonical Codex copy and aliases the other agent home to it', async () => {
     const { root, input } = await fixture()
     const result = await installSharedSkill(input)

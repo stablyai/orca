@@ -13,7 +13,7 @@ import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_BUNDLE_PREVIEW_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY,
-  SKILL_INSTALL_PROVIDERS_CAPABILITY,
+  supportsSelectedSkillProviders,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
 } from '../../shared/skill-install-capability'
@@ -166,10 +166,7 @@ export async function installSkillBundleOnSshHost(input: {
           call: async () => {
             const client = requireSkillSshRelayClient(input.provider)
             const supported = await skillSshRelayCapabilities(client)
-            if (
-              request.providers !== undefined &&
-              !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)
-            ) {
+            if (!supportsSelectedSkillProviders(supported, request.providers)) {
               throw new Error('skill-bundle-ssh-update-required')
             }
             if (!supported.includes(SKILL_BUNDLE_INSTALL_CAPABILITY)) {
@@ -206,8 +203,7 @@ export async function installSkillBundleOnSshHost(input: {
         const supported = await skillSshRelayCapabilities(client)
         if (
           !supported.includes(SKILL_BUNDLE_INSTALL_CAPABILITY) ||
-          (request.providers !== undefined &&
-            !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY))
+          !supportsSelectedSkillProviders(supported, request.providers)
         ) {
           throw new Error('skill-bundle-ssh-update-required')
         }

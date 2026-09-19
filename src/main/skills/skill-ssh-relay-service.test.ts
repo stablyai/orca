@@ -49,6 +49,35 @@ function request(bytes: Buffer) {
 }
 
 describe('installSkillOnSshHost', () => {
+  it.each([false, true])('gates Antigravity on SSH host support=%s', async (supported) => {
+    const requestHostRpc = vi.fn(async (method: string) =>
+      method === 'relay.status'
+        ? {
+            capabilities: [
+              'skills.install.v1',
+              'skills.install.bundle.v1',
+              'skills.install-providers.v1',
+              ...(supported ? ['skills.install-antigravity.v1'] : [])
+            ]
+          }
+        : result()
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this path only calls requestHostRpc on the provider.
+    const provider = { requestHostRpc } as unknown as IPtyProvider
+    const outcome = installSkillOnSshHost({
+      provider,
+      userDataPath: await userDataPath(),
+      request: { ...request(Buffer.from('archive')), providers: ['antigravity'] },
+      requireHttps: true
+    })
+    if (supported) {
+      await expect(outcome).resolves.toEqual(result())
+    } else {
+      await expect(outcome).rejects.toThrow('skill-install-ssh-update-required')
+      expect(requestHostRpc.mock.calls.map(([method]) => method)).toEqual(['relay.status'])
+    }
+  })
+
   it('does not reuse newer capabilities after reconnecting to an older host', async () => {
     const secondRpc = vi.fn(async (_method: string) => ({ capabilities: [] }))
     const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider

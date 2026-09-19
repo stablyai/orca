@@ -94,6 +94,44 @@ describe('installSkillOnRemoteRuntime', () => {
     expect(mocks.callRuntimeEnvironment).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    'gates Antigravity on host support=%s for skills and bundles',
+    async (supported) => {
+      const capabilities = [
+        'skills.install.v1',
+        'skills.install.bundle.v1',
+        'skills.install-providers.v1',
+        ...(supported ? (['skills.install-antigravity.v1'] as const) : [])
+      ] as const
+      mocks.callRuntimeEnvironment.mockResolvedValue(success(result))
+      const single = installSkillOnRemoteRuntime({
+        userDataPath: '/state',
+        environmentId: 'env-1',
+        request: { ...request, providers: ['antigravity'] },
+        capabilities,
+        requireHttps: true
+      })
+      await (supported
+        ? expect(single).resolves.toEqual(result)
+        : expect(single).rejects.toThrow('skill-install-remote-update-required'))
+      mocks.callRuntimeEnvironment.mockResolvedValue(success(bundleResult))
+      const bundle = installSkillBundleOnRemoteRuntime({
+        userDataPath: '/state',
+        environmentId: 'env-1',
+        request: { ...bundleRequest, providers: ['antigravity'] },
+        capabilities,
+        requireHttps: true
+      })
+      if (supported) {
+        await expect(bundle).resolves.toEqual(bundleResult)
+      } else {
+        await expect(bundle).rejects.toThrow('skill-bundle-remote-update-required')
+        expect(mocks.callRuntimeEnvironment).not.toHaveBeenCalled()
+      }
+      expect(mocks.transferSkillPackageToRuntime).not.toHaveBeenCalled()
+    }
+  )
+
   it('uses direct remote download when the runtime can reach storage', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValue(success(result))
 

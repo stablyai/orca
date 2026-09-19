@@ -10,6 +10,7 @@ export type SkillInstallProviderId =
   | 'claude'
   | 'cursor'
   | 'gemini'
+  | 'antigravity'
   | 'droid'
   | 'continue'
   | 'trae'
@@ -49,6 +50,12 @@ export const SKILL_INSTALL_PROVIDERS: readonly SkillInstallProviderDefinition[] 
     id: 'gemini',
     displayName: 'Gemini CLI',
     globalSegments: ['.gemini', 'skills'],
+    workspaceSegments: null
+  },
+  {
+    id: 'antigravity',
+    displayName: 'Antigravity',
+    globalSegments: ['.gemini', 'config', 'skills'],
     workspaceSegments: null
   },
   {

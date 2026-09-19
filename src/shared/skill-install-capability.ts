@@ -20,3 +20,18 @@ export const SKILL_DELETE_CAPABILITY = 'skills.delete.v1' as const
 
 export const SKILL_DELETE_UPDATE_REQUIRED_MESSAGE =
   'Update Orca on the selected machine to delete skills.'
+
+// Older hosts accept the provider field but silently discard unknown provider IDs.
+export const SKILL_INSTALL_ANTIGRAVITY_CAPABILITY = 'skills.install-antigravity.v1' as const
+
+export function supportsSelectedSkillProviders(
+  capabilities: readonly string[],
+  providers: readonly string[] | undefined
+): boolean {
+  return (
+    providers === undefined ||
+    (capabilities.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY) &&
+      (!providers.includes('antigravity') ||
+        capabilities.includes(SKILL_INSTALL_ANTIGRAVITY_CAPABILITY)))
+  )
+}
