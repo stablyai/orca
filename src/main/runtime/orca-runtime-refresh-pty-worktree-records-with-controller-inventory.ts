@@ -55,7 +55,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     }
     const inventoryGeneration = this.ptyControllerInventorySequence + 1
     this.ptyControllerInventorySequence = inventoryGeneration
-    const providerKey = typeof connectionId === 'string' ? `ssh:${connectionId}` : 'local'
+    const providerKey =
+      typeof connectionId === 'string'
+        ? toSshExecutionHostId(connectionId)
+        : LOCAL_EXECUTION_HOST_ID
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration

@@ -1,0 +1,60 @@
+{
+  "comparison": "Actual runtime inventory, spawn, registration, and exit methods with controlled provider responses; before reverses only fix.patch in a temporary Vite transform",
+  "sourceHashes": {
+    "src/main/runtime/orca-runtime-invalidate-all-handles-for-pty.ts": {
+      "before": "5ee6ba0ae3407207ea7f894a83e3325851f8cd6b4b7b8b5adf0be0a6def7d244",
+      "after": "0eeaf4f89324aea51c49fd4149d632635dbf327d5d91b251e65488bb3852e3ce"
+    },
+    "src/main/runtime/orca-runtime-on-pty-exit.ts": {
+      "before": "a6512283ac5ee9c45db21a96d1eb228d2c859f1fd0df16300a377fbc126a2557",
+      "after": "1750058230590062eb0e6488faa39c4def121008d9a7fbb533b98e7d4e31f209"
+    },
+    "src/main/runtime/orca-runtime-refresh-pty-worktree-records-with-controller-inventory.ts": {
+      "before": "e64d819f6a3694168eca4ab99ce5d01d82f57ea8cb226b0aebe78201f74841ab",
+      "after": "d0c8228127079e4a87ef5b6cc8e73982ee15eef34f19b0c59a7e224bde2f7fcd"
+    },
+    "src/main/runtime/orca-runtime-register-pty.ts": {
+      "before": "1f10fb6b9ceefb192e1fde77056897d0b913e6ea21be7b30f60473c1876dc178",
+      "after": "8855f7ea968e9a759377d4bc3a34c184398b9274d5793e7a1a13a61025c7cbcb"
+    },
+    "src/main/runtime/pty-inventory-lifecycle-admission.test.ts": {
+      "current": "b00527c138453edf1cb6281b4f6a6fc8dede4de8bcfb39d3b82826125f89721d"
+    },
+    "src/main/runtime/pty-inventory-lifecycle-scope.test.ts": {
+      "current": "76a519ce504849cf341d7b8472c0d7d5f38b79e67a5302692b65d41b5b1364d9"
+    },
+    "src/main/runtime/pty-inventory-lifecycle-fixture.ts": {
+      "current": "27958421bac5c9e6ef4dea643774ff1950b77165620bfd565a89c498ddc85f3f"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 6,
+    "failed": 16,
+    "failedCases": [
+      "inventory admission after a PTY lifecycle change rejects a captured predecessor row after exit before it can adopt handles",
+      "inventory admission after a PTY lifecycle change rejects a captured predecessor row after registered-successor before it can adopt handles",
+      "inventory admission after a PTY lifecycle change rejects a captured predecessor row after spawned-successor before it can adopt handles",
+      "inventory admission after a PTY lifecycle change rejects a captured predecessor row after unknown-start-spawn before it can adopt handles",
+      "inventory admission after a PTY lifecycle change does not apply stale absence to unknown-at-start spawn",
+      "inventory admission after a PTY lifecycle change does not apply stale absence to unknown-at-start register",
+      "inventory admission after a PTY lifecycle change fences a same-ID legacy registration with no incarnation",
+      "lifecycle invalidation respects inventory scope and retry bounds conservatively rejects pending inventory for foreign lifecycle ID remote:unscoped-handle",
+      "lifecycle invalidation respects inventory scope and retry bounds conservatively rejects pending inventory for foreign lifecycle ID remote:paired-host@@term_guest",
+      "lifecycle invalidation respects inventory scope and retry bounds uses explicit host ownership for a legacy unqualified PTY ID on host-a",
+      "lifecycle invalidation respects inventory scope and retry bounds uses explicit host ownership for a legacy unqualified PTY ID on deploy@10.0.0.4:2222",
+      "lifecycle invalidation respects inventory scope and retry bounds uses explicit host ownership for a legacy unqualified PTY ID on ssh target",
+      "lifecycle invalidation respects inventory scope and retry bounds rejects stale inventory for an encoding-sensitive qualified PTY ID on deploy@10.0.0.4:2222",
+      "lifecycle invalidation respects inventory scope and retry bounds rejects stale inventory for an encoding-sensitive qualified PTY ID on ssh target",
+      "lifecycle invalidation respects inventory scope and retry bounds allows only one target retry and keeps a second invalidation unknown",
+      "lifecycle invalidation respects inventory scope and retry bounds retries with the original remaining deadline and accepts fresh truth"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 22,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

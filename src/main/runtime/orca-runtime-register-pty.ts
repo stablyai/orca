@@ -27,6 +27,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
+    this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const existingPty = this.ptysById.get(ptyId)
     const replacementHandle = binding?.terminalHandle?.trim()
     const pendingReplacement = this.pendingPtyHandleReplacementFences.get(ptyId)
