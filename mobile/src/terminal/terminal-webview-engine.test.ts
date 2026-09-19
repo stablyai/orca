@@ -236,6 +236,6 @@ describe('terminal WebView bundled engine', () => {
 
   it('answers native readiness probes from the live document', () => {
     expect(terminalHtmlSource).toContain("if (msg.type === 'ping')")
-    expect(terminalHtmlSource).toContain("notify({ type: 'pong', pingId: msg.id })")
+    expect(terminalHtmlSource).toContain("terminalAvailable: typeof window.Terminal === 'function'")
   })
 })

@@ -11,8 +11,10 @@ export function useTerminalWebReadyWatchdog(
   reportEngineError: (message: string, fatal: boolean) => void
 ) {
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const watchdogGenerationRef = useRef(0)
 
   const clearWebReadyWatchdog = useCallback(() => {
+    watchdogGenerationRef.current += 1
     if (watchdogRef.current) {
       clearTimeout(watchdogRef.current)
       watchdogRef.current = null
@@ -21,7 +23,11 @@ export function useTerminalWebReadyWatchdog(
 
   const armWebReadyWatchdog = useCallback(() => {
     clearWebReadyWatchdog()
+    const generation = watchdogGenerationRef.current
     const fire = () => {
+      if (generation !== watchdogGenerationRef.current) {
+        return
+      }
       watchdogRef.current = null
       if (isWebReadyRef.current) {
         return

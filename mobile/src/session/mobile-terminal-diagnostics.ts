@@ -76,16 +76,6 @@ export class MobileTerminalDiagnostics {
     this.firstStreamEventSeqByHandle.delete(handle)
   }
 
-  viewportMeasured(handle: string, dims: DiagnosticDimensions, frameHeight: number): void {
-    logMobileTerminalDiagnostic('viewport-measure', {
-      handle: shortenMobileTerminalDiagnosticId(handle),
-      ok: dims != null,
-      cols: dims?.cols,
-      rows: dims?.rows,
-      frameHeight: Math.round(frameHeight)
-    })
-  }
-
   streamSkipped(handle: string, reason: string, isActive: boolean): void {
     if (this.streamGateByHandle.get(handle) === reason) {
       return

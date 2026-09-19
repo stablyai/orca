@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
+import {
+  TERMINAL_HTML_WRITE_QUEUE,
+  TERMINAL_WEBVIEW_WRITE_SLICE_UNITS
+} from './terminal-webview-html/write-queue'
 
 // The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
 // TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
@@ -116,6 +120,35 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('writeQueueHead++;')
     expect(source).toContain('writeQueue = writeQueue.slice(writeQueueHead);')
     expect(source).not.toContain('writeQueue.shift()')
+  })
+
+  it('slices large writes without retaining consumed chunks or splitting surrogate pairs', () => {
+    const enqueueSource = TERMINAL_HTML_WRITE_QUEUE.slice(
+      TERMINAL_HTML_WRITE_QUEUE.indexOf('function enqueueWrite'),
+      TERMINAL_HTML_WRITE_QUEUE.indexOf('function enqueueWriteBoundary')
+    )
+    const nextSource = TERMINAL_HTML_WRITE_QUEUE.slice(
+      TERMINAL_HTML_WRITE_QUEUE.indexOf('function nextQueuedWrite'),
+      TERMINAL_HTML_WRITE_QUEUE.indexOf('function disposeTermObservers')
+    )
+    const createQueue = new Function(
+      'normalizeStatusDotPresentation',
+      `${enqueueSource}; ${nextSource}; var writeQueue = []; var writeQueueHead = 0; return { enqueueWrite, nextQueuedWrite, queue: () => writeQueue };`
+    )((data: string) => data) as unknown as {
+      enqueueWrite: (data: string) => void
+      nextQueuedWrite: () => string | undefined
+      queue: () => Array<string | undefined>
+    }
+    const input = 'a'.repeat(TERMINAL_WEBVIEW_WRITE_SLICE_UNITS - 1) + '😀' + 'b'.repeat(32)
+
+    createQueue.enqueueWrite(input)
+
+    const chunks = createQueue.queue().filter((chunk): chunk is string => typeof chunk === 'string')
+    expect(chunks.join('')).toBe(input)
+    expect(chunks.every((chunk) => chunk.length <= TERMINAL_WEBVIEW_WRITE_SLICE_UNITS)).toBe(true)
+    expect(chunks.every((chunk) => !/^[\\uDC00-\\uDFFF]/.test(chunk))).toBe(true)
+    expect(createQueue.nextQueuedWrite()).toBe(chunks[0])
+    expect(createQueue.queue()[0]).toBeUndefined()
   })
 
   it('bounds native-side pending WebView writes while preserving control messages', () => {

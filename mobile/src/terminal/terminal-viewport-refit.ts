@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { AppState, Platform, useWindowDimensions, type AppStateStatus } from 'react-native'
+import { AppState, Platform, type AppStateStatus } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalWebViewHandle } from './TerminalWebView'
@@ -13,6 +13,7 @@ import {
   type TerminalFrameHeightRefitState,
   type TerminalUpdateViewportCapability
 } from './terminal-viewport-refit-state'
+import { useWindowBounds } from '../layout/window-bounds'
 
 export type TerminalViewportDims = { cols: number; rows: number }
 
@@ -203,7 +204,7 @@ export function useTerminalViewportRefit(
   }, [tabStripVisible, viewportMeasuredRef, scheduleViewportRefit])
 
   // Why: fold/unfold and rotation change window dims with no subscribe/tab change; refit or the grid stays stale (fit capped at 1).
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const { width: windowWidth, height: windowHeight } = useWindowBounds()
   const prevWindowDimsRef = useRef({ width: windowWidth, height: windowHeight })
   useEffect(() => {
     const prev = prevWindowDimsRef.current

@@ -22,7 +22,7 @@ describe('terminal viewport refit', () => {
   it('refits when the window dimensions change (fold/unfold, rotation)', () => {
     // Why: a PTY fitted on the folded cover screen must be re-measured when
     // the window grows, or the terminal renders in a fraction of the display.
-    expect(hookSource).toContain('useWindowDimensions()')
+    expect(hookSource).toContain('useWindowBounds()')
     const start = hookSource.indexOf('const { width: windowWidth, height: windowHeight }')
     expect(start).toBeGreaterThanOrEqual(0)
     const resizeEffect = hookSource.slice(start)
@@ -36,7 +36,7 @@ describe('terminal viewport refit', () => {
   it('still refits when the tab strip toggles visibility', () => {
     const start = hookSource.indexOf('const prevTabStripVisibleRef')
     expect(start).toBeGreaterThanOrEqual(0)
-    const tabEffect = hookSource.slice(start, hookSource.indexOf('useWindowDimensions()'))
+    const tabEffect = hookSource.slice(start, hookSource.indexOf('useWindowBounds()'))
     expect(tabEffect).toContain('viewportMeasuredRef.current = false')
     expect(tabEffect).toContain('scheduleViewportRefit()')
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TERMINAL_HTML_WRITE_QUEUE } from './write-queue'
+import { TERMINAL_HTML_WRITE_QUEUE, TERMINAL_WEBVIEW_WRITE_SLICE_UNITS } from './write-queue'
 
 // Why: this slice is JS text injected into the WebView document, so the tests evaluate the
 // emitted source against the same surrounding vars the document declares rather than asserting
@@ -111,7 +111,7 @@ describe('terminal WebView write queue', () => {
   })
 
   // Distinct contents per chunk: with one shared string the sum below would count the same
-  // 64 KB string 128 times and read identically even if nothing were released.
+  // string 128 times and read identically even if nothing were released.
   function distinctChunks(count: number, codeUnits: number): string[] {
     return Array.from({ length: count }, (_v, i) => {
       const marker = `chunk-${i}:`
@@ -128,7 +128,7 @@ describe('terminal WebView write queue', () => {
   // The measured quantity is a count of queue-reachable string code units, not heap bytes:
   // xterm may still hold the submitted chunk, so this proves only that the queue released it.
   it('retains one chunk instead of every dequeued chunk after 127 of 128 dequeues', () => {
-    const CHUNK_CODE_UNITS = 65_536
+    const CHUNK_CODE_UNITS = TERMINAL_WEBVIEW_WRITE_SLICE_UNITS
     const CHUNK_COUNT = 128
     const chunks = distinctChunks(CHUNK_COUNT, CHUNK_CODE_UNITS)
     const measure = (source: string): number => {

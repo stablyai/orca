@@ -3,6 +3,7 @@
 // nextQueuedWrite() clears each slot before advancing the head; otherwise consumed slots keep
 // already-submitted chunks reachable until compaction, which is up to half a backlog away.
 // Kept out of the template literal below: anything inside it ships to every device.
+export const TERMINAL_WEBVIEW_WRITE_SLICE_UNITS = 4 * 1024
 export const TERMINAL_HTML_WRITE_QUEUE = `  function resetWriteQueue() {
     writeQueue = [];
     writeQueueHead = 0;
@@ -37,7 +38,20 @@ export const TERMINAL_HTML_WRITE_QUEUE = `  function resetWriteQueue() {
   }
 
   function enqueueWrite(data) {
-    writeQueue.push(normalizeStatusDotPresentation(data));
+    var normalized = normalizeStatusDotPresentation(data);
+    if (normalized.length <= ${TERMINAL_WEBVIEW_WRITE_SLICE_UNITS}) {
+      writeQueue.push(normalized);
+      return;
+    }
+    var offset = 0;
+    while (offset < normalized.length) {
+      var end = Math.min(normalized.length, offset + ${TERMINAL_WEBVIEW_WRITE_SLICE_UNITS});
+      var leftCodeUnit = normalized.charCodeAt(end - 1);
+      var rightCodeUnit = normalized.charCodeAt(end);
+      if (end < normalized.length && leftCodeUnit >= 0xd800 && leftCodeUnit <= 0xdbff && rightCodeUnit >= 0xdc00 && rightCodeUnit <= 0xdfff) end--;
+      writeQueue.push(normalized.slice(offset, end));
+      offset = end;
+    }
   }
 
   function enqueueWriteBoundary(callback) {
