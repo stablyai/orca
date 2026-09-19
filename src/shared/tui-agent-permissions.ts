@@ -20,6 +20,7 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   continue: '--allow "*"',
   cursor: '--yolo',
   kimi: '--yolo',
+  muse: '--yolo',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',
   rovo: '--yolo',

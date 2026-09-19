@@ -49,7 +49,10 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   devin: 'devin',
   ante: null,
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
-  trae: 'trae-cn'
+  trae: 'trae-cn',
+  // Why: no verified community-skills-CLI key for Muse Spark yet; per this
+  // file's rule an uncertain mapping is null (dropped) rather than guessed.
+  muse: null
 } satisfies Record<TuiAgent, string | null>
 
 /**
