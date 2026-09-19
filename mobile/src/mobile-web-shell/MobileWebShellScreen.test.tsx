@@ -405,6 +405,36 @@ describe('the hybrid shell screen', () => {
     ).toContain('The downloaded workspace could not be opened.')
   })
 
+  it('reports a URL nothing on this phone could open, which is the dead tap that survives', async () => {
+    dependencies.client = createFakeRpcClient()
+    const failure = new Error('no activity found')
+    dependencies.openUrl.mockReturnValue(Promise.reject(failure))
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
+      })
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: {
+          json: clientFrame({
+            type: 'notify',
+            name: 'externalLink',
+            url: 'mailto:someone@example.com'
+          })
+        }
+      })
+    })
+    // Nothing crosses back for a notify, so silence here is the one dead tap this verb does not
+    // rule out: the page was told the frame left and the phone opened nothing.
+    expect(warned.mock.calls).toContainEqual([
+      '[web-shell] could not open a URL for the page',
+      'mailto:someone@example.com',
+      failure
+    ])
+    warned.mockRestore()
+  })
+
   it('pops its own stack when the page hands its back button over', async () => {
     dependencies.client = createFakeRpcClient()
     const tree = await render(readyState('session-one'))

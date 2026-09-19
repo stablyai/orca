@@ -182,10 +182,15 @@ export function MobileWebShellScreen({
     onNavigate: (href: string) => {
       router.push(href)
     },
-    // Straight to the system handler. The envelope allowlisted the scheme before this ran, and the
-    // rejection is swallowed because this is a native frame handler with nowhere to put a throw.
+    // Straight to the system handler. The envelope allowlisted the scheme before this ran, so the
+    // only failure left is a device with nothing registered for it — a `mailto:` on a phone with no
+    // mail account. Reported rather than swallowed: nothing crosses back for a notify, so this is
+    // the one dead tap the verb does not rule out, and silence is what would hide it. Still not
+    // rethrown, because this runs on the native frame handler.
     onExternalLink: (url: string) => {
-      void Linking.openURL(url).catch(() => {})
+      void Linking.openURL(url).catch((error: unknown) => {
+        console.warn('[web-shell] could not open a URL for the page', url, error)
+      })
     },
     // The page's own Back goes nowhere: it holds the one history entry the entry wrote, so the only
     // stack to pop is this one.
