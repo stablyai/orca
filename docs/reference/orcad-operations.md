@@ -1,8 +1,9 @@
 # Running orcad
 
-`orcad` is the Orca runtime served from plain Node. This is the contract between it and
-whatever supervises it: what it binds, what it owns on disk, who restarts what, and what its
-readiness payload actually proves.
+`orcad` is the headless Orca runtime. Managed installs run from their slot-local pinned Bun
+executable; host Node is considered only when rolling back to a complete pre-Bun slot whose native
+dependencies pass a load probe. This is the contract between orcad, its terminal daemon, the managing
+desktop, and any external supervisor.
 
 ## Two long-lived processes, not one
 
@@ -10,7 +11,7 @@ A deployment is **orcad** plus **the terminal daemon**.
 
 |            | orcad                            | terminal daemon                       |
 | ---------- | -------------------------------- | ------------------------------------- |
-| Started by | the supervisor                   | orcad, detached                       |
+| Started by | the desktop or supervisor        | orcad, detached                       |
 | Owns       | RPC, git, worktrees, persistence | every local PTY                       |
 | Lifetime   | one supervised run               | detached from orcad, not its service  |
 | Endpoint   | `ws://<bind>:<port>`             | `<data-root>/daemon/daemon-v<N>.sock` |
@@ -60,6 +61,7 @@ It refuses to start when:
 | `orcad_data_root_shared`               | the root is group/world accessible and could not be tightened |
 | `orcad_instance_lock_held`             | another live orcad owns this root                             |
 | `orcad_instance_lock_foreign_identity` | the lock belongs to a different identity                      |
+| `orcad_instance_lock_unreadable`       | the existing lock cannot safely identify its holder           |
 | `orcad_data_root_unusable`             | the root cannot be created, stat'd or written                 |
 
 A root that is merely too permissive and that we own is tightened to `0700` rather than
@@ -69,7 +71,14 @@ permissions are not ours to fix. Windows is exempt from the owner and mode check
 not expressible as a POSIX mode, and `statSync().mode` there reports a synthesized one.
 
 A dead holder's record is reclaimed (PID plus process start time, so a recycled PID does not
-read as alive). A record belonging to a different identity is never reclaimed.
+read as alive). A record belonging to a different identity is never reclaimed. Malformed,
+oversized, or unreadable records fail closed: the operator must first stop orcad and then remove
+the stale lock, because an unreadable record is not proof that its holder has exited.
+
+Startup failure and normal shutdown unwind acquired runtime resources before releasing the lock.
+Cleanup attempts every registered step even if an earlier step fails. If any cleanup fails, the
+lock remains held until the process exits; failure is not permission for a second runtime writer.
+The terminal daemon is disconnected, not killed, during this cleanup.
 
 **The lock scopes one role — who is the runtime.** It deliberately says nothing about the
 daemon, which lives under `<data-root>/daemon` and fences its own endpoint with its own PID
@@ -99,13 +108,17 @@ not admit new work after the census. Orca does not yet provide an atomic census-
 
 ### Who supervises orcad
 
-An external supervisor (systemd, launchd, a process manager). orcad conforms to it:
+The managed flow launches orcad detached over SSH and records the exact slot PID. A manual deployment
+may instead use systemd, launchd, or another process manager. orcad conforms to either model:
 
 - **Readiness.** One JSON line on stdout (`--json`), `type: "orca_server_ready"`, published
   after the listener is bound and the daemon verdict is in. There is no separate readiness
   socket; the line is the signal. Set the supervisor's start timeout generously — the daemon
   launch has its own retries and can take tens of seconds on a cold host.
-- **Shutdown.** `SIGTERM` or `SIGINT` starts a graceful stop. A **second** signal exits
+- **Shutdown.** `SIGTERM` or `SIGINT` starts a graceful stop. Managed lifecycle writes the
+  slot-local `.orcad-stop-request` on every platform so a stale, reused PID can never direct a
+  signal at an unrelated process. The runtime consumes that request through the same graceful
+  path. A **second** signal exits
   immediately with code 1 rather than being swallowed — a supervisor's second signal means
   its first deadline elapsed, and waiting silently is what turns a stop into a `SIGKILL`,
   the one teardown that skips the daemon handoff. orcad also imposes its own 15s deadline
@@ -124,8 +137,9 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 - **Logs.** orcad writes human-readable diagnostics to **stderr** and its readiness contract
   to **stdout**; the supervisor owns capture and rotation. The daemon, being detached, writes
   its own NDJSON lifecycle log to `<data-root>/logs/daemon.log` (suppressed by
-  `ORCA_DIAGNOSTICS_DISABLED=1`). Rotation of that file is not implemented — see
-  [What is not covered](#what-is-not-covered).
+  `ORCA_DIAGNOSTICS_DISABLED=1`). The daemon log rotates at 5 MiB and retains
+  `daemon.log.1` and `daemon.log.2`; logging failures disable that sink without affecting
+  terminal service.
 
 ### orcad supervising the daemon
 
@@ -146,7 +160,145 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 - **Shutdown.** orcad never stops the daemon. A daemon that was never adopted retires itself
   after its adoption window; an adopted one stays resident (see Decommissioning).
 
-### Decommissioning
+### Managed decommissioning
+
+Ordinary orcad shutdown deliberately disconnects from the daemon without killing it. Managed
+**Stop and unlink** is different: it must retire an idle daemon and must not race a terminal created by
+another paired client.
+
+The managing desktop therefore does not trust a separate “zero sessions” census followed by stop.
+While holding the host activation fence it asks the running orcad for `orcad.decommissionIfIdle`:
+
+1. orcad fences new adapter spawns and refuses if a create/attach is already in flight;
+2. every compatible current or preserved daemon generation must supply authoritative zero-session
+   inventory;
+3. each daemon executes `shutdownIfIdle`, which atomically fences daemon admission and accepts only
+   with no live sessions and no competing daemon transport; and
+4. orcad keeps its adapter fence closed after acceptance or any ambiguous partial retirement.
+
+The verdict vocabulary stays exact:
+
+| Verdict        | Required host evidence                                                           |
+| -------------- | -------------------------------------------------------------------------------- |
+| `live`         | positive daemon inventory counted one or more live terminal sessions             |
+| `unverifiable` | inventory, compatibility, admission, transport, or contact was not proved        |
+| `exited`       | the SSH execution host positively confirmed the recorded orcad process is absent |
+
+Before the request, the client writes a prepared decommission transaction and sends its transaction
+ID. A receipt-capable orcad atomically writes the version-bound `decommissioning` marker to
+`~/.orca-remote/orcad-active.json` before acknowledging that exact ID. The client then records the
+admission-fenced and process-exited phases around the graceful stop request. If the RPC response,
+contact, or local cleanup is lost, recovery resumes from that host-owned receipt and transaction; it
+does not reopen terminal admission or reinterpret silence as exit. After confirmed exit the record is
+deactivated, then the client closes the tunnel, retires runtime and browser transports, clears the
+browser partition, releases SSH-target ownership, and removes the managed environment. A failed cleanup
+leaves the environment linked for retry.
+
+Stop/unlink is refused while that environment is the desktop's Active Server. Choose another Active
+Server first. Do not manually signal daemon PIDs or delete the data root as a substitute for this
+contract; either action bypasses the evidence and retry boundaries.
+
+## Managed updates and rollback
+
+Managed deploy, update, rollback, and stop/unlink are production runtime-environment APIs surfaced in
+Settings → Remote Orca Servers. The SSH registration is exclusively claimed by its managed environment,
+so the same target cannot simultaneously act as a direct SSH runtime.
+
+Activation is serialized by a host-wide lock. For an existing runtime it positively stops orcad before
+capturing shared state, so the archive is quiescent. If capture fails, the candidate is not launched and
+the incumbent is restarted and health-gated. A candidate launch exception or rejected readiness also
+restores the incumbent state and health-gates the active runtime before releasing the fence. Candidate
+readiness must prove bundle identity and terminal-daemon health before the activation record changes.
+The readiness file is bounded and schema-validated; activation also requires the exact managed loopback
+port, runtime kind, PTY backend, build hash, and runtime-scoped pairing offer. A complete malformed
+readiness line fails activation instead of polling indefinitely.
+
+For a new Bun candidate, the daemon must also report `runtimeKind: bun` and
+`ptyBackend: bun-terminal` from its own health probe. This prevents a Bun orcad process from
+silently accepting a Node-owned daemon after a mixed-version restart; older daemons remain readable
+for rollback and compatibility paths.
+
+Activation writes its prepared transaction before the first mutation and advances it through
+incumbent-stopped, snapshot-captured, and candidate-ready phases. Rollback separately journals
+incumbent-stopped, rescue-captured, rollback-state-restored, and target-ready. Settings displays the
+interrupted operation/phase and replaces ordinary mutation controls with Recover.
+
+The activation fence cannot be reclaimed merely because it is old. After the 20-minute recovery window,
+Recover may take the fence only to compare the current activation record with both journaled sides,
+prove candidate quiescence before state restoration, and health-gate the runtime it keeps. An unreadable
+or inconsistent journal, changed record, unproved quiescence, or failed health gate remains
+`unverifiable` and fenced for operator inspection. Ordinary incomplete install locks keep their bounded
+stale-takeover behavior.
+
+When no managed activation record exists, the host first checks `orcad.lock` and `orca-runtime.json`.
+A live owner or an unreadable, malformed, non-regular, or oversized record refuses first activation;
+force cannot bypass ownership. This prevents a rejected Bun candidate from restoring over an
+unmanaged runtime that is still writing the shared data root.
+
+Managed slots use one safe SemVer-compatible version rule for install, activation records, inventory,
+and GC. Prerelease/build versions such as `1.4.178-rc.2+abcdef123456` remain visible after installation.
+Update and rollback refuse while a durable `decommissioning` marker exists, even when forced, so a
+partially retired host cannot be silently reactivated.
+
+GC first renames a removable slot to a strict model-owned tombstone. Relay and orcad clean only their
+own tombstone names, and those names are excluded from the version-directory classifier so interrupted
+cleanup cannot be reclassified as an installed slot.
+
+Rollback requires the recorded snapshot, a trustworthy snapshot-presence verdict, and proof that no
+live terminal started after activation. A Bun slot uses its bundled runtime. A pre-Bun slot uses host
+Node only after `node-pty` resolves and loads from that slot; an incomplete or ineligible slot is refused
+before launch. After the active runtime stops, rollback captures current state in a unique durable
+rescue directory. It extracts and validates the old archive in staging before removing live profile
+members. Restore failure or an unhealthy old runtime restores the rescue and restarts the active
+runtime. An interrupted rollback uses the durable rescue verdict and last phase to perform the same
+safe restoration; `unverifiable` recovery retains the activation fence.
+
+### Workload conversion is not migration
+
+Managed Node→Bun update preserves daemon-owned terminals because the daemon stays on the same host and
+is adopted by the new orcad. Other execution models have different owners and are intentionally
+refused:
+
+- direct-SSH repository/folder rows are client control-plane state;
+- direct-SSH terminals belong to the relay and cannot transfer their PTY identity to orcad;
+- independently paired runtimes have no managed activation transaction to adopt; and
+- local Electron workloads remain desktop-owned.
+
+Do not delete workspace rows or terminate work merely to make the SSH target claimable. Settings
+preflights the selected target and lists exact persisted repositories, folder workspaces, non-final
+relay PTY leases, and saved forwards. That inventory is read-only: it does not contact the execution
+host or establish `exited`.
+
+Managed deployment can durably fence an idle direct-SSH source, stage its bounded static catalog without
+publication, commit it with an exact host receipt, and reconcile lost replies. The optional dormant
+payload also carries worktree metadata, lineage whose two ends are in scope, sparse presets, and
+repo/path retirement registries. It also carries inactive owner-scoped session/tab/layout rows only
+when they contain no PTY ID, browser profile, external runtime/file route, or active selection. Dormant
+source-partition focus scalars are carried when they reference captured entities and are re-keyed to
+the destination-local host. Inline
+and stored scrollback bytes transfer through bounded content-addressed snapshots whose references
+publish only after exact bytes are durable; source files retire only after the destination receipt.
+Dormant sleeping-agent records transfer only when their provider resume identity stays on the same host
+and their authority can rekey to destination-local ownership; cross-target, orchestration-fenced, and
+missing-pane records remain blockers. Disabled SSH-owned automations also transfer when their entire
+retained history is final; they are rekeyed to destination-local execution and scheduler ownership
+while historical terminal IDs and output snapshots remain intact. Enabled, in-flight, duplicate,
+cross-host, malformed, or externally routed automation state remains a blocker. Representable mobile
+selections and UI routing transfer with exact destination conflict checks. Durable client-hosted browser
+page rows transfer when their browser workspace is in the captured session; the owner map is rekeyed but
+the browser workspace id is preserved, and duplicate or out-of-scope page references fail closed. Saved
+forwards remain owned by the fenced source target without opening duplicate listeners. Source drift keeps
+the fence;
+receipt-gated retirement removes only exact captured source keys and retains shared source namespace
+tombstones. Recoverable sessions, main-owned terminal recovery, cross-scope lineage, leases, and
+unsupported client projections remain blockers. Older desktops keep the target fence and journal but cannot resume its phases; if they
+strip the environment link during a rewrite, current code repairs it on re-upgrade only after exact
+endpoint, owner, and generation proof. A `live` or `unverifiable` relay PTY still blocks conversion.
+
+Release SSH relay packages are strict Bun bundles. They carry libc-specific Linux runtimes and
+target-native watcher binaries; deployment verifies the exact runtime before launch and does not
+require system Node, npm, or a remote compiler. Node is consulted only when reconnecting to a legacy
+relay slot that predates bundled Bun.
 
 After a PID-scoped stop, an adopted daemon stays resident so the next orcad can reattach.
 A combined-unit systemd stop kills it instead. To retire a process-scoped deployment, apply
@@ -163,6 +315,9 @@ buildHash    sha256 (16 hex) of the running orcad bundle — build identity that
              string cannot give, so a rollback that did not replace the file is visible
 buildVersion ORCA_VERSION
 nodeVersion  / nodeAbi   process.versions.node / .modules — the ABI native addons must match
+runtimeKind / runtimeVersion   bun + pinned Bun version for managed slots (optional for skew)
+ptyBackend                    bun-terminal for Bun slots (optional for skew)
+libc / glibcVersion           Linux slot libc and observed glibc version when available
 platform / arch / pid
 terminalDaemon:
   state              live | degraded | absent
@@ -173,6 +328,8 @@ terminalDaemon:
                      this orcad after an update — reporting orcad's version for both would
                      hide exactly that)
   entryPath / protocolVersion
+  runtimeKind / runtimeVersion  runtime reported by the daemon process itself (optional for skew)
+  ptyBackend                    backend selected by that daemon (`bun-terminal` or `node-pty`)
   selfTest { ok, coverage, verdict, durationMs }
 ```
 
@@ -194,22 +351,41 @@ because those terminals die with orcad. A daemon that answered and then failed i
 probe is also `degraded`, not `absent`: it still holds live sessions, and calling those
 exited would be the verdict `ssh-execution-boundary.md` forbids guessing.
 
+The same health object is available through the authenticated `orcad.health` JSON-RPC method.
+Results and concurrent probes share a five-second cache so a supervisor cannot create unbounded
+daemon PTY self-test churn. `status.get` separately includes optional `degradations[]` entries for
+unavailable browser and terminal capabilities; absence means no reported degradation.
+
+## Disposable SSH lifecycle acceptance
+
+Run `pnpm smoke:orcad-ssh` with Docker running. It builds the matching Linux Bun artifact
+and provisions a Debian SSH host without Node/npm; the test checks their absence over SSH
+before deployment. Set `ORCA_REVIEW_ORCAD_ARTIFACT_DIR` to a fresh output directory to retain
+the artifact without replacing the default `out/orcad-ssh-lifecycle` build.
+
+The test covers real terminal input, daemon survival, half-open and disconnected SSH recovery,
+interrupted activation/rollback, fresh input after update/rollback, identity-bound live-stop
+refusal/cancellation, lost decommission acknowledgment and completed-stop retry. Terminal
+probes require standalone output lines rather than matching echoed input. This does not prove
+live ownership transfer from an incumbent direct-SSH relay, the Linux glibc floor, or other
+platforms; those require separate acceptance runs.
+
 ## What is not covered
 
 Named here so nothing reads as implemented that is not:
 
-- **A continuous health endpoint.** `health` is published once, in the readiness payload. A
-  supervisor's periodic liveness/readiness probe needs an HTTP or RPC surface over the same
-  `collectOrcadHealth()`; that surface does not exist yet.
+- **An unauthenticated HTTP health endpoint.** Periodic health exists only as authenticated JSON-RPC;
+  supervisors that cannot hold a pairing credential must use the readiness line and process state.
+- **Headless credential administration.** The desktop runtime can list and revoke its own mobile and
+  runtime grants, and offer creation can rotate pending grants, but orcad exposes no operator CLI/RPC
+  for listing, revoking, expiring, or security-auditing credentials on the unattended host.
+- **A hosted web client.** orcad does not configure a static web-client root and therefore advertises
+  `webClientUrl: null`; managed clients connect through the SSH tunnel with the pairing offer.
+- **A state schema version.** Managed rollback is safe through a quiescent pre-activation snapshot,
+  but the persisted store itself still carries no schema version.
+- **Universal workload migration.** Managed Node→Bun upgrades and the bounded direct-SSH catalog plus
+  dormant metadata/inactive-session/scrollback/sleeping-agent/settled-automation tranche are covered.
+  Main-owned terminal recovery, unsupported client projections, and live PTY ownership—and independently
+  paired or local desktop ownership—cannot yet be imported universally.
 - **Systemd-isolated daemon supervision.** orcad and its daemon currently share one service
   cgroup, so a combined-unit stop cannot preserve live terminals.
-- **libc slot.** There is no honest health value to publish until native libc detection owns
-  it.
-- **`degradations[]`.** The readiness contract does not publish this collection yet.
-- **Credential administration** (list / revoke / rotate devices, expiring pending offers,
-  structured security logging).
-- **Pinned-port fail-closed.** A pinned `--port` still falls back to an OS-assigned port on
-  conflict.
-- **Reconciling `webClientUrl` with reachability** under the loopback default.
-- **State-schema rollback rules.**
-- **Daemon log rotation.** `<data-root>/logs/daemon.log` grows unbounded.

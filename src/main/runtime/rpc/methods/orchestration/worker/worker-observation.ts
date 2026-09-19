@@ -9,6 +9,7 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerForDispatch
 } from '../../orchestration-structured-worker-lifecycle'
+import { snapshotDelegatedPtyProviderRoutes } from '../../../../../ipc/pty/provider/delegated-provider-routes'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -58,6 +59,21 @@ export async function inspectWorkerTerminal(
   }
   const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
   if (!terminal) {
+    const dispatch = db.getDispatchContextById(dispatchId)
+    const reserved = snapshotDelegatedPtyProviderRoutes().some(
+      ({ identity, isCurrent }) =>
+        `${identity.terminalId}:${identity.incarnationId}` === dispatch?.process_incarnation &&
+        identity.destinationRuntimeId === runtime.getRuntimeId() &&
+        isCurrent()
+    )
+    if (reserved) {
+      return {
+        terminal: null,
+        exact: false,
+        status: 'unverifiable',
+        reason: 'delegated_terminal_observation_unavailable'
+      }
+    }
     return { terminal: null, exact: false, status: 'missing' }
   }
   const exact = db.isDispatchProcessCurrent({

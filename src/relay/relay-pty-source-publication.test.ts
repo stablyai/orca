@@ -157,6 +157,46 @@ describe('RelayPtySourcePublication', () => {
     await flushRequests()
   })
 
+  it('exposes drained owner evidence only after writer settlement and final source credit', async () => {
+    const harness = await createHarness(4, false)
+    const resolver = harness.publication.ownershipTransfer
+    const source = resolver.resolve('pty-1')!
+    expect(resolver.inspectDrainedDelivery(source, 1)?.receivedEndSu).toBe(0)
+    harness.publication.publish('pty-1', { data: 'abcd' }, false)
+    expect(resolver.inspectDrainedDelivery(source, 1)).toBeNull()
+    harness.sourceSettlements[0]({ ok: true })
+    expect(resolver.inspectDrainedDelivery(source, 1)).toBeNull()
+    const output = harness.writes.map(notification).find((frame) => frame?.method === 'pty.data')!
+    dispatcher!.feed(
+      encodeJsonRpcFrame(
+        {
+          jsonrpc: '2.0',
+          method: 'pty.ackData',
+          params: {
+            acknowledgements: [
+              {
+                id: 'pty-1',
+                clientGeneration: output.params.clientGeneration,
+                ownerGeneration: output.params.ownerGeneration,
+                deliveryToken: output.params.deliveryToken,
+                creditedEndSu: 4
+              }
+            ]
+          }
+        },
+        2,
+        0
+      )
+    )
+    await flushRequests()
+    expect(resolver.inspectDrainedDelivery(source, 1)).toMatchObject({
+      receivedEndSu: 4,
+      sentEndSu: 4,
+      creditedEndSu: 4
+    })
+    expect(resolver.inspectDrainedDelivery(source, 2)).toBeNull()
+  })
+
   it('settles a reentrant cumulative ACK only after the matching writer callback', async () => {
     const harness = await createHarness(4, false)
     expect(harness.publication.publish('pty-1', { data: 'abcdefgh' }, false)).toBe(true)

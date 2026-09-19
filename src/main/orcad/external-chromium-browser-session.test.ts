@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir } from 'node:fs/promises'
 
 const runProcessMock = vi.fn()
 vi.mock('../../shared/child-process/run-process', () => ({
@@ -21,7 +22,7 @@ const BASE = {
   sessionName: 'orca-orcad-0123456789abcdef'
 }
 
-type Spec = { args?: readonly string[]; env?: NodeJS.ProcessEnv }
+type Spec = { args?: readonly string[]; env?: NodeJS.ProcessEnv; signal?: AbortSignal }
 
 function commands(): string[][] {
   return runProcessMock.mock.calls.map((call) => [...((call[0] as Spec).args ?? [])])
@@ -30,7 +31,59 @@ function commands(): string[][] {
 describe('orcad external-chromium agent-browser environment', () => {
   beforeEach(() => {
     runProcessMock.mockReset()
+    vi.mocked(mkdir).mockClear()
   })
+
+  it('does no work when startup is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const session = new ExternalChromiumBrowserSession(
+      '/opt/orca/agent-browser',
+      { executablePath: BASE.executablePath, provider: 'chromium' },
+      '/state'
+    )
+    await expect(session.start(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(mkdir).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['tab', 'close', 'open'])(
+    'does not continue startup after abort during %s',
+    async (phase) => {
+      const controller = new AbortController()
+      runProcessMock.mockImplementation(async (spec: Spec) => {
+        if (spec.args?.includes(phase)) {
+          controller.abort()
+        }
+        return {
+          code: 0,
+          signal: null,
+          stdout: JSON.stringify({ success: true, data: { tabs: [] } }),
+          stderr: '',
+          timedOut: false
+        }
+      })
+      const session = new ExternalChromiumBrowserSession(
+        '/opt/orca/agent-browser',
+        { executablePath: BASE.executablePath, provider: 'chromium' },
+        '/state'
+      )
+      await expect(session.start(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+      const specs = runProcessMock.mock.calls.map(([spec]) => spec as Spec)
+      const issued = specs.map((spec) =>
+        spec.args?.find((arg) => ['tab', 'close', 'open'].includes(arg))
+      )
+      expect(issued).toEqual(
+        phase === 'tab' ? ['tab'] : phase === 'close' ? ['tab', 'close'] : ['tab', 'close', 'open']
+      )
+      for (const spec of specs) {
+        expect(spec.signal).toBe(spec.args?.includes('close') ? undefined : controller.signal)
+      }
+      await session.stop()
+      expect(runProcessMock.mock.lastCall?.[0]).toMatchObject({ signal: undefined })
+      expect(commands().at(-1)).toContain('close')
+    }
+  )
 
   // Why: this daemon owns the user's remote Chromium, so an idle bound would close a live browser.
   it('never bounds the daemon that owns the Chromium tree', () => {

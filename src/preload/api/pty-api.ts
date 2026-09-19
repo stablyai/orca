@@ -72,8 +72,9 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  write: (id: string, data: string) => void
-  writeAccepted: (id: string, data: string) => Promise<boolean>
+  write: (id: string, data: string, options?: { operationId?: string }) => void
+  writeAccepted: (id: string, data: string, options?: { operationId?: string }) => Promise<boolean>
+  retireWriteOperation?: (id: string, operationId: string) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void

@@ -67,6 +67,8 @@ export type RpcContext = {
   signal?: AbortSignal
   // Why: per-WebSocket key so the server reaps a closing socket's subscriptions without touching sibling sockets sharing the deviceToken.
   connectionId?: string
+  // Why: paired-runtime ownership bindings must reject a socket generation that reconnects under the same device.
+  transportGeneration?: number
   // Why: shared-control multiplexes many logical streams over one socket; the frame id lets handlers register cleanup per logical stream.
   requestId?: string
   // Why: paired mobile device token; state-owning handlers use it to clean up when that device disconnects.

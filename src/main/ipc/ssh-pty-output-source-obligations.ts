@@ -14,8 +14,23 @@ import type {
   SshPtySourceCancellationRequest
 } from './ssh-pty-output-intake-contract'
 import { SshPtyRemoteSourceRangeConsumers } from './ssh-pty-remote-source-range-consumers'
-import type { SshPtySourceAdmissionReservation } from './ssh-pty-source-obligation-contract'
+import type {
+  SshPtySourceAdmissionReservation,
+  SshPtySourceConsumerId
+} from './ssh-pty-source-obligation-contract'
 import { SshPtySourceObligationCoordinator } from './ssh-pty-source-obligation-coordinator'
+import {
+  sourceAcceptedCheckpoint,
+  requireSourceCheckpointIdentity,
+  type SshPtyAcceptedSourceCheckpoint
+} from './ssh-pty-source-checkpoint'
+export type { SshPtyAcceptedSourceCheckpoint } from './ssh-pty-source-checkpoint'
+import {
+  SshPtyOwnershipTransferObligations,
+  type SshPtyOwnershipTransferSourceRange
+} from './ssh-pty-ownership-transfer-obligations'
+
+export type { SshPtyOwnershipTransferSourceRange } from './ssh-pty-ownership-transfer-obligations'
 
 export type SshPtyOutputSourceReservation = Readonly<{
   admission: SshPtySourceAdmissionReservation
@@ -27,19 +42,10 @@ export type SshPtySourceCancellationProofCommit = Readonly<{
   proof: SshPtySourceCancellationProof
 }>
 
-export type SshPtyAcceptedSourceCheckpoint = Readonly<{
-  id: string
-  providerGeneration: number
-  clientGeneration: number
-  ownerGeneration: number
-  ptyIncarnation: string
-  deliveryToken: string
-  acceptedSourceEndSu: number
-}>
-
 export class SshPtyOutputSourceObligations {
   private readonly coordinator: SshPtySourceObligationCoordinator
   private readonly remoteConsumers: SshPtyRemoteSourceRangeConsumers
+  private readonly ownershipTransferObligations: SshPtyOwnershipTransferObligations
   private readonly openedTokens = new Set<string>()
   // Why: fence/recovery consumers key checkpoints by app pty id, but the wire
   // ACK path needs the relay id kept on identity.id — record both.
@@ -48,7 +54,10 @@ export class SshPtyOutputSourceObligations {
     Readonly<{ appPtyId: string; identity: PtySourceDeliveryIdentity }>
   >()
 
-  constructor(publish: SshPtyOutputDataEventPublisher | undefined) {
+  constructor(
+    publish: SshPtyOutputDataEventPublisher | undefined,
+    options: { ownershipTransferOutputEnabled?: boolean } = {}
+  ) {
     this.coordinator = new SshPtySourceObligationCoordinator({
       onTokenClosed: (identity) => this.removeIdentity(identity),
       publish:
@@ -57,34 +66,41 @@ export class SshPtyOutputSourceObligations {
           onSettled({ ok: false, error: new Error('SSH PTY source ACK publisher unavailable') }))
     })
     this.remoteConsumers = new SshPtyRemoteSourceRangeConsumers(this.coordinator)
+    this.ownershipTransferObligations = new SshPtyOwnershipTransferObligations(
+      this.coordinator,
+      options.ownershipTransferOutputEnabled === true
+    )
   }
 
   get remoteHooks(): RemoteTerminalSourceRangeConsumerHooks {
     return this.remoteConsumers.hooks
   }
-
   reserve(
     event: SshPtyOutputDataEvent,
     projection: DesktopProjectionSpan
   ): SshPtyOutputSourceReservation {
     const span = this.toSourceSpan(event, projection)
-    const identity = this.sourceIdentity(span)
+    const identity = span
     const tokenKey = ptySourceDeliveryKey(identity)
     if (!this.openedTokens.has(tokenKey)) {
       this.coordinator.open(identity, span.sourceStartSu)
       this.openedTokens.add(tokenKey)
       this.identityByPty.set(this.ptyKey(event), Object.freeze({ appPtyId: event.id, identity }))
     }
+    const requiredConsumers: SshPtySourceConsumerId[] = [
+      'model',
+      'desktop',
+      ...this.remoteConsumers.requiredConsumers(event.id)
+    ]
+    const transfer = event.source?.ownershipTransfer
+    if (transfer && this.ownershipTransferObligations.isEnabled()) {
+      requiredConsumers.push(`ownership-transfer:${transfer.bridgeId}`)
+    }
     return Object.freeze({
       span,
-      admission: this.coordinator.reserve(identity, span, [
-        'model',
-        'desktop',
-        ...this.remoteConsumers.requiredConsumers(event.id)
-      ])
+      admission: this.coordinator.reserve(identity, span, requiredConsumers)
     })
   }
-
   commit(
     reservation: SshPtyOutputSourceReservation,
     ptyId: string,
@@ -98,14 +114,15 @@ export class SshPtyOutputSourceObligations {
       modelSequenceEnd
     )
   }
-
+  settlePendingOwnershipTransfer(span: PtySourceSpan): void {
+    this.ownershipTransferObligations.afterCommit(span)
+  }
   rollback(reservation: SshPtyOutputSourceReservation): boolean {
     return (
       this.coordinator.rollback(reservation.admission) ||
       this.coordinator.rollbackCommitted(reservation.admission)
     )
   }
-
   settleModel(span: PtySourceSpan): void {
     this.coordinator.settle({
       identity: span,
@@ -114,7 +131,6 @@ export class SshPtyOutputSourceObligations {
       reason: 'model-accepted'
     })
   }
-
   settleDesktop(span: DesktopProjectionSpan, reason: string): void {
     this.coordinator.settle({
       identity: span,
@@ -123,7 +139,9 @@ export class SshPtyOutputSourceObligations {
       reason
     })
   }
-
+  settleOwnershipTransfer(range: SshPtyOwnershipTransferSourceRange): void {
+    this.ownershipTransferObligations.settle(range)
+  }
   transferDesktop(span: DesktopProjectionSpan, reason: string): void {
     const transition = {
       identity: span,
@@ -135,26 +153,22 @@ export class SshPtyOutputSourceObligations {
       this.coordinator.commitTransfer(transition)
     }
   }
-
   sealPty(event: SshPtyOutputExitEvent): void {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (identity) {
       this.coordinator.seal(identity)
     }
   }
-
   markExitPublished(event: SshPtyOutputExitEvent): void {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (identity) {
       this.coordinator.markExitPublished(identity)
     }
   }
-
   whenPtyTerminal(event: SshPtyOutputExitEvent): Promise<void> {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     return identity ? this.coordinator.whenTerminal(identity) : Promise.resolve()
   }
-
   async requestPtyCancellationProof(
     event: SshPtyOutputExitEvent,
     cancel: (request: SshPtySourceCancellationRequest) => Promise<SshPtySourceCancellationProof>
@@ -167,11 +181,9 @@ export class SshPtyOutputSourceObligations {
     const proof = await cancel(request)
     return Object.freeze({ identity, proof })
   }
-
   commitPtyCancellationProof(commit: SshPtySourceCancellationProofCommit): void {
     this.coordinator.applyCancellationProof(commit.identity, commit.proof)
   }
-
   applyCancellationProof(
     event: SshPtyOutputExitEvent,
     proof: SshPtySourceCancellationProof
@@ -183,7 +195,6 @@ export class SshPtyOutputSourceObligations {
     this.coordinator.applyCancellationProof(identity, proof)
     return true
   }
-
   applyRecoveryCancellationProof(
     event: SshPtyOutputExitEvent,
     proof: SshPtySourceCancellationProof
@@ -193,8 +204,8 @@ export class SshPtyOutputSourceObligations {
       this.coordinator.applyRecoveryCancellationProof(identity, proof)
     }
   }
-
   closeGeneration(providerGeneration: number, reason: string): void {
+    this.ownershipTransferObligations.closeGeneration(providerGeneration)
     this.remoteConsumers.closeGeneration(providerGeneration, reason)
     this.coordinator.closeGeneration(providerGeneration, reason)
     const prefix = `${providerGeneration}\0`
@@ -209,7 +220,6 @@ export class SshPtyOutputSourceObligations {
       }
     }
   }
-
   acceptedCheckpoints(providerGeneration: number): readonly SshPtyAcceptedSourceCheckpoint[] {
     const checkpoints: SshPtyAcceptedSourceCheckpoint[] = []
     for (const record of this.identityByPty.values()) {
@@ -217,21 +227,11 @@ export class SshPtyOutputSourceObligations {
         continue
       }
       checkpoints.push(
-        Object.freeze({
-          // Why: fence/recovery keys are app pty ids; the bare relay id stays on identity.id.
-          id: record.appPtyId,
-          providerGeneration: record.identity.providerGeneration,
-          clientGeneration: record.identity.clientGeneration,
-          ownerGeneration: record.identity.ownerGeneration,
-          ptyIncarnation: record.identity.ptyIncarnation,
-          deliveryToken: record.identity.deliveryToken,
-          acceptedSourceEndSu: this.coordinator.modelAcceptedEnd(record.identity)
-        })
+        sourceAcceptedCheckpoint(record, this.coordinator.modelAcceptedEnd(record.identity))
       )
     }
     return Object.freeze(checkpoints)
   }
-
   acceptedCheckpoint(key: {
     ptyId: string
     providerGeneration: number
@@ -242,18 +242,28 @@ export class SshPtyOutputSourceObligations {
       ) ?? null
     )
   }
-
+  requireLiveSettlement(checkpoint: SshPtyAcceptedSourceCheckpoint) {
+    const identity = requireSourceCheckpointIdentity(
+      this.identityByPty.get(this.ptyKey(checkpoint)),
+      checkpoint
+    )
+    return this.coordinator.requireLiveSettlement(identity, checkpoint.acceptedSourceEndSu)
+  }
   dispose(): void {
+    this.ownershipTransferObligations.dispose()
     this.coordinator.dispose()
   }
-
-  getDebugSnapshot(): Readonly<{ openedTokens: number; ptyIdentities: number }> {
+  getDebugSnapshot(): Readonly<{
+    openedTokens: number
+    ptyIdentities: number
+    pendingOwnershipTransferSettlements: number
+  }> {
     return Object.freeze({
       openedTokens: this.openedTokens.size,
-      ptyIdentities: this.identityByPty.size
+      ptyIdentities: this.identityByPty.size,
+      pendingOwnershipTransferSettlements: this.ownershipTransferObligations.pendingCount()
     })
   }
-
   private toSourceSpan(
     event: SshPtyOutputDataEvent,
     projection: DesktopProjectionSpan
@@ -272,19 +282,16 @@ export class SshPtyOutputSourceObligations {
       displayEnd: projection.displayEnd,
       splittable: projection.splittable,
       transform: projection.transform,
+      ...(event.source?.ownershipTransfer
+        ? { ownershipTransfer: event.source.ownershipTransfer }
+        : {}),
       data: event.data
     })
   }
 
-  private sourceIdentity(source: PtySourceSpan): PtySourceDeliveryIdentity {
-    return source
-  }
-
-  private ptyKey(event: {
-    id: string
-    providerGeneration: number
-    ptyIncarnation: string
-  }): string {
+  private ptyKey(
+    event: Pick<SshPtyOutputDataEvent, 'id' | 'providerGeneration' | 'ptyIncarnation'>
+  ): string {
     return `${event.providerGeneration}\0${event.id}\0${event.ptyIncarnation}`
   }
 

@@ -3,11 +3,7 @@ import { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from './orca-r
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS
@@ -29,6 +25,11 @@ import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from './runtime-restored-orchestration-authority-sweep'
+import { isOutgoingPtyRegistrationFenced } from './outgoing-pty-registration-fence'
+import {
+  includeListedSshInventoryHosts,
+  isOutgoingPtyInventoryFenced
+} from './outgoing-pty-inventory-admission'
 
 export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
@@ -118,12 +119,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const sessions = sessionsResult.value.processes
     const queriedHostIds = new Set<ExecutionHostId>(sessionsResult.value.hostIds)
     if (connectionId === undefined) {
-      for (const session of sessions) {
-        const hostId = getPtyExecutionHost(session.id)
-        if (hostId && hostId !== 'foreign' && parseExecutionHostId(hostId)?.kind === 'ssh') {
-          queriedHostIds.add(hostId)
-        }
-      }
+      includeListedSshInventoryHosts(sessions, queriedHostIds)
+    }
+    if (isOutgoingPtyInventoryFenced(this, sessions, this.ptysById.values(), queriedHostIds)) {
+      return null
     }
     const { controllerIdentityByPtyId } = buildControllerTerminalIdentities(sessions)
     const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(resolvedWorktrees)
@@ -241,6 +240,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       this.refreshPtyForegroundAgent(session.id)
     }
     for (const pty of this.ptysById.values()) {
+      if (isOutgoingPtyRegistrationFenced(this, pty.ptyId)) {
+        continue
+      }
       if (connectionId !== undefined && pty.connectionId !== connectionId) {
         continue
       }

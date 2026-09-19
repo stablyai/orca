@@ -4,6 +4,7 @@ import type {
   SshPtyOutputExitEvent,
   SshPtyOutputIntakeDependencies
 } from './ssh-pty-output-intake-contract'
+import { settleSshPtyOutputExit } from './ssh-pty-output-exit'
 import { outputIntakeError, type SshPtyExitBarrier } from './ssh-pty-output-intake-validation'
 import type {
   SshPtyOutputSourceObligations,
@@ -96,6 +97,27 @@ export class SshPtyOutputExitDeadline {
           }
         }
       )
+    })
+  }
+
+  settle(
+    event: SshPtyOutputExitEvent,
+    validateNormalExit: () => void,
+    validateGeneration: () => void
+  ): Promise<void> {
+    return settleSshPtyOutputExit({
+      event,
+      admission: this.dependencies.admission,
+      projections: this.dependencies.projections,
+      dependencies: this.dependencies.intake,
+      validateGeneration: () => {
+        validateGeneration()
+        validateNormalExit()
+      },
+      prepareExit: () => this.prepareExitOnce(event),
+      afterAdmissionIdle: () => this.dependencies.sourceObligations.sealPty(event),
+      waitForSourceTerminal: () => this.dependencies.sourceObligations.whenPtyTerminal(event),
+      beforeFinalize: () => this.dependencies.sourceObligations.markExitPublished(event)
     })
   }
 

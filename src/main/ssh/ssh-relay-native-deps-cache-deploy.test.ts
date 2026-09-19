@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('fs', () => ({
-  existsSync: vi.fn().mockReturnValue(true),
+  existsSync: vi.fn((path: string) => !/bun-runtime(?:-|$)/u.test(path)),
   readFileSync: vi.fn().mockReturnValue('0.1.0+testhash')
 }))
 

@@ -285,6 +285,26 @@ describe('reply ownership matrix', () => {
 describe('main-side replay guard', () => {
   const DA1 = '\x1b[c'
 
+  it('strict model restoration preserves the sequence without answering historical queries', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-strict-seed')
+    await runtime.restoreHeadlessTerminalModel(
+      'pty-strict-seed',
+      {
+        modelData: `restored prompt${DA1}`,
+        cols: 80,
+        rows: 24,
+        sequence: 100
+      },
+      () => true
+    )
+    expect(replies).toEqual([])
+    expect(runtime.getPtyOutputSequence('pty-strict-seed')).toBe(100)
+    runtime.onPtyData('pty-strict-seed', DA1, Date.now())
+    await settle(runtime, 'pty-strict-seed')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+  })
+
   it('never answers queries embedded in a seeded snapshot, then answers live bytes', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-seed')
@@ -314,6 +334,25 @@ describe('main-side replay guard', () => {
 })
 
 describe('kitty flag re-seed parity (terminal-query-authority.md §kitty)', () => {
+  it('strict restore applies keyboard flags before the saved incomplete query', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-strict-kitty')
+    await runtime.restoreHeadlessTerminalModel(
+      'pty-strict-kitty',
+      {
+        modelData: 'retained',
+        cols: 80,
+        rows: 24,
+        sequence: 100,
+        restoreMetadata: { kittyKeyboardFlags: 5, pendingEscapeTailAnsi: '\x1b[?' }
+      },
+      () => true
+    )
+    expect(replies).toEqual([])
+    runtime.onPtyData('pty-strict-kitty', 'u', Date.now())
+    await settle(runtime, 'pty-strict-kitty')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?5u'])
+  })
   it('answers ?u with the persisted snapshot flags after a re-seed, silently applied', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-kitty')

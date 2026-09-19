@@ -1,4 +1,5 @@
 import type { ClientChannel } from 'ssh2'
+import { StringDecoder } from 'node:string_decoder'
 import type { SshConnection } from './ssh-connection'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
 import {
@@ -13,6 +14,9 @@ const MAX_EXEC_OUTPUT_CHARS = 1024 * 1024
 
 type ExecCommandOptions = SshExecOptions & {
   timeoutMs?: number
+  stdin?: string
+  maxOutputBytes?: number
+  beforeInput?: () => undefined
   // Why: a zero-exit command resolves with stdout alone, so the reason a wrapped-in-`|| echo`
   // probe failed is discarded. Callers that need that diagnostic opt in here rather than
   // folding stderr into stdout, where it would match the probe's own token strings.
@@ -44,11 +48,24 @@ export function isUnconfirmedSshCommandTermination(
 }
 
 export async function execCommand(
-  conn: SshConnection,
+  conn: Pick<SshConnection, 'exec' | 'usesSystemSshTransport'>,
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {
-  const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, ...execOptions } = options ?? {}
+  const {
+    timeoutMs = EXEC_TIMEOUT_MS,
+    onStderr,
+    stdin,
+    maxOutputBytes,
+    beforeInput,
+    ...execOptions
+  } = options ?? {}
+  if (
+    maxOutputBytes !== undefined &&
+    (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1)
+  ) {
+    throw new Error('SSH exec output limit is invalid')
+  }
   const signal = options?.signal
   if (signal?.aborted) {
     throw createSshOperationAbortError()
@@ -68,6 +85,9 @@ export async function execCommand(
     let stdout = ''
     let stderr = ''
     let settled = false
+    let outputBytes = 0
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
     let terminationError: SshCommandTerminationError | null = null
     let closeGraceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -131,12 +151,24 @@ export async function execCommand(
     }
     const onAbort = (): void => requestTermination(createSshOperationAbortError())
     const onStdoutData = (data: Buffer): void => {
-      stdout = appendExecOutputTail(stdout, data.toString('utf-8'))
+      outputBytes += Buffer.byteLength(data)
+      if (maxOutputBytes !== undefined && outputBytes > maxOutputBytes) {
+        requestTermination(new Error('SSH exec output limit exceeded'))
+        return
+      }
+      stdout = appendExecOutputTail(stdout, stdoutDecoder.write(data))
     }
     const onStderrData = (data: Buffer): void => {
-      stderr = appendExecOutputTail(stderr, data.toString('utf-8'))
+      outputBytes += Buffer.byteLength(data)
+      if (maxOutputBytes !== undefined && outputBytes > maxOutputBytes) {
+        requestTermination(new Error('SSH exec output limit exceeded'))
+        return
+      }
+      stderr = appendExecOutputTail(stderr, stderrDecoder.write(data))
     }
     const onClose = (code: number): void => {
+      stdout = appendExecOutputTail(stdout, stdoutDecoder.end())
+      stderr = appendExecOutputTail(stderr, stderrDecoder.end())
       if (
         !terminationError &&
         openedWithSystemSsh &&
@@ -195,6 +227,17 @@ export async function execCommand(
     channel.on('close', onClose)
     if (signal?.aborted) {
       onAbort()
+    } else if (stdin !== undefined) {
+      try {
+        if (beforeInput?.() !== undefined) {
+          throw new Error('SSH exec input admission is not synchronous')
+        }
+        if (!settled && !terminationError && !signal?.aborted) {
+          channel.end(stdin)
+        }
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error('SSH exec input failed'))
+      }
     }
   })
 }

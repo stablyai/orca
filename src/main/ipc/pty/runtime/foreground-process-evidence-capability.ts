@@ -4,19 +4,29 @@ import { getProvider, registeredPtyProviders } from '../provider/registry'
 export async function supportsForegroundProcessEvidenceFromRuntimeController(
   connectionId?: string | null
 ): Promise<boolean> {
-  if (connectionId === null) {
-    return true
-  }
-  if (connectionId === undefined) {
-    const providers = registeredPtyProviders()
+  if (connectionId === undefined || connectionId === null) {
+    const providers = registeredPtyProviders().filter(
+      (entry) => connectionId !== null || entry.connectionId === null
+    )
     const supported = await Promise.all(
-      providers.map(async ({ provider, connectionId: providerConnectionId }) =>
-        providerConnectionId === null
-          ? true
-          : ((await provider.supportsForegroundProcessEvidence?.()) ?? false)
+      providers.map(
+        async ({ provider, connectionId: providerConnectionId, delegatedIdentity, isCurrent }) => {
+          if (!provider || isCurrent?.() === false) {
+            return false
+          }
+          try {
+            const supported =
+              providerConnectionId === null && !delegatedIdentity
+                ? true
+                : ((await provider.supportsForegroundProcessEvidence?.()) ?? false)
+            return supported && isCurrent?.() !== false
+          } catch {
+            return false
+          }
+        }
       )
     )
-    return supported.every(Boolean)
+    return supported.every(Boolean) && providers.every((entry) => entry.isCurrent?.() !== false)
   }
   try {
     return (await getProvider(connectionId).supportsForegroundProcessEvidence?.()) ?? false

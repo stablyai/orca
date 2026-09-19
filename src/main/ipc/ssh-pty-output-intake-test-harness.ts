@@ -35,6 +35,7 @@ export function createSshPtyOutputIntakeHarness(
       completions.push(completion)
       return { sequence, completion: completion.promise }
     },
+    checkpointOwnershipTransferModel: vi.fn(() => Promise.resolve()),
     project: (input) => order.push(`project:${input.data}`),
     prepareExit: vi.fn(),
     finalizeExit: () => order.push('exit'),

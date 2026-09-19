@@ -116,6 +116,26 @@ than a first-connect error. CI runs it once per slot inside the matching contain
 (`--slot=` forces the label), merges the trees, and `--require-slots` fails a release with
 a hole in the matrix.
 
+## Bun orcad floor smoke
+
+Build a Linux artifact, then run the isolated stock Ubuntu 20.04 check (Docker required):
+
+```bash
+node config/scripts/build-orcad-bun.mjs --target linux-arm64-glibc --out-dir /tmp/orcad-floor-arm64
+node config/scripts/orcad-bun-glibc-floor-smoke.mjs --artifact-dir /tmp/orcad-floor-arm64 --arch arm64
+```
+
+For x64, use target `linux-x64-glibc`, a separate artifact directory and `--arch x64`.
+Cross-architecture runs require Docker emulation; they do not replace native-host acceptance.
+The runner pins architecture-specific Ubuntu image digests, requires glibc 2.31 and no
+Node/npm on the container PATH, and checks bundled Bun ≥1.4 and the daemon load path.
+It runs the existing SQLite adapter/watcher smoke and 25-cycle PTY input, resize and
+backpressure probe with the bundled runtime. Watcher resolution is restricted to the
+artifact; probe/adapter source is mounted read-only from the worktree. Both mounts and
+the container root are read-only, runtime state lives in disposable tmpfs, and container
+network access is disabled. This is native-primitive/load acceptance, not full SSH
+lifecycle, migration acceptance or long-soak coverage.
+
 ## Adding or upgrading a native dependency
 
 - Prefer packages that ship prebuilt binaries compiled against an old toolchain

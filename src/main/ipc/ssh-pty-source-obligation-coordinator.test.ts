@@ -86,6 +86,44 @@ describe('SshPtySourceObligationCoordinator', () => {
     ).toThrow('stale')
   })
 
+  it('holds the upstream ACK until destination output is durably accepted', () => {
+    const publish = vi.fn()
+    const coordinator = new SshPtySourceObligationCoordinator({
+      publish,
+      schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
+      cancelSchedule: vi.fn()
+    })
+    coordinator.open(identity)
+    const reservation = coordinator.reserve(identity, span, [
+      'model',
+      'ownership-transfer:bridge-1'
+    ])
+    coordinator.commit(reservation)
+    coordinator.settle({
+      identity,
+      spanId: span.spanId,
+      consumer: 'model',
+      reason: 'emulator-receipt'
+    })
+    coordinator.flushAcknowledgements()
+
+    expect(publish).not.toHaveBeenCalled()
+
+    coordinator.settle({
+      identity,
+      spanId: span.spanId,
+      consumer: 'ownership-transfer:bridge-1',
+      reason: 'destination-output-durable'
+    })
+    coordinator.flushAcknowledgements()
+
+    expect(publish).toHaveBeenCalledWith(
+      identity.providerGeneration,
+      { acknowledgements: [expect.objectContaining({ creditedEndSu: span.sourceEndSu })] },
+      expect.any(Function)
+    )
+  })
+
   it('keeps later generations publishable after closing one generation', () => {
     const publish = vi.fn()
     const coordinator = new SshPtySourceObligationCoordinator({

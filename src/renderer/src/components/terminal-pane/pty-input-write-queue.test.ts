@@ -22,7 +22,26 @@ import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'
 
-type WriteRecord = { id: string; data: string }
+it('preserves stable operation IDs through accepted chunk writes and retries', async () => {
+  const writeAccepted = vi.fn(async () => true)
+  const queue = createPtyInputWriteQueue({
+    isWritable: () => true,
+    write: vi.fn(),
+    writeAccepted,
+    yieldBetweenWrites: async () => undefined
+  })
+  const data = 'a'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
+  await expect(queue.enqueueAccepted('pty', data, { operationId: 'paste' })).resolves.toBe(true)
+  await expect(queue.enqueueAccepted('pty', data, { operationId: 'paste' })).resolves.toBe(true)
+  expect(writeAccepted.mock.calls).toEqual([
+    ['pty', data.slice(0, -1), { operationId: 'paste' }],
+    ['pty', 'a', { operationId: 'paste:chunk:1' }],
+    ['pty', data.slice(0, -1), { operationId: 'paste' }],
+    ['pty', 'a', { operationId: 'paste:chunk:1' }]
+  ])
+})
+
+type WriteRecord = { id: string; data: string; operationId?: string }
 
 function createRecordingQueue(options: { writable?: () => boolean } = {}): {
   writes: WriteRecord[]
@@ -31,7 +50,12 @@ function createRecordingQueue(options: { writable?: () => boolean } = {}): {
   const writes: WriteRecord[] = []
   const queue = createPtyInputWriteQueue({
     isWritable: () => options.writable?.() ?? true,
-    write: (id, data) => writes.push({ id, data })
+    write: (id, data, options) =>
+      writes.push({
+        id,
+        data,
+        ...(options?.operationId ? { operationId: options.operationId } : {})
+      })
   })
   return { writes, queue }
 }
@@ -45,7 +69,12 @@ function createParkedQueue(): {
   const pendingYields: (() => void)[] = []
   const queue = createPtyInputWriteQueue({
     isWritable: () => true,
-    write: (id, data) => writes.push({ id, data }),
+    write: (id, data, options) =>
+      writes.push({
+        id,
+        data,
+        ...(options?.operationId ? { operationId: options.operationId } : {})
+      }),
     yieldBetweenWrites: () =>
       new Promise<void>((resolve) => {
         pendingYields.push(resolve)
@@ -165,6 +194,21 @@ describe('pty input write queue', () => {
     await queue.waitForDrain()
 
     expect(writes).toEqual([])
+  })
+
+  it('keeps retry-aware chunk writes distinct and stable', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const large = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2 + 17)
+
+    expect(queue.enqueue('pty-1', large, { operationId: 'paste-op-1' })).toBe(true)
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.operationId)).toEqual([
+      'paste-op-1',
+      'paste-op-1:chunk:1',
+      'paste-op-1:chunk:2'
+    ])
+    expect(writes.map((write) => write.data).join('')).toBe(large)
   })
 
   it('drops queued input for PTYs that are no longer writable', async () => {

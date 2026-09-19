@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { runSshProviderContinuation } from '../../../ssh/ssh-provider-continuations'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import type {
   HostQualifiedDetectedWorktreeResult,
@@ -68,16 +69,21 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
             }, DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS)
           : undefined
         try {
-          const providerResult = listHostQualifiedDetectedWorktrees(
-            store,
-            args,
-            controller
-              ? {
-                  signal: controller.signal,
-                  status: () => (timedOut ? 'timed-out' : 'canceled')
-                }
-              : undefined
-          )
+          const list = () =>
+            listHostQualifiedDetectedWorktrees(
+              store,
+              args,
+              controller
+                ? {
+                    signal: controller.signal,
+                    status: () => (timedOut ? 'timed-out' : 'canceled')
+                  }
+                : undefined
+            )
+          const providerResult =
+            parsedHost?.kind === 'ssh'
+              ? runSshProviderContinuation(parsedHost.targetId, list)
+              : list()
           return abortedResult
             ? await Promise.race([providerResult, abortedResult])
             : await providerResult
@@ -103,17 +109,21 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
       const authority = repo.connectionId
         ? { ...getSshProviderAuthority(repo.connectionId) }
         : undefined
-      const result = await listDetectedWorktreesForCapturedRepo(
-        store,
-        repo,
-        () =>
-          isCapturedRepoCurrent(store, repo) &&
-          (!repo.connectionId ||
-            (getSshGitProvider(repo.connectionId) === provider &&
-              authority !== undefined &&
-              isCurrentSshProviderAuthority(authority))),
-        provider
-      )
+      const list = () =>
+        listDetectedWorktreesForCapturedRepo(
+          store,
+          repo,
+          () =>
+            isCapturedRepoCurrent(store, repo) &&
+            (!repo.connectionId ||
+              (getSshGitProvider(repo.connectionId) === provider &&
+                authority !== undefined &&
+                isCurrentSshProviderAuthority(authority))),
+          provider
+        )
+      const result = await (repo.connectionId
+        ? runSshProviderContinuation(repo.connectionId, list)
+        : list())
       return result && !('providerAbortStatus' in result)
         ? result
         : {

@@ -20,6 +20,9 @@ import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
 import { startPtyBindingSpan, type PtyBindingOrigin } from './pty-binding-span'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
+import { inspectPtyOwnershipTransferBindingAdmission } from './pty-ownership-transfer-binding-admission'
+import type { ReservedPtyOwnershipTransferLayout } from './pty-ownership-transfer-reserved-layout-admission'
+import { persistReservedPtyOwnershipTransferLayout } from './pty-ownership-transfer-reserved-layout-publication'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -43,6 +46,12 @@ type PersistPtyBindingArgs = {
   expectedSourceBinding?: PtyBindingSourceExpectation
   /** Set by host-initiated creates, which have no renderer session writer behind them. */
   hostAdmittedMembership?: boolean
+  /** Fail-closed publication for an exact, durable ownership-transfer surface. */
+  bindingMode?: 'strict-transfer-publication'
+  /** Main-owned reservation; never accepted from a renderer binding request. */
+  reservedTransferLayout?: ReservedPtyOwnershipTransferLayout
+  /** Exact prewritten baseline artifact committed with a strict transfer binding. */
+  scrollbackSnapshotRef?: string
   /**
    * Defaults true, which is what `pty:spawn` needs — it can beat the debounced layout writer
    * and must be able to mint the surface it is binding. A reattach is the opposite: the pane
@@ -75,10 +84,44 @@ export class PtyBindingPersistenceOperations {
   persistPtyBinding(args: PersistPtyBindingArgs, hostId?: string | null): boolean {
     const runtime = this[ptyBindingPersistenceOperationsContext].runtime
     const resolvedHostId = resolveHostId(hostId)
+    if (args.reservedTransferLayout) {
+      return persistReservedPtyOwnershipTransferLayout(runtime, args, resolvedHostId)
+    }
     const session =
       this[ptyBindingPersistenceOperationsContext].sessions.getWorkspaceSession(resolvedHostId)
     const paneKey = `${args.tabId}:${args.leafId}`
     const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
+    const strictTransferPublication = args.bindingMode === 'strict-transfer-publication'
+    if (strictTransferPublication) {
+      if (
+        args.expectedBinding ||
+        args.expectedSourceBinding ||
+        (args.scrollbackSnapshotRef !== undefined &&
+          !/^v1-[0-9a-f]{32}$/.test(args.scrollbackSnapshotRef))
+      ) {
+        return false
+      }
+      const admission = inspectPtyOwnershipTransferBindingAdmission(session, args)
+      if (admission === 'conflict') {
+        return false
+      }
+      if (admission === 'published') {
+        const layout = session.terminalLayoutsByTabId[args.tabId]
+        const currentRef = layout?.scrollbackRefsByLeafId?.[args.leafId]
+        const hasInlineBuffer = Object.hasOwn(layout?.buffersByLeafId ?? {}, args.leafId)
+        if (args.scrollbackSnapshotRef === undefined) {
+          runtime.flushOrThrow()
+          return true
+        }
+        if (currentRef === args.scrollbackSnapshotRef && !hasInlineBuffer) {
+          runtime.flushOrThrow()
+          return true
+        }
+        if (currentRef !== undefined || hasInlineBuffer) {
+          return false
+        }
+      }
+    }
     const span = startPtyBindingSpan({
       hostKind: parseExecutionHostId(resolvedHostId)?.kind ?? 'local',
       origin: args.origin ?? 'unknown',
@@ -90,16 +133,18 @@ export class PtyBindingPersistenceOperations {
       return false
     }
     // A durable reattach needs neither a session clone nor whole-state serialization.
-    const verdict = evaluatePtyBindingFastLane(
-      args,
-      session,
-      bindingWorktreeId,
-      !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
-    )
-    span.setEligibility(verdict)
-    if (verdict.eligible) {
-      span.finish('fast_lane')
-      return true
+    if (!strictTransferPublication) {
+      const verdict = evaluatePtyBindingFastLane(
+        args,
+        session,
+        bindingWorktreeId,
+        !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+      )
+      span.setEligibility(verdict)
+      if (verdict.eligible) {
+        span.finish('fast_lane')
+        return true
+      }
     }
     try {
       writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
@@ -197,7 +242,8 @@ function applyPtyBinding(
     )
   } else {
     terminalMembershipChanged = true
-    hostAdmittedTabCreated = args.hostAdmittedMembership === true
+    hostAdmittedTabCreated =
+      args.hostAdmittedMembership === true || args.bindingMode === 'strict-transfer-publication'
     // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
     const nextTabs = [
       ...(tabs ?? []),
@@ -249,6 +295,12 @@ function applyPtyBinding(
       ...layout.ptyIdsByLeafId,
       [args.leafId]: args.ptyId
     }
+    if (args.scrollbackSnapshotRef) {
+      layout.scrollbackRefsByLeafId = {
+        ...layout.scrollbackRefsByLeafId,
+        [args.leafId]: args.scrollbackSnapshotRef
+      }
+    }
   } else {
     terminalMembershipChanged = true
     // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
@@ -258,7 +310,10 @@ function applyPtyBinding(
         root: { type: 'leaf', leafId: args.leafId },
         activeLeafId: args.leafId,
         expandedLeafId: null,
-        ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+        ptyIdsByLeafId: { [args.leafId]: args.ptyId },
+        ...(args.scrollbackSnapshotRef
+          ? { scrollbackRefsByLeafId: { [args.leafId]: args.scrollbackSnapshotRef } }
+          : {})
       }
     }
   }

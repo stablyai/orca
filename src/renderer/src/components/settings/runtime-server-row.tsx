@@ -9,6 +9,7 @@ import {
 } from '@/runtime/runtime-host-connection-state'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
+import { RuntimeSshAccessControl } from './RuntimeSshAccessControl'
 import {
   getHostDetailsDescription,
   getHostDetailsSummary,
@@ -39,6 +40,7 @@ type RuntimeServerRowProps = {
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
+  onSshAccessChanged?: () => Promise<void>
 }
 
 export function RuntimeServerRow({
@@ -55,7 +57,8 @@ export function RuntimeServerRow({
   onOpenUpdate,
   onDisconnect,
   onConnect,
-  onRemove
+  onRemove,
+  onSshAccessChanged
 }: RuntimeServerRowProps): React.JSX.Element {
   const runtimeStatusEntry = useAppStore((state) =>
     state.runtimeStatusByEnvironmentId.get(environment.id)
@@ -167,6 +170,13 @@ export function RuntimeServerRow({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {onSshAccessChanged ? (
+          <RuntimeSshAccessControl
+            environment={environment}
+            disabled={isBusy}
+            onChanged={onSshAccessChanged}
+          />
+        ) : null}
         {remoteUpdate?.phase === 'available' || remoteUpdate?.phase === 'failed' ? (
           <Button
             type="button"

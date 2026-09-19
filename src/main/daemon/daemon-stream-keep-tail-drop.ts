@@ -10,6 +10,7 @@
 import { clampToSafeSplitIndex } from './daemon-stream-data-split'
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonEvent, DataGapEvent } from './types'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 // A control entry carries a whole pre-shaped stream event (background marker,
 // data gap, transient fact) that must ride at its exact position in the
@@ -23,6 +24,7 @@ export type StreamQueueEntry = {
   sequenceChars?: number
   seq?: number
   transformed?: boolean
+  incarnationId?: PtyIncarnationId
   control?: DaemonEvent
 }
 

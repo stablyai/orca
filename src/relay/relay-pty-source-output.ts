@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { PtySourceDeliveryIdentity } from '../shared/pty-source-credit-contract'
+import type { PtyOwnershipTransferOutputEnvelope } from '../shared/pty-ownership-transfer-output-envelope'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayPtySourceDeliveryRecord } from './relay-pty-source-send-scheduler'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
@@ -11,6 +12,7 @@ export type RelayPtySourceOutput = {
   seq?: number
   sourceAccepted?: boolean
   sourceSpanId?: string
+  ownershipTransfer?: PtyOwnershipTransferOutputEnvelope
 }
 
 // Why: an evicted tombstone probes null, so an unknown delivery counts as closed.
@@ -33,6 +35,7 @@ export function appendPtySourceOutput(
     session.appendSource(record.identity, {
       spanId: output.sourceSpanId,
       data: output.data,
+      ...(output.ownershipTransfer ? { ownershipTransfer: output.ownershipTransfer } : {}),
       displayStart: record.displayEnd,
       displayEnd: record.displayEnd + output.data.length,
       splittable: output.transformed !== true,
@@ -67,7 +70,8 @@ export function projectPtySourceOutputToLegacy(
       data: output.data,
       ...(output.seq === undefined ? {} : { seq: output.seq }),
       ...(output.rawLength === undefined ? {} : { rawLength: output.rawLength }),
-      ...(output.transformed ? { transformed: true } : {})
+      ...(output.transformed ? { transformed: true } : {}),
+      ...(output.ownershipTransfer ? { ownershipTransfer: output.ownershipTransfer } : {})
     },
     { interactive }
   )

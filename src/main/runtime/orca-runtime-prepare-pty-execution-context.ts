@@ -2,6 +2,7 @@
 import { OrcaRuntimeWithRegisterPty } from './orca-runtime-register-pty'
 import type { TerminalOutputSourceRange } from '../../shared/terminal-output-source-range'
 import type { RuntimePtyDataAdmission } from './runtime-terminal-contracts'
+import { assertOutgoingPtyModelMutationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRegisterPty {
   preparePtyExecutionContext(
@@ -9,6 +10,7 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
     wslDistro: string | null,
     options: { resetIncarnation?: boolean; preserveExisting?: boolean } = {}
   ): boolean {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     const pty = this.ptysById.get(ptyId)
     const hadExistingContext = this.wslDistroByPtyId.has(ptyId) || pty !== undefined
     if (options.preserveExisting && hadExistingContext) {
@@ -56,6 +58,7 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
   }
 
   resetPtyModelAfterMigrationFailure(ptyId: string): void {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
     this.disposeHeadlessTerminal(ptyId)
   }

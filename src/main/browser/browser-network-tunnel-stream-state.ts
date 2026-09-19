@@ -26,10 +26,11 @@ export function reserveBrowserNetworkTunnelStreamId(
 
 export type BrowserNetworkTunnelSocket = {
   destroyed: boolean
+  settleRead?: (bytes: number) => void
   setNoDelay(noDelay?: boolean): BrowserNetworkTunnelSocket
   pause(): BrowserNetworkTunnelSocket
   resume(): BrowserNetworkTunnelSocket
-  write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean
+  write(bytes: Uint8Array<ArrayBufferLike>, callback?: (error?: Error | null) => void): boolean
   end(): BrowserNetworkTunnelSocket
   destroy(): BrowserNetworkTunnelSocket
   on(event: 'connect', listener: () => void): BrowserNetworkTunnelSocket
@@ -49,6 +50,9 @@ export type BrowserNetworkTunnelStream = {
   closed: boolean
   receiveCredit: number
   sendCredit: number
+  initialClientCreditReceived: boolean
+  unsettledDestinationBytes: number
+  flushingToClient: boolean
   pendingToClient: Uint8Array<ArrayBufferLike>[]
   pendingToClientBytes: number
   pendingDestinationWriteReleases: Set<() => void>

@@ -9,6 +9,7 @@ import type { DaemonSessionBackgroundRouting } from './daemon-session-background
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
+import { readDaemonRuntimeIdentity } from './daemon-runtime-identity'
 import type { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import type { TerminalHost } from './terminal-host'
 import { SessionNotFoundError, type DaemonRequest } from './types'
@@ -149,7 +150,7 @@ export class DaemonRequestRouter {
         return { health: await readCurrentProcessMacSystemResolverHealth() }
       case 'ptySpawnHealth':
         await this.options.ptySpawnHealthCheck()
-        return { healthy: true }
+        return { healthy: true, coverage: 'pty-spawn', ...readDaemonRuntimeIdentity() }
       case 'shutdown':
         return this.shutdown(clientId, request.id, request.payload.killSessions)
     }

@@ -31,6 +31,9 @@ import {
 export function createRuntimeEnvironmentsApi(): NonNullable<
   Partial<PreloadApi>['runtimeEnvironments']
 > {
+  const desktopOnlyOrcad = (): never => {
+    throw new Error('Managed Orca server deployment is only available in the desktop app.')
+  }
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
@@ -165,6 +168,28 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     },
     resolve: async ({ selector }) =>
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
+    listPendingOrcadMigrations: async () => desktopOnlyOrcad(),
+    createOrcadSshHost: async () => desktopOnlyOrcad(),
+    linkSshAccess: async () => desktopOnlyOrcad(),
+    reconcile: async () => desktopOnlyOrcad(),
+    unlinkSshAccess: async () => desktopOnlyOrcad(),
+    resumeOrcadSshHost: async () => desktopOnlyOrcad(),
+    listPendingOrcadSshProvisioning: async () => desktopOnlyOrcad(),
+    preflightOrcadTarget: async () => desktopOnlyOrcad(),
+    deployOrcad: async () => desktopOnlyOrcad(),
+    updateOrcad: async () => desktopOnlyOrcad(),
+    getOrcadStatus: async () => desktopOnlyOrcad(),
+    rollbackOrcad: async () => desktopOnlyOrcad(),
+    recoverOrcad: async () => desktopOnlyOrcad(),
+    listOrcadOutgoingCaptures: async () => desktopOnlyOrcad(),
+    listOrcadLiveMigrations: async () => desktopOnlyOrcad(),
+    getOrcadLiveMigrationRendererPlan: async () => desktopOnlyOrcad(),
+    resumeOrcadLiveMigration: async () => desktopOnlyOrcad(),
+    startOrcadLiveMigration: async () => desktopOnlyOrcad(),
+    recoverOrcadOutgoingCapture: async () => desktopOnlyOrcad(),
+    prepareOrcadOutgoingTerminal: async () => desktopOnlyOrcad(),
+    cancelOrcadStop: async () => desktopOnlyOrcad(),
+    stopOrcad: async () => desktopOnlyOrcad(),
     remove: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
       if (webRuntimeState.activeEnvironment?.id === environment.id) {

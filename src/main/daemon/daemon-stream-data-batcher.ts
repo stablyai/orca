@@ -222,7 +222,8 @@ export class DaemonStreamDataBatcher {
         this.maxLineBytes,
         sliceSequenceChars,
         entry.seq,
-        entry.transformed
+        entry.transformed,
+        entry.incarnationId
       )
       this.onAfterSocketWrite?.()
     }
@@ -316,7 +317,8 @@ export class DaemonStreamDataBatcher {
           this.maxLineBytes,
           entry.sequenceChars ?? entry.data.length,
           entry.seq,
-          entry.transformed
+          entry.transformed,
+          entry.incarnationId
         )
         this.onAfterSocketWrite?.()
       }

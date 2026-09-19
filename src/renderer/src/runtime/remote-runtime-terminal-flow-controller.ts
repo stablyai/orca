@@ -40,7 +40,15 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     return this.streams.get(stream.streamId) === stream
   }
 
-  protected sendInput(stream: RemoteRuntimeMultiplexedTerminalState, text: string): boolean {
+  protected sendInput(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    text: string,
+    options?: { operationId?: string }
+  ): boolean {
+    // Stable retry IDs use the additive unary RPC, which legacy binary frames cannot carry.
+    if (options?.operationId) {
+      return false
+    }
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.Input,

@@ -3,7 +3,6 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { setMigrationUnsupportedPty } from '../../agent-hooks/migration-unsupported-pty-state'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
 import {
@@ -27,6 +26,10 @@ import {
   type SessionSnapshotOperations
 } from './session-snapshot-operations'
 import { scheduleSave } from './write-scheduling'
+import {
+  collectOrcadRetirementSnapshotRefs,
+  reconcileOrcadRetirementSessionWrite
+} from './orcad-retirement-session-write'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
@@ -35,12 +38,13 @@ export function setLocalWorkspaceSession(
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
+  session = reconcileOrcadRetirementSessionWrite(context.runtime, session, LOCAL_EXECUTION_HOST_ID)
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
   session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
   session = pruneWorkspaceSessionBrowserHistory(
-    pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+    context.runtime.transferSnapshotHistory.prune(session, context.runtime.state.repos, prior)
   )
 
   // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
@@ -94,7 +98,11 @@ export function setLocalWorkspaceSession(
     context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
   }
   session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
-  session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+  session = context.runtime.transferSnapshotHistory.prune(
+    session,
+    context.runtime.state.repos,
+    prior
+  )
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       session,
@@ -104,7 +112,8 @@ export function setLocalWorkspaceSession(
     deleteRemovedTerminalScrollbackSnapshots(
       prior,
       session,
-      context.runtime.terminalScrollbackSnapshotStorage
+      context.runtime.terminalScrollbackSnapshotStorage,
+      collectOrcadRetirementSnapshotRefs(context.runtime)
     )
   }
   context.runtime.state.workspaceSession = session
@@ -128,33 +137,46 @@ export function enqueueTerminalScrollbackSnapshotWork(
           await deleteRemovedTerminalScrollbackSnapshotsAsync(
             prior,
             context.runtime.state.workspaceSession,
-            context.runtime.terminalScrollbackSnapshotStorage
+            context.runtime.terminalScrollbackSnapshotStorage,
+            collectOrcadRetirementSnapshotRefs(context.runtime)
           )
         }
         return
       }
-      const migrated = await migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
+      const admitted = reconcileOrcadRetirementSessionWrite(
+        context.runtime,
         staged,
+        LOCAL_EXECUTION_HOST_ID
+      )
+      const migrated = await migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
+        admitted,
         context.runtime.terminalScrollbackSnapshotStorage
       )
-      const current =
+      let current =
         context.runtime.state.workspaceSession === staged
           ? migrated
           : context.runtime.state.workspaceSession
       if (context.runtime.state.workspaceSession === staged) {
-        context.runtime.state.workspaceSession = migrated
+        context.runtime.state.workspaceSession = reconcileOrcadRetirementSessionWrite(
+          context.runtime,
+          migrated,
+          LOCAL_EXECUTION_HOST_ID
+        )
+        current = context.runtime.state.workspaceSession
       } else if (current) {
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           migrated,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          collectOrcadRetirementSnapshotRefs(context.runtime)
         )
       }
       if (current) {
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           prior,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          collectOrcadRetirementSnapshotRefs(context.runtime)
         )
       }
     })

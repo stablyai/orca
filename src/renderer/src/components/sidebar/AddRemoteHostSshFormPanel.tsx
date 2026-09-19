@@ -31,8 +31,8 @@ export function AddRemoteHostSshFormPanel({
         </DialogTitle>
         <DialogDescription>
           {translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshDescription',
-            'Add a persistent machine you can log into over SSH.'
+            'auto.components.sidebar.AddRemoteHostDialog.sshServerDescription',
+            'Install an Orca server over SSH. No Node.js installation is needed on the host.'
           )}
         </DialogDescription>
       </DialogHeader>
@@ -63,10 +63,16 @@ export function AddRemoteHostSshFormPanel({
           <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
             {translate('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
           </Button>
-          <Button type="button" onClick={onSubmit} disabled={disabled}>
+          <Button type="button" className="w-36" onClick={onSubmit} disabled={disabled}>
             {disabled
-              ? translate('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')
-              : translate('auto.components.sidebar.AddRemoteHostDialog.save', 'Save')}
+              ? translate(
+                  'auto.components.sidebar.AddRemoteHostDialog.provisioning',
+                  'Setting up server…'
+                )
+              : translate(
+                  'auto.components.sidebar.AddRemoteHostDialog.installServer',
+                  'Install server'
+                )}
           </Button>
         </div>
       </DialogFooter>

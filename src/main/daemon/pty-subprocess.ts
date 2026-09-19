@@ -82,7 +82,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
 
   let spawned: SpawnedDaemonPty
   try {
-    spawned = spawnNativeDaemonPty({
+    spawned = await spawnNativeDaemonPty({
       shellPath: launch.shellPath,
       shellArgs: launch.shellArgs,
       spawnCwd: launch.spawnCwd,

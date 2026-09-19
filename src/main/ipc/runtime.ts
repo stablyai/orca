@@ -12,6 +12,14 @@ import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-br
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import type {
+  PtyOwnershipTransferExecuteRequest,
+  PtyOwnershipTransferExecuteResult,
+  PtyOwnershipTransferPreflightRequest,
+  PtyOwnershipTransferPreflightResult,
+  PtyOwnershipTransferStatusProbeRequest
+} from '../../shared/pty-ownership-transfer-orchestration'
+import type { PtyOwnershipTransferStatusResult } from '../../shared/pty-ownership-transfer-wire'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 
@@ -29,6 +37,9 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
+  ipcMain.removeHandler('runtime:transferPtyOwnership')
+  ipcMain.removeHandler('runtime:preflightPtyOwnershipTransfer')
+  ipcMain.removeHandler('runtime:getPtyOwnershipTransferStatus')
   ipcMain.removeHandler('runtime:call')
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
@@ -55,6 +66,31 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.handle('runtime:getStatus', (): RuntimeStatus => {
     return runtime.getStatus()
   })
+
+  ipcMain.handle(
+    'runtime:transferPtyOwnership',
+    (
+      _event,
+      request: PtyOwnershipTransferExecuteRequest
+    ): Promise<PtyOwnershipTransferExecuteResult> => runtime.transferPtyOwnership(request)
+  )
+
+  ipcMain.handle(
+    'runtime:preflightPtyOwnershipTransfer',
+    (
+      _event,
+      request: PtyOwnershipTransferPreflightRequest
+    ): Promise<PtyOwnershipTransferPreflightResult> =>
+      runtime.preflightPtyOwnershipTransfer(request)
+  )
+
+  ipcMain.handle(
+    'runtime:getPtyOwnershipTransferStatus',
+    (
+      _event,
+      request: PtyOwnershipTransferStatusProbeRequest
+    ): Promise<PtyOwnershipTransferStatusResult> => runtime.getPtyOwnershipTransferStatus(request)
+  )
 
   ipcMain.handle(
     'runtime:call',

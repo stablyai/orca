@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import type { Store } from '../persistence'
+import { getCanonicalUserDataPath, type Store } from '../persistence'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -118,7 +118,7 @@ export function attachMainWindowServices(
   } else {
     void hydrateLocalPtyRegistryAtBoot(store)
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
+  registerSshHandlers(store, () => mainWindow, runtime, getCanonicalUserDataPath)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)

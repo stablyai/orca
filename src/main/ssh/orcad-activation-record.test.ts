@@ -6,6 +6,8 @@ import {
   parseOrcadActivationRecord,
   serializeOrcadActivationRecord,
   withActivatedVersion,
+  withDeactivatedVersion,
+  withDecommissioningVersion,
   withRolledBackVersion,
   type OrcadStateSnapshot
 } from './orcad-activation-record'
@@ -44,6 +46,24 @@ describe('orcad activation record', () => {
     expect(parseOrcadActivationRecord('{not json').state).toBe('unreadable')
   })
 
+  it.each([
+    { field: 'active', value: 42 },
+    { field: 'active', value: '../../outside' },
+    { field: 'snapshot', value: { dirName: '../../outside' } },
+    { field: 'decommissioning', value: { version: '0.2.0+bb01' } }
+  ])('reports an invalid $field as unreadable instead of clearing it', ({ field, value }) => {
+    const record = { ...emptyOrcadActivationRecord(), [field]: value }
+    expect(parseOrcadActivationRecord(JSON.stringify(record)).state).toBe('unreadable')
+  })
+
+  it('accepts a legacy schema-1 record that predates the optional decommission marker', () => {
+    const { decommissioning: _omitted, ...legacy } = emptyOrcadActivationRecord()
+    expect(parseOrcadActivationRecord(JSON.stringify(legacy))).toEqual({
+      state: 'ok',
+      record: emptyOrcadActivationRecord()
+    })
+  })
+
   it('names the outgoing version as the rollback target', () => {
     const record = withActivatedVersion(
       { ...emptyOrcadActivationRecord(), active: '0.1.0+aa01' },
@@ -77,6 +97,25 @@ describe('orcad activation record', () => {
       active: '0.1.0+aa01',
       previous: null,
       snapshot: null
+    })
+  })
+
+  it('persists decommission acceptance until positive process exit', () => {
+    const active = {
+      ...emptyOrcadActivationRecord(),
+      active: '0.2.0+bb01',
+      activatedAt: NOW.toISOString()
+    }
+    const marked = withDecommissioningVersion(active, NOW)
+
+    expect(marked.decommissioning).toEqual({
+      version: '0.2.0+bb01',
+      acceptedAt: NOW.toISOString()
+    })
+    expect(withDeactivatedVersion(marked)).toMatchObject({
+      active: null,
+      previous: '0.2.0+bb01',
+      decommissioning: null
     })
   })
 

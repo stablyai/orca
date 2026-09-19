@@ -10,22 +10,26 @@
  */
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { checkDaemonHealth, type DaemonHealth } from '../daemon/daemon-health'
+import { ORCAD_BUILD_TARGET_FILENAME } from '../../shared/orcad-artifacts'
+import { ORCAD_BUN_TARGETS, type OrcadBunTarget } from '../../shared/orcad-bun-runtime'
+import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
 import {
   daemonOwnsFreshPersistentPtys,
   getDaemonEndpointFacts,
   readDaemonPidRecord
 } from '../daemon/daemon-init'
+import { detectNativeHostAbi } from './native-host-abi'
+
+declare const __ORCAD_BUILD_TARGET__: string | undefined
 
 /**
  * How much a green self-test actually proves.
  *
  * `pty-spawn` — the daemon spawned a real PTY inside its own process and it worked.
- * `handshake` — the daemon answered its protocol handshake, but its spawn probe is a no-op
- *   on this platform (win32: `checkPtySpawnHealth` returns without spawning). Reported
- *   separately rather than folded into `ok`, because claiming a PTY round trip we did not
- *   perform is the failure mode this surface exists to prevent.
+ * `handshake` — the daemon answered its protocol handshake, but did not report proof that
+ *   its health request spawned a PTY. Older Windows daemons have this coverage.
  */
 export type PtySelfTestCoverage = 'pty-spawn' | 'handshake'
 
@@ -35,6 +39,10 @@ export type PtySelfTest = {
   /** The daemon's own verdict word, so a failure is diagnosable without re-probing. */
   verdict: DaemonHealth | 'no-daemon'
   durationMs: number
+  /** Optional runtime proof from newer daemons; absent on mixed-version peers. */
+  runtimeKind?: 'node' | 'bun'
+  runtimeVersion?: string
+  ptyBackend?: 'node-pty' | 'bun-terminal'
 }
 
 export type TerminalDaemonHealth = {
@@ -47,6 +55,10 @@ export type TerminalDaemonHealth = {
   buildVersion: string | null
   entryPath: string | null
   protocolVersion: number | null
+  /** Runtime proof reported by the daemon that owns PTYs; absent on old daemons. */
+  runtimeKind?: 'node' | 'bun'
+  runtimeVersion?: string
+  ptyBackend?: 'node-pty' | 'bun-terminal'
   selfTest: PtySelfTest
 }
 
@@ -54,13 +66,56 @@ export type OrcadHealth = {
   /** Content hash of the running orcad bundle — the deployed build's identity. */
   buildHash: string
   buildVersion: string
+  /** Legacy Node fields remain for mixed-version clients; Bun reports its emulated values here. */
   nodeVersion: string
-  /** `process.versions.modules`: the ABI every native addon on this host must match. */
   nodeAbi: string
+  /** Actual JavaScript runtime, which controls built-in APIs and native addon behavior. */
+  runtimeKind?: 'node' | 'bun'
+  runtimeVersion?: string
+  ptyBackend?: 'node-pty' | 'bun-terminal'
+  /** Immutable native slot assembled with these bytes. */
+  buildTarget?: OrcadBunTarget
+  /** Linux C library selected for this immutable native slot. */
+  libc?: 'glibc' | 'musl'
+  glibcVersion?: string
   platform: NodeJS.Platform
   arch: string
   pid: number
   terminalDaemon: TerminalDaemonHealth
+}
+
+function parseOrcadBuildTarget(value: unknown): OrcadBunTarget | undefined {
+  return typeof value === 'string' && ORCAD_BUN_TARGETS.includes(value as OrcadBunTarget)
+    ? (value as OrcadBunTarget)
+    : undefined
+}
+
+export function readOrcadBuildTarget(entryPath = process.argv[1]): OrcadBunTarget | undefined {
+  if (!entryPath) {
+    return undefined
+  }
+  try {
+    return parseOrcadBuildTarget(
+      readFileSync(join(dirname(entryPath), ORCAD_BUILD_TARGET_FILENAME), 'utf8').trim()
+    )
+  } catch {
+    return undefined
+  }
+}
+
+export function libcFromOrcadBuildTarget(
+  buildTarget: OrcadBunTarget | undefined,
+  platform: NodeJS.Platform,
+  arch: string
+): 'glibc' | 'musl' | undefined {
+  if (!buildTarget?.startsWith(`${platform}-${arch}-`)) {
+    return undefined
+  }
+  return buildTarget.endsWith('-musl')
+    ? 'musl'
+    : buildTarget.endsWith('-glibc')
+      ? 'glibc'
+      : undefined
 }
 
 /**
@@ -94,15 +149,25 @@ export async function runTerminalDaemonSelfTest(
   now: () => number = () => Date.now()
 ): Promise<PtySelfTest> {
   const startedAt = now()
-  // Why: `checkPtySpawnHealth` returns immediately on win32 without spawning anything, so a
-  // green verdict there covers the handshake only. Say so instead of overclaiming.
-  const coverage: PtySelfTestCoverage = process.platform === 'win32' ? 'handshake' : 'pty-spawn'
   const facts = getDaemonEndpointFacts()
   if (!facts) {
-    return { ok: false, coverage, verdict: 'no-daemon', durationMs: now() - startedAt }
+    return {
+      ok: false,
+      coverage: process.platform === 'win32' ? 'handshake' : 'pty-spawn',
+      verdict: 'no-daemon',
+      durationMs: now() - startedAt
+    }
   }
-  const verdict = await checkDaemonHealth(facts.socketPath, facts.tokenPath)
-  return { ok: verdict === 'healthy', coverage, verdict, durationMs: now() - startedAt }
+  const result = await checkDaemonHealthWithCoverage(facts.socketPath, facts.tokenPath)
+  return {
+    ok: result.verdict === 'healthy',
+    coverage: result.coverage,
+    verdict: result.verdict,
+    durationMs: now() - startedAt,
+    ...(result.runtimeKind ? { runtimeKind: result.runtimeKind } : {}),
+    ...(result.runtimeVersion ? { runtimeVersion: result.runtimeVersion } : {}),
+    ...(result.ptyBackend ? { ptyBackend: result.ptyBackend } : {})
+  }
 }
 
 export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealth> {
@@ -137,19 +202,72 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
     buildVersion: record?.appVersion ?? null,
     entryPath: record?.entryPath ?? null,
     protocolVersion: facts.protocolVersion,
+    ...(selfTest.runtimeKind ? { runtimeKind: selfTest.runtimeKind } : {}),
+    ...(selfTest.runtimeVersion ? { runtimeVersion: selfTest.runtimeVersion } : {}),
+    ...(selfTest.ptyBackend ? { ptyBackend: selfTest.ptyBackend } : {}),
     selfTest
   }
 }
 
 export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHealth> {
+  const bunVersion = (process.versions as typeof process.versions & { bun?: string }).bun
+  const runtimeKind = bunVersion ? 'bun' : 'node'
+  const nativeAbi = detectNativeHostAbi()
+  const embeddedBuildTarget =
+    typeof __ORCAD_BUILD_TARGET__ === 'string'
+      ? parseOrcadBuildTarget(__ORCAD_BUILD_TARGET__)
+      : undefined
+  const buildTarget = readOrcadBuildTarget() ?? embeddedBuildTarget
+  const targetLibc = libcFromOrcadBuildTarget(buildTarget, process.platform, process.arch)
+  const libc =
+    process.platform !== 'linux'
+      ? undefined
+      : (targetLibc ?? (nativeAbi.libc === 'musl' ? 'musl' : 'glibc'))
   return {
     buildHash: computeOrcadBuildHash(),
     buildVersion,
     nodeVersion: process.versions.node,
     nodeAbi: process.versions.modules ?? 'unknown',
+    runtimeKind,
+    ...(bunVersion ? { runtimeVersion: bunVersion } : {}),
+    ptyBackend: bunVersion ? 'bun-terminal' : 'node-pty',
+    ...(buildTarget ? { buildTarget } : {}),
+    ...(libc ? { libc } : {}),
+    ...(libc === 'glibc' && nativeAbi.glibcVersion ? { glibcVersion: nativeAbi.glibcVersion } : {}),
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,
     terminalDaemon: await collectTerminalDaemonHealth()
+  }
+}
+
+let cachedHealth: { buildVersion: string; collectedAt: number; health: OrcadHealth } | null = null
+let healthInFlight: { buildVersion: string; promise: Promise<OrcadHealth> } | null = null
+
+/** Bounds PTY self-test churn when supervisors poll the authenticated health RPC. */
+export async function collectCachedOrcadHealth(
+  buildVersion: string,
+  now: () => number = () => Date.now()
+): Promise<OrcadHealth> {
+  const currentTime = now()
+  if (
+    cachedHealth?.buildVersion === buildVersion &&
+    currentTime - cachedHealth.collectedAt < 5_000
+  ) {
+    return cachedHealth.health
+  }
+  if (healthInFlight?.buildVersion === buildVersion) {
+    return healthInFlight.promise
+  }
+  const promise = collectOrcadHealth(buildVersion)
+  healthInFlight = { buildVersion, promise }
+  try {
+    const health = await promise
+    cachedHealth = { buildVersion, collectedAt: now(), health }
+    return health
+  } finally {
+    if (healthInFlight?.promise === promise) {
+      healthInFlight = null
+    }
   }
 }

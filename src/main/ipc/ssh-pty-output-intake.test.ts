@@ -6,6 +6,74 @@ import {
 } from './ssh-pty-output-intake-test-harness'
 
 describe('SshPtyOutputIntake', () => {
+  it('holds source credit until a durable ownership-transfer sink settles the frame', async () => {
+    vi.useFakeTimers()
+    const batches: unknown[] = []
+    const harness = createHarness(
+      {
+        publishSourceAck: (_generation, batch, onSettled) => {
+          batches.push(batch)
+          onSettled({ ok: true })
+        }
+      },
+      { ownershipTransferOutputEnabled: true }
+    )
+    const ownershipTransfer = {
+      bridgeId: 'bridge-1',
+      terminalId: 'relay-pty-1',
+      incarnationId: 'incarnation-1',
+      ownerLease: 'lease-1',
+      sourceOwnerGeneration: 3,
+      destinationRuntimeId: 'runtime-1',
+      version: 1 as const,
+      frameSeq: 1,
+      fragmentStartSu: 0,
+      fragmentEndSu: 4,
+      frameLengthSu: 4
+    }
+    const dataReceipt = harness.intake.acceptData(
+      event({
+        source: {
+          relayPtyId: 'relay-pty-1',
+          spanId: 'token-1:0:4',
+          clientGeneration: 2,
+          ownerGeneration: 3,
+          deliveryToken: 'token-1',
+          sourceStartSu: 0,
+          sourceEndSu: 4,
+          ownershipTransfer
+        }
+      })
+    )
+    harness.completions[0]!.resolve()
+    const receipt = await dataReceipt
+    const projectionId = receipt.projection.identity.projectionSemanticsId
+    harness.intake.publishProjectionPrefix([projectionId], 4, 4)
+    harness.intake.settleProjectionPrefix('pty-1', 4)
+    await vi.advanceTimersByTimeAsync(8)
+    expect(batches).toEqual([])
+
+    harness.intake.settleOwnershipTransferOutput({
+      providerGeneration: 1,
+      relayPtyId: 'relay-pty-1',
+      spanId: 'token-1:0:4',
+      clientGeneration: 2,
+      ownerGeneration: 3,
+      deliveryToken: 'token-1',
+      ptyIncarnation: 'incarnation-1',
+      sourceStartSu: 0,
+      sourceEndSu: 4,
+      ownershipTransfer
+    })
+    await vi.advanceTimersByTimeAsync(8)
+    expect(batches).toEqual([
+      {
+        acknowledgements: [expect.objectContaining({ creditedEndSu: 4 })]
+      }
+    ])
+    vi.useRealTimers()
+  })
+
   it('plateaus at the model and pressure budgets, then resumes below low water', async () => {
     const harness = createHarness(
       {},
@@ -615,7 +683,8 @@ describe('SshPtyOutputIntake', () => {
     ).not.toThrow()
     expect(harness.intake.getDebugSnapshot().source).toEqual({
       openedTokens: 0,
-      ptyIdentities: 0
+      ptyIdentities: 0,
+      pendingOwnershipTransferSettlements: 0
     })
   })
 
@@ -648,7 +717,8 @@ describe('SshPtyOutputIntake', () => {
 
     expect(harness.intake.getDebugSnapshot().source).toEqual({
       openedTokens: 0,
-      ptyIdentities: 0
+      ptyIdentities: 0,
+      pendingOwnershipTransferSettlements: 0
     })
   })
 

@@ -1,40 +1,29 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { hardenExistingSecureFile } from './secure-file'
+import {
+  readEnvironmentStore,
+  RuntimeEnvironmentStoreError,
+  writeEnvironmentStore
+} from './runtime-environment-store-file'
 import {
   createEnvironmentFromPairingOffer,
+  getPreferredLoopbackRuntimePort,
   getPreferredPairingOffer,
   KnownRuntimeEnvironmentSchema,
-  RuntimeEnvironmentStoreSchema,
+  OrcadDeploymentLinkSchema,
   type KnownRuntimeEnvironment,
+  type OrcadDeploymentLink,
   type RuntimeEnvironmentSource,
   type RuntimeEnvironmentStore
 } from './runtime-environments'
 
-const ENVIRONMENTS_FILE = 'orca-environments.json'
-export const MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES = 1024 * 1024
-
-export type RuntimeEnvironmentStoreErrorCode = 'invalid_argument' | 'runtime_error'
-
-export class RuntimeEnvironmentStoreError extends Error {
-  readonly code: RuntimeEnvironmentStoreErrorCode
-
-  constructor(code: RuntimeEnvironmentStoreErrorCode, message: string) {
-    super(message)
-    this.name = 'RuntimeEnvironmentStoreError'
-    this.code = code
-  }
-}
-
-export function getEnvironmentStorePath(userDataPath: string): string {
-  return join(userDataPath, ENVIRONMENTS_FILE)
-}
+export {
+  getEnvironmentStorePath,
+  MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
+  RuntimeEnvironmentStoreError,
+  type RuntimeEnvironmentStoreErrorCode
+} from './runtime-environment-store-file'
 
 export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[] {
   return readEnvironmentStore(userDataPath).environments
@@ -43,11 +32,13 @@ export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
   args: {
+    id?: string
     name: string
     pairingCode: string
     now?: number
     source?: RuntimeEnvironmentSource
     connectionDependency?: 'ssh-tunnel'
+    orcadDeployment?: OrcadDeploymentLink
   }
 ): KnownRuntimeEnvironment {
   const offer = parsePairingCode(args.pairingCode)
@@ -59,6 +50,12 @@ export function addEnvironmentFromPairingCode(
   }
   const store = readEnvironmentStore(userDataPath)
   const now = args.now ?? Date.now()
+  if (args.id && store.environments.some((entry) => entry.id === args.id)) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      `A server with id "${args.id}" already exists.`
+    )
+  }
   const existing = store.environments.find((entry) => entry.name === args.name)
   if (existing) {
     throw new RuntimeEnvironmentStoreError(
@@ -67,13 +64,13 @@ export function addEnvironmentFromPairingCode(
     )
   }
   const environment = createEnvironmentFromPairingOffer({
-    id: randomUUID(),
+    id: args.id ?? randomUUID(),
     name: args.name,
     now,
     offer,
     runtimeId: null,
     ...(args.source ? { source: args.source } : {}),
-    ...getPairingConnectionDependency(args.connectionDependency, offer)
+    ...getPairingSshMetadata(args.connectionDependency, args.orcadDeployment, offer)
   })
   const next = {
     version: 1 as const,
@@ -89,6 +86,7 @@ export function addEnvironmentFromPairingCode(
 export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {
   const store = readEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
+  assertNoIndependentSshAccess(environment)
   writeEnvironmentStore(userDataPath, {
     version: 1,
     environments: store.environments.filter((entry) => entry.id !== environment.id)
@@ -110,6 +108,7 @@ export function updateEnvironmentFromPairingCode(
   }
   const store = readEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, selector)
+  assertNoIndependentSshAccess(existing)
   const now = args.now ?? Date.now()
   const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
   const environment = createEnvironmentFromPairingOffer({
@@ -119,7 +118,7 @@ export function updateEnvironmentFromPairingCode(
     offer,
     runtimeId: existing.runtimeId,
     ...(existing.source ? { source: existing.source } : {}),
-    ...getPairingConnectionDependency(existing.connectionDependency, offer)
+    ...getPairingSshMetadata(existing.connectionDependency, existing.orcadDeployment, offer)
   })
   const next = {
     ...environment,
@@ -137,18 +136,88 @@ export function updateEnvironmentFromPairingCode(
   return next
 }
 
-function getPairingConnectionDependency(
+export function restoreManagedOrcadEnvironmentLink(
+  userDataPath: string,
+  selector: string,
+  deployment: Omit<OrcadDeploymentLink, 'localPort'>
+): KnownRuntimeEnvironment {
+  const store = readEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, selector)
+  assertNoIndependentSshAccess(existing)
+  const localPort = getPreferredLoopbackRuntimePort(existing)
+  if (localPort === null) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'The saved managed Orca environment does not have an explicit loopback endpoint.'
+    )
+  }
+  const orcadDeployment = OrcadDeploymentLinkSchema.parse({ ...deployment, localPort })
+  if (
+    existing.orcadDeployment &&
+    !managedOrcadDeploymentLinksEqual(existing.orcadDeployment, orcadDeployment)
+  ) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'The saved managed Orca environment has conflicting deployment metadata.'
+    )
+  }
+  const next = KnownRuntimeEnvironmentSchema.parse({
+    ...existing,
+    connectionDependency: 'ssh-tunnel',
+    orcadDeployment
+  })
+  if (
+    existing.connectionDependency === 'ssh-tunnel' &&
+    existing.orcadDeployment &&
+    managedOrcadDeploymentLinksEqual(existing.orcadDeployment, orcadDeployment)
+  ) {
+    return existing
+  }
+  writeEnvironmentStore(userDataPath, {
+    version: 1,
+    environments: store.environments.map((entry) => (entry.id === existing.id ? next : entry))
+  })
+  return next
+}
+
+function managedOrcadDeploymentLinksEqual(
+  left: OrcadDeploymentLink,
+  right: OrcadDeploymentLink
+): boolean {
+  return (
+    left.sshTargetId === right.sshTargetId &&
+    left.sshTargetGeneration === right.sshTargetGeneration &&
+    left.localPort === right.localPort &&
+    left.remotePort === right.remotePort
+  )
+}
+
+function assertNoIndependentSshAccess(environment: KnownRuntimeEnvironment): void {
+  if (environment.sshAccess || environment.pendingSshAccessOperation) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      "Unlink this server's SSH access before replacing its pairing, removing it, or managing its deployment."
+    )
+  }
+}
+
+function getPairingSshMetadata(
   dependency: 'ssh-tunnel' | undefined,
+  deployment: OrcadDeploymentLink | undefined,
   offer: PairingOffer
-): { connectionDependency?: 'ssh-tunnel' } {
-  if (!dependency) {
+): { connectionDependency?: 'ssh-tunnel'; orcadDeployment?: OrcadDeploymentLink } {
+  if (!dependency && !deployment) {
     return {}
   }
   try {
     const endpoint = new URL(offer.endpoint)
-    return classifyRemotePairingHostname(endpoint.hostname) === 'loopback'
-      ? { connectionDependency: dependency }
-      : {}
+    if (classifyRemotePairingHostname(endpoint.hostname) !== 'loopback') {
+      return {}
+    }
+    return {
+      ...(dependency ? { connectionDependency: dependency } : {}),
+      ...(deployment ? { orcadDeployment: deployment } : {})
+    }
   } catch {
     return {}
   }
@@ -184,6 +253,15 @@ export function markEnvironmentUsed(
   const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
   const pairedDeviceIdChanged =
     args.pairedDeviceId != null && args.pairedDeviceId !== environment.pairedDeviceId
+  if (
+    (runtimeIdChanged || pairedDeviceIdChanged) &&
+    (environment.sshAccess || environment.pendingSshAccessOperation)
+  ) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'SSH access operation cannot change the paired runtime identity.'
+    )
+  }
   const lastUsedIsFresh =
     environment.lastUsedAt != null &&
     now >= environment.lastUsedAt &&
@@ -205,7 +283,7 @@ export function markEnvironmentUsed(
   writeEnvironmentStore(userDataPath, { version: 1, environments: next })
 }
 
-function resolveEnvironmentFromStore(
+export function resolveEnvironmentFromStore(
   store: RuntimeEnvironmentStore,
   selector: string
 ): KnownRuntimeEnvironment {
@@ -224,51 +302,4 @@ function resolveEnvironmentFromStore(
     )
   }
   throw new RuntimeEnvironmentStoreError('invalid_argument', `Unknown environment: ${selector}`)
-}
-
-function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
-  const path = getEnvironmentStorePath(userDataPath)
-  if (!existsSync(path)) {
-    return { version: 1, environments: [] }
-  }
-  try {
-    hardenExistingSecureFile(path)
-    const parsed = RuntimeEnvironmentStoreSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer.toString(
-          'utf8'
-        )
-      )
-    )
-    return {
-      version: 1,
-      environments: parsed.environments
-        .map((entry) => KnownRuntimeEnvironmentSchema.parse(entry))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    }
-  } catch {
-    throw new RuntimeEnvironmentStoreError(
-      'runtime_error',
-      `Could not read Orca environments at ${path}; the file is invalid.`
-    )
-  }
-}
-
-function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
-  const path = getEnvironmentStorePath(userDataPath)
-  try {
-    writeSecureJsonFileWithinLimit(
-      path,
-      RuntimeEnvironmentStoreSchema.parse(store),
-      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
-    )
-  } catch (error) {
-    if (error instanceof JsonStringifyByteLimitError) {
-      throw new RuntimeEnvironmentStoreError(
-        'runtime_error',
-        `Could not write Orca environments at ${path}; the store exceeds its durable capacity.`
-      )
-    }
-    throw error
-  }
 }

@@ -6,7 +6,9 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('fs', () => ({
-  existsSync: vi.fn().mockReturnValue(true),
+  // Model the legacy Node-only relay package; Bun companions are absent so
+  // executable-bit command counts reflect the shipped artifact.
+  existsSync: vi.fn((path: string) => !/bun-runtime(?:-|$)/u.test(path)),
   readFileSync: vi.fn().mockReturnValue('0.1.0+testhash')
 }))
 

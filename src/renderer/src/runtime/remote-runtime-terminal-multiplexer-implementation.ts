@@ -83,7 +83,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
 
     const stream: RemoteRuntimeMultiplexedTerminal = {
       streamId,
-      sendInput: (text) => this.isRegisteredStream(state) && this.sendInput(state, text),
+      sendInput: (text, options) =>
+        this.isRegisteredStream(state) && this.sendInput(state, text, options),
       resize: (cols, rows) =>
         this.isRegisteredStream(state) &&
         this.sendFrame(

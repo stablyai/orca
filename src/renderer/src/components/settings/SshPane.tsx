@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
@@ -21,6 +21,7 @@ import { getAllWorktreesFromState } from '@/store/selectors'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useSshAddTargetIntent } from './use-ssh-add-target-intent'
+import { saveSshTargetForm } from './ssh-target-save-action'
 export { getSshPaneSearchEntries } from './ssh-search'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
@@ -38,6 +39,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   // Why: gates the submit button and the Enter path so a double click cannot
   // land two addTarget/updateTarget writes for one draft.
   const [saving, setSaving] = useState(false)
+  const provisioningRequestId = useRef<string | null>(null)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   // Why: when a target still has workspaces, route removal through the shared
   // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
@@ -93,6 +95,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }, [loadTargets])
 
   const openAddTargetForm = useCallback((): void => {
+    provisioningRequestId.current = null
     // Why: composer deep-links should land on the existing add form, not just
     // the host management pane.
     setEditingId(null)
@@ -113,21 +116,12 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     setSaving(true)
 
     try {
-      if (editingId) {
-        await window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
-      } else {
-        const result = await window.api.ssh.addTarget({ target: savePayload.payload.target })
-        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
-      }
+      await saveSshTargetForm(editingId, savePayload.payload, provisioningRequestId)
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
         return
       }
-      toast.success(
-        editingId
-          ? translate('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
-          : translate('auto.components.settings.SshPane.f602009125', 'Target added')
-      )
+      provisioningRequestId.current = null
       setShowForm(false)
       setEditingId(null)
       setForm(EMPTY_FORM)
@@ -328,6 +322,10 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }
 
   const cancelForm = (): void => {
+    if (saving) {
+      return
+    }
+    provisioningRequestId.current = null
     setShowForm(false)
     setEditingId(null)
     setForm(EMPTY_FORM)

@@ -14,6 +14,7 @@ import {
   recordPtySurfaceClaim,
   SURFACE_CLAIM_WITHOUT_STANDING
 } from './pty-recorded-surface-topology'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepoWorktreeScan {
   protected recordPtyWorktree(
@@ -38,6 +39,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     let pty = this.ptysById.get(ptyId)
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null
