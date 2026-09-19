@@ -628,6 +628,8 @@ describe('Pi Source Control AI model selection', () => {
       prompt: 'Name a branch',
       model: 'openai-codex/gpt-5.5'
     })
-    expect(args).toEqual(expect.arrayContaining(['--model', 'openai-codex/gpt-5.5']))
+    const modelFlagIndex = args.indexOf('--model')
+    expect(modelFlagIndex).toBeGreaterThanOrEqual(0)
+    expect(args[modelFlagIndex + 1]).toBe('openai-codex/gpt-5.5')
   })
 })
