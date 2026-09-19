@@ -140,5 +140,29 @@ html, body {
 @media print {
   pre, code, table, img, svg { page-break-inside: avoid; }
   h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
+  /* A tall Mermaid SVG must move as one unit. Keep its heading on the
+     preceding page so the avoid rules cannot strand an otherwise blank page. */
+  h1:has(+ .mermaid-block),
+  h2:has(+ .mermaid-block),
+  h3:has(+ .mermaid-block),
+  h4:has(+ .mermaid-block),
+  h5:has(+ .mermaid-block),
+  h6:has(+ .mermaid-block),
+  h1:has(+ .markdown-annotation-block .mermaid-block),
+  h2:has(+ .markdown-annotation-block .mermaid-block),
+  h3:has(+ .markdown-annotation-block .mermaid-block),
+  h4:has(+ .markdown-annotation-block .mermaid-block),
+  h5:has(+ .markdown-annotation-block .mermaid-block),
+  h6:has(+ .markdown-annotation-block .mermaid-block) {
+    page-break-after: auto;
+  }
+  .markdown-annotation-block:has(+ .markdown-annotation-block .mermaid-block) h1,
+  .markdown-annotation-block:has(+ .markdown-annotation-block .mermaid-block) h2,
+  .markdown-annotation-block:has(+ .markdown-annotation-block .mermaid-block) h3,
+  .markdown-annotation-block:has(+ .markdown-annotation-block .mermaid-block) h4,
+  .markdown-annotation-block:has(+ .markdown-annotation-block .mermaid-block) h5,
+  .markdown-annotation-block:has(+ .markdown-annotation-block .mermaid-block) h6 {
+    page-break-after: auto;
+  }
 }
 `
