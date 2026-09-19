@@ -30,6 +30,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
   json: '--json                 Emit machine-readable JSON',
   key: '--key <key>            Key argument for this command',
+  kind: '--kind git|folder      Register the path as a git project or a plain folder',
   limit: '--limit <n>            Maximum number of rows to return',
   local: '--local                Target the current project instead of the global install',
   skill: '--skill <name>         Bundled skill to act on; repeat for several',
