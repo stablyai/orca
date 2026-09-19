@@ -4,12 +4,27 @@ import * as React from 'react'
 import { Popover as PopoverPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
 
-function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />
+function Popover({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof PopoverPrimitive.Root>) {
+  // Why: stay controlled so hiding Tasks cannot flip Radix uncontrolled↔controlled.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
+  return (
+    <PopoverPrimitive.Root
+      data-slot="popover"
+      {...props}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
+    />
+  )
 }
 
 function PopoverTrigger(props: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
