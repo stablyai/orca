@@ -144,6 +144,11 @@ export function sameGroups(
 }
 
 export function toVisibleTabType(tab: Tab): WebSessionTabsSyncState['activeTabType'] {
+  if (tab.contentType === 'agents') {
+    // The Agents tab has no visible-type of its own; the web client treats it as a terminal
+    // surface, and its only caller is reached after no prior surface survived the sync.
+    return 'terminal'
+  }
   if (tab.contentType === 'agent-session') {
     return 'agent-session'
   }

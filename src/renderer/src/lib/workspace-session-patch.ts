@@ -178,7 +178,11 @@ export function buildWorkspaceSessionPatch(
       'activeGroupIdByWorktree',
       'groupsByWorktree',
       'layoutByWorktree',
-      'unifiedTabsByWorktree'
+      'unifiedTabsByWorktree',
+      // Why: a direct input to projectAgentCardsToOrdinaryTabs (via buildPersistedUnifiedTabSessionData);
+      // a registry-only mutation must still rebuild this patch or a card group can persist as an
+      // ordinary off-layout group until some other covered field happens to change too.
+      'agentCardGroupIdsByWorktree'
     ] as const)
   ) {
     Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))

@@ -1,5 +1,6 @@
 import React from 'react'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
+import { useAgentCardsReconciler } from '../hooks/use-agent-cards-reconciler'
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
 import {
   useBrowserGuestPaintRetention,
@@ -47,6 +48,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
     shouldMeasureHiddenWorktree,
     needsBrowserGuestPaint
   })
+  useAgentCardsReconciler(worktreeId)
 
   return (
     <div

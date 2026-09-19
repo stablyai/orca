@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import { useAgentCardGridClip } from './agent-card-grid-clip'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 
 const HAS_CSS_ANCHOR_POSITIONING =
@@ -103,9 +104,17 @@ export function RetainedPaneHost({
       resizeObserver.observe(parent)
     }
     window.addEventListener('resize', updateRect)
+    // Why the agent-cards grid specifically, not document: it is the one ancestor that can actually
+    // scroll under a retained pane host. It is also the scroll target, so no capture: capture would
+    // re-measure every mounted host whenever a scroll happened inside any one terminal or chat.
+    // Scoping here means a non-card worktree's fallback effect (every web-client pane) attaches no
+    // scroll listener at all (I4).
+    const scrollAncestor = body?.closest('[data-orca-agent-cards]')
+    scrollAncestor?.addEventListener('scroll', updateRect)
     return () => {
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateRect)
+      scrollAncestor?.removeEventListener('scroll', updateRect)
     }
   }, [anchorName, groupId, isVisible])
 
@@ -143,6 +152,8 @@ export function RetainedPaneHost({
       window.clearTimeout(settledRetryId)
     }
   }, [anchorName, fitTerminal, isVisible, measuredFallbackRect])
+
+  useAgentCardGridClip(overlayRef, groupId, isVisible, measuredFallbackRect)
 
   const style: React.CSSProperties = useMemo(
     () =>

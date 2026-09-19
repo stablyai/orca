@@ -16,7 +16,8 @@ import {
   FileSpreadsheet,
   FileText,
   FileType,
-  FileVideo
+  FileVideo,
+  LayoutGrid
 } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import { getFileTypeIcon } from './file-type-icons'
@@ -53,6 +54,10 @@ describe('getFileTypeIcon', () => {
   it('matches audio and video extensions', () => {
     expect(getFileTypeIcon('sound/theme.mp3')).toBe(FileMusic)
     expect(getFileTypeIcon('demo.mov')).toBe(FileVideo)
+  })
+
+  it('uses LayoutGrid for the agents tab synthetic label', () => {
+    expect(getFileTypeIcon('Agents')).toBe(LayoutGrid)
   })
 
   it('falls back to the generic file icon for unknown files', () => {

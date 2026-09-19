@@ -93,6 +93,46 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     {
       title: translate(
+        'auto.components.settings.experimental.search.tiledAgentsTitle',
+        'Tiled agents'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.tiledAgentsDescription',
+        "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time."
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.tiledAgentsKeywordTile',
+          'tile'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.tiledAgentsKeywordTiled',
+          'tiled'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.tiledAgentsKeywordGrid',
+          'grid'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.fa72e71f05',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.tiledAgentsKeywordPanes',
+          'panes'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.tiledAgentsKeywordSideBySide',
+          'side by side'
+        )
+      ]
+    },
+    {
+      title: translate(
         'auto.components.settings.experimental.search.9e4ddf776d',
         'Terminal attention'
       ),
@@ -184,7 +224,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   ]
 )
 
-// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
+// Why: title-keyed lookup avoids a fragile numeric-index invariant: the array
 // shape can change without breaking consumers, and a typo/rename throws loudly
 // instead of silently matching the wrong (or empty) entry.
 function findEntry(title: string): SettingsSearchEntry {
@@ -206,6 +246,9 @@ export function getExperimentalSearchEntry() {
         'auto.components.settings.experimental.search.agentDashboard.title',
         'Agent Dashboard'
       )
+    ),
+    tiledAgents: findEntry(
+      translate('auto.components.settings.experimental.search.tiledAgentsTitle', 'Tiled agents')
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

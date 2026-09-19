@@ -200,6 +200,8 @@ export function buildWorktreePurgeState(
     unifiedTabsByWorktree: omitByWorktree(s.unifiedTabsByWorktree),
     groupsByWorktree: omitByWorktree(s.groupsByWorktree),
     layoutByWorktree: omitByWorktree(s.layoutByWorktree),
+    agentCardGroupIdsByWorktree: omitByWorktree(s.agentCardGroupIdsByWorktree),
+    maximizedGroupIdByWorktree: omitByWorktree(s.maximizedGroupIdByWorktree),
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),

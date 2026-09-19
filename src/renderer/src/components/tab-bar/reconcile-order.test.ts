@@ -28,8 +28,9 @@ describe('reconcileTabOrder', () => {
     expect(reconcileTabOrder([], [], [])).toEqual([])
   })
 
-  it('maintains interleaved stored order across types', () => {
-    const stored = ['t1', 'e1', 't2', 'e2']
-    expect(reconcileTabOrder(stored, ['t1', 't2'], ['e1', 'e2'])).toEqual(['t1', 'e1', 't2', 'e2'])
+  it('orders and dedupes agents ids alongside other kinds', () => {
+    expect(reconcileTabOrder(['a1', 't1'], ['t1'], [], [], [], [], ['a1'])).toEqual(['a1', 't1'])
+    expect(reconcileTabOrder(undefined, ['t1'], [], [], [], [], ['a1'])).toEqual(['t1', 'a1'])
+    expect(reconcileTabOrder(['a1', 'a1'], [], [], [], [], [], ['a1'])).toEqual(['a1'])
   })
 })
