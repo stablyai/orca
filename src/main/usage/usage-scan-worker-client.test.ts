@@ -6,6 +6,7 @@ import {
   MAX_CONSECUTIVE_DEATHS,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS,
   UsageScanWorkerClient,
+  scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker
 } from './usage-scan-worker-client'
 import { USAGE_SCAN_WORKER_ENTRY_FILENAME } from './usage-scan-worker-spawn'
@@ -70,6 +71,21 @@ const CODEX_BODY: UsageScanWorkerRequestBody = {
 }
 
 describe('UsageScanWorkerClient', () => {
+  it('forwards the selected Claude runtime target to the worker', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+    const target = { configDir: '/selected/.claude', includeWslHomes: false }
+    const pending = scanClaudeUsageOnWorker((body) => client.scan(body), [], [], target)
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    expect(worker.postedRequests[0]).toMatchObject({ providerId: 'claude', target })
+    worker.emit('message', {
+      id: worker.lastId(),
+      ok: true,
+      value: { providerId: 'claude', source: [], sessions: [], dailyAggregates: [] }
+    })
+    await expect(pending).resolves.toMatchObject({ providerId: 'claude' })
+  })
+
   it('routes a scan to the worker and hands back that provider’s projection', async () => {
     const worker = new FakeWorker()
     const client = createClient(() => worker)

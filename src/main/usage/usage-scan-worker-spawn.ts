@@ -17,6 +17,7 @@ import type {
   OpenCodeUsageSession
 } from '../opencode-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import type { ClaudeUsageScanTarget } from '../claude-usage/scanner'
 import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
@@ -58,7 +59,8 @@ function getSharedClient(): UsageScanWorkerClient {
  */
 export async function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  previous: ClaudeUsagePersistedFile[] = []
+  previous: ClaudeUsagePersistedFile[] = [],
+  target?: ClaudeUsageScanTarget
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -67,7 +69,8 @@ export async function scanClaudeUsageFilesViaWorker(
   const value = await scanClaudeUsageOnWorker(
     (body) => getSharedClient().scan(body),
     worktrees,
-    previous
+    previous,
+    target
   )
   return {
     processedFiles: value.source,

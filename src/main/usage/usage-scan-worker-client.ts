@@ -16,6 +16,7 @@ import type {
   OpenCodeUsageSession
 } from '../opencode-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import type { ClaudeUsageScanTarget } from '../claude-usage/scanner'
 import type {
   UsageScanWorkerProviderId,
   UsageScanWorkerRequest,
@@ -119,11 +120,12 @@ function wrongProvider(expected: UsageScanWorkerProviderId, actual: string): Err
 export async function scanClaudeUsageOnWorker(
   scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
-  previous: ClaudeUsagePersistedFile[]
+  previous: ClaudeUsagePersistedFile[],
+  target?: ClaudeUsageScanTarget
 ): Promise<
   ProviderScanResult<ClaudeUsagePersistedFile, ClaudeUsageSession, ClaudeUsageDailyAggregate>
 > {
-  const value = await scan({ providerId: 'claude', worktrees, previous })
+  const value = await scan({ providerId: 'claude', worktrees, previous, target })
   if (value.providerId !== 'claude') {
     throw wrongProvider('claude', value.providerId)
   }

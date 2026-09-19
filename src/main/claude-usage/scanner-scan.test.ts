@@ -422,6 +422,67 @@ describe('scanClaudeUsageFiles', () => {
     expect(second.processedFiles[0]?.ownedDedupeKeys).toEqual(['msg_1:req_1', 'msg_9:req_9'])
   })
 
+  it('reclaims fork-copied turns when the owning original file cannot be statted', async () => {
+    const root = await makeClaudeProjectsRoot()
+    const projectDir = join(root, '.claude', 'projects', 'project-a')
+    const originalFile = join(projectDir, 'aaaa-original.jsonl')
+    const forkFile = join(projectDir, 'bbbb-fork.jsonl')
+    const turn = (
+      sessionId: string,
+      messageId: string,
+      requestId: string,
+      inputTokens: number
+    ): string =>
+      JSON.stringify({
+        type: 'assistant',
+        sessionId,
+        timestamp: '2026-04-09T10:00:00.000Z',
+        requestId,
+        cwd: '/workspace/repo-a',
+        message: {
+          id: messageId,
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: inputTokens, output_tokens: 10 }
+        }
+      })
+
+    await writeFile(originalFile, turn('session-1', 'msg_1', 'req_1', 100))
+    await writeFile(
+      forkFile,
+      [turn('session-2', 'msg_1', 'req_1', 100), turn('session-2', 'msg_9', 'req_9', 50)].join('\n')
+    )
+
+    vi.resetModules()
+    vi.doMock('os', async () => ({
+      ...(await vi.importActual<typeof Os>('os')),
+      homedir: () => root
+    }))
+    const { scanClaudeUsageFiles } = await import('./scanner')
+    const first = await scanClaudeUsageFiles([])
+
+    vi.resetModules()
+    vi.doMock('fs/promises', async () => {
+      const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+      return {
+        ...actual,
+        stat: vi.fn(async (filePath: string) => {
+          if (filePath === originalFile) {
+            throw new Error('transcript metadata unavailable')
+          }
+          return actual.stat(filePath)
+        })
+      }
+    })
+    const { scanClaudeUsageFiles: rescanClaudeUsageFiles } = await import('./scanner')
+
+    const second = await rescanClaudeUsageFiles([], first.processedFiles)
+    expect(second.dailyAggregates.reduce((sum, aggregate) => sum + aggregate.inputTokens, 0)).toBe(
+      150
+    )
+    expect(second.processedFiles).toHaveLength(1)
+    expect(second.processedFiles[0]?.ownedDedupeKeys).toEqual(['msg_1:req_1', 'msg_9:req_9'])
+  })
+
   it('keeps unrelated cached transcripts when a different owner file is deleted', async () => {
     const root = await makeClaudeProjectsRoot()
     const projectDir = join(root, '.claude', 'projects', 'project-a')
