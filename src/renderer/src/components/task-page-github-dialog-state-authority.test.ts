@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
-import { assertTaskPageGitHubDialogStateAuthority } from './task-page-github-dialog-state-authority'
+import {
+  assertTaskPageGitHubDialogAssigneesAuthority,
+  assertTaskPageGitHubDialogStateAuthority,
+  resolveTaskPageGitHubDialogAssigneeUsers
+} from './task-page-github-dialog-state-authority'
 import {
   adoptQuietSearchFieldsForItem,
   applyPendingTaskPageGitHubMutationsToItems,
@@ -9,10 +13,13 @@ import {
   reapplyPendingTaskPageGitHubMutationsToCache
 } from './task-page-github-work-item-mutations'
 import {
+  deleteConfirmedListSnapshot,
   deleteLastConfirmedClientValue,
+  getConfirmedListSnapshot,
   getLastConfirmedClientValue,
   getOrCreateQuietRevalidateState,
   resetTaskPageGitHubMutationRegistryForTests,
+  setConfirmedListSnapshot,
   setLastConfirmedClientValue,
   setTaskPageGitHubMutationQueryKey,
   taskPageGitHubFamilyDirtyKey,
@@ -183,5 +190,100 @@ describe('dialog state authority (STA-3343)', () => {
     setLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', 'merged')
     expect(superseded.revert()).toBe(false)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('merged')
+  })
+})
+
+describe('dialog assignee authority', () => {
+  const me = { login: 'me', name: 'Me', avatarUrl: 'https://avatars/me' }
+  const other = { login: 'other', name: null, avatarUrl: '' }
+
+  it('holds a dialog-confirmed assignee over a stale search refetch', () => {
+    setTaskPageGitHubMutationQueryKey('q')
+    assertTaskPageGitHubDialogAssigneesAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      assignees: [me]
+    })
+    const materialized = materializeTaskPageItemList({
+      networkItems: [item({ assignees: [] })],
+      previousItems: [item({ assignees: [me] })],
+      queryKey: 'q'
+    })
+    expect(materialized[0]?.assignees?.map((user) => user.login)).toEqual(['me'])
+  })
+
+  it('records the snapshot under the mutation source scope and marks the family dirty', () => {
+    setTaskPageGitHubMutationQueryKey('q')
+    const before = getOrCreateQuietRevalidateState('q').dirtyGeneration
+    assertTaskPageGitHubDialogAssigneesAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      assignees: [me],
+      sourceContext
+    })
+    const scope = getTaskSourceCacheScope(sourceContext)
+    expect(getConfirmedListSnapshot(scope, 'repo-1', 'issue:1', 'assignees')).toEqual([me])
+    expect(getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')).toBeUndefined()
+    const quiet = getOrCreateQuietRevalidateState('q')
+    expect(quiet.dirtyGeneration).toBe(before + 1)
+    expect(
+      quiet.familyDirtyAt.get(
+        taskPageGitHubFamilyDirtyKey(taskPageGitHubItemKey('repo-1', 'issue:1'), 'assignees')
+      )
+    ).toBe(quiet.dirtyGeneration)
+  })
+
+  it('releases authority once search reports the confirmed assignees', () => {
+    setTaskPageGitHubMutationQueryKey('q')
+    assertTaskPageGitHubDialogAssigneesAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      assignees: [me]
+    })
+    adoptQuietSearchFieldsForItem({
+      item: item({ assignees: [me] }),
+      serverItem: item({ assignees: [me] }),
+      sourceScope: null,
+      queryKey: 'q',
+      fetchStartedAtGeneration: getOrCreateQuietRevalidateState('q').dirtyGeneration,
+      patchWorkItem: () => {}
+    })
+    expect(getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')).toBeUndefined()
+  })
+
+  it('revert drops fresh authority, restores a previous snapshot, and yields to newer owners', () => {
+    setTaskPageGitHubMutationQueryKey('q')
+    const fresh = assertTaskPageGitHubDialogAssigneesAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      assignees: [me]
+    })
+    expect(fresh.revert()).toBe(true)
+    expect(getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')).toBeUndefined()
+
+    setConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees', [other])
+    const layered = assertTaskPageGitHubDialogAssigneesAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      assignees: [other, me]
+    })
+    expect(layered.revert()).toBe(true)
+    expect(getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')).toEqual([other])
+
+    const released = assertTaskPageGitHubDialogAssigneesAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      assignees: [me]
+    })
+    deleteConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')
+    expect(released.revert()).toBe(false)
+    expect(getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')).toBeUndefined()
+  })
+
+  it('resolves dialog logins to known profiles and falls back to a bare user', () => {
+    expect(resolveTaskPageGitHubDialogAssigneeUsers(['ME', 'ghost'], [other, me])).toEqual([
+      me,
+      { login: 'ghost', name: null, avatarUrl: '' }
+    ])
   })
 })

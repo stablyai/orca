@@ -281,8 +281,10 @@ export function GHEditSection({
       runGHEditAssigneeToggle({
         login,
         localAssignees,
+        knownAssignees: [...(item.assignees ?? []), ...repoAssignees.data],
         assigneesItemKey,
         editedAssigneesItemKeyRef,
+        itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -290,18 +292,23 @@ export function GHEditSection({
         projectOrigin,
         run,
         setLocalAssignees,
+        patchWorkItem,
         patchProjectRowIfNeeded,
         onMutated
       })
     },
     [
+      item.id,
       item.number,
       item.repoId,
+      item.assignees,
+      repoAssignees.data,
       assigneesItemKey,
       repoPath,
       sourceContext,
       projectOrigin,
       localAssignees,
+      patchWorkItem,
       patchProjectRowIfNeeded,
       run,
       onMutated
