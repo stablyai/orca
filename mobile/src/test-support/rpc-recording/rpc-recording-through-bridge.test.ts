@@ -18,9 +18,11 @@ import {
   type BridgedParityEvidence
 } from '../bridged-parity/divergence-classes'
 import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
+import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
 import { C1_PAGE_CLOSURE } from '../bridged-parity/c1-page-closure'
 import {
   pageClosureDrift,
+  pageClosureRunTotals,
   pageClosureTotals,
   readPageClosure,
   type BridgedParityVerdict,
@@ -376,11 +378,20 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       // The run's own totals over this closure, against the pin's. A per-id walk agrees with a
       // table that is wrong the same way twice; the counts are what caught exactly that while the
       // file was being derived.
-      const ran: Record<string, number> = {}
-      for (const [, seen] of [...observed].filter(([, seen]) => seen.family in C5_PAGE_CLOSURE)) {
-        ran[seen.verdict] = (ran[seen.verdict] ?? 0) + 1
-      }
-      expect(ran).toEqual(pageClosureTotals(C5_PAGE_CLOSURE))
+      expect(pageClosureRunTotals(C5_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C5_PAGE_CLOSURE)
+      )
+    })
+
+    it('gives every golden the C2 page closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C2', C2_PAGE_CLOSURE, observed))
+      // 70 families and 266 goldens, C1's 22 among them and inherited rather than re-derived, so
+      // this repeats their check too. Five of the families it adds have no byte-identical golden at
+      // all: there the pin holds the class, which is the whole of what it can hold.
+      expect({ closure: pageClosureDrift(C2_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
+      expect(pageClosureRunTotals(C2_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C2_PAGE_CLOSURE)
+      )
     })
   }
 )
