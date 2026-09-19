@@ -129,6 +129,7 @@ export function resetRemoteRuntimeMocks() {
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this harness intentionally supplies only the state surface exercised by the isolated worktree slice.
       ({
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
@@ -167,6 +168,7 @@ export function createTestStore() {
         editorDrafts: {},
         markdownViewMode: {},
         markdownRichModeSizeOverride: {},
+        markdownRichModeFaultedContent: {},
         editorViewMode: {},
         showDotfilesByWorktree: {},
         expandedDirs: {},

@@ -145,7 +145,9 @@ export function getMarkdownRichModeUnsupportedReason(
     return matcher.reason
   }
 
-  if (hasHtml) {
+  // HTML comments inside image alt text are Markdown label content, not embedded
+  // document HTML; they remain literal through the rich serializer.
+  if (hasHtml && !hasOnlyImageAltComments(contentWithoutCode)) {
     if (!validateHtmlRoundTrip) {
       return htmlMatcher!.reason
     }
@@ -163,6 +165,14 @@ export function getMarkdownRichModeUnsupportedReason(
   }
 
   return null
+}
+
+function hasOnlyImageAltComments(content: string): boolean {
+  const withoutImageAltComments = content.replace(/!\[<!--(?:.|\n)*?-->\]/g, '')
+  return (
+    content !== withoutImageAltComments &&
+    !hasHtmlOrJsx(withoutImageAltComments, /<!--|<\/?[A-Za-z]/)
+  )
 }
 
 export function getMarkdownRichModeEligibilityDecision({
@@ -324,9 +334,7 @@ function forEachEmbeddedHtmlFragment(
 function getHtmlTagEnd(content: string, startIndex: number): number | null {
   let index = startIndex + 1
 
-  if (content.charCodeAt(index) === 47) {
-    index++
-  }
+  index += content.charCodeAt(index) === 47 ? 1 : 0
 
   if (!isHtmlTagNameStart(content.charCodeAt(index))) {
     return null
@@ -351,11 +359,8 @@ function getHtmlTagEnd(content: string, startIndex: number): number | null {
   index++
   while (index < content.length) {
     const code = content.charCodeAt(index)
-    if (code === 60) {
-      return null
-    }
-    if (code === 62) {
-      return index + 1
+    if (code === 60 || code === 62) {
+      return code === 60 ? null : index + 1
     }
     index++
   }

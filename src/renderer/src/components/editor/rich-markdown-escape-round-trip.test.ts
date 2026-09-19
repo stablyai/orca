@@ -117,7 +117,7 @@ describe('rich markdown escape round trip', () => {
 
   it('does not invent a backslash on money-like $5', () => {
     expect(expectStable('cost $5\n')).toBe('cost $5')
-    expect(expectStable('cost \\$5\n')).not.toContain('\\$')
+    expect(expectStable('cost \\$5\n')).toBe('cost \\$5')
     expect(inspect('cost $5\n').inlineMath).toBe(0)
   })
 
@@ -259,4 +259,24 @@ describe('rich markdown escape round trip', () => {
       editor.destroy()
     }
   })
+})
+
+it.each([
+  '\\* `$HOME`',
+  '\\* `a & b`',
+  '\\* Copyright &copy; 2026',
+  'cost \\$5\n\n```\nx && y < z\n```',
+  'a \\& b and [x](http://h/?a=1&b=2)',
+  '[`[text](url)`](https://docs)'
+])('preserves mixed escaped prose through repeated saves: %s', (source) => {
+  const before = inspect(source)
+  let output = source
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    const next = inspect(output)
+    expect(next.text).toBe(before.text)
+    expect(next.href).toBe(before.href)
+    expect(next.types).toEqual(before.types)
+    output = next.markdown
+  }
+  expect(roundTrip(output)).toBe(output)
 })

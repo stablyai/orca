@@ -1,8 +1,7 @@
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
-import Image from '@tiptap/extension-image'
+import { RichMarkdownLink, RichMarkdownImage } from './rich-markdown-destinations'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
 import { createRichMarkdownTable } from './rich-markdown-table'
@@ -41,14 +40,33 @@ import { RichMarkdownCodeSpanPadding } from './rich-markdown-code-span-padding'
 import { RichMarkdownListItem } from './rich-markdown-list-item'
 import { RichMarkdownProseEntities } from './rich-markdown-prose-entities'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
-import { RichMarkdownInlineMath } from './rich-markdown-inline-math'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
+import { RichMarkdownInlineMath } from './rich-markdown-inline-math'
+import { RichMarkdownEscapedCharacter } from './rich-markdown-escaped-character'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 import { renderRichMarkdownCodeBlock } from './rich-markdown-code-block-markdown'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
+const BLOCK_MATH_START_PATTERN = /\n[ \t]*\$\$/
+const BLOCK_MATH_PATTERN = /^[ \t]*\$\$((?:(?!\$\$)[\s\S])+?)\$\$/
+const RichMarkdownBlockMath = BlockMath.extend({
+  markdownTokenizer: {
+    name: 'blockMath',
+    level: 'block',
+    // Why: marked cuts the paragraph at the returned index + 1; pointing at the newline keeps
+    // the indent out of the paragraph and lets the block tokenizer see the whole opener line.
+    start: (src: string) => BLOCK_MATH_START_PATTERN.exec(src)?.index ?? -1,
+    tokenize: (src: string) => {
+      const match = src.match(BLOCK_MATH_PATTERN)
+      if (!match) {
+        return undefined
+      }
+      return { type: 'blockMath', raw: match[0], latex: match[1].trim() }
+    }
+  }
+})
 const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
   // mark even though it should still stay exclusive with emphasis marks.
@@ -96,7 +114,7 @@ export function createRichMarkdownExtensions({
       lowlight,
       defaultLanguage: null
     }),
-    Link.configure({
+    RichMarkdownLink.configure({
       openOnClick: false,
       autolink: true,
       linkOnPaste: true
@@ -105,7 +123,7 @@ export function createRichMarkdownExtensions({
     // file:// URLs in <img> tags are blocked by cross-origin restrictions.
     // A nodeView loads local images via IPC → blob URL, which bypasses this
     // and works identically in dev and production modes.
-    Image.extend({
+    RichMarkdownImage.extend({
       addStorage() {
         return {
           contextVersion: 0,
@@ -237,7 +255,7 @@ export function createRichMarkdownExtensions({
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    RichMarkdownBlockMath.configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false
@@ -257,6 +275,7 @@ export function createRichMarkdownExtensions({
         gfm: true
       }
     }),
+    RichMarkdownEscapedCharacter,
     RichMarkdownCodeSpanPadding,
     RichMarkdownProseEntities,
     createRichMarkdownAnnotationHighlightExtension()

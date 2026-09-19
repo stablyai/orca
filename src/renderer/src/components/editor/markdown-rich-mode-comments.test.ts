@@ -173,3 +173,9 @@ describe('rich editing of Markdown documents with HTML comments', () => {
     )
   })
 })
+
+it('does not let image-alt comments bypass reference definitions', () => {
+  expect(
+    getMarkdownRichModeUnsupportedReason('![<!-- alt -->](image.png)\n\n[id]: https://example.com')
+  ).toBe('reference-links')
+})

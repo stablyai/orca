@@ -160,6 +160,7 @@ describe('fence boundaries against marked', () => {
     '````',
     '~~~',
     '```~~~',
+    '``` ~',
     '~~~```',
     '```` ',
     '```js',

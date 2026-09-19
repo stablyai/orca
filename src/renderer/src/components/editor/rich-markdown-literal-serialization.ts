@@ -40,6 +40,9 @@ function escapeBare(markdown: string, chars: string): string {
 }
 
 function destNeedsEscape(dest: string): boolean {
+  if (/\s/.test(dest)) {
+    return true
+  }
   let depth = 0
   let oddBackslash = false
   for (let i = 0; i < dest.length; i += 1) {
@@ -156,8 +159,19 @@ function escapeLinkAndImageAttributes(node: JSONContent): void {
   forEachLinkOrImage(node, (attrs, kind) => {
     const destKey = kind === 'image' ? 'src' : 'href'
     const dest = attrs[destKey]
-    if (typeof dest === 'string' && destNeedsEscape(dest)) {
-      attrs[destKey] = escapeBare(dest, '()')
+    const rawKey = kind === 'image' ? 'rawSrc' : 'rawHref'
+    const originalKey = kind === 'image' ? 'originalSrc' : 'originalHref'
+    const raw = attrs[rawKey]
+    const keepRaw = typeof raw === 'string' && dest === attrs[originalKey]
+    if (keepRaw) {
+      attrs[destKey] = raw
+      attrs[originalKey] = raw
+    }
+    if (!keepRaw && typeof dest === 'string' && destNeedsEscape(dest)) {
+      attrs[destKey] = escapeBare(
+        dest.replace(/\s/g, (character) => encodeURIComponent(character)),
+        '()'
+      )
     }
     if (typeof attrs.title === 'string' && /["\\]/.test(attrs.title)) {
       attrs.title = attrs.title.replace(/["\\]/g, '\\$&')

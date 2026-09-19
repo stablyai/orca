@@ -1,8 +1,7 @@
 import { InlineMath } from '@tiptap/extension-mathematics'
 
-// Why: the common dialect requires a non-space next to each delimiter and forbids a
-// newline inside, which is what keeps `US$ 5,000 and R$ 40,000` out of a math span.
-const INLINE_MATH = /^\$(?![\s$])((?:\\[^\n]|[^$\\\n])*?)(?<!\s)\$(?![\d$])/
+// Keep money as text while allowing valid multiline and escaped LaTeX content.
+const INLINE_MATH = /^\$(?![\s$])((?:\\[\s\S]|[^$\\])*?)(?<!\s)\$(?![\d$])/
 
 const baseTokenizer = InlineMath.config.markdownTokenizer
 if (!baseTokenizer) {

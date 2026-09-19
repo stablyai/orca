@@ -82,10 +82,36 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
       const editor = await waitForRichMarkdownEditor(page)
       await expect(editor).toContainText('[[]] [[a|]]')
       await expect(editor.locator('a strong')).toHaveText('Bold')
-      await editor.click()
-      await page.keyboard.press('ControlOrMeta+End')
+      await editor.locator('p').filter({ hasText: /^End$/ }).click()
+      // Hidden renderers cannot reliably position the native caret from a mouse click.
+      await editor
+        .locator('p')
+        .filter({ hasText: /^End$/ })
+        .evaluate((paragraph) => {
+          const text = paragraph.firstChild
+          if (!text) {
+            throw new Error('Missing final paragraph text')
+          }
+          const range = document.createRange()
+          range.setStart(text, text.textContent?.length ?? 0)
+          range.collapse(true)
+          const selection = window.getSelection()
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+          document.dispatchEvent(new Event('selectionchange'))
+        })
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const selection = window.getSelection()
+            return [selection?.anchorNode?.textContent, selection?.anchorOffset]
+          })
+        )
+        .toEqual(['End', 3])
       await page.keyboard.press('Enter')
       await page.keyboard.insertText(TYPED)
+      await expect(editor.locator('h1')).toHaveText('Compatibility')
+      await expect(editor.locator('p').last()).toHaveText(TYPED)
       await expect(editor.locator('a').filter({ hasText: 'typed' })).toHaveCount(0)
       await page.keyboard.press('ControlOrMeta+S')
       await expect
@@ -102,7 +128,8 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
       }
       await openMarkdownFixture(page, context, filePath)
       const reopened = await waitForRichMarkdownEditor(page)
-      await expect(reopened).toContainText(TYPED)
+      await expect(reopened.locator('h1')).toHaveText('Compatibility')
+      await expect(reopened.locator('p').last()).toHaveText(TYPED)
       await expect(reopened).toContainText('[[]] [[a|]]')
       await expect(reopened.locator('a strong')).toHaveText('Bold')
       await expect(reopened.locator('a').filter({ hasText: 'typed' })).toHaveCount(0)

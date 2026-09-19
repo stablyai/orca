@@ -16,6 +16,7 @@ import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
+import { useMarkdownRichModeFaultTracking } from './useMarkdownRichModeFaultTracking'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { useEditorContentChangeHandler } from './use-editor-content-change-handler'
@@ -66,6 +67,8 @@ function EditorPanelInner({
   const markdownRichModeSizeOverridden = useAppStore(
     (s) => activeFileId !== null && s.markdownRichModeSizeOverride[activeFileId] === true
   )
+  const markdownRichModeFaultedContent = useAppStore((s) => s.markdownRichModeFaultedContent)
+  const setMarkdownRichModeFaultedContent = useAppStore((s) => s.setMarkdownRichModeFaultedContent)
   const editorViewMode = useAppStore((s) => s.editorViewMode)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
@@ -205,20 +208,31 @@ function EditorPanelInner({
     }
   }, [activeFile, clearCopiedPathToastResetTimer])
 
-  if (!activeFile) {
+  const model = activeFile
+    ? getEditorPanelRenderModel({
+        activeFile,
+        fileContents,
+        editorDrafts,
+        gitStatusEntries,
+        gitBranchEntries,
+        markdownViewMode,
+        markdownRichModeSizeOverridden,
+        markdownRichModeFaultedContent,
+        isChangesMode,
+        canOpenWorkspaceFileBrowser
+      })
+    : null
+  useMarkdownRichModeFaultTracking({
+    fileId: activeFile?.id ?? null,
+    mdViewMode: model?.mdViewMode ?? 'source',
+    inlineMarkdownRenderState: model?.inlineMarkdownRenderState ?? null,
+    inlineMarkdownContent: model?.inlineMarkdownContent ?? null,
+    setMarkdownRichModeFaultedContent
+  })
+
+  if (!activeFile || !model) {
     return null
   }
-  const model = getEditorPanelRenderModel({
-    activeFile,
-    fileContents,
-    editorDrafts,
-    gitStatusEntries,
-    gitBranchEntries,
-    markdownViewMode,
-    markdownRichModeSizeOverridden,
-    isChangesMode,
-    canOpenWorkspaceFileBrowser
-  })
 
   const handleOpenPreviewToSide = (): void => {
     const state = useAppStore.getState()

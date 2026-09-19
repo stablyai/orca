@@ -13,6 +13,21 @@ import {
   marked
 } from 'marked'
 
+const ESCAPED_CHARACTER_TOKEN = 'richMarkdownEscapedCharacter'
+
+function preserveEscapedCharacters(tokens: Token[]): Token[] {
+  return tokens.map((token) => {
+    if (token.type === 'escape') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this token shape is the Markdown manager's custom inline token contract.
+      return { type: ESCAPED_CHARACTER_TOKEN, raw: token.raw, character: token.text } as Token
+    }
+    if ('tokens' in token && Array.isArray(token.tokens)) {
+      token.tokens = preserveEscapedCharacters(token.tokens)
+    }
+    return token
+  })
+}
+
 export function createTiptapMarkedFacade(): typeof marked {
   const registry = new Marked()
   registry.use({
@@ -48,6 +63,13 @@ export function createTiptapMarkedFacade(): typeof marked {
         extensions: registry.defaults.extensions
       })
     }
+
+    inlineTokens(src: string, tokens: Token[] = []): Token[] {
+      return preserveEscapedCharacters(super.inlineTokens(src, tokens))
+    }
+
+    // Why: Tiptap's markdown parser has no case for marked's `escape` token, so
+    // `\$`, `\*`, `\_`, `\[` would be deleted from the document on load.
   }
 
   const parser = (tokens: Token[], options?: MarkedOptions) => registry.parser(tokens, options)

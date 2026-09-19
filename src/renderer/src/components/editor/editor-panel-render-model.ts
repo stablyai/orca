@@ -25,6 +25,7 @@ type EditorPanelRenderModelParams = {
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
   markdownRichModeSizeOverridden: boolean
+  markdownRichModeFaultedContent: StoreState['markdownRichModeFaultedContent']
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
 }
@@ -37,6 +38,7 @@ export function getEditorPanelRenderModel({
   gitBranchEntries,
   markdownViewMode,
   markdownRichModeSizeOverridden,
+  markdownRichModeFaultedContent,
   isChangesMode,
   canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
@@ -125,24 +127,23 @@ export function getEditorPanelRenderModel({
     !inlineFileContent.loadError &&
     activeFile.conflict?.kind !== 'conflict-placeholder' &&
     activeFile.conflict?.conflictStatus !== 'unresolved'
-  // Why: classified once per content change (cached) so both the toggle's
-  // fallback-preview affordance and the inline banner below agree on whether
-  // rich mode would fall back, without duplicating the eligibility scan. Gated
-  // on the same guards as the inline renderer so unrenderable content (binary,
-  // load error, unresolved conflict, Changes mode) is never scanned.
-  const richModeEligibility = canRenderInlineMarkdown
-    ? getCachedMarkdownRichModeEligibility({
-        content: inlineMarkdownContent,
-        sizeOverridden: markdownRichModeSizeOverridden,
-        // Source mode only needs a conservative affordance decision. The full
-        // HTML round trip is reserved for rich rendering so typing stays cheap.
-        validateHtmlRoundTrip: mdViewMode === 'rich'
-      })
-    : null
+  // Why: classification scans the whole document, so it runs only in Rich
+  // mode; Source-view tabs read the stored fault (useMarkdownRichModeFaultTracking).
+  const richModeEligibility =
+    canRenderInlineMarkdown && mdViewMode === 'rich'
+      ? getCachedMarkdownRichModeEligibility({
+          content: inlineMarkdownContent,
+          sizeOverridden: markdownRichModeSizeOverridden
+        })
+      : null
   const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null
+  const richModeFaultedForCurrentContent =
+    canRenderInlineMarkdown &&
+    markdownRichModeFaultedContent[activeFile.id] === inlineMarkdownContent
   const richModeFallsBackToSource =
-    richModeEligibility !== null &&
-    (richModeEligibility.exceedsSizeLimit || richModeUnsupportedMessage !== null)
+    richModeEligibility !== null
+      ? richModeEligibility.exceedsSizeLimit || richModeUnsupportedMessage !== null
+      : richModeFaultedForCurrentContent
   const editorToggleModes = getEditorToggleModes({
     language: viewerLanguage,
     mode: activeFile.mode,
@@ -210,6 +211,7 @@ export function getEditorPanelRenderModel({
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     inlineMarkdownRenderState,
+    inlineMarkdownContent,
     canShowMarkdownTableOfContents:
       viewerLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
