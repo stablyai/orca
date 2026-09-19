@@ -71,6 +71,16 @@ export function DiffCommentDraftCard({
     textarea?.focus()
   }, [])
 
+  useEffect(() => {
+    const focusTextarea = (): void => textareaRef.current?.focus()
+    focusTextarea()
+    if (typeof requestAnimationFrame !== 'function') {
+      return
+    }
+    const frame = requestAnimationFrame(focusTextarea)
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
   useLayoutEffect(() => {
     const card = cardRef.current
     if (!card || !onContentResizeRef.current) {

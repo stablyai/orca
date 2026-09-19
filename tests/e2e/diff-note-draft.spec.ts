@@ -73,6 +73,9 @@ test.describe('Diff note draft', () => {
     await expect(draftCard).toBeVisible({ timeout: 15_000 })
     await expect(draftCard).toContainText('Line 6')
     await expect(draftCard).not.toContainText('You')
+    await expect
+      .poll(() => textarea.evaluate((element) => document.activeElement === element))
+      .toBe(true)
     await expect(orcaPage.locator('.orca-diff-comment-draft-margin')).toBeVisible()
     await expect
       .poll(

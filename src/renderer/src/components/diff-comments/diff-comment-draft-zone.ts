@@ -75,7 +75,7 @@ export function useDiffCommentDraftZone({
 
   const openDraft = useCallback(
     (draft: DiffCommentDraft, initialBody = ''): void => {
-      if (!editor || !onCreateCommentRef.current || !canOpenDraft) {
+      if (!editor || !editor.getModel() || !onCreateCommentRef.current || !canOpenDraft) {
         return
       }
 
@@ -88,12 +88,24 @@ export function useDiffCommentDraftZone({
         const disposeDomMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
         const disposeMarginMouseDownStopper = installDiffCommentZoneMouseDownStopper(marginDom)
         const root = createRoot(dom)
+        let didFocus = false
         const delegate: monacoEditor.IViewZone = {
           afterLineNumber: draft.lineNumber,
           heightInPx: DRAFT_ZONE_DEFAULT_HEIGHT,
           domNode: dom,
           marginDomNode: marginDom,
-          suppressMouseDown: false
+          suppressMouseDown: false,
+          onDomNodeTop: () => {
+            if (didFocus) {
+              return
+            }
+            const textarea = dom.querySelector<HTMLTextAreaElement>('textarea')
+            if (!textarea) {
+              return
+            }
+            didFocus = true
+            textarea.focus()
+          }
         }
         const zoneId = accessor.addZone(delegate)
         const entry: DraftZoneEntry = {
@@ -177,7 +189,7 @@ export function useDiffCommentDraftZone({
     }
     pendingDraftRef.current = { draft: current.draft, body: current.body }
     disposeDraftZone()
-    if (!editor || !onCreateCommentRef.current || !canOpenDraft) {
+    if (!editor || !editor.getModel() || !onCreateCommentRef.current || !canOpenDraft) {
       return
     }
     reanchorFrameRef.current = requestAnimationFrame(() => {
@@ -190,6 +202,29 @@ export function useDiffCommentDraftZone({
     })
   }, [canOpenDraft, disposeDraftZone, editor, monacoModelIdentity, openDraft])
 
+  // A combined-diff model refresh can briefly clear the editor ref before the replacement mounts.
+  // Re-anchor any carried draft when that replacement becomes available.
+  useEffect(() => {
+    if (!editor || !canOpenDraft || !pendingDraftRef.current) {
+      return
+    }
+    const pending = pendingDraftRef.current
+    pendingDraftRef.current = null
+    reanchorFrameRef.current = requestAnimationFrame(() => {
+      reanchorFrameRef.current = null
+      openDraft(pending.draft, pending.body)
+    })
+    return () => {
+      if (reanchorFrameRef.current !== null) {
+        cancelAnimationFrame(reanchorFrameRef.current)
+        reanchorFrameRef.current = null
+      }
+      if (!draftZoneRef.current) {
+        pendingDraftRef.current = pending
+      }
+    }
+  }, [canOpenDraft, editor, openDraft])
+
   useEffect(() => {
     if (!editor) {
       return
@@ -199,7 +234,6 @@ export function useDiffCommentDraftZone({
         cancelAnimationFrame(reanchorFrameRef.current)
         reanchorFrameRef.current = null
       }
-      pendingDraftRef.current = null
       disposeDraftZone(false)
     }
   }, [disposeDraftZone, editor])
