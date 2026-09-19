@@ -47,6 +47,8 @@ export type AgentSessionTurnContext = {
   /** Re-derives authorization after submission persistence, immediately before provider dispatch. */
   beforeDispatch?: () => void
   now: () => number
+  /** Re-establishes the execution-host provider before the first dispatch. */
+  ensureSessionReady?: () => Promise<void>
 }
 
 export type TurnOutcome<TValue> =
@@ -146,6 +148,8 @@ export async function performSend(
     return invalid('The message could not be recorded and was not sent.')
   }
   ctx.publish()
+
+  await ctx.ensureSessionReady?.()
 
   // The row just written is the send's instant on the host clock; the turn this
   // dispatch opens records it so the live counter never re-anchors at turn-open.

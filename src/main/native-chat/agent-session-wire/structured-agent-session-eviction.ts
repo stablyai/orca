@@ -45,6 +45,8 @@ export type StructuredAgentSessionEvictionContext = {
   /** Hands the lease back now that this host's child is proven gone. No-ops when the record is
    *  not this host's to release. */
   releaseLease: () => Promise<void>
+  /** Receives a step promise so callers can fence a timed-out stop until it settles. */
+  onStepPending?: (stepName: string, completion: Promise<void>) => void
 }
 
 export type StructuredAgentSessionEvictionStep = {

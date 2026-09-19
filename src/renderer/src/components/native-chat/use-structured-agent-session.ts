@@ -30,7 +30,7 @@ export function useStructuredAgentSession(args: {
   transportEnabled?: boolean
 }) {
   const { agent, isVisible, sessionId, target, transportEnabled = true } = args
-  const { state, loadingOlder, loadOlder, mutate, writeError, providerVisible } =
+  const { state, loadingOlder, loadOlder, mutate, holdError, writeError, providerVisible } =
     useStructuredAgentSessionTransport({
       sessionId,
       target,
@@ -87,7 +87,7 @@ export function useStructuredAgentSession(args: {
     messages,
     status: transportEnabled ? state.status : 'ready',
     error: transportEnabled
-      ? (state.error ?? writeError ?? outboxController.error)
+      ? (state.error ?? holdError ?? writeError ?? outboxController.error)
       : outboxController.error,
     hasOlder: transportEnabled && state.hasOlder,
     loadingOlder: transportEnabled && loadingOlder,

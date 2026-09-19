@@ -39,6 +39,8 @@ export type StructuredAgentSessionHostSession = {
   owesProviderChildWindDown?: boolean
   /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
   acquisitionGeneration: string | null
+  /** A timed-out provider stop still settling; new transitions wait before changing ownership. */
+  pendingCloseCompletion?: Promise<void>
 }
 
 export type StructuredAgentSessionHostDeps = {

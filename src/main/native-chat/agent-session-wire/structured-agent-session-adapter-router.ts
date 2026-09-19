@@ -26,6 +26,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
     Object.values(this.adapters).some((adapter) => adapter.supportsLocation?.(location) ?? false)
 
+  isSessionReady = (sessionId: string): boolean => this.liveOwnerOrNull(sessionId) !== null
+
   /** Both adapters already gate their own shutdown, so the router only has to stop UNDOING that:
    *  a late acquire must not clear `allAdaptersClosed` and fan a session back out to closed
    *  adapters. Once closed, the router stays closed. */

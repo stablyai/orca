@@ -189,6 +189,39 @@ describe('holds', () => {
     expect(holds.isHeld('session-1')).toBe(false)
     holds.dispose()
   })
+
+  it('waits for a timed-out stop before resuming the next generation', async () => {
+    let finishStop!: () => void
+    const pendingStop = new Promise<void>((resolve) => {
+      finishStop = resolve
+    })
+    let child = false
+    const resume = vi.fn(async () => {
+      child = true
+    })
+    const holds = new StructuredAgentSessionHolds({
+      resume,
+      hasProviderChild: () => child,
+      isTurnActive: () => false,
+      evict: async () => {},
+      waitForPendingClose: () => pendingStop,
+      graceMs: 1
+    })
+
+    let finished = false
+    const holding = holds.hold('session-1', 'chat-1').then(() => {
+      finished = true
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(finished).toBe(false)
+    expect(resume).not.toHaveBeenCalled()
+
+    finishStop()
+    await holding
+    expect(resume).toHaveBeenCalledOnce()
+    expect(holds.isHeld('session-1')).toBe(true)
+    holds.dispose()
+  })
 })
 
 describe('the teardown deadline', () => {

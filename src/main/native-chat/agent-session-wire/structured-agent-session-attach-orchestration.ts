@@ -42,9 +42,45 @@ export function attachStructuredAgentSession(
   admitRecoveryTicket?: () => boolean,
   rewind?: StructuredAgentSessionAcquireInput['rewind']
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  return attachStructuredAgentSessionTransition(
+    context,
+    callerKey,
+    params,
+    true,
+    admitRecoveryTicket,
+    rewind
+  )
+}
+
+/** Runs attach after the caller has already entered the session transition queue. */
+export function attachStructuredAgentSessionInTransition(
+  context: StructuredAgentSessionAttachContext,
+  callerKey: string,
+  params: AgentSessionAttachParams,
+  admitRecoveryTicket?: () => boolean,
+  rewind?: StructuredAgentSessionAcquireInput['rewind']
+): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  return attachStructuredAgentSessionTransition(
+    context,
+    callerKey,
+    params,
+    false,
+    admitRecoveryTicket,
+    rewind
+  )
+}
+
+function attachStructuredAgentSessionTransition(
+  context: StructuredAgentSessionAttachContext,
+  callerKey: string,
+  params: AgentSessionAttachParams,
+  serialize: boolean,
+  admitRecoveryTicket?: () => boolean,
+  rewind?: StructuredAgentSessionAcquireInput['rewind']
+): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
-  const run = (recordPhase?: AgentSessionCreatePhaseRecorder) =>
-    context.serialize(sessionId, async () => {
+  const run = (recordPhase?: AgentSessionCreatePhaseRecorder) => {
+    const operation = async () => {
       if (admitRecoveryTicket && !admitRecoveryTicket()) {
         return refuseAgentSessionMutation({
           code: 'agent_session_checkpoint_stale',
@@ -182,7 +218,9 @@ export function attachStructuredAgentSession(
         context.runtimeState.discardEventSink(sessionId)
       }
       return attached
-    })
+    }
+    return serialize ? context.serialize(sessionId, operation) : operation()
+  }
   const attaching =
     params.envelope.expectedRuntimeFence === null
       ? withAgentSessionSpan(async (span) => {

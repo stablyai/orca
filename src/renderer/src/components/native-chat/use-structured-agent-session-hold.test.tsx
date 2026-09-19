@@ -121,4 +121,24 @@ describe('a mounted structured chat', () => {
     await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(2))
     expect(callsTo('agentSession.release')).toHaveLength(1)
   })
+
+  it('surfaces a failed hold through the session connection state', async () => {
+    mocks.call.mockRejectedValueOnce(new Error('agent_session_ownership_unknown'))
+
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useStructuredAgentSessionHold({
+          sessionId: 'session-alpha',
+          target: LOCAL_TARGET,
+          surface: 'desktop-chat',
+          enabled
+        }),
+      { initialProps: { enabled: true } }
+    )
+
+    await waitFor(() => expect(result.current).toBe('agent_session_ownership_unknown'))
+
+    rerender({ enabled: false })
+    await waitFor(() => expect(result.current).toBeNull())
+  })
 })
