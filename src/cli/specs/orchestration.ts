@@ -126,8 +126,13 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full']
+    usage:
+      'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--run <run_id>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
+    notes: [
+      '--terminal reads messages addressed directly to that terminal and reports its current Run binding.',
+      '--run reads the Run mailbox and rejects a terminal that is bound to a different Run.'
+    ]
   },
   {
     path: ['orchestration', 'task-create'],
