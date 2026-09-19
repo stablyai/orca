@@ -292,8 +292,10 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
   },
   'emulator logcat': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const filter = getOptionalStringFlag(flags, 'filter')
     const res = await client.call('emulator.logcat', {
       lines: getOptionalPositiveIntegerFlag(flags, 'lines'),
+      filters: filter ? [filter] : undefined,
       device: target.device,
       emulator: target.emulator,
       worktree: target.worktree
