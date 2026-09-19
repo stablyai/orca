@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto'
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -9,8 +8,17 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join, win32 as winPath } from 'node:path'
+import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import {
+  buildDaemonHostManifest,
+  daemonHostExeName,
+  destPath,
+  executeManifest,
+  toPosixRelative,
+  WINDOWS_PROCESS_TREE_REQUIRED,
+  type DaemonHostSources
+} from './daemon-host-manifest'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
@@ -41,50 +49,10 @@ const MARKER_NAME = '.materialized.json'
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
-/**
- * The host exe keeps the app exe's own file name, so the relocated image is a byte-for-byte,
- * name-included copy of a signed binary — nothing for EDR to read as a renamed image (MITRE T1036).
- * Survival comes from the path (see the module header). The one name-sensitive updater path is the
- * no-PowerShell `taskkill /IM` fallback, where the daemon is killed and terminals cold-restore —
- * the documented pre-relocation outcome, not a failure.
- */
-const daemonHostExeName = (execPath: string): string => winPath.basename(execPath)
-
-// V8 snapshots + ICU data the Electron bootstrap reads even under ELECTRON_RUN_AS_NODE; siblings of Orca.exe.
-const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
-
-type CopyOp = {
-  sourcePath: string
-  /** Destination path relative to the host root, posix-separated. */
-  destRel: string
-  kind: 'file' | 'dir'
-  /** When true, a missing source is skipped rather than failing the copy. */
-  optional?: boolean
-  /** Per-source-path predicate for dir copies: return false to skip a path. */
-  filter?: (sourcePath: string) => boolean
-}
-
-type DaemonHostSources = {
-  appDir: string
-  execPath: string
-  resourcesPath: string
-  entrySourcePath: string
-  entryRelPath: string
-}
-
 type MaterializeMarker = {
   version: string
   completedAt: string
   entryRelPath: string
-}
-
-// win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
-function toPosixRelative(fromDir: string, absPath: string): string {
-  return winPath.relative(fromDir, absPath).split(winPath.sep).join('/')
-}
-
-function destPath(root: string, destRel: string): string {
-  return join(root, ...destRel.split('/'))
 }
 
 // Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
@@ -132,83 +100,8 @@ function collectDaemonHostSources(): DaemonHostSources | null {
     execPath,
     resourcesPath,
     entrySourcePath,
-    entryRelPath: toPosixRelative(appDir, entrySourcePath)
-  }
-}
-
-// Drop node-pty's .pdb symbols and non-host-arch prebuilds (its bulk); keyed on host arch so a future win32-arm64 build keeps the prebuild it needs.
-const HOST_WIN_PREBUILD_DIR = `win32-${process.arch}`.toLowerCase()
-function isRuntimeNodePtyPath(sourcePath: string): boolean {
-  const p = sourcePath.toLowerCase()
-  if (p.endsWith('.pdb')) {
-    return false
-  }
-  // Keep only the host arch's win32 prebuild; drop any other win32-<arch> dir.
-  const prebuild = p.match(/prebuilds[\\/](win32-[^\\/]+)/)
-  return !prebuild || prebuild[1] === HOST_WIN_PREBUILD_DIR
-}
-
-/**
- * The ordered copy plan. Every destRel mirrors the source's win-unpacked relative path so require()
- * and node-pty's loader resolve the mirror identically to the packaged app. Pure so tests can assert layout.
- */
-export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
-  const { appDir, execPath, resourcesPath, entrySourcePath, entryRelPath } = sources
-  const ops: CopyOp[] = []
-
-  // Host exe (verbatim name) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
-  ops.push({ sourcePath: execPath, destRel: daemonHostExeName(execPath), kind: 'file' })
-  for (const name of RUNTIME_DATA_FILES) {
-    ops.push({ sourcePath: join(appDir, name), destRel: name, kind: 'file', optional: true })
-  }
-
-  // Daemon bundle: entry + sibling chunks/ + out/package.json (CJS/ESM loader resolution), mirrored verbatim.
-  ops.push({ sourcePath: entrySourcePath, destRel: entryRelPath, kind: 'file' })
-  const chunksDir = join(winPath.dirname(entrySourcePath), 'chunks')
-  ops.push({
-    sourcePath: chunksDir,
-    destRel: toPosixRelative(appDir, chunksDir),
-    kind: 'dir',
-    optional: true
-  })
-  const pkgJson = join(resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
-  ops.push({
-    sourcePath: pkgJson,
-    destRel: toPosixRelative(appDir, pkgJson),
-    kind: 'file',
-    optional: true
-  })
-
-  // node-pty tree, mirrored so require('node-pty') resolves it; filtered to drop unused .pdb/other-arch prebuilds.
-  const nodePtyDir = join(resourcesPath, 'node_modules', 'node-pty')
-  ops.push({
-    sourcePath: nodePtyDir,
-    destRel: toPosixRelative(appDir, nodePtyDir),
-    kind: 'dir',
-    filter: isRuntimeNodePtyPath
-  })
-
-  return ops
-}
-
-function executeManifest(ops: CopyOp[], stagingRoot: string): void {
-  for (const op of ops) {
-    if (!existsSync(op.sourcePath)) {
-      if (op.optional) {
-        continue
-      }
-      throw new Error(`daemon-host relocation: missing required input ${op.sourcePath}`)
-    }
-    const dest = destPath(stagingRoot, op.destRel)
-    mkdirSync(dirname(dest), { recursive: true })
-    const { filter } = op
-    // Dereference symlinks so the copy holds no link back into the install dir.
-    cpSync(op.sourcePath, dest, {
-      recursive: op.kind === 'dir',
-      dereference: true,
-      force: true,
-      ...(filter ? { filter: (src: string) => filter(src) } : {})
-    })
+    entryRelPath: toPosixRelative(appDir, entrySourcePath),
+    windowsProcessTreeDir: join(resourcesPath, 'node_modules', '@vscode', 'windows-process-tree')
   }
 }
 
@@ -228,6 +121,17 @@ function readMarker(dir: string): MaterializeMarker | null {
     // Missing/corrupt marker — treat as not materialized.
   }
   return null
+}
+
+function processTreeRelDir(sources: DaemonHostSources): string {
+  return toPosixRelative(sources.appDir, sources.windowsProcessTreeDir)
+}
+
+/** True when any file require() needs is absent from a copy of the package. */
+function missingProcessTreeFiles(packageDir: string): boolean {
+  return WINDOWS_PROCESS_TREE_REQUIRED.some(
+    (relative) => !existsSync(join(packageDir, ...relative.split('/')))
+  )
 }
 
 function hostRootDir(): string {
@@ -260,6 +164,13 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!existsSync(execPath) || !existsSync(entryPath)) {
     return null
   }
+  // A mirror the daemon cannot load the addon from still runs -- it just forks a
+  // shell per snapshot (#16905) -- so treat it as unmaterialized and rebuild. Hosts
+  // from before this shipped have none of these files. Checked in the mirror, never
+  // in the install dir, which is the thing relocation exists to outlive.
+  if (missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))) {
+    return null
+  }
   return { execPath, entryPath }
 }
 
@@ -274,6 +185,12 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   }
   const sources = collectDaemonHostSources()
   if (!sources) {
+    return null
+  }
+  // Checked against the source before copying: the mirror check below would refuse
+  // the result anyway, and re-copying ~260MB on every launch to reach that verdict
+  // is the loop this shares its list with the copy plan to prevent.
+  if (missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
     return null
   }
   const version = getAppEnvironment().getVersion()

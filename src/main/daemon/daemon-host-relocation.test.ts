@@ -11,6 +11,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import os from 'node:os'
+import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -37,8 +38,8 @@ function installHostApp(): void {
   } as AppEnvironment)
 }
 
+import { buildDaemonHostManifest } from './daemon-host-manifest'
 import {
-  buildDaemonHostManifest,
   collectPinnedDaemonVersions,
   getRelocatedDaemonHost,
   materializeRelocatedDaemonHost,
@@ -88,7 +89,36 @@ function buildInstallFixture(root: string): void {
     mkdirSync(join(prebuildsRoot, arch), { recursive: true })
     writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
   }
+  const processTreeDir = join(root, 'resources', 'node_modules', '@vscode', 'windows-process-tree')
+  mkdirSync(join(processTreeDir, 'build', 'Release'), { recursive: true })
+  mkdirSync(join(processTreeDir, 'lib'), { recursive: true })
+  mkdirSync(join(processTreeDir, 'src'), { recursive: true })
+  writeFileSync(join(processTreeDir, 'package.json'), '{"main":"lib/index.js"}')
+  writeFileSync(join(processTreeDir, 'lib', 'index.js'), 'module.exports = {}')
+  writeFileSync(
+    join(processTreeDir, 'build', 'Release', 'windows_process_tree.node'),
+    'process-tree-native'
+  )
+  writeFileSync(join(processTreeDir, 'build', 'Release', 'windows_process_tree.pdb'), 'symbols')
+  writeFileSync(join(processTreeDir, 'src', 'process.cc'), 'source')
 }
+
+const PROCESS_TREE_DIR_REL = join(
+  'resources',
+  'node_modules',
+  '@vscode',
+  'windows-process-tree'
+)
+
+const PROCESS_TREE_ADDON_REL = join(
+  'resources',
+  'node_modules',
+  '@vscode',
+  'windows-process-tree',
+  'build',
+  'Release',
+  'windows_process_tree.node'
+)
 
 // The win32 prebuild dir the running host arch loads vs. the one that is pruned.
 const HOST_PREBUILD = `win32-${process.arch}`
@@ -139,14 +169,13 @@ describe('buildDaemonHostManifest', () => {
       execPath: 'C:\\app\\Orca.exe',
       resourcesPath: 'C:\\app\\resources',
       entrySourcePath: 'C:\\app\\resources\\app.asar.unpacked\\out\\main\\daemon-entry.js',
-      entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js'
+      entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
+      windowsProcessTreeDir: 'C:\\app\\resources\\node_modules\\@vscode\\windows-process-tree'
     })
     const byDest = new Map(ops.map((op) => [op.destRel, op]))
-    // The host exe keeps the source basename: a verbatim, signature-preserving copy with no
-    // image-name mismatch. What escapes the updater's sweep is the path, not the name.
-    expect(byDest.get('Orca.exe')?.kind).toBe('file')
-    const exeOp = ops.find((op) => op.sourcePath === 'C:\\app\\Orca.exe')
-    expect(exeOp?.destRel).toBe('Orca.exe')
+    // Without this op the relocated daemon cannot resolve the native process
+    // table and falls back to a powershell.exe scan per snapshot (#16905).
+    expect(byDest.get('resources/node_modules/@vscode/windows-process-tree')?.kind).toBe('dir')
     // V8/ICU data blobs are read by the Electron bootstrap and kept.
     expect(byDest.has('icudtl.dat')).toBe(true)
     // GPU/graphics DLLs are never loaded by the windowless host, so not copied.
@@ -201,6 +230,19 @@ describe('materializeRelocatedDaemonHost', () => {
     const marker = JSON.parse(readFileSync(join(dest, '.materialized.json'), 'utf8'))
     expect(marker.version).toBe('9.9.9')
     expect(marker.entryRelPath).toBe('resources/app.asar.unpacked/out/main/daemon-entry.js')
+    // The whole package is mirrored, so require() finds every hop it walks.
+    const processTreeDest = join(dest, 'resources', 'node_modules', '@vscode', 'windows-process-tree')
+    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.node'))).toBe(true)
+    expect(existsSync(join(processTreeDest, 'lib', 'index.js'))).toBe(true)
+    // The loader requires the BARE package, so resolution runs through the copied
+    // package.json's `main`. Asserting the .node subpath instead would still pass
+    // with package.json dropped from the filter, while the daemon's own require
+    // failed and it silently went back to the CIM scan.
+    expect(
+      createRequire(
+        join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js')
+      ).resolve('@vscode/windows-process-tree')
+    ).toBe(join(processTreeDest, 'lib', 'index.js'))
   })
 
   it('copies the exe verbatim: same file name and same bytes as the install-dir exe', () => {
@@ -224,6 +266,120 @@ describe('materializeRelocatedDaemonHost', () => {
     // Re-resolution must agree with materialization or the fork would target a missing exe.
     expect(getRelocatedDaemonHost()?.execPath).toBe(join(dest, 'Orca Nightly.exe'))
   })
+
+  it('refuses a mirror that lost the addon, so a stale host is never handed out', () => {
+    // A host without it still RUNS -- the daemon just forks a shell per snapshot --
+    // which is why absence has to read as unmaterialized. This is also what retires
+    // every host built before this shipped: they have no addon at all.
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    expect(getRelocatedDaemonHost()).not.toBeNull()
+
+    rmSync(join(dest, PROCESS_TREE_ADDON_REL))
+
+    expect(getRelocatedDaemonHost()).toBeNull()
+  })
+
+  it('rematerializes a host whose copied addon went missing', () => {
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    const relocatedAddon = join(dest, PROCESS_TREE_ADDON_REL)
+
+    rmSync(relocatedAddon)
+    // A sentinel proves the host was rebuilt rather than reused.
+    const sentinel = join(dest, 'sentinel.txt')
+    writeFileSync(sentinel, 'remove')
+
+    expect(materializeRelocatedDaemonHost()).not.toBeNull()
+    expect(readFileSync(relocatedAddon, 'utf8')).toBe('process-tree-native')
+    expect(existsSync(sentinel)).toBe(false)
+  })
+
+  it('does not read the install dir to decide an existing host is still good', () => {
+    // Relocation exists to outlive the install dir, so validity cannot depend on
+    // it: an updater mid-copy would otherwise condemn an intact host. A real
+    // upgrade changes the version keying this directory, which already forces a
+    // rebuild, and nothing else in the mirror is source-verified either.
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    const sentinel = join(dest, 'sentinel.txt')
+    writeFileSync(sentinel, 'keep')
+
+    rmSync(join(installDir, 'resources', 'node_modules', '@vscode'), {
+      recursive: true,
+      force: true
+    })
+
+    expect(getRelocatedDaemonHost()).not.toBeNull()
+    expect(existsSync(sentinel)).toBe(true)
+  })
+
+
+  it.each([['the binary', PROCESS_TREE_ADDON_REL], ['package.json', join(PROCESS_TREE_DIR_REL, 'package.json')], ['lib/index.js', join(PROCESS_TREE_DIR_REL, 'lib', 'index.js')]])(
+    'refuses a mirror that lost %s',
+    (_label, relativePath) => {
+      // Any one of them missing means require() cannot reach the addon, and a host
+      // that cannot load it runs anyway -- forking a shell per snapshot (#16905).
+      materializeRelocatedDaemonHost()
+      const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+      expect(getRelocatedDaemonHost()).not.toBeNull()
+
+      rmSync(join(dest, relativePath))
+
+      expect(getRelocatedDaemonHost()).toBeNull()
+    }
+  )
+
+  it('rematerializes a host whose copied addon went missing', () => {
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    const relocatedAddon = join(dest, PROCESS_TREE_ADDON_REL)
+
+    rmSync(relocatedAddon)
+    // A sentinel proves the host was rebuilt rather than reused.
+    const sentinel = join(dest, 'sentinel.txt')
+    writeFileSync(sentinel, 'remove')
+
+    expect(materializeRelocatedDaemonHost()).not.toBeNull()
+    expect(readFileSync(relocatedAddon, 'utf8')).toBe('process-tree-native')
+    expect(existsSync(sentinel)).toBe(false)
+  })
+
+  it('does not read the install dir to decide an existing host is still good', () => {
+    // Relocation exists to outlive the install dir, so validity cannot depend on
+    // it: an updater mid-copy would otherwise condemn an intact host. A real
+    // upgrade changes the version keying this directory, which already forces a
+    // rebuild, and nothing else in the mirror is source-verified either.
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    const sentinel = join(dest, 'sentinel.txt')
+    writeFileSync(sentinel, 'keep')
+
+    rmSync(join(installDir, 'resources', 'node_modules', '@vscode'), {
+      recursive: true,
+      force: true
+    })
+
+    expect(getRelocatedDaemonHost()).not.toBeNull()
+    expect(existsSync(sentinel)).toBe(true)
+  })
+
+  it.each([
+    ['the binary', PROCESS_TREE_ADDON_REL],
+    ['package.json', join(PROCESS_TREE_DIR_REL, 'package.json')],
+    ['lib/index.js', join(PROCESS_TREE_DIR_REL, 'lib', 'index.js')]
+  ])('refuses to copy anything when the install lost %s', (_label, relativePath) => {
+    // Each of these would be accepted by the copy plan and then refused by the
+    // mirror check, which is a ~260MB copy per launch to reach a verdict the
+    // source could have given for free. Sharing one list is what prevents that.
+    rmSync(join(installDir, relativePath))
+
+    expect(materializeRelocatedDaemonHost()).toBeNull()
+    // Not even the host root: the source is checked before any directory is made.
+    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
+  })
+
+
 
   it('is idempotent: a valid marker short-circuits without recopying', () => {
     materializeRelocatedDaemonHost()
@@ -278,6 +434,13 @@ describe('getRelocatedDaemonHost', () => {
       join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js'),
       'e'
     )
+    // The process-table files too, or this passes because the mirror has no addon
+    // and never exercises the version comparison it is named for.
+    mkdirSync(join(dest, PROCESS_TREE_DIR_REL, 'lib'), { recursive: true })
+    mkdirSync(dirname(join(dest, PROCESS_TREE_ADDON_REL)), { recursive: true })
+    writeFileSync(join(dest, PROCESS_TREE_DIR_REL, 'package.json'), '{}')
+    writeFileSync(join(dest, PROCESS_TREE_DIR_REL, 'lib', 'index.js'), 'm')
+    writeFileSync(join(dest, PROCESS_TREE_ADDON_REL), 'n')
     writeFileSync(
       join(dest, '.materialized.json'),
       JSON.stringify({
