@@ -7,6 +7,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { formatNonGitRepoRejection } from '../../shared/non-git-repo-rejection'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
@@ -44,7 +45,7 @@ export class RuntimeRepositoryRegistrationController {
     }
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
-      throw new Error(`Not a valid git repository: ${path}`)
+      throw new Error(formatNonGitRepoRejection(path))
     }
     // Why: git lists the main checkout at its resolved toplevel; storing a symlink alias or a
     // subdirectory instead hides that checkout as external, so the project shows no workspaces.
