@@ -143,8 +143,22 @@ describe('orchestration federation', () => {
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
     })
-    const fx = JSON.parse(attachment?.effects ?? '[]') as { kind?: string; state?: string }[]
+    const fx = JSON.parse(attachment?.effects ?? '[]') as {
+      kind?: string
+      state?: string
+      action?: string
+      branch?: string
+    }[]
     expect(fx.some((x) => x.kind === 'dispatch_input' && x.state === 'accepted')).toBe(true)
+    expect(fx).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          action: 'created_top_level',
+          branch: 'octocat/windows-worker'
+        })
+      ])
+    )
     expect(workerDb.listTasks()).toHaveLength(0)
     const create = vi.mocked(workerRuntime.createManagedWorktree).mock.calls[0]?.[0]
     expect([create.activate, create.runHooks]).toEqual([false, false])

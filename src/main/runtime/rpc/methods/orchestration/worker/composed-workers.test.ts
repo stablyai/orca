@@ -38,10 +38,12 @@ describe('orchestration RPC methods', () => {
         async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
       )
       vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-        id: 'repo::worktree'
+        id: 'repo::worktree',
+        branch: 'octocat/current-worktree'
       } as never)
       vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
-        id: 'repo::worktree'
+        id: 'repo::worktree',
+        branch: 'octocat/current-worktree'
       } as never)
       vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
         handle: 'term_worker',
@@ -143,7 +145,11 @@ describe('orchestration RPC methods', () => {
       expect(result.state).toBe('ready')
       expect(result.effects).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ kind: 'worktree', action: 'reused' }),
+          expect.objectContaining({
+            kind: 'worktree',
+            action: 'reused',
+            branch: 'octocat/current-worktree'
+          }),
           expect.objectContaining({ kind: 'terminal', role: 'agent', action: 'created' }),
           expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
         ])

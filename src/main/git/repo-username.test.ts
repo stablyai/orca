@@ -272,8 +272,7 @@ describe('resolveLocalGitUsername', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('marks a timed-out gh probe non-authoritative and retries after the cooldown', async () => {
-    vi.useFakeTimers()
+  it('retries a timed-out gh probe on the next branch-prefix lookup', async () => {
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
     ghExecFileAsyncMock
       .mockRejectedValueOnce(makeExecError('gh timeout', { code: 'ETIMEDOUT' }))
@@ -283,19 +282,17 @@ describe('resolveLocalGitUsername', () => {
       username: '',
       authoritative: false
     })
-    // Within the cooldown the timeout result is reused without a new spawn.
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: '',
-      authoritative: false
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(5 * 60 * 1000 + 1)
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: 'gh-demo',
-      authoritative: true
-    })
+    await expect(resolveGitUsernameForBranchPrefix('/repo')).resolves.toBe('gh-demo')
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a timed-out branch-prefix lookup with its deterministic error code', async () => {
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    ghExecFileAsyncMock.mockRejectedValueOnce(makeExecError('gh timeout', { code: 'ETIMEDOUT' }))
+
+    await expect(resolveGitUsernameForBranchPrefix('/repo')).rejects.toMatchObject({
+      code: 'git_username_probe_timeout'
+    })
   })
 
   it('refuses git-username prefix resolution while the gh probe is timed out', async () => {
