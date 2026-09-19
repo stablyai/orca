@@ -189,7 +189,7 @@ export function useHostWorktreeActions(args: {
           })
           .catch(() => null)
       }
-      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
+      const target = `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
       navigateFromHostList(target)
     },
     [client, connState, hostId, navigateFromHostList]
