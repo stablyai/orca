@@ -6,46 +6,74 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import ts from 'typescript-api'
 
 /** The seam, as the web build resolves it: `.web.ts` wins under the builder's resolveExtensions,
  *  and it is the one module a page closure may reach react-native's `Linking` from. */
 export const EXTERNAL_LINK_SEAM = 'src/platform/external-link.web.ts'
 
-/** 1-based line of a character offset, so an offender is reported where it is written. */
-function lineOf(source, index) {
-  return source.slice(0, index).split('\n').length
-}
-
 /**
  * Every line on which a module reaches react-native's own `Linking`, by name or through a
  * namespace import.
  *
- * Both quote styles: the tree is single-quoted by the formatter today, so a double-quoted
- * specifier would have walked past this unseen — and a census that cannot see a call site is one
- * that passes for the wrong reason.
+ * Parsed rather than matched: a regex over the text names `Linking` inside a comment that talks
+ * about it and inside a string that quotes it, and a census that reports a line nobody can act on
+ * is one the next reader learns to ignore. The parser also settles the quote styles for free.
+ *
+ * A named import reports the import statement, once however many times the module calls through
+ * it, because the import is the thing the rule is about and the thing that has to go. A namespace
+ * import reports its uses instead, there being no single line to name — `import * as RN from
+ * 'react-native'` is not itself an offence — and every alias is read, because a module may import
+ * the namespace twice and call on either.
  *
  * Lines rather than a boolean because a red census that names `path:line` is read once, and one
  * that names a file is grepped for. The boolean below is derived from this, so there is one rule.
  */
 export function reactNativeLinkingSites(source) {
+  const parsed = ts.createSourceFile(
+    'module.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  )
+  const lineOf = (node) => parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1
   const sites = []
-  for (const match of source.matchAll(
-    /import\s*\{[^}]*\bLinking\b[^}]*\}\s*from\s*['"]react-native['"]/gs
-  )) {
-    sites.push(lineOf(source, match.index))
+  const aliases = new Set()
+  for (const statement of parsed.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react-native'
+    ) {
+      continue
+    }
+    const bindings = statement.importClause?.namedBindings
+    if (bindings === undefined) {
+      continue
+    }
+    if (ts.isNamespaceImport(bindings)) {
+      aliases.add(bindings.name.text)
+      continue
+    }
+    if (bindings.elements.some((element) => element.name.text === 'Linking')) {
+      sites.push(lineOf(statement))
+    }
   }
-  // Every alias, not the first: a module may import the namespace twice, and reading only the
-  // first binding makes a call on the second report no site at all.
-  const aliases = [
-    ...source.matchAll(/import\s*\*\s*as\s*(\w+)\s*from\s*['"]react-native['"]/g)
-  ].map((match) => match[1])
-  if (aliases.length > 0) {
-    source.split('\n').forEach((line, index) => {
-      // Once per line however many aliases meet on it: the line is the site, not the name.
-      if (aliases.some((alias) => line.includes(`${alias}.Linking`))) {
-        sites.push(index + 1)
+  if (aliases.size > 0) {
+    const visit = (node) => {
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        aliases.has(node.expression.text) &&
+        node.name.text === 'Linking'
+      ) {
+        // The line, not the expression: two aliases meeting on one line are one site.
+        sites.push(lineOf(node))
       }
-    })
+      ts.forEachChild(node, visit)
+    }
+    ts.forEachChild(parsed, visit)
   }
   return [...new Set(sites)].sort((left, right) => left - right)
 }

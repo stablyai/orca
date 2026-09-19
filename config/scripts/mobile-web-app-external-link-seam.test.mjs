@@ -59,6 +59,28 @@ describe('where the seam predicate says a module reaches Linking', () => {
     ).toEqual([3])
   })
 
+  it('ignores the name inside a comment, which text matching cannot', () => {
+    // A module that talks about the rule is not breaking it, and a census that names a comment is
+    // one whose red list the next reader learns to skip.
+    expect(
+      reactNativeLinkingSites(
+        "import * as RN from 'react-native'\n// never call RN.Linking.openURL here\n/* nor RN.Linking */\n"
+      )
+    ).toEqual([])
+  })
+
+  it('ignores the name inside a string, and still sees the call beside it', () => {
+    expect(
+      reactNativeLinkingSites(
+        "import * as RN from 'react-native'\nconst hint = 'use RN.Linking.openURL'\nRN.Linking.openURL(u)\n"
+      )
+    ).toEqual([3])
+  })
+
+  it('ignores a commented-out named import, which was the same class of miss', () => {
+    expect(reactNativeLinkingSites("// import { Linking } from 'react-native'\n")).toEqual([])
+  })
+
   it('finds nothing in a module that only names the seam', () => {
     expect(
       reactNativeLinkingSites("import { openExternalLink } from '../platform/external-link'")
