@@ -77,6 +77,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
 
+  it('keeps split halving as the default so deliberately uneven layouts survive', () => {
+    expect(getDefaultSettings('/tmp').terminalEqualizePanesOnSplit).toBe(false)
+  })
+
   it('keeps file-editor word wrapping enabled by default', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
   })

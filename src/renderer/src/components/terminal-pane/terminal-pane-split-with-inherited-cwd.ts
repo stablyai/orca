@@ -3,7 +3,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import type { PtyTransport } from './pty-transport'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
-import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { completeCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 
 export function splitTerminalPaneWithInheritedCwd(args: {
   worktreeId: string
@@ -34,9 +34,10 @@ export function splitTerminalPaneWithInheritedCwd(args: {
   const cached = args.paneCwdMap.get(args.pane.id)
   if (cached?.confirmed && cached.cwd) {
     const createdPane = manager.splitPane(args.pane.id, args.direction, { cwd: cached.cwd })
-    recordCreatedTerminalPaneSplit(createdPane, {
+    completeCreatedTerminalPaneSplit(createdPane, {
       source: args.source,
-      direction: args.direction
+      direction: args.direction,
+      equalizeTarget: { tabId: args.tabId, manager }
     })
     return
   }
@@ -50,8 +51,9 @@ export function splitTerminalPaneWithInheritedCwd(args: {
       fallbackCwd: args.fallbackCwd
     })
   const createdPane = manager.splitPane(paneId, args.direction, { cwdPromise })
-  recordCreatedTerminalPaneSplit(createdPane, {
+  completeCreatedTerminalPaneSplit(createdPane, {
     source: args.source,
-    direction: args.direction
+    direction: args.direction,
+    equalizeTarget: { tabId: args.tabId, manager }
   })
 }
