@@ -399,7 +399,7 @@ describe('skill discovery', () => {
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
   })
 
-  it('scans each provider home skill root that npx skills --global writes to', () => {
+  it('scans provider home and workspace skill roots', () => {
     const roots = buildSkillDiscoverySources({
       homeDir: '/home/test',
       cwd: '/workspace/current'
@@ -414,7 +414,7 @@ describe('skill discovery', () => {
         '/home/test/.omp/agent/skills',
         '/home/test/.hermes/skills',
         '/home/test/.gemini/skills',
-        '/home/test/.gemini/antigravity/skills',
+        '/home/test/.gemini/config/skills',
         '/home/test/.cursor/skills',
         '/home/test/.factory/skills',
         '/home/test/.continue/skills',
