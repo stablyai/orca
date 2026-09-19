@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
@@ -83,9 +84,11 @@ import { useShellStackPop } from './use-shell-stack-pop'
 type Harness = {
   pop: () => BridgeNavigateBackOutcome
   /** A second `MobileWebShellScreen` over the same native stack, which `/h/a/web` makes reachable. */
-  mountSecondShell: () => () => BridgeNavigateBackOutcome
-  /** Drops the screen that took the latch, leaving the second one mounted. */
-  unmountHolder: () => void
+  mountSecondShell: () => void
+  /** The second shell's own pop, through whichever instance is mounted when it is called. */
+  secondPop: () => BridgeNavigateBackOutcome
+  /** Unmounts the screen that took the latch and leaves the second one mounted. */
+  removeHolder: () => void
   screens: string[]
   drain: () => void
   commitRoute: (pathname: string) => void
@@ -110,41 +113,52 @@ function mount(screens: string[]): Harness {
     held.second = useShellStackPop()
     return null
   }
+  // One root component for the life of the tree, with a slot per shell. Swapping the root element
+  // instead — a fragment for two shells, the shell itself for one — remounts everything under it,
+  // which hands the test a callback belonging to an unmounted hook: it can still take the latch,
+  // and the instance that took it is already gone, so nothing is left to release it.
+  function Shells(props: { holder: boolean; second: boolean }): ReactElement {
+    return (
+      <>
+        {props.holder ? <Screen /> : null}
+        {props.second ? <SecondShell /> : null}
+      </>
+    )
+  }
   const rendered: { tree: ReturnType<typeof create> | null } = { tree: null }
   act(() => {
-    rendered.tree = create(<Screen />)
+    rendered.tree = create(<Shells holder second={false} />)
   })
   const tree = rendered.tree
-  if (tree !== null) {
-    mounted.push(tree)
-  }
-  const pop = held.pop
   if (tree === null) {
     throw new Error('nothing rendered')
   }
-  if (pop === null) {
+  mounted.push(tree)
+  /** Re-read on every call, so a pop always goes through the instance that is mounted now. */
+  function callHeld(which: 'pop' | 'second'): BridgeNavigateBackOutcome {
+    const pop = held[which]
+    if (pop === null) {
+      throw new Error(`no ${which} shell is mounted`)
+    }
+    return pop()
+  }
+  if (held.pop === null) {
     throw new Error('nothing mounted')
   }
   return {
-    pop,
+    pop: () => callHeld('pop'),
+    secondPop: () => callHeld('second'),
     mountSecondShell: () => {
       act(() => {
-        tree.update(
-          <>
-            <Screen />
-            <SecondShell />
-          </>
-        )
+        tree.update(<Shells holder second />)
       })
-      const second = held.second
-      if (second === null) {
+      if (held.second === null) {
         throw new Error('the second shell did not mount')
       }
-      return second
     },
-    unmountHolder: () => {
+    removeHolder: () => {
       act(() => {
-        tree.update(<SecondShell />)
+        tree.update(<Shells holder={false} second />)
       })
     },
     screens,
@@ -168,12 +182,22 @@ beforeEach(() => {
   router.pathname = '/h/host-a/tasks'
 })
 
-afterEach(() => {
+function unmountAll(): void {
   act(() => {
     for (const tree of mounted.splice(0)) {
       tree.unmount()
     }
   })
+}
+
+afterEach(() => {
+  unmountAll()
+  // The latch is one per stack, so a case that left it set shows up in the next case — and in the
+  // last case of a file, never. Read it here, through the only thing that can observe it: a screen
+  // mounted after every other one is gone must still be able to pop.
+  const probe = mount(['home', 'host'])
+  expect(probe.pop(), 'a case left the stack latch set').toBe('popped')
+  unmountAll()
 })
 
 describe('a page that asks to go back twice in one batch', () => {
@@ -216,20 +240,20 @@ describe('a page that asks to go back twice in one batch', () => {
 describe('two shells over one stack', () => {
   it('share the latch, so the second one cannot pop what the first already queued', () => {
     const harness = mount(['home', 'host', 'tasks'])
-    const second = harness.mountSecondShell()
+    harness.mountSecondShell()
     expect(harness.pop()).toBe('popped')
-    expect(second()).toBe('pop-pending')
+    expect(harness.secondPop()).toBe('pop-pending')
     harness.drain()
     expect(harness.screens).toEqual(['home', 'host'])
   })
 
   it('release the latch when the screen holding it goes away, so a stick cannot outlive it', () => {
     const harness = mount(['home', 'host', 'tasks'])
-    const second = harness.mountSecondShell()
+    harness.mountSecondShell()
     expect(harness.pop()).toBe('popped')
     // The pop is discarded rather than committed, which is what `routingQueue.run` does when the
     // container ref is gone: no route commits, so nothing else would ever clear this.
-    harness.unmountHolder()
-    expect(second()).toBe('popped')
+    harness.removeHolder()
+    expect(harness.secondPop()).toBe('popped')
   })
 })
