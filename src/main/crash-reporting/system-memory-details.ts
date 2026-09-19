@@ -9,7 +9,11 @@ import type { SwapVolumeFreeSpace } from './swap-volume-free-space'
 // healthier than at kill time; the pre-gone sampler carries a live reading past
 // that.
 // Every reading is labelled `systemMemoryPressureSignal` so no report can be
-// read as a pressure verdict the platform never gave:
+// read as a pressure verdict the platform never gave. `none` is the
+// not-computed arm — darwin always, elsewhere when the field the signal needs
+// is missing — which reads as its own opposite, so
+// `systemMemoryPressureSignalComputed` states it outright rather than renaming
+// a value already ingested by consumers outside this repo:
 //   win32  — swapFree is MEMORYSTATUSEX.ullAvailPageFile, i.e. available
 //     COMMIT, which pagefile growth can heal (a 127 MB commit floor healed to
 //     2029 MB mid-hold on the win-lowspec repro, killing nothing). Free space on
@@ -31,6 +35,16 @@ import type { SwapVolumeFreeSpace } from './swap-volume-free-space'
 type CrashReportDetails = Record<string, CrashReportDetailValue>
 
 export const SYSTEM_MEMORY_KEY_PREFIX = 'systemMemory'
+
+const PRESSURE_SIGNAL_KEY = `${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`
+const PRESSURE_SIGNAL_COMPUTED_KEY = `${PRESSURE_SIGNAL_KEY}Computed`
+
+/** Appended to every reading, so callers can tell a labelled-but-empty
+ *  reading from one that actually resolved a memory field. */
+export const PRESSURE_SIGNAL_LABEL_KEYS: readonly string[] = [
+  PRESSURE_SIGNAL_KEY,
+  PRESSURE_SIGNAL_COMPUTED_KEY
+]
 
 export function memoryKBFieldMB(value: unknown): number | undefined {
   const kb = typeof value === 'number' && Number.isFinite(value) ? value : undefined
@@ -107,6 +121,19 @@ function pressureSignal(
   return 'none'
 }
 
+/** Both label keys in one write: `withSwapVolumeFreeSpace` relabels a reading
+ *  `getSystemMemoryDetails` already labelled, and the pair must never disagree. */
+function labelPressureSignal(
+  details: CrashReportDetails,
+  platform: NodeJS.Platform,
+  volumeCoTimed = true
+): CrashReportDetails {
+  const signal = pressureSignal(platform, details, volumeCoTimed)
+  details[PRESSURE_SIGNAL_KEY] = signal
+  details[PRESSURE_SIGNAL_COMPUTED_KEY] = signal !== 'none'
+  return details
+}
+
 export function getSystemMemoryDetails(
   platform: NodeJS.Platform = process.platform
 ): CrashReportDetails {
@@ -130,8 +157,7 @@ export function getSystemMemoryDetails(
       details[`${SYSTEM_MEMORY_KEY_PREFIX}${suffix}`] = mb
     }
   }
-  details[`${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`] = pressureSignal(platform, details)
-  return details
+  return labelPressureSignal(details, platform)
 }
 
 /**
@@ -156,6 +182,5 @@ export function withSwapVolumeFreeSpace(
     [`${SYSTEM_MEMORY_KEY_PREFIX}SwapVolumeFreeMB`]: volume.freeMB,
     [`${SYSTEM_MEMORY_KEY_PREFIX}SwapVolume`]: volume.volume
   }
-  merged[`${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`] = pressureSignal(platform, merged, coTimed)
-  return merged
+  return labelPressureSignal(merged, platform, coTimed)
 }

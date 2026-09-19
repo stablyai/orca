@@ -9,7 +9,7 @@ import {
 import { decodePosixWaitStatus, describePosixWaitStatus } from '../../shared/posix-wait-status'
 import { rendererCrashBreadcrumbOrigin } from '../../shared/crash-breadcrumb-origin'
 import type { CrashReportStore } from './crash-report-store'
-import { getCrashBreadcrumbSnapshot } from './crash-breadcrumb-store'
+import { reportBreadcrumbsWithProvenance } from './breadcrumb-causal-provenance'
 import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb
@@ -255,8 +255,10 @@ export function recordProcessGoneCrash(
     },
     event.processType
   )
-  const breadcrumbs = getCrashBreadcrumbSnapshot(processGoneRendererOrigin(event))
-  const reportBreadcrumbs = breadcrumbs?.map(({ origin: _origin, ...breadcrumb }) => breadcrumb)
+  // Why the provenance: the ring carries no ages, so its newest entry always
+  // lands flush against the death and reads as adjacent to it.
+  const breadcrumbTrail = reportBreadcrumbsWithProvenance(processGoneRendererOrigin(event), goneAt)
+  Object.assign(crashDetails, breadcrumbTrail.details)
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': event.source,
@@ -274,7 +276,7 @@ export function recordProcessGoneCrash(
       'app.main_process.launch_id': mainProcessLifecycle.mainProcessLaunchId,
       'app.main_process.started_at': mainProcessLifecycle.mainProcessStartedAt,
       details: crashDetails,
-      breadcrumbs: reportBreadcrumbs
+      breadcrumbs: breadcrumbTrail.breadcrumbs
     }
   })
   // Why: a renderer crash can be followed by another process exit before the
@@ -298,7 +300,7 @@ export function recordProcessGoneCrash(
     electronVersion: process.versions.electron ?? 'unknown',
     chromeVersion: process.versions.chrome ?? 'unknown',
     details: crashDetails,
-    breadcrumbs: reportBreadcrumbs
+    breadcrumbs: breadcrumbTrail.breadcrumbs
   })
   trackRendererSiblingAttribution(
     event,
