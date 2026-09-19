@@ -11,14 +11,14 @@ import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 const {
   handleMock,
   resolveEnvironmentMock,
-  getRuntimeEnvironmentStatusMock,
+  getRuntimeEnvironmentStatusForBrowserPlacementMock,
   startHostMock,
   closeHostMock,
   manuallyDisconnectedMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
-  getRuntimeEnvironmentStatusMock: vi.fn(),
+  getRuntimeEnvironmentStatusForBrowserPlacementMock: vi.fn(),
   startHostMock: vi.fn(),
   closeHostMock: vi.fn(),
   manuallyDisconnectedMock: vi.fn()
@@ -29,7 +29,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 vi.mock('./runtime-environment-transport-routing', () => ({
-  getRuntimeEnvironmentStatus: getRuntimeEnvironmentStatusMock
+  getRuntimeEnvironmentStatusForBrowserPlacement: getRuntimeEnvironmentStatusForBrowserPlacementMock
 }))
 vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
   startPairedRuntimeBrowserClientHost: startHostMock,
@@ -49,8 +49,8 @@ describe('runtime environment browser client host handler', () => {
     handleMock.mockReset()
     resolveEnvironmentMock.mockReset()
     resolveEnvironmentMock.mockReturnValue(environment())
-    getRuntimeEnvironmentStatusMock.mockReset()
-    getRuntimeEnvironmentStatusMock.mockResolvedValue({
+    getRuntimeEnvironmentStatusForBrowserPlacementMock.mockReset()
+    getRuntimeEnvironmentStatusForBrowserPlacementMock.mockResolvedValue({
       id: 'status.get',
       ok: true,
       result: {
@@ -94,11 +94,9 @@ describe('runtime environment browser client host handler', () => {
     await expect(
       prepare(null, { selector: 'environment-a', expectedPairingRevision: 7 })
     ).resolves.toEqual({ kind: 'client', browserHostClientId: 'browser-client-a' })
-    expect(getRuntimeEnvironmentStatusMock).toHaveBeenCalledWith(
+    expect(getRuntimeEnvironmentStatusForBrowserPlacementMock).toHaveBeenCalledWith(
       '/profile',
-      'environment-a',
-      undefined,
-      { observeOnly: true }
+      'environment-a'
     )
     expect(startHostMock).toHaveBeenCalledWith({
       environment: expect.objectContaining({ id: 'environment-a', pairingRevision: 7 }),
@@ -114,7 +112,7 @@ describe('runtime environment browser client host handler', () => {
     )
 
     await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
-    expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
+    expect(getRuntimeEnvironmentStatusForBrowserPlacementMock).not.toHaveBeenCalled()
     expect(startHostMock).not.toHaveBeenCalled()
     expect(closeHostMock).not.toHaveBeenCalled()
   })
@@ -142,7 +140,7 @@ describe('runtime environment browser client host handler', () => {
   })
 
   it('answers server placement when the fresh probe never reaches the host', async () => {
-    getRuntimeEnvironmentStatusMock.mockResolvedValue({
+    getRuntimeEnvironmentStatusForBrowserPlacementMock.mockResolvedValue({
       id: 'status.get',
       ok: false,
       error: { code: 'runtime_unavailable', message: 'socket closed before ready' },
@@ -163,7 +161,7 @@ describe('runtime environment browser client host handler', () => {
   // placement instead of throwing, so nothing else notices that the user detached the runtime
   // while it was in flight.
   it('rejects a manual disconnect that lands while the probe is in flight', async () => {
-    getRuntimeEnvironmentStatusMock.mockImplementation(async () => {
+    getRuntimeEnvironmentStatusForBrowserPlacementMock.mockImplementation(async () => {
       manuallyDisconnectedMock.mockReturnValue(true)
       return {
         id: 'status.get',
@@ -193,7 +191,7 @@ describe('runtime environment browser client host handler', () => {
     await expect(prepare(null, { selector: 'environment-a' })).rejects.toThrow(
       'runtime_manually_disconnected'
     )
-    expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
+    expect(getRuntimeEnvironmentStatusForBrowserPlacementMock).not.toHaveBeenCalled()
     expect(startHostMock).not.toHaveBeenCalled()
   })
 

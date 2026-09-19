@@ -46,13 +46,9 @@ export async function createWebRuntimeSessionBrowserTab(
     stageWebRuntimeBrowserCreation(context)
     const placementPreference = args.placementPreference ?? 'auto'
     let placement: BrowserPageCreationPlacement = { kind: 'server' }
-    // Why no cached-capability gate here: the renderer's runtime status can hold a pre-upgrade
-    // "cannot client-host" verdict for a whole catalog TTL, and skipping the preparation on it
-    // pinned a capable pair to server placement for that long. The preparation reads live status
-    // and answers `server` for a runtime that truly cannot host, so staleness now costs a round
-    // trip against an incapable host instead of the wrong placement. An unreachable host pays for
-    // that on the failure path too: the probe's 15s ceiling, then the tabCreate behind it and the
-    // cleanup close its non-definitive failure needs, where before the create never started.
+    // Why the main process owns this probe: renderer status can lag a runtime replacement. The
+    // preparation path checks live host state and retries one transient failure before falling
+    // back to server placement.
     if (placementPreference !== 'server') {
       try {
         await pauseDuringE2eWebRuntimeBrowserClientHostPreparation()
