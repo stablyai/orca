@@ -31,7 +31,7 @@ function panelProps(
   return {
     title: 'Linear skill',
     description: null,
-    command: 'npx skills add orca-linear --global',
+    command: 'npx skills@latest add orca-linear --global',
     terminalTitle: 'Linear skill setup',
     terminalAriaLabel: 'Linear skill install terminal',
     terminalWorktreeId: 'settings-linear-skill-terminal',
