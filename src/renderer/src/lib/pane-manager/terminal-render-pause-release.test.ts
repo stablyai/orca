@@ -8,9 +8,14 @@ import {
 type FakeRenderService = {
   _isPaused?: boolean
   _needsFullRefresh?: boolean
+  _charSizeService?: { width?: number; height?: number }
   refreshRows?: ReturnType<typeof vi.fn>
   _renderer?: {
-    value?: { clear?: ReturnType<typeof vi.fn>; renderRows?: ReturnType<typeof vi.fn> }
+    value?: {
+      clear?: ReturnType<typeof vi.fn>
+      renderRows?: ReturnType<typeof vi.fn>
+      _isAttached?: boolean
+    }
   }
 }
 
@@ -19,17 +24,38 @@ function createTerminal(options: {
   renderService?: FakeRenderService | null
   withoutCore?: boolean
   synchronizedOutput?: boolean
+  screenConnected?: boolean
 }): unknown {
-  const { rows = 24, renderService, withoutCore, synchronizedOutput } = options
+  const {
+    rows = 24,
+    renderService,
+    withoutCore,
+    synchronizedOutput,
+    screenConnected = true
+  } = options
   if (withoutCore) {
     return { rows }
   }
   return {
     rows,
     _core: {
+      screenElement: { isConnected: screenConnected },
       _renderService: renderService ?? null,
       coreService: { decPrivateModes: { synchronizedOutput: synchronizedOutput === true } }
     }
+  }
+}
+
+function createUnattachedWebglService(
+  overrides: Partial<FakeRenderService> = {}
+): FakeRenderService {
+  return {
+    _isPaused: true,
+    _needsFullRefresh: true,
+    _charSizeService: { width: 8, height: 16 },
+    refreshRows: vi.fn(),
+    _renderer: { value: { renderRows: vi.fn(), _isAttached: false } },
+    ...overrides
   }
 }
 
@@ -172,7 +198,9 @@ describe('forceFullViewportPresent', () => {
 
     expect(forceFullViewportPresent(terminal)).toBe(false)
     expect(renderService._isPaused).toBe(false)
-    expect(renderService._needsFullRefresh).toBe(false)
+    // Why true: nothing painted, so xterm must keep owing the full repaint. Only
+    // _isPaused has to stay cleared for the caller's refresh() fallback to run.
+    expect(renderService._needsFullRefresh).toBe(true)
   })
 })
 
@@ -222,5 +250,83 @@ describe('requestFullViewportPresent', () => {
     expect(renderService._isPaused).toBe(false)
     expect(renderService._needsFullRefresh).toBe(false)
     expect(refreshRows).toHaveBeenCalledWith(0, 29, true)
+  })
+})
+
+describe("xterm's owed full repaint", () => {
+  it('keeps the latch when an unattached renderer has no measured screen to attach to', () => {
+    const renderService = createUnattachedWebglService()
+    const terminal = createTerminal({ rows: 24, renderService, screenConnected: false })
+
+    expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
+    expect(renderService._isPaused).toBe(false)
+    expect(renderService._needsFullRefresh).toBe(true)
+    // The drive still runs: it is the cheapest way to let the renderer attach.
+    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
+  })
+
+  it('keeps the latch when cell metrics are not measured yet', () => {
+    const renderService = createUnattachedWebglService({
+      _charSizeService: { width: 0, height: 0 }
+    })
+    const terminal = createTerminal({ rows: 24, renderService })
+
+    expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
+    expect(renderService._needsFullRefresh).toBe(true)
+  })
+
+  it('spends the latch once the unattached renderer can attach on this frame', () => {
+    const renderService = createUnattachedWebglService()
+    const terminal = createTerminal({ rows: 24, renderService })
+
+    expect(forceRepaintThroughRenderPause(terminal)).toBe(true)
+    expect(renderService._needsFullRefresh).toBe(false)
+  })
+
+  it('spends the latch for a DOM renderer, which has no attach gate', () => {
+    const renderService: FakeRenderService = {
+      _isPaused: true,
+      _needsFullRefresh: true,
+      refreshRows: vi.fn(),
+      _renderer: { value: { renderRows: vi.fn() } }
+    }
+    const terminal = createTerminal({ rows: 24, renderService })
+
+    expect(forceRepaintThroughRenderPause(terminal)).toBe(true)
+    expect(renderService._needsFullRefresh).toBe(false)
+  })
+
+  it('reports an unpainted request as not presented so the caller still refreshes', () => {
+    const renderService = createUnattachedWebglService()
+    const terminal = createTerminal({ rows: 24, renderService, screenConnected: false })
+
+    expect(requestFullViewportPresent(terminal)).toBe(false)
+    expect(renderService._needsFullRefresh).toBe(true)
+  })
+
+  it('keeps the latch on the DEC 2026 path, the one present that bypasses refreshRows', () => {
+    const renderRows = vi.fn()
+    const renderService = createUnattachedWebglService({
+      _renderer: { value: { renderRows, _isAttached: false } }
+    })
+    const terminal = createTerminal({
+      rows: 24,
+      renderService,
+      synchronizedOutput: true,
+      screenConnected: false
+    })
+
+    expect(forceFullViewportPresent(terminal)).toBe(false)
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+    expect(renderService._isPaused).toBe(false)
+    expect(renderService._needsFullRefresh).toBe(true)
+  })
+
+  it('reports an unpainted forced present as not presented', () => {
+    const renderService = createUnattachedWebglService()
+    const terminal = createTerminal({ rows: 24, renderService, screenConnected: false })
+
+    expect(forceFullViewportPresent(terminal)).toBe(false)
+    expect(renderService._needsFullRefresh).toBe(true)
   })
 })

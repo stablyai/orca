@@ -1,5 +1,6 @@
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { isManagedPaneDisplayNone } from './pane-display-visibility'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
 import {
   forceFullViewportPresent,
   requestFullViewportPresent
@@ -38,6 +39,13 @@ function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportP
     if (isManagedPaneDisplayNone(pane)) {
       if (retry.frames === 1) {
         pendingDisplayedPresentRetries.delete(pane)
+        // Why: this is the one reveal path xterm has no watchdog for — giving up
+        // silently is why a pane stuck on pre-reveal pixels leaves no field signal.
+        recordTerminalWebglDiagnostic('reveal-present-retry-abandoned', {
+          paneId: pane.id,
+          mode: retry.mode,
+          frames: DISPLAYED_PRESENT_RETRY_FRAMES
+        })
         return
       }
       retry.frames -= 1
@@ -45,6 +53,14 @@ function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportP
       return
     }
     pendingDisplayedPresentRetries.delete(pane)
+    const framesWaited = DISPLAYED_PRESENT_RETRY_FRAMES - retry.frames
+    if (framesWaited > 0) {
+      recordTerminalWebglDiagnostic('reveal-present-retry-landed', {
+        paneId: pane.id,
+        mode: retry.mode,
+        framesWaited
+      })
+    }
     presentPaneViewportWithMode(pane, retry.mode)
   }
   globalThis.requestAnimationFrame(tick)
@@ -59,9 +75,11 @@ function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMod
     // Why: on reveal xterm's IntersectionObserver can still report the pane as
     // not intersecting, so a plain refresh() is swallowed by RenderService's
     // paused-render gate and the pending model never repaints (stale bottom rows
-    // until a drag-select forces a redraw). Request one synchronous full present
-    // even if the observer already unpaused; only fall back to refresh() when
-    // internals are unavailable.
+    // until a drag-select forces a redraw). The helpers below drive that present
+    // only while a gate is actually holding the frame — observer pause or DEC 2026.
+    // Once neither holds, they decline and the refresh() fallback runs: it reaches
+    // the same RenderService.refreshRows with nothing left to swallow it, and a
+    // debounced frame is what lets cell metrics settle first.
     //
     // Why the display check: that release is only right for a pane that is
     // DOM-visible. A pane with no box at all (collapsed sibling of an expanded

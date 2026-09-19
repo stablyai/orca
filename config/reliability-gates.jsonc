@@ -17188,7 +17188,8 @@
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
-        "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
+        "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/pane-viewport-present.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
@@ -17197,6 +17198,7 @@
         "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-viewport-present.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
@@ -17220,11 +17222,36 @@
           ]
         },
         {
+          "file": "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+          "assertions": [
+            "keeps the latch when an unattached renderer has no measured screen to attach to",
+            "keeps the latch when cell metrics are not measured yet",
+            "reports an unpainted request as not presented so the caller still refreshes"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-viewport-present.test.ts",
+          "assertions": [
+            "records a breadcrumb instead of abandoning the reveal present silently",
+            "reports how many frames a reveal present waited for the pane to be displayed"
+          ]
+        },
+        {
           "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
           "assertions": ["@headful atlas recovery presents a synchronized-output WebGL frame"]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-09-18",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/pane-viewport-present.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "23 contracts passed, covering the new rule that a released render pause only spends xterm's owed full repaint when the renderer can paint the frame it drives, and the reveal-present retry breadcrumbs that replace a silent 16-frame give-up.",
+          "notes": "Both rules were mutation-checked: clearing the latch unconditionally, and reporting an unpainted present as presented, each turn four of these contracts red."
+        },
         {
           "date": "2026-08-23",
           "runner": "local",
