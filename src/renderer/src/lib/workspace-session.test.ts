@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkspaceSessionPayload } from './workspace-session'
+import { buildEditorSessionData, buildWorkspaceSessionPayload } from './workspace-session'
 import type { AppState } from '../store'
+import type { OpenFile } from '../store/slices/editor'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 function createSnapshot(overrides: Partial<AppState> = {}): AppState {
@@ -506,5 +507,245 @@ describe('buildWorkspaceSessionPayload', () => {
 
     expect(payload.activeFileIdByWorktree).toEqual({})
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
+  })
+})
+
+const WORKTREE = 'wt-dup'
+const FILE = '/tmp/dup/app.ts'
+
+function editOpenFile(id: string, overrides: Partial<OpenFile> = {}): OpenFile {
+  const base: OpenFile = {
+    id,
+    filePath: FILE,
+    relativePath: 'app.ts',
+    worktreeId: WORKTREE,
+    language: 'typescript',
+    mode: 'edit',
+    isDirty: false,
+    isPreview: false,
+    runtimeEnvironmentId: null
+  }
+  return { ...base, ...overrides }
+}
+
+function buildEditorSession(
+  openFiles: OpenFile[],
+  overrides: {
+    editorDrafts?: Record<string, string>
+    markdownFrontmatterVisible?: Record<string, boolean>
+    activeFileIdByWorktree?: Record<string, string | null>
+  } = {}
+) {
+  const session = buildEditorSessionData(
+    openFiles,
+    overrides.editorDrafts ?? {},
+    overrides.markdownFrontmatterVisible ?? {},
+    overrides.activeFileIdByWorktree ?? {},
+    {}
+  )
+  return {
+    openFilesByWorktree: session.openFilesByWorktree ?? {},
+    activeFileIdByWorktree: session.activeFileIdByWorktree ?? {},
+    markdownFrontmatterVisible: session.markdownFrontmatterVisible ?? {}
+  }
+}
+
+describe('buildEditorSessionData duplicate collapse', () => {
+  it('writes one record for live files that share worktree, owner and path', () => {
+    const session = buildEditorSession([
+      editOpenFile(FILE),
+      editOpenFile(`editor:a:${FILE}`),
+      editOpenFile(`editor:b:${FILE}`)
+    ])
+
+    expect(session.openFilesByWorktree[WORKTREE]).toHaveLength(1)
+  })
+
+  it('keeps the dirty record and its disk baseline over a clean duplicate', () => {
+    const session = buildEditorSession(
+      [
+        editOpenFile(FILE),
+        editOpenFile(`editor:dirty:${FILE}`, {
+          isDirty: true,
+          lastKnownDiskSignature: 'sig-7'
+        })
+      ],
+      { editorDrafts: { [`editor:dirty:${FILE}`]: 'unsaved text' } }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({
+        dirtyDraftContent: 'unsaved text',
+        lastKnownDiskSignature: 'sig-7'
+      })
+    ])
+  })
+
+  it('prefers the active file over a clean duplicate', () => {
+    const session = buildEditorSession(
+      [editOpenFile(FILE, { isPreview: true }), editOpenFile(`editor:b:${FILE}`)],
+      { activeFileIdByWorktree: { [WORKTREE]: `editor:b:${FILE}` } }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({ isPreview: undefined })
+    ])
+    expect(session.activeFileIdByWorktree[WORKTREE]).toBe(`editor:b:${FILE}`)
+  })
+
+  it('remaps the active file id onto the record that outranked it', () => {
+    const session = buildEditorSession(
+      [editOpenFile(FILE, { isDirty: true }), editOpenFile(`editor:b:${FILE}`)],
+      {
+        editorDrafts: { [FILE]: 'unsaved text' },
+        activeFileIdByWorktree: { [WORKTREE]: `editor:b:${FILE}` }
+      }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE]).toHaveLength(1)
+    expect(session.activeFileIdByWorktree[WORKTREE]).toBe(FILE)
+  })
+
+  it('never merges a read-only live-tail log with a writable record for the same path', () => {
+    const session = buildEditorSession(
+      [
+        editOpenFile(FILE, { readOnly: true, liveTail: true }),
+        editOpenFile(`editor:writable:${FILE}`, { isDirty: true })
+      ],
+      { editorDrafts: { [`editor:writable:${FILE}`]: 'unsaved text' } }
+    )
+
+    const [logRecord, writableRecord] = session.openFilesByWorktree[WORKTREE]
+    expect(logRecord).toEqual(expect.objectContaining({ readOnly: true, liveTail: true }))
+    expect(logRecord).not.toHaveProperty('dirtyDraftContent')
+    expect(writableRecord).toEqual(expect.objectContaining({ dirtyDraftContent: 'unsaved text' }))
+    expect(writableRecord).not.toHaveProperty('readOnly')
+  })
+
+  it('prefers a non-preview record over the active preview record', () => {
+    const previewFirst = buildEditorSession(
+      [editOpenFile(FILE, { isPreview: true }), editOpenFile(`editor:b:${FILE}`)],
+      { activeFileIdByWorktree: { [WORKTREE]: FILE } }
+    )
+    const previewSecond = buildEditorSession(
+      [editOpenFile(FILE), editOpenFile(`editor:b:${FILE}`, { isPreview: true })],
+      { activeFileIdByWorktree: { [WORKTREE]: `editor:b:${FILE}` } }
+    )
+
+    expect(previewFirst.openFilesByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({ isPreview: undefined })
+    ])
+    expect(previewSecond.openFilesByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({ isPreview: undefined })
+    ])
+  })
+
+  it('keeps records apart when only the runtime owner or the ssh target differs', () => {
+    const session = buildEditorSession([
+      editOpenFile(FILE),
+      editOpenFile(`editor:env-a:${FILE}`, { runtimeEnvironmentId: 'env-a' }),
+      editOpenFile(`editor:ssh:${FILE}`, { externalSshTargetId: 'ssh-target' })
+    ])
+
+    expect(session.openFilesByWorktree[WORKTREE]).toHaveLength(3)
+  })
+
+  it('keeps both records when two duplicates hold divergent unsaved drafts', () => {
+    const session = buildEditorSession(
+      [editOpenFile(FILE, { isDirty: true }), editOpenFile(`editor:b:${FILE}`, { isDirty: true })],
+      { editorDrafts: { [FILE]: 'left text', [`editor:b:${FILE}`]: 'right text' } }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE].map((record) => record.dirtyDraftContent)).toEqual(
+      ['left text', 'right text']
+    )
+  })
+
+  it('carries a merged front-matter override onto the surviving record', () => {
+    const session = buildEditorSession([editOpenFile(FILE), editOpenFile(`editor:b:${FILE}`)], {
+      markdownFrontmatterVisible: { [`editor:b:${FILE}`]: false }
+    })
+
+    expect(session.markdownFrontmatterVisible).toEqual({ [FILE]: false })
+  })
+
+  it('merges a repeated draft into the variant it agrees with', () => {
+    const ids = [FILE, `editor:b:${FILE}`, `editor:c:${FILE}`]
+    const session = buildEditorSession(
+      ids.map((id) => editOpenFile(id, { isDirty: true })),
+      {
+        editorDrafts: {
+          [ids[0]]: 'left text',
+          [ids[1]]: 'right text',
+          [ids[2]]: 'right text'
+        }
+      }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE].map((record) => record.dirtyDraftContent)).toEqual(
+      ['left text', 'right text']
+    )
+  })
+
+  it('carries the merged duplicate disk baseline onto the equal-draft survivor', () => {
+    const ids = [FILE, `editor:b:${FILE}`]
+    const session = buildEditorSession(
+      [
+        editOpenFile(ids[0], { isDirty: true }),
+        editOpenFile(ids[1], { isDirty: true, lastKnownDiskSignature: 'sig' })
+      ],
+      { editorDrafts: { [ids[0]]: 'same text', [ids[1]]: 'same text' } }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({ dirtyDraftContent: 'same text', lastKnownDiskSignature: 'sig' })
+    ])
+  })
+
+  it('remaps the active file id onto the variant that absorbed it', () => {
+    const ids = [FILE, `editor:b:${FILE}`, `editor:c:${FILE}`]
+    const session = buildEditorSession(
+      ids.map((id) => editOpenFile(id, { isDirty: true })),
+      {
+        editorDrafts: {
+          [ids[0]]: 'left text',
+          [ids[1]]: 'right text',
+          [ids[2]]: 'right text'
+        },
+        activeFileIdByWorktree: { [WORKTREE]: ids[2] }
+      }
+    )
+
+    expect(session.activeFileIdByWorktree[WORKTREE]).toBe(ids[1])
+  })
+
+  it('merges clean duplicates on both sides of a drafted record', () => {
+    const ids = [FILE, `editor:b:${FILE}`, `editor:c:${FILE}`]
+    const session = buildEditorSession(
+      [editOpenFile(ids[0]), editOpenFile(ids[1], { isDirty: true }), editOpenFile(ids[2])],
+      { editorDrafts: { [ids[1]]: 'right text' } }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE].map((record) => record.dirtyDraftContent)).toEqual(
+      ['right text']
+    )
+  })
+
+  it('keeps two records when a draft repeats after a divergent one', () => {
+    const ids = [FILE, `editor:b:${FILE}`, `editor:c:${FILE}`]
+    const session = buildEditorSession(
+      ids.map((id) => editOpenFile(id, { isDirty: true })),
+      {
+        editorDrafts: {
+          [ids[0]]: 'left text',
+          [ids[1]]: 'right text',
+          [ids[2]]: 'left text'
+        }
+      }
+    )
+
+    expect(session.openFilesByWorktree[WORKTREE].map((record) => record.dirtyDraftContent)).toEqual(
+      ['left text', 'right text']
+    )
   })
 })

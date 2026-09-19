@@ -4,7 +4,8 @@ import type { PersistedOpenFile } from '../../../../../../shared/workspace-sessi
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
-import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
+import { buildOwnedEditorFileId } from './editor-file-ids'
+import { runtimeOwnerKey } from './editor-document-identity'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,
