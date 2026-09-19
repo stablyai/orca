@@ -1,6 +1,5 @@
 import {
   isMobileRelayCloseCode,
-  MOBILE_RELAY_CLOSE_CODE,
   mobileRelayRecoveryFor
 } from '../../../src/shared/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
@@ -9,7 +8,8 @@ import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
 import { RelayCredentialEligibility } from './relay-credential-eligibility'
-import { RelayPairingRejectionLatch } from './relay-pairing-rejection-latch'
+import type { RelayHostReachability } from './relay-host-reachability'
+import { RelayRecoveryEvidence, type RelayRecoveryReporter } from './relay-recovery-evidence'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ScheduleTimer } from './timer-scheduler'
@@ -28,11 +28,11 @@ type RecoveryGate = 'external-signal' | 'fresh-credential'
 
 export class RelayReconnectController {
   private readonly failureCount = new RelayRecoveryFailureCount(RELAY_STABLE_CONNECTION_MS)
-  private readonly pairingRejection = new RelayPairingRejectionLatch()
+  private readonly evidence = new RelayRecoveryEvidence()
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
-  private activeSession: MobileRelayRpcSession | null = null
+  private activeSession: Pick<MobileRelayRpcSession, 'getFailure'> | null = null
   private recoveryGate: RecoveryGate | null = null
   private gateReprobePending = false
   private gateReprobeStreak = 0
@@ -49,10 +49,14 @@ export class RelayReconnectController {
 
   getFailureCount = (): number => this.failureCount.current()
 
-  reportRecoveryTo(logical: StableLogicalRpcClient): void {
+  reportRecoveryTo(logical: RelayRecoveryReporter): void {
     this.failureCount.reportTo(logical.setRecoveryAttempt)
-    this.pairingRejection.reportTo(logical.setPairingRejected)
+    this.evidence.reportTo(logical)
   }
+
+  // The cell named the desktop's state outright; no failure streak to earn.
+  assertHostReachability = (reachability: RelayHostReachability): void =>
+    this.evidence.assert(reachability)
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
@@ -117,10 +121,11 @@ export class RelayReconnectController {
     logical.suspendActiveSession()
   }
 
-  setActiveSession(session: MobileRelayRpcSession): void {
+  // Only the failure is ever read back; the narrow type keeps test doubles honest.
+  setActiveSession(session: Pick<MobileRelayRpcSession, 'getFailure'>): void {
     // Why: an authenticated relay is the desktop accepting this device — the only
     // evidence that outranks a rejection streak.
-    this.pairingRejection.clear()
+    this.evidence.clear()
     this.activeSession = session
     this.activeRelayConnectedAt = this.dependencies.now()
     this.nextAttemptAt = 0
@@ -133,8 +138,9 @@ export class RelayReconnectController {
     this.activeSession = null
     this.activeRelayConnectedAt = null
     // Why: direct auth resolves the same desktop device registry, so a live direct
-    // session disproves revocation even though relay is still gated.
-    this.pairingRejection.clear()
+    // session disproves revocation even though relay is still gated — and it is the
+    // desktop, awake and running Orca.
+    this.evidence.clear()
     if (needsCredentialRefresh) {
       // Why: the rejected credential stays unusable until its replacement is
       // durable. No reprobe timer here — direct is live, rotation over it
@@ -153,7 +159,7 @@ export class RelayReconnectController {
 
   completeCredentialRefresh(): void {
     if (this.recoveryGate === 'fresh-credential') {
-      this.pairingRejection.clear()
+      this.evidence.clear()
       this.credentials.clearRejected()
       this.reset()
     }
@@ -246,7 +252,9 @@ export class RelayReconnectController {
     // authenticated relay is the desktop accepting this device right now, so a failed
     // replacement dial is not revocation — banking it would fire a false re-pair alarm
     // the moment that healthy session drops for an unrelated transport error.
-    this.pairingRejection.record(this.activeSession ? null : error)
+    if (!this.activeSession) {
+      this.evidence.record(error)
+    }
     const recovery =
       error instanceof RelayOuterError && isMobileRelayCloseCode(error.code)
         ? mobileRelayRecoveryFor(error.code, 'phone-resume')
@@ -294,15 +302,6 @@ export class RelayReconnectController {
       return
     }
     this.scheduleRetry(delay)
-  }
-
-  shouldTryGraceAfterRelayFailure(error: Error): boolean {
-    // Why: only a rejected outer credential can be repaired by the grace token;
-    // retrying session/capacity close codes immediately recreates relay churn.
-    return (
-      error instanceof RelayOuterError &&
-      error.code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
-    )
   }
 
   retryDelayMs(minimumMs: number): number | null {

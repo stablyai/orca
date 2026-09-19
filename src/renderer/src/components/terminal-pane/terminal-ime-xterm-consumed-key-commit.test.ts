@@ -109,6 +109,57 @@ describe('a candidate commit that arrives with no composition session', () => {
     document.body.replaceChildren()
   })
 
+  for (const initialState of ['empty', 'refocused', 'committed'] as const) {
+    for (const delayed of [false, true]) {
+      it(`sends direct punctuation exactly once from ${initialState}, delayed=${delayed}`, async () => {
+        const rig = openTerminal()
+        try {
+          if (initialState === 'committed') {
+            dispatchComposition(rig, 'compositionstart', '')
+            dispatchComposition(rig, 'compositionupdate', 'ni')
+            dispatchComposition(rig, 'compositionend', '你')
+            dispatchCommit(rig, '你')
+          } else if (initialState === 'refocused') {
+            rig.textarea.dispatchEvent(new FocusEvent('blur'))
+            rig.textarea.dispatchEvent(new FocusEvent('focus'))
+          }
+          for (const [code, text] of [
+            ['Comma', '，'],
+            ['Period', '。'],
+            ['Comma', '，']
+          ]) {
+            dispatchKey(rig, 'keydown', { key: 'Process', code, keyCode: IME_KEYCODE })
+            if (delayed) {
+              await nextEventLoop()
+            }
+            dispatchCommit(rig, text)
+            dispatchKey(rig, 'keyup', { key: 'Process', code, keyCode: IME_KEYCODE })
+            await nextEventLoop()
+          }
+          await nextEventLoop()
+          expect(rig.emitted.join('')).toBe(`${initialState === 'committed' ? '你' : ''}，。，`)
+        } finally {
+          rig.terminal.dispose()
+        }
+      })
+    }
+  }
+
+  it('sends direct punctuation delivered after the consumed key is released', async () => {
+    const rig = openTerminal()
+    try {
+      dispatchKey(rig, 'keydown', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+      await nextEventLoop()
+      dispatchKey(rig, 'keyup', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+      dispatchCommit(rig, '，')
+      await nextEventLoop()
+      await nextEventLoop()
+      expect(rig.emitted.join('')).toBe('，')
+    } finally {
+      rig.terminal.dispose()
+    }
+  })
+
   it('sends a candidate picked with the mouse, with no key down', async () => {
     const rig = openTerminal()
     await typeConsumedPinyin(rig, ['KeyH', 'KeyA', 'KeyO'])

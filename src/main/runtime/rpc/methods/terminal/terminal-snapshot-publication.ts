@@ -16,11 +16,21 @@ import type { SerializedSnapshot, SnapshotFrameOptions } from './terminal-stream
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 
+/** E2E-only: reproduce a host that retains nothing for a pty — the state a client cannot tell
+ *  apart from a host that is merely slow, and the one a parked pane must survive. Mirrors
+ *  ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED. */
+function isTerminalSnapshotForcedUnavailable(): boolean {
+  return process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_SNAPSHOT_UNAVAILABLE === '1'
+}
+
 export async function serializeBudgetedRequestedSnapshot(
   runtime: OrcaRuntimeService,
   ptyId: string,
   scrollbackRows: number | undefined
 ): Promise<SerializedSnapshot> {
+  if (isTerminalSnapshotForcedUnavailable()) {
+    return null
+  }
   const requestedRows = scrollbackRows ?? 0
   for (const rows of requestedSnapshotScrollbackCandidates(scrollbackRows)) {
     const serialized = await runtime.serializeAuthoritativeTerminalBuffer(ptyId, {
@@ -115,6 +125,9 @@ export async function serializeBudgetedMobileSnapshot(
   ptyId: string,
   isMobile: boolean
 ): Promise<SerializedSnapshot> {
+  if (isTerminalSnapshotForcedUnavailable()) {
+    return null
+  }
   if (!isMobile) {
     const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 })
     return serialized

@@ -195,15 +195,16 @@ export function useMobileWebShellSession(args: {
         hostStatus: hostProtocolWindow
       }
     })
-    // `hostId` is in the list for the host whose gates read identically to the last one's: the
-    // reducer now starts nothing on a repeat verdict, so a session that never re-armed would sit
-    // in `checking` forever.
+    // `hostId` and `routePathname` are in the list because they are what rebuilds the session
+    // above: the reducer starts nothing on a repeat verdict, so a fresh session nobody re-armed
+    // would sit in `checking` forever. Both, not just the host, because either one rebuilds it.
   }, [
     dispatch,
     hostCapabilities,
     hostId,
     hostProtocolWindow,
     reachability,
+    routePathname,
     statusPending,
     statusReadable
   ])

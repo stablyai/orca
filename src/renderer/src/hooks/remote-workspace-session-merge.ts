@@ -4,6 +4,7 @@ import { reconcileClosedTerminalTabTombstones } from '../../../shared/closed-ter
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
+import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
@@ -249,9 +250,15 @@ export function mergeDirectSshRemoteWorkspaceSession(
       )
     ),
     ...Object.fromEntries(
-      Object.entries(remote.terminalLayoutsByTabId).filter(
-        ([tabId]) => !locallyPreservedTabIds.has(tabId) && !suppressedTabIds.has(tabId)
-      )
+      Object.entries(remote.terminalLayoutsByTabId)
+        .filter(([tabId]) => !locallyPreservedTabIds.has(tabId) && !suppressedTabIds.has(tabId))
+        // Why: this replace is wholesale, and a park capture does not bump tab.generation, so a
+        // just-parked tab is not locally preserved and the only client-side copy of its remote
+        // scrollback would go with its layout. Structure stays the host's.
+        .map(([tabId, layout]) => [
+          tabId,
+          retainLocalScrollbackInRemoteLayout(current.terminalLayoutsByTabId[tabId], layout)
+        ])
     )
   }
   const activeOutsideTarget =

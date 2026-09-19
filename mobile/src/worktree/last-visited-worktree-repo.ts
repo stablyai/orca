@@ -1,5 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { noteMirroredWrite } from '../storage/mirrored-storage-keys'
+import { writeMirroredStorage } from '../storage/mirrored-storage-keys'
 import { getRepoIdFromMobileWorktreeId } from '../session/mobile-session-route-helpers'
 
 export const LAST_VISITED_WORKTREE_STORAGE_KEY = 'orca:last-visited-worktree'
@@ -57,7 +56,5 @@ export function readLastVisitedWorktreeRepoId(raw: string | null, hostId: string
  * would open on the repo the user left rather than the one they just came from.
  */
 export function writeLastVisitedWorktree(record: LastVisitedWorktreeRecord): void {
-  const value = JSON.stringify(record)
-  noteMirroredWrite(LAST_VISITED_WORKTREE_STORAGE_KEY, value)
-  void AsyncStorage.setItem(LAST_VISITED_WORKTREE_STORAGE_KEY, value)
+  writeMirroredStorage(LAST_VISITED_WORKTREE_STORAGE_KEY, JSON.stringify(record))
 }

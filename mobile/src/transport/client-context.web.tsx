@@ -64,7 +64,7 @@ export function RpcClientProvider({
       getPendingPath: () => null,
       // Both are pairing verdicts, and pairing happened natively before this document existed.
       isPairingRejected: () => false,
-      isHostSignedOut: () => false,
+      getRelayHostReachability: () => 'connecting',
       subscribeHostState: (_hostId: string, listener: (next: ConnectionState) => void) =>
         client.onStateChange(listener),
       getAllClients: () => [...acquiredRef.current].map((hostId) => ({ hostId, client })),

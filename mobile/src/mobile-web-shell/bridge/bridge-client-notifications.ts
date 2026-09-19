@@ -9,13 +9,19 @@ import { captureBridgeError } from './bridge-error-capture'
 /**
  * Everything the page posts and hears nothing back about.
  *
- * Three of the four share one guard, and it is not the same guard `sendRequest` uses. A call before
- * `init` is a mount-order bug and throws; a call after `close` is an unmounting screen posting one
- * more nudge on its way out, which the native clients answer inertly rather than by throwing into a
- * teardown path nobody wrote a catch for. Nothing here returns a promise, so nothing here can be
- * awaited into a rejection either.
+ * Three of the four post through one guard, but only two reach its throw, and it is not the guard
+ * `sendRequest` uses. A call before `init` is a mount-order bug and throws; a call after `close` is
+ * an unmounting screen posting one more nudge on its way out, which the native clients answer
+ * inertly rather than by throwing into a teardown path nobody wrote a catch for. Nothing here
+ * returns a promise, so nothing here can be awaited into a rejection either.
  *
- * `notifyPageFault` is the exception and reads the session instead of requiring it: its one caller
+ * Only the two ungated notifies reach that throw. A grant is read off the session, so before `init`
+ * there is no grant either and `navigate` and `storage` answer false without asking: that is the
+ * same false they answer a shell that withheld the grant, and both callers already handle it —
+ * `useRouteHandoff` pushes inside the page instead, where a throw would take down a tap handler
+ * nobody wrapped.
+ *
+ * `notifyPageFault` reads the session instead of requiring it for a different reason: its one caller
  * is an error boundary, and a report that threw would replace the page's last word with an error
  * nobody catches.
  */

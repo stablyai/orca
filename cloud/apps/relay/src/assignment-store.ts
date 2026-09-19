@@ -342,6 +342,26 @@ const ACTIVITY_REQUEST_UNITS: Record<AssignmentActivityKind, number> = {
 }
 
 const ASSIGNMENT_LOCK_RETRY_DEADLINE_MS = 15_000
+
+// THE ROW LOCK ORDER. Every transaction that takes more than one of these
+// takes them in this order, whichever role it runs on:
+//
+//   1. relay_assignments               (the host's row)
+//   2. relay_assignment_migrations
+//      relay_assignment_activity_leases
+//   3. relay_control_connection_reservations   (lockControlConnectionReservations)
+//   4. relay_cells                     (lockCellInventory / lockCellRows / the
+//                                       conditional reservation UPDATE)
+//
+// relay_cells is last because it is the only row shared by every host on a
+// cell: a transaction that takes it early holds it across every round trip
+// that follows, and on a cell far from PostgreSQL that is what turns accepts
+// into a queue. Everything above it is per-host, so holding it longer costs
+// only that host. Paths that read the inventory to make a placement decision
+// cannot defer relay_cells, so they lock the host's rows from tiers 1-3 up
+// front instead, before the inventory, and re-check what they read afterwards.
+// Tier 1 is what serialises two transactions on the same host; the tiers below
+// it keep transactions on *different* hosts from cycling through relay_cells.
 // Why: one global FOR UPDATE over a 23-row table serialises every director and
 // cell. At the 1s pool lock_timeout each blocked waiter also holds a pooled
 // client for a full second, so the queue converts contention into pool
@@ -854,6 +874,9 @@ export class RelayAssignmentStore {
     let retryScope: RetriedAssignmentInventoryScope =
       inventoryScope === 'all' ? 'all' : 'general'
     return await this.database.transaction(async (transaction) => {
+      // The retry paths below open with the inventory, so this path takes its
+      // host rows before any of them rather than where the others do.
+      await this.lockControlConnectionReservations(transaction, identity, lockMode)
       let lockedCells =
         inventoryScope === 'all'
           ? await this.lockCellInventory(transaction, lockMode)
@@ -3821,14 +3844,16 @@ export class RelayAssignmentStore {
               ? activityId
               : pendingId
             : activityId
-        await this.removeSupersededSameCellControls(
+        // Accumulated, not applied: every cell-row write on this path is folded
+        // into one conditional statement issued last, below.
+        let reservationDelta = -(await this.removeSupersededSameCellControls(
           transaction,
           identity,
           activityLeases,
           input.cellId,
           retainedActivityId,
           now
-        )
+        ))
         if (existing) {
           await transaction.query(
             `UPDATE relay_assignment_activity_leases SET expires_at = ?, updated_at = ?
@@ -3846,7 +3871,7 @@ export class RelayAssignmentStore {
             )
             await this.touchAssignment(transaction, identity, expiresAt, now)
           } else {
-            await this.adjustCellReservationAtomically(transaction, input.cellId, 1)
+            reservationDelta += ACTIVITY_REQUEST_UNITS.control
             await this.adjustActivityCount(transaction, identity, 'control', 1, expiresAt, now)
             await transaction.query(
               `INSERT INTO relay_assignment_activity_leases
@@ -3902,6 +3927,17 @@ export class RelayAssignmentStore {
             input.idleRegionalRehome && input.cellIncarnation ? 1 : 0
           ]
         )
+        // Last, and only if the count actually moved: the cell row is shared by
+        // every host on the cell, and this transaction spans a dozen round
+        // trips. Holding its write lock from the first of them capped a
+        // far-from-Postgres cell at a couple of accepts a second.
+        if (reservationDelta !== 0) {
+          await this.adjustCellReservationAtomically(
+            transaction,
+            input.cellId,
+            reservationDelta
+          )
+        }
         return activityId
       })
     })
@@ -3946,6 +3982,7 @@ export class RelayAssignmentStore {
       }
       if (sourceCellId === targetCellId) throw new Error('target_matches_source')
       await this.lockAssignmentActivities(transaction, identity)
+      await this.lockControlConnectionReservations(transaction, identity)
       const cells = await this.lockCellInventory(transaction, 'request')
       const target = cells.find((row) => text(row, 'cell_id') === targetCellId)
       if (!target || integer(target, 'enabled') !== 1) throw new Error('target_cell_unavailable')
@@ -4151,6 +4188,7 @@ export class RelayAssignmentStore {
   ): Promise<DeadSourceCompletionResult> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
+      await this.lockControlConnectionReservations(transaction, identity)
       let lockedCells: SqlRow[] | undefined
       if (inventoryFirst) {
         try {
@@ -4298,6 +4336,7 @@ export class RelayAssignmentStore {
   ): Promise<RelayAssignmentMigration> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
+      await this.lockControlConnectionReservations(transaction, identity)
       const lockedCells = inventoryFirst
         ? await this.lockCellInventory(transaction, 'request')
         : undefined
@@ -4790,7 +4829,10 @@ export class RelayAssignmentStore {
             throw new Error('migration_activity_topology_mismatch')
           }
         }
-        if (obsoleteLeases.length > 0) await this.lockCellInventory(transaction, 'request')
+        if (obsoleteLeases.length > 0) {
+          await this.lockControlConnectionReservations(transaction, identity)
+          await this.lockCellInventory(transaction, 'request')
+        }
         for (const lease of obsoleteLeases) {
           await this.removeActivityLease(transaction, identity, lease, now)
         }
@@ -5133,6 +5175,7 @@ export class RelayAssignmentStore {
       const sourceCellId = text(assignment, 'cell_id')
       if (sourceCellId === targetCellId) throw new Error('target_matches_source')
       await this.lockAssignmentActivities(transaction, identity)
+      await this.lockControlConnectionReservations(transaction, identity)
       const cells = await this.lockCellInventory(transaction, 'request')
       const admission = await cellAdmissionStates(transaction)
       const targetRow = cells.find(
@@ -5464,6 +5507,7 @@ export class RelayAssignmentStore {
     }
     const activityLeases = await this.lockAssignmentActivities(transaction, input.identity)
     assertAssignmentActivityCounts(assignment, activityLeases, 0)
+    await this.lockControlConnectionReservations(transaction, input.identity, 'nowait')
     const cells = await this.lockCellInventory(transaction, 'nowait')
     const admission = await cellAdmissionStates(transaction)
     const regions = new Map(
@@ -6383,6 +6427,7 @@ export class RelayAssignmentStore {
             integer(lease, 'expires_at') > now
         )
         if (targetActive) return false
+        await this.lockControlConnectionReservations(transaction, identity, 'nowait')
         const cells = await this.lockCellInventory(transaction, 'nowait')
         const source = cells.find((cell) => text(cell, 'cell_id') === sourceCellId)
         const admission = await cellAdmissionStates(transaction)
@@ -6549,7 +6594,10 @@ export class RelayAssignmentStore {
             ]
               .map((activityId) => activityLeaseById(activityLeases, activityId))
               .filter((lease): lease is SqlRow => lease !== undefined)
-            if (obsoleteLeases.length > 0) await this.lockCellInventory(transaction, 'nowait')
+            if (obsoleteLeases.length > 0) {
+              await this.lockControlConnectionReservations(transaction, identity, 'nowait')
+              await this.lockCellInventory(transaction, 'nowait')
+            }
             for (const lease of obsoleteLeases) {
               await this.removeActivityLease(transaction, identity, lease, now)
             }
@@ -6567,6 +6615,7 @@ export class RelayAssignmentStore {
             )
             return true
           }
+          await this.lockControlConnectionReservations(transaction, identity, 'nowait')
           const cells = await this.lockCellInventory(transaction, 'nowait')
           const sourceCellId = text(row, 'source_cell_id')
           const admissionRows = await transaction.query(
@@ -6982,6 +7031,24 @@ export class RelayAssignmentStore {
       `SELECT * FROM relay_cells WHERE cell_id IN (${distinct.map(() => '?').join(', ')})
        ORDER BY cell_id ASC`,
       distinct,
+      wait
+    )
+  }
+
+  // Tier 3 of the row lock order: a path that will take relay_cells and also
+  // touch this host's reservations takes them here, before the cell rows. The
+  // set is the host's own rows, so it is small and known before any placement
+  // decision is read.
+  private async lockControlConnectionReservations(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    mode: CellInventoryLockMode = 'request'
+  ): Promise<void> {
+    const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
+    await database.queryLocked(
+      `SELECT reservation_id FROM relay_control_connection_reservations
+       WHERE user_id = ? AND relay_host_id = ? ORDER BY reservation_id ASC`,
+      [identity.userId, identity.relayHostId],
       wait
     )
   }
@@ -7641,6 +7708,9 @@ export class RelayAssignmentStore {
     await this.adjustActivityCount(database, identity, kind, -1, now, now)
   }
 
+  // Returns the request units this removal frees on `cellId`. The caller folds
+  // them into the one conditional cell-row write it makes just before COMMIT,
+  // so no statement here touches the fleet's most contended row.
   private async removeSupersededSameCellControls(
     database: RelayDatabase,
     identity: AssignmentIdentity,
@@ -7648,14 +7718,14 @@ export class RelayAssignmentStore {
     cellId: string,
     retainedActivityId: string,
     now: number
-  ): Promise<void> {
+  ): Promise<number> {
     const superseded = leases.filter(
       (lease) =>
         activityKind(lease) === 'control' &&
         text(lease, 'cell_id') === cellId &&
         text(lease, 'activity_id') !== retainedActivityId
     )
-    if (superseded.length === 0) return
+    if (superseded.length === 0) return 0
     if (
       superseded.some(
         (lease) => integer(lease, 'request_units') !== ACTIVITY_REQUEST_UNITS.control
@@ -7663,10 +7733,6 @@ export class RelayAssignmentStore {
     ) {
       throw new Error('activity_lease_shape_mismatch')
     }
-    // Why: this recomputes one cell's reservation from its leases, so only that
-    // row needs to be held; the 23-row inventory lock here serialised every
-    // desktop control rebind in the fleet behind every other one.
-    const cellRow = (await this.lockCellRows(database, [cellId]))[0]
     await database.query(
       `DELETE FROM relay_assignment_activity_leases
        WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'control'
@@ -7680,22 +7746,9 @@ export class RelayAssignmentStore {
        WHERE user_id = ? AND relay_host_id = ?`,
       [remainingControls, now, identity.userId, identity.relayHostId]
     )
-    const cellUnitsRow = (
-      await database.query(
-        `SELECT COALESCE(SUM(request_units), 0) AS request_units
-         FROM relay_assignment_activity_leases WHERE cell_id = ?`,
-        [cellId]
-      )
-    )[0]!
-    const cellUnits = integer(cellUnitsRow, 'request_units')
-    if (!cellRow) throw new Error('assigned_cell_missing')
-    if (cellUnits > integer(cellRow, 'capacity_requests')) {
-      throw new Error('relay_capacity_exhausted')
-    }
-    await database.query(
-      `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
-      [cellUnits, now, cellId]
-    )
+    // The shape check above proved every superseded lease holds exactly the
+    // control unit, so the freed units are exact without re-summing the cell.
+    return superseded.length * ACTIVITY_REQUEST_UNITS.control
   }
 
   private async adjustActivityCount(

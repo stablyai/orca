@@ -44,6 +44,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeWorkspaceKey: 'global',
   activeWorktreeIdsOnShutdown: 'worktreeArray',
   terminalLayoutsByTabId: 'tabKeyed',
+  // Local-only, never uploaded — but still routed per host so a tab's park scrollback follows its
+  // own partition rather than merging across hosts the way sleepingAgentKeyed rows do.
+  localOnlyScrollbackByTabId: 'tabKeyed',
   remoteSessionIdsByTabId: 'tabKeyed',
   browserPagesByWorkspace: 'browserWorkspaceKeyed',
   markdownFrontmatterVisible: 'fileKeyed',

@@ -477,6 +477,56 @@ describe('the wait for the page to speak', () => {
     })
   })
 
+  it('re-arms a session the route rebuilt, with the host and its gates unchanged', async () => {
+    // The route is the other half of the session identity: changing it throws the old session away,
+    // and a session nobody told the gates about never leaves `checking`.
+    const fake = createFakeStore()
+    const route = { pathname: '/h/host-1' }
+    const seen: MobileWebShellSessionState[] = []
+    function Probe() {
+      const session = useMobileWebShellSession({
+        hostId: HOST_ID,
+        routePathname: route.pathname,
+        runtime: {
+          createStore: () => fake.store,
+          mintSessionId: () => 'session-id',
+          now: () => 0,
+          setTimer: createTimerSeam().setTimer
+        }
+      })
+      seen.push(session.state)
+      return null
+    }
+    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+    await act(async () => {
+      rendered.tree = create(createElement(Probe))
+    })
+    const tree = rendered.tree
+    if (tree === null) {
+      throw new Error('the hook did not mount')
+    }
+    await act(async () => {
+      fake.settleCacheRead(null)
+    })
+    route.pathname = '/h/host-1/tasks'
+    seen.length = 0
+    await act(async () => {
+      tree.update(createElement(Probe))
+    })
+    // The rebuilt session must open the cache of its own accord; settling a read it never asked
+    // for leaves it in `checking`, which is exactly what an un-armed session looks like.
+    await act(async () => {
+      fake.settleCacheRead(null)
+    })
+    await flush()
+    // Pinned, not merely "moved on": `/h/host-1/tasks` is not the route the bundle lists, so a
+    // re-armed session settles on the native screen. A failure would also leave `checking`.
+    expect(seen.at(-1)?.kind).toBe('native-route')
+    await act(async () => {
+      tree.unmount()
+    })
+  })
+
   it('cancels the armed deadline when the session it belongs to is torn down', async () => {
     const mounted = await ready()
     await act(async () => {

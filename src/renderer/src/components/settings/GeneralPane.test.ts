@@ -109,6 +109,12 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('red underline', entries)).toBe(true)
   })
 
+  it('makes the running-terminal confirmation setting searchable', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(matchesSettingsSearch('running', entries)).toBe(true)
+  })
+
   it('omits the default project runtime setting when Windows runtimes are unsupported', () => {
     const entries = getGeneralPaneSearchEntries({ includeProjectRuntime: false })
 
