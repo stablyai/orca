@@ -41,6 +41,7 @@ type PostedFrame = { sessionId: string; json: string }
 type Probe = {
   view: MobileWebShellBridgeView | null
   navigations: string[]
+  externalLinks: string[]
   backPops: number
   storageWrites: { key: string; value: string | null }[]
 }
@@ -120,6 +121,7 @@ function Harness(props: {
     route: { pathname: '/h/host-1' },
     pageRoutes: ['/h/[hostId]'],
     onNavigate: (href) => props.probe.navigations.push(href),
+    onExternalLink: (url) => props.probe.externalLinks.push(url),
     onNavigateBack: () => {
       props.probe.backPops += 1
       return 'popped'
@@ -175,7 +177,13 @@ let warned: MockInstance<typeof console.warn>
 
 async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
   const posted: PostedFrame[] = []
-  const probe: Probe = { view: null, navigations: [], backPops: 0, storageWrites: [] }
+  const probe: Probe = {
+    view: null,
+    navigations: [],
+    externalLinks: [],
+    backPops: 0,
+    storageWrites: []
+  }
   const faults: BridgeErrorCapture[] = []
   const readies: string[] = []
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -262,6 +270,16 @@ describe('the bridge channel', () => {
       clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-1/session/wt-1' })
     )
     expect(mounted.probe.navigations).toEqual(['/h/host-1/session/wt-1'])
+  })
+
+  it('hands a URL the page asked for to the caller that can leave the app', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: 'externalLink', url: 'https://example.com/x' })
+    )
+    expect(mounted.probe.externalLinks).toEqual(['https://example.com/x'])
+    expect(mounted.probe.navigations).toEqual([])
   })
 
   it('pops the stack the page was pushed onto, through the caller that owns it', async () => {
@@ -431,7 +449,13 @@ describe('the callbacks a render passes', () => {
     const first: BridgeErrorCapture[] = []
     const second: BridgeErrorCapture[] = []
     const posted: PostedFrame[] = []
-    const probe: Probe = { view: null, navigations: [], backPops: 0, storageWrites: [] }
+    const probe: Probe = {
+      view: null,
+      navigations: [],
+      externalLinks: [],
+      backPops: 0,
+      storageWrites: []
+    }
     // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
     // second render's callback to a frame that arrives after it.
     const render = (faults: BridgeErrorCapture[]): ReactElement =>
@@ -484,7 +508,13 @@ describe('client changes', () => {
   it('hands the host over in the commit, so no frame reaches the replaced client', async () => {
     const first = fakeClient()
     const posted: PostedFrame[] = []
-    const probe: Probe = { view: null, navigations: [], backPops: 0, storageWrites: [] }
+    const probe: Probe = {
+      view: null,
+      navigations: [],
+      externalLinks: [],
+      backPops: 0,
+      storageWrites: []
+    }
     const render = (deliver: string | null): ReactElement =>
       createElement(DeliverDuringCommit, { deliver, posted, probe, faults: [], readies: [] })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
