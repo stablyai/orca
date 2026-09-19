@@ -24,6 +24,27 @@ export {
 }
 export type { DecodedFrame, FrameDecoderOptions } from './relay-frame-decoder'
 
+import {
+  MIN_RELAY_PROTOCOL_VERSION,
+  RELAY_PROTOCOL_VERSION,
+  describeRelayProtocolVersion,
+  relayProtocolOffer,
+  relayProtocolOfferAdmits,
+  type RelayHandshakeCapabilities,
+  type RelayProtocolOffer
+} from '../shared/relay-protocol-version'
+
+export {
+  MIN_RELAY_PROTOCOL_VERSION,
+  RELAY_PROTOCOL_VERSION,
+  describeRelayProtocolVersion,
+  relayProtocolOffer,
+  relayProtocolOfferAdmits
+}
+export type { RelayHandshakeCapabilities, RelayProtocolOffer }
+
+// Why frozen at 0.1.0: the deploy path carries a content hash of the bundle instead, so nothing
+// ever needed this to move. `RELAY_PROTOCOL_VERSION` is the number that describes the wire.
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 
@@ -37,10 +58,24 @@ export const MessageType = {
 // reads exactly one Handshake frame before attaching the JSON-RPC dispatcher,
 // to refuse mismatched-version --connect bridges that would otherwise drive a
 // stale daemon.
+// Why optional on every arm: `parseHandshakeMessage` throws on an unknown `type` and the throw
+// closes the socket, so this envelope can only ever grow by optional fields on the arms that
+// already ship. `endpointCredential` is the precedent. See
+// docs/reference/remote-wire-compatibility.md Rule 1.
 export type HandshakeMessage =
-  | { type: 'orca-relay-handshake'; version: string; endpointCredential?: string }
-  | { type: 'orca-relay-handshake-ok'; version: string }
-  | { type: 'orca-relay-handshake-mismatch'; expected: string; got: string }
+  | ({
+      type: 'orca-relay-handshake'
+      version: string
+      endpointCredential?: string
+    } & RelayProtocolOffer)
+  | ({
+      type: 'orca-relay-handshake-ok'
+      version: string
+      capabilities?: RelayHandshakeCapabilities
+    } & RelayProtocolOffer)
+  // `protocolVersion` here tells a client whose offered range missed *what* it missed, which a
+  // content hash cannot: the two builds may be wire-compatible and merely differ in bytes.
+  | ({ type: 'orca-relay-handshake-mismatch'; expected: string; got: string } & RelayProtocolOffer)
   // Why a distinct reply: the bridge exits with its own code so the client can tell a refused
   // credential from a crashed relay. Old bridges reject the unknown type and exit 1 pre-sentinel.
   | { type: 'orca-relay-handshake-credential-mismatch' }
