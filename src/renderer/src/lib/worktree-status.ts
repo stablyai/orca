@@ -1,4 +1,5 @@
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import { translate } from '@/i18n/i18n'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
@@ -18,6 +19,7 @@ export type WorktreeStatus =
   | 'monitoring'
   | 'permission'
   | 'interrupted'
+  | 'rate-limited'
   | 'done'
   | 'inactive'
 
@@ -36,6 +38,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
   interrupted: 'Interrupted',
+  'rate-limited': 'Rate-limited',
   done: 'Done',
   inactive: 'Inactive'
 }
@@ -158,6 +161,14 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {
+  // Only the status this feature added is translated: it reaches tooltips, the
+  // command palette and screen readers, and no localized label covers it. The
+  // neighbouring labels stay as they are — relocalizing the whole table is a
+  // separate change, and the table cannot call translate() where it is declared
+  // anyway (module scope is evaluated before the catalog loads).
+  if (status === 'rate-limited') {
+    return translate('auto.lib.worktreeStatus.rateLimited', 'Rate-limited')
+  }
   return STATUS_LABELS[status]
 }
 
@@ -184,6 +195,7 @@ export function resolveWorktreeStatus(args: {
   hasInterrupted?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  hasRateLimited?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -210,6 +222,12 @@ export function resolveWorktreeStatus(args: {
   }
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
+  }
+  // Why: a rate-limited (paused) agent outranks the passive done/active/inactive
+  // states so the card advertises that Orca is waiting to auto-resume it, but
+  // stays below permission/working which are more user-actionable / live.
+  if (args.hasRateLimited) {
+    return 'rate-limited'
   }
   // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
   if (args.hasInterrupted) {

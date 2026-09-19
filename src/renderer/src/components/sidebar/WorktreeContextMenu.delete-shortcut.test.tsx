@@ -39,6 +39,12 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
       </div>
     )
   },
+  DropdownMenuCheckboxItem: function DropdownMenuCheckboxItem(props: {
+    children?: React.ReactNode
+    onCheckedChange?: (checked: boolean) => void
+  }) {
+    return <button onClick={() => props.onCheckedChange?.(true)}>{props.children}</button>
+  },
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return <hr />
   },

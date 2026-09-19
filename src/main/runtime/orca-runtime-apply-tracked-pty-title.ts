@@ -58,6 +58,27 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
+      // Why: a resumed agent must stop being tracked so the service never pokes
+      // a working agent (product rule #6). Working is the only status that
+      // clears — an idle-at-banner agent is still limited. Banners only: the
+      // chooser interrupts a turn whose spinner title can emit another frame
+      // after the menu renders, and one such frame here killed the tracked
+      // stall seconds after detection. A menu stall ends when the service acts
+      // on it or its live-chooser re-read finds the menu gone — never on the
+      // title stream, which lies for the whole time a chooser is up. Everything
+      // else does clear here, including the CLI's own auto-continue: the agent
+      // going back to work IS that wait having succeeded.
+      // Read through `?.` like every other reader of this field does: these split
+      // files are `@ts-nocheck`, so a record that never got the field would make
+      // a `!== null` test true and then throw on `.reason`.
+      const stallReason = pty.usageLimitStall?.reason
+      if (
+        agentStatus === 'working' &&
+        stallReason !== undefined &&
+        stallReason !== 'usage-limit-menu'
+      ) {
+        this.clearPtyUsageLimitStall(pty, ptyId)
+      }
       // Why `!== 'permission'` rather than `!== 'idle'`: a name-only idle leaves the waiter
       // parked on its poll, so the later explicit idle is an idle→idle step that still has
       // to be offered. The resolve helper re-ranks and returns early when it is not yet

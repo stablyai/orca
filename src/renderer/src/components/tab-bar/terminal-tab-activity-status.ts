@@ -246,8 +246,12 @@ export function terminalTabActivityToAgentDotState(
     case 'interrupted':
     case 'done':
       return status
+    // Why 'rate-limited' lands here: AgentStateDot only speaks working /
+    // permission / done. A rate-limited agent is paused, not in-turn, and the
+    // amber "resumes …" chip on the workspace card already carries the signal.
     case 'active':
     case 'inactive':
+    case 'rate-limited':
       return null
   }
 }

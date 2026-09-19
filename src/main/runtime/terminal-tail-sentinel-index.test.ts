@@ -5,7 +5,9 @@ import { buildPreview } from './terminal-tail-state'
 import {
   getTerminalTailSentinelFullScanCount,
   getTerminalTailSentinelMatches,
-  tailMayContainBlockedSignal
+  tailMayContainBlockedSignal,
+  tailMayContainUsageLimitSignal,
+  TERMINAL_USAGE_LIMIT_SENTINEL_RE
 } from './terminal-tail-sentinel-index'
 import { computeTerminalTailWaitState } from './terminal-wait-tail-state'
 import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './terminal-wait-detection'
@@ -24,6 +26,21 @@ function referenceMayContainBlockedSignal(lines: string[], partialLine: string):
 
 function indexedMayContainBlockedSignal(lines: string[], partialLine: string): boolean {
   return tailMayContainBlockedSignal(lines) || TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(partialLine)
+}
+
+// The same contract for the second sentinel the index carries: the usage-limit
+// prefilter decides whether usage-limit stall detection runs at all.
+function referenceMayContainUsageLimitSignal(lines: string[], partialLine: string): boolean {
+  for (const line of lines) {
+    if (TERMINAL_USAGE_LIMIT_SENTINEL_RE.test(line)) {
+      return true
+    }
+  }
+  return TERMINAL_USAGE_LIMIT_SENTINEL_RE.test(partialLine)
+}
+
+function indexedMayContainUsageLimitSignal(lines: string[], partialLine: string): boolean {
+  return tailMayContainUsageLimitSignal(lines) || TERMINAL_USAGE_LIMIT_SENTINEL_RE.test(partialLine)
 }
 
 type TailSim = {
@@ -54,12 +71,16 @@ function assertMatchesFullScan(sim: TailSim): void {
   expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(
     referenceMayContainBlockedSignal(sim.lines, sim.partialLine)
   )
+  expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(
+    referenceMayContainUsageLimitSignal(sim.lines, sim.partialLine)
+  )
   expect(computeTerminalTailWaitState(sim.lines, sim.partialLine, sim.preview)).toEqual(
     computeTerminalTailWaitState(unindexed(sim), sim.partialLine, sim.preview)
   )
 }
 
 const BLOCKED_LINE = 'Update available! Press Enter to continue.'
+const USAGE_LIMIT_LINE = "You've hit your session limit · resets 3:50pm"
 const ESC = String.fromCharCode(27)
 
 /** The exact positions a from-scratch scan would record, written out independently. */
@@ -152,6 +173,21 @@ describe('terminal tail sentinel index', () => {
       feed(sim, `long after eviction ${index}\n`)
     }
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(false)
+    assertMatchesFullScan(sim)
+  })
+
+  it('carries and evicts the usage-limit sentinel independently of the blocked one', () => {
+    const sim = saturatedSim()
+    feed(sim, `${USAGE_LIMIT_LINE}\n`)
+    expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(true)
+    expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(false)
+    assertMatchesFullScan(sim)
+
+    for (let index = 0; index < MAX_TAIL_LINES; index += 1) {
+      feed(sim, `after limit ${index}\n`)
+    }
+    expect(sim.lines.includes(USAGE_LIMIT_LINE)).toBe(false)
+    expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(false)
     assertMatchesFullScan(sim)
   })
 
@@ -250,6 +286,22 @@ describe('terminal tail sentinel index carried window', () => {
     feed(sim, `${ESC}[2500A${ESC}[2K${BLOCKED_LINE}\n`)
     assertIndexedPositionsAreExact(sim.lines)
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(true)
+  })
+
+  it('carries the usage-limit sentinel through the same redraw windows', () => {
+    const sim = saturatedSim()
+    feed(sim, `${ESC}[3A${ESC}[2K${USAGE_LIMIT_LINE}\n`)
+    expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(true)
+    assertMatchesFullScan(sim)
+
+    feed(sim, `${ESC}[1A${ESC}[2Kplain replacement\n`)
+    expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(false)
+    assertMatchesFullScan(sim)
+
+    // Deep enough to outrun the window: carries nothing and rescans in full.
+    feed(sim, `${ESC}[2500A${ESC}[2K${USAGE_LIMIT_LINE}\n`)
+    expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(true)
+    assertMatchesFullScan(sim)
   })
 
   it('shifts every carried position by exactly the number of rows evicted', () => {
@@ -356,8 +408,11 @@ function randomChunk(random: () => number, profile: 'streaming' | 'tui'): string
     }
     return `${lines.join('\n')}\n`
   }
-  if (roll < 0.42) {
+  if (roll < 0.4) {
     return `plain output ${Math.floor(random() * 1e6)}\n`
+  }
+  if (roll < 0.42) {
+    return `${USAGE_LIMIT_LINE}\n`
   }
   if (roll < 0.48) {
     return `${'   '.repeat(Math.floor(random() * 3))}\n`
@@ -406,19 +461,26 @@ describe('terminal tail sentinel index property', () => {
         const random = mulberry32(seed)
         const sim = newSim()
         let sawSentinel = false
+        let sawUsageLimit = false
         let sawSaturation = false
         for (let step = 0; step < 1200; step += 1) {
           feed(sim, randomChunk(random, profile))
           const expected = referenceMayContainBlockedSignal(sim.lines, sim.partialLine)
           expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(expected)
+          const expectedUsageLimit = referenceMayContainUsageLimitSignal(sim.lines, sim.partialLine)
+          expect(indexedMayContainUsageLimitSignal(sim.lines, sim.partialLine)).toBe(
+            expectedUsageLimit
+          )
           expect(computeTerminalTailWaitState(sim.lines, sim.partialLine, sim.preview)).toEqual(
             computeTerminalTailWaitState(unindexed(sim), sim.partialLine, sim.preview)
           )
           sawSentinel = sawSentinel || expected
+          sawUsageLimit = sawUsageLimit || expectedUsageLimit
           sawSaturation = sawSaturation || sim.lines.length >= MAX_TAIL_LINES
         }
         // Guard against a vacuous pass.
         expect(sawSentinel).toBe(true)
+        expect(sawUsageLimit).toBe(true)
         if (profile === 'streaming') {
           expect(sawSaturation).toBe(true)
         }

@@ -100,7 +100,8 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         tailTruncated: false,
         tailLinesTotal: 0,
         preview: state.preview ?? '',
-        waitBlockedAt: null
+        waitBlockedAt: null,
+        usageLimitStall: null
       }
       if (state.title) {
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
