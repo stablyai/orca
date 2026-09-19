@@ -6,6 +6,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { NON_GIT_REPO_REJECTION } from '../../../shared/non-git-repo-rejection'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
 import { isGitRepoAsync, getRepoName } from '../../git/repo'
 import {
@@ -68,16 +69,12 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
         try {
           // This process cannot validate SSH paths with local Git.
           if (args.connectionId) {
-            results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            results.push({ path: repoPath, status: 'failed', error: NON_GIT_REPO_REJECTION })
             continue
           }
           await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
           if (!(await isGitRepoAsync(repoPath))) {
-            results.push({
-              path: repoPath,
-              status: 'failed',
-              error: 'Not a valid git repository'
-            })
+            results.push({ path: repoPath, status: 'failed', error: NON_GIT_REPO_REJECTION })
             continue
           }
           const importRepoPath = await importTargetResolver.resolveLocal(repoPath)

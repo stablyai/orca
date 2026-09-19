@@ -14,8 +14,8 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca repo add --path <path> [--kind git|folder] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind'],
     notes: [
-      'Without --kind, a git checkout is added as a git project and any other directory as a folder project.',
-      'A folder project has no branches, worktrees, or review state; pass --kind git to fail instead when the path is not a checkout.'
+      'Without --kind, a path inside a git checkout is added as a git project and a directory outside any checkout as a folder project.',
+      'A folder project has no branches, worktrees, or review state; pass --kind folder to register a directory that sits inside a checkout, or --kind git to fail instead of falling back.'
     ],
     examples: [
       'orca repo add --path /abs/repo --json',
