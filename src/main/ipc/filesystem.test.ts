@@ -363,7 +363,10 @@ describe('registerFilesystemHandlers', () => {
       ext: 'svg',
       mime: 'image/svg+xml',
       data: Array.from(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />'))
-    }
+    },
+    { ext: 'webm', mime: 'video/webm', data: [0x1a, 0x45, 0xdf, 0xa3, 0x00] },
+    { ext: 'mp4', mime: 'video/mp4', data: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70] },
+    { ext: 'mp3', mime: 'audio/mpeg', data: [0x49, 0x44, 0x33, 0x04, 0x00] }
   ])('returns base64 content for supported $ext binaries', async ({ ext, mime, data }) => {
     const buf = Buffer.from(data)
     statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
@@ -377,6 +380,45 @@ describe('registerFilesystemHandlers', () => {
       isImage: true,
       mimeType: mime
     })
+  })
+
+  it('allows media previews between the 50MB image cap and the 100MB media cap', async () => {
+    const buf = Buffer.from([0x1a, 0x45, 0xdf, 0xa3])
+    statMock.mockResolvedValue({
+      size: 80 * 1024 * 1024,
+      isDirectory: () => false,
+      mtimeMs: 123
+    })
+    readFileMock.mockResolvedValue(buf)
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/clip.webm') })
+    ).resolves.toMatchObject({ isBinary: true, isImage: true, mimeType: 'video/webm' })
+  })
+
+  it('rejects media previews above the 100MB media cap', async () => {
+    statMock.mockResolvedValue({
+      size: 101 * 1024 * 1024,
+      isDirectory: () => false,
+      mtimeMs: 123
+    })
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/clip.webm') })
+    ).rejects.toThrow('File too large: 101.0MB exceeds 100MB limit')
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the 50MB cap for image previews', async () => {
+    statMock.mockResolvedValue({
+      size: 80 * 1024 * 1024,
+      isDirectory: () => false,
+      mtimeMs: 123
+    })
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/photo.png') })
+    ).rejects.toThrow('File too large: 80.0MB exceeds 50MB limit')
   })
 
   it('opens text files larger than the old 5MB guard', async () => {

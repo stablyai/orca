@@ -16,12 +16,14 @@ import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from '../ma
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../readdir-error-diagnostics'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { isMediaPreviewMimeType } from '../../../shared/media-file-extensions'
 import {
   BINARY_PROBE_BYTES,
   isBinaryBuffer,
   isBinaryFilePrefix,
   isDirectoryEntry,
   MAX_PREVIEWABLE_BINARY_SIZE,
+  MAX_PREVIEWABLE_MEDIA_SIZE,
   MAX_TEXT_FILE_SIZE,
   PREVIEWABLE_BINARY_MIME_TYPES,
   readLocalLogSnapshot
@@ -88,7 +90,11 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       }
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+      const sizeLimit = mimeType
+        ? isMediaPreviewMimeType(mimeType)
+          ? MAX_PREVIEWABLE_MEDIA_SIZE
+          : MAX_PREVIEWABLE_BINARY_SIZE
+        : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
         throw new Error(
           `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`

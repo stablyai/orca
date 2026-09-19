@@ -1,12 +1,15 @@
 import { open } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
+import { MEDIA_FILE_MIME_TYPES } from '../../../shared/media-file-extensions'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 export const BINARY_PROBE_BYTES = 8192
 // Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
+// Why: screen recordings and clips routinely exceed the image cap; local IPC has no frame limit, so media gets its own ceiling.
+export const MAX_PREVIEWABLE_MEDIA_SIZE = 100 * 1024 * 1024 // 100MB
 export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -16,7 +19,8 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  ...MEDIA_FILE_MIME_TYPES
 }
 
 export async function readLocalLogSnapshot(filePath: string): Promise<{
