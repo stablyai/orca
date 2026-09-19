@@ -21,6 +21,7 @@ import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { pasteClipboardFilePathsToPane } from './terminal-clipboard-file-paste'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -36,6 +37,7 @@ export function createTerminalPanePasteExecution(
   shortcutPlatform: NodeJS.Platform
 ) {
   const {
+    cwd,
     forceBracketedMultilineTextPaste,
     managerRef,
     paneTransportsRef,
@@ -132,6 +134,15 @@ export function createTerminalPanePasteExecution(
     const activeElementAtDispatch = document.activeElement
     void pasteTerminalClipboard({
       readClipboardText,
+      readClipboardFilePaths: window.api.ui.readClipboardFilePaths,
+      pasteFilePaths: pasteClipboardFilePathsToPane({
+        manager: managerRef.current,
+        paneTransports: paneTransportsRef.current,
+        worktreeId,
+        tabId,
+        cwd,
+        pane
+      }),
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
       runtimeEnvironmentId,

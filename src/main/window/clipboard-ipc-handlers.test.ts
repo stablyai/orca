@@ -296,6 +296,9 @@ describe('registerClipboardHandlers', () => {
     expect(() =>
       handlers.get('clipboard:writeFile')?.(untrustedEvent, '/tmp/copied-file.txt')
     ).toThrow('Unauthorized clipboard IPC sender')
+    expect(() => handlers.get('clipboard:readFilePaths')?.(untrustedEvent)).toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
     expect(() =>
       handlers.get('clipboard:writeImage')?.(untrustedEvent, 'data:image/png;base64,AAAA')
     ).toThrow('Unauthorized clipboard IPC sender')
@@ -546,12 +549,27 @@ describe('registerClipboardHandlers', () => {
 
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readText')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readSelectionText')
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readFilePaths')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeText')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeSelectionText')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeImage')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageAsTempFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
+  })
+
+  it('reads copied file paths from the OS file flavor', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    clipboardReadBufferMock.mockImplementation((format: string) =>
+      format === 'public.file-url'
+        ? Buffer.from('file:///Users/me/sub%20dir/hello%20world.txt', 'utf8')
+        : Buffer.alloc(0)
+    )
+    registerClipboardHandlers({} as never)
+
+    expect(getRegisteredHandlers().get('clipboard:readFilePaths')?.(makeClipboardEvent())).toEqual([
+      '/Users/me/sub dir/hello world.txt'
+    ])
   })
 
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {
