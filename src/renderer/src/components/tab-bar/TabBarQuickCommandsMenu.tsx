@@ -20,7 +20,6 @@ import {
 } from '../../../../shared/terminal-quick-commands'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -29,6 +28,12 @@ import { TabBarQuickCommandAddActions } from './TabBarQuickCommandAddActions'
 import { TabBarQuickCommandHostLoadStatus } from './TabBarQuickCommandHostLoadStatus'
 import { searchHostedTerminalQuickCommands } from './hosted-terminal-quick-command-search'
 import { useTabBarQuickCommandSearchInput } from './use-tab-bar-quick-command-search-input'
+import {
+  TAB_BAR_SPLIT_BUTTON_CHEVRON_CLASS,
+  TAB_BAR_SPLIT_BUTTON_CLASS,
+  TAB_BAR_SPLIT_BUTTON_LABEL_CLASS,
+  TAB_BAR_SPLIT_BUTTON_PRIMARY_CLASS
+} from './tab-bar-split-button-chrome'
 import type {
   HostedTerminalQuickCommand,
   TerminalQuickCommandHost
@@ -183,19 +188,15 @@ export function TabBarQuickCommandsMenu({
     'auto.components.tab.bar.TabBarQuickCommandsButton.b82e237a4b',
     'More quick commands'
   )
-  const splitButtonClass =
-    'my-auto flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-border/60 text-muted-foreground'
-  const innerButtonBase =
-    'flex items-center bg-transparent leading-none text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
   return (
-    <div className={splitButtonClass}>
+    <div className={TAB_BAR_SPLIT_BUTTON_CLASS}>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
             onClick={() => mostRecent && runAndClose(mostRecent)}
             disabled={!mostRecent}
-            className={cn(innerButtonBase, 'gap-1.5 rounded-l-md rounded-r-none px-1.5')}
+            className={TAB_BAR_SPLIT_BUTTON_PRIMARY_CLASS}
             aria-label={
               mostRecent
                 ? translate(
@@ -210,7 +211,7 @@ export function TabBarQuickCommandsMenu({
             }
           >
             <Play className="size-3 shrink-0" fill="currentColor" strokeWidth={0} />
-            <span className="max-w-[160px] truncate text-[12px] font-medium">
+            <span className={TAB_BAR_SPLIT_BUTTON_LABEL_CLASS}>
               {mostRecent?.command.label ??
                 translate('auto.components.tab.bar.TabBarQuickCommandsButton.7b1c9d6ae1', 'Run')}
             </span>
@@ -244,10 +245,7 @@ export function TabBarQuickCommandsMenu({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className={cn(
-                  innerButtonBase,
-                  'justify-center rounded-l-none rounded-r-md border-l border-border/60 px-1'
-                )}
+                className={TAB_BAR_SPLIT_BUTTON_CHEVRON_CLASS}
                 aria-label={moreCommandsLabel}
                 onPointerEnter={allowMoreCommandsTooltip}
                 onBlur={allowMoreCommandsTooltip}
