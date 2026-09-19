@@ -26,8 +26,8 @@ Current and exact existing workspaces create a fresh terminal unless
 or require worktree lineage when the selected workspace is a folder.
 
 Register a folder workspace under an existing project through project setup, or
-as a standalone project through `repo add`, which registers a directory that is
-not a Git checkout as a folder project:
+as a standalone project through `repo add`, which registers a directory outside
+any Git checkout as a folder project:
 
 ```text
 ORCA project setup-existing-folder --project <project_id> --host <host_id> --path <abs_path> --kind folder --json

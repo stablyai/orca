@@ -14,8 +14,9 @@ import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
 type AddedRepo = { repo: Record<string, unknown> }
 
-/** Folder registration accepts any absolute path, so a mistyped one would become a dead project. */
-async function assertPathIsDirectoryOnHost(
+// Best effort by design: folder registration accepts any absolute path, so this catches the typo
+// the git attempt used to catch, and anything short of a positive refutation leaves the add alone.
+async function refuseWhenHostRefutesDirectory(
   client: HandlerContext['client'],
   path: string
 ): Promise<void> {
@@ -28,13 +29,12 @@ async function assertPathIsDirectoryOnHost(
       })
     ).result.status
   } catch {
-    // An Orca server too old to answer cannot refute the path; leave the add to the runtime.
     return
   }
   if (isConfirmedStaleFolderPathStatus(status)) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Cannot add ${path}: the host that would own this project reports no directory there.`
+      `Cannot add ${path}: the host reports no directory there.`
     )
   }
 }
@@ -43,7 +43,7 @@ async function addFolderRepo(
   client: HandlerContext['client'],
   path: string
 ): Promise<RuntimeRpcSuccess<AddedRepo>> {
-  await assertPathIsDirectoryOnHost(client, path)
+  await refuseWhenHostRefutesDirectory(client, path)
   return client.call<AddedRepo>('repo.add', { path, kind: 'folder' })
 }
 

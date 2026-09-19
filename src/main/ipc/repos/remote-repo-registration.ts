@@ -4,6 +4,10 @@ import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRepoSshConnectionId, toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  formatNonGitRepoRejection,
+  isNonGitRepoRejection
+} from '../../../shared/non-git-repo-rejection'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
@@ -50,13 +54,13 @@ export async function addRemoteRepoFromPath(
           resolvedPath = check.rootPath
         }
       } else {
-        return { error: `Not a valid git repository: ${args.remotePath}` }
+        return { error: formatNonGitRepoRejection(args.remotePath) }
       }
     } catch (err) {
-      if (err instanceof Error && err.message.includes('Not a valid git repository')) {
+      if (err instanceof Error && isNonGitRepoRejection(err.message)) {
         return { error: err.message }
       }
-      return { error: `Not a valid git repository: ${args.remotePath}` }
+      return { error: formatNonGitRepoRejection(args.remotePath) }
     }
   }
 
