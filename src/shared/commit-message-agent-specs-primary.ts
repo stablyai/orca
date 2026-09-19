@@ -201,22 +201,20 @@ export function buildPrimaryCommitMessageAgentSpecs({
         '--no-context-files',
         '--mode',
         'text',
-        '--model',
-        model,
+        ...(model && model !== 'default' ? ['--model', model] : []),
         ...(thinkingLevel ? ['--thinking', thinkingLevel] : [])
       ],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'pi', args: ['--list-models'], parse: parsePiModels },
       models: [
         {
-          // Why: Pi commonly authenticates through GitHub Copilot locally; using
-          // that provider avoids selecting a raw OpenAI model when no key exists.
-          id: 'github-copilot/gpt-5.4-mini',
-          label: 'Github Copilot GPT 5.4 Mini',
-          ...withOpenAiThinking('gpt-5.4-mini')
+          // Why: the unqualified choice lets Pi use its configured provider and
+          // avoids forcing GitHub Copilot credentials during automation.
+          id: 'default',
+          label: 'Config default'
         }
       ],
-      defaultModelId: 'github-copilot/gpt-5.4-mini'
+      defaultModelId: 'default'
     }
   }
 }

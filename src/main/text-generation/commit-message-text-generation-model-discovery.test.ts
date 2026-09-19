@@ -273,8 +273,8 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     await expect(pending).resolves.toMatchObject({
       success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
-      models: [{ id: 'github-copilot/gpt-5.4-mini' }]
+      defaultModelId: 'default',
+      models: [{ id: 'default' }]
     })
   })
 
@@ -305,7 +305,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     await expect(pending).resolves.toMatchObject({
       success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
+      defaultModelId: 'default',
       models: [{ id: 'github-copilot/gpt-5.4-mini' }, { id: 'openai-codex/gpt-5.5' }]
     })
   })
