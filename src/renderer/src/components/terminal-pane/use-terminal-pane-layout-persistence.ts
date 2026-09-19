@@ -87,8 +87,8 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     }
     layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
       root: layout.root,
-      activeLeafId: layout.activeLeafId,
-      ptyIdsByLeafId: mergedPtyIds
+      // A live selected split can still be waiting for its shell to bind.
+      activeLeafId: layout.activeLeafId
     })
     const titlesByLeafId: Record<string, string> = {}
     const removedTitleLeafIds = removedTitleLeafIdsRef.current
