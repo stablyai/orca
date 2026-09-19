@@ -22,7 +22,16 @@ type LiveAgentGeneration = {
   worktreeIds: ReadonlySet<string>
 }
 
+type SleepingWorktreeGeneration = {
+  tabsByWorktree: SleepStateInput['tabsByWorktree']
+  ptyIdsByTabId: SleepStateInput['ptyIdsByTabId']
+  browserTabsByWorktree: SleepStateInput['browserTabsByWorktree']
+  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  sleepingByWorktree: Map<string, boolean>
+}
+
 let liveAgentGeneration: LiveAgentGeneration | null = null
+let sleepingWorktreeGeneration: SleepingWorktreeGeneration | null = null
 
 // Why cached across cards: zustand re-runs every mounted card's selector on every
 // store write, and the live-agent set is a whole-store scan. Keyed on the same
@@ -52,6 +61,44 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
   return worktreeIds
 }
 
+/** Cache each worktree's answer until one of the inputs to the predicate changes. */
+export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: string): boolean {
+  const worktreeIdsWithLiveAgent = selectWorktreeIdsWithLiveAgent(state)
+  const cached = sleepingWorktreeGeneration
+  if (
+    !cached ||
+    cached.tabsByWorktree !== state.tabsByWorktree ||
+    cached.ptyIdsByTabId !== state.ptyIdsByTabId ||
+    cached.browserTabsByWorktree !== state.browserTabsByWorktree ||
+    cached.worktreeIdsWithLiveAgent !== worktreeIdsWithLiveAgent
+  ) {
+    sleepingWorktreeGeneration = {
+      tabsByWorktree: state.tabsByWorktree,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      browserTabsByWorktree: state.browserTabsByWorktree,
+      worktreeIdsWithLiveAgent,
+      sleepingByWorktree: new Map()
+    }
+  }
+
+  const current = sleepingWorktreeGeneration
+  if (!current) {
+    throw new Error('sleeping worktree cache was not initialized')
+  }
+  if (current.sleepingByWorktree.has(worktreeId)) {
+    return current.sleepingByWorktree.get(worktreeId) === true
+  }
+  const sleeping = isInactiveWorkspace(
+    worktreeId,
+    state.tabsByWorktree,
+    state.ptyIdsByTabId,
+    state.browserTabsByWorktree,
+    worktreeIdsWithLiveAgent
+  )
+  current.sleepingByWorktree.set(worktreeId, sleeping)
+  return sleeping
+}
+
 /**
  * Whether a workspace is asleep: no live terminal, no browser tab, and no live
  * agent holding it awake through a PTY gap.
@@ -65,17 +112,10 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
  * are asleep.
  */
 export function useIsSleepingWorktree(worktreeId: string): boolean {
-  return useAppStore((state) =>
-    isInactiveWorkspace(
-      worktreeId,
-      state.tabsByWorktree,
-      state.ptyIdsByTabId,
-      state.browserTabsByWorktree,
-      selectWorktreeIdsWithLiveAgent(state)
-    )
-  )
+  return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
 }
 
 export function resetWorktreeSleepStateCacheForTests(): void {
   liveAgentGeneration = null
+  sleepingWorktreeGeneration = null
 }
