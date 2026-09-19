@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { C5_PAGE_CLOSURE } from './c5-page-closure'
@@ -10,6 +10,7 @@ import {
 } from './page-closure'
 import { C1_PAGE_CLOSURE } from './c1-page-closure'
 import { BRIDGED_PARITY_EXCLUSIONS } from './divergence-classes'
+import { readGolden } from '../rpc-recording/golden-recording'
 
 const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
 
@@ -86,10 +87,11 @@ describe('the C5 page closure', () => {
   it('pins goldens that exist, in the family the corpus records them under', () => {
     for (const [family, goldens] of Object.entries(C5_PAGE_CLOSURE)) {
       for (const id of Object.keys(goldens)) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every golden carries `family`; a file that does not fails this read and the test.
-        const recorded = JSON.parse(readFileSync(`${GOLDENS}/${id}.json`, 'utf8')) as {
-          family: string
-        }
+        // Through the corpus's own reader, which checks the format version and the value pool and
+        // throws a named diagnostic otherwise. The assertion this file wants is about `family`, and
+        // asserting the shape in order to read one field made this test the second place that
+        // decides what a golden is.
+        const recorded = readGolden(GOLDENS, id)
         expect({ id, family: recorded.family }).toEqual({ id, family })
       }
     }
