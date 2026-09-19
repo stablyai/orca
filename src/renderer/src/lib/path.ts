@@ -8,7 +8,7 @@ function stripLeadingSeparators(path: string): string {
   return path.replace(/^[\\/]+/, '')
 }
 
-function getSeparator(path: string): '/' | '\\' {
+export function getSeparator(path: string): '/' | '\\' {
   return path.includes('\\') ? '\\' : '/'
 }
 
