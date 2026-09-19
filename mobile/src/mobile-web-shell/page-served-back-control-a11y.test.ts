@@ -204,3 +204,39 @@ describe('Back controls in the screens the page serves', () => {
     ).toEqual([])
   })
 })
+
+/**
+ * The trees a route not yet registered will bring under the rule, held to it before it does.
+ *
+ * `screenTree` takes a screen's directory, so registering the review route puts the whole of
+ * `src/components` under these two rules and the source-control route puts `src/source-control`.
+ * Fixing that in the PR that registers would make a route entry carry unrelated accessibility
+ * work; fixing it here means C4.4 adds two rows to the table above and nothing else moves.
+ *
+ * This describe is what the rows replace: once they are in `PAGE_SERVED_SCREENS`, `CONTROLS`
+ * covers these trees and the cases below become a second reading of the same thing.
+ */
+const ARRIVING_TREES = ['src/components']
+const ARRIVING = ARRIVING_TREES.flatMap((tree) => backControlsUnder(tree))
+
+describe('Back controls in the trees a registered route will add', () => {
+  it('finds controls in them, so the rules below cannot pass vacuously', () => {
+    expect(ARRIVING.length).toBeGreaterThan(0)
+  })
+
+  it('gives every one of them the button role', () => {
+    expect(
+      ARRIVING.filter((control) => !control.role.known || control.role.value !== 'button').map(
+        describeControl
+      )
+    ).toEqual([])
+  })
+
+  it('names every one of them in the app’s own wording for Back', () => {
+    expect(
+      ARRIVING.filter(
+        (control) => !control.label.known || !/^Back\b/.test(control.label.value)
+      ).map(describeControl)
+    ).toEqual([])
+  })
+})
