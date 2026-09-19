@@ -66,7 +66,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
         ])
       )
       .digest('base64url')
@@ -142,7 +143,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
           ])
         )
         .digest('base64url')
@@ -213,6 +215,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           env: startup.env,
           launchConfig: startup.launchConfig,
           launchAgent: request.agent,
+          terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           startupCommandDelivery: startup.startupCommandDelivery,
           cwd: startupCwd,
           presentation: request.presentation ?? 'background',

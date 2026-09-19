@@ -82,6 +82,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    this.clearAgentPromptCorrelationForPty(ptyId)
     // A stop intent belongs to one process incarnation; never let it label a
     // replacement process when the provider reports a generation reset.
     this.stopRequestedPtyIds.delete(ptyId)

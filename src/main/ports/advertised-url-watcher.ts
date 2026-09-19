@@ -20,6 +20,7 @@ import {
   lookupBestAdvertisedUrl,
   shouldEvictAdvertisedUrlAfterScan
 } from './advertised-url-reconciliation'
+import { ownRetainedString } from '../../shared/own-retained-string'
 export type HostKind = 'custom' | 'loopback' | 'private-ip' | 'public-ip'
 
 export type AdvertisedUrl = {
@@ -140,7 +141,11 @@ export class AdvertisedUrlWatcher {
     if (!worktreeId) {
       // Why: daemon PTY data can arrive before the spawn handler resolves the worktreeId (src/main/ipc/pty.ts:1318-1323); buffer until bindPty replays.
       const prior = this.pending.get(ptyId) ?? ''
-      const merged = (prior + chunk).slice(-PENDING_PRE_BIND_LIMIT)
+      const combined = prior + chunk
+      const merged =
+        combined.length > PENDING_PRE_BIND_LIMIT
+          ? ownRetainedString(combined.slice(-PENDING_PRE_BIND_LIMIT))
+          : combined
       // Why: drop+reinsert refreshes Map insertion order (LRU) so the eviction below drops the oldest unbound PTY.
       this.pending.delete(ptyId)
       this.pending.set(ptyId, merged)

@@ -1,4 +1,5 @@
-import { BrowserWindow, Notification, ipcMain } from 'electron'
+import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
+import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
 import type {
   NotificationDeliveryProbeResult,
@@ -8,13 +9,12 @@ import type {
   NotificationPermissionStatusResult
 } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
-import { reserveNotificationCooldown } from './notification-burst-cooldown'
+import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import {
@@ -26,8 +26,8 @@ import {
 } from './notification-permission-probe'
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
-  const recentDesktopNotifications = new Map<string, number>()
-  const recentMobileNotifications = new Map<string, number>()
+  ipcMain.removeHandler('notifications:getDesktopAwayState')
+  ipcMain.handle('notifications:getDesktopAwayState', () => readDesktopAwayState(powerMonitor))
   resetNotificationPermissionEvidence()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
@@ -103,86 +103,31 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     return { dismissed }
   })
 
+  const deliveryService = createNotificationDeliveryService({
+    readNotificationSettings: () => store.getSettings().notifications,
+    findActiveWindow: () =>
+      BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
+    isWindowVisible: isMainWindowVisible,
+    setTrayAttention,
+    isNotificationSupported: () => Notification.isSupported(),
+    dispatchMobileNotification: runtime
+      ? (payload) => runtime.dispatchMobileNotification(payload)
+      : null,
+    readAuthorizationStatus: readNotificationAuthorizationStatus,
+    recordDeliveryOutcome: recordNotificationDeliveryOutcome,
+    deliverNative: deliverNativeNotification,
+    platform: process.platform,
+    now: () => Date.now()
+  })
+
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
     (
       _event,
       args: NotificationDispatchRequest
-    ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
-      // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
-      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
-        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
-        if (!isMainWindowVisible(activeWindow)) {
-          setTrayAttention(true)
-        }
-      }
-
-      const settings = store.getSettings().notifications
-      if (!settings.enabled) {
-        return { delivered: false, reason: 'disabled' }
-      }
-
-      if (
-        (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
-        (args.source === 'terminal-bell' && !settings.terminalBell)
-      ) {
-        return { delivered: false, reason: 'source-disabled' }
-      }
-
-      const notificationOptions = buildNotificationOptions(args)
-
-      // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
-      if (runtime && args.source !== 'test') {
-        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (reserveNotificationCooldown(recentMobileNotifications, dedupeKey, Date.now())) {
-          runtime.dispatchMobileNotification({
-            type: 'notification',
-            source: args.source,
-            title: notificationOptions.title,
-            body: notificationOptions.body,
-            worktreeId: args.worktreeId,
-            ...(args.notificationId ? { notificationId: args.notificationId } : {})
-          })
-        }
-      }
-
-      const browserWindow =
-        BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null
-      if (
-        settings.suppressWhenFocused &&
-        args.isActiveWorktree &&
-        browserWindow &&
-        browserWindow.isFocused()
-      ) {
-        return { delivered: false, reason: 'suppressed-focus' }
-      }
-
-      // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.
-      if (args.source !== 'test') {
-        // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only the first.
-        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (!reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, Date.now())) {
-          return { delivered: false, reason: 'cooldown' }
-        }
-      }
-
-      if (!Notification.isSupported()) {
-        return { delivered: false, reason: 'not-supported' }
-      }
-
-      if (process.platform !== 'darwin') {
-        return deliverNativeNotification(args, notificationOptions, settings)
-      }
-      // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
-      return readNotificationAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
-          recordNotificationDeliveryOutcome('failed')
-          return { delivered: false, reason: 'blocked-by-system' }
-        }
-        return deliverNativeNotification(args, notificationOptions, settings)
-      })
-    }
+    ): NotificationDispatchResult | Promise<NotificationDispatchResult> =>
+      deliveryService.dispatch(args)
   )
 
   registerNotificationSoundHandlers(store)

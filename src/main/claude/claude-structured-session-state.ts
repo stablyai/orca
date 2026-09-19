@@ -1,4 +1,7 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   ClaudeStreamJsonConnection,
@@ -9,8 +12,12 @@ import type { ClaudeJournalTranslator } from './claude-structured-journal-transl
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionFastModeState
+} from '../../shared/agent-session-wire'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -27,6 +34,11 @@ export type ClaudeStructuredSessionEvent =
       message: Record<string, unknown>
       /** Present only when this replay acknowledged Orca's in-flight dispatch. */
       startsTurn?: true
+      /** Submission instant of the dispatch this replay acknowledged; the origin
+       *  of the turn it opens. Absent when the host cannot name a send. */
+      requestedAt?: number
+      /** Host clock at receipt; stamped on turn boundaries only. */
+      observedAt?: number
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
@@ -49,13 +61,24 @@ export type ClaudeStructuredSessionEvent =
       fence?: number
       acquisitionGeneration?: string
       settlementRetryRequired?: boolean
+      /** Host clock when the end was observed. */
+      observedAt?: number
     }
+
+export type ClaudeLateDispatchOutcome =
+  | {
+      clientMessageId: string
+      providerIdentity: AgentJournalItemIdentity
+    }
+  | { clientMessageId: string; state: 'rejected'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
+  /** Direct settlement path for provider-proven late dispatch outcomes. */
+  onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
@@ -67,7 +90,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   now?: () => number
   requestTimeoutMs?: number
   initTimeoutMs?: number
-  dispatchAckTimeoutMs?: number
   persistHandle?: (input: {
     sessionId: string
     providerSessionId: string
@@ -78,6 +100,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
   readTranscriptLeaf?: (input: {
     providerSessionId: string
     previousLeafUuid: string | null
+    intentionalRewindUuid?: string
     /** Account-scoped Claude config root that owns this provider session. */
     claudeConfigDir: string
   }) => Promise<string | null>
@@ -85,15 +108,18 @@ export type ClaudeStructuredSessionAdapterDeps = {
 
 export type ClaudeDispatchWaiter = {
   resolve: (uuid: string | null) => void
-  timer: ReturnType<typeof setTimeout>
   acceptsResult: boolean
+  /** Submission settled by the replay, or null for provider-control turns. */
+  clientMessageId: string | null
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
-  /** Sequence used to fence a late identity from a newer dispatch. */
+  /** Sequence used to identify the latest pending dispatch for control ownership. */
   dispatchSequence: number
+  /** Host submission instant owned by this exact dispatch. */
+  requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
-  /** The waiter timed out or its write failed, but its replay may still arrive. */
+  /** The write failed or the child died, but a replay may still name it. */
   retired?: boolean
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
@@ -109,12 +135,15 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
-  /** Bounded identities for dispatches whose ack was unknown when they returned. */
+  /** Bounded identities for dispatches whose child died or whose write failed. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
-  reportedOptions: { model?: string; effort?: string }
+  reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
+  fastModeState?: AgentSessionFastModeState
+  fastModeDisabledReason?: string
+  fastModePerSessionOptIn?: boolean
   /** `optionMutationSequence` when `reportedOptions.model` was last observed, so a
    *  write still awaiting its first turn outranks the report it will replace. */
   reportedModelMutation: number
@@ -123,13 +152,12 @@ export type ClaudeSession = {
   restoreSkippedOptions: Set<string>
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
-  /** Provider uuid of the most recently admitted turn, if one is active. */
-  activeTurnId?: string
   backgroundTasks: ClaudeBackgroundTaskTracker
+  /** The `/` surface the CLI reports for itself; seeded from init, kept current
+   *  by later init and `commands_changed` frames. */
+  commands: ClaudeSlashCommandCatalog
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
-  /** Dispatch sequence that admitted activeTurnId. */
-  activeTurnSequence?: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
   optionMutationSequence: number
   /** Shared durable-close write; a failed write clears this for a retry. */
@@ -142,6 +170,7 @@ export type ClaudeSession = {
   closeEnded?: boolean
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
+  unbindReadingControl?: () => void
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {

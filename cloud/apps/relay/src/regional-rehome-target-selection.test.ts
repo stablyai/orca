@@ -25,6 +25,7 @@ async function setup() {
   let clock = 1_000_000
   const database = await openInMemoryRelayDatabase()
   const store = new RelayAssignmentStore(database, () => clock, {
+    regionalRehomeCohortPercent: 100,
     requireLiveCells: true,
     heartbeatTtlMs: 45_000
   })
@@ -36,6 +37,7 @@ async function setup() {
     notBefore: clock,
     ratePerMinute: 10,
     preferenceMaxAgeMs: 24 * 60 * 60_000,
+    hostCooldownMs: 7 * 24 * 60 * 60_000,
     drainGraceMs: 60 * 60_000
   })
   await store.reconcileCells([source, noHeadroom, unclean, highLoad, lowLoad])
@@ -82,11 +84,40 @@ async function setup() {
     await store.activateControl(identity, {
       cellId: source.id,
       assignmentEpoch: assignment.assignmentEpoch,
-      generation: 1
+      generation: 1,
+      idleRegionalRehome: true,
+      cellIncarnation: incarnation(1)
     })
-    await store.assign(identity, 'asia-east2')
+    const { window } = await store.exchangeRegionCorrection(
+      identity,
+      { v: 1, action: 'issue-window' },
+      assignment.assignmentEpoch
+    )
+    expect(window).toBeDefined()
+    await store.exchangeRegionCorrection(
+      identity,
+      {
+        v: 1,
+        action: 'report',
+        generation: window!.generation,
+        assignmentEpoch: assignment.assignmentEpoch,
+        policyVersion: 1,
+        outcome: 'conclusive',
+        measurements: { 'us-central1': 180, 'asia-east2': 40 }
+      },
+      assignment.assignmentEpoch
+    )
   }
-  return { database, store, beat, activatePreferredSource }
+  const safety = () => ({
+    observedAt: clock,
+    sqlFailures: 0,
+    reconnects: 0,
+    controlActivityRecoveryFailures: 0,
+    databasePoolWaiting: 0,
+    databasePoolWaitersMax: 0,
+    databasePoolWaitMsMax: 0
+  })
+  return { database, store, beat, activatePreferredSource, safety }
 }
 
 const UNCLEAN = REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT + 1
@@ -94,70 +125,78 @@ const UNCLEAN = REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT + 1
 describe('regional rehome target selection', () => {
   it('never selects a target without connection headroom, even at lowest load', async () => {
     const context = await setup()
-    await context.beat(source, 1, 1, {
+    await context.beat(source, 1, 3, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: 0
     })
     // Lowest load but the connection hard cap is exhausted.
-    await context.beat(noHeadroom, 2, 0, {
+    await context.beat(noHeadroom, 2, 3, {
       observedRequests: 0,
       enforcedConnections: 999,
       sqlFailures: 0
     })
-    await context.beat(unclean, 3, 0, {
+    await context.beat(unclean, 3, 3, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
-    await context.beat(highLoad, 4, 0, {
+    await context.beat(highLoad, 4, 3, {
       observedRequests: 50,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(lowLoad, 5, 0, {
+    await context.beat(lowLoad, 5, 3, {
       observedRequests: 10,
       enforcedConnections: 0,
       sqlFailures: 0
     })
     await context.activatePreferredSource()
 
-    const attempt = await context.store.claimRegionalRehome()
+    const candidates = await context.store.selectIdleRegionalRehomeCandidates(context.safety())
+    const attempt = candidates[0]
     expect(attempt?.targetCellId).toBe(lowLoad.id)
+    expect(await context.store.commitIdleRegionalRehome(attempt!, context.safety(), 100)).toEqual({
+      outcome: 'committed'
+    })
     await context.database.close()
   })
 
   it('falls to the next clean target when the load winner goes unclean', async () => {
     const context = await setup()
-    await context.beat(source, 1, 1, {
+    await context.beat(source, 1, 3, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(noHeadroom, 2, 0, {
+    await context.beat(noHeadroom, 2, 3, {
       observedRequests: 0,
       enforcedConnections: 999,
       sqlFailures: 0
     })
-    await context.beat(unclean, 3, 0, {
+    await context.beat(unclean, 3, 3, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
-    await context.beat(highLoad, 4, 0, {
+    await context.beat(highLoad, 4, 3, {
       observedRequests: 50,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(lowLoad, 5, 0, {
+    await context.beat(lowLoad, 5, 3, {
       observedRequests: 10,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
     await context.activatePreferredSource()
 
-    const attempt = await context.store.claimRegionalRehome()
+    const candidates = await context.store.selectIdleRegionalRehomeCandidates(context.safety())
+    const attempt = candidates[0]
     expect(attempt?.targetCellId).toBe(highLoad.id)
+    expect(await context.store.commitIdleRegionalRehome(attempt!, context.safety(), 100)).toEqual({
+      outcome: 'committed'
+    })
     await context.database.close()
   })
 })

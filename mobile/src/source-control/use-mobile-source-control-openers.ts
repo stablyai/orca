@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
 import { useRouter } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import type { ConnectionState } from '../transport/types'
 import { triggerError, triggerSelection } from '../platform/haptics'
 import { buildMobileDiffLines } from '../session/mobile-diff-lines'
 import {
@@ -12,18 +13,20 @@ import {
   canOpenMobileBranchCompareDiff,
   type MobileGitBranchChangeEntry
 } from './mobile-branch-compare'
+import { gitBranchDiffRead } from './mobile-git-read-operations'
 import {
   canOpenMobileGitStatusEntry,
-  isMobileGitUnavailable,
+  isMobileGitUnavailableReply,
   type MobileGitStatusEntry
 } from './mobile-git-status'
+import { sourceFileDiffOpenRun, sourceFileOpenRun } from './mobile-source-file-open-operations'
 import { buildMobileReviewFileRoute } from './mobile-review-route'
 import { revealMobileSourceControlSessionDiff } from './reveal-mobile-source-control-session-diff'
 import type {
-  GitDiffTextResult,
   MobileBranchCompareState,
   MobileBranchDiffPreviewState
 } from './mobile-source-control-screen-state'
+import type { MobileGitDiffReply } from './git-compare-reply-schema'
 
 type Params = {
   client: RpcClient | null
@@ -77,7 +80,8 @@ export function useMobileSourceControlOpeners(params: Params) {
     async (entry: MobileGitStatusEntry) => {
       // Deletions are openable (pre-delete text/image via git.diff); only block
       // unresolved conflicts, matching canOpenMobileGitStatusEntry / row UI.
-      if (!canOpenMobileGitStatusEntry(entry)) {
+      // An entry with no area is in no section, so no row can reach this anyway.
+      if (!canOpenMobileGitStatusEntry(entry) || entry.area === undefined) {
         return
       }
       if (openingPathRef.current || busyActionRef.current) {
@@ -111,21 +115,29 @@ export function useMobileSourceControlOpeners(params: Params) {
         // the session uses it to avoid stealing focus if the user switches tabs
         // during the RPC window.
         onFileOpenStart?.()
-        let response = await client.sendRequest('files.openDiff', {
+        const diffReply = await sourceFileDiffOpenRun.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath: entry.path,
           staged: entry.area === 'staged'
         })
-        let openedTabMode: 'diff' | 'edit' = 'diff'
-        if (!response.ok && isMobileGitUnavailable(response.error?.code, response.error?.message)) {
-          response = await client.sendRequest('files.open', {
-            worktree: `id:${worktreeId}`,
-            relativePath: entry.path
-          })
-          openedTabMode = 'edit'
-        }
-        if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to open diff')
+        // Why the raw refusal: a host too old to open a diff tab is a capability gap this flow
+        // falls back from, and no acceptance policy carries the code and message through.
+        const fallbackToEdit = isMobileGitUnavailableReply(diffReply)
+        const openedTabMode: 'diff' | 'edit' = fallbackToEdit ? 'edit' : 'diff'
+        const editReply = fallbackToEdit
+          ? await sourceFileOpenRun.request(client, {
+              worktree: `id:${worktreeId}`,
+              relativePath: entry.path
+            })
+          : undefined
+        try {
+          if (editReply) {
+            sourceFileOpenRun.interpret(editReply)
+          } else {
+            sourceFileDiffOpenRun.interpret(diffReply)
+          }
+        } catch (error) {
+          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to open diff'))
         }
         if (!mountedRef.current) {
           return
@@ -231,7 +243,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       }
       setBranchDiffPreview({ kind: 'loading', entry })
       try {
-        const response = await client.sendRequest('git.branchDiff', {
+        const reply = await gitBranchDiffRead.request(client, {
           worktree: `id:${worktreeId}`,
           filePath: entry.path,
           ...(entry.oldPath ? { oldPath: entry.oldPath } : {}),
@@ -242,10 +254,12 @@ export function useMobileSourceControlOpeners(params: Params) {
             mergeBase: summary.mergeBase
           }
         })
-        if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to load committed diff')
+        let result: MobileGitDiffReply
+        try {
+          result = gitBranchDiffRead.interpret(reply)
+        } catch (error) {
+          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed diff'))
         }
-        const result = (response as RpcSuccess).result as GitDiffTextResult | { kind: 'binary' }
         if (result.kind !== 'text') {
           throw new Error('Binary branch diff preview unavailable on mobile')
         }

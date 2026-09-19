@@ -1,5 +1,7 @@
 const manuallyDisconnectedEnvironmentIds = new Set<string>()
 
+export const RUNTIME_MANUALLY_DISCONNECTED_MESSAGE = 'Runtime environment is manually disconnected.'
+
 export function markRuntimeEnvironmentManuallyDisconnected(environmentId: string): void {
   manuallyDisconnectedEnvironmentIds.add(environmentId)
 }

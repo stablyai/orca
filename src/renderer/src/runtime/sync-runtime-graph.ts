@@ -1,4 +1,8 @@
 import type { AppState } from '@/store/types'
+import {
+  activePaneIsCoveredByNativeChat,
+  paneIsCoveredByNativeChat
+} from '@/components/terminal-pane/native-chat-covered-pane'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import {
   syncRuntimeGraph,
@@ -72,6 +76,12 @@ export function focusRuntimeTerminalSurface(
     return false
   }
   if (!leafId) {
+    // Why: mirrors focus-terminal-tab-surface.ts's chat-view bail — the xterm is covered by the
+    // chat portal, so focusing it pulls the caret out of the composer. `true` = handled because
+    // `false` sends the caller to the DOM fallback.
+    if (activePaneIsCoveredByNativeChat(manager)) {
+      return true
+    }
     manager.getActivePane()?.terminal.focus()
     return true
   }
@@ -79,7 +89,14 @@ export function focusRuntimeTerminalSurface(
   if (resolution.status !== 'resolved') {
     return false
   }
-  manager.setActivePane(resolution.numericPaneId, { focus: true })
+  const requestedPane = manager
+    .getPanes()
+    .find((candidate) => candidate.id === resolution.numericPaneId)
+  // Activating a covered leaf lets its chat surface claim the composer without focusing the
+  // xterm underneath it. Explicit leaf requests must still change the manager's active pane.
+  manager.setActivePane(resolution.numericPaneId, {
+    focus: !paneIsCoveredByNativeChat(requestedPane)
+  })
   scheduleRuntimeGraphSync()
   return true
 }

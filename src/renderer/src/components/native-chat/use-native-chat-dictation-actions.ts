@@ -1,8 +1,9 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
 
 export function useNativeChatDictationActions(args: {
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  textareaRef: RefObject<NativeChatComposerInput | null>
   setDictationPressed: Dispatch<SetStateAction<boolean>>
 }): {
   toggleDictation: () => void

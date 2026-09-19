@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../agent-session-journal/journal-payload-bounds'
 import { CODEX_APP_SERVER_NOTIFICATION_METHODS } from '../../codex/codex-app-server-notification-schema'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from './claude-stream-json-frame-schema'
 import {
   classifyProviderFrame,
-  isDeltaShapedProviderFrameKind,
+  isDeltaProviderFrameKind,
   PROVIDER_FRAME_CLASSIFICATIONS
 } from './provider-frame-disposition'
+import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 describe('provider frame classification catalog', () => {
   it('classifies every pinned Codex app-server notification method', () => {
@@ -24,7 +26,7 @@ describe('provider frame classification catalog', () => {
     const deltaKinds = [
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex),
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.claude)
-    ].filter(isDeltaShapedProviderFrameKind)
+    ].filter(isDeltaProviderFrameKind)
 
     expect(deltaKinds.length).toBeGreaterThan(0)
     for (const kind of deltaKinds) {
@@ -103,11 +105,12 @@ describe('provider frame classification catalog', () => {
   })
 
   it('dispositions codex item-form frames, which the method catalog never matches', () => {
-    // `thread/compacted` is already chrome; its item form is the same event and
-    // must not leak `codex · item:contextCompaction` into the transcript.
-    expect(classifyProviderFrame('codex', 'item:contextCompaction', {})).toBe('status-chrome')
+    // Both provider generations reach the journal's compaction deduplication.
+    expect(classifyProviderFrame('codex', 'item:contextCompaction', {})).toBe(
+      'timeline-substantive'
+    )
     expect(classifyProviderFrame('codex', 'notification:thread/compacted', {})).toBe(
-      'status-chrome'
+      'timeline-substantive'
     )
     // An item type nobody has dispositioned still falls through visibly.
     expect(classifyProviderFrame('codex', 'item:futureThing', {})).toBe('timeline-substantive')
@@ -124,7 +127,7 @@ describe('provider frame classification catalog', () => {
     )
   })
 
-  it('keeps subagent items visible — the only evidence a spawned agent is working', () => {
+  it('suppresses subAgentActivity once the roster renders it, but never collabAgentToolCall', () => {
     expect(
       classifyProviderFrame('codex', 'item:subAgentActivity', {
         id: 'a-1',
@@ -132,7 +135,9 @@ describe('provider frame classification catalog', () => {
         agentThreadId: 'thread-child',
         agentPath: '/root/list_directory'
       })
-    ).toBe('timeline-substantive')
+      // The spawn-group roster row renders this now, so a raw gray row beside it
+      // would duplicate it. Suppressing it was gated on that renderer existing.
+    ).toBe('status-chrome')
     expect(
       classifyProviderFrame('codex', 'item:collabAgentToolCall', {
         id: 'c-1',
@@ -159,5 +164,124 @@ describe('provider frame classification catalog', () => {
         'timeline-substantive'
       )
     }
+  })
+})
+
+describe('typed translator coverage', () => {
+  it('emits no generic row for a covered kind, whatever the payload reports', () => {
+    // The catalogue calls these `status-chrome`, but `hasProviderError` promotes
+    // any of them that reports a failure — which is how a failed background task
+    // reached users as `claude · message:system:task_notification`. Coverage is
+    // the contract that stops it: the typed translator writes the row instead.
+    for (const kind of [
+      'message:system:task_started',
+      'message:system:task_updated',
+      'message:system:task_progress',
+      'message:system:task_notification',
+      'message:system:background_tasks_changed'
+    ]) {
+      expect(
+        unhandledProviderFrameJournalItem(
+          'claude',
+          kind,
+          {
+            task_id: 'byjnee2no',
+            status: 'failed',
+            summary: 'Background command "Wait" failed with exit code 1'
+          },
+          DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+          { coveredByTypedTranslator: true }
+        ),
+        kind
+      ).toBeNull()
+    }
+  })
+
+  it('keeps malformed covered-kind failures eligible for the generic fallback', () => {
+    // Eligibility is all this layer decides. A frame naming no task is not
+    // claimed by the row owner, which withholds the coverage flag so the
+    // failure still reaches the user. The SENTENCE it leads with is Claude's to
+    // supply, through the fallback's display-text seam — proven in
+    // `claude-structured-journal-translation-background-tasks.test.ts`. Teaching
+    // `summary` to the shared key list here would re-rank the row text of every
+    // unmodelled frame on both providers to reach this one case.
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:system:task_notification', {
+        status: 'failed',
+        summary: 'Background command "Wait" failed with exit code 1'
+      })
+    ).toMatchObject({ classification: 'error-surface' })
+  })
+
+  it('covers Claude only — the same method name on another provider still falls back', () => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'message:system:task_notification', {
+        status: 'failed'
+      })
+    ).not.toBeNull()
+  })
+
+  it('leaves an unmodelled Claude failure on the visible fallback', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:future_task', {
+      status: 'failed'
+    })
+    expect(item?.classification).toBe('error-surface')
+  })
+})
+
+describe('notice disposition boundaries', () => {
+  it.each(['warning', 'guardianWarning', 'deprecationNotice', 'configWarning'])(
+    'retains the error-surface cap exemption for %s',
+    (method) => {
+      expect(classifyProviderFrame('codex', `notification:${method}`, {})).toBe('error-surface')
+    }
+  )
+  it('does not change usage or rate-limit classifications', () => {
+    expect(classifyProviderFrame('codex', 'thread/tokenUsage/updated', {})).toBe('status-chrome')
+    expect(classifyProviderFrame('codex', 'account/rateLimits/updated', {})).toBe(
+      'suppressed-benign'
+    )
+  })
+})
+
+describe('codex subagent item disposition', () => {
+  it('keeps subagent lifecycle out of the transcript now that it renders as a roster row', () => {
+    expect(
+      classifyProviderFrame('codex', 'item:subAgentActivity', {
+        type: 'subAgentActivity',
+        kind: 'started',
+        agentThreadId: 'child-1',
+        agentPath: '/root/read'
+      })
+    ).toBe('status-chrome')
+  })
+
+  it('leaves collab tool calls substantive — they may be the only subagent signal', () => {
+    // A session that reports no `subAgentActivity` gets no roster row, so
+    // suppressing this too would render its fan-out blank.
+    expect(
+      classifyProviderFrame('codex', 'item:collabAgentToolCall', {
+        type: 'collabAgentToolCall',
+        agentsStates: {}
+      })
+    ).not.toBe('status-chrome')
+  })
+
+  it('journals no fallback row for subagent activity', () => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'item:subAgentActivity', {
+        kind: 'completed',
+        agentThreadId: 'child-1'
+      })
+    ).toBeNull()
+  })
+
+  it('still surfaces a subagent frame that reports a failure', () => {
+    expect(
+      classifyProviderFrame('codex', 'item:collabAgentToolCall', {
+        type: 'collabAgentToolCall',
+        status: 'failed'
+      })
+    ).toBe('error-surface')
   })
 })

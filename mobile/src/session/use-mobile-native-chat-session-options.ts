@@ -1,7 +1,10 @@
+import { appliedReportByScope, getScopedRecord } from './mobile-session-option-records'
+export { clearMobileSessionOptionRecordsForTests } from './mobile-session-option-records'
+import { mobileOmpSessionCatalog } from './mobile-omp-session-catalog'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog,
   type CatalogCommandDelivery,
   type CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
@@ -21,15 +24,15 @@ import {
 import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
-  createNativeChatSessionOptionRecord,
   getTrackedSessionOption,
   isFlipOnlyMidSession,
   matchNativeChatCatalogModelId,
-  setTrackedSessionOption,
-  type NativeChatSessionOptionRecord
+  setTrackedSessionOption
 } from '../../../src/shared/native-chat-session-option-state'
 
 export type MobileNativeChatSessionOptionsController = {
+  conversationCommands?: readonly AgentSessionConversationCommand[]
+  optionPickerRequest?: { id: string; sequence: number } | null
   /** Model descriptor first, then the current model's options; empty when the
    *  agent has no catalog. */
   snapshot: SessionOptionDescriptor[]
@@ -43,59 +46,19 @@ export type MobileNativeChatSessionOptionsController = {
 
 type PendingOperation = { id: string; token: number }
 
-// Why: per-tab records survive chat↔terminal flips and remounts, like desktop's
-// scope cache. Bounded so long sessions across many tabs can't grow unbounded.
-const MOBILE_SESSION_OPTION_RECORD_CAP = 32
-const recordsByScope = new Map<string, NativeChatSessionOptionRecord>()
-// The catalog model id last taken from a hook report, per scope. Mobile cannot
-// read the agent's screen, so a repeat of the same report is not new evidence.
-const appliedReportByScope = new Map<string, string>()
-
-function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOptionRecord {
-  const existing = recordsByScope.get(scopeKey)
-  const record =
-    existing && existing.agent === agent ? existing : createNativeChatSessionOptionRecord(agent)
-  if (record !== existing) {
-    appliedReportByScope.delete(scopeKey)
-  }
-  // Why: delete-then-set on every read makes the touched scope most-recent, so
-  // eviction only sheds the oldest UNTOUCHED tab. Insertion order alone would let
-  // a long-lived active tab be the oldest key and lose its tracked model.
-  recordsByScope.delete(scopeKey)
-  recordsByScope.set(scopeKey, record)
-  while (recordsByScope.size > MOBILE_SESSION_OPTION_RECORD_CAP) {
-    const oldest = recordsByScope.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    recordsByScope.delete(oldest)
-    appliedReportByScope.delete(oldest)
-  }
-  return record
-}
-
-export function clearMobileSessionOptionRecordsForTests(): void {
-  recordsByScope.clear()
-  appliedReportByScope.clear()
-}
-
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 
-/** The model list every consumer must see: the catalog's, plus the tracked model
- *  when the catalog no longer lists it. Desktop reconciles identically. */
-function activeModels(
-  catalog: AgentSessionOptionCatalog,
-  record: NativeChatSessionOptionRecord
-): CatalogModel[] {
-  return withTrackedNativeChatModel(catalog, catalog.models, record)
-}
-
+/** Model and session-option state for the active mobile chat tab: builds the
+ *  picker snapshot from the agent's catalog, seeds it from the hook-reported
+ *  model, and dispatches picks as the agent's own slash commands. */
 export function useMobileNativeChatSessionOptions(args: {
   agent: string | null
   /** Stable per-tab scope (host + worktree + tab), or null when no tab is active. */
   scopeKey: string | null
   /** Provider model from live agent status, when the hook reported one. */
   reportedModel: string | null
+  discoveredModels?: CatalogModel[] | null
+  modelSwitchCommand?: string
   dispatchCommand: (
     command: string,
     options?: { delivery?: CatalogCommandDelivery }
@@ -104,13 +67,20 @@ export function useMobileNativeChatSessionOptions(args: {
    *  dispatched — bring the terminal view forward. */
   onAgentPicker?: () => void
 }): MobileNativeChatSessionOptionsController {
-  const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
-  const catalog = useMemo(
-    // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
-    // effective-model resolution desktop does — `previousModelId` below is tracked-only,
-    // so a CLI-default model would render option rows that do nothing when tapped.
-    () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
+  const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker, discoveredModels } = args
+  const baseCatalog = useMemo(
+    () =>
+      agent === 'claude' || agent === 'codex' || agent === 'omp'
+        ? getAgentSessionOptionCatalog(agent)
+        : null,
     [agent]
+  )
+  const catalog = useMemo(
+    () =>
+      baseCatalog && agent === 'omp'
+        ? mobileOmpSessionCatalog(baseCatalog, discoveredModels, args.modelSwitchCommand)
+        : baseCatalog,
+    [agent, baseCatalog, discoveredModels, args.modelSwitchCommand]
   )
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null
   const [version, setVersion] = useState(0)
@@ -136,7 +106,9 @@ export function useMobileNativeChatSessionOptions(args: {
     if (!catalog || !scopeKey || !agent || !reportedModel) {
       return
     }
-    const matched = matchNativeChatCatalogModelId(catalog, reportedModel)
+    // OMP reports exact selectors, including models absent from cached discovery.
+    const matched =
+      agent === 'omp' ? reportedModel.trim() : matchNativeChatCatalogModelId(catalog, reportedModel)
     if (!matched) {
       return
     }
@@ -165,7 +137,7 @@ export function useMobileNativeChatSessionOptions(args: {
       catalog,
       // The snapshot no longer self-heals an unlisted tracked model; every caller
       // reconciles it in, so a value the seed dropped keeps its row and options.
-      models: activeModels(catalog, record),
+      models: withTrackedNativeChatModel(catalog, catalog.models, record),
       record,
       mode: 'live',
       modelLabel: 'Model',
@@ -219,7 +191,7 @@ export function useMobileNativeChatSessionOptions(args: {
         const apply =
           id === 'model'
             ? catalog.modelApply
-            : activeModels(catalog, record)
+            : withTrackedNativeChatModel(catalog, catalog.models, record)
                 .find((model) => model.id === previousModelId)
                 ?.options.find((option) => option.id === id)?.apply
         if (!apply || apply.midSession?.kind === 'agent-picker') {
@@ -243,7 +215,7 @@ export function useMobileNativeChatSessionOptions(args: {
           apply,
           modelId: previousModelId,
           catalog,
-          models: activeModels(catalog, record),
+          models: withTrackedNativeChatModel(catalog, catalog.models, record),
           record
         })
         if (!command) {
@@ -297,7 +269,7 @@ export function useMobileNativeChatSessionOptions(args: {
         const apply =
           id === 'model'
             ? catalog.modelApply
-            : activeModels(catalog, record)
+            : withTrackedNativeChatModel(catalog, catalog.models, record)
                 .find((model) => model.id === modelId)
                 ?.options.find((option) => option.id === id)?.apply
         const midSession = apply?.midSession
@@ -331,7 +303,7 @@ export function useMobileNativeChatSessionOptions(args: {
       const record = getScopedRecord(scopeKey, agent)
       const result = recordNativeChatSessionOptionCommand({
         catalog,
-        models: activeModels(catalog, record),
+        models: withTrackedNativeChatModel(catalog, catalog.models, record),
         record,
         command
       })

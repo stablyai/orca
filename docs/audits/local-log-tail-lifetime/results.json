@@ -1,0 +1,39 @@
+{
+  "comparison": "Actual local log IPC lifecycle tests with real temporary-file watchers and controlled sender events; before reverses only fix.patch in a temporary Vite transform",
+  "sourceHashes": {
+    "src/main/ipc/local-log-tail.ts": {
+      "before": "6c7b9912fdab5be8b219eacc5000f2e11097219832212ec2f532879222292c02",
+      "after": "e5db5f0256dd1c2d8d6b42039f2ad5f2cf46faa9e2edeb6f522a962fa58fbf81"
+    },
+    "src/main/ipc/local-log-tail-lifetime.test.ts": {
+      "current": "2ed1a7f9a1a0ddaf724b429aaa2ec1f9c531dda1c6e82c9884e8d85f25877ef6"
+    },
+    "src/main/ipc/local-log-tail.test.ts": {
+      "current": "eafa0ccdf60d7adbc14ed9b14ca04c27e775a55c77996e5b2894f448a126637c"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 9,
+    "failed": 10,
+    "failedCases": [
+      "does not install a watcher after its sender is destroyed during authorization",
+      "does not revive an existing subscription while a replacement is authorizing at destruction",
+      "rejects both overlapping same-ID admissions after renderer destruction",
+      "releases installed and pending watches on render-process-gone and permits a new document owner",
+      "releases installed and pending watches on did-navigate and permits a new document owner",
+      "shares lifecycle listeners and releases them when the last watch stops",
+      "explicit stop invalidates pending authorization without retaining idle listeners",
+      "late success from an older same-ID request preserves the newer installed watch",
+      "does not accumulate watchers across twenty destroyed renderer owners",
+      "local log tail IPC ignores errors from a retired watcher after a same-ID replacement"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 19,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

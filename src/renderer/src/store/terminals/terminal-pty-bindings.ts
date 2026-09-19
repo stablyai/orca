@@ -9,6 +9,7 @@ import {
   isRemoteRuntimePtyId
 } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
 
 export function createTerminalPtyBindingActions(
@@ -275,6 +276,8 @@ export function createTerminalPtyBindingActions(
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })
+      // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
+      clearWorktreeSleepIntent(worktreeId)
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
       if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
         get().bumpWorktreeActivity(worktreeId)

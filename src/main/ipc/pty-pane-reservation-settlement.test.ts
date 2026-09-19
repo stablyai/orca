@@ -541,7 +541,8 @@ describe('registerPtyHandlers', () => {
         tabId: 'tab-remote',
         leafId,
         ptyId: 'ssh:ssh-1@@relay-pty',
-        hostAdmittedMembership: true
+        hostAdmittedMembership: true,
+        origin: 'spawn'
       },
       'ssh:ssh-1'
     )

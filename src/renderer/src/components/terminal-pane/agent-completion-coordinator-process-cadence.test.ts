@@ -290,7 +290,25 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledExactlyOnceWith('done')
   })
 
-  it('resets exit confirmation across an unavailable inspection', async () => {
+  it.each([
+    {
+      label: 'client-only uncertainty',
+      result: {
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        verdict: 'unverifiable',
+        reason: 'transport_loss'
+      } satisfies RuntimeTerminalProcessInspection
+    },
+    {
+      label: 'host child-process uncertainty',
+      result: {
+        foregroundProcess: '/bin/zsh',
+        hasChildProcesses: false,
+        childProcessEvidence: 'unverifiable'
+      } satisfies RuntimeTerminalProcessInspection
+    }
+  ])('resets exit confirmation across $label', async ({ result: unavailableResult }) => {
     let result: RuntimeTerminalProcessInspection = processResult('codex')
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
@@ -306,12 +324,7 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     result = processResult(null, false)
     await vi.advanceTimersByTimeAsync(750)
-    result = {
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      verdict: 'unverifiable',
-      reason: 'transport_loss'
-    }
+    result = unavailableResult
     await vi.advanceTimersByTimeAsync(750)
     result = processResult(null, false)
     await vi.advanceTimersByTimeAsync(1_500)

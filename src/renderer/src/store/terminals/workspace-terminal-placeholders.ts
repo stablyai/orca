@@ -20,10 +20,12 @@ export function buildRuntimeSessionPlaceholders({
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   worktreesByRepo: Record<string, Worktree[]>
 }): {
-  repos: Repo[]
+  repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
 } {
-  let nextRepos = repos.slice()
+  // Why copy-on-write: hydration writes both straight to the store, and an unconditional copy
+  // rerendered every whole-array/map selector on every hydration with no data change.
+  let nextRepos: readonly Repo[] = repos
   let nextWorktreesByRepo = worktreesByRepo
   for (const workspaceSessionKey of Object.keys(runtimeHostIdByWorkspaceSessionKey)) {
     const hostId = runtimeHostIdByWorkspaceSessionKey[workspaceSessionKey]

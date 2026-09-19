@@ -98,48 +98,51 @@ describe('registerNotificationHandlers', () => {
 
     expect(notificationCtorMock).toHaveBeenCalledWith(
       expectedNativeNotificationOptions({
-        title: 'feat/notis - Codex finished',
-        body: 'Updated the notification body.'
-      })
-    )
-  })
-
-  it('includes the repo name when multiple repos are active', async () => {
-    registerNotificationHandlers({
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: false,
-          suppressWhenFocused: true
-        }
-      })
-    } as never)
-
-    const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          worktreeLabel: 'feat/notis',
-          repoLabel: 'orca',
-          hasMultipleActiveRepos: true,
-          agentType: 'codex',
-          agentState: 'done',
-          agentLastAssistantMessage: 'Updated the notification body.'
-        }
-      )
-    ).toEqual({ delivered: true })
-
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
         title: 'orca / feat/notis - Codex finished',
         body: 'Updated the notification body.'
       })
     )
   })
+
+  it.each([true, false, undefined])(
+    'includes the repo name regardless of the legacy multiple-repo flag (%s)',
+    async (hasMultipleActiveRepos) => {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: false,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(
+        await handler(
+          {},
+          {
+            source: 'agent-task-complete',
+            worktreeId: 'repo::wt1',
+            worktreeLabel: 'feat/notis',
+            repoLabel: 'orca',
+            hasMultipleActiveRepos,
+            agentType: 'codex',
+            agentState: 'done',
+            agentLastAssistantMessage: 'Updated the notification body.'
+          }
+        )
+      ).toEqual({ delivered: true })
+
+      expect(notificationCtorMock).toHaveBeenCalledWith(
+        expectedNativeNotificationOptions({
+          title: 'orca / feat/notis - Codex finished',
+          body: 'Updated the notification body.'
+        })
+      )
+    }
+  )
 
   it('keeps a readable body when no assistant response was captured', async () => {
     registerNotificationHandlers({
@@ -278,6 +281,73 @@ describe('registerNotificationHandlers', () => {
     expect(options.body.length).toBeLessThanOrEqual(180)
   })
 
+  it.each([
+    { agentState: 'working', expected: 'feat/notis - Claude working' },
+    { agentState: 'blocked', expected: 'feat/notis - Claude needs input' },
+    { agentState: 'waiting', expected: 'feat/notis - Claude needs input' },
+    { agentState: 'done', expected: 'feat/notis - Claude finished' },
+    { agentState: undefined, expected: 'feat/notis - Claude finished' }
+  ])('titles agentState $agentState without claiming a false finish', async (scenario) => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeLabel: 'feat/notis',
+        agentType: 'claude',
+        ...(scenario.agentState ? { agentState: scenario.agentState } : {}),
+        agentLastAssistantMessage: 'Ran the suite.'
+      }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({ title: scenario.expected, body: 'Ran the suite.' })
+    )
+  })
+
+  it('reports an interrupted finish as stopped', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeLabel: 'feat/notis',
+        agentType: 'claude',
+        agentState: 'done',
+        agentInterrupted: true
+      }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Claude stopped',
+        body: 'Claude stopped.'
+      })
+    )
+  })
+
   it('uses tool context before falling back when no prompt or assistant preview exists', async () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -308,7 +378,7 @@ describe('registerNotificationHandlers', () => {
 
     expect(notificationCtorMock).toHaveBeenCalledWith(
       expectedNativeNotificationOptions({
-        title: 'feat/notis - Agent finished',
+        title: 'feat/notis - Agent working',
         body: 'Using Bash: pnpm test'
       })
     )

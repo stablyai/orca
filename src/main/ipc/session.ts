@@ -13,6 +13,13 @@ export function registerSessionHandlers(store: Store): void {
     return store.getWorkspaceSession(hostId)
   })
 
+  // Why a census channel: boot used to infer which partitions exist from the repo catalog, which
+  // cannot name an SSH target whose only workspace is a folder — the runtime wrote that partition
+  // and no reader ever enumerated it (#12723).
+  ipcMain.handle('session:list-host-ids', () => {
+    return store.getWorkspaceSessionHostIds()
+  })
+
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
     store.setWorkspaceSession(args, hostId)
   })

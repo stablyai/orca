@@ -215,7 +215,7 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
 
     expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
     expect(mockStoreState.markTerminalPaneUnread).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
@@ -239,7 +239,7 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('\x07')
     flushSideEffects()
 
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY)
+    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY, 'terminal-bell')
     dispose()
   })
 
@@ -299,13 +299,12 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY,
-      suppressOsNotification: true
+      paneKey: PANE_KEY
     })
     dispose()
   })
 
-  it('skips completion dispatch when tracking is fully disabled, keeping the cache timer', async () => {
+  it('keeps mobile completion detection active when desktop notifications and attention are off', async () => {
     mockStoreState.settings = {
       ...mockStoreState.settings,
       experimentalTerminalAttention: false,
@@ -318,7 +317,10 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
     expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
       PANE_KEY,
       expect.any(Number)
@@ -771,7 +773,7 @@ describe('startParkedTerminalByteWatcher', () => {
       await dispatchFacts([{ kind: 'bell' }])
 
       expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)

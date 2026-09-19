@@ -51,6 +51,14 @@ describe('capPaletteSection', () => {
   it('supports an explicit cap of zero', () => {
     expect(capPaletteSection(range(3), 0)).toEqual({ visible: [], overflowCount: 3 })
   })
+
+  it('keeps a retained eligible row when it crosses from 50th to 51st', () => {
+    const capped = capPaletteSection(range(60), PALETTE_SECTION_RENDER_CAP, (item) => item === 50)
+
+    expect(capped.visible).toHaveLength(PALETTE_SECTION_RENDER_CAP)
+    expect(capped.visible.slice(-2)).toEqual([48, 50])
+    expect(capped.overflowCount).toBe(10)
+  })
 })
 
 describe('softSplitPaletteSection', () => {

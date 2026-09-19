@@ -14,7 +14,7 @@ import {
   classifyProjectError,
   driftError,
   rateLimitedError,
-  type GhGraphqlErrorShape
+  type GhGraphqlError
 } from './project-error-classification'
 import { ownerQueryRoot } from './project-view-config'
 import type { RawItem } from './project-view-item-normalization'
@@ -47,7 +47,7 @@ export async function fetchItemsPageWithRaw(args: {
   | {
       ok: false
       error: GitHubProjectViewError
-      rawErrors: GhGraphqlErrorShape[]
+      rawErrors: GhGraphqlError[]
       stderr: string
     }
 > {
@@ -117,7 +117,7 @@ export async function fetchItemsPageWithRaw(args: {
       stdout = extracted.stdout
       execFailed = true
     }
-    let parsed: { data?: Record<string, unknown>; errors?: GhGraphqlErrorShape[] } = {}
+    let parsed: { data?: Record<string, unknown>; errors?: GhGraphqlError[] } = {}
     try {
       parsed = JSON.parse(stdout)
     } catch {

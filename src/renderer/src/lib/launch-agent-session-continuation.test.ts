@@ -41,7 +41,7 @@ describe('launchAgentSessionContinuation', () => {
     store.ensureRemoteDetectedAgents.mockResolvedValue(['claude', 'codex'])
     store.ensureRuntimeDetectedAgents.mockResolvedValue(['claude', 'codex'])
     launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-new',
+      surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
     })
     vi.stubGlobal('window', {
@@ -116,7 +116,7 @@ describe('launchAgentSessionContinuation', () => {
 
   it('distinguishes prompt delivery failure from terminal launch failure', async () => {
     launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-new',
+      surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false })
     })
     const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')

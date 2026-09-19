@@ -1,4 +1,5 @@
 import type { CodexAppServerNotificationMethod } from '../../codex/codex-app-server-notification-schema'
+import { CODEX_SUBAGENT_ITEM_TYPE } from '../../codex/codex-subagent-activity'
 import type { ClaudeStreamJsonFrameKind } from './claude-stream-json-frame-schema'
 
 export type ProviderFrameClassification =
@@ -24,8 +25,10 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'thread/closed': 'status-chrome',
     'skills/changed': 'status-chrome',
     'thread/name/updated': 'status-chrome',
-    'thread/goal/updated': 'status-chrome',
-    'thread/goal/cleared': 'status-chrome',
+    // The goal tool call is never emitted as an item, so these two frames are the only
+    // truthful evidence a goal exists; the model's prose about goals can be wrong.
+    'thread/goal/updated': 'timeline-substantive',
+    'thread/goal/cleared': 'timeline-substantive',
     'thread/environment/connected': 'status-chrome',
     'thread/environment/disconnected': 'status-chrome',
     'thread/settings/updated': 'status-chrome',
@@ -65,7 +68,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'item/reasoning/summaryTextDelta': 'stream-into-item',
     'item/reasoning/summaryPartAdded': 'stream-into-item',
     'item/reasoning/textDelta': 'stream-into-item',
-    'thread/compacted': 'status-chrome',
+    'thread/compacted': 'timeline-substantive',
     'model/rerouted': 'status-chrome',
     'model/verification': 'status-chrome',
     'turn/moderationMetadata': 'suppressed-benign',
@@ -146,6 +149,38 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
   }
 } as const satisfies ProviderFrameClassificationTable
 
+/**
+ * Frame kinds a DEDICATED typed translator owns end to end.
+ *
+ * Coverage is a contract, not a label. The catalogue classification alone is
+ * only a hint about where a frame belongs, and `hasProviderError` deliberately
+ * outranks it so an unmodelled failure still reaches the user — which is how a
+ * failed background task ended up rendered by the generic fallback, whose row
+ * text is the wire opcode when the payload carries no key the fallback knows.
+ * A kind listed here is guaranteed no fallback row instead, so its translator
+ * may legitimately emit zero rows for a frame and nothing appears beside it.
+ *
+ * Listing a kind before its translator exists deletes the only report of a
+ * failure, so nothing may be added here except together with the code that
+ * renders it.
+ *
+ * A frame of a listed kind that names no task writes nothing. The row it
+ * replaces named no task either — it printed the opcode and a raw payload —
+ * and every frame this protocol sends carries the id its own tracker and
+ * roster have always required.
+ */
+const CLAUDE_TYPED_TRANSLATOR_KINDS: ReadonlySet<string> = new Set([
+  'message:system:task_started',
+  'message:system:task_updated',
+  'message:system:task_progress',
+  'message:system:task_notification',
+  'message:system:background_tasks_changed'
+] satisfies ClaudeStreamJsonFrameKind[])
+
+export function hasTypedProviderFrameTranslator(provider: string, kind: string): boolean {
+  return provider === 'claude' && CLAUDE_TYPED_TRANSLATOR_KINDS.has(kind)
+}
+
 const ERROR_VARIANT_KEYS = new Set(['type', 'status', 'state', 'subtype', 'outcome'])
 const ERROR_VALUE_KEYS = new Set(['error', 'failureReason', 'failure_reason'])
 
@@ -195,13 +230,23 @@ function hasProviderError(payload: unknown): boolean {
  *  new item type cannot leak `codex · item:<type>` into the transcript. The
  *  notification catalog above is keyed by METHOD and never matches these. */
 const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = {
-  // The `thread/compacted` notification is already chrome; its item form is the
-  // same event and must not read as a mysterious opcode row.
-  contextCompaction: 'status-chrome',
+  // The journal coalesces this canonical completion with the legacy notification.
+  contextCompaction: 'timeline-substantive',
+  // Subagent lifecycle renders as the spawn-group roster row, so its raw items
+  // must not print a gray `codex · item:<type>` row beside it. The live
+  // notification path intercepts them before this catalog is reached;
+  // `restoreThread` replays them straight through `items.handle`, which is where
+  // the classification earns its keep.
+  //
+  // `collabAgentToolCall` is deliberately NOT suppressed with it. Nothing
+  // guarantees a session reports subagent work as `subAgentActivity` at all; one
+  // that only ever emits the collab tool call gets no roster row, and suppressing
+  // that too would leave its fan-out showing nothing.
+  [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
   // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
   // nothing at all. Every other item type this build does not model carries text
-  // a user would want (review output, an image path, hook prompt text, subagent
-  // progress), so those keep their visible fallback row.
+  // a user would want (review output, an image path, hook prompt text), so those
+  // keep their visible fallback row.
   sleep: 'status-chrome'
 }
 
@@ -213,7 +258,7 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
-export function isDeltaShapedProviderFrameKind(kind: string): boolean {
+export function isDeltaProviderFrameKind(kind: string): boolean {
   return notificationKind(kind).toLowerCase().endsWith('delta')
 }
 
@@ -247,7 +292,7 @@ export function classifyProviderFrame(
   if (hasProviderError(payload)) {
     return 'error-surface'
   }
-  if (isDeltaShapedProviderFrameKind(kind)) {
+  if (isDeltaProviderFrameKind(kind)) {
     return 'stream-into-item'
   }
   if (provider === 'claude' && kind === 'message:result') {

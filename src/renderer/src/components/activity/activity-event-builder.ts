@@ -1,11 +1,9 @@
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { freshActivityLiveAgentState } from './activity-event-state'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusOrchestrationContext,
-  type AgentStatusState,
-  type MigrationUnsupportedPtyEntry
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext,
+  MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -13,12 +11,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type {
-  ActivityEvent,
-  ActivityHookLiveAgentState,
-  ActivityLiveAgentSnapshot,
-  ActivityLiveAgentState
-} from './activity-thread-types'
+import type { ActivityEvent, ActivityLiveAgentSnapshot } from './activity-thread-types'
 import { capActivityEvents } from './activity-event-cap'
 import { newestActivityHistoryEntries } from './activity-pane-events'
 import {
@@ -36,27 +29,6 @@ import {
 } from './activity-event-builder-context'
 
 export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
-
-function isActivityHookLiveAgentState(
-  state: AgentStatusState
-): state is ActivityHookLiveAgentState {
-  return state === 'working' || state === 'blocked' || state === 'waiting'
-}
-
-function freshActivityLiveAgentState(
-  entry: AgentStatusEntry,
-  now: number
-): ActivityLiveAgentState | null {
-  if (
-    !isActivityHookLiveAgentState(entry.state) ||
-    !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
-  ) {
-    return null
-  }
-  return entry.state === 'working' && entry.workingMode === 'monitoring'
-    ? 'monitoring'
-    : entry.state
-}
 
 export type BuildActivityEventsArgs = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -120,7 +92,7 @@ export function buildActivityEvents(
       ownerCache
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-    // Why: live status is separate from history; a fresh working turn updates the thread without counting as an unread done/blocked/waiting event.
+    // Only fresh live turns contribute working activity; history cannot establish liveness.
     // The freshness check runs on the raw entry (orchestration merges never change state/timing fields).
     const liveState = freshActivityLiveAgentState(entry, args.now)
     const { events: paneEvents, live } = resolvePaneBuild(

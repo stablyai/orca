@@ -138,7 +138,6 @@ describe('native-deps repair probe verdicts', () => {
       { reject: 'SSH channel closed unexpectedly' }, // health probe: unverifiable, not MISSING
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -177,7 +176,6 @@ describe('native-deps repair probe verdicts', () => {
       'MISSING', // answered, no marker line: nothing here names a dep
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -235,7 +233,6 @@ describe('native-deps repair probe verdicts', () => {
       '', // rm probe stderr
       NPTY_CLOEXEC_PATCHED,
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -259,7 +256,6 @@ describe('native-deps repair probe verdicts', () => {
       '', // health probe: PowerShell swallowed the native failure, so nothing names a dep
       '', // no persisted active pipe marker
       'WAITING', // initial pipe probe
-      '', // publish the per-launch credential
       '', // WMI relay launch
       'READY', // readiness poll
       '' // persist active pipe marker
@@ -292,7 +288,6 @@ describe('native-deps repair probe verdicts', () => {
       '', // rm probe stderr
       NPTY_CLOEXEC_PATCHED,
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -312,7 +307,6 @@ describe('native-deps repair probe verdicts', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -336,7 +330,6 @@ describe('native-deps repair probe verdicts', () => {
       '', // rm probe stderr
       NPTY_CLOEXEC_PATCHED,
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 

@@ -45,6 +45,7 @@ export function parseRegionalRehomeArguments(argv, environment = process.env) {
     'not-before',
     'rate-per-minute',
     'preference-max-age-ms',
+    'host-cooldown-ms',
     'drain-grace-ms',
     'confirmation'
   ]
@@ -117,6 +118,11 @@ export function parseRegionalRehomeArguments(argv, environment = process.env) {
             '--preference-max-age-ms',
             { minimum: 60_000, maximum: 30 * 24 * 60 * 60_000 }
           ),
+          hostCooldownMs: integer(
+            values['host-cooldown-ms'],
+            '--host-cooldown-ms',
+            { minimum: 60_000, maximum: 30 * 24 * 60 * 60_000 }
+          ),
           drainGraceMs: integer(values['drain-grace-ms'], '--drain-grace-ms', {
             minimum: 60_000,
             maximum: 60 * 60_000
@@ -147,12 +153,23 @@ function assertControl(control, expected) {
     !Number.isSafeInteger(control.notBefore) ||
     !Number.isSafeInteger(control.ratePerMinute) ||
     !Number.isSafeInteger(control.preferenceMaxAgeMs) ||
+    // A director predating the per-host cooldown does not report it. Reading
+    // the control and both emergency brakes must keep working against that
+    // image; only enable requires the field.
+    (control.hostCooldownMs !== undefined &&
+      !Number.isSafeInteger(control.hostCooldownMs)) ||
     !Number.isSafeInteger(control.drainGraceMs)
   ) throw new Error('director returned an invalid regional rehome control')
   if (expected.enabled !== undefined && control.enabled !== expected.enabled) {
     throw new Error('regional rehome enabled state does not match')
   }
   return control
+}
+
+// Echo the cooldown only when the director already reports it: a legacy
+// director rejects the unknown key outright and would refuse every brake.
+function cooldownField(before, value) {
+  return before.hostCooldownMs === undefined ? {} : { hostCooldownMs: value }
 }
 
 async function verifiedDisabledControl(post, generation) {
@@ -171,6 +188,7 @@ async function applyDisabledControl(post, before) {
     notBefore: before.notBefore,
     ratePerMinute: before.ratePerMinute,
     preferenceMaxAgeMs: before.preferenceMaxAgeMs,
+    ...cooldownField(before, before.hostCooldownMs),
     drainGraceMs: before.drainGraceMs,
     confirmation: 'DISABLE_REGIONAL_REHOMING'
   })).control, { generation: before.generation + 1, enabled: false })
@@ -270,6 +288,11 @@ export async function operateRegionalRehome(config, dependencies = {}) {
     throw new Error('regional rehome is already paused')
   }
   const enabled = config.mode === 'enable'
+  if (enabled && before.hostCooldownMs === undefined) {
+    throw new Error(
+      'director does not report a per-host rehome cooldown; deploy a director that supports it before enabling'
+    )
+  }
   const applied = await post('/v1/admin/regional-rehome-control', {
     v: 1,
     action: 'apply',
@@ -278,6 +301,7 @@ export async function operateRegionalRehome(config, dependencies = {}) {
     notBefore: config.notBefore,
     ratePerMinute: config.ratePerMinute,
     preferenceMaxAgeMs: config.preferenceMaxAgeMs,
+    ...cooldownField(before, config.hostCooldownMs),
     drainGraceMs: config.drainGraceMs,
     confirmation: enabled
       ? 'ENABLE_REGIONAL_REHOMING'

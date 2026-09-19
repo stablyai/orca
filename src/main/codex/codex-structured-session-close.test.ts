@@ -1,3 +1,4 @@
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type {
@@ -10,6 +11,8 @@ import {
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 import { handleCodexSessionExit } from './codex-structured-session-close'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
@@ -83,13 +86,15 @@ describe('Codex structured session close lifecycle', () => {
       respondWithError: () => {},
       close: async () => true
     }
-    const prompts = { clear: vi.fn() } as unknown as CodexSession['prompts']
+    const prompts = new CodexPromptRegistry()
+    const clearPrompts = vi.spyOn(prompts, 'clear')
     const translator = {
       handle: vi.fn().mockReturnValueOnce({ accepted: false, reason: 'backpressure' as const }),
       dispose: vi.fn()
     } as unknown as NonNullable<CodexSession['translator']>
-    const session = {
+    const session: CodexSession = {
       connection,
+      backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
       requestedClose: false,
       fence: 7,
@@ -99,9 +104,10 @@ describe('Codex structured session close lifecycle', () => {
       prompts,
       options: new Map(),
       reportedOptions: {},
-      turnIdWaiters: [],
+      fastModeTierByModel: new Map(),
+      dispatchEchoes: createCodexDispatchEchoes(),
       translator
-    } as CodexSession
+    }
     const sessions = new Map([['session-1', session]])
     const onEvent = vi.fn()
 
@@ -116,7 +122,7 @@ describe('Codex structured session close lifecycle', () => {
       })
     ).toBe(true)
     expect(session.ended).toBe(true)
-    expect(prompts.clear).toHaveBeenCalledOnce()
+    expect(clearPrompts).toHaveBeenCalledOnce()
     expect(onEvent).toHaveBeenCalledOnce()
     expect(translator.dispose).toHaveBeenCalledOnce()
     expect(onEvent.mock.calls[0]?.[0]).toMatchObject({

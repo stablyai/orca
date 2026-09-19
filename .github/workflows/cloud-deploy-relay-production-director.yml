@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image-digest:
-        description: "Immutable relay image digest (sha256: plus 64 lowercase hex characters)"
+        description: 'Immutable relay image digest (sha256: plus 64 lowercase hex characters)'
         required: true
         type: string
       regional-placement-mode:
@@ -13,6 +13,11 @@ on:
         default: preserve
         type: choice
         options: [preserve, enable, disable]
+      region-correction-cohort-percent:
+        description: 'Preserve the measured-correction cohort, or set an integer 0–100; durable rehome stays disabled'
+        required: true
+        default: preserve
+        type: string
       prune-incompatible-revisions:
         description: Retain only the newly verified serving and rollback revisions
         required: true
@@ -62,6 +67,7 @@ jobs:
       REGIONAL_PLACEMENT_SECRET: orca-cloud-relay-regional-placement-enabled
       IMAGE_DIGEST: ${{ inputs.image-digest }}
       REGIONAL_PLACEMENT_MODE: ${{ inputs.regional-placement-mode }}
+      REGION_CORRECTION_COHORT_PERCENT: ${{ inputs.region-correction-cohort-percent }}
       PRUNE_INCOMPATIBLE_REVISIONS: ${{ inputs.prune-incompatible-revisions }}
       # Floor the served revision must keep, matching relay_min_instances in
       # environments/production.tfvars. This gate only fails a bad deploy; Terraform
@@ -106,8 +112,11 @@ jobs:
             echo "image-digest must be an immutable lowercase sha256 digest" >&2
             exit 1
           fi
+          if test "${REGION_CORRECTION_COHORT_PERCENT}" != preserve; then
+            [[ "${REGION_CORRECTION_COHORT_PERCENT}" =~ ^([0-9]|[1-9][0-9]|100)$ ]]
+          fi
           IMAGE="${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
-          SERVED_DIGEST="$(gcloud artifacts docker images describe "${IMAGE}" --format='value(image_summary.digest)')"
+          SERVED_DIGEST="$(gcloud artifacts docker images describe "${IMAGE}" --project "${GCP_PROJECT_ID}" --format='value(image_summary.digest)')"
           test "${SERVED_DIGEST}" = "${IMAGE_DIGEST}"
           [[ "${PRUNE_INCOMPATIBLE_REVISIONS}" =~ ^(true|false)$ ]]
           [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
@@ -218,7 +227,8 @@ jobs:
             --max-instances "${DIRECTOR_MAX_INSTANCES}" \
             --prune-revisions "${PRUNE_INCOMPATIBLE_REVISIONS}" \
             --release-id "${RELEASE_ID}" \
-            --regional-placement-secret-version "${target_version}"
+            --regional-placement-secret-version "${target_version}" \
+            --region-correction-cohort-percent "${REGION_CORRECTION_COHORT_PERCENT}"
           echo "REGIONAL_PLACEMENT_ENABLED=${desired}" >> "${GITHUB_ENV}"
           echo "REGIONAL_PLACEMENT_VERSION=${target_version}" >> "${GITHUB_ENV}"
 

@@ -9,6 +9,7 @@ import {
   MAX_TOOL_DETAIL_LENGTH,
   summarizeToolInput,
   summarizeToolRun,
+  toolRunSummaryMembers,
   toolFilePath,
   truncateToolDetail
 } from './native-chat-tool-summary'
@@ -251,6 +252,73 @@ describe('briefToolArg', () => {
     expect(briefToolArg({ command: ['kill', '-9', 1234] })).toBe('{"command":["kill","-9",1234')
     expect(briefToolArg({ command: 42 })).toBe('{"command":42}')
     expect(briefToolArg({ query: { text: 'auth flow' } })).toBe('{"query":{"text":"auth flow"')
+  })
+})
+
+describe('toolRunSummaryMembers', () => {
+  it('keeps each call separate so a boundary can be drawn between them', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls -la' } },
+      { type: 'tool-call', name: 'tools/read', input: { file_path: 'README.md' } }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)).toEqual([
+      { name: 'Bash', arg: 'ls -la', mcpIdentity: undefined },
+      { name: 'tools/read', arg: 'README.md', mcpIdentity: undefined }
+    ])
+  })
+
+  // `url` is a PRIMARY_ARG_KEY but not a BRIEF_ARG_KEY, so a call carrying only
+  // a url falls through to the bounded JSON preview and is cut at 28 chars —
+  // mid-token, brace unbalanced. Pinned as-is: the header renders whatever this
+  // returns, and changing the key list would move mobile's summary too.
+  it('still falls through to a clipped JSON preview for a url-only call', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'browser.open', input: { url: 'https://example.com' } }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)[0]?.arg).toBe('{"url":"https://example.com"')
+  })
+
+  it('caps at the summary limit and skips nameless calls, as the joined string does', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: '  ', input: {} },
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } },
+      { type: 'tool-call', name: 'Edit', input: { file_path: 'b.ts' } },
+      { type: 'tool-call', name: 'Write', input: { file_path: 'c.ts' } }
+    ]
+
+    const members = toolRunSummaryMembers(blocks)
+    expect(members.map((member) => member.name)).toEqual(['Bash', 'Read', 'Edit'])
+    // The joined string is derived from these, so the two can never disagree.
+    expect(summarizeToolRun(blocks)).toBe(
+      members.map((member) => `${member.name} ${member.arg}`).join('  ·  ')
+    )
+  })
+
+  it('carries provider MCP identity through, so a pill can draw the server glyph', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'mcp__linear__list_issues',
+        input: {},
+        mcpIdentity: { server: 'linear', tool: 'list_issues' }
+      }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)[0]?.mcpIdentity).toEqual({
+      server: 'linear',
+      tool: 'list_issues'
+    })
+  })
+
+  it('reports a blank argument rather than standing raw JSON in for one', () => {
+    const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Bash', input: { command: '' } }]
+
+    expect(toolRunSummaryMembers(blocks)).toEqual([
+      { name: 'Bash', arg: '', mcpIdentity: undefined }
+    ])
   })
 })
 

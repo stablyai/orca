@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e773638bf4 100644
+index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..0bb2af7923b6e6f1f0da40cae8067304cd1fea14 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -3,7 +3,6 @@
@@ -10,7 +10,8 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
        ],
        "conditions": [
          ['OS=="win"', {
-@@ -15,12 +14,11 @@
+@@ -14,13 +13,12 @@
+             "src/process_worker.cc",
              "src/process_commandline.cc"
            ],
 -          "include_dirs": [],
@@ -26,314 +27,207 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
                "AdditionalOptions": [
                  "/guard:cf",
                  "/sdl",
+diff --git a/lib/index.js b/lib/index.js
+index 9747a7402600cd252859144d32580ed45c8c93f7..001e81fa8bc89091971d06aaf9d051ba20906615 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -7,11 +7,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.getAllProcesses = exports.getProcessTree = exports.getProcessCpuUsage = exports.getProcessList = exports.filterProcessList = exports.buildProcessTree = exports.ProcessDataFlag = void 0;
+ const util_1 = require("util");
+ const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;
+ var ProcessDataFlag;
+ (function (ProcessDataFlag) {
+     ProcessDataFlag[ProcessDataFlag["None"] = 0] = "None";
+     ProcessDataFlag[ProcessDataFlag["Memory"] = 1] = "Memory";
+     ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";
++    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";
+ })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
+ // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
+ // to this cannot be done at the same time.
+@@ -66,11 +68,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
+     // • the properties are inlined/splatted
+     // • the 'ppid' field is omitted
+     // • the depth of the tree is limited by `maxDepth`
+-    const buildNode = ({ info: { pid, name, memory, commandLine }, children }, depth) => ({
++    const buildNode = ({ info: { pid, name, memory, commandLine, creationTimeMs }, children }, depth) => ({
+         pid,
+         name,
+         memory,
+         commandLine,
++        creationTimeMs,
+         children: depth > 0 ? children.map(c => buildNode(c, depth - 1)) : [],
+     });
+     return buildNode(root, maxDepth);
+diff --git a/lib/index.ts b/lib/index.ts
+index f9aa005d9ced9e42885b8a976de5eb5bd61899ee..1b509af0b9065918bcb5cb75f2d7f23821d4a56a 100644
+--- a/lib/index.ts
++++ b/lib/index.ts
+@@ -6,12 +6,15 @@
+ import { promisify } from 'util';
+ 
+ const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++/** The flag bits this compiled addon reports; undefined off win32. */
++export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;
+ import { IProcessInfo, IProcessTreeNode, IProcessCpuInfo } from '@vscode/windows-process-tree';
+ 
+ export enum ProcessDataFlag {
+   None = 0,
+   Memory = 1,
+-  CommandLine = 2
++  CommandLine = 2,
++  CreationTime = 4
+ }
+ 
+ type RequestCallback = (processList: IProcessInfo[]) => void;
+@@ -81,11 +84,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
+   // • the properties are inlined/splatted
+   // • the 'ppid' field is omitted
+   // • the depth of the tree is limited by `maxDepth`
+-  const buildNode = ({ info: { pid, name, memory, commandLine }, children }: IProcessInfoNode, depth: number): IProcessTreeNode => ({
++  const buildNode = ({ info: { pid, name, memory, commandLine, creationTimeMs }, children }: IProcessInfoNode, depth: number): IProcessTreeNode => ({
+     pid,
+     name,
+     memory,
+     commandLine,
++    creationTimeMs,
+     children: depth > 0 ? children.map(c => buildNode(c, depth - 1)) : [],
+   });
+ 
+diff --git a/src/addon.cc b/src/addon.cc
+index 9214aff281251e797a70ecb9f6e0b52932a0503f..722edd42ddb4740296bfc47582a181bd6d00c464 100644
+--- a/src/addon.cc
++++ b/src/addon.cc
+@@ -53,6 +53,10 @@ void GetProcessCpuUsage(const Napi::CallbackInfo& args) {
+ Napi::Object Init(Napi::Env env, Napi::Object exports) {
+   exports.Set("getProcessList", Napi::Function::New(env, GetProcessList));
+   exports.Set("getProcessCpuUsage", Napi::Function::New(env, GetProcessCpuUsage));
++  // Lets a caller prove THIS BINARY understands CREATIONTIME. The JS enum is
++  // patched source and says nothing about what the .node was compiled from.
++  exports.Set("supportedProcessDataFlags",
++              Napi::Number::New(env, MEMORY | COMMANDLINE | CREATIONTIME));
+   return exports;
+ }
+ 
 diff --git a/src/process.cc b/src/process.cc
-index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c0380327ed1863 100644
+index 3eea92077c4d1d433119361d5c432881859131e9..22a47421da919c76e2194280974d39c2287b098d 100644
 --- a/src/process.cc
 +++ b/src/process.cc
-@@ -1,108 +1,112 @@
--/*---------------------------------------------------------------------------------------------
-- *  Copyright (c) Microsoft Corporation. All rights reserved.
-- *  Licensed under the MIT License. See License.txt in the project root for license information.
-- *--------------------------------------------------------------------------------------------*/
--
--#include "process.h"
--#include "process_commandline.h"
--
--#include <tlhelp32.h>
--#include <psapi.h>
--#include <limits>
--
--uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
--                           DWORD process_data_flags) {
--  // Fetch the PID and PPIDs
--  PROCESSENTRY32 process_entry = { 0 };
--  DWORD parent_pid = 0;
--  uint32_t process_count = 0;
--  HANDLE snapshot_handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
--  process_entry.dwSize = sizeof(PROCESSENTRY32);
--  if (Process32First(snapshot_handle, &process_entry)) {
--    do {
--      if (process_entry.th32ProcessID != 0) {
+@@ -21,7 +21,8 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+   if (Process32First(snapshot_handle, &process_entry)) {
+     do {
+       if (process_entry.th32ProcessID != 0) {
 -        ProcessInfo pinfo;
--        pinfo.pid = process_entry.th32ProcessID;
--        pinfo.ppid = process_entry.th32ParentProcessID;
--
--        if (MEMORY & process_data_flags) {
--          GetProcessMemoryUsage(pinfo);
--        }
--
--        if (COMMANDLINE & process_data_flags) {
--          GetProcessCommandLine(pinfo);
--        }
--
--        strcpy(pinfo.name, process_entry.szExeFile);
--        process_info.push_back(std::move(pinfo));
--        process_count++;
--      }
--    } while (process_count < 1024 && Process32Next(snapshot_handle, &process_entry));
--  }
--
--  CloseHandle(snapshot_handle);
--  return process_count;
--}
--
--void GetProcessMemoryUsage(ProcessInfo& process_info) {
--  DWORD pid = process_info.pid;
--  HANDLE hProcess;
--  PROCESS_MEMORY_COUNTERS pmc;
--
--  hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
--
--  if (hProcess == NULL) {
--    return;
--  }
--
--  if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
--    process_info.memory = (DWORD)pmc.WorkingSetSize;
--  }
--
--  CloseHandle(hProcess);
--}
--
--// Per documentation, it is not recommended to add or subtract values from the FILETIME
--// structure, or to cast it to ULARGE_INTEGER as this can cause alignment faults on 64-bit Windows.
--// Copy the high and low part to a ULARGE_INTEGER and peform arithmetic on that instead.
--// See https://msdn.microsoft.com/en-us/library/windows/desktop/ms724284(v=vs.85).aspx
--ULONGLONG GetTotalTime(const FILETIME* kernelTime, const FILETIME* userTime) {
--  ULARGE_INTEGER kt, ut;
--  kt.LowPart = (*kernelTime).dwLowDateTime;
--  kt.HighPart = (*kernelTime).dwHighDateTime;
--
--  ut.LowPart = (*userTime).dwLowDateTime;
--  ut.HighPart = (*userTime).dwHighDateTime;
--
--  return kt.QuadPart + ut.QuadPart;
--}
--
--void GetCpuUsage(Cpu& cpu_info, bool first_pass) {
--  DWORD pid = cpu_info.pid;
--  HANDLE hProcess;
--
--  hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
--
--  if (hProcess == NULL) {
--    return;
--  }
--
--  FILETIME creationTime, exitTime, kernelTime, userTime;
--  FILETIME sysIdleTime, sysKernelTime, sysUserTime;
--  if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime)
--    && GetSystemTimes(&sysIdleTime, &sysKernelTime, &sysUserTime)) {
--    if (first_pass) {
--      cpu_info.initialProcRunTime = GetTotalTime(&kernelTime, &userTime);
--      cpu_info.initialSystemTime = GetTotalTime(&sysKernelTime, &sysUserTime);
--    } else {
--      ULONGLONG endProcTime = GetTotalTime(&kernelTime, &userTime);
--      ULONGLONG endSysTime = GetTotalTime(&sysKernelTime, &sysUserTime);
--
--      cpu_info.cpu = 100.0 * (endProcTime - cpu_info.initialProcRunTime) / (endSysTime - cpu_info.initialSystemTime);
--    }
--  } else {
--    cpu_info.cpu = std::numeric_limits<double>::quiet_NaN();
--  }
--
--  CloseHandle(hProcess);
-+/*---------------------------------------------------------------------------------------------
-+ *  Copyright (c) Microsoft Corporation. All rights reserved.
-+ *  Licensed under the MIT License. See License.txt in the project root for license information.
-+ *--------------------------------------------------------------------------------------------*/
-+
-+#include "process.h"
-+#include "process_commandline.h"
-+
-+#include <tlhelp32.h>
-+#include <psapi.h>
-+#include <limits>
-+
-+uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
-+                           DWORD process_data_flags) {
-+  // Fetch the PID and PPIDs
-+  PROCESSENTRY32 process_entry = { 0 };
-+  DWORD parent_pid = 0;
-+  uint32_t process_count = 0;
-+  HANDLE snapshot_handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-+  process_entry.dwSize = sizeof(PROCESSENTRY32);
-+  if (Process32First(snapshot_handle, &process_entry)) {
-+    do {
-+      if (process_entry.th32ProcessID != 0) {
 +        // Value-initialize: `memory` is otherwise stack garbage when the flag is unset.
 +        ProcessInfo pinfo{};
-+        pinfo.pid = process_entry.th32ProcessID;
-+        pinfo.ppid = process_entry.th32ParentProcessID;
-+
-+        if (MEMORY & process_data_flags) {
-+          GetProcessMemoryUsage(pinfo);
+         pinfo.pid = process_entry.th32ProcessID;
+         pinfo.ppid = process_entry.th32ParentProcessID;
+ 
+@@ -33,23 +34,51 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+           GetProcessCommandLine(pinfo);
+         }
+ 
++        if (CREATIONTIME & process_data_flags) {
++          GetProcessCreationTime(pinfo);
 +        }
 +
-+        if (COMMANDLINE & process_data_flags) {
-+          GetProcessCommandLine(pinfo);
-+        }
-+
-+        strcpy(pinfo.name, process_entry.szExeFile);
-+        process_info.push_back(std::move(pinfo));
-+        process_count++;
-+      }
+         strcpy(pinfo.name, process_entry.szExeFile);
+         process_info.push_back(std::move(pinfo));
+         process_count++;
+       }
+-    } while (process_count < 1024 && Process32Next(snapshot_handle, &process_entry));
 +    } while (Process32Next(snapshot_handle, &process_entry));
-+  }
-+
-+  CloseHandle(snapshot_handle);
-+  return process_count;
-+}
-+
-+void GetProcessMemoryUsage(ProcessInfo& process_info) {
-+  DWORD pid = process_info.pid;
-+  HANDLE hProcess;
-+  PROCESS_MEMORY_COUNTERS pmc;
-+
-+  // PROCESS_VM_READ is never used here -- GetProcessMemoryInfo reads counters the
-+  // kernel keeps, not the address space -- and acquiring it is what EDR scores.
-+  hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-+
-+  if (hProcess == NULL) {
-+    return;
-+  }
-+
-+  if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
-+    process_info.memory = (DWORD)pmc.WorkingSetSize;
-+  }
-+
-+  CloseHandle(hProcess);
-+}
-+
-+// Per documentation, it is not recommended to add or subtract values from the FILETIME
-+// structure, or to cast it to ULARGE_INTEGER as this can cause alignment faults on 64-bit Windows.
-+// Copy the high and low part to a ULARGE_INTEGER and peform arithmetic on that instead.
-+// See https://msdn.microsoft.com/en-us/library/windows/desktop/ms724284(v=vs.85).aspx
-+ULONGLONG GetTotalTime(const FILETIME* kernelTime, const FILETIME* userTime) {
-+  ULARGE_INTEGER kt, ut;
-+  kt.LowPart = (*kernelTime).dwLowDateTime;
-+  kt.HighPart = (*kernelTime).dwHighDateTime;
-+
-+  ut.LowPart = (*userTime).dwLowDateTime;
-+  ut.HighPart = (*userTime).dwHighDateTime;
-+
-+  return kt.QuadPart + ut.QuadPart;
-+}
-+
-+void GetCpuUsage(Cpu& cpu_info, bool first_pass) {
-+  DWORD pid = cpu_info.pid;
-+  HANDLE hProcess;
-+
-+  // GetProcessTimes needs no more than PROCESS_QUERY_LIMITED_INFORMATION.
-+  hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-+
+   }
+ 
+   CloseHandle(snapshot_handle);
+   return process_count;
+ }
+ 
++void GetProcessCreationTime(ProcessInfo& process_info) {
++  HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_info.pid);
 +  if (hProcess == NULL) {
 +    return;
 +  }
 +
 +  FILETIME creationTime, exitTime, kernelTime, userTime;
-+  FILETIME sysIdleTime, sysKernelTime, sysUserTime;
-+  if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime)
-+    && GetSystemTimes(&sysIdleTime, &sysKernelTime, &sysUserTime)) {
-+    if (first_pass) {
-+      cpu_info.initialProcRunTime = GetTotalTime(&kernelTime, &userTime);
-+      cpu_info.initialSystemTime = GetTotalTime(&sysKernelTime, &sysUserTime);
-+    } else {
-+      ULONGLONG endProcTime = GetTotalTime(&kernelTime, &userTime);
-+      ULONGLONG endSysTime = GetTotalTime(&sysKernelTime, &sysUserTime);
-+
-+      cpu_info.cpu = 100.0 * (endProcTime - cpu_info.initialProcRunTime) / (endSysTime - cpu_info.initialSystemTime);
++  if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime)) {
++    ULARGE_INTEGER timestamp;
++    timestamp.LowPart = creationTime.dwLowDateTime;
++    timestamp.HighPart = creationTime.dwHighDateTime;
++    constexpr ULONGLONG WINDOWS_EPOCH_OFFSET_100NS = 116444736000000000ULL;
++    constexpr ULONGLONG HUNDRED_NS_PER_MILLISECOND = 10000ULL;
++    if (timestamp.QuadPart >= WINDOWS_EPOCH_OFFSET_100NS) {
++      process_info.creationTimeMs =
++          (timestamp.QuadPart - WINDOWS_EPOCH_OFFSET_100NS) / HUNDRED_NS_PER_MILLISECOND;
 +    }
-+  } else {
-+    cpu_info.cpu = std::numeric_limits<double>::quiet_NaN();
 +  }
 +
 +  CloseHandle(hProcess);
- }
-\ No newline at end of file
++}
++
+ void GetProcessMemoryUsage(ProcessInfo& process_info) {
+   DWORD pid = process_info.pid;
+   HANDLE hProcess;
+   PROCESS_MEMORY_COUNTERS pmc;
+ 
+-  hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
++  // PROCESS_VM_READ is never used here -- GetProcessMemoryInfo reads counters the
++  // kernel keeps, not the address space -- and acquiring it is what EDR scores.
++  hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+ 
+   if (hProcess == NULL) {
+     return;
+@@ -81,7 +110,8 @@ void GetCpuUsage(Cpu& cpu_info, bool first_pass) {
+   DWORD pid = cpu_info.pid;
+   HANDLE hProcess;
+ 
+-  hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
++  // GetProcessTimes needs no more than PROCESS_QUERY_LIMITED_INFORMATION.
++  hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+ 
+   if (hProcess == NULL) {
+     return;
+diff --git a/src/process.h b/src/process.h
+index 82f8e4bcfa742551e5d874a7632736a7611d7aa7..78d1d2c3b2360ed06fd624b4cb2f5042510f7a77 100644
+--- a/src/process.h
++++ b/src/process.h
+@@ -22,18 +22,22 @@ struct ProcessInfo {
+   DWORD ppid;
+   DWORD memory; // Reported in bytes
+   std::string commandLine;
++  ULONGLONG creationTimeMs;
+ };
+ 
+ enum ProcessDataFlags {
+   NONE = 0,
+   MEMORY = 1,
+-  COMMANDLINE = 2
++  COMMANDLINE = 2,
++  CREATIONTIME = 4
+ };
+ 
+ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info, DWORD flags);
+ 
+ void GetProcessMemoryUsage(ProcessInfo& process_info);
+ 
++void GetProcessCreationTime(ProcessInfo& process_info);
++
+ void GetCpuUsage(Cpu& cpu_info, bool first_run);
+ 
+ #endif  // SRC_PROCESS_H_
 diff --git a/src/process_commandline.cc b/src/process_commandline.cc
 index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3210c3cfd 100644
 --- a/src/process_commandline.cc
 +++ b/src/process_commandline.cc
-@@ -1,67 +1,125 @@
--/*---------------------------------------------------------------------------------------------
-- *  Copyright (c) Microsoft Corporation. All rights reserved.
-- *  Licensed under the MIT License. See License.txt in the project root for license information.
-- *--------------------------------------------------------------------------------------------*/
--
--#include "process.h"
--#include "process_commandline.h"
--#include <windows.h>
--#include <winternl.h>
+@@ -7,61 +7,119 @@
+ #include "process_commandline.h"
+ #include <windows.h>
+ #include <winternl.h>
 -#include <iostream>
--
++#include <vector>
+ 
 -bool GetProcessCommandLine(ProcessInfo& process_info) {
 -  HINSTANCE ntdll = GetModuleHandleW(L"ntdll.dll");
--  if (!ntdll) {
--    return false;
--  }
--
--  decltype(NtQueryInformationProcess)* nt_query_information_process =
--      reinterpret_cast<decltype(NtQueryInformationProcess)*>(
--          GetProcAddress(ntdll, "NtQueryInformationProcess"));
--
--  if (!nt_query_information_process) {
--    return false;
--  }
--
--  PROCESS_BASIC_INFORMATION pbi{};
--  PEB peb = {NULL};
--  RTL_USER_PROCESS_PARAMETERS process_parameters = {NULL};
--
--  // Get process handle
--  DWORD pid = process_info.pid;
--  HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
--  if (hProcess == INVALID_HANDLE_VALUE) {
--    return false;
--  }
--
--  // Get Process Environment Block (PEB)
--  NTSTATUS status = nt_query_information_process(hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), nullptr);
--  if (NT_SUCCESS(status) && pbi.PebBaseAddress) {
--    // Read PEB
--    if (ReadProcessMemory(hProcess, pbi.PebBaseAddress, &peb, sizeof(peb), nullptr)) {
--      // Read the processs parameters
--      if (ReadProcessMemory(hProcess, peb.ProcessParameters, &process_parameters, sizeof(RTL_USER_PROCESS_PARAMETERS), nullptr)) {
--        if (process_parameters.CommandLine.Length > 0) {
--          std::wstring buffer;
--          buffer.resize(process_parameters.CommandLine.Length / sizeof(wchar_t));
--          if (ReadProcessMemory(hProcess, process_parameters.CommandLine.Buffer, &buffer[0], process_parameters.CommandLine.Length, nullptr)) {
--            int wide_length = static_cast<int>(buffer.length());
--            int charcount = WideCharToMultiByte(CP_UTF8, 0, buffer.data(), wide_length,
--                                      NULL, 0, NULL, NULL);
--            if (charcount) {
--              process_info.commandLine.resize(static_cast<size_t>(charcount));
--              WideCharToMultiByte(CP_UTF8, 0, buffer.data(), wide_length,
--                                  &process_info.commandLine[0], charcount,
--                                  NULL, NULL);
--            }
--            CloseHandle(hProcess);
--            return true;
--          }
--        }
--      }
--    }
--  }
--
--  CloseHandle(hProcess);
--  return false;
--}
-+/*---------------------------------------------------------------------------------------------
-+ *  Copyright (c) Microsoft Corporation. All rights reserved.
-+ *  Licensed under the MIT License. See License.txt in the project root for license information.
-+ *--------------------------------------------------------------------------------------------*/
-+
-+#include "process.h"
-+#include "process_commandline.h"
-+#include <windows.h>
-+#include <winternl.h>
-+#include <vector>
-+
 +namespace {
 +
 +// Windows 8.1 and later hand back a process's command line as a UNICODE_STRING
@@ -366,7 +260,7 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +// ntdll ships no import library for this entry point; it has to be resolved.
 +NtQueryInformationProcessFn ResolveNtQueryInformationProcess() {
 +  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-+  if (!ntdll) {
+   if (!ntdll) {
 +    return nullptr;
 +  }
 +  return reinterpret_cast<NtQueryInformationProcessFn>(
@@ -385,8 +279,8 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +  int length = static_cast<int>(wide_length);
 +  int charcount = WideCharToMultiByte(CP_UTF8, 0, data, length, NULL, 0, NULL, NULL);
 +  if (!charcount) {
-+    return false;
-+  }
+     return false;
+   }
 +  process_info.commandLine.resize(static_cast<size_t>(charcount));
 +  WideCharToMultiByte(CP_UTF8, 0, data, length, &process_info.commandLine[0], charcount, NULL,
 +                      NULL);
@@ -394,18 +288,25 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +}
 +
 +}  // namespace
-+
+ 
+-  decltype(NtQueryInformationProcess)* nt_query_information_process =
+-      reinterpret_cast<decltype(NtQueryInformationProcess)*>(
+-          GetProcAddress(ntdll, "NtQueryInformationProcess"));
 +bool GetProcessCommandLine(ProcessInfo& process_info) {
 +  NtQueryInformationProcessFn query = NtQueryInformationProcessEntry();
 +  if (!query) {
 +    return false;
 +  }
-+
+ 
+-  if (!nt_query_information_process) {
 +  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_info.pid);
 +  if (process == NULL) {
-+    return false;
-+  }
-+
+     return false;
+   }
+ 
+-  PROCESS_BASIC_INFORMATION pbi{};
+-  PEB peb = {NULL};
+-  RTL_USER_PROCESS_PARAMETERS process_parameters = {NULL};
 +  ULONG size = 0;
 +  NTSTATUS status = query(process, kProcessCommandLineInformation, nullptr, 0, &size);
 +  if (NT_SUCCESS(status)) {
@@ -421,14 +322,44 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +    CloseHandle(process);
 +    return false;
 +  }
-+
+ 
+-  // Get process handle
+-  DWORD pid = process_info.pid;
+-  HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+-  if (hProcess == INVALID_HANDLE_VALUE) {
 +  std::vector<unsigned char> buffer(size);
 +  status = query(process, kProcessCommandLineInformation, &buffer[0], size, &size);
 +  CloseHandle(process);
 +  if (!NT_SUCCESS(status)) {
-+    return false;
-+  }
-+
+     return false;
+   }
+ 
+-  // Get Process Environment Block (PEB)
+-  NTSTATUS status = nt_query_information_process(hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), nullptr);
+-  if (NT_SUCCESS(status) && pbi.PebBaseAddress) {
+-    // Read PEB
+-    if (ReadProcessMemory(hProcess, pbi.PebBaseAddress, &peb, sizeof(peb), nullptr)) {
+-      // Read the processs parameters
+-      if (ReadProcessMemory(hProcess, peb.ProcessParameters, &process_parameters, sizeof(RTL_USER_PROCESS_PARAMETERS), nullptr)) {
+-        if (process_parameters.CommandLine.Length > 0) {
+-          std::wstring buffer;
+-          buffer.resize(process_parameters.CommandLine.Length / sizeof(wchar_t));
+-          if (ReadProcessMemory(hProcess, process_parameters.CommandLine.Buffer, &buffer[0], process_parameters.CommandLine.Length, nullptr)) {
+-            int wide_length = static_cast<int>(buffer.length());
+-            int charcount = WideCharToMultiByte(CP_UTF8, 0, buffer.data(), wide_length,
+-                                      NULL, 0, NULL, NULL);
+-            if (charcount) {
+-              process_info.commandLine.resize(static_cast<size_t>(charcount));
+-              WideCharToMultiByte(CP_UTF8, 0, buffer.data(), wide_length,
+-                                  &process_info.commandLine[0], charcount,
+-                                  NULL, NULL);
+-            }
+-            CloseHandle(hProcess);
+-            return true;
+-          }
+-        }
+-      }
+-    }
 +  // Header and characters arrive in one allocation, but treat the header as
 +  // untrusted: a hooked ntdll is the case this reader is written for, and an
 +  // unchecked Buffer/Length here would be an over-read encoded straight into JS.
@@ -440,11 +371,70 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +  if (chars == nullptr || chars < begin + sizeof(UNICODE_STRING) || chars > end ||
 +      command_line->Length > static_cast<ULONG>(end - chars)) {
 +    return false;
-+  }
-+
+   }
+ 
+-  CloseHandle(hProcess);
+-  return false;
 +  // True only when a command line was actually stored, so "empty" and "not
 +  // recovered" stay the same answer they were before this reader replaced the
 +  // PEB read. `src/process.cc` discards the result either way.
 +  return StoreCommandLineUtf8(process_info, command_line->Buffer,
 +                              command_line->Length / sizeof(wchar_t));
-+}
+ }
+diff --git a/src/process_worker.cc b/src/process_worker.cc
+index c9e3457a759c1acaa2644231a4917d45aed951f8..3f26a354477f062b34bd31fbd17be529e6a2fd7a 100644
+--- a/src/process_worker.cc
++++ b/src/process_worker.cc
+@@ -43,6 +43,11 @@ void GetProcessesWorker::OnOK() {
+           Napi::String::New(env, pinfo.commandLine));
+     }
+ 
++    if ((CREATIONTIME & process_data_flags_) && pinfo.creationTimeMs != 0) {
++      object.Set("creationTimeMs",
++                 Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs)));
++    }
++
+     result.Set(i, object);
+   }
+ 
+diff --git a/typings/windows-process-tree.d.ts b/typings/windows-process-tree.d.ts
+index 08bdac2fdc5ead6f0fcfb5ee5a021e2298c7d523..458981566fc45c0084badff566b1e3791ec1b629 100644
+--- a/typings/windows-process-tree.d.ts
++++ b/typings/windows-process-tree.d.ts
+@@ -7,9 +7,17 @@ declare module '@vscode/windows-process-tree' {
+   export enum ProcessDataFlag {
+     None = 0,
+     Memory = 1,
+-    CommandLine = 2
++    CommandLine = 2,
++    CreationTime = 4
+   }
+ 
++  /**
++   * The flag bits the compiled addon actually understands, or undefined off
++   * win32. `ProcessDataFlag` above is source; this is what the binary reports,
++   * so it is the only way to tell a patched build from a stale prebuilt.
++   */
++  export const supportedProcessDataFlags: number | undefined;
++
+   export interface IProcessInfo {
+     pid: number;
+     ppid: number;
+@@ -24,6 +32,9 @@ declare module '@vscode/windows-process-tree' {
+      * The string returned is at most 512 chars, strings exceeding this length are truncated.
+      */
+     commandLine?: string;
++
++    /** Process creation time in Unix milliseconds. */
++    creationTimeMs?: number;
+   }
+ 
+   export interface IProcessCpuInfo extends IProcessInfo {
+@@ -35,6 +46,7 @@ declare module '@vscode/windows-process-tree' {
+     name: string;
+     memory?: number;
+     commandLine?: string;
++    creationTimeMs?: number;
+     children: IProcessTreeNode[];
+   }
+ 

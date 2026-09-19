@@ -96,6 +96,10 @@ class SyncDatabase {
     return statement.all()
   }
 
+  get isTransaction(): boolean {
+    return this.db.isTransaction
+  }
+
   close(): void {
     this.statementCache.clear()
     this.db.close()

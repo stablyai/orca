@@ -10,6 +10,7 @@ export const DIRECTOR_REGIONAL_PLACEMENT_SECRET =
   'orca-cloud-relay-regional-placement-enabled'
 export const DIRECTOR_REGIONAL_PLACEMENT_ENV =
   'ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED'
+export const DIRECTOR_CORRECTION_COHORT_ENV = 'ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT'
 export const DIRECTOR_REHOME_IDENTITY_ENV =
   'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT'
 export const DIRECTOR_REHOME_AUDIENCE_ENV = 'ORCA_RELAY_REHOME_AUDIENCE'
@@ -228,6 +229,13 @@ export function directorCellSetAddition(currentValue, desiredValue) {
   return { changed: additions.length > 0, value: JSON.stringify(desired) }
 }
 
+export function correctionCohortPercent(value) {
+  if (!/^(?:[0-9]|[1-9][0-9]|100)$/.test(String(value))) {
+    throw new Error('region correction cohort must be an integer from 0 to 100')
+  }
+  return String(value)
+}
+
 export function directorDeploymentEnvironment(config) {
   const imageDigest = config.image?.match(/@(sha256:[a-f0-9]{64})$/)?.[1]
   if (config.image !== undefined && imageDigest === undefined) {
@@ -237,6 +245,10 @@ export function directorDeploymentEnvironment(config) {
     ...DIRECTOR_ADMISSION_ENVIRONMENT,
     ORCA_RELAY_ADMISSION_SELECTOR_VERSION: SELECTOR_REVISION_MARKER,
     ...(imageDigest === undefined ? {} : { ORCA_RELAY_IMAGE_DIGEST: imageDigest })
+  }
+  if (config['region-correction-cohort-percent'] !== undefined &&
+      config['region-correction-cohort-percent'] !== 'preserve') {
+    environment[DIRECTOR_CORRECTION_COHORT_ENV] = correctionCohortPercent(config['region-correction-cohort-percent'])
   }
   const serviceAccount = projectServiceAccount(config, 'capacity-service-account')
   const asiaProofServiceAccount = projectServiceAccount(config, 'asia-proof-service-account')
@@ -302,7 +314,8 @@ export function parseArguments(argv) {
       values['rehome-director-service-account'] !== undefined ||
       values['rehome-audience'] !== undefined ||
       values['expected-rehome-generation'] !== undefined ||
-      values['rehome-control-origin'] !== undefined
+      values['rehome-control-origin'] !== undefined ||
+      values['region-correction-cohort-percent'] !== undefined
     ) {
       throw new Error('director configuration arguments require --role director')
     }
@@ -785,6 +798,14 @@ export async function deployDirector(config, tag, overrides = {}) {
     config['prune-revisions'] === 'true' ? CONNECTION_CAPACITY_PROTOCOL : undefined
   const currentEnvironment = revisionEnvironment(servingRevision)
   const deploymentEnvironment = directorDeploymentEnvironment(config)
+  deploymentEnvironment[DIRECTOR_CORRECTION_COHORT_ENV] ??= correctionCohortPercent(
+    currentEnvironment[DIRECTOR_CORRECTION_COHORT_ENV] ?? '0'
+  )
+  if (config['region-correction-cohort-percent'] !== undefined &&
+      config['region-correction-cohort-percent'] !== 'preserve' &&
+      config['expected-rehome-generation'] === undefined) {
+    throw new Error('cohort changes require an exact disabled regional-rehome generation')
+  }
   const mutableEnvironment = {
     ...deploymentEnvironment,
     [DIRECTOR_REGIONAL_PLACEMENT_ENV]: ''

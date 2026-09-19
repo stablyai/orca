@@ -46,6 +46,7 @@ function TestField({
   const imeEnterGesture = useImeEnterGestureOwnership()
   return (
     <NativeChatComposerField
+      composerScopeKey="pane-test"
       textareaRef={createRef<HTMLTextAreaElement>()}
       draft={draft}
       disabled={false}
@@ -89,8 +90,8 @@ function renderField(draft: string): HTMLTextAreaElement {
 }
 
 describe('native chat composer autogrow', () => {
-  it('sizes the textarea from its content instead of staying at rows={2}', () => {
-    expect(renderField('').className).toContain('[field-sizing:content]')
+  it('grows naturally with editable content', () => {
+    expect(renderField('').getAttribute('contenteditable')).toBe('true')
   })
 
   it('caps growth at 8 lines plus the py-1 padding box', () => {

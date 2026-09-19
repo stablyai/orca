@@ -18,7 +18,16 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     this.rememberPtyLivenessVerdict(ptyId, { status: 'unverifiable', reason })
   }
 
-  markPtyLivenessLive(ptyId: string): void {
+  /**
+   * A host positively observed this PTY. `observedNoLaterThan` fences the write against the
+   * observation sequence the caller read at, so a slow in-flight listing cannot overwrite a
+   * newer lost-contact verdict recorded while it was outstanding.
+   */
+  markPtyLivenessLive(ptyId: string, observedNoLaterThan?: number): void {
+    const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+    if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
+      return
+    }
     this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
   }
 
@@ -128,6 +137,10 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   protected forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+    // An inventory's weak absence cannot revoke an earlier host-certified exit.
+    if (tracked?.verdict.status === 'exited') {
+      return
+    }
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
       return
     }

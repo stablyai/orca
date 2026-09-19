@@ -1,6 +1,5 @@
 import { Buffer } from 'buffer'
 import type { GestureResponderEvent, Image, View } from 'react-native'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type {
   BrowserScreencastFrame,
   BrowserScreencastFrameMetadata
@@ -102,15 +101,6 @@ export function updateBrowserImageSource(image: Image | null, uri: string): void
   // source avoids re-rendering the whole tab view for every streamed frame.
   const source = [{ uri }]
   image?.setNativeProps({ source, src: source })
-}
-
-export function assertRpcOk(
-  response: RpcSuccess | RpcFailure,
-  fallbackMessage: string
-): asserts response is RpcSuccess {
-  if (!response.ok) {
-    throw new Error(response.error.message || fallbackMessage)
-  }
 }
 
 export function browserFrameMetadataEqual(

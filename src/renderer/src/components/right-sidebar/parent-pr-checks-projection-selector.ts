@@ -25,6 +25,7 @@ function trackCacheReads<K extends ReviewCacheName>(
 ): ReviewCacheState[K] {
   return new Proxy(state[cacheName], {
     get: (target, property, receiver) => {
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
       const value = Reflect.get(target, property, receiver)
       if (typeof property === 'string') {
         dependencies.push({ cacheName, key: property, value })
@@ -41,7 +42,7 @@ function dependenciesAreCurrent(
 ): boolean {
   return dependencies.every(
     ({ cacheName, key, value }) =>
-      state[cacheName] === previousState[cacheName] || Reflect.get(state[cacheName], key) === value
+      state[cacheName] === previousState[cacheName] || state[cacheName][key] === value
   )
 }
 

@@ -10,20 +10,23 @@ import { describe, expect, it } from 'vitest'
 const SURFACE_PROVIDING_CALLERS = [
   'src/renderer/src/components/editor/check-annotation-open.ts',
   'src/renderer/src/components/feature-wall/FeatureWallBrowserAction.tsx',
-  'src/renderer/src/components/sidebar/NonGitFolderDialog.tsx',
   'src/renderer/src/components/sidebar/folder-workspace-composer-submit.ts',
   'src/renderer/src/components/sidebar/run-worktree-delete-with-toast.ts',
+  'src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts',
   'src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts',
   'src/renderer/src/hooks/composer-state/full-creation-execution.ts',
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
   'src/renderer/src/lib/launch-work-item-direct.ts',
-  'src/renderer/src/lib/worktree-creation-flow-execute.ts',
+  'src/renderer/src/lib/worktree-creation-structured-session.ts',
   'src/renderer/src/lib/workspace-port-actions.ts',
-  'src/renderer/src/store/repos/repo-add-actions.ts'
+  'src/renderer/src/lib/onboarding-folder-agent-launch.ts'
 ]
 
 // The activation seam itself: declares the option and forwards it into the tombstone gate.
-const SEAM_FILES = ['src/renderer/src/lib/worktree-activation.ts']
+const SEAM_FILES = [
+  'src/renderer/src/lib/worktree-activation-surface-selection.ts',
+  'src/renderer/src/lib/worktree-activation.ts'
+]
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

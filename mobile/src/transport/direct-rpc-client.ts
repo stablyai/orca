@@ -72,7 +72,7 @@ export class DirectRpcClient implements RpcClient {
     })
     this.liveness = new RpcSessionLivenessWatchdog({
       transport: 'direct',
-      sendProbe: (identity) => this.sendLivenessProbe(identity),
+      sendProbe: (identity) => identity === this.livenessSession && this.sendLivenessProbe(),
       terminate: (identity) => {
         if (identity === this.livenessSession && this.socketSession === this.livenessSession) {
           this.socketClose.forceClose(this.livenessSession)
@@ -250,8 +250,9 @@ export class DirectRpcClient implements RpcClient {
       return
     }
     if (!response.ok && response.error.code === 'unauthorized') {
-      this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
-      return
+      // Settle this correlated refusal before marking other written requests unknown.
+      this.requests.resolve(response)
+      return this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
     }
     if (!this.streams.handleResponse(response)) {
       this.requests.resolve(response)
@@ -270,7 +271,7 @@ export class DirectRpcClient implements RpcClient {
     this.socketSession = null
     closing?.clearKey()
     this.streams.markForReplay()
-    this.requests.rejectAll(reason)
+    this.requests.rejectAll(reason, { deliveryUnknown: true })
     closing?.close()
     this.connectionState.publish('reconnecting')
     this.reconnect.schedule()
@@ -281,7 +282,7 @@ export class DirectRpcClient implements RpcClient {
     this.socketSession?.close()
     this.socketSession = null
     this.connectionState.publish('auth-failed')
-    this.requests.rejectAll(reason)
+    this.requests.rejectAll(reason, { deliveryUnknown: true })
   }
 
   private sendEncrypted(request: unknown): boolean {
@@ -296,8 +297,8 @@ export class DirectRpcClient implements RpcClient {
     return false
   }
 
-  private sendLivenessProbe(identity: object): boolean {
-    if (identity !== this.livenessSession || this.getState() !== 'connected') {
+  private sendLivenessProbe(): boolean {
+    if (this.getState() !== 'connected') {
       return false
     }
     return this.sendEncrypted({

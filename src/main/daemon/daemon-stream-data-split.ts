@@ -70,6 +70,15 @@ export function splitStreamDataForNdjson(
     return [data]
   }
 
+  return splitOversizedStreamDataForNdjson(sessionId, data, maxLineBytes, sequenceChars)
+}
+
+function splitOversizedStreamDataForNdjson(
+  sessionId: string,
+  data: string,
+  maxLineBytes: number,
+  sequenceChars?: number
+): string[] {
   const chunks: string[] = []
   let start = 0
   while (start < data.length) {
@@ -118,12 +127,22 @@ export function writeStreamDataEvents(
     return
   }
   const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
-  const chunks = splitStreamDataForNdjson(
-    sessionId,
-    data,
-    carriesMetadata ? Math.max(1, maxLineBytes - 96) : maxLineBytes,
-    explicitRawLength
-  )
+  let chunks: string[]
+  if (!carriesMetadata) {
+    const line = encodeStreamDataEvent(sessionId, data)
+    if (Buffer.byteLength(line, 'utf8') <= maxLineBytes) {
+      streamSocket.write(line)
+      return
+    }
+    chunks = splitOversizedStreamDataForNdjson(sessionId, data, maxLineBytes)
+  } else {
+    chunks = splitStreamDataForNdjson(
+      sessionId,
+      data,
+      Math.max(1, maxLineBytes - 96),
+      explicitRawLength
+    )
+  }
   let consumed = 0
   for (const chunk of chunks) {
     consumed += chunk.length

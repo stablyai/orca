@@ -309,7 +309,10 @@ describe('simulator-palette-search', () => {
     ]
 
     const hit = searchSimulatorTabs(entries, 'emulator checkout')[0]
-    expect(hit?.typeAliasMatch).toEqual({ text: 'emulator', ranges: [{ start: 0, end: 8 }] })
+    expect(hit?.typeAliasMatch).toEqual({
+      text: 'mobile emulator tab',
+      ranges: [{ start: 7, end: 15 }]
+    })
     expect(hit?.worktreeRanges).toEqual([{ start: 0, end: 8 }])
   })
 

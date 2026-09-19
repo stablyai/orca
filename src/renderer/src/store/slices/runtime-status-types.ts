@@ -1,20 +1,14 @@
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostStatusSnapshot
+} from '../../../../shared/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 
-export type RuntimeEnvironmentStatus = {
-  status: RuntimeStatus | null
-  remoteControl?: RuntimeStatus['remoteControl'] | null
-  appVersion?: string | null
-  checkedAt: number
-  connectionGeneration?: number
-}
-
-export type RuntimeStatusRefreshOptions = {
-  publishUnreachable?: boolean
-}
+export type { RuntimeEnvironmentStatus }
 
 export type RuntimeStatusSlice = {
+  readRuntimeHostStatusSnapshots: () => Promise<void>
+  applyRuntimeHostStatusSnapshot: (snapshot: RuntimeHostStatusSnapshot) => void
   runtimeEnvironments: readonly PublicKnownRuntimeEnvironment[]
   runtimeEnvironmentCatalogHydrated: boolean
   runtimeEnvironmentCatalogSettled: boolean
@@ -26,17 +20,8 @@ export type RuntimeStatusSlice = {
     status: RuntimeEnvironmentStatus,
     options?: { suppressDisconnectToast?: boolean }
   ) => void
-  publishRuntimeEnvironmentDiagnostics: (args: {
-    environmentId: string
-    transportGeneration: number
-    diagnostics: RemoteRuntimeSharedConnectionDiagnostics
-  }) => void
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
-  refreshRuntimeEnvironmentStatus: (
-    environmentId: string,
-    timeoutMs?: number,
-    options?: RuntimeStatusRefreshOptions
-  ) => Promise<boolean>
+  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
 }

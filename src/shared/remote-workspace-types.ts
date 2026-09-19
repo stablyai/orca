@@ -1,6 +1,12 @@
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 
-export type RemoteWorkspaceTerminalTab = Omit<TerminalTab, 'worktreeId'> & {
+// Transient client-local fields are omitted, not merely unset: `recovery` is
+// this client's in-flight heal, stamped with this machine's clock, so the type
+// must not let a future producer put one on the wire.
+export type RemoteWorkspaceTerminalTab = Omit<
+  TerminalTab,
+  'worktreeId' | 'pendingActivationSpawn' | 'recovery'
+> & {
   worktreePath: string
 }
 

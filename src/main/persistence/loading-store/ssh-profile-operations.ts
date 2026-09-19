@@ -146,7 +146,7 @@ export function getSshTargetStateOperations(owner: SshProfileOperations): SshTar
 }
 
 export function installSshProfileOperationsContext(
-  target: object,
+  target: SshProfileOperations,
   source: SshProfileOperations
 ): void {
   Object.defineProperty(target, sshProfileOperationsContext, {

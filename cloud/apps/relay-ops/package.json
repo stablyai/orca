@@ -16,14 +16,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.14",
-    "hono": "^4.12.27",
+    "@hono/node-server": "^1.19.17",
+    "hono": "^4.13.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.8"
+    "vitest": "^4.1.11"
   }
 }

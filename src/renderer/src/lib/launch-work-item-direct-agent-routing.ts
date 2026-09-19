@@ -1,20 +1,13 @@
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { AppState } from '@/store/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import {
-  buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts
-} from '@/lib/launch-work-item-direct-agent'
-import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+import { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
@@ -86,89 +79,52 @@ export async function resolveDirectWorkItemAgent(args: {
   }
 }
 
+/** Why: runs only before the legacy route; structured chat has no TUI trust menu. */
 export async function markDirectWorkItemAgentTrusted(args: {
   structuredLaunch: boolean
   agent: TuiAgent | null
   workspacePath: string
   connectionId: string | null
 }): Promise<void> {
-  if (args.structuredLaunch || !args.agent || !window.api.agentTrust?.markTrusted) {
+  if (args.structuredLaunch) {
     return
   }
-  const preflight = TUI_AGENT_CONFIG[args.agent].preflightTrust
-  if (!preflight) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath: args.workspacePath,
-      ...(args.connectionId ? { connectionId: args.connectionId } : {})
-    })
-  } catch {
-    // Best-effort: the user can still dismiss the agent trust prompt manually.
-  }
+  await preflightAgentTrust({
+    agent: args.agent,
+    workspacePath: args.workspacePath,
+    connectionId: args.connectionId
+  })
 }
 
-export async function settleDirectWorkItemStructuredLaunch(args: {
-  structuredLaunch: boolean
-  agent: TuiAgent | null
-  worktreeId: string
-  workspacePath: string
-  connectionId: string | null
-  draftContent: string
-  promptDelivery: PromptDelivery
+export function beginDirectWorkItemStructuredLaunch(args: {
+  plan: AgentSessionLaunchPlan | null
   primaryTabId: string | null
-  startupPlan: AgentStartupPlan | null
-  launchSource: LaunchSource
-}): Promise<{
+  beforeOpen: (sessionId: string) => boolean | void
+}): {
   completed: boolean
   structuredLaunch: boolean
-  visibilityUnknown: boolean
   primaryTabId: string | null
-}> {
-  let { structuredLaunch, primaryTabId } = args
-  if (!structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
-    return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
-  }
-
-  const launch = startStructuredAgentLaunch(args.worktreeId, args.agent, {
-    prompt: args.draftContent,
-    ...(args.promptDelivery === 'submit-after-ready' ? { promptDelivery: args.promptDelivery } : {})
+} {
+  const { plan } = args
+  const notLaunched = (structuredLaunch: boolean) => ({
+    completed: false,
+    structuredLaunch,
+    primaryTabId: args.primaryTabId
   })
-  const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-    structuredLaunch = false
-    await preflightAgentTrust({
-      agent: args.agent,
-      workspacePath: args.workspacePath,
-      connectionId: args.connectionId
-    })
-    const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
-      sidebarRevealBehavior: 'auto',
-      createNewTerminalForStartup: true,
-      ...buildDirectWorkItemStartupOpts(
-        args.agent,
-        args.startupPlan,
-        args.launchSource,
-        args.promptDelivery === 'draft' ? args.draftContent : undefined
-      )
-    })
-    primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
-  })
-  try {
-    await launch.launchResult
-    return { completed: true, structuredLaunch, visibilityUnknown: false, primaryTabId }
-  } catch (error) {
-    if (!(error instanceof StructuredAgentSessionCreateRefusalError)) {
-      const visibilityUnknown = launch.isVisibilityUnknown()
-      return {
-        completed: !visibilityUnknown,
-        structuredLaunch,
-        visibilityUnknown,
-        primaryTabId
-      }
-    }
-    await refusalFallback
+  if (plan?.route !== 'structured-native-chat') {
+    return notLaunched(false)
   }
-  return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
+  const launch = beginStructuredAgentSessionProvisionalLaunch({
+    plan,
+    hooks: {},
+    beforeOpen: args.beforeOpen
+  })
+  if (!launch) {
+    return notLaunched(true)
+  }
+  return {
+    completed: true,
+    structuredLaunch: true,
+    primaryTabId: launch.tab.id
+  }
 }

@@ -1,6 +1,10 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
-import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
+import { parseUnameToRelayPlatform, RELAY_REMOTE_DIR } from '../main/ssh/relay-protocol'
+import { DEFAULT_AI_VAULT_SEARCH_SETTINGS } from '../shared/ai-vault-search-settings'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { installInProcessSessionSearchService } from '../main/ai-vault-search/session-search-in-process-service'
 import type { RelayDispatcher } from './dispatcher'
 import { RelayContext, expandTilde } from './context'
 import { PtyHandler } from './pty-handler'
@@ -29,6 +33,7 @@ export class RelayRuntimeServices {
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
+  private readonly sessionSearch: { dispose(): void } | null
   private readonly registeredHandlers: readonly unknown[]
 
   constructor(
@@ -77,6 +82,22 @@ export class RelayRuntimeServices {
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
     this.aiVaultService = hostPlatform ? createRelayAiVaultService(homedir(), hostPlatform) : null
+    // Why beside the AI Vault sidecar and not inside it: that sidecar runs the
+    // remote scanner, which reads through a filesystem provider and publishes
+    // nothing to the transcript channel the index consumes. This process is the
+    // one that would drive the index's own reads, and the only writer on the file.
+    // Off until something can carry consent to a remote host (see the PR body);
+    // registering it anyway is what makes this host answer `disabled` and not
+    // `no-service`, which is the difference between off and too old.
+    this.sessionSearch = installInProcessSessionSearchService({
+      dataRoot: join(homedir(), RELAY_REMOTE_DIR),
+      roots: { executionHostId: LOCAL_EXECUTION_HOST_ID },
+      settings: DEFAULT_AI_VAULT_SEARCH_SETTINGS,
+      onError: (error) =>
+        relayLogLine(
+          `[relay] session search: ${error instanceof Error ? error.message : String(error)}`
+        )
+    })
     this.registeredHandlers = [
       preflightHandler,
       this.skillInstallHandler,
@@ -112,6 +133,7 @@ export class RelayRuntimeServices {
   }
 
   disposeHandlers(): void {
+    this.sessionSearch?.dispose()
     this.fsHandler.dispose()
     this.gitHandler.dispose()
     void this.registeredHandlers

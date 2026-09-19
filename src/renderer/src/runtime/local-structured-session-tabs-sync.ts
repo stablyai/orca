@@ -3,7 +3,11 @@ import { useAppStore } from '../store'
 import { clearLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-apply'
 import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 
-export { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
+export {
+  isCurrentLocalStructuredSessionGeneration,
+  localStructuredSessionGeneration,
+  resetLocalStructuredSessionVersionForTests
+} from './local-structured-session-tabs-sync/inventory-generation-fence'
 export {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce
@@ -12,9 +16,9 @@ export {
   applyLocalStructuredSessionTabSnapshots,
   applyStructuredSessionTabSnapshots,
   clearLocalStructuredSessionTabs,
-  LOCAL_STRUCTURED_SESSION_OWNER,
   removeLocalStructuredSessionTabs
 } from './local-structured-session-tabs-sync/snapshot-apply'
+export { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 export { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
 export { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 

@@ -1,12 +1,9 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
-import {
-  resolveRepoFilterHostId,
-  resolveWorktreeFilterHostId,
-  type PaletteFilterModel
-} from './palette-filter-options'
+import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
+import { resolveWorktreeFilterHostId, type PaletteFilterModel } from './palette-filter-options'
 
-export type PaletteFilterField = 'host' | 'project'
+export type PaletteFilterField = 'host' | 'repository'
 
 /**
  * Sorted arrays rather than Sets: identity is stable across renders and the
@@ -14,30 +11,22 @@ export type PaletteFilterField = 'host' | 'project'
  */
 export type PaletteFilterState = {
   hostIds: readonly string[]
-  projectKeys: readonly string[]
+  repoIds: readonly string[]
 }
 
-export const EMPTY_PALETTE_FILTER: PaletteFilterState = { hostIds: [], projectKeys: [] }
-
-/** Guard against a pathological selection blowing up the predicate's Set build. */
-export const PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD = 500
+export const EMPTY_PALETTE_FILTER: PaletteFilterState = { hostIds: [], repoIds: [] }
 
 export function isPaletteFilterActive(filter: PaletteFilterState): boolean {
-  return filter.hostIds.length > 0 || filter.projectKeys.length > 0
+  return filter.hostIds.length > 0 || filter.repoIds.length > 0
 }
 
 export function getPaletteFilterSelectionCount(filter: PaletteFilterState): number {
-  return filter.hostIds.length + filter.projectKeys.length
+  return filter.hostIds.length + filter.repoIds.length
 }
 
 function toggleValue(values: readonly string[], id: string): readonly string[] {
   if (values.includes(id)) {
     return values.filter((value) => value !== id)
-  }
-  // Why: same reference on the capped no-op — a fresh array would invalidate
-  // every downstream search memo for a click that changed nothing.
-  if (values.length >= PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD) {
-    return values
   }
   return [...values, id].sort()
 }
@@ -49,74 +38,69 @@ export function togglePaletteFilterValue(
 ): PaletteFilterState {
   return field === 'host'
     ? { ...filter, hostIds: toggleValue(filter.hostIds, id) }
-    : { ...filter, projectKeys: toggleValue(filter.projectKeys, id) }
+    : { ...filter, repoIds: toggleValue(filter.repoIds, id) }
 }
 
 function addValues(values: readonly string[], ids: readonly string[]): readonly string[] {
-  if (ids.length === 0 || values.length >= PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD) {
+  if (ids.length === 0) {
     return values
   }
   const merged = new Set(values)
   const sizeBefore = merged.size
   for (const id of ids) {
-    if (merged.size >= PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD) {
-      break
-    }
     merged.add(id)
   }
-  // Why: same reference when nothing new fit — keeps search memos stable.
+  // Why: same reference when nothing was added keeps search memos stable.
   if (merged.size === sizeBefore) {
     return values
   }
   return [...merged].sort()
 }
 
-/** Bulk-add for "Select all matching"; respects the per-field cap and de-dupes. */
+/** Bulk-add for "Select all matching"; de-dupes while preserving stable no-ops. */
 export function addPaletteFilterValues(
   filter: PaletteFilterState,
   field: PaletteFilterField,
   ids: readonly string[]
 ): PaletteFilterState {
-  return field === 'host'
-    ? { ...filter, hostIds: addValues(filter.hostIds, ids) }
-    : { ...filter, projectKeys: addValues(filter.projectKeys, ids) }
+  const values = field === 'host' ? filter.hostIds : filter.repoIds
+  const nextValues = addValues(values, ids)
+  if (nextValues === values) {
+    return filter
+  }
+  return field === 'host' ? { ...filter, hostIds: nextValues } : { ...filter, repoIds: nextValues }
 }
 
 export function clearPaletteFilterField(
   filter: PaletteFilterState,
   field: PaletteFilterField
 ): PaletteFilterState {
-  return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, projectKeys: [] }
+  if ((field === 'host' ? filter.hostIds : filter.repoIds).length === 0) {
+    return filter
+  }
+  return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, repoIds: [] }
 }
 
-function pruneToAvailable(values: readonly string[], available: ReadonlySet<string>): string[] {
-  return values.filter((value) => available.has(value))
+type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdSet>[0] & {
+  filterRepoIds: readonly string[]
 }
 
-/**
- * Drops selections whose host or project disappeared (repo removed, SSH target
- * deleted). Without this a stale id would silently empty the palette forever.
- * Returns the same reference when nothing changed so memo deps stay stable.
- */
-export function reconcilePaletteFilter(
-  filter: PaletteFilterState,
-  model: PaletteFilterModel
+function sortedUnique(values: Iterable<string>): string[] {
+  return [...new Set(values)].sort()
+}
+
+/** Seeds the palette from the sidebar's exact host and repository scope. */
+export function buildPaletteFilterFromSidebarScope(
+  scope: SidebarScopeForPaletteFilter
 ): PaletteFilterState {
-  if (!isPaletteFilterActive(filter)) {
-    return filter
+  const visibleHostIds = getVisibleWorkspaceHostIdSet(scope)
+  const hostIds = visibleHostIds ? sortedUnique(visibleHostIds) : []
+  const repoIds = sortedUnique(scope.filterRepoIds)
+
+  if (hostIds.length === 0 && repoIds.length === 0) {
+    return EMPTY_PALETTE_FILTER
   }
-  const hostIds = pruneToAvailable(filter.hostIds, new Set(model.hosts.map((host) => host.id)))
-  const projectKeys = pruneToAvailable(
-    filter.projectKeys,
-    new Set(model.projects.map((project) => project.id))
-  )
-  if (
-    hostIds.length === filter.hostIds.length &&
-    projectKeys.length === filter.projectKeys.length
-  ) {
-    return filter
-  }
-  return { hostIds, projectKeys }
+  return { hostIds, repoIds }
 }
 
 export type PaletteFilterPredicate = {
@@ -140,31 +124,29 @@ export function buildPaletteFilterPredicate(
   }
 
   const selectedHostIds = filter.hostIds.length > 0 ? new Set(filter.hostIds) : null
-  const selectedProjectKeys = filter.projectKeys.length > 0 ? new Set(filter.projectKeys) : null
-  let selectedRepoIds: Set<string> | null = null
-  if (selectedProjectKeys) {
-    selectedRepoIds = new Set<string>()
-    for (const projectKey of selectedProjectKeys) {
-      for (const repoId of model.repoIdsByProjectKey.get(projectKey) ?? []) {
-        selectedRepoIds.add(repoId)
+  const selectedRepoIds = filter.repoIds.length > 0 ? new Set(filter.repoIds) : null
+  const repoMatchesSelectedHost = (repoId: string): boolean => {
+    if (!selectedHostIds) {
+      return true
+    }
+    const repoHostIds = model.hostIdsByRepoId.get(repoId)
+    if (!repoHostIds) {
+      return selectedHostIds.has(model.defaultHostId)
+    }
+    for (const hostId of repoHostIds) {
+      if (selectedHostIds.has(hostId)) {
+        return true
       }
     }
+    return false
   }
 
   return {
     matchesProjectRowKey: (rowKey) => {
-      if (selectedProjectKeys && !selectedProjectKeys.has(rowKey)) {
-        return false
-      }
-      if (!selectedHostIds) {
-        return true
-      }
-      // Why: the row survives if *any* of its repos is on a selected host — a
-      // project checked out on both local and SSH is still reachable from either.
-      return (model.repoIdsByProjectKey.get(rowKey) ?? []).some((repoId) =>
-        selectedHostIds.has(
-          resolveRepoFilterHostId(repoId, model.hostIdByRepoId, model.defaultHostId)
-        )
+      const rowRepoIds = model.repoIdsByProjectKey.get(rowKey) ?? []
+      return rowRepoIds.some(
+        (repoId) =>
+          (!selectedRepoIds || selectedRepoIds.has(repoId)) && repoMatchesSelectedHost(repoId)
       )
     },
     matchesWorktree: (worktree) => {
@@ -177,10 +159,10 @@ export function buildPaletteFilterPredicate(
       // Why: worktree.hostId wins over the repo fallback — a runtime-owned
       // workspace can live on a different host than the repo it came from.
       return selectedHostIds.has(
-        resolveWorktreeFilterHostId(worktree, model.hostIdByRepoId, model.defaultHostId)
+        resolveWorktreeFilterHostId(worktree, model.repoById, model.defaultHostId)
       )
     },
-    // Why: a group header is not a project, so an explicit project selection
+    // Why: a group header has no repository, so a repository selection
     // excludes every group row; only the host axis can keep one.
     matchesGroupHostId: (hostId) =>
       selectedRepoIds === null && (!selectedHostIds || selectedHostIds.has(hostId))

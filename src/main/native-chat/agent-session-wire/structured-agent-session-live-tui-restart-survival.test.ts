@@ -104,6 +104,7 @@ describe('structured session live TUI restart survival', () => {
       suspendNative: vi.fn(),
       acquireNative: vi.fn(),
       importTuiHistory: vi.fn(),
+      retryPendingSettlement: vi.fn(async () => true),
       publish: vi.fn(),
       schedule: async (_sessionId, task) => task(),
       now: () => NOW
@@ -224,6 +225,7 @@ describe('structured session live TUI restart survival', () => {
       suspendNative: vi.fn(),
       acquireNative: vi.fn(),
       importTuiHistory: vi.fn(),
+      retryPendingSettlement: vi.fn(async () => true),
       publish: vi.fn(),
       schedule: async (_sessionId, task) => task(),
       now: () => NOW

@@ -84,11 +84,14 @@ describe('RuntimeClient module-graph deferral', () => {
     process.exitCode = 0
   })
 
-  // These eager modules must not pull the RuntimeClient dependency graph into help.
+  // Why: the whole point of the change. These modules load on EVERY
+  // invocation, so a value-import of the barrel from any of them drags the
+  // RuntimeClient graph (zod, ws, tweetnacl) back onto the --help path.
   it.each([
     'args.ts',
     'flags.ts',
     'dispatch.ts',
+    'format.ts',
     'cli-error.ts',
     'selectors.ts',
     'execution-host-flag.ts'
@@ -100,7 +103,10 @@ describe('RuntimeClient module-graph deferral', () => {
     for (const line of valueImports) {
       expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
     }
-    expect(source).toContain("} from './runtime/types'")
+    // Why: format.ts re-exports its error formatters; the guarded import lives in cli-error.ts.
+    if (file !== 'format.ts') {
+      expect(source).toContain("} from './runtime/types'")
+    }
   })
 
   it('index.ts has no eager value-import of the runtime client', () => {

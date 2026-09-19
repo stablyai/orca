@@ -182,7 +182,7 @@ async function parentMain() {
   const reportPath = path.resolve(argValue('report', path.join(tempDir, 'report.json')))
   const marker = argValue('marker', `ORCA_TERMINAL_SEND_${process.pid}_${Date.now()}`)
   const prompt = `${marker} ${'slow composer payload '.repeat(24)}`
-  const expectStalled = hasFlag('expect-stalled')
+  const expectUnsubmitted = hasFlag('expect-unsubmitted')
   const expectBlocked = hasFlag('expect-blocked')
   const providedHandle = argValue('terminal')
   await mkdir(tempDir, { recursive: true })
@@ -202,7 +202,7 @@ async function parentMain() {
         shellQuote(marker),
         '--timeout-ms',
         String(timeoutMs),
-        ...(expectStalled ? ['--swallow-first-enter'] : []),
+        ...(expectUnsubmitted ? ['--swallow-first-enter'] : []),
         ...(expectBlocked ? ['--permission-before-send'] : []),
         ...(process.platform === 'win32' ? ['--allow-unframed-paste'] : [])
       ]))
@@ -247,16 +247,15 @@ async function parentMain() {
       )
     }
     let sendErrorCode = null
+    let sendReceipt = null
     try {
-      await callOrca(
+      sendReceipt = await callOrca(
         cli,
         ['terminal', 'send', '--terminal', handle, '--text', prompt, '--enter'],
         cwd
       )
     } catch (error) {
-      const expectedError =
-        (expectStalled && error?.code === 'agent_prompt_stalled') ||
-        (expectBlocked && error?.code === 'agent_prompt_blocked')
+      const expectedError = expectBlocked && error?.code === 'agent_prompt_blocked'
       if (!expectedError) {
         throw error
       }
@@ -264,7 +263,7 @@ async function parentMain() {
     }
     let report = await readReport(reportPath, 1_000)
     let rescueSent = false
-    if (!report && !expectStalled && !expectBlocked) {
+    if (!report && !expectUnsubmitted && !expectBlocked) {
       rescueSent = true
       await callOrca(cli, ['terminal', 'send', '--terminal', handle, '--enter'], cwd)
       report = await readReport(reportPath, timeoutMs)
@@ -277,11 +276,14 @@ async function parentMain() {
       promptBytes: Buffer.byteLength(prompt, 'utf8'),
       rescueSent,
       sendErrorCode,
+      promptStages: sendReceipt?.send?.prompt?.stages ?? null,
       ...report
     }
     console.log(JSON.stringify(summary, null, 2))
-    const expectedStallObserved =
-      sendErrorCode === 'agent_prompt_stalled' &&
+    const expectedUnsubmittedObserved =
+      sendErrorCode === null &&
+      summary.promptStages?.includes('input_accepted') &&
+      !summary.promptStages?.includes('turn_started') &&
       report.submitted === false &&
       report.receivedEnters === 1 &&
       report.swallowedEnters === 1
@@ -292,7 +294,7 @@ async function parentMain() {
     if (
       !report.contractOk ||
       rescueSent ||
-      (expectStalled && !expectedStallObserved) ||
+      (expectUnsubmitted && !expectedUnsubmittedObserved) ||
       (expectBlocked && !expectedBlockObserved)
     ) {
       process.exitCode = 1

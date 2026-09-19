@@ -16,8 +16,10 @@
  *   an enumeration that found no holder). A relay whose socket was already unlinked is
  *   invisible to this probe by construction — that is what the superseded sweep is for.
  * - a probe that could not run, a host without `lsof`, or a connect that failed for any other
- *   reason is `unverifiable`. It never authorizes unlinking, rebinding over, or signalling.
+ *   reason is `unverifiable`. It cannot authorize client cleanup; guarded launch still
+ *   delegates socket takeover checks to the daemon.
  */
+import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import {
@@ -56,9 +58,9 @@ export type RelayEndpointIncumbent = {
   verdict: RelayEndpointVerdict
   evidence: RelayEndpointEvidence
   socketPresent: boolean
-  /** Pids proven to hold this exact socket. Empty when the host could not enumerate them. */
+  /** Pids observed holding this socket, including partial enumeration results. */
   holders: RelayEndpointHolder[]
-  /** False when no enumeration tool was available — an empty `holders` then proves nothing. */
+  /** False when enumeration was incomplete — an empty `holders` then proves nothing. */
   holdersEnumerable: boolean
 }
 
@@ -77,6 +79,13 @@ const CONNECT_PROBE_JS = [
   'say(e.code==="ECONNREFUSED"?"refused":e.code==="ENOENT"?"absent":"unknown")});',
   `setTimeout(function(){say("unknown")},${CONNECT_PROBE_TIMEOUT_MS})`
 ].join('')
+
+export class RelayProbeCleanupUnconfirmedError extends Error {
+  readonly name = 'RelayProbeCleanupUnconfirmedError'
+  constructor() {
+    super('Remote relay probe cleanup is unverifiable; refusing to race a replacement launch')
+  }
+}
 
 /**
  * A POSIX probe that reports only what the host actually observed. Every field has an
@@ -99,10 +108,22 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     'fi',
     'printf \'LISTEN=%s\\n\' "$listen"',
     'if command -v lsof >/dev/null 2>&1; then',
-    "  printf 'HOLDERS_SOURCE=lsof\\n'",
-    // Why -a: lsof ORs its selectors, so without it every unix-socket holder on the box
-    // would be reported as holding this path (#8762).
-    '  for pid in $(lsof -t -a -U "$sock" 2>/dev/null); do',
+    // Why -a: lsof ORs selectors without it and reports unrelated unix-socket holders (#8762).
+    `  lsof_result=$("$node" -e ${shellEscape(RELAY_LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
+    '  case "$lsof_result" in',
+    '    cleanup-unconfirmed*)',
+    "      printf 'PROBE_CLEANUP=unconfirmed\\n'",
+    "      printf 'HOLDERS_SOURCE=unavailable\\n'",
+    '      ;;',
+    '    lsof*)',
+    "      printf 'HOLDERS_SOURCE=lsof\\n'",
+    '      ;;',
+    '    *)',
+    "      printf 'HOLDERS_SOURCE=unavailable\\n'",
+    '      ;;',
+    '  esac',
+    "  pids=$(printf '%s\\n' \"$lsof_result\" | sed '1d')",
+    '  for pid in $pids; do',
     '    args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
     '    match=no',
     '    case "$args" in *relay.js*"$sock"*) match=yes ;; esac',
@@ -124,6 +145,9 @@ export function parseRelayEndpointIncumbentProbe(
   const lines = output.split('\n').map((line) => line.trim())
   if (!lines.includes(PROBE_BEGIN) || !lines.includes(PROBE_END)) {
     return unverifiableEndpoint(sockPath)
+  }
+  if (lines.includes('PROBE_CLEANUP=unconfirmed')) {
+    throw new RelayProbeCleanupUnconfirmedError()
   }
   const socketPresent = lines.includes('PRESENT=yes')
   const listen = lines.find((line) => line.startsWith('LISTEN='))?.slice('LISTEN='.length) ?? ''
@@ -219,7 +243,10 @@ export async function probeRelayEndpointIncumbent(
   } catch (err) {
     // An exec whose channel never confirmed close may still be running remotely; the caller
     // must not race a detached launch against it.
-    if (isUnconfirmedSshCommandTermination(err)) {
+    if (
+      err instanceof RelayProbeCleanupUnconfirmedError ||
+      isUnconfirmedSshCommandTermination(err)
+    ) {
       throw err
     }
     // Any other unanswered probe observes nothing. It is never evidence of death.
@@ -305,4 +332,27 @@ export class RelayEndpointHeldError extends Error {
 
 export function isRelayEndpointHeldError(err: unknown): err is RelayEndpointHeldError {
   return err instanceof RelayEndpointHeldError
+}
+
+/**
+ * Thrown when a relay holds the endpoint but never refused us: it accepted a connection or is
+ * enumerated as the holder, yet our --connect got no handshake answer. That is a stalled or
+ * overloaded relay, not a decision — so unlike `RelayEndpointHeldError` this is retryable, and
+ * the session routes it through the relay-lost backoff rather than the terminal error path.
+ */
+export class RelayEndpointUnresponsiveError extends Error {
+  readonly name = 'RelayEndpointUnresponsiveError'
+  constructor(readonly incumbent: RelayEndpointIncumbent) {
+    super(
+      `A relay still owns ${incumbent.sockPath} but did not answer the handshake ` +
+        `(${describeRelayEndpointIncumbent(incumbent)}). Orca will retry rather than replace it; ` +
+        'if it never recovers, use Reset Relay for this host.'
+    )
+  }
+}
+
+export function isRelayEndpointUnresponsiveError(
+  err: unknown
+): err is RelayEndpointUnresponsiveError {
+  return err instanceof RelayEndpointUnresponsiveError
 }

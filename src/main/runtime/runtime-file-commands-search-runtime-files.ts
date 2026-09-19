@@ -13,6 +13,11 @@ import {
   listMarkdownDocuments,
   markdownDocumentsFromRelativePaths
 } from '../ipc/markdown-documents'
+import {
+  validatePathExistenceBatch,
+  type PathExistenceResult
+} from '../../shared/path-existence-batch'
+import { readRuntimeFilePathExistence } from './runtime-file-path-existence'
 import { stat } from 'node:fs/promises'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 
@@ -78,6 +83,15 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
     return listMarkdownDocuments(target.worktree.path)
+  }
+
+  async pathsExistRuntimeFiles(
+    worktreeSelector: string,
+    relativePaths: string[]
+  ): Promise<PathExistenceResult[]> {
+    validatePathExistenceBatch(relativePaths)
+    const targets = await this.resolveFileExplorerPaths(worktreeSelector, relativePaths)
+    return readRuntimeFilePathExistence(targets, () => this.host.requireStore())
   }
 
   async statRuntimeFile(

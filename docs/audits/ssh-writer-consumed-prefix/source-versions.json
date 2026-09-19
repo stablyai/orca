@@ -1,0 +1,208 @@
+{
+  "baselineHashes": {
+    "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50"
+  },
+  "fixedHashes": {
+    "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts": "6173ddd6640a930d0fa586fed91c1adc0d865a33f81af9a1ed5a0817c08e90cc"
+  },
+  "sourceHashLineEndings": "canonical LF",
+  "namedRefs": {
+    "2e83de3154c4ee1bbeea816734b892c34500a5cc": {
+      "path": "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+      "sha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+      "equalsBaseline": true
+    },
+    "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+      "path": "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+      "sha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+      "equalsBaseline": true
+    },
+    "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+      "path": "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+      "sha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+      "equalsBaseline": true
+    }
+  },
+  "provenance": [
+    {
+      "path": "src/shared/relay-frame-decoder-contract.ts",
+      "currentBaselineSha256": "f58279099fe4dbbdfde9e3e038a916ae077e71d8ac6aa871b59a64c6fbaeaad8",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "f58279099fe4dbbdfde9e3e038a916ae077e71d8ac6aa871b59a64c6fbaeaad8",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "f58279099fe4dbbdfde9e3e038a916ae077e71d8ac6aa871b59a64c6fbaeaad8",
+          "identical": true
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/shared/relay-frame-buffer.ts",
+      "currentBaselineSha256": "f89fcd33489894c34f79ba8fd5e5634487555a7c34fc8e7c054229ae1c20e0be",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "f89fcd33489894c34f79ba8fd5e5634487555a7c34fc8e7c054229ae1c20e0be",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "4d40ca7cb812e0af6edf78340b017a150ce9529b71396e4c946358f4ed698f81",
+          "identical": false
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/shared/relay-frame-decoder.ts",
+      "currentBaselineSha256": "88c0ecbc06b93efe6733094b8c9e4509ab1cbd139f8cb3257e9fb74a0ed39194",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "88c0ecbc06b93efe6733094b8c9e4509ab1cbd139f8cb3257e9fb74a0ed39194",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "88c0ecbc06b93efe6733094b8c9e4509ab1cbd139f8cb3257e9fb74a0ed39194",
+          "identical": true
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/main/ssh/relay-protocol.ts",
+      "currentBaselineSha256": "644aa6f2087b5867d41006bfdcec78ffba693157a2912feb8f82b120f5647b34",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "644aa6f2087b5867d41006bfdcec78ffba693157a2912feb8f82b120f5647b34",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "644aa6f2087b5867d41006bfdcec78ffba693157a2912feb8f82b120f5647b34",
+          "identical": true
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+      "currentBaselineSha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+          "identical": true
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/shared/pty-write-settlement.ts",
+      "currentBaselineSha256": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": null,
+          "identical": false
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/main/ssh/ssh-multiplexer-transport-writer.ts",
+      "currentBaselineSha256": "433a2cc400b5ed9743871ca03aac06d31a079ef23c42c2a2759f78967312d071",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "433a2cc400b5ed9743871ca03aac06d31a079ef23c42c2a2759f78967312d071",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "4a73e2194f15ec0604802fe6810742f34930fc55e542458b6d8ab7344ee841a2",
+          "identical": false
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/main/ssh/ssh-channel-multiplexer.ts",
+      "currentBaselineSha256": "9ecd88963fec72901596bd25d2cb4c8666ef41d3c8a968242c6eef52095ee108",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "9ecd88963fec72901596bd25d2cb4c8666ef41d3c8a968242c6eef52095ee108",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "480c722b27dd1ffb8c70bfca8fb3568294ff2777b7b02607548df93bb280f6ae",
+          "identical": false
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/main/providers/ssh-pty-write.ts",
+      "currentBaselineSha256": "357024da7dc5bf2df1dabd43f6f90146afa239d414e29f04b17f86a6351520ae",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "357024da7dc5bf2df1dabd43f6f90146afa239d414e29f04b17f86a6351520ae",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "76c4994509a0de61052ceb984a8a9fa0f958bd6a87239ea8e95ff7702f242c67",
+          "identical": false
+        }
+      },
+      "bundled": true
+    },
+    {
+      "path": "src/main/ssh/ssh-relay-deploy-helpers.ts",
+      "currentBaselineSha256": "5452b8a441268a42abe09ae71ae64c5684e070a7469eed0b421ab4cd8e41abae",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "5452b8a441268a42abe09ae71ae64c5684e070a7469eed0b421ab4cd8e41abae",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "d9f42be19fb6c1a7921d2f0258f4b4dea814e0dd19f228616d1a2c4158a7c41e",
+          "identical": false
+        }
+      },
+      "bundled": false
+    },
+    {
+      "path": "src/main/ssh/ssh-git-response-stream-reader.ts",
+      "currentBaselineSha256": "8e3a2a5606f95ce1c70c1397ca5a807d90989074ea2be41497785c269381af0e",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "8e3a2a5606f95ce1c70c1397ca5a807d90989074ea2be41497785c269381af0e",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "8e3a2a5606f95ce1c70c1397ca5a807d90989074ea2be41497785c269381af0e",
+          "identical": true
+        }
+      },
+      "bundled": false
+    },
+    {
+      "path": "src/main/providers/ssh-pty-provider.ts",
+      "currentBaselineSha256": "7bf1a9e41b606dcfd73bd2a4aa9d9aa185b12f18f9beb027b640fe10cf360123",
+      "namedRefs": {
+        "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+          "sha256": "7bf1a9e41b606dcfd73bd2a4aa9d9aa185b12f18f9beb027b640fe10cf360123",
+          "identical": true
+        },
+        "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+          "sha256": "f37a0e8688544a79b35e2d2342282f215cd80928adb9da4824d185598fb8a6b6",
+          "identical": false
+        }
+      },
+      "bundled": false
+    }
+  ]
+}

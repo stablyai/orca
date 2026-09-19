@@ -90,6 +90,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      ORCA_PUSH_TEST_DATABASE_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
       ORCA_RELAY_TEST_POSTGRES_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
     steps:
       - uses: actions/checkout@v4

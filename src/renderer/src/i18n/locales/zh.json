@@ -716,7 +716,6 @@
       "useComposerState": {
         "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
         "b2ead86962": "无法解析 PR 基础引用。",
-        "a9ff236145": "部分附件无法上传。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
         "ba6cb77082": "无法连接到项目。",
         "chooseOrAddProjectBeforeWorkspace": "创建工作区前，请选择或添加项目。",
@@ -1948,7 +1947,8 @@
         "0f3066256e": "上一个结果",
         "42e466b9f1": "正则表达式",
         "90c61387d9": "区分大小写",
-        "e07012f26e": "搜索..."
+        "e07012f26e": "搜索...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "重启即可更新",
@@ -2221,6 +2221,10 @@
                 "7c302f8174": "无标题"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "此视图暂无任何项目。",
+            "7e4a2f80c6": "最近添加的项目可能需要一段时间才会显示。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -4438,11 +4442,10 @@
           "92154beb7e": "新工作区",
           "49f62c5665": "工作区板",
           "5c9c7c16aa": "添加项目以创建工作区",
-          "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目",
           "spaces": "空间",
-          "views": "侧边栏视图"
+          "views": "侧边栏视图",
+          "addProject": "添加项目"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -5451,7 +5454,6 @@
           "8d61637a77": "MiniMax Cookie 已保存。",
           "b43e761fe5": "MiniMax Cookie 更新失败。",
           "5d63bbfbec": "MiniMax",
-          "15e831350e": "从 platform.minimax.io 配置 MiniMax 使用量跟踪。",
           "21d6eb141e": "MiniMax 会话 Cookie",
           "33bba5ad83": "粘贴 MiniMax 会话 Cookie 以在本地获取速率限制。",
           "73ea15f24b": "已保存",
@@ -5459,7 +5461,6 @@
           "566d9a99ab": "_token=…; minimax_group_id_v2=…",
           "f38b9cc4bd": "替换",
           "590a3130f9": "保存",
-          "79418c782a": "在浏览器中打开 platform.minimax.io/console/usage 并登录，然后从 DevTools(网络 → 任一 remains 请求 → Cookie)复制 Cookie 请求头。",
           "9dd50d3f75": "高级",
           "174fb408f9": "除非 MiniMax 使用量刷新指向了错误的工作区或模型，否则请保持这些默认值。",
           "bf160bb6c0": "Group ID 覆盖",
@@ -5470,14 +5471,11 @@
           "3c92b0d31c": "general",
           "0d8e77bc40": "打开控制台",
           "0b8c1c7e02": "已存储在本地",
-          "1fd1b1b6b4": "未设置 Cookie",
-          "5e08b0fe57": "存储在本地，仅发送到 platform.minimax.io 以刷新使用量。",
           "43d7a45b97": "如何复制",
           "b8a4f21c3e": "粘贴来自 DevTools 的 Cookie 请求头",
           "53f7b8c7a2": "上次刷新: {{value0}}",
           "31d24a4e87": "在浏览器中退出登录后，Cookie 将过期。",
           "3a30aaf526": "刚刚",
-          "f5d8d2a6a1": "在浏览器中打开 platform.minimax.io/console/usage 并登录。",
           "24560fe830": "打开 DevTools。",
           "4cab0fa42d": "转到“网络”选项卡并启用“保留日志”。",
           "bee4e63e1c": "重新加载页面。",
@@ -5485,7 +5483,6 @@
           "435df0ee51": "在请求头中，复制 Cookie 的值。",
           "7492fb3bba": "在此粘贴并点击保存。",
           "9fec52de4b": "如何复制 Cookie",
-          "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。",
           "remoteServerFallback": "远程服务器",
           "loadAccountsFailed": "无法加载提供商账户。",
           "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户。请在该服务器上添加或重新验证账户。",
@@ -5500,7 +5497,31 @@
           "codexConfigSyncMissingSource": "由于缺少 {{value0}}，Codex 仍在使用上次同步的设置。请恢复该文件以恢复同步。",
           "codexConfigSyncBlankSource": "由于 {{value0}} 为空，Codex 仍在使用上次同步的设置。同步文件夹完成下载前出现这种情况是正常的。",
           "codexConfigSyncManagedHomeUnavailable": "Orca 暂时无法读取此账户的 Codex 文件，因此设置可能尚未同步。这通常会自行恢复——防病毒软件或备份工具可能只是短暂锁定了这些文件。",
-          "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限。"
+          "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限。",
+          "d6f1b9b6a2": "请填写 MiniMax API 密钥。",
+          "7c5d8a4e1b": "MiniMax API 密钥未保存。",
+          "4d2c7b9e83": "MiniMax API 密钥已保存。",
+          "f8a4b9d210": "MiniMax 端点",
+          "0b3a9f6c2e": "选择与你的账户匹配的端点。海外 (platform.minimax.io) 和中国 (platform.minimaxi.com) 均支持会话 Cookie 或 API 密钥。",
+          "83b6a1f7c4": "MiniMax API 密钥",
+          "4f2c8a7e1b": "粘贴你的 MiniMax API 密钥",
+          "a7b1e3c5d2": "忘记密钥",
+          "usageTracking": "为你的账户配置 MiniMax 用量跟踪。",
+          "credentialsNotSet": "尚未设置凭据",
+          "selectedEndpointStorage": "保存在本地，并发送到所选的 MiniMax 端点以刷新用量。",
+          "openSelectedConsole": "在浏览器中打开 {{url}} 并登录。",
+          "cookieSelectedEndpoint": "保存在本地，并发送到所选的 MiniMax 端点以刷新用量。",
+          "copySelectedConsoleCookie": "打开所选控制台并登录，然后从开发者工具复制 Cookie 请求标头（Network → 任意 remains 请求 → Cookie）。",
+          "apiKeySelectedEndpoint": "粘贴 MiniMax 控制台 → API 密钥中的密钥。保存在本地，并发送到所选的 MiniMax 端点以刷新用量。API 密钥优先于 Cookie。",
+          "apiKeyInstructions": "从 MiniMax 控制台 → API 密钥中复制密钥。已保存的 API 密钥优先于 Cookie；使用“忘记密钥”切换回 Cookie。",
+          "endpointOverseas": "海外 (platform.minimax.io)",
+          "endpointChina": "中国 (platform.minimaxi.com)",
+          "15e831350e": "从 platform.minimax.io 配置 MiniMax 使用量跟踪。",
+          "1fd1b1b6b4": "未设置 Cookie",
+          "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。",
+          "5e08b0fe57": "存储在本地，仅发送到 platform.minimax.io 以刷新使用量。",
+          "79418c782a": "在浏览器中打开 platform.minimax.io/console/usage 并登录，然后从 DevTools(网络 → 任一 remains 请求 → Cookie)复制 Cookie 请求头。",
+          "f5d8d2a6a1": "在浏览器中打开 platform.minimax.io/console/usage 并登录。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -5849,7 +5870,12 @@
           "14444243ba": "从路径中删除`{{value0}}`？",
           "5d432fe44d": "已安装",
           "8a9b784c60": "陈旧",
-          "d363e5929b": "正在检查 CLI 注册..."
+          "d363e5929b": "正在检查 CLI 注册...",
+          "6f894ef9c2": "在 Finder 中显示",
+          "cbe55e4d48": "在资源管理器中显示",
+          "9fd4023db0": "在文件管理器中显示",
+          "installFailureUnknownReason": "Orca 无法完成 CLI 注册，且未报告任何原因。",
+          "installFailureConflictRemedy": "删除 {{value0}} 并在不再需要时重新注册。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -7738,13 +7764,17 @@
             "b84a5b0c8a": "选择是否在此设备上或 WSL 中检查和添加提供商账户。",
             "d09fb5ca92": "账户位置",
             "733f9e2a93": "MiniMax 使用情况",
-            "f8374c3151": "粘贴 platform.minimax.io 会话 Cookie 以在本地获取速率限制。",
+            "f8374c3151": "配置 MiniMax 用量跟踪。选择海外或中国端点，然后粘贴会话 Cookie 或保存适用于该端点的 API 密钥。",
             "f4a8c2e1b7": "Grok (xAI) 使用情况",
             "e3b7d1f9a2": "通过 Grok CLI（grok login）OAuth 登录以查看每周额度使用量。",
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "登录"
+            "a9f3d7b5c8": "登录",
+            "b2c4e7f1a8": "端点",
+            "3a9b6d2c4e": "API 密钥",
+            "5d8f1a3b7c": "中国",
+            "7e2a4b8c1d": "海外"
           }
         },
         "advanced": {
@@ -8925,6 +8955,12 @@
             "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。",
             "projectRuntime": "项目运行时",
             "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+            "githubAccount": "GitHub 账户",
+            "githubAccountDescription": "为该项目的 GitHub API 调用绑定密钥环中的 gh 登录。",
+            "githubAccountKeyword": "GitHub 账户",
+            "ghAccount": "gh 账户",
+            "login": "登录",
+            "token": "token",
             "externalWorktrees": "外部工作树",
             "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",
             "copy": "复制",
@@ -9333,6 +9369,24 @@
           "on": "开启",
           "auto": "智能体",
           "off": "关闭"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "此运行时的 GitHub CLI 版本过旧，不支持账户绑定（需要 gh ≥ 2.40）。",
+          "capabilityUnknown": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请重试。",
+          "envToken": "环境令牌账户无法绑定。请使用密钥环登录。",
+          "invalidBinding": "该 GitHub 账户绑定无效。",
+          "unavailable": "该 GitHub 账户在此运行时不可用。",
+          "saveFailed": "无法保存 GitHub 账户绑定。",
+          "title": "GitHub 账户",
+          "description": "为此项目的 GitHub 议题和拉取请求调用使用特定的 gh 登录。",
+          "longDescription": "Orca 会将所选密钥环登录的短期令牌注入此项目的每次 gh 调用。项目视图继续使用当前活动的 gh 登录。",
+          "retry": "重试",
+          "selectLabel": "账户",
+          "ambient": "默认（当前活动的 gh 登录）",
+          "unavailableOption": "{{user}} @ {{host}}（不可用）",
+          "capabilityBlocked": "在此运行时的 GitHub CLI 支持 `gh auth token --user`（gh ≥ 2.40）之前，无法使用账户绑定。",
+          "capabilityUnknownHint": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请清除绑定或重试。",
+          "notEnforced": "已保存，但此运行时（混合版本主机）不会强制执行。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -10245,7 +10299,8 @@
           "noteKeysBody": "API 密钥和工作区存储在当前运行环境中。",
           "noteVisibilityTitle": "隐藏不等于断开连接",
           "noteVisibilityBody": "在任务来源中隐藏 Linear 只会将其从选择器中移除，不会删除密钥或技能。",
-          "setupChecking": "检查中…"
+          "setupChecking": "检查中…",
+          "setupUnverified": "无法验证"
         },
         "TaskSourceLinearSetup": {
           "connectTitle": "连接 Linear",
@@ -10267,6 +10322,7 @@
           "statusReady": "已就绪",
           "statusConnectRequired": "需要连接",
           "statusSkillRequired": "需要技能",
+          "statusUnverified": "无法验证",
           "statusUnavailable": "状态不可用",
           "statusHidden": "已从任务中隐藏",
           "statusIncomplete": "需要设置",
@@ -14237,12 +14293,33 @@
           "795cbf26e2": "筛选...",
           "4616ea39fd": "跳转到工作区",
           "threadListOptionsFiltered": "线程列表选项，筛选器已启用",
+          "showSearch": "显示搜索",
           "markThreadRead": "将话题标记为已读",
           "59b131fbd9": "将话题标记为未读",
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
-          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。"
+          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。",
+          "clearCompleted": "清除已完成",
+          "none": "无",
+          "search": "搜索",
+          "showUnreadOnly": "仅显示未读",
+          "showChildAgents": "显示子智能体",
+          "activityOptions": "活动选项",
+          "interrupted": "已中断",
+          "state": {
+            "working": "工作中",
+            "monitoring": "监控后台任务",
+            "blocked": "受阻",
+            "waiting": "等待输入",
+            "failed": "失败",
+            "done": "完成",
+            "idle": "空闲",
+            "unverifiable": "暂无近期更新",
+            "permission": "需注意"
+          },
+          "filtersSection": "筛选",
+          "viewSection": "视图"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目"
@@ -14651,7 +14728,8 @@
         "chooseInAgentPicker": "在智能体选择器中选择…",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "当前值未知 — 请选择开或关",
+        "valueIsDefault": "默认",
+        "valueNotReported": "未报告",
         "sentNotConfirmed": "已发送给智能体 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
@@ -14664,9 +14742,7 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
-          "ultra": "极致",
-          "on": "开",
-          "off": "关"
+          "ultra": "极致"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
@@ -14864,27 +14940,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "仪表盘视图",
-      "board": "仪表盘",
-      "map": "智能体地图"
-    },
-    "map": {
-      "host": {
-        "local": "本地",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "远程"
-      },
-      "liveContainmentMap": "实时包含关系图",
-      "empty": "没有智能体符合当前筛选条件。",
-      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
-      "zoomOut": "缩小",
-      "zoomIn": "放大",
-      "fit": "适配屏幕",
-      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
-      "agentCount": "{{count}} 个智能体"
-    },
     "placeholder": {
       "title": "智能体仪表盘",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
@@ -14959,7 +15014,11 @@
   "dashboard": {
     "sidebar": {
       "label": "智能体",
-      "dashboardLabel": "智能体仪表盘"
+      "dashboardLabel": "智能体仪表盘",
+      "openActivity": "查看活动",
+      "closeActivity": "关闭活动视图",
+      "projects": "项目",
+      "workspaces": "工作区"
     }
   },
   "browser": {
@@ -15014,6 +15073,14 @@
       "hide": "隐藏智能体",
       "action": "试用智能体",
       "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "需要输入",
+      "working": "处理中",
+      "stopped": "已停止",
+      "finished": "已完成"
     }
   }
 }

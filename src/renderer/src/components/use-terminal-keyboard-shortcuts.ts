@@ -5,11 +5,7 @@ import type { TerminalActivationController } from './use-terminal-activation-act
 export function useTerminalKeyboardShortcuts(controller: TerminalActivationController): void {
   const {
     activeWorktreeId,
-    closeBrowserTab,
     handleCloseAllFiles,
-    handleCloseBrowserTab,
-    handleCloseFile,
-    handleCloseTab,
     handleNewAgentTab,
     handleNewBrowserTab,
     handleNewFile,
@@ -42,10 +38,6 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     handleNewFile,
     handleNewTab,
     handleNewAgentTab,
-    handleCloseTab,
-    handleCloseBrowserTab,
-    closeBrowserTab,
-    handleCloseFile,
     handleCloseAllFiles,
     keybindings,
     mobileEmulatorEnabled,

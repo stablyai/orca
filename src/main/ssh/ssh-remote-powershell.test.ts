@@ -126,22 +126,22 @@ describe('remote PowerShell payload invariant', () => {
     expect(importers.length).toBeGreaterThan(10)
   })
 
-  it.each(POLICY_GATED_CONSTRUCTS)('loads no remote payload through $label', ({
-    label,
-    pattern
-  }) => {
-    const offenders = importers
-      .filter((file) => pattern.test(stripComments(file.source)))
-      .map((file) => file.relativePath)
+  it.each(POLICY_GATED_CONSTRUCTS)(
+    'loads no remote payload through $label',
+    ({ label, pattern }) => {
+      const offenders = importers
+        .filter((file) => pattern.test(stripComments(file.source)))
+        .map((file) => file.relativePath)
 
-    expect(
-      offenders,
-      `${offenders.join(', ')} uses ${label}, which IS execution-policy gated on the remote ` +
-        'host. Do not restore `-ExecutionPolicy Bypass` to the command line (a GPO scope ' +
-        'beats it). Set the policy in-payload at process scope instead — see the note on ' +
-        'powerShellCommand.'
-    ).toEqual([])
-  })
+      expect(
+        offenders,
+        `${offenders.join(', ')} uses ${label}, which IS execution-policy gated on the remote ` +
+          'host. Do not restore `-ExecutionPolicy Bypass` to the command line (a GPO scope ' +
+          'beats it). Set the policy in-payload at process scope instead — see the note on ' +
+          'powerShellCommand.'
+      ).toEqual([])
+    }
+  )
 
   // Why: these patterns only earn trust if they fire on a real violation spelled the way a
   // generated payload spells it — inside a TS string literal — and stay quiet on the near
@@ -149,16 +149,15 @@ describe('remote PowerShell payload invariant', () => {
   // sample but missed `powerShellCommand(". '$x'")`, and the obvious case-insensitive fix for
   // `-File` matches `--credential-file` in three real importers. A fixture written from the
   // pattern confirms the pattern; these are written from the requirement.
-  it.each(POLICY_GATED_CONSTRUCTS)('detects $label wherever it is spelled', ({
-    pattern,
-    catches,
-    ignores
-  }) => {
-    for (const sample of catches) {
-      expect(pattern.test(sample), `should catch: ${sample}`).toBe(true)
+  it.each(POLICY_GATED_CONSTRUCTS)(
+    'detects $label wherever it is spelled',
+    ({ pattern, catches, ignores }) => {
+      for (const sample of catches) {
+        expect(pattern.test(sample), `should catch: ${sample}`).toBe(true)
+      }
+      for (const sample of ignores) {
+        expect(pattern.test(sample), `should ignore: ${sample}`).toBe(false)
+      }
     }
-    for (const sample of ignores) {
-      expect(pattern.test(sample), `should ignore: ${sample}`).toBe(false)
-    }
-  })
+  )
 })

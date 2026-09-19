@@ -55,6 +55,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             state: connState,
             reconnectAttempts,
             lastConnectedAt,
+            hostName: state.hostName,
             ...relayRecovery
           })
           return (
@@ -184,7 +185,9 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                 styles.embeddedToolbarIconButton,
                 connState !== 'connected' && styles.toolbarIconDisabled
               ]}
-              onPress={() => actions.navigateFromHostList(`/h/${hostId}/accounts`)}
+              onPress={() =>
+                actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/accounts`)
+              }
               disabled={connState !== 'connected'}
               accessibilityRole="button"
               accessibilityLabel="Accounts"
@@ -200,7 +203,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                 styles.embeddedToolbarIconButton,
                 connState !== 'connected' && styles.toolbarIconDisabled
               ]}
-              onPress={() => actions.navigateFromHostList(`/h/${hostId}/tasks`)}
+              onPress={() => actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/tasks`)}
               disabled={connState !== 'connected'}
               accessibilityRole="button"
               accessibilityLabel="Tasks"
@@ -303,7 +306,9 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
 
           <Pressable
             style={styles.searchToggle}
-            onPress={() => actions.navigateFromHostList(`/h/${hostId}/accounts`)}
+            onPress={() =>
+              actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/accounts`)
+            }
             disabled={connState !== 'connected'}
           >
             <UserCircle
@@ -314,7 +319,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
 
           <Pressable
             style={styles.searchToggle}
-            onPress={() => actions.navigateFromHostList(`/h/${hostId}/tasks`)}
+            onPress={() => actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/tasks`)}
             disabled={connState !== 'connected'}
           >
             <List

@@ -44,6 +44,7 @@ describe('remote runtime request connection integration', () => {
         }
       ]
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
@@ -115,6 +116,7 @@ describe('remote runtime request connection integration', () => {
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -280,6 +282,7 @@ describe('remote runtime request connection integration', () => {
         }
       }
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -506,6 +509,7 @@ describe('remote runtime request connection integration', () => {
         tabs: []
       }
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
         getStatus: () => ({

@@ -42,9 +42,7 @@ export function createDirectSshReconnectCoordinator(
   const now = deps.now ?? Date.now
   const setTimer =
     deps.setTimer ?? ((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
-  const clearTimer =
-    deps.clearTimer ??
-    ((timer: DirectSshReconnectTimer) => clearTimeout(timer as ReturnType<typeof setTimeout>))
+  const clearTimer = deps.clearTimer ?? ((timer: DirectSshReconnectTimer) => clearTimeout(timer))
   const stabilizationMs = deps.stabilizationMs ?? DIRECT_SSH_RELAY_STABILIZATION_MS
   const targets = new Map<string, DirectSshReconnectTargetState>()
   let stopped = false

@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import {
@@ -244,10 +245,12 @@ export function NativeChatImageAttachments({
 
 export function NativeChatAgentControls({
   markdown,
+  timestamp,
   onScrollToTop,
   className
 }: {
   markdown: string
+  timestamp: number | null
   onScrollToTop: () => void
   className?: string
 }): React.JSX.Element {
@@ -266,11 +269,18 @@ export function NativeChatAgentControls({
       >
         <ArrowUp className="size-3.5" />
       </button>
+      <NativeChatMessageTimestamp timestamp={timestamp} />
     </div>
   )
 }
 
-export function ProviderFrameRow({ block }: { block: NativeChatBlock }): React.JSX.Element | null {
+export function ProviderFrameRow({
+  block,
+  summary
+}: {
+  block: NativeChatBlock
+  summary?: string
+}): React.JSX.Element | null {
   if (block.type !== 'text' || !block.providerFrame) {
     return null
   }
@@ -280,7 +290,7 @@ export function ProviderFrameRow({ block }: { block: NativeChatBlock }): React.J
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="transition-transform group-open:rotate-90">›</span>
         <span className="font-medium text-foreground">{frame.provider}</span>
-        <span className="truncate">{nativeChatProviderFrameSummary(block)}</span>
+        <span className="truncate">{summary ?? nativeChatProviderFrameSummary(block)}</span>
         {frame.payload.truncated ? (
           <span>
             ·{' '}

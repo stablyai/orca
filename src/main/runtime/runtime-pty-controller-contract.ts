@@ -11,6 +11,7 @@ import type { PtyBindingSourceExpectation } from '../persistence'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
@@ -57,9 +58,12 @@ export type RuntimePtyController = {
     tabId?: string
     leafId?: string
     sessionId?: string
+    /** Windows shell to spawn AS this PTY, instead of the host default. */
+    shellOverride?: string
     isNewSession?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
@@ -93,7 +97,8 @@ export type RuntimePtyController = {
     data: string,
     authority: { sessionId: string; spawnToken: string }
   ): boolean
-  writeWithSettlement?(ptyId: string, data: string): Promise<boolean>
+  /** Three-valued settlement; local providers settle synchronously. */
+  writeWithSettlement?(ptyId: string, data: string): WriteSettlement | Promise<WriteSettlement>
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */

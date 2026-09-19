@@ -14,6 +14,7 @@ on:
       not-before: { required: true, type: string }
       rate-per-minute: { required: true, type: string }
       preference-max-age-ms: { required: true, type: string }
+      host-cooldown-ms: { required: true, type: string }
       drain-grace-ms: { required: true, type: string }
       confirmation: { required: true, type: string }
       monitor-run-id: { required: true, type: string }
@@ -54,6 +55,7 @@ jobs:
       NOT_BEFORE: ${{ inputs.not-before }}
       RATE_PER_MINUTE: ${{ inputs.rate-per-minute }}
       PREFERENCE_MAX_AGE_MS: ${{ inputs.preference-max-age-ms }}
+      HOST_COOLDOWN_MS: ${{ inputs.host-cooldown-ms }}
       DRAIN_GRACE_MS: ${{ inputs.drain-grace-ms }}
       CONFIRMATION: ${{ inputs.confirmation }}
       MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
@@ -128,6 +130,7 @@ jobs:
             --expected-control-generation "${EXPECTED_CONTROL_GENERATION}" \
             --not-before "${NOT_BEFORE}" --rate-per-minute "${RATE_PER_MINUTE}" \
             --preference-max-age-ms "${PREFERENCE_MAX_AGE_MS}" \
+            --host-cooldown-ms "${HOST_COOLDOWN_MS}" \
             --drain-grace-ms "${DRAIN_GRACE_MS}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-rehome-control.json"
 
@@ -299,6 +302,7 @@ jobs:
             --expected-control-generation "${EXPECTED_CONTROL_GENERATION}" \
             --not-before "${NOT_BEFORE}" --rate-per-minute "${RATE_PER_MINUTE}" \
             --preference-max-age-ms "${PREFERENCE_MAX_AGE_MS}" \
+            --host-cooldown-ms "${HOST_COOLDOWN_MS}" \
             --drain-grace-ms "${DRAIN_GRACE_MS}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-rehome-control.json"
 

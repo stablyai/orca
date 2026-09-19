@@ -59,8 +59,10 @@ export function updateSidebarDragPreviewPosition(args: {
   offsetX: number
   offsetY: number
 }): void {
-  const x = args.pointerX - args.offsetX
-  const y = args.pointerY - args.offsetY
+  const nesting = args.preview.hasAttribute('data-worktree-sidebar-nesting')
+  // Keep the destination title visible while the pointer rests inside it.
+  const x = nesting ? args.pointerX + 16 : args.pointerX - args.offsetX
+  const y = nesting ? args.pointerY + 16 : args.pointerY - args.offsetY
   args.preview.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.015)`
 }
 

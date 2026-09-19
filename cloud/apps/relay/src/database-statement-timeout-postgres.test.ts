@@ -42,10 +42,12 @@ describePostgres('PostgreSQL statement deadline', () => {
     expect(result).toBe(2)
   }, 15_000)
 
-  // Why: DDL runs on its own untimed connection. relay_invites carries a
-  // CREATE INDEX IF NOT EXISTS, which (unlike CREATE TABLE IF NOT EXISTS)
-  // really does queue behind an ACCESS EXCLUSIVE lock on the table.
-  it('applies the schema behind a held ACCESS EXCLUSIVE lock', async () => {
+  // Why: relay_invites carries a CREATE INDEX IF NOT EXISTS, which (unlike CREATE TABLE IF NOT
+  // EXISTS) really does queue behind an ACCESS EXCLUSIVE lock on the table. The catalog pre-check
+  // asks pg_class whether that index is already there, and the read takes no lock on relay_invites,
+  // so a boot on a migrated database no longer joins the queue at all. It used to, and every writer
+  // queued behind it in lock order.
+  it('boots without queueing behind a held ACCESS EXCLUSIVE lock', async () => {
     let releaseTable!: () => void
     const tableReleased = new Promise<void>((resolve) => {
       releaseTable = resolve
@@ -61,7 +63,9 @@ describePostgres('PostgreSQL statement deadline', () => {
     })
     await tableHeldPromise
 
-    const opening = openRelayDatabase({
+    // Resolving while the lock is still held is the whole proof: a statement that queued would hit
+    // the schema connection's 1s lock_timeout and fail the boot, which is no longer retried.
+    const database = await openRelayDatabase({
       databaseUrl,
       dataDir: '',
       applicationName,
@@ -69,27 +73,18 @@ describePostgres('PostgreSQL statement deadline', () => {
       // connection must not.
       statementTimeoutMs: 200
     })
-    const blockedOnSchemaConnection = async (): Promise<boolean> => {
-      const deadline = Date.now() + 4_000
-      while (Date.now() < deadline) {
-        const rows = await databases[0]!.query(
-          `SELECT count(*) AS waiting FROM pg_stat_activity
-           WHERE datname = current_database() AND wait_event_type = 'Lock'
-             AND application_name = ?`,
-          [`${applicationName}/schema`]
-        )
-        if (Number(rows[0]!.waiting) > 0) return true
-        await new Promise((resolve) => setTimeout(resolve, 10))
-      }
-      return false
-    }
-    const blocked = await blockedOnSchemaConnection()
+    databases.push(database)
+    const waiting = await databases[0]!.query(
+      `SELECT count(*) AS waiting FROM pg_stat_activity
+       WHERE datname = current_database() AND wait_event_type = 'Lock'
+         AND application_name = ?`,
+      [`${applicationName}/schema`]
+    )
+    expect(Number(waiting[0]!.waiting)).toBe(0)
+
     releaseTable()
     await holder
 
-    const database = await opening
-    databases.push(database)
-    expect(blocked).toBe(true)
     // The serving pool still carries the short deadline it was opened with.
     expect(await database.query(`SELECT current_setting('statement_timeout') AS statement_timeout`)).toEqual([
       { statement_timeout: '200ms' }

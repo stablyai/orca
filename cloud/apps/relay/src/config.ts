@@ -9,6 +9,11 @@ import {
   type RelayCellConnectionHardCap,
   type RelayRegion
 } from '@orca-cloud/relay-contract'
+import {
+  RELAY_MAX_READINESS_GRACE_MS,
+  RELAY_READINESS_JWKS_GRACE_MS,
+  RELAY_READINESS_SQL_GRACE_MS
+} from './relay-readiness.js'
 
 export const RELAY_MAX_CELL_CAPACITY_REQUESTS = 100_000
 export const RELAY_DATABASE_POOL_MAX = 10
@@ -30,6 +35,14 @@ const OptionalServiceAccountSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.string().email().optional()
 )
+
+// 0 disables the window and restores the fail-on-first-error readiness answer. An unset variable
+// arrives as '' from Cloud Run, which z.coerce would read as 0 rather than as the default.
+const readinessGraceSchema = (defaultMs: number) =>
+  z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(RELAY_MAX_READINESS_GRACE_MS).default(defaultMs)
+  )
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
@@ -75,11 +88,17 @@ const EnvSchema = z.object({
   ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT: z.string().email().optional(),
   ORCA_RELAY_DIRECTOR_URL: z.string().url().optional(),
   ORCA_RELAY_HEARTBEAT_AUDIENCE: z.string().url().optional(),
-  ORCA_RELAY_IMAGE_DIGEST: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+  ORCA_RELAY_IMAGE_DIGEST: z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .optional(),
   ORCA_RELAY_ADMIN_JWKS_URL: z.string().url().default('https://www.googleapis.com/oauth2/v3/certs'),
   ORCA_RELAY_DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).optional(),
+  ORCA_RELAY_READINESS_JWKS_GRACE_MS: readinessGraceSchema(RELAY_READINESS_JWKS_GRACE_MS),
+  ORCA_RELAY_READINESS_SQL_GRACE_MS: readinessGraceSchema(RELAY_READINESS_SQL_GRACE_MS),
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
+  ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY: z.coerce.number().int().positive().max(100).default(2),
   ORCA_RELAY_PUBLIC_STICKY_CONCURRENCY: z.coerce.number().int().positive().max(100).default(1),
   ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX: z.coerce.number().int().positive().max(4_096).default(64),
@@ -183,8 +202,11 @@ export type RelayConfig = {
   connectionUnobservedBound?: number
   adminJwksUrl: string
   databasePoolMax: number
+  readinessJwksGraceMs?: number
+  readinessSqlGraceMs?: number
   publicAssignmentsEnabled: boolean
   regionalPlacementEnabled?: boolean
+  regionCorrectionCohortPercent?: number
   publicAssignmentConcurrency: number
   publicAssignmentQueueMax: number
   publicAssignmentWaitMs: number
@@ -330,8 +352,11 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     connectionUnobservedBound: ownCell.connectionUnobservedBound,
     adminJwksUrl: parsed.ORCA_RELAY_ADMIN_JWKS_URL,
     databasePoolMax,
+    readinessJwksGraceMs: parsed.ORCA_RELAY_READINESS_JWKS_GRACE_MS,
+    readinessSqlGraceMs: parsed.ORCA_RELAY_READINESS_SQL_GRACE_MS,
     publicAssignmentsEnabled: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED,
     regionalPlacementEnabled: parsed.ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED,
+    regionCorrectionCohortPercent: parsed.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT,
     publicAssignmentConcurrency: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY,
     publicAssignmentQueueMax: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX,
     publicAssignmentWaitMs: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_WAIT_MS,

@@ -2,6 +2,10 @@ import {
   MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS,
   isCurrentMobileDictationStart
 } from './mobile-dictation-session-state'
+import {
+  dictationSessionCancel,
+  dictationSessionStart
+} from '../dictation/mobile-dictation-operations'
 import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -50,9 +54,7 @@ async function cancelStaleStart(
   const { client, dictationId, keepAwakeOwner } = options
   options.clearActiveId(dictationId)
   setIdleIfGenerationCurrent(options)
-  const cleanups: Promise<unknown>[] = [
-    client.sendRequest('speech.dictation.cancel', { dictationId })
-  ]
+  const cleanups: Promise<unknown>[] = [dictationSessionCancel.request(client, { dictationId })]
   if (releaseKeepAwake) {
     cleanups.push(keepAwakeOwner.release(dictationId))
   }
@@ -65,14 +67,12 @@ export async function startMobileDictationDesktopSession(
   const { client, dictationId, keepAwakeOwner } = options
 
   try {
-    const response = await client.sendRequest('speech.dictation.start', { dictationId })
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
+    const reply = await dictationSessionStart.request(client, { dictationId })
+    dictationSessionStart.interpret(reply)
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
     options.clearActiveId(dictationId)
-    await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+    await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
     // Awaited cleanup may overlap a newer start; stale work must not reset or
     // report over the replacement session.
     const shouldReport = wasCurrent && canReportStartFailure(options)
@@ -129,7 +129,7 @@ export async function startMobileDictationDesktopSession(
     options.clearActiveId(dictationId)
     await Promise.allSettled([
       keepAwakeOwner.release(dictationId),
-      client.sendRequest('speech.dictation.cancel', { dictationId })
+      dictationSessionCancel.request(client, { dictationId })
     ])
     const shouldReport = wasCurrent && canReportStartFailure(options)
     setIdleIfGenerationCurrent(options)

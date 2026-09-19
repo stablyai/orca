@@ -37,14 +37,16 @@ export function buildViewportUserAgentOverride(args: {
   url: string
   mobile: boolean
   baseUserAgent: string
+  googleAuthEnabled?: boolean
 }): ViewportUserAgentOverride {
-  if (isGoogleAuthUrl(args.url)) {
+  if (args.googleAuthEnabled !== false && isGoogleAuthUrl(args.url)) {
     // Why: match the header-level Firefox switch exactly, and send no userAgentMetadata — real
     // Firefox emits no client hints, so Chrome brands here would contradict the stripped headers.
     return { userAgent: googleAuthUserAgent() }
   }
   if (!args.mobile) {
-    // Why: desktop presets republish the session's own identity unchanged.
+    // Why: desktop presets republish the session's clean identity, or a preset would put the
+    // Electron/app tokens back on the wire and a transplanted session gets revoked (STA-7147).
     return { userAgent: args.baseUserAgent }
   }
   const chromeMajor = extractChromeMajor(args.baseUserAgent)

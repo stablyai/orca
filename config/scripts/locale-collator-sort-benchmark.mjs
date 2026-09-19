@@ -129,6 +129,7 @@ for (const count of [36, 50, 250]) {
   const issues = makeJiraIssues(count)
   const before = () =>
     [...issues]
+      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Baseline measures per-comparison setup against a reused collator.
       .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }))
       .map((issue) => issue.key)
   const after = () => sortJiraIssues(issues, 'key', 'asc').map((issue) => issue.key)
@@ -142,6 +143,7 @@ for (const count of [36, 50, 250]) {
 for (const count of [10, 50, 250]) {
   const values = makeBaseSensitivityValues(count)
   const before = () =>
+    // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Baseline measures per-comparison setup against a reused collator.
     [...values].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   const after = () => [...values].sort(compareBaseSensitivityLocaleText)
   assertSameOrder(before, after, `base ${count}`)

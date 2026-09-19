@@ -9,6 +9,7 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
+import { verifyPlaywrightParticipation } from './verify-playwright-participation.mjs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -20,6 +21,9 @@ import {
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const scriptPath = import.meta.filename
 const insideSessionFlag = '--inside-session'
+const nestedWaylandFlag = '--nested-wayland'
+const nestedWayland = process.argv.includes(nestedWaylandFlag)
+const waylandTitle = 'a digit typed right after a Hangul syllable reaches the pty'
 const processStopTimeoutMs = 5_000
 const processKillTimeoutMs = 1_000
 
@@ -111,26 +115,38 @@ function configureHangulEngine() {
   }
 }
 
-async function waitForHangulEngine(ibusProcess) {
+async function waitForHangulEngine(sessionProcess) {
+  let lastError = ''
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
-    if (ibusProcess.exitCode !== null) {
-      throw new Error(`ibus-daemon exited early with code ${ibusProcess.exitCode}`)
+    if (sessionProcess.exitCode !== null) {
+      throw new Error(`IME session process exited early with code ${sessionProcess.exitCode}`)
     }
-    const result = spawnSync('ibus', ['engine', 'hangul'], { stdio: 'pipe' })
+    if (
+      nestedWayland &&
+      !existsSync(path.join(process.env.XDG_RUNTIME_DIR, process.env.WAYLAND_DISPLAY))
+    ) {
+      await delay(100)
+      continue
+    }
+    const result = spawnSync('ibus', ['engine', 'hangul'], { encoding: 'utf8' })
+    lastError = result.stderr?.trim() || String(result.error ?? result.status)
     if (result.status === 0) {
       return
     }
     await delay(100)
   }
-  throw new Error('Timed out while selecting the IBus Hangul engine')
+  throw new Error(`Timed out while selecting the IBus Hangul engine: ${lastError}`)
 }
 
 async function runInsideSession(evidenceDir) {
   const receiptPath = path.join(evidenceDir, 'ime-engagement-receipt.jsonl')
   const ibusLogPath = path.join(evidenceDir, 'ibus-daemon.log')
   const ibusLogFd = openSync(ibusLogPath, 'w')
-  const windowManagerLogPath = path.join(evidenceDir, 'xfwm4.log')
+  const windowManagerLogPath = path.join(
+    evidenceDir,
+    nestedWayland ? 'gnome-shell.log' : 'xfwm4.log'
+  )
   const windowManagerLogFd = openSync(windowManagerLogPath, 'w')
   const evidence = {
     display: process.env.DISPLAY ?? null,
@@ -147,32 +163,58 @@ async function runInsideSession(evidenceDir) {
 
   try {
     configureHangulEngine()
-    windowManagerProcess = spawn('xfwm4', ['--compositor=off'], {
-      detached: true,
-      env: process.env,
-      stdio: ['ignore', windowManagerLogFd, windowManagerLogFd]
-    })
-    if (!windowManagerProcess.pid) {
-      throw new Error('xfwm4 did not return a PID')
-    }
-    evidence.windowManagerPid = windowManagerProcess.pid
-    console.error(`[terminal-ime] started xfwm4 PID ${windowManagerProcess.pid}`)
-
-    ibusProcess = spawn(
-      'ibus-daemon',
-      ['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable'],
-      {
+    if (nestedWayland) {
+      for (const [schema, key, value] of [
+        ['org.gnome.desktop.interface', 'enable-animations', 'false'],
+        ['org.gnome.desktop.input-sources', 'sources', "[('ibus', 'hangul')]"]
+      ]) {
+        const result = spawnSync('gsettings', ['set', schema, key, value], { encoding: 'utf8' })
+        if (result.status !== 0) {
+          throw new Error(`Failed to configure GNOME: ${result.stderr}`)
+        }
+      }
+      windowManagerProcess = spawn(
+        'gnome-shell',
+        ['--nested', '--wayland', `--wayland-display=${process.env.WAYLAND_DISPLAY}`],
+        {
+          detached: true,
+          env: process.env,
+          stdio: ['ignore', windowManagerLogFd, windowManagerLogFd]
+        }
+      )
+    } else {
+      windowManagerProcess = spawn('xfwm4', ['--compositor=off'], {
         detached: true,
         env: process.env,
-        stdio: ['ignore', ibusLogFd, ibusLogFd]
-      }
-    )
-    if (!ibusProcess.pid) {
-      throw new Error('ibus-daemon did not return a PID')
+        stdio: ['ignore', windowManagerLogFd, windowManagerLogFd]
+      })
     }
-    evidence.ibusDaemonPid = ibusProcess.pid
-    console.error(`[terminal-ime] started ibus-daemon PID ${ibusProcess.pid}`)
-    await waitForHangulEngine(ibusProcess)
+    if (!windowManagerProcess.pid) {
+      throw new Error('Window manager did not return a PID')
+    }
+    evidence.windowManagerPid = windowManagerProcess.pid
+    console.error(`[terminal-ime] started window manager PID ${windowManagerProcess.pid}`)
+
+    if (nestedWayland) {
+      // GNOME starts IBus in the private session; a second daemon can compete for ownership.
+      await waitForHangulEngine(windowManagerProcess)
+    } else {
+      ibusProcess = spawn(
+        'ibus-daemon',
+        ['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable'],
+        {
+          detached: true,
+          env: process.env,
+          stdio: ['ignore', ibusLogFd, ibusLogFd]
+        }
+      )
+      if (!ibusProcess.pid) {
+        throw new Error('ibus-daemon did not return a PID')
+      }
+      evidence.ibusDaemonPid = ibusProcess.pid
+      console.error(`[terminal-ime] started ibus-daemon PID ${ibusProcess.pid}`)
+      await waitForHangulEngine(ibusProcess)
+    }
     console.error(`[terminal-ime] IBus version: ${commandOutput('ibus', ['version'])}`)
     console.error(`[terminal-ime] IBus engine: ${commandOutput('ibus', ['engine'])}`)
     console.error(
@@ -189,23 +231,49 @@ async function runInsideSession(evidenceDir) {
         'hangul-keyboard'
       ])}`
     )
-    evidence.ibusGroupBeforeCleanup = processGroupMembers(ibusProcess.pid)
+    evidence.ibusGroupBeforeCleanup = ibusProcess?.pid ? processGroupMembers(ibusProcess.pid) : []
     console.error(`[terminal-ime] owned IBus group: ${evidence.ibusGroupBeforeCleanup.join('; ')}`)
 
     const testProcess = spawn(
       process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-      [
-        'run',
-        'test:e2e:headful',
-        '--workers=1',
-        '--',
-        'tests/e2e/terminal-ibus-hangul-native.spec.ts',
-        'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'
-      ],
+      nestedWayland
+        ? [
+            'exec',
+            'playwright',
+            'test',
+            '--config',
+            'tests/playwright.config.ts',
+            'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts',
+            '--project=electron-headful',
+            '--workers=1',
+            '--repeat-each=3',
+            '--retries=0',
+            '--reporter=list,json'
+          ]
+        : [
+            'run',
+            'test:e2e:headful',
+            '--workers=1',
+            '--',
+            'tests/e2e/terminal-ibus-hangul-native.spec.ts',
+            'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'
+          ],
       {
         cwd: projectDir,
         env: {
           ...process.env,
+          ...(nestedWayland
+            ? {
+                ORCA_E2E_IME_INJECTOR: 'nested',
+                ORCA_E2E_NESTED_FOCUS_CMD: path.join(
+                  projectDir,
+                  'config/scripts/focus-nested-wayland-terminal.sh'
+                ),
+                ORCA_E2E_EXTRA_APP_ARGS:
+                  '--ozone-platform=wayland --enable-wayland-ime --wayland-text-input-version=3 --password-store=basic --use-mock-keychain --disable-gpu-sandbox',
+                PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(evidenceDir, 'playwright.json')
+              }
+            : {}),
           ORCA_E2E_FORWARD_APP_LOGS: '1',
           ORCA_E2E_NATIVE_IBUS_HANGUL: '1',
           [IME_ENGAGEMENT_RECEIPT_ENV]: receiptPath,
@@ -232,6 +300,13 @@ async function runInsideSession(evidenceDir) {
         windowManagerProcess.pid
       )
     }
+    if (nestedWayland && existsSync(path.join(evidenceDir, 'playwright.json'))) {
+      mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
+      copyFileSync(
+        path.join(evidenceDir, 'playwright.json'),
+        path.join(projectDir, 'test-results', 'terminal-wayland-playwright.json')
+      )
+    }
     closeSync(ibusLogFd)
     closeSync(windowManagerLogFd)
     mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
@@ -241,7 +316,11 @@ async function runInsideSession(evidenceDir) {
     )
     copyFileSync(
       windowManagerLogPath,
-      path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-xfwm4.log')
+      path.join(
+        projectDir,
+        'test-results',
+        nestedWayland ? 'terminal-wayland-gnome-shell.log' : 'terminal-ibus-hangul-native-xfwm4.log'
+      )
     )
     writeFileSync(
       path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-processes.json'),
@@ -269,6 +348,23 @@ async function runInsideSession(evidenceDir) {
   // Why unconditionally, and not only when Playwright failed: a skipped test reports as a pass,
   // so exit code 0 is exactly the state this check exists to distrust.
   const receiptText = existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : ''
+  if (nestedWayland) {
+    verifyPlaywrightParticipation(
+      JSON.parse(readFileSync(path.join(evidenceDir, 'playwright.json'), 'utf8')),
+      { titles: [waylandTitle], label: 'Native Wayland Hangul', repetitions: 3 }
+    )
+    const receipts = receiptText.trim().split('\n')
+    if (receipts.length !== 3) {
+      throw new Error('Expected three native Wayland engagement receipts')
+    }
+    for (const receipt of receipts) {
+      const problems = verifyImeEngagementReceipts(receipt, [waylandTitle])
+      if (problems.length) {
+        throw new Error(problems.join('\n'))
+      }
+    }
+    return testExitCode
+  }
   const engagementProblems = verifyImeEngagementReceipts(receiptText, EXPECTED_NATIVE_IME_TESTS)
   if (engagementProblems.length > 0) {
     for (const problem of engagementProblems) {
@@ -288,7 +384,7 @@ async function runInsideSession(evidenceDir) {
 
 async function runOuter() {
   if (process.platform !== 'linux') {
-    throw new Error('The native IBus Hangul E2E runner requires Linux/X11')
+    throw new Error('The native IBus Hangul E2E runner requires Linux')
   }
 
   const evidenceDir = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-ime-e2e-'))
@@ -302,24 +398,36 @@ async function runOuter() {
     'xvfb-run',
     [
       '--auto-servernum',
+      ...(nestedWayland ? ['--server-args=-screen 0 1280x800x24'] : []),
       'dbus-run-session',
       '--',
       process.execPath,
       scriptPath,
       insideSessionFlag,
-      evidenceDir
+      evidenceDir,
+      ...(nestedWayland ? [nestedWaylandFlag] : [])
     ],
     {
       cwd: projectDir,
       detached: true,
       env: {
         ...process.env,
+        ...(nestedWayland
+          ? {
+              WAYLAND_DISPLAY: 'wayland-orca-ime',
+              XDG_SESSION_TYPE: 'wayland',
+              XDG_CURRENT_DESKTOP: 'GNOME',
+              LIBGL_ALWAYS_SOFTWARE: '1',
+              NO_AT_BRIDGE: '1'
+            }
+          : {}),
         GTK_IM_MODULE: 'ibus',
         IBUS_ENABLE_SYNC_MODE: '1',
         LANG: process.env.LANG || 'C.UTF-8',
         QT_IM_MODULE: 'ibus',
-        XDG_CACHE_HOME: path.join(evidenceDir, 'cache'),
-        XDG_CONFIG_HOME: path.join(evidenceDir, 'config'),
+        // GNOME 42 drops XDG_CONFIG_HOME when spawning IBus; both must use its default path.
+        XDG_CACHE_HOME: nestedWayland ? undefined : path.join(evidenceDir, 'cache'),
+        XDG_CONFIG_HOME: nestedWayland ? undefined : path.join(evidenceDir, 'config'),
         XDG_RUNTIME_DIR: runtimeDir,
         XMODIFIERS: '@im=ibus'
       },
@@ -329,17 +437,20 @@ async function runOuter() {
   if (!sessionProcess.pid) {
     throw new Error('xvfb-run did not return a PID')
   }
-  console.error(`[terminal-ime] started isolated X11 session PID ${sessionProcess.pid}`)
+  console.error(`[terminal-ime] started isolated display session PID ${sessionProcess.pid}`)
   const exitCode = await waitForExit(sessionProcess)
   const remaining = await stopOwnedProcessGroup(sessionProcess.pid)
   if (remaining.length > 0) {
-    throw new Error(`Owned X11 session processes survived cleanup: ${remaining.join('; ')}`)
+    throw new Error(`Owned display session processes survived cleanup: ${remaining.join('; ')}`)
   }
   return exitCode
 }
 
 const insideSession = process.argv[2] === insideSessionFlag
 try {
+  if (nestedWayland && process.env.GITHUB_ACTIONS !== 'true') {
+    throw new Error('Nested Wayland native input validation runs only in GitHub Actions')
+  }
   if (insideSession && !process.argv[3]) {
     throw new Error(`${insideSessionFlag} requires an evidence directory argument`)
   }

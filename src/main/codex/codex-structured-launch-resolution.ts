@@ -12,7 +12,9 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
+import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
+import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -24,6 +26,11 @@ export type CodexStructuredLaunchResolverDeps = {
   /** Fresh shell/configured environment for this spawn; never written to the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
+  /** Test seam for the host capability; production uses the native process table. */
+  isWindowsProcessStartTimeAvailable?: () => boolean
+  /** The user's Agent Permissions setting as thread policy, re-read per acquisition.
+   *  States both postures outright — a resume inherits the last one for any field left absent. */
+  resolvePermissionPolicy?: () => CodexStructuredPermissionPolicy
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -46,6 +53,13 @@ export function createCodexStructuredLaunchResolver(
         `codex structured sessions run on the local host, not ${location.executionHostId}`
       )
     }
+    // Refuse before resolving launch data; a PID alone cannot prove Windows ownership.
+    if (
+      process.platform === 'win32' &&
+      !(deps.isWindowsProcessStartTimeAvailable ?? isWindowsProcessStartTimeAvailable)()
+    ) {
+      throw new Error('codex structured sessions require Windows process creation-time proof')
+    }
     if (accountHome.variable !== 'CODEX_HOME') {
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
@@ -56,18 +70,21 @@ export function createCodexStructuredLaunchResolver(
       pathEnv,
       ...(homePath ? { homePath } : {})
     })
-    const args = [...(record.launchArgs ?? []), 'app-server']
+    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
+    // concern, and the permission posture they used to smuggle in is derived per acquisition.
+    const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
     return {
       command,
-      args,
+      args: ['app-server'],
       cwd: await deps.resolveWorkspacePath(location.workspaceId),
       codexHome: accountHome.path,
       ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId,
+      ...(permissionPolicy ? { permissionPolicy } : {}),
       ...(resumeThreadId
         ? {
             resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(

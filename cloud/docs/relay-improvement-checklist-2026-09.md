@@ -4,18 +4,18 @@ Companion to [`relay-improvement-roadmap-2026-09.md`](./relay-improvement-roadma
 match). This file answers three questions per item: what are the concrete steps, what can run in parallel,
 and will a user notice.
 
-## Status as of 2026-09-04 22:30Z
+## Status as of 2026-09-06 16:30Z
 
 Three buckets. "Merged" means the code is on `main` and nothing in production has changed yet. "Deployed" means users are already getting it. "Awaiting owner" means I will not touch production without a go.
 
 **Deployed to production**
+- Roll 2 relay image `4916ed67` (stablyai/orca #18959 + #18722 + #18720 flag unset): director since 2026-09-06 01:02Z, all 19 general cells by 16:29Z. Control lease 6 h ± 30 min, accept abandonment, per-cell inventory locks, pool `statement_timeout`. Record: findings doc, "Roll 2" section.
 - Auth instance cap 20 + dead-family audit fix (orca-cloud #474) as revision `orca-cloud-auth-00031-tox`.
 - Dynamic NAT ports in both regions (stablyai/orca #18693). Zero drops and zero proxy dial errors since.
 - Nine alert policies with log metrics: 4 auth (#475), 3 relay Cloud SQL/NAT (#18693), 1 cell process-exit (#18717), all on the relay Slack channel.
 
-**Merged, ships with the next relay cell image roll (Roll 1 carries `519f4914`; Roll 2 needs a fresh image build)**
-- Per-cell inventory locks, delta counters, pool `statement_timeout` (#18722). Roll 2.
-- Cells dial Cloud SQL with `--private-ip` when configured (#18720). Inert until 2.1 applies.
+**Merged, not yet live**
+- Cells dial Cloud SQL with `--private-ip` when configured (#18720). Deployed in Roll 2 with the flag unset; inert until 2.1 applies.
 - Phone shows a clear "sign in on the desktop again" state when the desktop is signed out (#18698).
 
 **Merged, ships with the next auth deploy**
@@ -158,9 +158,10 @@ independent. (2.2 deferred; if revived, do it after 2.1 so the new instance is p
 - [ ] Production: announce a window; same steps; verify `orca_relay_runtime_metrics` controls recover to pre-cutover count.
 - [ ] Update `production-cloud-sql-app-consumers` budget test and both alert policies' `database_id`.
 
-### 2.3 Relay pool statement timeout (merged stablyai/orca #18722; ships Roll 2)
+### 2.3 Relay pool statement timeout (deployed in Roll 2, 2026-09-06)
 - [x] `statement_timeout` on the relay `pg.Pool` (5 s, env-configurable; schema pool untimed; `57014` retryable), below the control-renewal deadline; DDL on an untimed connection (same pattern as auth #476).
 - [x] Postgres test on 55440: a held lock fails the query fast and the bounded retry takes over.
+- [x] Deployed fleet-wide in Roll 2 (`4916ed67`), 2026-09-06.
 
 ### 3.1 Refresh rotation grace window (orca-cloud #478 merged 2026-09-04; deploy pending owner go)
 - [ ] Fix the deploy-script env strip for `ORCA_CLOUD_REFRESH_TOKEN_TTL_DAYS` (pre-existing; found by #478).
@@ -169,14 +170,16 @@ independent. (2.2 deferred; if revived, do it after 2.1 so the new instance is p
 - [x] Tests: replay inside window returns same successor; outside revokes; concurrent double-present yields one successor.
 - [x] Deploy via `deploy-auth-production` (candidate → smoke → promote). Deployed 2026-09-04 23:15Z as `orca-cloud-auth-00035-gos`, cap 20 kept, 0 5xx; `successor_material` column present; sealed successors being written. (candidate → smoke → promote).
 
-### 3.2 / 4.3 Desktop (merged stablyai/orca #18719; ships next desktop release)
+### 3.2 / 4.3 Desktop (merged stablyai/orca #18719; ships next desktop release; relay side of 4.3 deployed in Roll 2)
 - [x] 3.2: on refresh timeout, re-read stored session before retrying; do not re-send a token already rotated locally.
 - [x] 4.3: ±10 % jitter on control lease renewal; unit test on the distribution; wire-compatible (server accepts early renewals already).
+- [x] 4.3 relay side: control lease 55 min → 6 h ± 30 min (#18959), deployed in Roll 2, 2026-09-06.
 
-### 4.1 Lock contention (partial: stablyai/orca #18722 merged; ships Roll 2)
+### 4.1 Lock contention (partial: stablyai/orca #18722 deployed in Roll 2, 2026-09-06)
 - [x] Replace the global `FOR UPDATE` over `relay_cells` with per-cell row locks; counters delta-only. Remaining: `assignOnce` placement lock is still global (optimistic snapshot follow-up). with per-cell row locks or `pg_advisory_xact_lock(cell)`; counters delta-only.
 - [x] Postgres tests on 55440 with concurrent probes (in #18722). Staging load run still owed; `postgres_retries` per hour drops in staging load run.
-- [ ] Ships in Roll 2; then 4.4 recalibrates the retries bar from a week of data.
+- [x] Shipped in Roll 2 (2026-09-06). Director retries first 6 h on the new image: 13 vs 85 on the predecessor's prior 6 h.
+- [ ] 4.4: recalibrate the retries bar from a week of data (after 2026-09-13).
 
 ### 4.2 Region preference
 - [ ] Director: honor requested region when the preferred region has headroom, else sticky. Behind the existing flag.

@@ -25,11 +25,28 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     worktreeId: string,
     existing: RuntimeMobileSessionTabsSnapshot
   ): void {
-    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
+    const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
+    // An attached renderer owns its browser rows; the client-page registry cannot retire them.
+    const rendererBrowserTabs =
+      this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
+        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
+        : []
+    // Keyed by id so no row can publish twice whatever the two sources overlap on; a freshly
+    // built row wins over the retained one it replaces.
+    const liveById = new Map(
+      [...rendererBrowserTabs, ...publishedBrowserTabs].map((tab) => [tab.id, tab])
+    )
+    // Emit in the order the snapshot already had, because the equality check below compares by
+    // index: rebuilding renderer-first would read a pure reordering as a change and republish.
+    const retainedInOrder = existingBrowserTabs.flatMap((tab) => {
+      const live = liveById.get(tab.id)
+      return live && liveById.delete(tab.id) ? [live] : []
+    })
+    const liveBrowserTabs = [...retainedInOrder, ...liveById.values()]
+    const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
     if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
@@ -53,7 +70,6 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
     this.storeMobileSessionSnapshot(worktreeId, {
       ...existing,
-      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
       snapshotVersion: existing.snapshotVersion + 1,
       ...(activeStillPresent
         ? {}

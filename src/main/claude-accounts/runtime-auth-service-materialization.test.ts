@@ -53,8 +53,9 @@ describe('ClaudeRuntimeAuthService', () => {
     cleanupRuntimeAuthTestState()
   })
 
-  it('rematerializes unchanged managed credentials when the runtime file is missing', async () => {
+  it('creates and recreates the runtime directory when materializing managed credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    rmSync(expectedRuntimeConfigDir(), { recursive: true, force: true })
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
@@ -73,7 +74,7 @@ describe('ClaudeRuntimeAuthService', () => {
 
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
 
-    rmSync(runtimeCredentialsPath, { force: true })
+    rmSync(expectedRuntimeConfigDir(), { recursive: true, force: true })
     await service.prepareForClaudeLaunch()
 
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)

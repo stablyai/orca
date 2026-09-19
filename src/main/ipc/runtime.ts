@@ -10,10 +10,7 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
-import {
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
@@ -68,6 +65,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher's RpcSuccess/RpcFailure union is the same envelope RuntimeRpcResponse describes; only the `result` generic differs, and this call site declares it as unknown.
       return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
@@ -79,10 +77,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           clientId: 'desktop-renderer',
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
-          clientCapabilities: [
-            STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-            CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-          ]
+          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
         }
       )) as RuntimeRpcResponse<unknown>
     }
@@ -127,10 +122,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
             clientId: 'desktop-renderer',
             clientKind: 'runtime',
             connectionId,
-            clientCapabilities: [
-              STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-              CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-            ]
+            clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
           }
         )
         .finally(stop)

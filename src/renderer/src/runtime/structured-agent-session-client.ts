@@ -4,14 +4,58 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
+import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import {
+  callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability,
+  type RuntimeClientTarget
+} from './runtime-rpc-client'
+import {
+  ensureLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilitiesOrUnknown
+} from './local-runtime-capabilities'
+/** Read the prompt-cancel capability through the runtime's existing status cache.
+ *  A failed/unknown probe is treated as legacy so strict prompt fields are never
+ *  sent before the host has proved it understands them. */
+export async function supportsStructuredAgentSessionPromptCancel(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  try {
+    if (target.kind === 'local') {
+      const known = readLocalRuntimeCapabilitiesOrUnknown()
+      const capabilities = known ?? (await ensureLocalRuntimeCapabilities())
+      return capabilities?.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY) === true
+    }
+    return await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
+    )
+  } catch {
+    return false
+  }
+}
 
-export function callStructuredAgentSession<TResult>(
+export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown
 ): Promise<TResult> {
-  return callRuntimeRpc<TResult>(target, method, params)
+  if (
+    method === 'agentSession.rewind' &&
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+    ))
+  ) {
+    throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
+  }
+  return method === 'agentSession.conversationCommand'
+    ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
+    : callRuntimeRpc<TResult>(target, method, params)
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(

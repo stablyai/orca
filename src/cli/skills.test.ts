@@ -213,7 +213,7 @@ describe('orca skills CLI', () => {
     await main(['--help'], '/tmp/repo')
 
     expect(String(logSpy.mock.calls[0]?.[0])).toContain(
-      'Usage: orca skills get <topic> [--full] [--json]'
+      'Usage: orca skills get <topic> [--full | --reference <name>] [--json]'
     )
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
       'Commands:\n  installed          List installed skill selectors'
@@ -303,7 +303,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'install', '--skill'], '/tmp/repo')
 
     expect(process.exitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith('Missing required --skill')
+    expect(errorSpy).toHaveBeenCalledWith('--skill requires a value; it was passed with none.')
     expect(spawnMock).not.toHaveBeenCalled()
   })
 

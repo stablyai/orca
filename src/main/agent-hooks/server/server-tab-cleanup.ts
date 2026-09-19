@@ -1,15 +1,25 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import { paneCacheKeyMatchesTab } from './server-status-identity'
 import { AgentHookServerCleanup } from './server-cleanup'
+import type { EnrichedAgentHookEventPayload } from './server-types'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   /** Drop every status/cache claim attributable to a closed tab prefix. */
   dropStatusEntriesByTabPrefix(tabId: string): void {
     this.markTabClosedForAgentStatus(tabId)
     const paneKeysToClear = new Set<string>()
+    const statusPaneKeysToClear = new Set<string>()
+    const statusRowsToClear: EnrichedAgentHookEventPayload[] = []
     for (const key of this.state.lastStatusByPaneKey.keys()) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
         paneKeysToClear.add(key)
+        statusPaneKeysToClear.add(key)
+        const row = this.state.lastStatusByPaneKey.get(key) as
+          | EnrichedAgentHookEventPayload
+          | undefined
+        if (row) {
+          statusRowsToClear.push(row)
+        }
       }
     }
     for (const key of this.state.lastPromptByPaneKey.keys()) {
@@ -72,21 +82,32 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.currentAuthorityObservations.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
+      this.evidenceObservedAtByPaneKey.delete(paneKey)
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
+    }
+    for (const row of statusRowsToClear) {
+      this.commitStatusRowMutation(row, undefined)
     }
     if (statusChanged || authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
+    // Why: tab teardown must retire status subscribers' pane-scoped memo state too.
+    for (const paneKey of statusPaneKeysToClear) {
+      this.emitPaneStatusCleared({ paneKey })
+    }
   }
 
-  clearPaneState(paneKey: string): void {
+  clearPaneState(paneKey: string, options?: { emitStatusRowMutation?: boolean }): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
     const paneKeys = new Set([paneKey, resolvedPaneKey])
     // Why: only persist when a status entry was actually evicted; dropping prompt/tool caches doesn't change the file.
-    const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
+    const previousStatus = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const hadStatus = previousStatus !== undefined
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
@@ -114,6 +135,9 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
     if (clearedAlias) {
       this.notifyPaneKeyAliasPersistenceListener()
+    }
+    if (options?.emitStatusRowMutation !== false) {
+      this.commitStatusRowMutation(previousStatus, undefined)
     }
     if (hadStatus || authorityChanged) {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)

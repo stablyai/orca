@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
-import { WindowsShellPathOwnership, windowsPathSegmentKey } from './windows-shell-path-ownership'
+import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 
 // Why: GUI-launched Electron can miss PATH entries added by shell profiles.
 // Tools installed into ~/.opencode/bin, ~/.cargo/bin, pyenv/volta/fnm
@@ -374,7 +374,7 @@ export function mergePathSegments(segments: string[]): string[] {
   const pathDelimiter = process.platform === 'win32' ? pathWin32.delimiter : delimiter
   const currentSegments = current.split(pathDelimiter).filter(Boolean)
   const pathKey =
-    process.platform === 'win32' ? windowsPathSegmentKey : (segment: string): string => segment
+    process.platform === 'win32' ? createWindowsPathKey() : (segment: string): string => segment
   const shellSegments = uniquePathSegments(segments, pathKey)
   const shellSegmentSet = new Set(shellSegments.map(pathKey))
   const existing = new Set(currentSegments.map(pathKey))

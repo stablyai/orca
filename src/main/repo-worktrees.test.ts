@@ -9,7 +9,8 @@ const { listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } = vi
 vi.mock('./git/worktree', () => ({
   listWorktreeGraph: listWorktreeGraphMock,
   listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesStrictMock
+  listWorktreesStrict: listWorktreesStrictMock,
+  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesStrictMock
 }))
 
 import {
@@ -17,7 +18,8 @@ import {
   isRepoRoot,
   listLocalRepoWorktreesStrict,
   listRepoWorktreeGraph,
-  listRepoWorktrees
+  listRepoWorktrees,
+  listRepoWorktreesForDetectedScan
 } from './repo-worktrees'
 import { registerSshGitProvider, unregisterSshGitProvider } from './providers/ssh-git-dispatch'
 import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
@@ -269,4 +271,38 @@ describe('repo-worktrees', () => {
 
     expect(isRepoRoot(repos, String.raw`c:\repo`)).toBe(true)
   })
+})
+
+it('keeps an upgraded linked folder locator in every local listing, including restart hydration', async () => {
+  const repo = {
+    id: 'folder',
+    path: 'C:\\projects\\draft',
+    displayName: 'draft',
+    badgeColor: 'blue',
+    addedAt: 0,
+    kind: 'git' as const,
+    folderUpgradeGitRootPath: 'C:/projects/draft'
+  }
+  const raw = [
+    { path: 'C:/projects/main', head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+    {
+      path: 'C:/projects/draft',
+      head: 'def',
+      branch: 'draft',
+      isBare: false,
+      isMainWorktree: false
+    }
+  ]
+  listWorktreesMock.mockResolvedValue(raw)
+  listWorktreeGraphMock.mockResolvedValue(raw)
+  listWorktreesStrictMock.mockResolvedValue(raw)
+  for (const list of [
+    listRepoWorktrees,
+    listRepoWorktreesForDetectedScan,
+    listRepoWorktreeGraph,
+    listLocalRepoWorktreesStrict
+  ]) {
+    expect(await list(repo)).toEqual([raw[0], { ...raw[1], path: repo.path }])
+  }
+  expect(raw[1].path).toBe('C:/projects/draft')
 })

@@ -14,6 +14,7 @@ import { getUnavailableQuickActionMessage } from './use-worktree-jump-palette-qu
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
 import { translate } from '@/i18n/i18n'
 import type { PaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
@@ -56,7 +57,8 @@ export function useWorktreeJumpPaletteSelectionActions({
 }: WorktreeJumpPaletteSelectionActionsInput) {
   const handleSelectWorktree = useCallback(
     (worktree: Worktree) => {
-      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, worktree.hostId)
+      const executionHostId = getPaletteWorktreeExecutionHostId(worktree)
+      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, executionHostId)
       if (!current) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
@@ -65,7 +67,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       }
       const activation = activateAndRevealWorktree(
         worktree.id,
-        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+        executionHostId ? { executionHostId } : {}
       )
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true

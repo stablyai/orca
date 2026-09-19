@@ -1,5 +1,15 @@
-import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+
+import {
+  readJsonlCursor,
+  readTranscriptDirectory,
+  record,
+  type JsonlCursor,
+  type JsonRecord
+} from './codex-rollout-jsonl-cursor'
+
+import { readApprovalsReviewer } from './codex-subagent-reviewer'
+import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
 import {
   finishCodexSubagent,
@@ -8,18 +18,9 @@ import {
   type CodexSubagentRoster
 } from './codex-subagent-roster'
 
-const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
-const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
-const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
-
-type JsonlCursor = {
-  filePath?: string
-  offset: number
-  carry: string
-}
 
 type TrackedTranscriptSubagent = JsonlCursor & {
   description?: string
@@ -34,86 +35,12 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
   subagents: Map<string, TrackedTranscriptSubagent>
-}
-
-type JsonRecord = Record<string, unknown>
-
-function record(value: unknown): JsonRecord | undefined {
-  return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
-}
-
-/** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines. */
-function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
-  if (!cursor.filePath) {
-    return undefined
-  }
-  let stats: Stats
-  try {
-    stats = statSync(cursor.filePath)
-  } catch {
-    return undefined
-  }
-  if (!stats.isFile()) {
-    return undefined
-  }
-  if (stats.size < cursor.offset) {
-    cursor.offset = 0
-    cursor.carry = ''
-  }
-  if (stats.size === cursor.offset) {
-    return []
-  }
-  const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
-  const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
-  const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
-  let fd: number | undefined
-  try {
-    fd = openSync(cursor.filePath, 'r')
-    bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
-  } catch {
-    return undefined
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
-  }
-  const skippedPrefix = start !== cursor.offset
-  const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
-  const lines = content.split('\n')
-  cursor.offset = start + bytesRead
-  cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
-    lines.shift()
-  }
-  const records: JsonRecord[] = []
-  for (const line of lines) {
-    if (Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES) {
-      continue
-    }
-    try {
-      const parsed = record(JSON.parse(line) as unknown)
-      if (parsed) {
-        records.push(parsed)
-      }
-    } catch {
-      // A malformed rollout line must not block later lifecycle events.
-    }
-  }
-  return records
-}
-
-function readTranscriptDirectory(directory: string): string[] {
-  let entries: string[]
-  try {
-    entries = readdirSync(directory)
-  } catch {
-    return []
-  }
-  if (entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES) {
-    entries = entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
-  }
-  return entries
+  /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
+  reviewerCursorsByPath: Map<string, JsonlCursor>
+  /** Reviewer ownership discovered from child rollouts, keyed by their bounded cursor paths. */
+  reviewersByPath: Map<string, CodexApprovalsReviewer>
+  /** Who resolves this turn's approvals in the parent rollout. */
+  approvalsReviewer?: CodexApprovalsReviewer
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
@@ -222,6 +149,13 @@ function readChildModel(records: JsonRecord[]): string | undefined {
   return model
 }
 
+function normalizedTranscriptPath(transcriptPath: string | undefined): string | undefined {
+  const normalizedPath = transcriptPath?.trim()
+  return normalizedPath && isAbsolute(normalizedPath) && extname(normalizedPath) === '.jsonl'
+    ? normalizedPath
+    : undefined
+}
+
 function childIsComplete(records: JsonRecord[]): boolean {
   let complete = false
   for (const recordValue of records) {
@@ -241,7 +175,9 @@ function childIsComplete(records: JsonRecord[]): boolean {
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
-    subagents: new Map()
+    subagents: new Map(),
+    reviewerCursorsByPath: new Map(),
+    reviewersByPath: new Map()
   }
 }
 
@@ -256,8 +192,8 @@ export function reconcileCodexSubagentTranscript(
   roster: CodexSubagentRoster,
   transcriptPath: string | undefined
 ): void {
-  const normalizedPath = transcriptPath?.trim()
-  if (!normalizedPath || !isAbsolute(normalizedPath) || extname(normalizedPath) !== '.jsonl') {
+  const normalizedPath = normalizedTranscriptPath(transcriptPath)
+  if (!normalizedPath) {
     return
   }
   if (state.parent.filePath !== normalizedPath) {
@@ -266,8 +202,18 @@ export function reconcileCodexSubagentTranscript(
     }
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
     state.subagents.clear()
+    state.reviewerCursorsByPath.clear()
+    state.reviewersByPath.clear()
+    // Why: a different rollout is a different session, so its predecessor's reviewer is void.
+    state.approvalsReviewer = undefined
   }
-  for (const recordValue of readJsonlCursor(state.parent) ?? []) {
+  const parentRecords = readJsonlCursor(state.parent)
+  // A stale reviewer must never turn an unreadable rollout into a hidden prompt.
+  state.approvalsReviewer =
+    parentRecords === undefined
+      ? undefined
+      : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
+  for (const recordValue of parentRecords ?? []) {
     const activity = readActivity(recordValue)
     if (!activity) {
       continue

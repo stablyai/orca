@@ -16,7 +16,6 @@ import { browserManager } from '../browser/browser-manager'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../ipc/browser-tab-registration-wait'
-import type { BrowserSessionUserAgentMode } from '../../shared/browser-workspace-types'
 import { detectInstalledBrowsers } from '../browser/browser-cookie-import'
 
 export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrowserCommandsWithBrowserTabCreate {
@@ -158,12 +157,9 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
   async browserProfileCreate(params: {
     label: string
     scope: 'isolated' | 'imported'
-    userAgentMode?: BrowserSessionUserAgentMode
   }): Promise<BrowserProfileCreateResult> {
     return {
-      profile: await browserSessionRegistry.createProfile(params.scope, params.label, {
-        userAgentMode: params.userAgentMode
-      })
+      profile: await browserSessionRegistry.createProfile(params.scope, params.label)
     }
   }
 

@@ -28,22 +28,29 @@ export function selectHostBalancedPage<TRow>(
     }
   })
   const buckets = [...indicesByHost.values()]
-  const cursors = buckets.map(() => 0)
   const chosen: number[] = []
-  while (chosen.length < limit) {
-    let advanced = false
-    for (let bucket = 0; bucket < buckets.length && chosen.length < limit; bucket += 1) {
-      const cursor = cursors[bucket] ?? 0
-      const index = buckets[bucket]?.[cursor]
-      if (index !== undefined) {
-        chosen.push(index)
-        cursors[bucket] = cursor + 1
-        advanced = true
+  // Compacting in place keeps `buckets[0..activeCount)` as exactly the buckets longer than
+  // `round`, in their original order, so `bucket[round]` is always defined and the round robin
+  // still visits hosts in first-appearance order. Retiring them keeps a long host bucket from
+  // re-scanning every exhausted one. Writes land at or before the slot just read, never ahead.
+  let activeCount = buckets.length
+  let round = 0
+  while (chosen.length < limit && activeCount > 0) {
+    let nextActiveCount = 0
+    for (
+      let bucketIndex = 0;
+      bucketIndex < activeCount && chosen.length < limit;
+      bucketIndex += 1
+    ) {
+      const bucket = buckets[bucketIndex]
+      chosen.push(bucket[round])
+      if (bucket.length > round + 1) {
+        buckets[nextActiveCount] = bucket
+        nextActiveCount += 1
       }
     }
-    if (!advanced) {
-      break
-    }
+    activeCount = nextActiveCount
+    round += 1
   }
   return chosen.sort((left, right) => left - right).map((index) => rows[index] as TRow)
 }

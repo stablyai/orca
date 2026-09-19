@@ -17,10 +17,11 @@ export function TerminalPaneNativeChatPortal({
     chatPaneOwnsTabWideLaunchDraft,
     chatPanePtyId,
     chatPaneResolvedAgent,
-    chatPaneDispatchStatus,
     contextMenu,
     effectiveChatViewMode,
     expandedPaneId,
+    activePaneIsChatLeaf,
+    isActive,
     isRendererVisible,
     managedPanes,
     readNativeChatTerminalScreen,
@@ -75,14 +76,15 @@ export function TerminalPaneNativeChatPortal({
           sessionId={structuredSessionId}
           agent={structuredChatAgent}
           isVisible={isRendererVisible}
+          isFocusedGroup={isActive && activePaneIsChatLeaf}
           target={structuredChatTarget}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={chatPaneDispatchStatus}
         />
       ) : (
         <NativeChatView
           terminalTabId={tabId}
           isVisible={isRendererVisible}
+          isFocusedGroup={isActive && activePaneIsChatLeaf}
           paneKey={makePaneKey(tabId, chatPane.leafId)}
           targetPtyId={chatPanePtyId}
           launchAgent={chatPaneLaunchAgent}
@@ -91,7 +93,6 @@ export function TerminalPaneNativeChatPortal({
           onSwitchToTerminal={switchNativeChatToTerminal}
           readTerminalScreen={readNativeChatTerminalScreen}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={chatPaneDispatchStatus}
         />
       )}
     </div>,

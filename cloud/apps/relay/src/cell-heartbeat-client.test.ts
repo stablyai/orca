@@ -92,7 +92,7 @@ describe('cell heartbeat client', () => {
     client.stop()
 
     expect(JSON.parse(String(requests[1]!.body))).toMatchObject({
-      regionalRehomeProtocol: 1,
+      regionalRehomeProtocol: 3,
       safety: {
         observedAt: 120,
         sqlFailures: 0,
@@ -149,28 +149,34 @@ describe('cell heartbeat client', () => {
 
   it('does not start outside an explicitly configured cell role', () => {
     expect(
-      startCellHeartbeat({ ...CONFIG, role: 'director' }, {
-        ready: async () => true,
-        observedRequests: () => 0,
-        connectionCounts: () => ({
-          totalConnections: 0,
-          inFlightConnections: 0,
-          reservedConnectionUnits: 0,
-          enforcedConnectionUnits: 0
-        })
-      })
+      startCellHeartbeat(
+        { ...CONFIG, role: 'director' },
+        {
+          ready: async () => true,
+          observedRequests: () => 0,
+          connectionCounts: () => ({
+            totalConnections: 0,
+            inFlightConnections: 0,
+            reservedConnectionUnits: 0,
+            enforcedConnectionUnits: 0
+          })
+        }
+      )
     ).toBeNull()
     expect(
-      startCellHeartbeat({ ...CONFIG, directorUrl: undefined }, {
-        ready: async () => true,
-        observedRequests: () => 0,
-        connectionCounts: () => ({
-          totalConnections: 0,
-          inFlightConnections: 0,
-          reservedConnectionUnits: 0,
-          enforcedConnectionUnits: 0
-        })
-      })
+      startCellHeartbeat(
+        { ...CONFIG, directorUrl: undefined },
+        {
+          ready: async () => true,
+          observedRequests: () => 0,
+          connectionCounts: () => ({
+            totalConnections: 0,
+            inFlightConnections: 0,
+            reservedConnectionUnits: 0,
+            enforcedConnectionUnits: 0
+          })
+        }
+      )
     ).toBeNull()
   })
 })

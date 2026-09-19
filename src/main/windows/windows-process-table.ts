@@ -33,8 +33,13 @@ import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
  *
  * Dropping Memory removed the second per-process handle: it took an
  * OpenProcess(...|VM_READ) it never read through. CommandLine's own read is no
- * longer a PEB walk either -- the patched addon asks the kernel, so identity is
- * now the only flag set that opens nothing at all.
+ * longer a PEB walk either -- the patched addon asks the kernel.
+ *
+ * Both Toolhelp32 rows predate `CreationTime`, which both flag sets now also
+ * ask for and which is unmeasured here: it costs one
+ * OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) plus GetProcessTimes per
+ * process, so identity no longer opens nothing at all -- but that pair is far
+ * cheaper than either handle the rows above measure.
  *
  * All Toolhelp32 rows assume the optional `windows-process-tree.node` addon.
  * The desktop bundles it; no released relay carries it, so on an SSH host the
@@ -70,6 +75,13 @@ type WindowsProcessTreeModule = {
     CommandLine: number
     CreationTime?: number
   }
+  /**
+   * Flag bits the COMPILED addon reports, straight from `addon.cc`. Absent on a
+   * build that predates the patch — which is not the same question as the enum
+   * above, because pnpm patches the source tree and leaves the tarball's
+   * prebuilt `.node` in place.
+   */
+  supportedProcessDataFlags?: number
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -104,14 +116,18 @@ type WindowsProcessTreeAddon = {
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
   ) => void
+  supportedProcessDataFlags?: number
 }
 
 /**
  * Mirrors the package's enum; the addon takes the raw bit field. `Memory` (1)
  * is listed for completeness and is deliberately never set — see the projections
  * below.
+ *
+ * Naming `CreationTime` here only decides what we ASK for; whether the binary
+ * answers is `supportedProcessDataFlags`, which the addon reports itself.
  */
-const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
+const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 } as const
 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
 const RELAY_ADDON_FILENAME = './windows-process-tree.node'
@@ -160,6 +176,7 @@ let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
     ProcessDataFlag: PROCESS_DATA_FLAG,
+    supportedProcessDataFlags: addon.supportedProcessDataFlags,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -492,13 +509,23 @@ export function isWindowsProcessTableAvailable(): boolean {
 
 /**
  * PID-reuse-safe ownership needs the native creation-time field, not merely a
- * process list. Older addon builds expose the table without that field; keep
- * structured ownership unavailable on those hosts instead of fabricating proof
- * from a PID.
+ * process list.
+ *
+ * Why the binary's own answer and not the enum: pnpm patches the package's
+ * source tree but leaves the tarball's prebuilt `.node` at the same
+ * `build/Release/` path, so a host can hold a patched `lib/index.js` — enum and
+ * all — over a binary that ignores flag 4. CI produced exactly that: the enum
+ * said available, and every row came back without `creationTimeMs`. Answering
+ * true there is worse than answering false: the descendant snapshot then
+ * returns null forever and the exit proof latches `unverifiable`, while
+ * structured chat believes it has a reaper.
  */
 export function isWindowsProcessStartTimeAvailable(): boolean {
   const native = moduleLoader()
-  return native !== null && typeof native.ProcessDataFlag.CreationTime === 'number'
+  return (
+    native !== null &&
+    ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0
+  )
 }
 
 function resetSnapshotReaders(): void {

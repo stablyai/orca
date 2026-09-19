@@ -4,7 +4,9 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
+  agentPromptSubmitJoinsPasteFrame,
   getAgentPromptSubmitDelayMs,
+  getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
   iterateAgentPromptPasteChunks,
   sanitizeAgentPromptText
@@ -14,6 +16,13 @@ const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
 
 describe('agent prompt injection bytes', () => {
+  it('joins submit only for OMP', () => {
+    expect(agentPromptSubmitJoinsPasteFrame('omp')).toBe(true)
+    expect(agentPromptSubmitJoinsPasteFrame('claude')).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame('codex')).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame(undefined)).toBe(false)
+  })
+
   it('always bracket-pastes prompts so agent TUIs treat newlines as content', () => {
     expect(buildAgentPromptPasteBytes('line one\nline two')).toBe(
       `${BEGIN}line one\nline two${END}`
@@ -79,6 +88,12 @@ describe('agent prompt injection bytes', () => {
     expect(getTerminalPasteIngestMs('win32', 320_000)).toBeGreaterThan(
       getTerminalPasteIngestMs('darwin', 320_000)
     )
+  })
+
+  it('inverts the host ingest budget without crossing it', () => {
+    const bytes = getMaxTerminalPasteBytesForIngestMs('win32', 20_000)
+    expect(getTerminalPasteIngestMs('win32', bytes)).toBe(20_000)
+    expect(getTerminalPasteIngestMs('win32', bytes + 1)).toBe(20_001)
   })
 
   it('sanitizes embedded escape bytes before framing', () => {

@@ -1,4 +1,7 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import {
+  openSidebarProjectDialog,
+  openSidebarWorkspaceComposer
+} from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -231,7 +234,7 @@ async function addProjectFromSidebar(
 }
 
 async function createWorkspace(page: Page, workspaceName: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   const nameInput = dialog.getByPlaceholder(/Type a name/i)

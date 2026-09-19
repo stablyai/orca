@@ -33,7 +33,7 @@ const ROOT_ATTRIBUTE = 'data-project-combobox-root'
  * Type-ahead project picker: the field *is* the search, so there's no trigger
  * wrapping a second search box. Exactly one row is armed at any time and Enter
  * takes it; hovering arms, so the pointer and the keyboard drive one cursor.
- * "Add a new project" is pinned to the popover edge so it stays reachable
+ * "Add project" is pinned to the popover edge so it stays reachable
  * without scrolling, in every state including no-matches and no-projects.
  */
 export default function ProjectCombobox({
@@ -347,7 +347,7 @@ export default function ProjectCombobox({
                 <span className="truncate">
                   {translate(
                     'auto.components.new.workspace.ProjectCombobox.addProject',
-                    'Add a new project'
+                    'Add project'
                   )}
                 </span>
               </div>

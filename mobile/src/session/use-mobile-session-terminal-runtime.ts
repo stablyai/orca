@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import type { Keyboard, TextInput } from 'react-native'
+import { Platform, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -142,6 +142,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
+    reopenFocusedInputWhenKeyboardHidden: Platform.OS === 'android',
     timerRef: liveInputFocusTimerRef
   })
   useFocusEffect(

@@ -91,6 +91,7 @@ function flakyClose(journal: AgentSessionJournal, failures: number): AgentSessio
   return new Proxy(journal, {
     get(target, property, receiver) {
       if (property !== 'close') {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
       return async () => {
@@ -131,7 +132,8 @@ function attachContext(
     tasks: { trackAttach: <T>(task: Promise<T>) => task },
     reconcileLeases: async () => null,
     serialize: <T>(_sessionId: string, task: () => Promise<T>) => task(),
-    now: () => 1
+    now: () => 1,
+    forgetStatus: () => undefined
   } as unknown as StructuredAgentSessionAttachContext
 }
 

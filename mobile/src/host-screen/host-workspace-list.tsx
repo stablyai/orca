@@ -73,6 +73,16 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
+      {/* An action that did not happen. Above the list and dismissible, because the list, the
+          header and the confirm it re-opens all have to stay on screen. */}
+      {state.actionError !== '' && (
+        <HostRouteNoticeBanner
+          message={state.actionError}
+          tone="failure"
+          onDismiss={() => state.setActionError('')}
+        />
+      )}
+
       {/* Search bar */}
       {state.showSearch && (
         <View style={styles.searchBar}>

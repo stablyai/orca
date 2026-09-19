@@ -7,7 +7,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
@@ -37,6 +37,7 @@ export const ptySessionControlApi = {
     sessionId?: string
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
@@ -150,7 +151,8 @@ export const ptySessionControlApi = {
   },
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-  listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
+  listSessions: (scope?: PtySessionListScope): Promise<PtyListedSession[]> =>
+    ipcRenderer.invoke('pty:listSessions', scope),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>

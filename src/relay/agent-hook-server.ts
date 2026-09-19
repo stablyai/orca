@@ -12,6 +12,7 @@ import {
   createHookListenerState,
   type HookListenerState
 } from '../shared/agent-hook-listener/listener-state'
+import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import {
   getEndpointFileName,
   writeEndpointFile
@@ -41,10 +42,7 @@ import {
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
-import {
-  evictCachedPanesOverCap,
-  selectReplayableCachedPanes
-} from './agent-hook-cached-pane-status'
+import { MAX_CACHED_PANES, selectReplayableCachedPanes } from './agent-hook-cached-pane-status'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -209,8 +207,9 @@ export class RelayAgentHookServer {
   /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
    *  issued before the request handler returns, so the response trails all replayed notifications. */
   replayCachedPayloadsForPanes(): number {
+    const cachedSnapshot = new Map(this.state.lastStatusByPaneKey)
     const replayable = selectReplayableCachedPanes({
-      cachedByPaneKey: this.state.lastStatusByPaneKey,
+      cachedByPaneKey: cachedSnapshot,
       metaByPaneKey: this.lastEnvelopeMetaByPaneKey,
       isPaneSurfaceRetired: this.isPaneSurfaceRetired,
       dropPane: (paneKey) => this.clearPaneState(paneKey)
@@ -325,13 +324,15 @@ export class RelayAgentHookServer {
     // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when
     // it reconnects. Stripping it would let a cold relay replay a completion as an ordinary `done`
     // row and resurrect a pane that the client had already retired.
-    const cachedEvent = event
-    // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
-    this.state.lastStatusByPaneKey.delete(event.paneKey)
-    this.state.lastStatusByPaneKey.set(event.paneKey, cachedEvent)
+    if (
+      !cacheRelayLegacyAgentStatus(this.state, event, MAX_CACHED_PANES, (paneKey) =>
+        this.clearPaneState(paneKey)
+      )
+    ) {
+      return
+    }
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
-    evictCachedPanesOverCap(this.state.lastStatusByPaneKey, (key) => this.clearPaneState(key))
     this.forward(buildRelayHookEnvelope(event, source, env, version, options))
   }
 

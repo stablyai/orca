@@ -6,8 +6,13 @@ it('keeps the paired-web client public export surface exact', () => {
   expectTypeOf<WebClient.SubscribeOptions>().toEqualTypeOf<WebClient.SubscribeOptions>()
   expectTypeOf<WebClient.WebRuntimeSubscriptionHandle>().toEqualTypeOf<WebClient.WebRuntimeSubscriptionHandle>()
   expectTypeOf<ConstructorParameters<typeof WebClient.WebRuntimeClient>>().toEqualTypeOf<
-    [pairing: WebPairingOffer]
+    [
+      pairing: WebPairingOffer,
+      options?: ConstructorParameters<typeof WebClient.WebRuntimeClient>[1]
+    ]
   >()
-  expectTypeOf<keyof WebClient.WebRuntimeClient>().toEqualTypeOf<'call' | 'close' | 'subscribe'>()
+  expectTypeOf<keyof WebClient.WebRuntimeClient>().toEqualTypeOf<
+    'call' | 'close' | 'subscribe' | 'statusOwner'
+  >()
   expect(Object.keys(WebClient)).toEqual(['WebRuntimeClient'])
 })

@@ -49,6 +49,22 @@ describe('resolveNativeFileDropPath', () => {
     })
   })
 
+  it('carries the innermost composer scope key and omits an absent one', () => {
+    expect(
+      resolveNativeFileDropPath([
+        { composerScopeKey: 'pane-inner' },
+        {
+          nativeFileDropTarget: NATIVE_FILE_DROP_TARGET.composer,
+          composerScopeKey: 'pane-outer'
+        }
+      ])
+    ).toEqual({ target: NATIVE_FILE_DROP_TARGET.composer, scopeKey: 'pane-inner' })
+
+    expect(
+      resolveNativeFileDropPath([{ nativeFileDropTarget: NATIVE_FILE_DROP_TARGET.composer }])
+    ).toEqual({ target: NATIVE_FILE_DROP_TARGET.composer })
+  })
+
   it('uses the nearest file-explorer destination and fails closed without one', () => {
     expect(
       resolveNativeFileDropPath([
@@ -147,6 +163,18 @@ describe('createNativeFileDropPayload', () => {
     })
   })
 
+  it('preserves composer scope routing and omits an absent scope key', () => {
+    expect(
+      createNativeFileDropPayload(
+        { target: NATIVE_FILE_DROP_TARGET.composer, scopeKey: 'pane-1' },
+        ['/tmp/a']
+      )
+    ).toEqual({ paths: ['/tmp/a'], scopeKey: 'pane-1', target: NATIVE_FILE_DROP_TARGET.composer })
+    expect(
+      createNativeFileDropPayload({ target: NATIVE_FILE_DROP_TARGET.composer }, ['/tmp/a'])
+    ).toEqual({ paths: ['/tmp/a'], target: NATIVE_FILE_DROP_TARGET.composer })
+  })
+
   it('falls back to editor for unmarked drops and fails closed for rejected targets', () => {
     expect(createNativeFileDropPayload(null, ['/tmp/a'])).toEqual({
       paths: ['/tmp/a'],
@@ -202,6 +230,14 @@ describe('isNativeFileDropPayload', () => {
         target: 'rejected'
       })
     ).toBe(true)
+
+    expect(
+      isNativeFileDropPayload({
+        paths: ['/tmp/a'],
+        scopeKey: 'pane-1',
+        target: NATIVE_FILE_DROP_TARGET.composer
+      })
+    ).toBe(true)
   })
 
   it('rejects malformed or unbounded native file-drop payloads', () => {
@@ -218,6 +254,13 @@ describe('isNativeFileDropPayload', () => {
         paths: ['/tmp/a'],
         tabId: 42,
         target: NATIVE_FILE_DROP_TARGET.terminal
+      })
+    ).toBe(false)
+    expect(
+      isNativeFileDropPayload({
+        paths: ['/tmp/a'],
+        scopeKey: 42,
+        target: NATIVE_FILE_DROP_TARGET.composer
       })
     ).toBe(false)
     expect(

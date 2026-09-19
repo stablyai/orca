@@ -145,7 +145,8 @@ export function normalizeFieldValue(
         iterationId: raw.iterationId,
         title: raw.title ?? '',
         startDate: raw.startDate ?? '',
-        duration: typeof raw.duration === 'number' ? raw.duration : 0
+        duration: typeof raw.duration === 'number' ? raw.duration : 0,
+        ...(typeof raw.field.name === 'string' ? { fieldName: raw.field.name } : {})
       }
     case 'ProjectV2ItemFieldTextValue':
       return { kind: 'text', fieldId, text: raw.text ?? '' }
@@ -155,7 +156,12 @@ export function normalizeFieldValue(
       }
       return { kind: 'number', fieldId, number: raw.number }
     case 'ProjectV2ItemFieldDateValue':
-      return { kind: 'date', fieldId, date: raw.date ?? '' }
+      return {
+        kind: 'date',
+        fieldId,
+        date: raw.date ?? '',
+        ...(typeof raw.field.name === 'string' ? { fieldName: raw.field.name } : {})
+      }
     case 'ProjectV2ItemFieldLabelValue': {
       const labels = (raw.labels?.nodes ?? [])
         .map(normalizeLabel)

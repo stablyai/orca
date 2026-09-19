@@ -95,10 +95,13 @@ describe('forkAgentSessionFromPane', () => {
         id: 'wt-fork'
       }
     })
-    mockLaunchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-2',
-      startupPlan: {},
-      pasteDraftAfterLaunch: true
+    mockLaunchAgentInNewTab.mockImplementation((args) => {
+      args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
+      return {
+        surface: { kind: 'local-terminal', tabId: 'tab-2' },
+        startupPlan: {},
+        pasteDraftAfterLaunch: true
+      }
     })
     mockWriteClipboardText.mockResolvedValue(undefined)
     mockMarkTrusted.mockResolvedValue(undefined)
@@ -160,6 +163,95 @@ describe('forkAgentSessionFromPane', () => {
       'Top-level session fork opened in a new workspace'
     )
   })
+
+  it('announces the provisional chat without waiting for structured settlement', async () => {
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
+    }
+    const result = {
+      surface: {
+        kind: 'local-agent-session',
+        tabId: 'structured-agent-session-session-1',
+        sessionId: 'session-1'
+      },
+      startupPlan: {},
+      pasteDraftAfterLaunch: false,
+      structuredSettlement: new Promise(() => {})
+    }
+    mockLaunchAgentInNewTab.mockImplementationOnce(
+      (args: {
+        beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
+      }) => {
+        args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+        return result
+      }
+    )
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('User: compare OAuth options'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
+      sidebarRevealBehavior: 'auto',
+      providesInitialSurface: true
+    })
+    expect(mockToast.success).toHaveBeenCalledWith(
+      'Top-level session fork opened in a new workspace'
+    )
+  })
+
+  it.each([
+    ['failed', { kind: 'failed', error: new Error('boom') }, true],
+    ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }, true],
+    ['visibility-unknown', { kind: 'visibility-unknown', sessionId: 'session-1' }, false]
+  ])(
+    'keeps the provisional chat open on a later %s structured settlement',
+    async (_kind, settlement, _keepsOpen) => {
+      store.agentStatusByPaneKey = {
+        [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
+      }
+      const result = {
+        surface: {
+          kind: 'local-agent-session',
+          tabId: 'structured-agent-session-session-1',
+          sessionId: 'session-1'
+        },
+        startupPlan: {},
+        pasteDraftAfterLaunch: false,
+        structuredSettlement: Promise.resolve(settlement)
+      }
+      mockLaunchAgentInNewTab.mockImplementationOnce(
+        (args: {
+          beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
+        }) => {
+          args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+          return result
+        }
+      )
+      const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
+        await import('./terminal-agent-session-fork')
+
+      const prepared = prepareAgentSessionForkFromPane({
+        pane: makePane('User: compare OAuth options'),
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        groupId: null
+      })
+      // Why: the worktree already exists; a false return would keep the dialog open for a second fork.
+      await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'Top-level session fork opened in a new workspace'
+      )
+      expect(mockWriteClipboardText).not.toHaveBeenCalled()
+      expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
+        sidebarRevealBehavior: 'auto',
+        providesInitialSurface: true
+      })
+    }
+  )
 
   it('pre-marks trust for the created fork workspace before launching a trusted agent', async () => {
     store.agentStatusByPaneKey = {

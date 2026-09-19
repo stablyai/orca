@@ -1,6 +1,13 @@
-import type { RpcClient } from '../transport/rpc-client'
+import { formatAgentImagePath } from '../../../src/shared/agent-image-paste'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import {
+  clipboardImageSaveAsTempFile,
+  clipboardImageUploadAbort,
+  clipboardImageUploadAppend,
+  clipboardImageUploadCommit,
+  clipboardImageUploadStart,
+  type MobileClipboardImageRpcSender
+} from './mobile-clipboard-image-operations'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
 export const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
@@ -94,15 +101,8 @@ export async function prepareMobileClipboardImageBase64(
   return data
 }
 
-function assertSuccess<T>(response: RpcSuccess | RpcFailure): T {
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  return response.result as T
-}
-
 export async function saveMobileClipboardImageAsTempFile(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileClipboardImageRpcSender,
   imageData: string,
   args?: { connectionId?: string | null }
 ): Promise<string> {
@@ -124,36 +124,41 @@ export async function saveMobileClipboardImageAsTempFile(
 }
 
 async function uploadMobileClipboardImageTransaction(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileClipboardImageRpcSender,
   contentBase64: string,
   connectionId: string | null
 ): Promise<string> {
-  const startResponse = await client.sendRequest('clipboard.startImageUpload', {
+  const startResponse = await clipboardImageUploadStart.request(client, {
     expectedBase64Length: contentBase64.length,
     connectionId
   })
 
+  // Why the raw refusal: a host too old to offer a slot answers with a code, and a small enough
+  // image then goes over the single-frame method — no acceptance policy carries the code.
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
-      return assertSuccess<string>(
-        await client.sendRequest('clipboard.saveImageAsTempFile', { contentBase64, connectionId })
+      return clipboardImageSaveAsTempFile.interpret(
+        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
       )
     }
     throw new Error(startResponse.error.message)
   }
 
-  const { uploadId } = startResponse.result as { uploadId: string }
+  // The slot comes off the checked reader now, not off a cast of the raw result. A success
+  // carrying no `uploadId` used to throw a V8 destructuring TypeError whose message the composer
+  // showed verbatim; it is an incompatible reply named by its method instead.
+  const { uploadId } = clipboardImageUploadStart.interpret(startResponse)
   try {
     for (
       let offset = 0;
       offset < contentBase64.length;
       offset += MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
     ) {
-      assertSuccess(
-        await client.sendRequest('clipboard.appendImageUploadChunk', {
+      clipboardImageUploadAppend.interpret(
+        await clipboardImageUploadAppend.request(client, {
           uploadId,
           offset,
           contentBase64: contentBase64.slice(
@@ -163,20 +168,20 @@ async function uploadMobileClipboardImageTransaction(
         })
       )
     }
-    return assertSuccess<string>(
-      await client.sendRequest('clipboard.commitImageUpload', { uploadId })
+    return clipboardImageUploadCommit.interpret(
+      await clipboardImageUploadCommit.request(client, { uploadId })
     )
   } catch (error) {
     // Why: failed mobile image sends create server-side upload state; abort so
     // the bounded upload slot is released immediately instead of waiting for TTL.
-    await client.sendRequest('clipboard.abortImageUpload', { uploadId }).catch(() => {})
+    await clipboardImageUploadAbort.request(client, { uploadId }).catch(() => {})
     throw error
   }
 }
 
-export function buildMobileImagePastePayload(filePath: string): string {
+export function buildMobileImagePastePayload(filePath: string, agent?: string | null): string {
   // Why: generated image paths are paste payloads, not ordinary typed input.
   // Bracket the path even when it is one line so agents receive it atomically
   // and stale terminal paste state cannot turn it into shell commands.
-  return `\x1b[200~${filePath.split('\x1b').join('\u241b')}\x1b[201~`
+  return `\x1b[200~${formatAgentImagePath(agent, filePath).split('\x1b').join('\u241b')}\x1b[201~`
 }

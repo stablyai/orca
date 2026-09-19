@@ -523,7 +523,10 @@ describe('connectPanePty', () => {
     bellHandler()
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      'terminal-bell'
+    )
     expect(deps.clearTerminalPaneUnread).not.toHaveBeenCalled()
     expect(transport.sendInput).toHaveBeenCalledWith('a')
   })

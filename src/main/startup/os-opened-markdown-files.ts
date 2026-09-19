@@ -105,10 +105,22 @@ export class OsOpenedMarkdownFileState {
       return false
     }
     const merged = [...this.pending]
-    for (const filePath of filePaths) {
+    let index = 0
+    for (; index < filePaths.length; index++) {
+      if (merged.length >= MAX_PENDING_OS_OPENED_MARKDOWN_FILES) {
+        break
+      }
+      const filePath = filePaths[index]!
       if (!merged.includes(filePath)) {
         merged.push(filePath)
       }
+    }
+    if (index < filePaths.length) {
+      // Why logged: the cap drops the tail of an oversized selection, and a file the
+      // user explicitly asked to open must not vanish without leaving a trace.
+      console.warn(
+        `[os-open] Dropped ${filePaths.length - index} of ${filePaths.length} OS-opened markdown files; the pending queue is capped at ${MAX_PENDING_OS_OPENED_MARKDOWN_FILES}.`
+      )
     }
     this.pending = merged.slice(0, MAX_PENDING_OS_OPENED_MARKDOWN_FILES)
     publish?.()

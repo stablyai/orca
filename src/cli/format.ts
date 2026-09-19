@@ -2,7 +2,7 @@ import type { CliStatusResult } from '../shared/runtime-types'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
 
-export { formatCliError, reportCliError } from './cli-error'
+export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
 
 export {
   formatBrowserProfileList,
@@ -40,7 +40,8 @@ export {
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
-  formatTerminalWait
+  formatTerminalWait,
+  terminalSendWarnings
 } from './terminal-format'
 export {
   formatAutomationList,

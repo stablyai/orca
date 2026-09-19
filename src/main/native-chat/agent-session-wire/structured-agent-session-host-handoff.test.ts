@@ -11,6 +11,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   acquireNativeHandoffOwner,
   createStructuredAgentSessionHostHandoff,
@@ -201,6 +202,191 @@ describe('native handoff acquisition', () => {
     await acquiring
 
     expect(order).toEqual(['append-entered', 'append-complete', 'unbind', 'acquire'])
+  })
+
+  it('refuses an unsupported adapter before unbinding the TUI owner', async () => {
+    const location: AgentSessionExecutionLocation = {
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      wslDistro: null,
+      workspaceId: 'workspace-unsupported',
+      workspaceKind: 'folder'
+    }
+    const operationId = `${now}-00000000000000000000000000000011`
+    const reserved = await store.reserveOwner({
+      sessionId: 'session-handoff-unsupported',
+      location,
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: join(root, 'codex-home') },
+      runtimeKind: 'native',
+      expectedFence: null,
+      spawnToken: 'unsupported-spawn',
+      claimKeyId: 'key-1',
+      handoffOperationId: operationId,
+      probe: { outcome: 'reservation-unused' },
+      operation: { callerKey: 'test', operationId, fingerprint: 'unsupported' },
+      now
+    })
+    const journal = await journals.open({
+      identity: {
+        sessionId: 'session-handoff-unsupported',
+        workspaceId: location.workspaceId,
+        hostId: location.executionHostId,
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'unsupported-thread' }
+      },
+      journalDir: join(root, 'unsupported-journal')
+    })
+    const eventSink = createDeferredStructuredAgentSessionEventSink()
+    eventSink.bind({ journal, fence: reserved.record.lease.runtimeFence, publish: () => undefined })
+    const unbind = vi.spyOn(eventSink, 'unbind')
+    const acquire = vi.fn<NonNullable<StructuredAgentSessionHostDeps['adapter']['acquire']>>()
+    const adapter = {
+      supportsLocation: vi.fn(() => false),
+      acquire
+    }
+    const session = {
+      journal,
+      params: {
+        envelope: {
+          sessionId: 'session-handoff-unsupported',
+          clientOperationId: `${now}-00000000000000000000000000000012`,
+          expectedRuntimeFence: reserved.record.lease.runtimeFence,
+          payloadFingerprint: 'unsupported'
+        },
+        location,
+        provider: 'codex' as const,
+        agent: 'codex' as const,
+        accountHome: { variable: 'CODEX_HOME' as const, path: join(root, 'codex-home') },
+        runtimeKind: 'native' as const,
+        providerHandle: { kind: 'codex' as const, threadId: 'unsupported-thread' }
+      },
+      fence: reserved.record.lease.runtimeFence,
+      hasProviderChild: false,
+      acquisitionGeneration: null
+    }
+
+    await expect(
+      acquireNativeHandoffOwner(
+        {
+          store,
+          adapter: adapter as never,
+          journalRoot: root,
+          claimKeyId: 'key-1'
+        },
+        {
+          session: () => session,
+          findSession: () => session,
+          eventSink: () => eventSink,
+          flush: async () => undefined,
+          serialize: async (_sessionId, task) => task(),
+          subscribers: {
+            publish: vi.fn(),
+            reset: vi.fn(),
+            handoff: vi.fn(),
+            snapshot: vi.fn()
+          } as never,
+          now: () => now
+        },
+        {
+          sessionId: 'session-handoff-unsupported',
+          fence: reserved.record.lease.runtimeFence,
+          spawnToken: 'unsupported-spawn'
+        }
+      )
+    ).rejects.toThrow('structured_agent_session_unsupported')
+    expect(unbind).not.toHaveBeenCalled()
+    expect(acquire).not.toHaveBeenCalled()
+  })
+
+  it('rechecks adapter support immediately before handoff acquisition', async () => {
+    const sessionId = 'session-handoff-drift'
+    const location: AgentSessionExecutionLocation = {
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      wslDistro: null,
+      workspaceId: 'workspace-drift',
+      workspaceKind: 'folder'
+    }
+    const operationId = `${now}-00000000000000000000000000000021`
+    const reserved = await store.reserveOwner({
+      sessionId,
+      location,
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: join(root, 'codex-home') },
+      runtimeKind: 'native',
+      expectedFence: null,
+      spawnToken: 'drift-spawn',
+      claimKeyId: 'key-1',
+      handoffOperationId: operationId,
+      probe: { outcome: 'reservation-unused' },
+      operation: { callerKey: 'test', operationId, fingerprint: 'drift' },
+      now
+    })
+    const journal = await journals.open({
+      identity: {
+        sessionId,
+        workspaceId: location.workspaceId,
+        hostId: location.executionHostId,
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'drift-thread' }
+      },
+      journalDir: join(root, 'drift-journal')
+    })
+    const eventSink = createDeferredStructuredAgentSessionEventSink()
+    eventSink.bind({ journal, fence: reserved.record.lease.runtimeFence, publish: () => undefined })
+    const unbind = vi.spyOn(eventSink, 'unbind')
+    const supportsLocation = vi.fn(() => true)
+    supportsLocation.mockReturnValueOnce(true).mockReturnValueOnce(false)
+    const acquire = vi.fn<NonNullable<StructuredAgentSessionHostDeps['adapter']['acquire']>>()
+    const adapter = { supportsLocation, acquire }
+    const session = {
+      journal,
+      params: {
+        envelope: {
+          sessionId,
+          clientOperationId: `${now}-00000000000000000000000000000022`,
+          expectedRuntimeFence: reserved.record.lease.runtimeFence,
+          payloadFingerprint: 'drift'
+        },
+        location,
+        provider: 'codex' as const,
+        agent: 'codex' as const,
+        accountHome: { variable: 'CODEX_HOME' as const, path: join(root, 'codex-home') },
+        runtimeKind: 'native' as const,
+        providerHandle: { kind: 'codex' as const, threadId: 'drift-thread' }
+      },
+      fence: reserved.record.lease.runtimeFence,
+      hasProviderChild: false,
+      acquisitionGeneration: null
+    }
+
+    await expect(
+      acquireNativeHandoffOwner(
+        {
+          store,
+          adapter: adapter as never,
+          journalRoot: root,
+          claimKeyId: 'key-1'
+        },
+        {
+          session: () => session,
+          findSession: () => session,
+          eventSink: () => eventSink,
+          flush: async () => undefined,
+          serialize: async (_sessionId, task) => task(),
+          subscribers: {
+            publish: vi.fn(),
+            reset: vi.fn(),
+            handoff: vi.fn(),
+            snapshot: vi.fn()
+          } as never,
+          now: () => now
+        },
+        { sessionId, fence: reserved.record.lease.runtimeFence, spawnToken: 'drift-spawn' }
+      )
+    ).rejects.toThrow('structured_agent_session_unsupported')
+    expect(supportsLocation).toHaveBeenCalledTimes(2)
+    expect(unbind).toHaveBeenCalledOnce()
+    expect(acquire).not.toHaveBeenCalled()
   })
 })
 

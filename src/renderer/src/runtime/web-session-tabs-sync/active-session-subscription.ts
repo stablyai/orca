@@ -6,7 +6,6 @@ import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import { installWindowVisibilitySubscriptionParking } from '../window-visibility-subscription-parking'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
@@ -113,6 +112,7 @@ export function installActiveSessionTabsSubscription({
       environmentId,
       {
         expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
+        expectedRuntimeId: runtimeId,
         getCurrentState: () => useAppStore.getState()
       }
     )
@@ -140,13 +140,16 @@ export function installActiveSessionTabsSubscription({
     const hasLiveLocalPty = localTabs.some(
       (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0
     )
-    const bootstrap = shouldBootstrapInitialWebRuntimeTerminal({
-      event: recoveredEvent,
-      activeWorktreeId,
-      requestedInitialTerminal,
-      snapshotIsFresh: decision.apply,
-      localTerminalCount
-    })
+    const skipAutomaticTerminal = shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+    const bootstrap =
+      !skipAutomaticTerminal &&
+      shouldBootstrapInitialWebRuntimeTerminal({
+        event: recoveredEvent,
+        activeWorktreeId,
+        requestedInitialTerminal,
+        snapshotIsFresh: decision.apply,
+        localTerminalCount
+      })
     const respawn = shouldRespawnWebRuntimeTerminalAfterWake({
       event: recoveredEvent,
       activeWorktreeId,
@@ -154,7 +157,7 @@ export function installActiveSessionTabsSubscription({
       snapshotIsFresh: decision.apply,
       localTerminalCount,
       hasLiveLocalPty,
-      skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+      skipWakeRespawn: skipAutomaticTerminal
     })
     let settle: HostSessionMirrorSettle | null = decision.apply
       ? null
@@ -248,11 +251,6 @@ export function installActiveSessionTabsSubscription({
                 runtimeId
               )
               visibilitySnapshotReceipt.current(environmentId, event, frame, runtimeId)
-              const finish = beginWebSessionTabsSnapshotRecovery(
-                environmentId,
-                event.worktree,
-                frame
-              )
               void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
                 .catch((error) => {
                   if (isCurrent()) {
@@ -261,7 +259,6 @@ export function installActiveSessionTabsSubscription({
                   return null
                 })
                 .then((settle) => {
-                  finish()
                   if (isCurrent()) {
                     settle?.()
                   }

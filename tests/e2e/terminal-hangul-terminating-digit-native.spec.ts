@@ -190,6 +190,8 @@ test.describe('Hangul terminating digit @headful', () => {
     }))
     console.log(`[digit-diag] ${JSON.stringify(launchDiagnostics)}`)
     if (INJECTOR === 'nested') {
+      expect(launchDiagnostics.ozonePlatform).toBe('wayland')
+      expect(launchDiagnostics.waylandDisplay).toBeTruthy()
       // Under Wayland the app's ready-to-show never fires here, so the window
       // stays hidden and the compositor has nothing to give keyboard focus to.
       await electronApp.evaluate(({ BrowserWindow }) => {

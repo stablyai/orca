@@ -95,6 +95,13 @@ export async function handoffStructuredSessionToNative(
       ...(transcriptPath ? { transcriptPath } : {})
     })
   }
+  if (record.lease.settlementRetryRequired) {
+    const settled = await deps.retryPendingSettlement(sessionId)
+    if (!settled) {
+      throw new Error('The provider-exit terminal journal settlement is still pending.')
+    }
+    record = context.requireRecord(sessionId)
+  }
   const spawnToken = randomUUID()
   record = await reserveStoredAgentSessionHandoffOwner(deps.store, {
     sessionId,

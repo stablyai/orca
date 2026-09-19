@@ -1,4 +1,7 @@
+import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback, type RefObject } from 'react'
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, Paths } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
@@ -70,6 +73,7 @@ function buildMobileTerminalClipboardTextPayload(
 }
 
 type UseMobileTerminalPasteOptions = {
+  readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<string | null>
@@ -90,6 +94,7 @@ type UseMobileTerminalPasteOptions = {
 
 export function useMobileTerminalPaste({
   activeHandle,
+  agent,
   activeHandleRef,
   activeSessionTabTypeRef,
   canSend,
@@ -130,7 +135,10 @@ export function useMobileTerminalPaste({
         const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
           connectionId
         })
-        payload = buildMobileImagePastePayload(imagePath)
+        payload = separateImagePasteFromFollowingText(
+          buildMobileImagePastePayload(imagePath, agent),
+          true
+        )
       }
 
       const wrappedBytes = new TextEncoder().encode(payload).byteLength
@@ -155,7 +163,7 @@ export function useMobileTerminalPaste({
       ) {
         return
       }
-      await currentClient.sendRequest('terminal.send', {
+      const response = await terminalInputSend.request(currentClient, {
         terminal: targetHandle,
         text: payload,
         enter: false,
@@ -163,6 +171,9 @@ export function useMobileTerminalPaste({
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
+      if (terminalInputSend.interpret(response) === true) {
+        reportWorkerTerminalUserInput(currentClient, targetHandle)
+      }
       onSuccess()
       refreshCanPaste()
     } catch (e) {
@@ -181,6 +192,7 @@ export function useMobileTerminalPaste({
     }
   }, [
     activeHandle,
+    agent,
     activeHandleRef,
     activeSessionTabTypeRef,
     canSend,

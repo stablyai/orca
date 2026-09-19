@@ -28,7 +28,7 @@ export function recoverDeadTuiOwnerForHandoff(args: {
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
-  const evicted = evictAgentSessionOwner(args)
+  const evicted = evictAgentSessionOwner({ ...args, journalSettlement: 'required' })
   return withLease(evicted, {
     ...evicted.lease,
     handoffStage: 'old-owner-stopped',

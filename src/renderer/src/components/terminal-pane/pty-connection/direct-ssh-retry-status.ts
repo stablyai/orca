@@ -55,7 +55,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       if (session.directSshPaneRetrySettlementCancelled) {
         return
       }
-      session.settleDirectSshPaneRetryAttempt(attempt, 'timed-out')
+      session.settlePaneAttachAttempt(attempt, 'timed-out')
     }, DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS)
     session.directSshPaneRetrySettlementTimers.add(timer)
     void promise

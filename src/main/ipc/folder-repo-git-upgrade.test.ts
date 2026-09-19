@@ -183,6 +183,7 @@ describe('folder repo git upgrade watch', () => {
 
     expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
       kind: 'git',
+      folderUpgradeGitRootPath: repoPath.replaceAll('\\', '/'),
       externalWorktreeVisibility: 'hide'
     })
     expect(prepareLocalWorktreeRootForRepo).toHaveBeenCalledTimes(1)
@@ -206,7 +207,10 @@ describe('folder repo git upgrade watch', () => {
     })
     await tick()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', { kind: 'git' })
+    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
+      kind: 'git',
+      folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
+    })
   })
 
   it('refuses a project that has folder workspaces the git listing would drop', async () => {

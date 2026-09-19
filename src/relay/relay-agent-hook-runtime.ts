@@ -9,7 +9,11 @@ import {
 } from '../shared/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
-import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
+import {
+  resolveOpenCodeSourceConfigDir,
+  resolvePiSourceAgentDir,
+  resolveOmpConfigDirName
+} from './plugin-overlay-env'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
@@ -74,7 +78,9 @@ export class RelayAgentHookRuntime {
     })
   }
 
-  private buildPluginEnvironment(context: Parameters<PtyEnvAugmenter>[0]): Record<string, string> {
+  private async buildPluginEnvironment(
+    context: Parameters<PtyEnvAugmenter>[0]
+  ): Promise<Record<string, string>> {
     const env: Record<string, string> = {}
     const overlayId = context.paneKey ?? context.id
     if (this.pluginOverlay.hasOpenCodeSource()) {
@@ -88,9 +94,6 @@ export class RelayAgentHookRuntime {
         }
       }
     }
-    if (!this.pluginOverlay.hasPiSource()) {
-      return env
-    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(context.env, context.command)
     const explicitKind = isPiCompatibleAgentType(context.launchAgent)
       ? context.launchAgent
@@ -100,6 +103,12 @@ export class RelayAgentHookRuntime {
     const kind = explicitKind ?? 'pi'
     const hasLaunchCommand =
       typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
+    if (kind === 'omp' || !hasLaunchCommand) {
+      env.ORCA_OMP_FRESH_CONFIG = this.pluginOverlay.materializeOmpFreshConfig()
+    }
+    if (!this.pluginOverlay.hasPiSource()) {
+      return env
+    }
     if (kind === 'pi') {
       const sourceDir = resolvePiSourceAgentDir(context.env, context.shell, 'pi')
       const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'pi', {
@@ -114,8 +123,13 @@ export class RelayAgentHookRuntime {
         kind === 'omp'
           ? resolvePiSourceAgentDir(context.env, context.shell, 'omp')
           : context.env.ORCA_OMP_SOURCE_AGENT_DIR
+      const configDirName = await resolveOmpConfigDirName(context.env, context.shell)
+      if (configDirName !== undefined) {
+        env.PI_CONFIG_DIR = configDirName
+      }
       const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'omp', {
-        materializeDefaultHome: explicitKind === 'omp'
+        materializeDefaultHome: explicitKind === 'omp',
+        configDirName
       })
       if (result?.statusExtensionPath) {
         env.ORCA_OMP_STATUS_EXTENSION = result.statusExtensionPath

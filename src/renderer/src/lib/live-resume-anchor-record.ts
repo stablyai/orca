@@ -50,14 +50,3 @@ export function isCompletedPiCompatibleAgentWithLiveRecoveryRecord(
     isLiveResumeAnchorForCompletedAgent(entry, record, worktreeId)
   )
 }
-
-/**
- * A durable orchestration fence against automatic provider relaunch. Hibernating
- * a fenced pane would strand it or — since `sleepingRecordFromEntry` does not copy
- * the flag — erase the fence and later auto-resume prohibited work.
- */
-export function isAutomaticHibernationAllowed(
-  record: SleepingAgentSessionRecord | undefined
-): boolean {
-  return !record?.automaticResumeBlockedBy
-}

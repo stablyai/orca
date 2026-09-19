@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
+import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
+import { markdownTabRead } from './mobile-session-read-operations'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -17,18 +19,12 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       }
       setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
-        const response = await client.sendRequest('markdown.readTab', {
+        const response = await markdownTabRead.request(client, {
           worktree: `id:${worktreeId}`,
           tabId: tab.id
         })
         if (response.ok) {
-          const result = (response as RpcSuccess).result as {
-            content: string
-            version: string
-            isDirty: boolean
-            editable?: boolean
-            readOnlyReason?: string
-          }
+          const result = markdownTabRead.interpret(response)
           setMarkdownDocs((prev) =>
             new Map(prev).set(tab.id, {
               status: 'ready',
@@ -47,18 +43,16 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           throw new Error((response as RpcFailure).error.message)
         }
         // Why: a headless host fails markdown.readTab (renderer_unavailable); fall back to the on-disk file for read-only render.
-        const fallback = await client.sendRequest('files.read', {
-          worktree: `id:${worktreeId}`,
-          relativePath: tab.relativePath
-        })
-        if (!fallback.ok) {
+        const fallback = filePreviewTextRead.interpret(
+          await filePreviewTextRead.request(client, {
+            worktree: `id:${worktreeId}`,
+            relativePath: tab.relativePath
+          })
+        )
+        if (!fallback.accepted) {
           throw new Error('Unable to read markdown')
         }
-        const fileResult = (fallback as RpcSuccess).result as {
-          content: string
-          truncated: boolean
-          byteLength: number
-        }
+        const fileResult = fallback.value
         setMarkdownDocs((prev) =>
           new Map(prev).set(
             tab.id,

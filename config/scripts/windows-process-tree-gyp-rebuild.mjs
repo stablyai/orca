@@ -33,6 +33,17 @@ export const WINDOWS_PROCESS_TREE_PATCH_PATH = join(
 /** Only the patched reader defines this; the upstream one walks the PEB. */
 const COMMAND_LINE_PATCH_MARKER = 'kProcessCommandLineInformation'
 
+const CREATION_TIME_PATCH_MARKERS = [
+  ['src/process.h', 'CREATIONTIME = 4'],
+  ['src/process.h', 'ULONGLONG creationTimeMs'],
+  ['src/process.cc', 'GetProcessCreationTime(pinfo)'],
+  ['src/process.cc', 'GetProcessTimes(hProcess, &creationTime'],
+  ['src/process_worker.cc', 'object.Set("creationTimeMs"'],
+  ['lib/index.js', '["CreationTime"] = 4'],
+  ['lib/index.ts', 'CreationTime = 4'],
+  ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number']
+]
+
 export const WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS = [
   'napi.h',
   'napi-inl.h',
@@ -81,6 +92,36 @@ export function inspectWindowsProcessTreeAddon(addonPath) {
     return 'missing'
   }
   return readFileSync(addonPath).includes(FLAGGED_IMPORT) ? 'unpatched' : 'clean'
+}
+
+export function assertWindowsProcessTreeCreationTimePatch(
+  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
+) {
+  for (const [relativePath, expected] of CREATION_TIME_PATCH_MARKERS) {
+    const filePath = join(packageDir, relativePath)
+    if (!existsSync(filePath)) {
+      throw new Error(
+        `${filePath} is missing, so the process creation-time patch cannot be verified. ` +
+          'Run pnpm install.'
+      )
+    }
+    if (!readFileSync(filePath, 'utf8').includes(expected)) {
+      throw new Error(
+        `${relativePath} does not contain the process creation-time patch (${expected}). ` +
+          'Run pnpm install.'
+      )
+    }
+  }
+}
+
+export function assertWindowsProcessTreeRuntimeCreationTime(windowsProcessTree) {
+  if (windowsProcessTree?.ProcessDataFlag?.CreationTime !== 4) {
+    throw new Error(
+      '@vscode/windows-process-tree does not expose ProcessDataFlag.CreationTime, so native ' +
+        'Windows structured agent-session process ownership cannot be PID-reuse safe. Rebuild it ' +
+        '(pnpm run rebuild:electron) rather than using the published prebuild.'
+    )
+  }
 }
 
 /**
@@ -159,6 +200,7 @@ export function ensureWindowsProcessTreeCommandLinePatch(
     rmSync(windowsProcessTreeAddonPath(packageDir), { force: true })
     repaired = true
   }
+  assertWindowsProcessTreeCreationTimePatch(packageDir)
 
   return repaired
 }

@@ -1,3 +1,4 @@
+import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { PtyTransport } from './pty-transport'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
@@ -107,8 +108,8 @@ export type PtyConnectionDeps = {
     directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
   ) => void
   markWorktreeUnread: (worktreeId: string) => void
-  markTerminalTabUnread: (tabId: string) => void
-  markTerminalPaneUnread: (paneKey: string) => void
+  markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
+  markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
@@ -122,7 +123,6 @@ export type PtyConnectionDeps = {
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: AgentCompletionStatusSnapshot
-    suppressOsNotification?: boolean
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void

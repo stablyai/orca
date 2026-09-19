@@ -26,6 +26,7 @@ function argumentsFor(mode, confirmation) {
       '--not-before', '2000000000000',
       '--rate-per-minute', '10',
       '--preference-max-age-ms', '86400000',
+      '--host-cooldown-ms', '604800000',
       '--drain-grace-ms', '60000',
       '--confirmation', confirmation
     ])
@@ -40,8 +41,27 @@ function control(generation, enabled) {
     notBefore: 2_000_000_000_000,
     ratePerMinute: 10,
     preferenceMaxAgeMs: 86_400_000,
+    hostCooldownMs: 604_800_000,
     drainGraceMs: 60_000
   }
+}
+
+// The control a director predating the per-host cooldown reports.
+function legacyControl(generation, enabled) {
+  const { hostCooldownMs: _absent, ...rest } = control(generation, enabled)
+  return rest
+}
+
+function legacyDirector(controls) {
+  const requests = []
+  const post = async (path, body) => {
+    requests.push({ path, body })
+    if (path === '/v1/admin/admission-selector/status') {
+      return { selector: { generation: 11, membership } }
+    }
+    return { v: 1, control: controls.shift() }
+  }
+  return { requests, post }
 }
 
 test('parses exact selector and typed control confirmation', () => {
@@ -52,6 +72,17 @@ test('parses exact selector and typed control confirmation', () => {
   assert.equal(parsed.expectedSelectorGeneration, 11)
   assert.equal(parsed.expectedControlGeneration, 4)
   assert.equal(parsed.ratePerMinute, 10)
+  assert.equal(parsed.hostCooldownMs, 604_800_000)
+  assert.throws(
+    () => parseRegionalRehomeArguments(
+      argumentsFor('enable', 'ENABLE_REGIONAL_REHOMING').filter(
+        (value, index, all) =>
+          value !== '--host-cooldown-ms' && all[index - 1] !== '--host-cooldown-ms'
+      ),
+      { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+    ),
+    /complete durable control shape/
+  )
   assert.throws(
     () => parseRegionalRehomeArguments(
       argumentsFor('pause', 'DISABLE_REGIONAL_REHOMING'),
@@ -79,6 +110,7 @@ test('binds enable to exact selector and durable control generations', async () 
     notBefore: 0,
     ratePerMinute: 10,
     preferenceMaxAgeMs: 86_400_000,
+    hostCooldownMs: 604_800_000,
     drainGraceMs: 60_000,
     ...control
   }))
@@ -96,6 +128,7 @@ test('binds enable to exact selector and durable control generations', async () 
     }
   })
   assert.equal(result.control.generation, 5)
+  assert.equal(result.control.hostCooldownMs, 604_800_000)
   assert.deepEqual(requests[2].body, {
     v: 1,
     action: 'apply',
@@ -104,9 +137,80 @@ test('binds enable to exact selector and durable control generations', async () 
     notBefore: 2_000_000_000_000,
     ratePerMinute: 10,
     preferenceMaxAgeMs: 86_400_000,
+    hostCooldownMs: 604_800_000,
     drainGraceMs: 60_000,
     confirmation: 'ENABLE_REGIONAL_REHOMING'
   })
+})
+
+test('inspects a director that predates the per-host cooldown', async () => {
+  const director = legacyDirector([legacyControl(4, true)])
+  const config = parseRegionalRehomeArguments(
+    argumentsFor('inspect'),
+    { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+  )
+
+  const result = await operateRegionalRehome(config, { post: director.post })
+
+  assert.equal(result.control.generation, 4)
+  assert.equal(result.control.hostCooldownMs, undefined)
+})
+
+for (const [mode, confirmation, enabledBefore] of [
+  ['pause', 'PAUSE_REGIONAL_REHOMING', true],
+  ['disable', 'DISABLE_REGIONAL_REHOMING', false]
+]) {
+  test(`${mode} still brakes a director that predates the cooldown`, async () => {
+    const director = legacyDirector([
+      legacyControl(4, enabledBefore),
+      legacyControl(5, false),
+      legacyControl(5, false)
+    ])
+    const config = parseRegionalRehomeArguments(
+      argumentsFor(mode, confirmation),
+      { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+    )
+
+    const result = await operateRegionalRehome(config, { post: director.post })
+
+    assert.equal(result.control.generation, 5)
+    // The unknown key would be refused by that director's strict schema.
+    assert.equal('hostCooldownMs' in director.requests[2].body, false)
+    assert.equal(director.requests[2].body.confirmation, 'DISABLE_REGIONAL_REHOMING')
+  })
+}
+
+test('failed-enable recovery brakes a director that predates the cooldown', async () => {
+  const requests = []
+  let current = legacyControl(7, true)
+  const result = await recoverRegionalRehomeEnable({
+    mode: 'recover-enable',
+    expectedControlGeneration: 4
+  }, async (_path, body) => {
+    requests.push(body)
+    if (body.action === 'inspect') return { control: current }
+    current = legacyControl(8, false)
+    return { control: current }
+  })
+
+  assert.equal(result.control.generation, 8)
+  assert.equal('hostCooldownMs' in requests[1], false)
+})
+
+test('refuses to enable a director that does not report the cooldown', async () => {
+  const director = legacyDirector([legacyControl(4, false)])
+  const config = parseRegionalRehomeArguments(
+    argumentsFor('enable', 'ENABLE_REGIONAL_REHOMING'),
+    { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+  )
+
+  await assert.rejects(
+    operateRegionalRehome(config, { post: director.post }),
+    /per-host rehome cooldown/
+  )
+  // Read-only: selector status and the control inspect, and nothing else.
+  assert.equal(director.requests.length, 2)
+  assert.equal(director.requests.every(({ body }) => body.action !== 'apply'), true)
 })
 
 test('fails closed on selector drift before reading or mutating control', async () => {
@@ -150,6 +254,7 @@ test('failed-enable recovery CAS-disables an advanced enabled generation', async
     notBefore: 2_000_000_000_000,
     ratePerMinute: 10,
     preferenceMaxAgeMs: 86_400_000,
+    hostCooldownMs: 604_800_000,
     drainGraceMs: 60_000,
     confirmation: 'DISABLE_REGIONAL_REHOMING'
   })

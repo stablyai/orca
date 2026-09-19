@@ -219,8 +219,15 @@ function getHighlightApi(): {
 // window). Track each instance's ranges by its own token and paint the UNION,
 // so a second preview's Find does not clobber the first's highlights. Ranges
 // live in each instance's own subtree, so the union paints every pane correctly.
-const searchRangesByInstance = new Map<object, readonly Range[]>()
-const activeRangeByInstance = new Map<object, Range>()
+declare const markdownPreviewSearchInstanceBrand: unique symbol
+
+/** Per-preview identity for the highlight maps; only compared by reference. */
+export type MarkdownPreviewSearchInstance = {
+  readonly [markdownPreviewSearchInstanceBrand]?: never
+}
+
+const searchRangesByInstance = new Map<MarkdownPreviewSearchInstance, readonly Range[]>()
+const activeRangeByInstance = new Map<MarkdownPreviewSearchInstance, Range>()
 
 // Avoid array spread when collecting union ranges — a large doc can produce
 // 100k+ ranges and create()/registry writes must not build variadic arg lists.
@@ -250,7 +257,9 @@ function paintActiveHighlight(api: NonNullable<ReturnType<typeof getHighlightApi
   }
 }
 
-export function clearMarkdownPreviewSearchHighlights(instanceId: object): void {
+export function clearMarkdownPreviewSearchHighlights(
+  instanceId: MarkdownPreviewSearchInstance
+): void {
   searchRangesByInstance.delete(instanceId)
   activeRangeByInstance.delete(instanceId)
   const api = getHighlightApi()
@@ -261,7 +270,7 @@ export function clearMarkdownPreviewSearchHighlights(instanceId: object): void {
 }
 
 export function applyMarkdownPreviewSearchHighlights(
-  instanceId: object,
+  instanceId: MarkdownPreviewSearchInstance,
   root: HTMLElement,
   query: string
 ): Range[] {
@@ -309,7 +318,7 @@ export function applyMarkdownPreviewSearchHighlights(
 }
 
 export function setActiveMarkdownPreviewSearchMatch(
-  instanceId: object,
+  instanceId: MarkdownPreviewSearchInstance,
   matches: readonly Range[],
   activeIndex: number
 ): void {

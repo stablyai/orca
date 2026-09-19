@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { claudeRecord } from './claude-structured-item-translation'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_IMAGE_COUNT = 20
@@ -88,25 +89,47 @@ async function imageContent(
   }
 }
 
+/**
+ * Claude encodes a user turn as attachment blocks followed by the typed text, and recovers the
+ * typed prompt by reading only the trailing text block. Verified against the real CLI over
+ * stream-json: a body ending in an image has no recoverable prompt, so its `/command` reaches
+ * the model as prose instead of being expanded.
+ */
 export async function claudeDispatchMessageContent(
   body: AgentJournalMessageItem
 ): Promise<unknown[]> {
   if (body.role !== 'user') {
     throw new Error('Claude dispatch accepts only user messages')
   }
-  const content: unknown[] = []
+  const images: unknown[] = []
+  const texts: string[] = []
   const imageBudget: ImageBudget = { count: 0, localBytes: 0 }
   for (const block of body.blocks as NativeChatBlock[]) {
     if (block.type === 'text' && block.text.length > 0) {
-      content.push({ type: 'text', text: block.text })
+      texts.push(block.text)
     } else if (block.type === 'image-ref') {
-      content.push(await imageContent(block, imageBudget))
+      images.push(await imageContent(block, imageBudget))
     }
   }
+  // Join rather than append each block: only the trailing text is read as the prompt, so several
+  // text blocks would silently discard every one but the last.
+  const content = texts.length > 0 ? [...images, { type: 'text', text: texts.join('\n') }] : images
   if (content.length === 0) {
     throw new Error('Claude dispatch requires text or an image')
   }
   return content
+}
+
+/** The prompt Claude recovers from a dispatch, or null when the turn carries no prompt. */
+function claudeDispatchPrompt(content: readonly unknown[]): string | null {
+  const last = claudeRecord(content.at(-1))
+  return last?.type === 'text' && typeof last.text === 'string' ? last.text : null
+}
+
+/** Mirrors how Claude decides a turn is a command. Untrimmed on purpose: Claude does not trim
+ *  here either, so leading whitespace really does mean no command runs. */
+export function claudeDispatchInvokesSlashCommand(content: readonly unknown[]): boolean {
+  return claudeDispatchPrompt(content)?.startsWith('/') === true
 }
 
 /**
@@ -117,10 +140,7 @@ export function claudeDispatchContentKey(content: readonly unknown[]): string {
   const digest = createHash('sha256')
   const summary = content
     .map((part) => {
-      const record =
-        typeof part === 'object' && part !== null && !Array.isArray(part)
-          ? (part as Record<string, unknown>)
-          : null
+      const record = claudeRecord(part)
       const type = typeof record?.type === 'string' ? record.type : 'unknown'
       if (type === 'text') {
         return `text:${typeof record?.text === 'string' ? record.text.length : 0}`
@@ -136,10 +156,7 @@ export function claudeDispatchContentKey(content: readonly unknown[]): string {
     })
     .join(',')
   for (const [index, part] of content.entries()) {
-    const record =
-      typeof part === 'object' && part !== null && !Array.isArray(part)
-        ? (part as Record<string, unknown>)
-        : null
+    const record = claudeRecord(part)
     const type = typeof record?.type === 'string' ? record.type : 'unknown'
     digest.update(`${index}:${type}:`)
     if (type === 'text' && typeof record?.text === 'string') {

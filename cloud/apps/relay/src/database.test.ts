@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { openInMemoryRelayDatabase, openRelayDatabase } from './database.js'
+import {
+  openInMemoryRelayDatabase,
+  openRelayDatabase,
+  POSTGRES_SCHEMA_MIGRATIONS,
+  REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
+} from './database.js'
 
 const temporaryDirectories: string[] = []
 
@@ -13,6 +18,34 @@ afterEach(() => {
 })
 
 describe('relay database', () => {
+  it('upgrades an existing SQLite relay without treating legacy controls as idle-capable', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'orca-idle-schema-'))
+    temporaryDirectories.push(dataDir)
+    const legacy = await openRelayDatabase({ dataDir })
+    await legacy.query('ALTER TABLE relay_control_capabilities DROP COLUMN idle_regional_rehome')
+    await legacy.query('ALTER TABLE relay_region_rehome_attempts DROP COLUMN source_generation')
+    await legacy.query(
+      `INSERT INTO relay_control_capabilities
+       (user_id, relay_host_id, activity_id, cell_id, cell_incarnation, assignment_epoch, generation, finish_existing)
+       VALUES ('legacy-user', 'abcdefghijklmnop', 'control:source:1', 'source', 'legacy-incarnation', 1, 1, 1)`
+    )
+    await legacy.close()
+    const upgraded = await openRelayDatabase({ dataDir })
+    try {
+      expect(
+        await upgraded.query('SELECT idle_regional_rehome FROM relay_control_capabilities')
+      ).toEqual([{ idle_regional_rehome: 0 }])
+      const columns = await upgraded.query(
+        "SELECT * FROM pragma_table_info('relay_region_rehome_attempts')"
+      )
+      expect(columns.find((column) => column.name === 'source_generation')).toMatchObject({
+        dflt_value: '0'
+      })
+    } finally {
+      await upgraded.close()
+    }
+  })
+
   it('creates every durable relay state table', async () => {
     const database = await openInMemoryRelayDatabase()
     const rows = await database.query(
@@ -49,6 +82,7 @@ describe('relay database', () => {
       'relay_confirm_results',
       'relay_confirmable_splices',
       'relay_connection_bases',
+      'relay_control_capabilities',
       'relay_control_connection_reservations',
       'relay_devices',
       'relay_direct_authorizations',
@@ -57,6 +91,7 @@ describe('relay database', () => {
       'relay_migration_leases',
       'relay_post_drain_migration_pins',
       'relay_rate_windows',
+      'relay_region_decisions',
       'relay_region_rehome_attempts',
       'relay_region_rehome_control',
       'relay_region_rehome_worker_state'
@@ -135,11 +170,42 @@ describe('relay database', () => {
 
     const second = await openRelayDatabase({ dataDir })
     expect(
-      await second.query(`SELECT region FROM relay_cell_regions WHERE cell_id = ?`, [
-        'legacy-cell'
-      ])
+      await second.query(`SELECT region FROM relay_cell_regions WHERE cell_id = ?`, ['legacy-cell'])
     ).toEqual([{ region: 'us-central1' }])
     await second.close()
+  })
+
+  it('renders every region check from the shared region list', async () => {
+    // Derived, not hand-written: a third region must not leave one column
+    // rejecting a value the rest of the relay already accepts.
+    const database = await openInMemoryRelayDatabase()
+    const checked = await database.query(
+      `SELECT name, sql FROM sqlite_master
+       WHERE type = 'table'
+         AND name IN ('relay_assignment_region_preferences', 'relay_cell_regions',
+                      'relay_region_rehome_attempts')
+       ORDER BY name`
+    )
+    const list = `IN ('us-central1', 'asia-east2')`
+    expect(checked.map((row) => row.name)).toEqual([
+      'relay_assignment_region_preferences',
+      'relay_cell_regions',
+      'relay_region_rehome_attempts'
+    ])
+    expect(checked.every((row) => String(row.sql).includes(list))).toBe(true)
+    expect(POSTGRES_SCHEMA_MIGRATIONS.some((statement) => statement.includes(list))).toBe(true)
+    await database.close()
+  })
+
+  it('indexes rehome attempts by host recency for the per-host cooldown', async () => {
+    const database = await openInMemoryRelayDatabase()
+    const rows = await database.query(
+      `SELECT sql FROM sqlite_master
+       WHERE type = 'index' AND name = 'relay_region_rehome_attempts_host_recency'`
+    )
+    expect(rows[0]?.sql).toContain('(user_id, relay_host_id, created_at)')
+    expect(REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS).toBe(7 * 24 * 60 * 60_000)
+    await database.close()
   })
 
   it('indexes region preference expiry by observation time', async () => {

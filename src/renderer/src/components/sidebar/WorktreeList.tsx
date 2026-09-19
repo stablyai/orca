@@ -104,7 +104,8 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
-  const { filterState, hasFilters, clearFilters } = useSidebarWorktreeFilters()
+  const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
+    useSidebarWorktreeFilters()
   const sortedIds = useSidebarWorktreeSortOrder({ allWorktrees, repoMap, sortBy })
   const manualOrderCatalog = useMemo(
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
@@ -236,14 +237,15 @@ const WorktreeList = React.memo(function WorktreeList({
   useSidebarRevealRequests({
     groupBy,
     renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
-    renderedWorktreeIdentities: selection.renderedWorktreeIdentities,
+    visibleWorktrees,
+    visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,
     currentSidebarExecutionHostId: activeWorkspaceExecutionHostId,
     worktreeMap,
     worktrees: allWorktrees,
     folderWorkspaces,
     hasFilters,
-    clearFilters
+    revealWorkspaceFilters
   })
 
   const filtersHideAllRows = shouldFiltersHideAllRows({

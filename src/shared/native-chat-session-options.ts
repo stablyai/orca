@@ -1,3 +1,5 @@
+import type { AgentType } from './agent-status-types'
+
 export type SessionOptionValue = string | boolean
 
 export type SessionOptionSelectChoice = {
@@ -37,9 +39,12 @@ export type SessionOptionDescriptor = {
         currentValue?: string
         choices: SessionOptionSelectChoice[]
       }
+    /** Required, unlike the select's: a switch has no third position, so a value
+     *  the producer left unset would render as `false` and assert the opposite of
+     *  the catalog default. Whether anything confirmed it is `valueSource`'s job. */
     | {
         type: 'boolean'
-        currentValue?: boolean
+        currentValue: boolean
       }
   valueSource: SessionOptionValueSource
   /** Required so a new producer cannot inherit the wrong lane's rendering by
@@ -52,13 +57,32 @@ export type SessionOptionDescriptor = {
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
 
-/** A value we typed at the agent and have never read back. Only the terminal
- *  transport can be in this state: the structured lane's own per-turn report is
- *  what moves a value off `dispatched`, and until it lands nothing else has. */
+/** A value we typed at the agent and have never read back. Both lanes write
+ *  `dispatched` on a set, so the source alone does not name one — the transport
+ *  check is what limits the caption to the terminal, where reading the screen
+ *  back is the only confirmation available. */
 export function sessionOptionDispatchUnconfirmed(
   descriptor: Pick<SessionOptionDescriptor, 'valueSource' | 'transport'>
 ): boolean {
   return descriptor.valueSource === 'dispatched' && descriptor.transport === 'catalog'
+}
+
+/** Why a boolean row needs a marker at all: the switch always renders a value, so
+ *  the row is the only place that can say where the value came from. `default` and
+ *  `unreported` are opposite claims — the first says the catalog value is what a
+ *  launch will send, the second says nothing has told us anything and the agent may
+ *  be running something else entirely — so they never share one label. */
+export type SessionOptionValueMarker = 'default' | 'unreported'
+
+/** Display-only: it labels a rendered value and never gates what is sent, which
+ *  stays sourced from tracked picks. */
+export function sessionOptionValueMarker(
+  descriptor: Pick<SessionOptionDescriptor, 'valueSource'>
+): SessionOptionValueMarker | null {
+  if (descriptor.valueSource === 'default') {
+    return 'default'
+  }
+  return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 
 export type SessionOptionSetResult = {
@@ -74,6 +98,19 @@ export type PersistedNativeChatSessionOptions = Partial<
     }
   >
 >
+
+export type NativeChatSessionOptionSettingsMutation =
+  | {
+      type: 'apply-picks'
+      agent: AgentType
+      picks: readonly {
+        modelId: string
+        optionId: string
+        value: SessionOptionValue
+        adoptModelAsLaunchDefault?: boolean
+      }[]
+    }
+  | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
 export type SessionOptionsSurface = {
   getSnapshot(): SessionOptionDescriptor[]

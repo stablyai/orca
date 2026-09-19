@@ -1,19 +1,22 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from '../../shared/e2ee-crypto'
 import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
 import { addEnvironmentFromPairingCode } from '../../shared/runtime-environment-store'
 import {
   callRuntimeEnvironment,
   getRuntimeEnvironmentStatus,
-  subscribeRuntimeEnvironment
+  subscribeRuntimeEnvironment,
+  resetSharedControlSupport
 } from './runtime-environment-transport-routing'
 
 // Why: prove the wiring, not just the helper — an unreachable endpoint exercises
 // the real WebSocket failure → reject → Tailscale-hint join points the settings
 // probe (returned ok:false) and in-use calls (thrown) actually use.
+
+vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 
 let userDataPath: string
 
@@ -39,6 +42,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetSharedControlSupport()
   rmSync(userDataPath, { recursive: true, force: true })
 })
 

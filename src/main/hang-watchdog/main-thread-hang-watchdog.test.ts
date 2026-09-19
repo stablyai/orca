@@ -10,7 +10,8 @@ const { workerState, appMock } = vi.hoisted(() => ({
   appMock: {
     isPackaged: true,
     getAppPath: vi.fn(() => '/apps/orca/app.asar'),
-    on: vi.fn()
+    on: vi.fn(),
+    off: vi.fn()
   }
 }))
 
@@ -58,6 +59,7 @@ describe('installMainThreadHangWatchdog', () => {
     workerState.instance = null
     workerState.error = null
     appMock.on.mockReset()
+    appMock.off.mockReset()
     appMock.isPackaged = true
     delete process.env.ORCA_HANG_WATCHDOG_FORCE
     delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
@@ -137,6 +139,7 @@ describe('installMainThreadHangWatchdog', () => {
 
     handle?.stop()
     expect(worker.postMessage.mock.calls.some(([m]) => m.type === 'shutdown')).toBe(true)
+    expect(appMock.off).toHaveBeenCalledWith('will-quit', expect.any(Function))
 
     handle?.stop()
     const shutdowns = worker.postMessage.mock.calls.filter(([m]) => m.type === 'shutdown')
@@ -173,6 +176,7 @@ describe('installMainThreadHangWatchdog', () => {
     const exitListener = worker.once.mock.calls.find(([event]) => event === 'exit')?.[1]
     expect(exitListener).toEqual(expect.any(Function))
     exitListener()
+    expect(appMock.off).toHaveBeenCalledWith('will-quit', expect.any(Function))
     vi.advanceTimersByTime(6_000)
     expect(worker.postMessage).not.toHaveBeenCalled()
   })

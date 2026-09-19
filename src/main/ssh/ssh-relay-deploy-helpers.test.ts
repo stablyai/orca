@@ -8,6 +8,10 @@ import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH
 } from './ssh-relay-version-mismatch-error'
+import {
+  RelayCredentialMismatchError,
+  RELAY_EXIT_CODE_CREDENTIAL_MISMATCH
+} from './ssh-relay-credential-mismatch-error'
 
 type MockChannel = ClientChannel & {
   stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
@@ -151,6 +155,23 @@ describe('waitForSentinel', () => {
     await expect(transportPromise).rejects.toBeInstanceOf(RelayVersionMismatchError)
   })
 
+  it('translates a pre-sentinel exit-43 + close into RelayCredentialMismatchError', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.stderr.emit(
+      'data',
+      Buffer.from('[relay-connect] Endpoint credential refused by daemon; exiting 43\n')
+    )
+    channel.emit('exit', RELAY_EXIT_CODE_CREDENTIAL_MISMATCH)
+    channel.emit('close')
+
+    await expect(transportPromise).rejects.toBeInstanceOf(RelayCredentialMismatchError)
+    await transportPromise.catch((err: unknown) => {
+      expect(err).not.toBeInstanceOf(RelayVersionMismatchError)
+    })
+  })
+
   it('rejects with a generic error (not RelayVersionMismatchError) on a non-42 exit code', async () => {
     const channel = createMockChannel()
     const transportPromise = waitForSentinel(channel)
@@ -211,9 +232,9 @@ describe('waitForSentinel', () => {
 
   it.each(['ssh2 channel', 'system-SSH child stdio'])(
     'forwards write(false), callback settlement, and drain for a %s',
-    async (shape) => {
+    async (channelKind) => {
       const channel = createMockChannel()
-      if (shape.startsWith('system')) {
+      if (channelKind.startsWith('system')) {
         Object.assign(channel, { _process: new EventEmitter() })
       }
       const callback = vi.fn()

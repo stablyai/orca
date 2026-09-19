@@ -20,7 +20,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
-import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import {
   makePaneSpawnReservationKey,
   reservePaneSpawn,
@@ -49,12 +49,9 @@ export async function buildRuntimePtySpawnOptions(
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {
     ctx.spawnOptions.codexHomePathOverride = { value: ctx.selectedCodexHomePath }
   }
-  const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
-  if (startupTerminalColorQueryReplyColors) {
-    ctx.spawnOptions.startupIngress = {
-      colors: startupTerminalColorQueryReplyColors,
-      deadlineMs: 5_000
-    }
+  const startupIngress = getStartupTerminalIngressIntent(args)
+  if (startupIngress) {
+    ctx.spawnOptions.startupIngress = startupIngress
   }
   let ptySpawnCommitReported = false
   ctx.reportPtySpawnCommitted = (): void => {
@@ -142,7 +139,7 @@ export async function buildRuntimePtySpawnOptions(
   if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
     ctx.spawnOptions.tabId = args.tabId
   }
-  if (process.platform === 'win32' && !args.connectionId) {
+  if (!args.connectionId) {
     ctx.spawnOptions.shellOverride = ctx.terminalRuntimeOptions.shellOverride
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
     ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings

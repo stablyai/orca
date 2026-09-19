@@ -133,6 +133,16 @@ describe('SyncDatabase statement cache', () => {
     expect(statement.get('c')).toEqual({ label: 'gamma' })
   })
 
+  it('reports whether a transaction is active', async () => {
+    const db = await createDatabase()
+
+    expect(db.isTransaction).toBe(false)
+    db.exec('BEGIN IMMEDIATE')
+    expect(db.isTransaction).toBe(true)
+    db.exec('ROLLBACK')
+    expect(db.isTransaction).toBe(false)
+  })
+
   it('preserves pragma and exec behavior', async () => {
     const db = await createDatabase()
 

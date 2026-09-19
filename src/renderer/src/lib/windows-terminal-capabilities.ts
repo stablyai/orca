@@ -11,6 +11,8 @@ export type WindowsTerminalCapabilities = {
   pwshAvailable: boolean
   gitBashAvailable: boolean
   hostPlatform: NodeJS.Platform | null
+  /** Host-owned PID-reuse proof; absent means the host did not advertise it. */
+  windowsProcessStartTimeAvailable?: boolean
   isLoading: boolean
 }
 

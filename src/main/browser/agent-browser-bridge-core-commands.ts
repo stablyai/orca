@@ -6,14 +6,10 @@ import type {
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
-import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { focusedValueSetExpression } from './agent-browser-bridge-input'
-import {
-  AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES,
-  EMBEDDED_NAVIGATION_TIMEOUT_MS
-} from './agent-browser-bridge-types'
+import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
 import {
   isAbortedNavigationError,
   waitForAbortedNavigationReplacement
@@ -157,23 +153,10 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       async (sessionName) => {
         if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
           await this.execAgentBrowser(sessionName, ['focus', element])
-          await this.execAgentBrowser(sessionName, [
-            'eval',
-            focusedValueSetExpression(JSON.stringify(''))
-          ])
-          for (const chunk of iterateBrowserTextInsertionChunks(
-            value,
-            AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-          )) {
-            await this.execAgentBrowser(sessionName, [
-              'eval',
-              focusedValueSetExpression(JSON.stringify(chunk), { append: true })
-            ])
-          }
-          await this.execAgentBrowser(sessionName, [
-            'eval',
-            focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
-          ])
+          // One stdin edit avoids argv limits and repeated copying of the growing field value.
+          await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
+            stdinText: focusedValueSetExpression(JSON.stringify(value), { dispatchEvents: true })
+          })
           return { filled: element } as BrowserFillResult
         }
 

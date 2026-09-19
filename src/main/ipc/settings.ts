@@ -36,6 +36,8 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -160,6 +162,9 @@ export function registerSettingsHandlers(
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
     }
+    if ('aiVaultSearch' in args) {
+      sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
+    }
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
     }
@@ -265,6 +270,9 @@ export function registerSettingsHandlers(
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
+    }
+    if ('aiVaultSearch' in sanitizedArgs) {
+      applySessionSearchSettingsChange(before, result)
     }
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for

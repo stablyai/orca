@@ -18,7 +18,9 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
+import { dispatchRejectionWasTransportWriteFailure } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -26,6 +28,7 @@ export type JournalReducerState = {
   sessionId: string
   epoch: string
   lastSequence: number
+  lastActivityAt: number
   /** Lowest sequence still individually replayable; rows below it were compacted. */
   oldestSequence: number
   highestFence: number
@@ -45,6 +48,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     sessionId,
     epoch,
     lastSequence: 0,
+    lastActivityAt: 0,
     oldestSequence: 1,
     highestFence: 0,
     items: new Map(),
@@ -62,8 +66,13 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   if (row.kind === 'epoch') {
     return
   }
+  state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
   if (row.kind === 'item') {
+    if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
+      return
+    }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
+    acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertItem(state, itemId, row.revision, {
       itemId,
       revision: row.revision,
@@ -84,7 +93,11 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     }
     for (const mutation of row.mutations) {
       if (mutation.kind === 'item') {
+        if (journalItemRevisionIsStale(state, mutation.itemId, mutation.revision)) {
+          continue
+        }
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
+        acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         upsertItem(state, itemId, mutation.revision, {
           itemId,
           revision: mutation.revision,
@@ -146,14 +159,20 @@ export function resolveJournalItemId(
     fields: { body }
   })
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
+  // A submission an echo may not claim is one that says the message never reached
+  // the provider, so an item resembling it is somebody else's. That is `rejected`
+  // now — and, in journals written before this state moved, an `unknown` carrying
+  // the transport marker. Replaying an older journal must not let such a row alias
+  // the echo of a later, genuinely delivered resend of the same text.
   const submission = [...state.submissions.values()]
     .sort((left, right) => left.submittedAt - right.submittedAt)
-    .find((candidate) => {
-      if (candidate.dispatchState === 'rejected' || candidate.payloadFingerprint !== fingerprint) {
-        return false
-      }
-      return state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
-    })
+    .find(
+      (candidate) =>
+        candidate.dispatchState !== 'rejected' &&
+        !dispatchRejectionWasTransportWriteFailure(candidate.reason) &&
+        candidate.payloadFingerprint === fingerprint &&
+        state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
+    )
   if (!submission) {
     return itemId
   }
@@ -190,7 +209,17 @@ function upsertItem(
   // so letting a revision advance it makes the row jump past everything that
   // landed in between — the provider's own echo of a send revises the submission
   // row, which relocated the user's bubble below later rows.
-  state.items.set(itemId, { ...next, sequence: existing.sequence, observedAt: existing.observedAt })
+  const submitted =
+    existing.body.kind === 'message' &&
+    existing.body.role === 'user' &&
+    parseAgentJournalItemKey(itemId)?.provider === 'orca'
+  state.items.set(itemId, {
+    ...next,
+    // Provider history may normalize text or omit local attachments from the original send.
+    body: submitted ? existing.body : next.body,
+    sequence: existing.sequence,
+    observedAt: existing.observedAt
+  })
   state.tombstones.delete(itemId)
 }
 
@@ -243,10 +272,16 @@ function applyDispatch(
   if (submission.dispatchState === 'rejected' || submission.dispatchState === 'accepted') {
     return
   }
+  submission.fence = row.fence
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
   submission.reason = row.reason
-  submission.resolvedAt = row.ts
+  submission.resolvedAt = row.state === 'pending' ? null : row.ts
+  if (row.recovered) {
+    submission.recovered = row.recovered
+  } else {
+    delete submission.recovered
+  }
   if (row.state !== 'accepted' || !row.providerItemId) {
     return
   }
@@ -254,6 +289,39 @@ function applyDispatch(
   state.receipts.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     providerItemId: row.providerItemId,
+    cursor: { epoch: row.epoch, sequence: row.seq },
+    acceptedAt: row.ts
+  })
+}
+
+function acceptSubmissionFromProviderItem(
+  state: JournalReducerState,
+  providerItemId: string,
+  resolvedItemId: string,
+  row: Pick<JournalRow, 'epoch' | 'seq' | 'fence' | 'ts'>
+): void {
+  if (providerItemId === resolvedItemId) {
+    return
+  }
+  const submission = [...state.submissions.values()].find(
+    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
+  )
+  if (
+    !submission ||
+    submission.dispatchState === 'accepted' ||
+    submission.dispatchState === 'rejected'
+  ) {
+    return
+  }
+  submission.fence = row.fence
+  submission.dispatchState = 'accepted'
+  submission.providerItemId = providerItemId
+  submission.reason = null
+  submission.resolvedAt = row.ts
+  delete submission.recovered
+  state.receipts.set(submission.clientMessageId, {
+    clientMessageId: submission.clientMessageId,
+    providerItemId,
     cursor: { epoch: row.epoch, sequence: row.seq },
     acceptedAt: row.ts
   })

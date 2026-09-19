@@ -155,7 +155,6 @@ describe('relay pty fd-leak patch on the install path', () => {
       '', // promote into the shared native-deps cache, if this deploy still gets that far
       '', // clean stage root
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ]
   }
@@ -255,7 +254,6 @@ describe('relay pty fd-leak patch on the install path', () => {
         '', // rm probe stderr
         '', // clean stage root
         'DEAD',
-        '', // publish the per-launch credential
         'READY'
       ])
     )

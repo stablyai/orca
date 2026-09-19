@@ -1,3 +1,4 @@
+import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
@@ -133,6 +134,11 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     // Why: clone before mutating so injections don't leak back into args.env (renderer may reuse it).
     ctx.env = { ...ctx.baseEnv }
     try {
+      await inheritOmpLaunchEnvironment(ctx.env, {
+        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
+        launchAgent: args.launchAgent,
+        launchCommand: ctx.launchCommand
+      })
       buildPtyHostEnv(sessionIdForEnv, ctx.env, {
         isPackaged: getAppEnvironment().isPackaged(),
         resourcesPath: process.resourcesPath,

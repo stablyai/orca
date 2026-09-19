@@ -10,6 +10,7 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
@@ -278,8 +279,18 @@ describe('push notification preference', () => {
     vi.mocked(AsyncStorage.setItem).mockReset()
   })
 
+  it.each(['true', 'false'])('requires fresh consent for legacy choice %s', async (legacy) => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:pushNotificationsEnabled' ? legacy : null
+    )
+    await expect(readPushNotificationsPreference()).resolves.toEqual({ value: null, loaded: true })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+  })
+
   it('distinguishes an unset preference from an explicit disabled choice', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:remotePushEnabled' ? 'true' : null
+    )
     await expect(readPushNotificationsPreference()).resolves.toEqual({
       value: null,
       loaded: true
@@ -303,12 +314,17 @@ describe('push notification preference', () => {
     await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
   })
 
-  it('persists the onboarding decision in the existing mobile toggle', async () => {
-    await savePushNotificationsEnabled(true)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'true')
-
-    await savePushNotificationsEnabled(false)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'false')
+  it('persists and reloads master consent', async () => {
+    const storage = new Map<string, string>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => storage.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      storage.set(key, value)
+    })
+    for (const enabled of [true, false]) {
+      await savePushNotificationsEnabled(enabled)
+      await expect(loadPushNotificationsEnabled()).resolves.toBe(enabled)
+    }
+    expect([...storage]).toEqual([['orca:pushServiceNotificationsEnabled', 'false']])
   })
 })
 
@@ -487,5 +503,42 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
+ *  the test says which build kind it is running as without asserting a type on `globalThis`. */
+function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
+  if (isDevelopmentBuild === undefined) {
+    Reflect.deleteProperty(globalThis, '__DEV__')
+    return
+  }
+  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
+}
+
+describe('hybrid shell flag', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    setDevelopmentBuild(undefined)
+  })
+
+  it('reads the developer toggle in a development build', async () => {
+    setDevelopmentBuild(true)
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+
+    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
+  })
+
+  it.each([
+    ['a release build', false],
+    ['a runtime with no __DEV__ at all', undefined]
+  ])('is off in %s even with the key left on, and never reads it', async (_label, isDev) => {
+    setDevelopmentBuild(isDev)
+    // The value a development build left behind in a container the install-over kept.
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+
+    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
+    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
   })
 })

@@ -5,12 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionJournalCloseRetries } from '../native-chat/agent-session-journal/journal-close-retry'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type {
   AgentSessionClaimStatus,
+  AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
+import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
@@ -270,6 +271,35 @@ describe('structured agent-session runtime install', () => {
       )
     )
   })
+
+  it('does not infer Windows process identity support from an injected reader', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
+    const originalPlatform = process.platform
+    const location: AgentSessionExecutionLocation = {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'folder'
+    }
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    try {
+      const host = await ensureStructuredAgentSessionHost({
+        stateDirectory,
+        hostId: HOST_ID,
+        claimKeyId: 'key-1',
+        resolveWorkspacePath: async () => stateDirectory!,
+        resolveEnvironment: async () => ({}),
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        readProcessStartTime: async () => 1_700_000_000_000
+      })
+
+      expect(host.supportsCreate(location, 'codex')).toBe(false)
+    } finally {
+      __setWindowsProcessTreeLoaderForTests()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
 })
 
 // A stop whose teardown fails must not forget the runtime it was tearing down.
@@ -315,6 +345,7 @@ describe('a teardown that fails is retried by the next stop', () => {
     const flaky = new Proxy(real, {
       get(target, property, receiver) {
         if (property !== 'close') {
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, property, receiver)
         }
         return async () => {
@@ -325,7 +356,7 @@ describe('a teardown that fails is retried by the next stop', () => {
           await target.close()
         }
       }
-    }) as AgentSessionJournal
+    })
     await agentSessionJournalCloseRetries.closeOrRetain(flaky)
 
     // The host's teardown runs the registry retry, so this stop surfaces it.

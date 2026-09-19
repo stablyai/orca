@@ -87,6 +87,9 @@ export type RuntimeStore = {
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
+    terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
+    experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
+    openAgentTabsInChatByDefault?: GlobalSettings['openAgentTabsInChatByDefault']
     experimentalStructuredNativeChat?: GlobalSettings['experimentalStructuredNativeChat']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -98,6 +101,7 @@ export type RuntimeStore = {
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
+    minimaxEndpoint?: GlobalSettings['minimaxEndpoint']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
@@ -115,6 +119,8 @@ export type RuntimeStore = {
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
+    nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
+    aiVaultSearch?: GlobalSettings['aiVaultSearch']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value

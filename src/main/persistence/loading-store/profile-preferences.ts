@@ -189,7 +189,10 @@ export function getFeatureInteractionOperations(
   }
 }
 
-export function installProfilePreferencesContext(target: object, source: ProfilePreferences): void {
+export function installProfilePreferencesContext(
+  target: ProfilePreferences,
+  source: ProfilePreferences
+): void {
   Object.defineProperty(target, profilePreferencesContext, {
     value: source[profilePreferencesContext]
   })

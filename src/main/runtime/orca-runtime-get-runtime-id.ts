@@ -1,6 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from './orca-runtime-has-exact-persisted-terminal-surface-identity'
-import type { OrchestrationWorkerServer } from './orchestration/environment-transport'
+import type {
+  OrchestrationEnvironmentCallOptions,
+  OrchestrationWorkerServer
+} from './orchestration/environment-transport'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
@@ -29,7 +32,7 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     params: unknown,
     timeoutMs?: number,
     envelope?: RuntimeOrchestrationEnvelope,
-    internal?: { contractVerified?: boolean }
+    internal?: OrchestrationEnvironmentCallOptions
   ): Promise<unknown> {
     return this.orchestrationFederation.callWorkerServer(
       selector,

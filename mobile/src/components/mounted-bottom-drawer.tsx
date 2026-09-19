@@ -298,12 +298,12 @@ export function MountedBottomDrawer({
         }
       ]
     }
-  })
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateY])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
@@ -382,6 +382,8 @@ export function MountedBottomDrawer({
           <Animated.View
             // Why: remount per window hand-back — see the windowEpoch effect.
             key={windowEpoch}
+            // The sheet names itself so a check can find it without reading its styling.
+            testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,

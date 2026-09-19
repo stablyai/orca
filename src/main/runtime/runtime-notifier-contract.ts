@@ -79,6 +79,7 @@ export type RuntimeNotifier = {
     resolution: 'adopted' | 'exited' | 'rolled_back',
     ptyId?: string
   ): void
+  /** The fence lives in the workspace session, which a live renderer only re-reads at startup. */
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,

@@ -61,7 +61,7 @@ export type AgentStatusSlice = {
   recentlyClosedAgentStatusTabIds: Record<string, true>
 
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
-  recentlyRetiredAgentStatusPaneKeys: Record<string, true>
+  recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
 
   retireAgentPaneAuthority: (
     paneKey: string,
@@ -158,7 +158,6 @@ export type AgentStatusSlice = {
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
-  setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 

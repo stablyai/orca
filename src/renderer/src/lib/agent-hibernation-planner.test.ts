@@ -753,37 +753,6 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
       )
     ).toEqual([agentEntry.paneKey])
   })
-
-  it('still refuses a pane fenced against automatic resume', () => {
-    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
-    const agentEntry = entry({ agentType: 'claude', providerSession })
-    const fenced = {
-      ...liveAnchor('claude', providerSession),
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
-    }
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: { [agentEntry.paneKey]: fenced as never },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([])
-    // Control: the identical pane IS planned once the fence is gone, so the rejection
-    // above isolates the fence rather than some other guard.
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: {
-            [agentEntry.paneKey]: liveAnchor('claude', providerSession) as never
-          },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([agentEntry.paneKey])
-  })
 })
 
 describe('idle clock anchors on stateStartedAt, not updatedAt', () => {

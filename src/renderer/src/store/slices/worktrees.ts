@@ -52,6 +52,7 @@ import {
   createGetKnownWorktreeById,
   createPurgeWorktreeTerminalState,
   createRemountTerminalTabForRecovery,
+  createSettleTerminalTabRecovery,
   createSetRenamingWorktreeId
 } from './worktrees/session/worktree-slice-lookups'
 import { createPurgeStaleRuntimeHostState } from './worktrees/teardown/purge-stale-runtime-host-state'
@@ -108,6 +109,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   seedActiveWorktreeLastVisitedIfMissing: createSeedActiveWorktreeLastVisitedIfMissing(set, get),
   setRenamingWorktreeId: createSetRenamingWorktreeId(set, get),
   remountTerminalTabForRecovery: createRemountTerminalTabForRecovery(set, get),
+  settleTerminalTabRecovery: createSettleTerminalTabRecovery(set, get),
   setActiveWorktree: createSetActiveWorktree(set, get),
   setActiveFolderWorkspace: createSetActiveFolderWorkspace(set, get),
   allWorktrees: createAllWorktrees(set, get),

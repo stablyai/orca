@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
 import {
   applyCodexPromptAnswer,
   CodexPromptRegistry,
+  MAX_CODEX_PROMPT_REGISTRY_BYTES,
   MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
   codexJournalPromptIdPart,
   decodeCodexQuestionOptionId,
@@ -92,6 +94,79 @@ describe('CodexPromptRegistry', () => {
     expect(registry.find('approval-b')?.requestId).toBe(2)
     // Nothing addresses the shared item id, because it names two live prompts.
     expect(registry.find('codex-item-1')).toBeNull()
+  })
+
+  it('clears only prompts belonging to a settled turn', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register({
+      id: 1,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'root-item', threadId: 'thread-1' }
+    })
+    registry.register({
+      id: 2,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'other-item', threadId: 'thread-1', turnId: 'turn-2' }
+    })
+    registry.register({
+      id: 3,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'other-thread-item', threadId: 'thread-2', turnId: 'turn-1' }
+    })
+    registry.bindJournalItemId('journal-root', 'thread-1', 'root-item', 'turn-1')
+
+    registry.clearTurn('thread-1', 'turn-1')
+
+    expect(registry.find('root-item')).toBeNull()
+    expect(registry.find('journal-root')).toBeNull()
+    expect(registry.find('other-item')?.requestId).toBe(2)
+    expect(registry.find('other-thread-item')?.requestId).toBe(3)
+  })
+
+  it('retains a bounded cleanup identity for an unaddressable backfilled turn id', () => {
+    const registry = new CodexPromptRegistry()
+    const turnId = 'turn-'.padEnd(MAX_CODEX_PROMPT_REGISTRY_BYTES + 1, 'x')
+    registry.register({
+      id: 1,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'root-item', threadId: 'thread-1' }
+    })
+
+    registry.bindJournalItemId('journal-root', 'thread-1', 'root-item', turnId)
+
+    expect(registry.bytes).toBeLessThanOrEqual(MAX_CODEX_PROMPT_REGISTRY_BYTES)
+    registry.clearTurn('thread-1', turnId)
+    expect(registry.find('journal-root')).toBeNull()
+  })
+
+  it('reserves enough bytes for a wire-valid multibyte backfilled turn id', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register({
+      id: 1,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'root-item', threadId: 'thread-1' }
+    })
+    const reservedBytes = registry.bytes
+    const turnId = '界'.repeat(AGENT_SESSION_ID_MAX_LENGTH)
+
+    registry.bindJournalItemId('journal-root', 'thread-1', 'root-item', turnId)
+
+    expect(registry.find('journal-root')?.turnId).toBe(turnId)
+    expect(registry.bytes).toBe(reservedBytes)
+    expect(registry.bytes).toBeLessThanOrEqual(MAX_CODEX_PROMPT_REGISTRY_BYTES)
+  })
+
+  it('rejects a request turn id beyond the wire identity bound', () => {
+    const registry = new CodexPromptRegistry()
+    const turnId = 'x'.repeat(AGENT_SESSION_ID_MAX_LENGTH + 1)
+    const prompt = registry.register({
+      id: 1,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'root-item', threadId: 'thread-1', turnId }
+    })
+
+    expect(prompt).toBeNull()
+    expect(registry.bytes).toBe(0)
   })
 
   it('addresses a prompt by its journal item id once bound, and forgets both', () => {

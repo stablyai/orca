@@ -239,7 +239,7 @@ export function collectRetainedAgentsOnDisappear(args: {
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   retentionSuppressedPaneKeys: Record<string, true>
   recentlyClosedAgentStatusTabIds: Record<string, true>
-  recentlyRetiredAgentStatusPaneKeys: Record<string, true>
+  recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
   /** Live tabs by id; supplies the real destination tab when a pane key transferred. */
   tabIndex?: Map<string, { tab: TerminalTab }>
 }): {

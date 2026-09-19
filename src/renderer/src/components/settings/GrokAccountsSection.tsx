@@ -56,6 +56,12 @@ export function GrokAccountsSection(): React.JSX.Element {
   // monthly included usage instead of hiding the usage row entirely.
   const usageIsWeekly = Boolean(grokUsage?.weekly)
   const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
+  // Why: hiding the row entirely left signed-in users with no explanation when
+  // Grok reports no percentage — never let unknown usage read as healthy (#15740).
+  const unavailableReason =
+    signedIn && !usageWindow && grokUsage?.status === 'unavailable'
+      ? (grokUsage.error ?? null)
+      : null
 
   return (
     <section id="accounts-grok" className="space-y-4 scroll-mt-6">
@@ -197,6 +203,17 @@ export function GrokAccountsSection(): React.JSX.Element {
               </span>
             ) : null}
           </div>
+        </SearchableSetting>
+      ) : unavailableReason ? (
+        <SearchableSetting
+          title={translate('auto.components.settings.GrokAccountsSection.0bb18642b7', 'Usage')}
+          description={translate(
+            'auto.components.settings.GrokAccountsSection.a8f4139350',
+            'Grok reported no usage percentage for this account.'
+          )}
+          keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
+        >
+          <p className="text-xs text-muted-foreground">{unavailableReason}</p>
         </SearchableSetting>
       ) : null}
     </section>

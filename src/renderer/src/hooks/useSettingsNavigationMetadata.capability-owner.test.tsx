@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
+import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 
 const testState = vi.hoisted(() => ({
@@ -14,8 +16,16 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
+/** Only the store fields this screen's selectors read; the mock supplies nothing else. */
+type MockedSettingsNavState = {
+  settings: GlobalSettings | null
+  repos: Repo[]
+  runtimeEnvironments: typeof testState.runtimeEnvironments
+  runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
+}
+
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: object) => unknown) =>
+  useAppStore: (selector: (state: MockedSettingsNavState) => unknown) =>
     selector({
       settings: testState.settings,
       repos: [],

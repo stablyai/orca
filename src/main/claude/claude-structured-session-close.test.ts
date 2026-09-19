@@ -11,8 +11,42 @@ import {
   identityFor
 } from './claude-structured-session-test-support'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
+import { closeClaudeSession } from './claude-structured-session-close'
+import { ClaudeAcquisitionRegistry } from './claude-structured-session-state'
 
 describe('Claude published session close lifecycle', () => {
+  it('reports a proven root exit when published-session close cannot prove descendants', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const connection = claude.connections[0]!
+    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    connection.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+
+    await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
+      AgentSessionAcquisitionRootExitObservedError
+    )
+  })
+
+  it('reports the same root-exit verdict while cancelling acquisition', async () => {
+    const claude = fakeClaude({
+      unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' }
+    })
+    const acquisitions = new ClaudeAcquisitionRegistry()
+    const { attempt } = acquisitions.start('session-1', new ClaudePromptRegistry())
+    attempt.connection = await claude.openConnection({
+      pathToClaudeCodeExecutable: 'claude',
+      options: {},
+      cwd: '/work/repo'
+    })
+
+    await expect(
+      closeClaudeSession({ sessionId: 'session-1', sessions: new Map(), acquisitions })
+    ).rejects.toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+  })
+
   it('ends the session even when the durable handle write rejects', async () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
@@ -55,7 +89,9 @@ describe('Claude published session close lifecycle', () => {
     expect(backgroundStates).toEqual([
       {
         state: 'monitoring',
-        tasks: [{ id: 'background-1', kind: 'agent' }],
+        tasks: [
+          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
+        ],
         supportsTaskStop: true
       }
     ])
@@ -74,7 +110,9 @@ describe('Claude published session close lifecycle', () => {
     expect(backgroundStates).toEqual([
       {
         state: 'monitoring',
-        tasks: [{ id: 'background-1', kind: 'agent' }],
+        tasks: [
+          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
+        ],
         supportsTaskStop: true
       },
       null

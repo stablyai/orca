@@ -280,6 +280,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       return
     }
 
+    let burstRefresh: Promise<void> | null = null
     let eventSequence = 0
     let disposed = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -296,15 +297,24 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       const sequence = eventSequence
       clearRetryTimer()
       if (!isWindowVisible()) {
+        burstRefresh = null
         return
       }
-      void refresh({ force: true, targets: [runtimeTarget] }).finally(() => {
-        if (disposed || sequence !== eventSequence || !isWindowVisible()) {
+      // Keep the leading scan through the quiet window so sequential events share it too.
+      burstRefresh ??= refresh({ force: true, targets: [runtimeTarget] })
+      void burstRefresh.finally(() => {
+        if (disposed || sequence !== eventSequence) {
+          return
+        }
+        if (!isWindowVisible()) {
+          burstRefresh = null
           return
         }
         // Why: some dev servers print their URL just before the listener is
         // visible to lsof/netstat. One quiet settle scan catches that startup race.
         retryTimer = setTimeout(() => {
+          retryTimer = null
+          burstRefresh = null
           if (disposed || sequence !== eventSequence || !isWindowVisible()) {
             return
           }

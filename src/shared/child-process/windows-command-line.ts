@@ -32,6 +32,9 @@
  * because that part `CommandLineToArgvW` does interpret.
  */
 function quoteWindows(value: string, escapePercent: boolean): string {
+  if (!(escapePercent ? /[\\"%]/ : /[\\"]/).test(value)) {
+    return `"${value}"`
+  }
   let quoted = '"'
   let backslashes = 0
   for (const char of value) {

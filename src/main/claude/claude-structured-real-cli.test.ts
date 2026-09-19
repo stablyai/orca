@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -48,13 +48,14 @@ const realClaudeAuthenticated = realClaudeAuthStatus?.loggedIn === true
 function realAdapter(
   providerSessionId: string,
   claudeConfigDir: string,
-  events: ClaudeStructuredSessionEvent[] = []
+  events: ClaudeStructuredSessionEvent[] = [],
+  cwd = process.cwd()
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: command,
       options: { ...CLAUDE_STRUCTURED_BASE_OPTIONS, sessionId: providerSessionId },
-      cwd: process.cwd(),
+      cwd,
       claudeConfigDir,
       providerSessionId,
       resumeLeafUuid: null,
@@ -100,7 +101,13 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
       const events: ClaudeStructuredSessionEvent[] = []
-      const adapter = realAdapter(providerSessionId, claudeConfigDir, events)
+      const cwd = await mkdtemp(join(tmpdir(), 'orca-command-init-'))
+      await mkdir(join(cwd, '.claude', 'commands'), { recursive: true })
+      await writeFile(
+        join(cwd, '.claude', 'commands', 'orca-init-catalog-proof.md'),
+        '---\ndescription: Initialization catalog proof\n---\nReply with OK.\n'
+      )
+      const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd)
 
       try {
         const acquisition = await adapter.acquire({
@@ -120,8 +127,17 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
           leafUuid: null
         })
         expect(observedSubtypes).toContain('hook_started')
+        expect(adapter.readCommands('real-cli-handshake')).toContainEqual({
+          name: 'orca-init-catalog-proof',
+          kind: 'command',
+          kindUnspecified: true
+        })
+        expect(
+          adapter.readCommands('real-cli-handshake')?.some(({ name }) => name === 'help')
+        ).toBe(false)
       } finally {
         await adapter.closeAll()
+        await rm(cwd, { recursive: true, force: true })
       }
     },
     10_000
