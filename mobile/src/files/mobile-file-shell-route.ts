@@ -24,3 +24,21 @@ import {
 export function mobileFileShellRoute(route: BridgeInitRoute): BridgeInitRoute | null {
   return BridgeInitRouteSchema.safeParse(route).success ? route : null
 }
+
+/**
+ * The identity of a route as the page will experience it, which is what a shell screen keys on.
+ *
+ * The pathname is not enough. The page learns its route exactly once, from `init`, and writes it
+ * into its own history before the first render; nothing later tells it the route moved. So a
+ * same-path param change — another file in the same worktree, a different `name` — leaves the
+ * shell and its bridge host mounted, the page still showing the file it was opened on, and the
+ * host answering any later `init` with whatever route it now holds. Keying on the params as well
+ * makes that change a remount, which is the only thing that hands the page a new route.
+ *
+ * Serialized the same way the page's own bootstrap serializes it, so two routes that would put the
+ * same URL in the page's history are the same key.
+ */
+export function mobileFileShellRouteKey(route: BridgeInitRoute): string {
+  const search = new URLSearchParams(route.params ?? {}).toString()
+  return search === '' ? route.pathname : `${route.pathname}?${search}`
+}

@@ -4,7 +4,10 @@ import {
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
 } from '../../../../../src/files/mobile-file-preview-route'
-import { mobileFileShellRoute } from '../../../../../src/files/mobile-file-shell-route'
+import {
+  mobileFileShellRoute,
+  mobileFileShellRouteKey
+} from '../../../../../src/files/mobile-file-shell-route'
 import { MobileWebShellScreen } from '../../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { useMobileWebShellEnabled } from '../../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
@@ -53,17 +56,14 @@ export default function MobileFilePreviewRoute() {
   if (enabled !== true || !route.ok || shellRoute === null) {
     return native
   }
-  // Keyed on the route, for the reason the explorer beside it is: a host captures the grants its
-  // session was opened with, so only a remount drops the bridge the previous route opened.
-  //
-  // The pathname alone, not the params: every caller in this tree pushes rather than setting params
-  // on the route it is already on (`navigateToMobileFilePreview` is a `router.push`), so a file
-  // change arrives as a new entry and the pathname's worktree segment moves with it. A caller that
-  // swapped `relativePath` in place would keep the session, which is correct — same host, same
-  // grants — and the screen reloads the preview from the param either way.
+  // Keyed on the whole route, params included, for two reasons. A host captures the grants its
+  // session was opened with, so only a remount drops the bridge the previous route opened. And the
+  // page learns its route exactly once, from `init`: a same-path param change — another file in
+  // this worktree — would otherwise leave the shell mounted and the page still showing the file it
+  // was opened on, with nothing to tell it otherwise.
   return (
     <MobileWebShellScreen
-      key={shellRoute.pathname}
+      key={mobileFileShellRouteKey(shellRoute)}
       hostId={route.params.hostId}
       route={shellRoute}
       fallback={native}

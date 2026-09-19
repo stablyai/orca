@@ -203,6 +203,24 @@ describe('the native file explorer route that hands off to the shell', () => {
       'mount:/h/host-2/files/wt-9'
     ])
   })
+
+  it('remounts when only a param changes, which the page has no other way to learn', async () => {
+    // The page reads its route once, out of `init`. Same pathname, different label: without the
+    // params in the key the shell stays mounted and the page never hears about it.
+    let renderer: ReturnType<typeof create> | null = null
+    await act(async () => {
+      renderer = create(createElement(MobileFileExplorerScreen))
+    })
+    dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'renamed' }
+    await act(async () => {
+      renderer?.update(createElement(MobileFileExplorerScreen))
+    })
+    expect(dependencies.lifecycle).toEqual([
+      'mount:/h/host-1/files/wt-1',
+      'unmount:/h/host-1/files/wt-1',
+      'mount:/h/host-1/files/wt-1'
+    ])
+  })
 })
 
 describe('the native file preview route that hands off to the shell', () => {
@@ -222,6 +240,23 @@ describe('the native file preview route that hands off to the shell', () => {
         params: { relativePath: 'docs/readme.md', source: 'worktree' }
       }
     ])
+  })
+
+  it('remounts for another file in the same worktree, which keeps the pathname', async () => {
+    let renderer: ReturnType<typeof create> | null = null
+    await act(async () => {
+      renderer = create(createElement(MobileFilePreviewRoute))
+    })
+    dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', relativePath: 'docs/other.md' }
+    await act(async () => {
+      renderer?.update(createElement(MobileFilePreviewRoute))
+    })
+    expect(dependencies.lifecycle).toEqual([
+      'mount:/h/host-1/files/preview/wt-1',
+      'unmount:/h/host-1/files/preview/wt-1',
+      'mount:/h/host-1/files/preview/wt-1'
+    ])
+    expect(dependencies.routes.at(-1)?.params?.relativePath).toBe('docs/other.md')
   })
 
   it('remounts the shell when the route changes rather than updating it', async () => {

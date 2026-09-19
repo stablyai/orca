@@ -41,9 +41,22 @@ export function useMobileFilePreviewBack(options: {
 }): MobileFilePreviewBack {
   const { hasUnsavedDraft, leave } = options
   const [asking, setAsking] = useState(false)
+  const [askedAbout, setAskedAbout] = useState(hasUnsavedDraft)
 
-  // Derived rather than cleared in an effect: a draft saved or reverted while the prompt is up
-  // leaves nothing to discard, and an effect that answered that would paint one frame still asking.
+  // Adjusted during render, not in an effect: an effect that answered this would paint one frame
+  // still asking, which is the shape React Doctor names.
+  //
+  // The request belongs to the draft it was made about. `asking && hasUnsavedDraft` hides the
+  // prompt when a save or a revert empties the draft, but on its own it leaves the flag set, so
+  // the next edit put the prompt back with no Back request behind it. Dropping the request when
+  // the draft goes is what ends it with the thing it was about.
+  if (askedAbout !== hasUnsavedDraft) {
+    setAskedAbout(hasUnsavedDraft)
+    if (!hasUnsavedDraft) {
+      setAsking(false)
+    }
+  }
+
   const confirmingDiscard = asking && hasUnsavedDraft
 
   const requestBack = useCallback(() => {

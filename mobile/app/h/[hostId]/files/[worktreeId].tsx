@@ -1,7 +1,10 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplorerPanel'
 import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
-import { mobileFileShellRoute } from '../../../../src/files/mobile-file-shell-route'
+import {
+  mobileFileShellRoute,
+  mobileFileShellRouteKey
+} from '../../../../src/files/mobile-file-shell-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
@@ -51,6 +54,11 @@ export default function MobileFileExplorerScreen() {
   // across a route change would keep authorising frames under the grants of the route the page has
   // left. The key is what makes the change a remount, which disposes that bridge in the commit.
   return (
-    <MobileWebShellScreen key={route.pathname} hostId={hostId} route={route} fallback={native} />
+    <MobileWebShellScreen
+      key={mobileFileShellRouteKey(route)}
+      hostId={hostId}
+      route={route}
+      fallback={native}
+    />
   )
 }

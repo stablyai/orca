@@ -29,15 +29,26 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/tasks',
     grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
   },
-  // The file explorer. `navigate` because its Back pops the native stack, and because a row opens
-  // the preview beside it, which is a page route the handoff keeps inside the document. `storage`
-  // for the shared components the host layout renders above it. No `externalLink`: nothing the
-  // explorer itself renders opens a URL. The two openers in this closure are both the shared
-  // layout's — the protocol wall, and the New Workspace source field the sidebar renders on a wide
-  // layout — and every `/h` route reaches both, `/h/[hostId]` included, which is granted no
-  // `externalLink` either. A tablet tap on that field is therefore dead on any of them: a
-  // pre-existing gap this route neither widens nor fixes.
-  { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage'] },
+  // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
+  // components the host layout renders above it.
+  //
+  // `externalLink` is transitive, not its own: a row opens the preview, and because that is a page
+  // route the handoff keeps the push inside this document. Grants are resolved once, from the route
+  // the shell opened (`grantsForRoute` on `session.routePathname`), so a preview reached that way
+  // runs under *this* route's grants for the life of the session — and a Markdown link in it would
+  // be refused by `notifyExternalLink` and do nothing at all. So a route must declare a superset of
+  // the grants of every page route its screens push to locally, which for this one means the
+  // preview's list. The census beside it pins that pair.
+  //
+  // Nothing the explorer itself renders opens a URL. The two openers in its own closure are the
+  // shared layout's — the protocol wall, and the New Workspace source field the sidebar renders on
+  // a wide layout — and every `/h` route reaches both, `/h/[hostId]` included, which declares no
+  // `externalLink`. That tablet tap stays dead on all of them: a pre-existing gap this route
+  // neither widens nor fixes.
+  {
+    pathname: '/h/[hostId]/files/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink']
+  },
   // The file preview. Same two, plus `externalLink`: a Markdown preview renders links, and
   // `MobileMarkdown` opens them through the platform seam. That is a consumer inside the domain
   // rather than the shared wall, which is what makes this route's list longer than the explorer's.

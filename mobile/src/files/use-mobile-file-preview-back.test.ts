@@ -117,6 +117,29 @@ describe('leaving the file preview', () => {
     expect(leave).not.toHaveBeenCalled()
   })
 
+  it('does not re-show itself on the next edit after a save', () => {
+    // `asking` outlives the draft it was about unless something clears it: with the prompt up, a
+    // save makes `hasUnsavedDraft` false and the prompt hides, but the flag is still set, so the
+    // very next edit puts the prompt back with no Back request behind it.
+    const leave = vi.fn()
+    const renderer = render(true, leave)
+    act(() => {
+      held.back?.requestBack()
+    })
+    expect(held.back?.confirmingDiscard).toBe(true)
+    // The save lands: nothing left to discard.
+    act(() => {
+      renderer.update(createElement(Screen, { hasUnsavedDraft: false, leave }))
+    })
+    expect(held.back?.confirmingDiscard).toBe(false)
+    // The next edit. Nobody asked to leave, so nobody should be asked about it.
+    act(() => {
+      renderer.update(createElement(Screen, { hasUnsavedDraft: true, leave }))
+    })
+    expect(held.back?.confirmingDiscard).toBe(false)
+    expect(leave).not.toHaveBeenCalled()
+  })
+
   it('arms the hardware back press natively', () => {
     render(false, vi.fn())
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
