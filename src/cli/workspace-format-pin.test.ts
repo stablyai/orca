@@ -3,6 +3,7 @@ import { formatWorktreeList, formatWorktreePs } from './format'
 import type { RuntimeWorktreePsSummary, RuntimeWorktreeRecord } from '../shared/runtime-types'
 
 function record(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktreeRecord {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal names every field the list formatter prints; the cast supplies the rest of the record.
   return {
     id: 'repo::/tmp/repo/child',
     repoId: 'repo',
