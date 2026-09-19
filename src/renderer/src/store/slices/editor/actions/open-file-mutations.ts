@@ -21,6 +21,12 @@ export function createOpenFileMutations(
 > {
   return {
     setActiveFile: (fileId) => {
+      // Why: an id with no record selects an empty editor and then persists as the worktree's
+      // active file, which is how a closed document comes back on the next restore.
+      if (!get().openFiles.some((f) => f.id === fileId)) {
+        console.warn(`[editor] ignoring setActiveFile for an id with no open document: ${fileId}`)
+        return
+      }
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
         const worktreeId = file?.worktreeId

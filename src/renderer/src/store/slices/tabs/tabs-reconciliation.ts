@@ -12,11 +12,17 @@ import {
   writeBatchedWorkspaceRecordEntry,
   type WorktreeTabModelReconciliationBatch
 } from './tabs-reconciliation-batch'
+import { collectOrphanEditorFileIds } from '../editor/file-ids/orphan-editor-file-ids'
 
 export type WorktreeTabModelReconciliation = {
   patch: Partial<AppState>
   renderableTabCount: number
   activeRenderableTabId: string | null
+  /**
+   * Open documents this workspace has no tab for. Reported rather than pruned here: the batch
+   * fold indexes `openFiles` once and stays valid only while reconciliation never writes it.
+   */
+  orphanEditorFileIds: readonly string[]
 }
 
 /**
@@ -259,6 +265,15 @@ export function projectWorktreeTabModelReconciliation(
   return {
     patch,
     renderableTabCount: validTabs.length,
+    // Why the guard: a workspace whose tab model was never hydrated proves nothing about orphans.
+    orphanEditorFileIds:
+      worktreeId in state.unifiedTabsByWorktree
+        ? collectOrphanEditorFileIds(
+            liveEditorIds,
+            validTabs,
+            state.activeFileIdByWorktree[worktreeId]
+          )
+        : [],
     activeRenderableTabId:
       nextGroups.find((group) => group.id === nextActiveGroupId)?.activeTabId ??
       nextGroups.find((group) => group.activeTabId !== null)?.activeTabId ??
