@@ -374,7 +374,7 @@ describe('owned orchestration references', () => {
       'A Delivery therefore always carries the whole FIFO batch whatever its types, and a `check` without `--wait` hands that batch over unfiltered'
     )
     expect(reference).toContain('send --to dispatch:<dispatch_id>')
-    for (const group of ['@all', '@grok', '@cursor', '@worktree:<id>']) {
+    for (const group of ['@all', '@idle', '@<agent>', '@worktree:<id>']) {
       expect(reference).toContain(group)
     }
     expect(reference).toContain('Dispatch lifecycle messages never target groups')

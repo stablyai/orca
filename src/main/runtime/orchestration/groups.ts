@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
 import type { OrchestrationAddressableAgent } from './structured-worker-group-addressing'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
@@ -7,35 +8,33 @@ import type { OrchestrationAddressableAgent } from './structured-worker-group-ad
 // candidates: the sender's Run for every group but `@worktree:<id>`, which names one
 // workspace explicitly. There is no host-wide candidate set.
 
-const AGENT_NAME_GROUPS = [
-  'claude',
-  'openclaude',
-  'codex',
-  'opencode',
-  'mimo',
-  'gemini',
-  'droid',
-  'grok',
-  'cursor'
-] as const
+/** Group names that predate the canonical agent id and must keep resolving. */
+const LEGACY_GROUP_NAME_ALIASES: Readonly<Record<string, TuiAgent>> = { mimo: 'mimo-code' }
 
-type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
+// Use the canonical catalog so newly supported agents are addressable immediately.
+const GROUP_AGENT_IDS: ReadonlyMap<string, TuiAgent> = new Map<string, TuiAgent>([
+  ...ALL_TUI_AGENTS.map((agent): [string, TuiAgent] => [agent, agent]),
+  ...Object.entries(LEGACY_GROUP_NAME_ALIASES)
+])
+
+const WORKTREE_GROUP_PREFIX = '@worktree:'
 
 export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }
 
-/** Group name to the agent id the host publishes for a pane. */
-const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
-  claude: 'claude',
-  openclaude: 'openclaude',
-  codex: 'codex',
-  opencode: 'opencode',
-  mimo: 'mimo-code',
-  gemini: 'gemini',
-  droid: 'droid',
-  grok: 'grok',
-  cursor: 'cursor'
+// Distinguish an unknown group from a known group with no current members.
+export function isRecognisedGroupAddress(to: string): boolean {
+  if (!isGroupAddress(to)) {
+    return false
+  }
+  const group = to.toLowerCase()
+  return (
+    group === '@all' ||
+    group === '@idle' ||
+    group.startsWith(WORKTREE_GROUP_PREFIX) ||
+    GROUP_AGENT_IDS.has(group.slice(1))
+  )
 }
 
 /**
@@ -53,11 +52,8 @@ const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
  * delivering is visible and recoverable — the sender sees no recipients; delivering to the wrong
  * agent is neither.
  */
-function terminalIsAgent(
-  terminal: OrchestrationAddressableAgent,
-  agentName: AgentNameGroup
-): boolean {
-  return terminal.agentIdentity === GROUP_AGENT_IDS[agentName]
+function terminalIsAgent(terminal: OrchestrationAddressableAgent, agentId: TuiAgent): boolean {
+  return terminal.agentIdentity === agentId
 }
 
 export function resolveGroupAddress(
@@ -86,8 +82,8 @@ export function resolveGroupAddress(
   }
 
   // @worktree:<id> — all handles in a specific worktree
-  if (group.startsWith('@worktree:')) {
-    const worktreeId = to.slice('@worktree:'.length)
+  if (group.startsWith(WORKTREE_GROUP_PREFIX)) {
+    const worktreeId = to.slice(WORKTREE_GROUP_PREFIX.length)
     return terminals
       .filter((t) => t.handle !== senderHandle && t.worktreeId === worktreeId)
       .map((t) => t.handle)
@@ -96,19 +92,19 @@ export function resolveGroupAddress(
   // Why: agent-name groups (@claude, @droid, etc.) resolve against the identity the HOST
   // published for each pane, so the sender can address every instance of an agent without
   // knowing their handles — and without a task title being able to redirect the message.
-  const agentName = group.slice(1) // remove @
-  if ((AGENT_NAME_GROUPS as readonly string[]).includes(agentName)) {
+  const agentId = GROUP_AGENT_IDS.get(group.slice(1)) // remove @
+  if (agentId) {
     return terminals
       .filter((t) => {
         if (t.handle === senderHandle) {
           return false
         }
-        return terminalIsAgent(t, agentName as AgentNameGroup)
+        return terminalIsAgent(t, agentId)
       })
       .map((t) => t.handle)
   }
 
-  // Why: unknown groups resolve to empty rather than throwing so callers can
-  // distinguish "valid group, no current members" from programming errors.
+  // Why still empty and not a throw: resolution stays total. Callers that must tell an
+  // unknown group from an empty one ask `isRecognisedGroupAddress` first.
   return []
 }

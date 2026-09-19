@@ -1,7 +1,7 @@
 import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { resolveGroupAddress } from '../../../../orchestration/groups'
+import { isRecognisedGroupAddress, resolveGroupAddress } from '../../../../orchestration/groups'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import {
@@ -135,6 +135,14 @@ export async function sendGroupMessage(args: {
       )
     }
     return runId
+  }
+
+  // Report typos before Run-binding failures obscure the invalid address.
+  if (!isRecognisedGroupAddress(groupAddress)) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Unknown group address: ${groupAddress}. Group addresses are @all, @idle, @worktree:<id>, or @<agent>.`
+    )
   }
 
   // `@worktree:<id>` names one workspace explicitly; every other group means the sender's Run.
