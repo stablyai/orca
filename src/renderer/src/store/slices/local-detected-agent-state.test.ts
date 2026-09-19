@@ -219,4 +219,27 @@ describe('local detected agent context lifecycle', () => {
     expect(detectAgents).toHaveBeenCalledTimes(2)
     expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['claude'])
   })
+
+  it('re-runs local detection after an empty result instead of pinning it', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    // Why: detectPromise / detectedContextKey are module-scoped and can leak
+    // from earlier cases with the same local preflight context.
+    store.getState().clearLocalDetectedAgents()
+    // An empty [] is truthy, so a prior "no agents found" (including WSL
+    // cold-start soft-fails) must not short-circuit later probes.
+    detectAgents
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(['grok'])
+      .mockResolvedValue(['claude'])
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual([])
+    expect(store.getState().detectedAgentIds).toEqual([])
+    expect(detectAgents).toHaveBeenCalledTimes(1)
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['grok'])
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+    expect(store.getState().detectedAgentIds).toEqual(['grok'])
+    store.getState().clearLocalDetectedAgents()
+  })
 })
