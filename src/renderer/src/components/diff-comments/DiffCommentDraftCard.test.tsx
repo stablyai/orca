@@ -109,6 +109,53 @@ describe('DiffCommentDraftCard', () => {
     expect(onSubmit).toHaveBeenCalledWith('First line')
   })
 
+  it('submits Cmd+Shift+Enter and ignores duplicate submits while pending', async () => {
+    let resolveSubmit: (result: boolean) => void = () => {}
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveSubmit = resolve
+        })
+    )
+    const onCancel = vi.fn()
+    const view = render(
+      <DiffCommentDraftCard lineNumber={10} onCancel={onCancel} onSubmit={onSubmit} />
+    )
+    const textarea = view.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: 'Pending note' } })
+    const submitButton = view.getByRole('button', { name: 'Add note' })
+
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true, shiftKey: true })
+    fireEvent.click(submitButton)
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(view.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+    expect(onCancel).not.toHaveBeenCalled()
+
+    await act(async () => resolveSubmit(true))
+  })
+
+  it('seeds and reports draft text so a re-anchored card can carry it', () => {
+    const onBodyChange = vi.fn()
+    const view = render(
+      <DiffCommentDraftCard
+        lineNumber={10}
+        initialBody="Carried note"
+        onBodyChange={onBodyChange}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(true)}
+      />
+    )
+    const textarea = view.getByRole('textbox')
+    expect(textarea instanceof HTMLTextAreaElement).toBe(true)
+    if (textarea instanceof HTMLTextAreaElement) {
+      expect(textarea.value).toBe('Carried note')
+    }
+    fireEvent.change(textarea, { target: { value: 'Updated note' } })
+    expect(onBodyChange).toHaveBeenCalledWith('Updated note')
+  })
+
   it('does not submit on Enter when IME composition is active', async () => {
     const onCancel = vi.fn()
     const onSubmit = vi.fn().mockResolvedValue(true)

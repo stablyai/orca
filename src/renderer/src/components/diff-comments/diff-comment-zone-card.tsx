@@ -124,6 +124,8 @@ export type DiffCommentDraftCardContext = {
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
+  initialBody?: string
+  onBodyChange?: (body: string) => void
   resizeZone: () => void
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
@@ -136,6 +138,8 @@ export function renderDiffCommentDraftCard(
     placeholder,
     submitLabel,
     submittingLabel,
+    initialBody,
+    onBodyChange,
     resizeZone,
     onCancel,
     onSubmit
@@ -149,6 +153,8 @@ export function renderDiffCommentDraftCard(
         placeholder={placeholder}
         submitLabel={submitLabel}
         submittingLabel={submittingLabel}
+        initialBody={initialBody}
+        onBodyChange={onBodyChange}
         onCancel={onCancel}
         onSubmit={onSubmit}
         onContentResize={resizeZone}

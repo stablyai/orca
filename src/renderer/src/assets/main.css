@@ -3071,7 +3071,7 @@ html.native-shell .app-layout {
   background: var(--background);
   color: var(--foreground);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 10px 32px rgba(0, 0, 0, 0.12),
     0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
@@ -3079,8 +3079,8 @@ html.native-shell .app-layout {
   border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
   background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.35),
-    0 4px 14px rgba(0, 0, 0, 0.28);
+    0 10px 32px rgba(0, 0, 0, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .orca-diff-comment-popover-label {

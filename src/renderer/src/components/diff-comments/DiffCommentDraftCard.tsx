@@ -1,4 +1,4 @@
-import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -8,6 +8,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { toast } from 'sonner'
+import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number
@@ -15,6 +16,8 @@ export type DiffCommentDraftCardProps = {
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
+  initialBody?: string
+  onBodyChange?: (body: string) => void
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
   onContentResize?: () => void
@@ -35,9 +38,13 @@ export function DiffCommentDraftCard({
   submittingLabel,
   onCancel,
   onSubmit,
-  onContentResize
+  onContentResize,
+  initialBody = '',
+  onBodyChange
 }: DiffCommentDraftCardProps): React.JSX.Element {
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(initialBody)
+  const bodyRef = useRef(body)
+  bodyRef.current = body
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -84,7 +91,35 @@ export function DiffCommentDraftCard({
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) {
+      return
+    }
+    return installOpenDraftAddReviewNoteGuard(card)
+  }, [])
+
+  useEffect(() => {
+    const onDocumentMouseDown = (event: MouseEvent): void => {
+      const card = cardRef.current
+      const target = event.target
+      if (!card || (target instanceof Node && card.contains(target))) {
+        return
+      }
+      // Keep a non-empty draft alive when the user clicks another line's add button.
+      if (/\S/u.test(bodyRef.current)) {
+        return
+      }
+      onCancel()
+    }
+    document.addEventListener('mousedown', onDocumentMouseDown)
+    return () => document.removeEventListener('mousedown', onDocumentMouseDown)
+  }, [onCancel])
+
   const handleSubmit = async (): Promise<void> => {
+    if (submitting) {
+      return
+    }
     const bodyState = getCommentBodySubmitState(body)
     if (bodyState.status === 'empty') {
       return
@@ -117,12 +152,16 @@ export function DiffCommentDraftCard({
 
     if (e.key === 'Escape') {
       e.preventDefault()
+      if (submitting) {
+        return
+      }
       onCancel()
       return
     }
 
     const isEnter = e.key === 'Enter' && !e.nativeEvent.isComposing
     const isCmdOrCtrl = e.metaKey || e.ctrlKey
+    // Plain Shift+Enter inserts a newline; Cmd/Ctrl+Enter submits even with Shift.
     if (isEnter && (isCmdOrCtrl || !e.shiftKey)) {
       e.preventDefault()
       if (submitting) {
@@ -163,6 +202,7 @@ export function DiffCommentDraftCard({
           rows={3}
           onChange={(e) => {
             setBody(e.target.value)
+            onBodyChange?.(e.target.value)
             if (resizeDraftTextarea(e.currentTarget)) {
               onContentResizeRef.current?.()
             }

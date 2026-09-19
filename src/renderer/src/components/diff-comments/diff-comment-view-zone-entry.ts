@@ -17,8 +17,11 @@ export type DraftZoneEntry = {
   editor: monacoEditor.ICodeEditor
   zoneId: string
   domNode: HTMLElement
+  marginDomNode: HTMLElement
   delegate: monacoEditor.IViewZone
   root: Root
+  draft: { lineNumber: number; startLine?: number }
+  body: string
   disposeMouseDownStopper: () => void
 }
 

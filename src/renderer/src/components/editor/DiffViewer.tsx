@@ -135,6 +135,7 @@ export default function DiffViewer({
     onCreateComment: handleCreateComment,
     draftPlaceholder: addLineCommentPlaceholder,
     draftSubmitLabel: addLineCommentLabel,
+    canOpenDraft: !renderLimit.limited,
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)

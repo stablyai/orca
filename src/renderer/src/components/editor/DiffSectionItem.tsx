@@ -85,6 +85,12 @@ export function DiffSectionItem({
     collapsed: section.collapsed
   })
 
+  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
+    useDiffSectionLayoutMetrics({
+      section,
+      sectionHeight
+    })
+
   // Why: only forward the pending scroll id when it matches a comment in this
   // section so unrelated sections don't keep re-rendering their decorator
   // every time the sidebar requests a scroll elsewhere.
@@ -119,6 +125,7 @@ export function DiffSectionItem({
 
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
+    monacoModelIdentity: `${modelPathBase}:modified`,
     filePath: section.path,
     worktreeId: worktreeId ?? '',
     comments: inlineComments ?? (worktreeId ? diffComments : []),
@@ -128,6 +135,7 @@ export function DiffSectionItem({
     onCreateComment: handleCreateComment,
     draftPlaceholder: addLineCommentPlaceholder,
     draftSubmitLabel: addLineCommentLabel,
+    canOpenDraft: !isLargeDiffLimited,
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -150,12 +158,6 @@ export function DiffSectionItem({
       lineNumberOptionsSubRef.current = null
     }
   }, [sideBySide])
-
-  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
-    useDiffSectionLayoutMetrics({
-      section,
-      sectionHeight
-    })
 
   useDiffSectionFallbackCleanup({
     disposeDiffModels,

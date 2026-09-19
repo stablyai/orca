@@ -43,7 +43,7 @@ type DecoratorArgs = {
   }) => Promise<boolean>
   draftPlaceholder?: string
   draftSubmitLabel?: string
-  draftSubmittingLabel?: string
+  canOpenDraft?: boolean
   onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
   // Present only on surfaces that allow editing (local diffs); PR review notes are remote and can't be edited here.
@@ -67,7 +67,7 @@ export function useDiffCommentDecorator({
   onCreateComment,
   draftPlaceholder,
   draftSubmitLabel,
-  draftSubmittingLabel,
+  canOpenDraft,
   onAddCommentClick,
   onDeleteComment,
   onUpdateComment,
@@ -102,13 +102,13 @@ export function useDiffCommentDecorator({
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
 
-  const { disposeDraftZone, onAddCommentClickRef } = useDiffCommentDraftZone({
+  const { onAddCommentClickRef } = useDiffCommentDraftZone({
     editor,
     monacoModelIdentity,
     onCreateComment,
     draftPlaceholder,
     draftSubmitLabel,
-    draftSubmittingLabel,
+    canOpenDraft,
     onAddCommentClick
   })
 
@@ -206,7 +206,6 @@ export function useDiffCommentDecorator({
     return () => {
       // Editor swapped/torn down: unmount roots and clear tracking so the next mount starts known-empty.
       // Defer unmount via queueMicrotask: a sync unmount during React's commit triggers React 19's "unmount while rendering" warning; clear zones synchronously.
-      disposeDraftZone(false)
       const rootsToUnmount = Array.from(zones.values(), (z) => {
         z.disposeMouseDownStopper()
         return z.root
@@ -234,7 +233,7 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [cancelScrollToZoneFrame, disposeDraftZone, editor, monacoModelIdentity])
+  }, [cancelScrollToZoneFrame, editor, monacoModelIdentity])
 
   useEffect(() => {
     if (!editor) {
