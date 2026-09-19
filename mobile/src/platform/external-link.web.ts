@@ -3,6 +3,12 @@ import { isBridgeExternalLinkUrl } from '../mobile-web-shell/bridge/bridge-caps'
 /**
  * Web sibling: the page has no way out of itself, so the shell is asked to open the URL.
  *
+ * Not because `Linking` is missing here — react-native-web has one — but because its `openURL`
+ * calls `window.open(url, '_blank', 'noopener')` and resolves whether or not anything opened, and
+ * both shells refuse `window.open`: iOS returns nil from `createWebViewWith`, Android returns
+ * false from `onCreateWindow`, and both set `javaScriptCanOpenWindowsAutomatically` false. Taking
+ * that path would report success into a tap that did nothing.
+ *
  * Published by the entry rather than read from context, because the callers are plain functions in
  * render trees the provider does not wrap — the same reason `publishPageStorage` exists. A document
  * that never published one refuses every URL, which is the right answer for a page with no shell.

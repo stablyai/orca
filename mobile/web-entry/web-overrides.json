@@ -31,7 +31,7 @@
     },
     {
       "file": "src/platform/external-link.web.ts",
-      "reason": "The page is a document inside the shell's WebView, where react-native-web's Linking.openURL opens the URL in that WebView and replaces the page rather than handing it to the system browser. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
+      "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
     }
   ]
 }
