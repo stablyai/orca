@@ -10,6 +10,7 @@ import type {
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
+import type { DaemonLegacyGenerationRegistryEntry } from './daemon-legacy-adapters'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
@@ -17,13 +18,19 @@ import type { WriteSettlement } from '../../shared/pty-write-settlement'
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
+  private readonly registry: readonly DaemonLegacyGenerationRegistryEntry[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
 
-  constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
+  constructor(opts: {
+    current: DaemonPtyAdapter
+    legacy: DaemonPtyAdapter[]
+    registry?: readonly DaemonLegacyGenerationRegistryEntry[]
+  }) {
     this.current = opts.current
     this.legacy = opts.legacy
+    this.registry = opts.registry ?? []
     this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
     this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
       this.allAdapters(),
@@ -319,6 +326,14 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   getAllAdapters(): readonly DaemonPtyAdapter[] {
     return this.allAdapters()
+  }
+
+  // Why: a UI split-indicator (feature-request item 1) reads this for what each
+  // legacy generation still owns, without a caller needing to poll every legacy
+  // adapter itself. Data only, set once at construction like `legacy` above: no
+  // mutator here retires or reassigns an entry.
+  getLegacyGenerationRegistry(): readonly DaemonLegacyGenerationRegistryEntry[] {
+    return this.registry
   }
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {

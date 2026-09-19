@@ -27,6 +27,7 @@ export type MockAdapter = {
   fanoutSyntheticExits: Mock
   listProcesses: Mock
   listSessions: Mock
+  hasChildProcesses: Mock
   establishLifecycleLease: Mock
   shutdown: Mock
   dispose: Mock
