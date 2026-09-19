@@ -11,10 +11,8 @@ import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import {
-  DEFAULT_DISABLED_TUI_AGENTS,
-  filterEnabledTuiAgents
-} from '../../../../shared/tui-agent-selection'
+import { DEFAULT_DISABLED_TUI_AGENTS } from '../../../../shared/tui-agent-selection'
+import { orderTabLaunchAgents } from './tab-agent-launch-options'
 import { translate } from '@/i18n/i18n'
 import { useStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 
@@ -41,21 +39,6 @@ export type QuickLaunchAgentMenuItemsProps = {
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
   return getAgentCatalog().find((a) => a.id === agent) ?? null
-}
-
-function orderAgents(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => detected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  // Why: surface the user's configured default first — matches the prior
-  // split-button behavior where the default agent was the primary action.
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
 export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
@@ -115,6 +98,7 @@ function QuickLaunchAgentMenuItemsInner({
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+  const commandOverrides = useAppStore((s) => s.settings?.agentCmdOverrides)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
@@ -182,8 +166,9 @@ function QuickLaunchAgentMenuItemsInner({
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
-  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
+  const agents = detectedIds
+    ? orderTabLaunchAgents(defaultAgent, detectedIds, disabledAgents, commandOverrides)
+    : []
 
   return (
     <>

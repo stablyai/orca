@@ -172,35 +172,33 @@ export function AgentCatalogRow({
             <ExternalLink className="size-3.5" />
           </a>
           <div className="flex size-7 items-center justify-center">
-            {isDetected && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCmdOpen((previous) => !previous)}
-                aria-label={
-                  cmdOpen
-                    ? translate(
-                        'auto.components.settings.AgentsPane.cea7d97be1',
-                        'Collapse command override'
-                      )
-                    : translate(
-                        'auto.components.settings.AgentsPane.dc4a2ffdc0',
-                        'Expand command override'
-                      )
-                }
-                className="size-7 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronDown
-                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
-                />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setCmdOpen((previous) => !previous)}
+              aria-label={
+                cmdOpen
+                  ? translate(
+                      'auto.components.settings.AgentsPane.cea7d97be1',
+                      'Collapse command override'
+                    )
+                  : translate(
+                      'auto.components.settings.AgentsPane.dc4a2ffdc0',
+                      'Expand command override'
+                    )
+              }
+              className="size-7 text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown
+                className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
+              />
+            </Button>
           </div>
         </div>
       </div>
 
-      {isDetected && cmdOpen && (
+      {cmdOpen && (
         <div className="mt-3 pl-10">
           <AgentCommandOverrideInput
             key={cmdOverride ?? defaultCmd}

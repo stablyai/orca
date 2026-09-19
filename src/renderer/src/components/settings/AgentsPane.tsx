@@ -209,22 +209,20 @@ export function AgentsPane({
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, disabledAgents),
     isDefault: isDetected && defaultAgent === agent.id,
-    cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
+    cmdOverride: cmdOverrides[agent.id],
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
     envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
     onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
-    onSaveOverride: isDetected
-      ? (value) => {
-          const next = { ...cmdOverrides }
-          if (value) {
-            next[agent.id] = value
-          } else {
-            delete next[agent.id]
-          }
-          updateSettings({ agentCmdOverrides: next })
-        }
-      : () => {},
+    onSaveOverride: (value) => {
+      const next = { ...cmdOverrides }
+      if (value) {
+        next[agent.id] = value
+      } else {
+        delete next[agent.id]
+      }
+      updateSettings({ agentCmdOverrides: next })
+    },
     onSaveArgs: (value) =>
       updateSettings({ agentDefaultArgs: { ...agentDefaultArgs, [agent.id]: value } }),
     onSaveEnv: (value) =>
