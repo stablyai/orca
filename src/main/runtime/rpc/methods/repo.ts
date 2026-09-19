@@ -157,7 +157,7 @@ export const REPO_METHODS = [
     params: RepoCreate,
     handler: async (params, context) =>
       projectRepoResultVisibilityForClient(
-        await context.runtime.createRepo(params.parentPath, params.name, params.kind),
+        await context.runtime.createRepo(params.parentPath ?? undefined, params.name, params.kind),
         context
       )
   }),
@@ -173,7 +173,7 @@ export const REPO_METHODS = [
     params: RepoClone,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.cloneRepo(params.url, params.destination),
+        await context.runtime.cloneRepo(params.url, params.destination ?? undefined),
         context
       )
     })
