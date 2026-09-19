@@ -169,15 +169,15 @@ export class Session {
 
   /** Producer-side flow control: stop reading the PTY fd so a flooding child blocks on write.
    *  Arms the lost-resume failsafe; re-pausing re-arms it. */
-  pauseProducer(): void {
+  pauseProducer(source?: 'stream'): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.producerPause.pause()
+    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating)
   }
 
-  resumeProducer(): void {
-    this.producerPause.release({ resume: true })
+  resumeProducer(source?: 'stream'): void {
+    this.producerPause.resumeClient(source)
   }
 
   kill(): void {
