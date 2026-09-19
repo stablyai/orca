@@ -97,14 +97,15 @@ describe('account CLI handlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
   const originalElectronRunAsNode = process.env.ELECTRON_RUN_AS_NODE
   const originalPathAlias = process.env.Path
+  const originalWslDistroName = process.env.WSL_DISTRO_NAME
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
   let logSpy: ReturnType<typeof vi.spyOn>
 
-  function context(agent: string, json = false): HandlerContext {
+  function context(agent: string, json = false, cwd = process.cwd()): HandlerContext {
     return {
       client,
-      cwd: process.cwd(),
+      cwd,
       flags: new Map([['agent', agent]]),
       json,
       rawArgs: []
@@ -136,6 +137,9 @@ describe('account CLI handlers', () => {
     )
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     process.env.ELECTRON_RUN_AS_NODE = '1'
+    // Why: a test run inside a real distro carries WSL_DISTRO_NAME, which would
+    // leak WSL attribution into every faked-win32 add below.
+    delete process.env.WSL_DISTRO_NAME
   })
 
   afterEach(() => {
@@ -150,6 +154,11 @@ describe('account CLI handlers', () => {
       delete process.env.Path
     } else {
       process.env.Path = originalPathAlias
+    }
+    if (originalWslDistroName === undefined) {
+      delete process.env.WSL_DISTRO_NAME
+    } else {
+      process.env.WSL_DISTRO_NAME = originalWslDistroName
     }
   })
 
@@ -306,6 +315,62 @@ describe('account CLI handlers', () => {
         .digest('hex')
     })
     expect(existsSync(configDir)).toBe(false)
+  })
+
+  it('attributes a Claude account added through the WSL bridge to the cwd distro', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    await ACCOUNT_HANDLERS['account add'](
+      context('claude', false, String.raw`\\wsl.localhost\Ubuntu-22.04\home\user\project`)
+    )
+
+    const configDir = spawnMock.mock.calls[0]?.[2].env.CLAUDE_CONFIG_DIR
+    expect(callMock).toHaveBeenCalledWith('accounts.addClaudeFromConfigDir', {
+      configDir,
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu-22.04'
+    })
+  })
+
+  it('attributes a Codex account added through the WSL bridge to the cwd distro', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    await ACCOUNT_HANDLERS['account add'](
+      context('codex', false, String.raw`\\wsl$\Ubuntu\home\user`)
+    )
+
+    const sourceHome = spawnMock.mock.calls[0]?.[2].env.CODEX_HOME
+    expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', {
+      sourceHome,
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('prefers an interop-forwarded WSL_DISTRO_NAME over the bridged cwd distro', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    process.env.WSL_DISTRO_NAME = 'Debian'
+
+    await ACCOUNT_HANDLERS['account add'](
+      context('claude', false, String.raw`\\wsl.localhost\Ubuntu-22.04\home\user`)
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'accounts.addClaudeFromConfigDir',
+      expect.objectContaining({ runtime: 'wsl', wslDistro: 'Debian' })
+    )
+  })
+
+  it('keeps host attribution when the CLI itself runs inside a distro', async () => {
+    // Why: a Linux CLI talks to a Linux runtime whose accounts are host-lane;
+    // WSL_DISTRO_NAME there names the CLI's own environment, not a target lane.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    process.env.WSL_DISTRO_NAME = 'Ubuntu-22.04'
+
+    await ACCOUNT_HANDLERS['account add'](context('claude'))
+
+    const configDir = spawnMock.mock.calls[0]?.[2].env.CLAUDE_CONFIG_DIR
+    expect(callMock).toHaveBeenCalledWith('accounts.addClaudeFromConfigDir', { configDir })
   })
 
   it('waits for physical child close before removing interrupted login credentials', async () => {
