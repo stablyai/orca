@@ -105,4 +105,45 @@ describe('Linear issue context', () => {
     })
     expect(getClients).toHaveBeenCalledWith('workspace-stably')
   })
+
+  it('returns the cycle number next to its id and name', async () => {
+    const stably = workspace('workspace-stably', 'stably')
+    const rawRequest = vi.fn().mockResolvedValue({
+      data: {
+        issue: {
+          ...rawIssue('STA-336'),
+          cycle: { id: 'cycle-20', name: null, number: 20 }
+        }
+      }
+    })
+    getStatus.mockReturnValue({ workspaces: [stably] })
+    getClients.mockReturnValue([makeEntry({ workspace: stably, rawRequest })])
+    const { readLinearIssueContext } = await import('./issue-context')
+
+    await expect(
+      readLinearIssueContext(
+        {
+          current: true,
+          include: {
+            attachments: false,
+            children: false,
+            comments: false,
+            relations: false,
+            activity: false
+          },
+          depth: 0
+        },
+        async () => ({
+          identifier: 'STA-336',
+          workspaceId: null,
+          organizationUrlKey: 'stably',
+          worktreeId: 'repo::/tmp/repo/feature',
+          worktreePath: '/tmp/repo/feature'
+        })
+      )
+    ).resolves.toMatchObject({
+      issue: { identifier: 'STA-336', cycle: { id: 'cycle-20', name: null, number: 20 } }
+    })
+    expect(rawRequest.mock.calls[0]?.[0]).toMatch(/cycle \{[^}]*\bnumber\b[^}]*\}/)
+  })
 })

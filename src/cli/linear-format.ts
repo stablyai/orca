@@ -18,6 +18,7 @@ import type {
   LinearStatusSetResult
 } from '../shared/linear/agent-access'
 import { appendLinearListTruncation } from '../shared/linear/list-truncation-format'
+import { linearCycleLabel } from '../shared/linear/cycle-label'
 import { linearPriorityLabel } from '../shared/linear/priority-label'
 import {
   formatLinearProjectListRows,
@@ -31,7 +32,8 @@ export function formatLinearIssue(result: LinearIssueContextResult): string {
     `URL: ${issue.url}`,
     `State: ${issue.state?.name ?? 'unknown'}`,
     `Assignee: ${issue.assignee?.displayName ?? 'unassigned'}`,
-    `Project: ${issue.project?.name ?? 'none'}`
+    `Project: ${issue.project?.name ?? 'none'}`,
+    `Cycle: ${linearCycleLabel(issue.cycle)}`
   ]
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)

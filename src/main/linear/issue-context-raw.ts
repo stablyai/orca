@@ -25,7 +25,7 @@ export type RawIssue = {
   state?: RawNamedEntity | null
   team?: (RawNamedEntity & { key?: string | null }) | null
   project?: RawNamedEntity | null
-  cycle?: RawNamedEntity | null
+  cycle?: (RawNamedEntity & { number?: number | null }) | null
   assignee?: RawUser | null
   labels?: { nodes?: RawNamedEntity[]; pageInfo?: RawPageInfo } | null
 }
@@ -124,7 +124,7 @@ export const ISSUE_FIELDS = `
   state { id name type color }
   team { id name key color }
   project { id name color }
-  cycle { id name }
+  cycle { id name number }
   assignee { id displayName avatarUrl }
   labels(first: 50) { nodes { id name color } pageInfo { hasNextPage } }
 `
