@@ -17,6 +17,7 @@ import {
   humanizeTerminalError,
   isPaneOwnerUnverifiedError,
   isExplainedTerminalError,
+  isRemoteTerminalClosedError,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
@@ -414,5 +415,48 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() =>
       expect(view.container.textContent).toContain('Retry could not reconnect yet')
     )
+  })
+})
+
+describe('TerminalErrorToast teardown on dismiss (#21342)', () => {
+  it('identifies remote terminal closed error strings', () => {
+    expect(isRemoteTerminalClosedError('Remote terminal was closed.')).toBe(true)
+    expect(isRemoteTerminalClosedError('Paste failed.')).toBe(false)
+  })
+
+  it('triggers onClosePane when dismissing a remote terminal closed error', () => {
+    const onDismiss = vi.fn()
+    const onClosePane = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Remote terminal was closed.',
+        onDismiss,
+        onClosePane
+      })
+    )
+
+    const dismissButton = view.getByRole('button', { name: '×' })
+    fireEvent.click(dismissButton)
+
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onClosePane).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not trigger onClosePane when dismissing other errors', () => {
+    const onDismiss = vi.fn()
+    const onClosePane = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Paste failed.',
+        onDismiss,
+        onClosePane
+      })
+    )
+
+    const dismissButton = view.getByRole('button', { name: '×' })
+    fireEvent.click(dismissButton)
+
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onClosePane).not.toHaveBeenCalled()
   })
 })

@@ -93,6 +93,10 @@ export function isExplainedTerminalError(error: string): boolean {
     )
 }
 
+export function isRemoteTerminalClosedError(error: string): boolean {
+  return error.includes(REMOTE_TERMINAL_CLOSED_MARKER)
+}
+
 export function isPaneOwnerUnverifiedError(error: string): boolean {
   const lines = error.split('\n').filter((line) => line.length > 0)
   return lines.length > 0 && lines.every((line) => line.includes(PANE_OWNER_UNVERIFIED_MARKER))
@@ -164,11 +168,13 @@ export function humanizeTerminalError(error: string): string {
 export function TerminalErrorToast({
   error,
   onDismiss,
+  onClosePane,
   onRestartDaemon,
   onRetry
 }: {
   error: string
   onDismiss: () => void
+  onClosePane?: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
 }): React.JSX.Element {
@@ -324,7 +330,12 @@ export function TerminalErrorToast({
           </Button>
         ) : null}
         <button
-          onClick={onDismiss}
+          onClick={() => {
+            onDismiss()
+            if (isRemoteTerminalClosedError(error)) {
+              onClosePane?.()
+            }
+          }}
           style={{
             background: 'none',
             border: 'none',
