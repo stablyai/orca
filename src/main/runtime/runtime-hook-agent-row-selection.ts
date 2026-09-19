@@ -30,7 +30,7 @@ function isLiveObservation(row: AgentStatusIpcPayload): boolean {
 
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
 export function selectFreshExplicitAgentStatus(args: {
-  handle: string
+  handle: string | null
   paneKey: string | null
   hookRows: readonly AgentStatusIpcPayload[]
 }): {
@@ -64,7 +64,10 @@ export function selectFreshExplicitAgentStatus(args: {
     }
   }
   for (const row of args.hookRows) {
-    if (row.terminalHandle !== args.handle && (!args.paneKey || row.paneKey !== args.paneKey)) {
+    if (
+      (args.handle === null || row.terminalHandle !== args.handle) &&
+      (!args.paneKey || row.paneKey !== args.paneKey)
+    ) {
       continue
     }
     consider(

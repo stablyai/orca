@@ -9,6 +9,9 @@ import type {
 } from './runtime-capability-degradation'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { OrchestrationTaskStatus } from './orchestration-task-status'
+import type { WorkerTerminalListState } from './worker-terminal-list-state'
+import type { HostAvailableMemorySource } from './process-stats-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionSnapshotTab,
@@ -125,6 +128,260 @@ export type CliStatusResult = {
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
   }
+}
+
+/**
+ * What one counted agent's turn is doing, as far as the runtime can prove it in a single
+ * in-memory pass. `permission` is the established runtime name for "parked on a prompt that needs
+ * a human"; `unknown` means an agent is present but no current turn evidence exists for it — it
+ * is never a stand-in for idle.
+ */
+export type RuntimeServeStatsAgentState = 'working' | 'permission' | 'idle' | 'unknown'
+
+/**
+ * cgroup v2 pid-controller readings, straight from `/sys/fs/cgroup/pids.current` and
+ * `/sys/fs/cgroup/pids.max`.
+ *
+ * `max: null` means the literal cgroup value `max` — no limit at all — and NOT "unmeasured": the
+ * whole `RuntimeServeStatsHost.pids` object is null when nothing could be read, so this inner null
+ * is unambiguous. The literal is never coerced to a number: 0 would read as "no pids allowed", and
+ * Infinity does not survive JSON.
+ */
+export type RuntimeServeStatsHostPids = {
+  /** `pids.current` — every task in this cgroup, so threads count too, not just processes. */
+  current: number
+  /** `pids.max` — the ceiling `current` is racing, or null for the literal `max` (unlimited). */
+  max: number | null
+}
+
+/**
+ * Host-wide CPU/memory pressure, reported alongside the Orca-scoped `counts`.
+ *
+ * This deliberately reverses #10608's "host CPU/RAM metrics" non-goal, and it lives under its own
+ * key rather than inside `counts` because it is a different kind of measurement. #14552 and #19312
+ * were both misdiagnosed as network faults for days: from the paired client the only symptom is
+ * `Reconnecting to remote runtime`, while the host is in fact saturated (#19312 sustained a
+ * 1-minute loadavg of 105-112 while systemd still reported the unit healthy/active).
+ *
+ * EVERY number here is HOST-WIDE, never Orca-attributed. The ~60 GiB RSS in #12588 belonged to a
+ * terminal *child* process, not to the runtime, and it still degraded SSH and paired-runtime
+ * availability — so `memoryAvailableBytes` must never be read as "Orca is using the rest".
+ *
+ * `null` means "this platform cannot measure it", and is NEVER interchangeable with 0: `os.loadavg()`
+ * reports meaningless zeros on Windows, so a 0 there would read as an idle host. Readers MUST NOT
+ * coerce null to 0.
+ *
+ * Cheap by construction: in-process `node:os` syscalls plus at most one `/proc/meminfo` read. No
+ * subprocess, and explicitly not `collectMemorySnapshot`'s `ps` process-table sweep, so polling
+ * `serve stats` stays something nobody regrets.
+ */
+export type RuntimeServeStatsHost = {
+  /**
+   * 1-minute load average, unnormalized — compare it against `cpuCoreCount` (#14552's "6.85 on 4
+   * cores" is the shape of the read). `null` on Windows, which has no load average at all.
+   */
+  loadAverage1m: number | null
+  cpuCoreCount: number
+  memoryTotalBytes: number
+  /**
+   * Memory obtainable without material pressure. On Linux this is `/proc/meminfo` MemAvailable,
+   * which is the real signal; `os.freemem()` excludes reclaimable page cache and so badly
+   * understates what is actually available. `memoryAvailableSource` says which one you got.
+   */
+  memoryAvailableBytes: number
+  /**
+   * Which reading `memoryAvailableBytes` came from. Never `memory-pressure`: that darwin reading
+   * needs a subprocess, which this path refuses.
+   */
+  memoryAvailableSource: HostAvailableMemorySource
+  /**
+   * SwapTotal - SwapFree from Linux `/proc/meminfo`; `null` on every other platform and on a Linux
+   * container with no procfs. Swap in use is the #9229 / #14552 tell (19 kernel OOM kills in 30
+   * days against a nearly full swap). 0 means "no swap in use"; `null` means "not measured here".
+   */
+  swapUsedBytes: number | null
+  /**
+   * cgroup v2 pid accounting for the cgroup this runtime runs in, or `null` where there is nothing
+   * to read: non-Linux, cgroup v1, or a container with no `/sys/fs/cgroup` mount. Never 0 — a
+   * zeroed `current` would claim a measured, empty cgroup.
+   *
+   * #18789 had 8,629 `clone()` calls rejected against `pids.max=4096` while `pids.current` sat
+   * just under that ceiling, and neither `loadAverage1m` nor `memoryAvailableBytes` moved for it:
+   * that host had 44 GB free while it could not fork. Pid exhaustion is invisible to every other
+   * field here, which is why this one exists.
+   */
+  pids: RuntimeServeStatsHostPids | null
+}
+
+/** One long-poll admission pool: slots held right now, against the ceiling that sheds the next. */
+export type RuntimeServeStatsLongPollPool = {
+  active: number
+  cap: number
+}
+
+/**
+ * Long-poll admission state — the `runtime_busy` fence, made readable.
+ *
+ * #19342's operator hit `runtime_busy` on a host at loadavg 4.8 with 44 GB free, so nothing in the
+ * host readings explained it: the limit that rejected them is this in-process slot budget, not the
+ * machine. They could only find the cause by unpacking `app.asar` and reading the cap out of the
+ * source. Both halves are therefore reported — `active` says how full a pool is, `cap` says what
+ * it is full of — so the next rejection is self-diagnosing without a source dive.
+ *
+ * `total` fences every long poll; `ask` and `browserHost` are sub-pools of it, and `specialized`
+ * is the combined ceiling those two share (an ask can be shed by `specialized` while `ask` itself
+ * still has room). Admission checks them in exactly that order — see `admitLongPoll`.
+ *
+ * `null` when no RPC listener is serving: the counters and caps live on the RPC server, so an
+ * un-started or stopped one has no budget to report, and `0/0` would read as a runtime that can
+ * admit nothing.
+ */
+export type RuntimeServeStatsLongPolls = {
+  total: RuntimeServeStatsLongPollPool
+  ask: RuntimeServeStatsLongPollPool
+  browserHost: RuntimeServeStatsLongPollPool
+  specialized: RuntimeServeStatsLongPollPool
+}
+
+/** Whether this runtime can still service work — which process liveness cannot answer. */
+export type RuntimeServeStatsHealth = {
+  /**
+   * 99th-percentile event loop delay in milliseconds (`perf_hooks.monitorEventLoopDelay`, which
+   * reports nanoseconds). `null` when unmeasured — the monitor was never enabled, or no sample has
+   * been recorded yet. Never 0 for "not measured": #19312's whole failure was that "every liveness
+   * signal we had was green while the process was effectively unable to service new work" (new
+   * WebSocket connections hung 15s+ while the unit reported healthy).
+   *
+   * RESET CADENCE — reset-on-read: each read reports the window since the previous read, or since
+   * runtime start for the first read. A lifetime-cumulative percentile over a multi-day serve goes
+   * stale-flat: one saturated hour is diluted to invisibility, and a long-past spike keeps
+   * reporting forever. Both directions make the number uninterpretable, which is the #19312 trap.
+   * The cost is that two concurrent readers split one window between them; `serve stats` is an
+   * operator command, not a scrape target, so freshness is the better trade.
+   */
+  eventLoopDelayP99Ms: number | null
+  /**
+   * Long-poll slot occupancy against the configured caps, or `null` when no RPC listener is
+   * serving. This is the second half of "can this runtime still service work": a runtime whose
+   * event loop is idle still rejects every new long poll once `total.active` reaches `total.cap`
+   * (#19342).
+   */
+  longPolls: RuntimeServeStatsLongPolls | null
+}
+
+// Why: live current-state counts for `orca serve stats --json`. Deliberately
+// NOT StatsSummary (that is lifetime-cumulative "fun stats"). This shape is a
+// stable contract once shipped — scripts/MOPs parse it, so version it if it
+// must change.
+export type RuntimeServeStatsResult = {
+  version: string
+  // Why: distinguishes "same runtime generation" from "restarted under me" — a
+  // silent restart issues a new id and orphans the caller's pty handles (#9585).
+  runtimeId: string
+  uptimeSeconds: number
+  // Why: the bound WebSocket serve port, or null when no WS listener is active
+  // (WS disabled, or it failed to bind — e.g. a Unix-socket-only serve).
+  port: number | null
+  counts: {
+    agents: number
+    tasks: number
+    terminals: number
+    /**
+     * Registered ptys that are not connected and that this runtime cannot prove exited: no
+     * host-delivered exit frame ever reached the liveness register for them (a dropped relay, an
+     * SSH provider that unregistered, an exit the owning host never confirmed).
+     *
+     * Loss of contact is never proof of death
+     * (docs/reference/ssh-execution-boundary.md), so this count MUST NOT
+     * authorize cleanup — it exists so leaked ptys stop being invisible. A pty
+     * whose evidence fits neither bucket is counted here, the conservative side.
+     */
+    terminalsUnverifiable: number
+    /**
+     * Registered ptys that are not connected and that the owning host positively reported gone:
+     * the liveness register holds an `exited` verdict (see PtyLivenessVerdict), whose only writer
+     * is a host-delivered exit frame. These are proven dead, and separating them is what keeps
+     * `terminalsUnverifiable`'s no-cleanup warning meaningful instead of routine.
+     */
+    terminalsExited: number
+    worktrees: number
+    /**
+     * Every browser page this runtime holds, of both kinds: client-hosted pages in
+     * RuntimeBrowserPageRegistry, plus the pages backed by a WebContents this process registered —
+     * the renderer `<webview>` pages and the offscreen pages a headless serve creates. Counting
+     * only the registry reported 0 for exactly the agent-opened headless tabs #14552 is about.
+     * De-duplicated by page id, so a page known to both is counted once.
+     */
+    browserPages: number
+    /**
+     * The client-hosted subset whose host is gone. Each still pins one of the runtime's 256
+     * registry page slots for the runtime's life — no TTL, no reaper.
+     *
+     * Scoped to client-hosted pages deliberately: retention here means "the host that could drive
+     * this page left, and the slot stayed". A WebContents-backed page has no such host — this
+     * process is its host — so it can never be retained in that sense, and inflating this number
+     * with offscreen pages would misreport a leak. It is therefore a subset of `browserPages`,
+     * never a partition of it.
+     */
+    browserPagesRetained: number
+    /**
+     * Resident-set total, in bytes, of the renderer OS processes backing the pages counted by
+     * `browserPages` — or `null` when not one of them could be measured, which includes having no
+     * pages at all (read `browserPages` to tell those two apart). Never 0.
+     *
+     * #14552's six agent-opened headless tabs included one 1.3 GB outlier, which is why
+     * `browserPageMemoryMaxBytes` sits next to this: a total alone hides the single page that is
+     * actually eating the host.
+     *
+     * Attributed per renderer process and de-duplicated by pid, because Electron may back several
+     * pages with one renderer — summing per page would count a shared process twice. Linux only:
+     * one `/proc/<pid>/status` VmRSS read per distinct pid, no subprocess and no `ps` table sweep
+     * (the same polling discipline as `host`), so it is `null` on every other platform.
+     */
+    browserPageMemoryTotalBytes: number | null
+    /**
+     * The largest single renderer footprint behind `browserPages`, with the same measurement and
+     * the same null rule as `browserPageMemoryTotalBytes`. This is the #14552 read: one page at
+     * 1.3 GB among six is a different incident from six pages at 220 MB, and only the max
+     * separates them.
+     */
+    browserPageMemoryMaxBytes: number | null
+    /**
+     * Every task row grouped by status, with all six statuses always present (0, never omitted).
+     *
+     * Deliberately does NOT sum to `counts.tasks`: that field counts live/resumable work only
+     * (it excludes `completed` and `failed`, which persist in the table until an explicit reset).
+     * The terminal statuses are exactly what #13047's operator had to hand-tabulate, so the
+     * histogram keeps them.
+     */
+    tasksByStatus: Record<OrchestrationTaskStatus, number>
+    /**
+     * The `agents` count split by turn state. Sums to `counts.agents`.
+     *
+     * What each bucket can speak for depends on the population:
+     * - Connected ptys with a resolved agent identity: `working` / `permission` / `idle` come
+     *   from that pty's own current-incarnation evidence (retained hook status, then the prompt
+     *   lifecycle tracker, then a title status observed live). A pty whose only status was
+     *   observed in a previous incarnation, or which never reported one, counts as `unknown` —
+     *   an identity resolving on a pane proves an agent is there, never what it is doing
+     *   (#19548).
+     * - Structured (native) agent sessions: always `unknown`. The session host proves liveness
+     *   (live / unverifiable / exited), not turn state, and reading turn state would mean
+     *   projecting each session's journal.
+     */
+    agentsByState: Record<RuntimeServeStatsAgentState, number>
+    /**
+     * Worker terminals grouped by process-accounting state, all six keys always present.
+     *
+     * This is the histogram #19388 and #18737 were hand-counted from: `reclaimable` is settled
+     * work still holding a terminal, `release_unknown` is a release that could not be proven.
+     * Scoped to every dispatch the DB retains, so it does not sum to `counts.tasks` or
+     * `counts.terminals`; dispatches with no worker terminal at all are not counted here.
+     */
+    workersByTerminalState: Record<WorkerTerminalListState, number>
+  }
+  host: RuntimeServeStatsHost
+  health: RuntimeServeStatsHealth
 }
 
 export type RuntimeSyncedTab = {

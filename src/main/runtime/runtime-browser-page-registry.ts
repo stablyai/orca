@@ -195,6 +195,25 @@ export class RuntimeBrowserPageRegistry {
     })
   }
 
+  /**
+   * One pass for observability: slots held, and how many hold a page nothing can drive.
+   *
+   * Retention is invisible from the registry alone — the caller supplies the liveness lookup it
+   * already owns (see `hasLivePlacement` in client-hosted-browser-row-projection.ts).
+   */
+  countPages(hasLivePlacement: (browserPageId: string) => boolean): {
+    total: number
+    retained: number
+  } {
+    let retained = 0
+    for (const browserPageId of this.pages.keys()) {
+      if (!hasLivePlacement(browserPageId)) {
+        retained++
+      }
+    }
+    return { total: this.pages.size, retained }
+  }
+
   deactivateGlobal(): void {
     this.globalActivePageId = null
   }
