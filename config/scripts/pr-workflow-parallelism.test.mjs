@@ -457,6 +457,7 @@ describe('PR workflow parallelism', () => {
       'code_paths',
       'static_analysis',
       'root_directory_guard',
+      'formatting',
       'typecheck',
       'git_compatibility',
       'codex_index_heal_contract',

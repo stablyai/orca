@@ -128,10 +128,11 @@ describe('PR E2E gate contract', () => {
     expect(successLoop.length).toBeGreaterThan(0)
     expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
     expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+    expect(verifyStep.run).toContain('"$FORMATTING" != "success"')
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths' || job === 'root_directory_guard' || job === 'formatting') {
         continue
       }
       expect(successLoop).toContain(`"$${envVar}"`)
