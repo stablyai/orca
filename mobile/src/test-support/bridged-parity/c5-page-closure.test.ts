@@ -56,8 +56,15 @@ describe('the C5 page closure', () => {
 
   it("inherits C1's families whole, with the verdicts C1 committed", () => {
     // Not "the same families": the same goldens in them, at the same verdicts. C2's rule does not
-    // reproduce these — it disagrees on 10 of the 103 — so inheritance is the derivation, and this
-    // is what says the inheritance happened rather than a re-derivation that looked close.
+    // reproduce these — it disagrees on 13 of the 103, being `tasks.smart-source-search` 7,
+    // `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 — so inheritance is the
+    // derivation, and this is what says the inheritance happened rather than a re-derivation that
+    // looked close. The count is the one C2's and C3's files state; this file said 10 until the
+    // derivation was re-run.
+    //
+    // Compared against the imported object rather than the committed text, which is sound here
+    // because `C5_PAGE_CLOSURE` inlines its families instead of spreading C1's: there is no spread
+    // for an edited entry to be laundered through. `pinsFromSource` is what the composed tables use.
     for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
       expect(C5_PAGE_CLOSURE[family], family).toEqual(pinned)
     }

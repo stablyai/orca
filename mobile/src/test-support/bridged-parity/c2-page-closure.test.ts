@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { C1_PAGE_CLOSURE } from './c1-page-closure'
@@ -6,6 +6,7 @@ import { C2_PAGE_CLOSURE } from './c2-page-closure'
 import { C2_TASK_SOURCE_CLOSURE_FAMILIES } from './c2-task-source-closure-families'
 import { C2_WORK_ITEM_CLOSURE_FAMILIES } from './c2-work-item-closure-families'
 import { C5_PAGE_CLOSURE } from './c5-page-closure'
+import { pinsFromSource } from './page-closure-pin-source'
 import { BRIDGED_PARITY_EXCLUSIONS } from './divergence-classes'
 import {
   pageClosureDrift,
@@ -18,47 +19,6 @@ import { readGolden } from '../rpc-recording/golden-recording'
 
 const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
 const C1_SOURCE = resolve(import.meta.dirname, 'c1-page-closure.ts')
-
-/**
- * A pin table read back out of its file's own text, which a spread cannot launder.
- *
- * `C2_PAGE_CLOSURE` is composed by spreading `C1_PAGE_CLOSURE`, so comparing the two is vacuous —
- * a hand-edited inherited entry in C2's table would be read back as C1's and agree with itself.
- * Reading C1's source is the independent half of that comparison.
- *
- * The formatter wraps a long entry onto two lines, an id alone and its verdict indented beneath, so
- * both forms are handled: a reader that saw only the single-line form is what once dropped three
- * `result-absent-stream-release` pins while its mismatch list stayed empty.
- */
-function pinsFromSource(path: string): Record<string, Record<string, string>> {
-  const table: Record<string, Record<string, string>> = {}
-  let family: Record<string, string> | undefined
-  let wrappedId: string | undefined
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
-    const opened = /^ {2}'([^']+)': \{/.exec(line)?.[1]
-    if (opened !== undefined) {
-      family = {}
-      table[opened] = family
-      wrappedId = undefined
-      continue
-    }
-    const whole = /^ {4}'([^']+)': '([^']+)'/.exec(line)
-    const verdict = whole?.[2]
-    if (whole?.[1] !== undefined && verdict !== undefined && family !== undefined) {
-      family[whole[1]] = verdict
-      wrappedId = undefined
-      continue
-    }
-    const wrapped = /^\s+'([^']+)'/.exec(line)?.[1]
-    if (wrappedId !== undefined && wrapped !== undefined && family !== undefined) {
-      family[wrappedId] = wrapped
-      wrappedId = undefined
-      continue
-    }
-    wrappedId = /^ {4}'([^']+)':\s*$/.exec(line)?.[1]
-  }
-  return table
-}
 
 /** The run a corpus that diverged exactly as the pin says would hand the rule. */
 function asPinned(): Map<string, PageClosureObservation> {
