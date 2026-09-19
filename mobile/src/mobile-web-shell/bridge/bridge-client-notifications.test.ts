@@ -173,6 +173,17 @@ describe('externalLink', () => {
     })
   })
 
+  it('posts the URL the parser read, not the string the caller handed it', () => {
+    const page = granted()
+    expect(page.client.notifyExternalLink('  https://example.com/a\r\n  ')).toBe(true)
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'notify',
+      name: BRIDGE_EXTERNAL_LINK_GRANT,
+      url: 'https://example.com/a'
+    })
+  })
+
   it('answers false for a scheme the grant does not cover, and posts nothing', () => {
     const page = granted()
     const beforeNotify = page.sent.length

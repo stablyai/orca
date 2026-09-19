@@ -98,23 +98,40 @@ export const BRIDGE_EXTERNAL_LINK_SCHEMES: readonly string[] = ['https:', 'http:
 export const BRIDGE_MAX_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
 
 /**
- * Whether the shell will open this URL. Both sides run it: the envelope refuses the frame, and the
- * page's seam refuses the call so a tap knows it went nowhere.
+ * The URL the shell will open, as the parser reads it, or null when it is not one the grant covers.
  *
  * Parsed rather than prefix-matched, because a scheme is what a URL parser says it is and
  * `startsWith('https:')` reads one out of `javascript:alert("https://x")`. `URL` with no base
  * accepts only an absolute URL, which is the rest of the rule: a relative target is a route, and
  * routes go back over `navigate`.
+ *
+ * The parsed href is what callers forward, never the string they were handed. The WHATWG parser
+ * strips tab, LF and CR from anywhere and trims leading C0 and space before it reads the scheme, so
+ * `ht\ntps://example.com` and `https:example.com` pass this check and are not what a device handler
+ * should be given. Normalizing is the fix and comparing is not: `https://example.com` differs from
+ * its own href by a path slash, so refusing what differs would refuse an ordinary URL.
  */
-export function isBridgeExternalLinkUrl(url: string): boolean {
+export function readBridgeExternalLinkUrl(url: string): string | null {
+  // The raw string first, so a hostile one is refused without being parsed. The normalized form is
+  // bounded too, below: percent-encoding expands, so a string inside the cap can leave it.
   if (url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
-    return false
+    return null
   }
+  let parsed: URL
   try {
-    return BRIDGE_EXTERNAL_LINK_SCHEMES.includes(new URL(url).protocol)
+    parsed = new URL(url)
   } catch {
-    return false
+    return null
   }
+  if (!BRIDGE_EXTERNAL_LINK_SCHEMES.includes(parsed.protocol)) {
+    return null
+  }
+  return parsed.href.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS ? null : parsed.href
+}
+
+/** Whether the shell will open this URL at all. The envelope's refine; the value is read above. */
+export function isBridgeExternalLinkUrl(url: string): boolean {
+  return readBridgeExternalLinkUrl(url) !== null
 }
 export const BRIDGE_MAX_PAGE_ROUTES = 64
 /** A host id, its name and its endpoint. Bounded because the page renders all three. */

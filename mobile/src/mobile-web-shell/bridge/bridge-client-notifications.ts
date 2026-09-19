@@ -6,7 +6,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage
 } from './bridge-envelope'
-import { isBridgeExternalLinkUrl } from './bridge-caps'
+import { readBridgeExternalLinkUrl } from './bridge-caps'
 import { captureBridgeError } from './bridge-error-capture'
 
 /**
@@ -90,10 +90,23 @@ export function createBridgeClientNotifications(
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }),
     // Checked here as well as at the frame, because the answer is what the caller reports: a page
     // that posted a refused URL would be told the frame left and show a tap that went nowhere.
-    notifyExternalLink: (url) =>
-      deps.hasGrant(BRIDGE_EXTERNAL_LINK_GRANT) &&
-      isBridgeExternalLinkUrl(url) &&
-      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_EXTERNAL_LINK_GRANT, url }),
+    notifyExternalLink: (url) => {
+      if (!deps.hasGrant(BRIDGE_EXTERNAL_LINK_GRANT)) {
+        return false
+      }
+      // The parser's URL goes on the wire, never the caller's string: the two differ for anything
+      // carrying a stripped tab or newline, and the shell would open what the parser read anyway.
+      const target = readBridgeExternalLinkUrl(url)
+      if (target === null) {
+        return false
+      }
+      return post({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_EXTERNAL_LINK_GRANT,
+        url: target
+      })
+    },
     // The page's writes reach the app's own store, which is the only store it has: its `localStorage`
     // is off on Android and per-session on iOS, so a pin kept there would forget itself on remount.
     notifyStorageWrite: (key, value) =>

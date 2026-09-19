@@ -11,6 +11,7 @@ import {
   BRIDGE_DIRECTIONS,
   BRIDGE_MAX_SUBSCRIPTIONS,
   isBridgeExternalLinkUrl,
+  readBridgeExternalLinkUrl,
   parseBridgeMessage,
   utf8ByteLength
 } from './bridge-caps'
@@ -270,5 +271,43 @@ describe('the URLs a page may hand to the shell', () => {
     expect(under).toHaveLength(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
     expect(isBridgeExternalLinkUrl(under)).toBe(true)
     expect(isBridgeExternalLinkUrl(`${under}a`)).toBe(false)
+  })
+})
+
+/**
+ * What crosses is the parser's URL, not the page's string.
+ *
+ * The WHATWG parser strips tab, LF and CR from anywhere in a URL and trims leading and trailing C0
+ * and space before it reads the scheme. So a string the check accepts is not always the string a
+ * handler should be given: forwarding it raw hands the device a URL that reads as allowed here and
+ * as something else there. Normalizing is the fix; refusing anything that differs from its
+ * normalization is not, because `https://example.com` differs from its own href by a slash.
+ */
+describe('the URL that actually crosses', () => {
+  it('is the parsed href, for the four shapes that survive the scheme check unchanged', () => {
+    expect(readBridgeExternalLinkUrl('ht\ntps://example.com')).toBe('https://example.com/')
+    expect(readBridgeExternalLinkUrl('https://example.com/a\r\n')).toBe('https://example.com/a')
+    expect(readBridgeExternalLinkUrl('  https://example.com/a  ')).toBe('https://example.com/a')
+    expect(readBridgeExternalLinkUrl('https:example.com')).toBe('https://example.com/')
+  })
+
+  it('takes an ordinary URL that differs from its own href, rather than refusing it', () => {
+    // The whole reason this normalizes instead of comparing: a bare origin gains a path slash.
+    expect(readBridgeExternalLinkUrl('https://example.com')).toBe('https://example.com/')
+  })
+
+  it('answers null for exactly what the predicate refuses', () => {
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '/h/host-a/tasks', '']) {
+      expect(readBridgeExternalLinkUrl(url), url).toBeNull()
+      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
+    }
+  })
+
+  it('holds the normalized form to the cap, not just the string it was handed', () => {
+    // Percent-encoding expands, so a raw string inside the cap can normalize past it.
+    const raw = `https://example.com/${'\u00e9'.repeat(BRIDGE_MAX_EXTERNAL_LINK_CHARS - 21)}`
+    expect(raw.length).toBeLessThanOrEqual(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    expect(new URL(raw).href.length).toBeGreaterThan(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    expect(readBridgeExternalLinkUrl(raw)).toBeNull()
   })
 })

@@ -287,6 +287,23 @@ describe('externalLink', () => {
     expect(bridge.diagnostics).toEqual([])
   })
 
+  it('hands over the URL the parser read, not the string the page sent', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // Each of these passes the scheme check and is not what a device handler should be given: the
+    // WHATWG parser strips tab, LF and CR anywhere and trims leading C0 and space.
+    bridge.host.receive(open('ht\ntps://example.com'))
+    bridge.host.receive(open('https://example.com/a\r\n'))
+    bridge.host.receive(open('  https://example.com/a  '))
+    bridge.host.receive(open('https:example.com'))
+    expect(bridge.externalLinks).toEqual([
+      'https://example.com/',
+      'https://example.com/a',
+      'https://example.com/a',
+      'https://example.com/'
+    ])
+  })
+
   it('refuses a scheme the grant does not cover, as a frame the reader never accepts', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
