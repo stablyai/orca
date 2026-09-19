@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +17,8 @@ const { execFile } = await import('node:child_process')
 const execFileMock = vi.mocked(execFile)
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
-const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
+const { installManagedHooks, resolveRelayGrokHome, resolveRelayRedirectedCodexHome } =
+  await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
 
@@ -158,3 +159,130 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
     expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
   })
 })
+
+describe.runIf(process.platform !== 'win32')('resolveRelayRedirectedCodexHome', () => {
+  const CODEX_ONLY = ['codex'] as const
+
+  it('reports the CODEX_HOME the host s own Codex names', async () => {
+    // #19598: a launcher wrapper exports CODEX_HOME inside the script, so only
+    // Codex itself knows. The login-shell environment never sees it.
+    await expect(
+      resolveRelayRedirectedCodexHome(
+        '/home/orca',
+        CODEX_ONLY,
+        undefined,
+        async () => '/home/orca/.codex-x/'
+      )
+    ).resolves.toBe('/home/orca/.codex-x')
+  })
+
+  // Why null rather than the path: an explicit codexHomeDir switches
+  // installRemote to its redirected-runtime contract (script location, command
+  // wrapper, hook order). An unwrapped host must keep the incumbent layout.
+  it('reports no redirect when Codex names the ordinary home', async () => {
+    await expect(
+      resolveRelayRedirectedCodexHome(
+        '/home/orca/',
+        CODEX_ONLY,
+        undefined,
+        async () => '/home/orca/.codex'
+      )
+    ).resolves.toBeNull()
+  })
+
+  it('reports no redirect when Codex does not answer', async () => {
+    await expect(
+      resolveRelayRedirectedCodexHome('/home/orca', CODEX_ONLY, undefined, async () => null)
+    ).resolves.toBeNull()
+  })
+
+  it.each([
+    ['relative', '../relative'],
+    ['Windows', 'C:\\Users\\bob\\.codex'],
+    ['control-character', '/home/orca/.codex\u0007'],
+    ['empty', '   ']
+  ])('reports no redirect when the reported home is %s', async (_label, reported) => {
+    await expect(
+      resolveRelayRedirectedCodexHome('/home/orca', CODEX_ONLY, undefined, async () => reported)
+    ).resolves.toBeNull()
+  })
+
+  it('does not probe for a host with no detected Codex', async () => {
+    const probe = vi.fn()
+
+    await expect(
+      resolveRelayRedirectedCodexHome('/home/orca', ['claude'], undefined, probe)
+    ).resolves.toBeNull()
+    expect(probe).not.toHaveBeenCalled()
+  })
+})
+
+describe.runIf(process.platform !== 'win32')(
+  'installManagedHooks with a redirected Codex home',
+  () => {
+    /** A `codex` earlier on PATH that exports its own CODEX_HOME, as in #19598. */
+    async function stubWrappedCodex(home: string, codexHome: string): Promise<void> {
+      const binDir = join(home, 'bin')
+      await mkdir(binDir, { recursive: true })
+      const codexPath = join(binDir, 'codex')
+      await writeFile(
+        codexPath,
+        `#!/bin/sh\nread -r _line\nprintf '%s\\n' '{"id":1,"result":{"codexHome":"${codexHome}"}}'\nsleep 5\n`,
+        'utf8'
+      )
+      await chmod(codexPath, 0o755)
+      vi.stubEnv('HOME', home)
+      vi.stubEnv('SHELL', '/bin/sh')
+      vi.stubEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    }
+
+    it('installs into the home Codex reports, not ~/.codex', async () => {
+      const home = await createTempHome()
+      const codexHome = join(home, '.codex-openai')
+      await stubWrappedCodex(home, codexHome)
+
+      await expect(installManagedHooks({ agents: ['codex'] })).resolves.toEqual({
+        installers: 1,
+        errors: 0
+      })
+
+      await expect(readFile(join(codexHome, 'hooks.json'), 'utf8')).resolves.toContain(
+        'codex-hook.sh'
+      )
+      await expect(readFile(join(home, '.codex', 'hooks.json'), 'utf8')).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+    })
+
+    // The redirected-home contract moves the hook script under CODEX_HOME and
+    // rewrites the command; an unwrapped host must keep the incumbent layout.
+    it('leaves an unwrapped host on its incumbent ~/.codex layout', async () => {
+      const home = await createTempHome()
+      await stubWrappedCodex(home, join(home, '.codex'))
+
+      await expect(installManagedHooks({ agents: ['codex'] })).resolves.toEqual({
+        installers: 1,
+        errors: 0
+      })
+
+      await expect(readFile(join(home, '.codex', 'hooks.json'), 'utf8')).resolves.toContain(
+        join(home, '.orca', 'agent-hooks', 'codex-hook.sh')
+      )
+      await expect(
+        readFile(join(home, '.codex', '.orca', 'agent-hooks', 'codex-hook.sh'), 'utf8')
+      ).rejects.toMatchObject({ code: 'ENOENT' })
+    })
+
+    it('moves the hook script under a redirected home, as the runtime installer does', async () => {
+      const home = await createTempHome()
+      const codexHome = join(home, '.codex-openai')
+      await stubWrappedCodex(home, codexHome)
+
+      await installManagedHooks({ agents: ['codex'] })
+
+      await expect(
+        readFile(join(codexHome, '.orca', 'agent-hooks', 'codex-hook.sh'), 'utf8')
+      ).resolves.toContain('#!/bin/sh')
+    })
+  }
+)
