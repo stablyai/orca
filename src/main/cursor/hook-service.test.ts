@@ -24,7 +24,7 @@ import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -NonInteractive -EncodedCommand \S+$/
 
 // Why: on Windows one hook run is cmd.exe -> powershell.exe -> cmd.exe -> cursor-hook.cmd ->
 // curl.exe, and the package job runs ~25 files at maxWorkers 4 alongside real-Electron and
