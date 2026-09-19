@@ -38,6 +38,42 @@ export function BrowserTerminalLinkActionsSetting({
     'Control clicks on detected URLs printed in terminal panes and chat transcripts.'
   )
   const behavior = terminalLinkClickBehaviorFor(settings)
+  const plainClickLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickLabel',
+    'Plain click'
+  )
+  const plainClickDescription = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickDescription',
+    'Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly.'
+  )
+  const plainClickAriaLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickAriaLabel',
+    'Plain click URL behavior'
+  )
+  const middleClickLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.middleClickLabel',
+    'Middle click'
+  )
+  const middleClickDescription = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.middleClickDescription',
+    'Choose what a mouse-wheel click does on a detected terminal URL.'
+  )
+  const middleClickAriaLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.middleClickAriaLabel',
+    'Middle click'
+  )
+  const actionsLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.actionsLabel',
+    'Actions'
+  )
+  const openUrlLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.openUrlLabel',
+    'Open URL'
+  )
+  const leaveToTerminalLabel = translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.leaveToTerminalLabel',
+    'Leave to terminal'
+  )
 
   return (
     <SearchableSetting
@@ -51,36 +87,36 @@ export function BrowserTerminalLinkActionsSetting({
         <div className="rounded-lg border border-border/60 bg-muted/10 px-4">
           <div className="divide-y divide-border/40">
             <SettingsRow
-              label="Plain click"
-              description="Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly."
+              label={plainClickLabel}
+              description={plainClickDescription}
               alignTop
               control={
                 <SettingsSegmentedControl<TerminalLinkClickBehavior>
                   value={behavior}
                   onChange={(value) => updateSettings({ terminalLinkClickBehavior: value })}
-                  ariaLabel="Plain click URL behavior"
+                  ariaLabel={plainClickAriaLabel}
                   size="sm"
                   options={[
-                    { value: 'actions', label: 'Actions' },
-                    { value: 'open', label: 'Open URL' },
-                    { value: 'none', label: 'Leave to terminal' }
+                    { value: 'actions', label: actionsLabel },
+                    { value: 'open', label: openUrlLabel },
+                    { value: 'none', label: leaveToTerminalLabel }
                   ]}
                 />
               }
             />
             <SettingsRow
-              label="Middle click"
-              description="Choose what a mouse-wheel click does on a detected terminal URL."
+              label={middleClickLabel}
+              description={middleClickDescription}
               control={
                 <SettingsSegmentedControl<TerminalLinkClickBehavior>
                   value={settings.terminalUrlMiddleClickBehavior ?? 'open'}
                   onChange={(value) => updateSettings({ terminalUrlMiddleClickBehavior: value })}
-                  ariaLabel="Middle click"
+                  ariaLabel={middleClickAriaLabel}
                   size="sm"
                   options={[
-                    { value: 'actions', label: 'Actions' },
-                    { value: 'open', label: 'Open URL' },
-                    { value: 'none', label: 'Leave to terminal' }
+                    { value: 'actions', label: actionsLabel },
+                    { value: 'open', label: openUrlLabel },
+                    { value: 'none', label: leaveToTerminalLabel }
                   ]}
                 />
               }
