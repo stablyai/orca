@@ -52,6 +52,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.geminiCliOAuthEnabledResolver = resolver
   }
 
+  setAntigravityCommandResolver(resolver: () => string | undefined): void {
+    this.antigravityCommandResolver = resolver
+  }
+
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
     this.networkProxySettingsResolver = resolver
   }

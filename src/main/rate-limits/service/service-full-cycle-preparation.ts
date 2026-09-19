@@ -16,6 +16,8 @@ import type {
 } from './service-types'
 
 export type FetchAllCyclePrepared = {
+  antigravityCommand: string
+  antigravityCommandChanged: boolean
   claudeTarget: NormalizedClaudeAccountSelectionTarget
   claudeGeneration: number
   claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
@@ -85,6 +87,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxEndpoint = miniMaxConfigResult.config.endpoint
     const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
+    const antigravityCommand = this.antigravityCommandResolver?.()?.trim() ?? ''
+    const antigravityCommandChanged = antigravityCommand !== this.lastAntigravityCommand
+    this.lastAntigravityCommand = antigravityCommand
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
@@ -119,7 +124,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
-      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
+      antigravity: this.withFetchingStatus(
+        antigravityCommandChanged ? null : previousState.antigravity,
+        'antigravity'
+      ),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -167,7 +175,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
             signal
           })),
       fetchGeminiRateLimits(geminiCliOAuthEnabled),
-      fetchAntigravityRateLimits(signal),
+      fetchAntigravityRateLimits(signal, antigravityCommand),
       fetchOpenCodeGoRateLimits(
         cookie,
         workspaceIdOverride || undefined,
@@ -189,6 +197,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       return null
     }
     return {
+      antigravityCommand,
+      antigravityCommandChanged,
       claudeTarget,
       claudeGeneration,
       claudeAuthPreparation,

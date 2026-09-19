@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 
 describe('isStatusBarItemAvailable', () => {
+  it('keeps configured Antigravity available when PATH detection misses it', () => {
+    const settings = { agentCmdOverrides: { antigravity: '"/custom tools/agy"' } }
+    expect(isStatusBarItemAvailable('antigravity', [], settings)).toBe(true)
+    expect(isStatusBarItemAvailable('gemini', [], settings)).toBe(false)
+    expect(
+      isStatusBarItemAvailable('antigravity', [], {
+        agentCmdOverrides: { antigravity: '   ' }
+      })
+    ).toBe(false)
+  })
   it('shows non-CLI items regardless of detection', () => {
     // Why: ssh, resource-usage, and opencode-go aren't CLIs on PATH, so
     // detection results don't apply.

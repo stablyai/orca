@@ -128,6 +128,9 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  state.rateLimits.setAntigravityCommandResolver(
+    () => store.getSettings().agentCmdOverrides.antigravity
+  )
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),

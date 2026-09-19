@@ -5,10 +5,12 @@ import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import {
+  deferred,
   errorProvider,
   okProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -93,6 +95,43 @@ describe('RateLimitService Antigravity usage', () => {
     expect(state.antigravity?.status).toBe('ok')
     expect(state.antigravity?.provider).toBe('antigravity')
     expect(state.antigravity?.session?.usedPercent).toBe(8)
+  })
+
+  it('reads the current runtime launch override on each quota refresh', async () => {
+    const service = new RateLimitService()
+    let command = '/custom/agy'
+    service.setAntigravityCommandResolver(() => command)
+    await service.refresh()
+    expect(fetchAntigravityRateLimits).toHaveBeenLastCalledWith(expect.any(AbortSignal), command)
+    command = '/replacement/agy'
+    await service.refresh()
+    expect(fetchAntigravityRateLimits).toHaveBeenLastCalledWith(expect.any(AbortSignal), command)
+  })
+
+  it('drops an in-flight quota response after the configured executable changes', async () => {
+    const pending = deferred<ProviderRateLimits>()
+    vi.mocked(fetchAntigravityRateLimits).mockReturnValueOnce(pending.promise)
+    const service = new RateLimitService()
+    let command = '/first/agy'
+    service.setAntigravityCommandResolver(() => command)
+    const refresh = service.refresh()
+    await vi.waitFor(() => expect(fetchAntigravityRateLimits).toHaveBeenCalled())
+    command = '/second/agy'
+    pending.resolve(okProvider('antigravity', 75))
+    await refresh
+    expect(service.getState().antigravity).toBeNull()
+  })
+
+  it('does not retain the old executable quota when the replacement fails', async () => {
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce(okProvider('antigravity', 75))
+    const service = new RateLimitService()
+    let command = '/first/agy'
+    service.setAntigravityCommandResolver(() => command)
+    await service.refresh()
+    command = '/second/agy'
+    await service.refresh()
+    expect(service.getState().antigravity?.session).toBeNull()
+    expect(service.getState().antigravity?.status).toBe('error')
   })
 
   it('never leaves a cached Antigravity snapshot in the error retry lane', async () => {

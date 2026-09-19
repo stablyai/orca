@@ -8,11 +8,7 @@ export type UsageProviderSettings = Pick<
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
-  // Why: Antigravity has no separate persisted usage credential in Orca. The
-  // checked status-bar item is the durable user signal; StatusBar only sets
-  // this after PATH detection says the agent is available. Durability further
-  // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
-  // which never yields data while that opt-in is off.
+  // A checked item plus a detected or configured CLI keeps native quota visible while pending.
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean

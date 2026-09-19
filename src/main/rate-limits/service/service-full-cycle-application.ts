@@ -196,7 +196,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      antigravity:
+        prepared.antigravityCommand !== (this.antigravityCommandResolver?.()?.trim() ?? '')
+          ? null
+          : prepared.antigravityCommandChanged
+            ? antigravity
+            : this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax

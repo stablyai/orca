@@ -1,7 +1,6 @@
-import path from 'node:path'
 import { hasReachedAppVersion } from '../../shared/app-version'
 import type { ProviderRateLimits, RateLimitBucket } from '../../shared/rate-limit-types'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { resolveAntigravityUsageCommand } from './antigravity-usage-command'
 import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
 
 const AGY_USAGE_ARGS = ['--print', '/usage', '--output-format', 'json']
@@ -162,23 +161,16 @@ function classifyAgyFailure(error: unknown): {
   }
 }
 
-export function getAntigravityUsageCommand(): string {
-  return resolveCliCommand('agy')
-}
-
 export async function fetchAntigravityRateLimits(
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  commandOverride?: string
 ): Promise<ProviderRateLimits> {
   const now = Date.now()
-  const command = getAntigravityUsageCommand()
-  if (!path.isAbsolute(command)) {
-    return emptyAntigravityResult(
-      'unavailable',
-      'Antigravity usage is unavailable because the agy CLI was not found.',
-      now,
-      'cli-unavailable'
-    )
+  const resolved = resolveAntigravityUsageCommand(commandOverride)
+  if (!resolved.ok) {
+    return emptyAntigravityResult('unavailable', resolved.error, now, 'cli-unavailable')
   }
+  const command = resolved.command
   try {
     // Before 1.1.11, print /usage starts a model turn instead of reading quota.
     const versionResult = await execFileCaptureToTermination(command, ['--version'], {

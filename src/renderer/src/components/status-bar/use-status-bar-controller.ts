@@ -106,7 +106,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: Antigravity visibility is based on its own detected CLI and snapshot.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    isStatusBarItemAvailable('antigravity', detectedAgentIds, settings)
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
@@ -141,7 +141,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showAntigravity =
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    isStatusBarItemAvailable('antigravity', detectedAgentIds, settings)
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
@@ -256,6 +256,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
+    settings,
     showEmptyUsageCta,
     showFloatingTerminalToggle,
     showFloatingWorkspaceAttentionDot,

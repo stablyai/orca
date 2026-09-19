@@ -91,6 +91,8 @@ export abstract class RateLimitServiceState {
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
+  protected antigravityCommandResolver: (() => string | undefined) | null = null
+  protected lastAntigravityCommand: string | undefined
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null

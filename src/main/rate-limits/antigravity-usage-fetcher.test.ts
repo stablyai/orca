@@ -123,6 +123,32 @@ describe('parseAgyUsageResponse', () => {
 })
 
 describe('fetchAntigravityRateLimits', () => {
+  it('checks the configured executable version and reads quota from that same executable', async () => {
+    vi.mocked(execFileCaptureToTermination)
+      .mockReset()
+      .mockResolvedValueOnce({ stdout: '1.2.7', stderr: '' })
+    await fetchAntigravityRateLimits(undefined, '"/custom tools/agy"')
+    expect(execFileCaptureToTermination).toHaveBeenNthCalledWith(
+      1,
+      '/custom tools/agy',
+      ['--version'],
+      expect.any(Object)
+    )
+    expect(execFileCaptureToTermination).toHaveBeenNthCalledWith(
+      2,
+      '/custom tools/agy',
+      AGY_USAGE_ARGS,
+      expect.any(Object)
+    )
+  })
+
+  it('does not spawn for an override whose arguments could change the quota operation', async () => {
+    const result = await fetchAntigravityRateLimits(undefined, 'agy --print another-prompt')
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toContain('only the executable path')
+    expect(execFileCaptureToTermination).not.toHaveBeenCalled()
+  })
+
   it.each(['1.1.10', '1.1.11-rc.1', '', 'unknown', 'warning: 1.2.7'])(
     'never invokes usage when version %j does not establish support',
     async (version) => {
