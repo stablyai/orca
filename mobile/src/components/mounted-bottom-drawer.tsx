@@ -298,12 +298,12 @@ export function MountedBottomDrawer({
         }
       ]
     }
-  })
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateY])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport

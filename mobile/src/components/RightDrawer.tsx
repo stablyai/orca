@@ -153,20 +153,23 @@ function MountedRightDrawer({
       }
     })
 
-  const drawerStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
-          translateX.value
-      }
-    ]
-  }))
+  const drawerStyle = useAnimatedStyle(
+    () => ({
+      transform: [
+        {
+          translateX:
+            interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
+            translateX.value
+        }
+      ]
+    }),
+    [progress, translateX, panelWidth]
+  )
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateX, panelWidth])
 
   return (
     <Animated.View
