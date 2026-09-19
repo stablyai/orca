@@ -42,7 +42,7 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
-  /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
+  /** Delay before one extra blind submit input, for agents that render their composer before submit is live (codex). */
   submitRetryDelayMs?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'

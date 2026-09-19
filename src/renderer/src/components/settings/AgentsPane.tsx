@@ -34,6 +34,10 @@ import {
   resolveAgentPermissionModeSummary,
   type AgentPermissionMode
 } from '../../../../shared/tui-agent-permissions'
+import {
+  resolveAgentPostPasteSubmitInput,
+  type AgentPostPasteSubmitInput
+} from '../../../../shared/tui-agent-post-paste-submit'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -177,6 +181,7 @@ export function AgentsPane({
   const cmdOverrides = settings.agentCmdOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
+  const agentPostPasteSubmitInputs = settings.agentPostPasteSubmitInputs ?? {}
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   const detectedAgents =
     detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
@@ -212,6 +217,7 @@ export function AgentsPane({
     cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
     envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
+    postPasteSubmitInput: resolveAgentPostPasteSubmitInput(agent.id, agentPostPasteSubmitInputs),
     onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
     onSaveOverride: isDetected
@@ -229,6 +235,10 @@ export function AgentsPane({
       updateSettings({ agentDefaultArgs: { ...agentDefaultArgs, [agent.id]: value } }),
     onSaveEnv: (value) =>
       updateSettings({ agentDefaultEnv: { ...agentDefaultEnv, [agent.id]: value } }),
+    onSavePostPasteSubmitInput: (value: AgentPostPasteSubmitInput) =>
+      updateSettings({
+        agentPostPasteSubmitInputs: { ...agentPostPasteSubmitInputs, [agent.id]: value }
+      }),
     sessionSourceHome:
       isDetected && agent.id === 'codex'
         ? buildCodexSessionSourceHomeControl(settings, updateSettings)
