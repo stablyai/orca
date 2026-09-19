@@ -39,7 +39,51 @@ function sourceFiles(directory: string): string[] {
   })
 }
 
-/** Every mapper-hook call in the file that was not handed a dependency array. */
+/** Whether this `X.value` is being written rather than read. A write is an output, not an input. */
+function isWriteTarget(node: ts.PropertyAccessExpression): boolean {
+  const parent = node.parent
+  if (ts.isBinaryExpression(parent) && parent.left === node) {
+    // `=` through `??=`: every assignment operator sits in this one contiguous token range.
+    return (
+      parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    )
+  }
+  return ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)
+}
+
+/** Every `X` in an `X.value` read under this node, which is what the mapper has to listen to. */
+function sharedValuesRead(updater: ts.Node): Set<string> {
+  const names = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === 'value' &&
+      ts.isIdentifier(node.expression) &&
+      !isWriteTarget(node)
+    ) {
+      names.add(node.expression.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(updater)
+  return names
+}
+
+/** The identifiers a dependency array lists, ignoring entries that are not plain names. */
+function namesListed(dependencies: ts.ArrayLiteralExpression): Set<string> {
+  return new Set(dependencies.elements.filter(ts.isIdentifier).map((element) => element.text))
+}
+
+/**
+ * Every mapper-hook call that was not handed a dependency array, or was handed one that leaves a
+ * shared value out.
+ *
+ * The second half is the one an array alone does not give: `inputs` becomes exactly the array
+ * (hook/useAnimatedStyle.js:338-341), so a value the updater reads but the array omits is a value
+ * the mapper never listens to. That updater then stops re-running when only that value changes,
+ * which is the same freeze as having no array at all, in one prop instead of all of them.
+ */
 function callsMissingDependencies(path: string, source: string): string[] {
   const sourceFile = ts.createSourceFile(
     path,
@@ -55,9 +99,21 @@ function callsMissingDependencies(path: string, source: string): string[] {
       const hook = MAPPER_HOOKS.get(name)
       if (hook) {
         const dependencies = node.arguments[hook.dependencies]
+        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+        const where = `${relative(mobileDirectory, path)}:${String(line + 1)} ${name}`
         if (!dependencies || !ts.isArrayLiteralExpression(dependencies)) {
-          const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-          missing.push(`${relative(mobileDirectory, path)}:${String(line + 1)} ${name}`)
+          missing.push(where)
+        } else {
+          const listed = namesListed(dependencies)
+          const read = hook.updaters.flatMap((index) => {
+            const updater = node.arguments[index]
+            return updater ? [...sharedValuesRead(updater)] : []
+          })
+          for (const value of [...new Set(read)].sort()) {
+            if (!listed.has(value)) {
+              missing.push(`${where} omits ${value}`)
+            }
+          }
         }
       }
     }
@@ -99,6 +155,30 @@ describe('reanimated mapper hooks in the web bundle', () => {
         'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n'
       )
     ).toEqual([])
+  })
+
+  it('names a shared value the updater reads but the array leaves out', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      'const s = useAnimatedStyle(() => ({ opacity: progress.value * fade.value }), [progress])\n'
+    )
+    expect(found).toEqual(['fixture.tsx:1 useAnimatedStyle omits fade'])
+  })
+
+  it('does not ask for a value the updater only writes, which is an output', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      'useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n'
+    )
+    expect(found).toEqual([])
+  })
+
+  it('still asks for one that is read and written', () => {
+    const found = callsMissingDependencies(
+      'fixture.tsx',
+      'const s = useAnimatedStyle(() => { offset.value = offset.value + 1; return {} }, [])\n'
+    )
+    expect(found).toEqual(['fixture.tsx:1 useAnimatedStyle omits offset'])
   })
 
   it('accepts one that has a dependency array', () => {
