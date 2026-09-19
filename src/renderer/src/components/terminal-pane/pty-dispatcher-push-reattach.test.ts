@@ -108,4 +108,23 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
     expect(received).toEqual(['after-reattach'])
     expect(ackDataMock).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps a watcher added during a one-sidecar callback for the next chunk', async () => {
+    const { ensurePtyDispatcher, ptyDataSidecars } = await import('./pty-dispatcher')
+    const second = vi.fn()
+    const first = vi.fn(() => {
+      ptyDataSidecars.get('pty-1')?.add(second)
+    })
+
+    ensurePtyDispatcher()
+    ptyDataSidecars.set('pty-1', new Set([first]))
+
+    dataCallbacks[0]?.({ id: 'pty-1', data: 'first' })
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).not.toHaveBeenCalled()
+
+    dataCallbacks[0]?.({ id: 'pty-1', data: 'second' })
+    expect(first).toHaveBeenCalledTimes(2)
+    expect(second).toHaveBeenCalledTimes(1)
+  })
 })

@@ -155,10 +155,18 @@ function handleDispatchedPtyData(payload: {
     }
     const sidecars = ptyDataSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
-      // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
-      const snapshot = Array.from(sidecars)
-      for (const watcher of snapshot) {
-        watcher(payload.data)
+      if (sidecars.size === 1) {
+        // Why: the common parked-pane case needs no snapshot; breaking after the only current watcher also keeps a watcher added from inside the callback for the next chunk.
+        for (const watcher of sidecars) {
+          watcher(payload.data)
+          break
+        }
+      } else {
+        // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
+        const snapshot = Array.from(sidecars)
+        for (const watcher of snapshot) {
+          watcher(payload.data)
+        }
       }
     }
   }
