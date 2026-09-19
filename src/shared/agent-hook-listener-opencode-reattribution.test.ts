@@ -103,4 +103,25 @@ describe('opencode shared-server reattribution (#21359)', () => {
     const again = opencodeBusy(state, PANE_B, 'ses_1', 'token-b-stale')
     expect(again?.launchToken).toBe('token-b-live')
   })
+
+  it('drops the stamped worktree when the binding has none', () => {
+    const state = createHookListenerState()
+    bindOpenCodeSession(state, 'ses_1', {
+      paneKey: PANE_B,
+      boundAt: 1,
+      basis: 'argv'
+    })
+    const result = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_A,
+        worktreeId: 'repo::/stamped-worktree',
+        payload: { hook_event_name: 'SessionBusy', sessionID: 'ses_1' }
+      },
+      'production'
+    )
+    expect(result?.paneKey).toBe(PANE_B)
+    expect(result?.worktreeId).toBeUndefined()
+  })
 })

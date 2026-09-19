@@ -15,7 +15,7 @@ import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import type SyncDatabase from '../sqlite/sync-database'
-import { isOpenCodeClientArgv, type ProcessIdentityRow } from './opencode-client-sweep'
+import { isOpenCodeClientProcess, type ProcessIdentityRow } from './opencode-client-sweep'
 import type { HookListenerState } from '../../shared/agent-hook-listener/listener-state'
 
 /**
@@ -143,7 +143,7 @@ function toCorrelatedClients(
   }
   const clients: CorrelatedClient[] = []
   for (const row of processes) {
-    if (!isOpenCodeClientArgv(row.argv)) {
+    if (!isOpenCodeClientProcess(row)) {
       continue
     }
     const paneKey = owningPane(ppidByPid, shellPidByPid, row.pid)

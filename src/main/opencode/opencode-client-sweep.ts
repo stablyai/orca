@@ -23,6 +23,13 @@ export type ProcessIdentityRow = {
   ppid: number
   /** ms epoch the process started. */
   startedAtMs: number
+  /**
+   * Kernel-reported executable name (`comm=` on POSIX, `name` on Windows).
+   * Unlike `args=`, this is not a reconstructed string, so an install path
+   * containing spaces cannot split it. Empty when the sweep could not read it;
+   * classification then falls back to argv[0].
+   */
+  executable: string
   /** argv approximation; see parsePsArgsLine. */
   argv: string[]
 }
@@ -50,8 +57,10 @@ export function parsePsElapsedToMs(etime: string, nowMs: number): number | null 
  * Split a command line into argv, grouping `"..."` so a quoted executable
  * path survives as argv[0]. Covers the shapes that matter here (a quoted
  * install path plus plain flags); it is not a full shell parser — an escaped
- * quote inside a quoted span still splits, and only argv[0] (classification)
- * plus flag-adjacent values (`--session <id>`) are ever read downstream.
+ * quote inside a quoted span still splits. Downstream only flag-adjacent
+ * values (`--session <id>`) are read from this argv; classification uses the
+ * kernel executable name, because `ps` `args=` cannot preserve argv
+ * boundaries for unquoted paths.
  */
 export function splitCommandLineArgv(commandLine: string): string[] {
   const argv: string[] = []
@@ -64,10 +73,12 @@ export function splitCommandLineArgv(commandLine: string): string[] {
 }
 
 /**
- * One `ps -eo pid=,ppid=,etime=,args=` line. `args` is the joined command
- * line; argv[0] and flag values survive quote-aware splitting, but a path
- * containing an unquoted space does not. Enough to spot an `opencode`
- * client and read its `--session` value, not enough to re-exec anything.
+ * One `ps -eo pid=,ppid=,etime=,args=` line. `args` is a reconstructed
+ * command-and-arguments string: argv boundaries are lost, so a path with an
+ * unquoted space (e.g. `/opt/Open Code/opencode`) splits argv[0] in two.
+ * The executable name therefore comes from a separate `comm=` sweep;
+ * this parser records the flags it can still read reliably (`--session`
+ * values never contain spaces) and leaves `executable` empty for the join.
  */
 export function parsePsArgsLine(line: string, nowMs: number): ProcessIdentityRow | null {
   // Why a regex instead of split-with-limit: split discards everything past
@@ -92,7 +103,25 @@ export function parsePsArgsLine(line: string, nowMs: number): ProcessIdentityRow
   ) {
     return null
   }
-  return { pid, ppid, startedAtMs, argv }
+  return { pid, ppid, startedAtMs, executable: '', argv }
+}
+
+/**
+ * One `ps -eo pid=,comm=` line. `comm` is the kernel's executable name as a
+ * trailing field, so it may itself contain spaces — everything past the pid
+ * is the name. Empty names are dropped; the join then falls back to argv[0].
+ */
+export function parsePsCommLine(line: string): { pid: number; executable: string } | null {
+  const match = line.trim().match(/^(\S+)\s+([\s\S]*\S)\s*$/)
+  if (!match) {
+    return null
+  }
+  const [, pidText, executable] = match
+  const pid = Number.parseInt(pidText ?? '', 10)
+  if (!Number.isFinite(pid) || !executable) {
+    return null
+  }
+  return { pid, executable }
 }
 
 /**
@@ -112,23 +141,49 @@ export function nativeWindowsRowToIdentity(
   if (argv.length === 0) {
     return null
   }
-  return { pid: row.pid, ppid: row.ppid, startedAtMs: row.creationTimeMs, argv }
+  return {
+    pid: row.pid,
+    ppid: row.ppid,
+    startedAtMs: row.creationTimeMs,
+    executable: row.name,
+    argv
+  }
+}
+
+function executableBaseName(value: string): string {
+  const bare = value.split(/[\\/]/).at(-1) ?? ''
+  return bare.toLowerCase().replace(/\.exe$/, '')
 }
 
 function argvZeroBase(argv: readonly string[]): string {
-  const first = argv[0] ?? ''
-  const bare = first.split(/[\\/]/).pop() ?? ''
-  return bare.toLowerCase().replace(/\.exe$/, '')
+  return executableBaseName(argv[0] ?? '')
 }
 
 /** True for an OpenCode TUI/CLI client process (not the `serve` daemon). */
 export function isOpenCodeClientArgv(argv: readonly string[]): boolean {
-  if (argvZeroBase(argv) !== 'opencode') {
+  return isOpenCodeClientProcess({ executable: '', argv })
+}
+
+/**
+ * True for an OpenCode TUI/CLI client process (not the `serve` daemon).
+ * The kernel-reported executable wins when present: `ps` `args=` cannot
+ * preserve argv boundaries, so a truncated argv[0] must not veto a matching
+ * executable. With no executable recorded this degrades to argv[0] matching.
+ */
+export function isOpenCodeClientProcess(row: {
+  executable: string
+  argv: readonly string[]
+}): boolean {
+  const classified =
+    row.executable && row.executable.length > 0
+      ? executableBaseName(row.executable)
+      : argvZeroBase(row.argv)
+  if (classified !== 'opencode') {
     return false
   }
   // Why exclude: the shared server's posts are the ones being reattributed;
   // mistaking the daemon for a pane client would bind sessions to its pane.
-  return !argv.some((part) => part === 'serve' || part === '--service')
+  return !row.argv.some((part) => part === 'serve' || part === '--service')
 }
 
 /** Every process identity row on this host; fail-open [] like the memory sweeps. */
@@ -156,10 +211,33 @@ export async function sweepProcessIdentities(
         .filter((row): row is ProcessIdentityRow => row !== null)
     }
     const stdout = await execFileText(run, 'ps', ['-eo', 'pid=,ppid=,etime=,args='])
-    return stdout
+    const rows = stdout
       .split('\n')
       .map((line) => parsePsArgsLine(line, nowMs))
       .filter((row): row is ProcessIdentityRow => row !== null)
+    // Why a second sweep: `args=` is one reconstructed string, so the
+    // executable name for classification comes from `comm=` instead. A
+    // failed comm sweep degrades to argv[0] matching rather than dropping
+    // the whole round.
+    try {
+      const commOut = await execFileText(run, 'ps', ['-eo', 'pid=,comm='])
+      const executables = new Map<number, string>()
+      for (const line of commOut.split('\n')) {
+        const parsed = parsePsCommLine(line)
+        if (parsed && !executables.has(parsed.pid)) {
+          executables.set(parsed.pid, parsed.executable)
+        }
+      }
+      for (const row of rows) {
+        const executable = executables.get(row.pid)
+        if (executable) {
+          row.executable = executable
+        }
+      }
+    } catch (err) {
+      console.warn('[opencode-binder] comm sweep failed; classifying from argv', err)
+    }
+    return rows
   } catch (err) {
     console.warn('[opencode-binder] process sweep failed; skipping round', err)
     return []

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { ProcessResult, ProcessSpec } from '../../shared/child-process/process-spec'
 import {
   isOpenCodeClientArgv,
+  isOpenCodeClientProcess,
   nativeWindowsRowToIdentity,
   parsePsArgsLine,
+  parsePsCommLine,
   parsePsElapsedToMs,
   splitCommandLineArgv,
   sweepProcessIdentities
@@ -38,12 +41,32 @@ describe('parsePsArgsLine', () => {
   it('keeps a quoted executable path as argv[0]', () => {
     const row = parsePsArgsLine('999 100 00:05 "/opt/my tools/opencode" --session ses_abc', NOW)
     expect(row?.argv).toEqual(['/opt/my tools/opencode', '--session', 'ses_abc'])
+    expect(row?.executable).toBe('')
   })
 
   it('drops header-shaped and truncated rows', () => {
     expect(parsePsArgsLine('PID PPID ELAPSED COMMAND', NOW)).toBeNull()
     expect(parsePsArgsLine('1 0', NOW)).toBeNull()
     expect(parsePsArgsLine('', NOW)).toBeNull()
+  })
+})
+
+describe('parsePsCommLine', () => {
+  it('reads the executable name past the pid', () => {
+    expect(parsePsCommLine('23487 opencode')).toEqual({ pid: 23487, executable: 'opencode' })
+  })
+
+  it('keeps executable names containing spaces whole', () => {
+    expect(parsePsCommLine('  999  My App Helper ')).toEqual({
+      pid: 999,
+      executable: 'My App Helper'
+    })
+  })
+
+  it('drops header-shaped and truncated rows', () => {
+    expect(parsePsCommLine('PID COMMAND')).toBeNull()
+    expect(parsePsCommLine('1')).toBeNull()
+    expect(parsePsCommLine('')).toBeNull()
   })
 })
 
@@ -73,13 +96,14 @@ describe('nativeWindowsRowToIdentity', () => {
       pid: 23487,
       ppid: 22618,
       name: 'opencode.exe',
-      creationTimeMs: 1_700_000_000_000 - 60_000,
+      creationTimeMs: NOW - 60_000,
       command: '"C:\\Program Files\\OpenCode\\opencode.exe" --session ses_1'
     })
     expect(row).toMatchObject({
       pid: 23487,
       ppid: 22618,
-      startedAtMs: 1_700_000_000_000 - 60_000,
+      startedAtMs: NOW - 60_000,
+      executable: 'opencode.exe',
       argv: ['C:\\Program Files\\OpenCode\\opencode.exe', '--session', 'ses_1']
     })
   })
@@ -106,7 +130,72 @@ describe('isOpenCodeClientArgv', () => {
   })
 })
 
+describe('isOpenCodeClientProcess', () => {
+  it('trusts the executable when argv[0] is truncated by spaces', () => {
+    expect(
+      isOpenCodeClientProcess({ executable: 'opencode', argv: ['/opt/Open', 'Code/opencode'] })
+    ).toBe(true)
+  })
+
+  it('still rejects the serve daemon', () => {
+    expect(
+      isOpenCodeClientProcess({ executable: 'opencode', argv: ['opencode', 'serve', '--service'] })
+    ).toBe(false)
+  })
+
+  it('falls back to argv[0] without an executable', () => {
+    expect(isOpenCodeClientProcess({ executable: '', argv: ['opencode'] })).toBe(true)
+    expect(isOpenCodeClientProcess({ executable: '', argv: ['node', 'server.js'] })).toBe(false)
+  })
+})
+
 describe('sweepProcessIdentities', () => {
+  function psRunner(outputs: Record<'args' | 'comm', string | Error>): (
+    spec: ProcessSpec
+  ) => Promise<ProcessResult> {
+    return async (spec: ProcessSpec): Promise<ProcessResult> => {
+      const kind = spec.args?.some((arg) => arg.includes('comm=')) ? 'comm' : 'args'
+      const output = outputs[kind]
+      if (output instanceof Error) {
+        throw output
+      }
+      return {
+        code: 0,
+        signal: null,
+        stdout: output,
+        stderr: '',
+        timedOut: false
+      }
+    }
+  }
+
+  it('joins the comm executable onto args rows on POSIX', async () => {
+    const rows = await sweepProcessIdentities({
+      platform: 'darwin',
+      nowMs: NOW,
+      run: psRunner({
+        args: '23487 22618 00:05 /opt/Open Code/opencode --session ses_1\n',
+        comm: '23487 opencode\n999 My App Helper\n'
+      })
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ pid: 23487, executable: 'opencode' })
+    expect(rows[0]?.argv).toEqual(['/opt/Open', 'Code/opencode', '--session', 'ses_1'])
+  })
+
+  it('degrades to argv[0] matching when the comm sweep fails', async () => {
+    const rows = await sweepProcessIdentities({
+      platform: 'darwin',
+      nowMs: NOW,
+      run: psRunner({
+        args: '23487 22618 00:05 opencode --session ses_1\n',
+        comm: new Error('comm unavailable')
+      })
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ pid: 23487, executable: '' })
+  })
+
   it('reads the Windows table through the injected reader', async () => {
     const rows = await sweepProcessIdentities({
       platform: 'win32',

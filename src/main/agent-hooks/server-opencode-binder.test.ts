@@ -70,7 +70,7 @@ describe('opencode binder loop', () => {
         { paneKey: PANE_A, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 111 }
       ],
       sweep: async () => [
-        { pid: 112, ppid: 111, startedAtMs: Date.now() - 120_000, argv: ['opencode'] }
+        { pid: 112, ppid: 111, startedAtMs: Date.now() - 120_000, executable: 'opencode', argv: ['opencode'] }
       ]
     })
   })
@@ -144,7 +144,15 @@ describe('opencode binder loop', () => {
     server.bindDeps({
       sweep: async () => {
         await sweepGate
-        return [{ pid: 112, ppid: 111, startedAtMs: Date.now() - 120_000, argv: ['opencode'] }]
+        return [
+          {
+            pid: 112,
+            ppid: 111,
+            startedAtMs: Date.now() - 120_000,
+            executable: 'opencode',
+            argv: ['opencode']
+          }
+        ]
       }
     })
     const round = server.runBinderRound()
@@ -152,6 +160,50 @@ describe('opencode binder loop', () => {
     releaseSweep()
     expect(await round).toBe(0)
     expect(server.readRegistry('ses_live')).toBeUndefined()
+  })
+
+  it('an obsolete round does not clear the new round running flag', async () => {
+    writeDb(dbPath, 'session_v2')
+    let releaseFirst!: () => void
+    let releaseLater!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const laterGate = new Promise<void>((resolve) => {
+      releaseLater = resolve
+    })
+    const clientRow = {
+      pid: 112,
+      ppid: 111,
+      startedAtMs: Date.now() - 120_000,
+      executable: 'opencode',
+      argv: ['opencode']
+    }
+    let sweepCalls = 0
+    server.bindDeps({
+      sweep: async () => {
+        sweepCalls += 1
+        await (sweepCalls === 1 ? firstGate : laterGate)
+        return [clientRow]
+      }
+    })
+    server.startBinderLoop()
+    await vi.waitFor(() => expect(sweepCalls).toBe(1))
+    server.stop()
+    server.startBinderLoop()
+    await vi.waitFor(() => expect(sweepCalls).toBe(2))
+    // The obsolete round finishes while the new round is still parked: its
+    // finally must not clear the flag the new round holds.
+    releaseFirst()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // A third round attempted now must be refused at the flag check, calling
+    // no sweep. With the unguarded finally it would be admitted instead.
+    const extraRound = server.runBinderRound()
+    expect(sweepCalls).toBe(2)
+    releaseLater()
+    await vi.waitFor(() => expect(server.readRegistry('ses_live')).toBe(PANE_A))
+    await extraRound
+    server.stop()
   })
 })
 

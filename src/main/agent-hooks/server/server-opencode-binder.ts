@@ -122,6 +122,11 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
       return 0
     }
     this.openCodeBinderRunning = true
+    // Why capture before the try: if stop() lands while the sweep is in
+    // flight and a restart begins a new round, the obsolete round must not
+    // clear the new round's running flag (or two rounds overlap and apply
+    // ownership snapshots out of order).
+    const generation = this.openCodeBinderGeneration
     try {
       const deps = this.openCodeBinderDeps
       const nowMs = deps.now()
@@ -140,7 +145,6 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
         return 0
       }
       const panes = deps.listPanes()
-      const generation = this.openCodeBinderGeneration
       const processes = await deps.sweep()
       if (generation !== this.openCodeBinderGeneration) {
         return 0
@@ -201,7 +205,9 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
       console.warn('[opencode-binder] round failed; keeping stamped attribution', err)
       return 0
     } finally {
-      this.openCodeBinderRunning = false
+      if (generation === this.openCodeBinderGeneration) {
+        this.openCodeBinderRunning = false
+      }
     }
   }
 }

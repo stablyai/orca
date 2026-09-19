@@ -22,7 +22,7 @@ function proc(
   argv: string[],
   startedAtMs = NOW - 120_000
 ): ProcessIdentityRow {
-  return { pid, ppid, startedAtMs, argv }
+  return { pid, ppid, startedAtMs, executable: argv[0] ?? '', argv }
 }
 
 function pane(paneKey: string, shellPid: number | null): BinderPaneSnapshot {

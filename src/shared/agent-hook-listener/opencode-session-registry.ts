@@ -173,7 +173,10 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
     // Why derive: the envelope rejects a tabId that disagrees with the pane
     // key, so the substituted tab must come from the substituted pane.
     tabId: parsePaneKey(binding.paneKey)?.tabId ?? stamped.tabId,
-    worktreeId: binding.worktreeId ?? stamped.worktreeId,
+    // Why no stamped fallback: a binding without a worktree (its pane row
+    // carried none) combined with the stamped pane's worktree would file the
+    // row under the wrong worktree. Absent is honest; wrong is not.
+    worktreeId: binding.worktreeId,
     // Why the stored token or nothing: the frozen stamp carries the
     // server-starter's (usually empty) token, which a fenced pane would
     // suppress — and recording that stale token as live would poison the
