@@ -251,7 +251,12 @@ export function CodexSwitcherMenu({
                             </span>
                           ) : null}
                         </div>
-                        {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                        {target.active ? (
+                          <InlineUsageBars
+                            limits={codex}
+                            isFetching={codex.status === 'fetching'}
+                          />
+                        ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                           <InlineUsageSkeleton />
                         ) : showSignInAction ? (
                           <InlineUsageSignInAction
