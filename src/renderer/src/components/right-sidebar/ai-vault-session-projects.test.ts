@@ -8,7 +8,8 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
   buildAiVaultProjectContext,
-  buildAiVaultSessionProjectById
+  buildAiVaultSessionProjectById,
+  sessionsForAiVaultProjectMap
 } from './ai-vault-session-projects'
 import { groupAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
 
@@ -476,6 +477,34 @@ describe('buildAiVaultProjectContext', () => {
       key: 'unknown',
       label: ''
     })
+  })
+})
+
+describe('sessionsForAiVaultProjectMap', () => {
+  it('returns search sessions unchanged when not searching', () => {
+    const searchHit = { ...baseSession, id: 'search:1' }
+    const historyOnly = { ...baseSession, id: 'history:1' }
+    expect(
+      sessionsForAiVaultProjectMap([searchHit], {
+        searching: false,
+        historySessions: [historyOnly]
+      })
+    ).toEqual([searchHit])
+  })
+
+  it('unions history with search hits while searching so project/worktree maps cover overlay matches', () => {
+    const searchHit = { ...baseSession, id: 'search:1', title: 'index hit' }
+    const historyOnly = { ...baseSession, id: 'history:1', title: 'scanner title' }
+    const historyOverlap = { ...baseSession, id: 'search:1', title: 'stale history' }
+
+    const merged = sessionsForAiVaultProjectMap([searchHit], {
+      searching: true,
+      historySessions: [historyOnly, historyOverlap]
+    })
+
+    expect(merged.map((session) => session.id).sort()).toEqual(['history:1', 'search:1'])
+    // Prefer the search-result object when ids collide.
+    expect(merged.find((session) => session.id === 'search:1')?.title).toBe('index hit')
   })
 })
 

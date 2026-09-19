@@ -73,6 +73,32 @@ export function buildAiVaultProjectContext({
   }
 }
 
+
+/**
+ * Session lists used to build session→project and session→worktree attribution.
+ * During desktop search, `sessions` is only the main-process hit set; history-only
+ * overlay matches still need map entries for project-scope filtering and resume.
+ */
+export function sessionsForAiVaultProjectMap(
+  sessions: readonly AiVaultSession[],
+  {
+    searching,
+    historySessions
+  }: {
+    searching: boolean
+    historySessions?: readonly AiVaultSession[]
+  }
+): readonly AiVaultSession[] {
+  if (!searching || !historySessions || historySessions.length === 0) {
+    return sessions
+  }
+  const byId = new Map(historySessions.map((session) => [session.id, session]))
+  for (const session of sessions) {
+    byId.set(session.id, session)
+  }
+  return [...byId.values()]
+}
+
 /**
  * Session→project attribution never reads the active repo/worktree — exposed
  * separately so memoizing callers don't rebuild the map on worktree switches.

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { sessionsForAiVaultProjectMap } from './ai-vault-session-projects'
 import {
   resolveAiVaultSessionWorktreeDisplay,
   useAiVaultSessionWorktreeMap,
@@ -205,6 +206,36 @@ describe('useAiVaultSessionWorktreeMap', () => {
     )
 
     expect(result.current.get(session.id)).toMatchObject({ worktreeId: sibling.id })
+  })
+
+  it('covers history-only overlay sessions when fed the search/history union', () => {
+    // Mirrors AiVaultPanel: while searching, search.sessions alone omit history
+    // overlay matches, so resume would fall back to the active worktree.
+    const searchHit = makeSession({ id: 'codex:search', cwd: '/repo/alpha/src' })
+    const historyOnly = makeSession({ id: 'codex:history-only', cwd: '/repo/beta/lib' })
+    const union = sessionsForAiVaultProjectMap([searchHit], {
+      searching: true,
+      historySessions: [historyOnly, searchHit]
+    })
+
+    const { result: searchOnly } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({
+        sessions: [searchHit],
+        repos,
+        worktrees
+      })
+    )
+    expect(searchOnly.current.has(historyOnly.id)).toBe(false)
+
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({
+        sessions: union,
+        repos,
+        worktrees
+      })
+    )
+    expect(result.current.get(searchHit.id)).toMatchObject({ worktreeId: worktreeA.id })
+    expect(result.current.get(historyOnly.id)).toMatchObject({ worktreeId: worktreeB.id })
   })
 
   it('builds the map at scale without re-normalizing paths per session', () => {

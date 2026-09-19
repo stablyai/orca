@@ -63,6 +63,7 @@ function renderRow(
   overrides: {
     searchHit?: AiVaultSearchHit
     session?: AiVaultSession
+    displayTitle?: string
     subagentResume?: AiVaultSubagentResumeActions
     detailsExpanded?: boolean
     worktreeInfo?: AiVaultSessionWorktreeInfo | null
@@ -74,6 +75,7 @@ function renderRow(
     <TooltipProvider>
       <VaultSessionRow
         session={overrides.session ?? session}
+        displayTitle={overrides.displayTitle}
         searchHit={overrides.searchHit}
         subagentResume={overrides.subagentResume}
         liveState={null}
@@ -108,6 +110,14 @@ function expectAgentIdentity(): void {
   expect(within(metadata).getByText('Gemini')).toBeTruthy()
   expect(within(metadata).getByText('2 msgs')).toBeTruthy()
 }
+
+describe('VaultSessionRow list identity', () => {
+  it('shows an Orca tab rename instead of the scanner title', () => {
+    renderRow({ displayTitle: 'Payments spike' })
+    expect(screen.getByText('Payments spike')).toBeTruthy()
+    expect(screen.queryByText('A session')).toBeNull()
+  })
+})
 
 describe('VaultSessionRow details toggle', () => {
   it('does not expand the row when a menu action is chosen', async () => {
