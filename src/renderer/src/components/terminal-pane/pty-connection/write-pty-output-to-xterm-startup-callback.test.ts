@@ -40,6 +40,7 @@ function createSession(startupOnParsed: () => void) {
     startupTiming: {
       firstWrite: vi.fn(() => ({ beforeWrite: vi.fn(), onParsed: startupOnParsed }))
     },
+    writePtyOutputToXterm: vi.fn(),
     pane: { terminal }
   }
 }
@@ -48,9 +49,11 @@ describe('bindWritePtyOutputToXterm startup callbacks', () => {
   it('composes startup timing and synchronized-frame presentation callbacks', () => {
     const startupOnParsed = vi.fn()
     const session = createSession(startupOnParsed)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies exactly the fields read by this isolated binding test.
     bindWritePtyOutputToXterm(session as never)
 
     session.writePtyOutputToXterm?.('\x1b[?2026hframe', true, { liveStartupBatch: true })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scheduler mock receives the binding's documented options object.
     const options = writeTerminalOutput.mock.calls[0]?.[2] as {
       onParsed?: () => void
     }
