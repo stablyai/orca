@@ -19,6 +19,7 @@ import {
   createPendingWorkerLaunchReceipt,
   resolveFederatedWorkerLaunchReceipt
 } from '../worker/worker-launch-preferences'
+import { assertRetryOfRepeatsPlacement } from '../worker/worker-retry-placement'
 import { validateFederatedWorkerStartPlacement } from '../worker/worker-start-validation'
 import { resolveFederatedWorkerStartBudgets } from '../worker/worker-start-budgets'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
@@ -59,6 +60,7 @@ export async function startFederatedWorker(args: {
       'Remote worker-start requires a durable retry request.'
     )
   }
+  assertRetryOfRepeatsPlacement(params, db)
   const worktree = params.worktree ?? 'current'
   if (worktree === 'current' || worktree === 'new-child') {
     throw new OrchestrationError(
