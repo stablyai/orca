@@ -1,5 +1,6 @@
 import { parentPort } from 'node:worker_threads'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 import type {
@@ -29,6 +30,14 @@ async function handleRequest(
         issues
       })
       return { id: request.id, ok: true, value: { candidates, issues } }
+    }
+    if (request.kind === 'capture') {
+      const capture = await captureOpenCodeSqliteSession({
+        dbPath: request.dbPath,
+        sessionId: request.sessionId,
+        platform: request.platform
+      })
+      return { id: request.id, ok: true, value: capture }
     }
     const session = await parseOpenCodeSqliteSession({
       dbPath: request.dbPath,

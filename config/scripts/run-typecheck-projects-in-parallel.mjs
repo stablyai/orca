@@ -2,9 +2,14 @@ import { spawn } from 'node:child_process'
 import { availableParallelism } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-// The three projects overlap heavily in src/shared but have no build dependency on
+// These projects overlap heavily in src/shared but have no build dependency on
 // each other, so tsc can check them concurrently instead of in a `&&` chain.
-const projects = ['tsconfig.node.json', 'tsconfig.tc.cli.json', 'tsconfig.tc.web.json']
+const projects = [
+  'tsconfig.node.json',
+  'tsconfig.tc.cli.json',
+  'tsconfig.tc.web.json',
+  'tsconfig.mobile-web.json'
+]
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 

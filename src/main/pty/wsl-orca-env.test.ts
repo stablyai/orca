@@ -206,6 +206,12 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
   })
 
+  it('crosses the inline-image protocol hint into the guest untranslated (/u)', () => {
+    const env: Record<string, string> = { ORCA_IMAGE_PROTOCOL: 'kitty' }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).toContain('ORCA_IMAGE_PROTOCOL/u')
+  })
+
   it('marks the WSL hook relay version for import on relay spawn envs', () => {
     const env: Record<string, string> = {
       ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'

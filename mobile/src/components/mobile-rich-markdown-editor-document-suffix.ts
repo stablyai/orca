@@ -83,11 +83,8 @@ export const MOBILE_RICH_MARKDOWN_EDITOR_AFTER_KEYBOARD_DISMISS = [
   ''
 ].join('\n')
 
-export const MOBILE_RICH_MARKDOWN_EDITOR_DOCUMENT_END = [
+export const MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_END = [
   '',
   "      post({ type: 'ready' });",
-  '    })();',
-  '  </script>',
-  '</body>',
-  '</html>'
+  '    })();'
 ].join('\n')

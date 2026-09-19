@@ -12,11 +12,15 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { RuntimeStore } from './runtime-store-contract'
+import { folderWorkspaceKey } from '../../shared/workspace-scope'
 
 type RuntimeProjectGroupDependencies = {
   getStore: () => RuntimeStore | null
   resolveRepo: (selector: string) => Promise<Repo>
   notifyReposChanged: () => void
+  resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
+  teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
+  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
 }
 
 type FolderWorkspaceUpdates = Partial<
@@ -210,6 +214,22 @@ export class RuntimeProjectGroupController {
     const store = this.deps.getStore()
     if (!store?.removeFolderWorkspace) {
       throw new Error('runtime_unavailable')
+    }
+    const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
+    if (workspace) {
+      const worktreeId = folderWorkspaceKey(folderWorkspaceId)
+      // Why: a mixed-host group has no single PTY target; forgetting the
+      // workspace must still succeed, so skip the sweep instead of failing.
+      let connectionId: string | null | undefined
+      try {
+        connectionId = this.deps.resolveFolderConnectionId(workspace)
+      } catch (error) {
+        console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
+      }
+      if (connectionId !== undefined) {
+        await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
+      }
+      this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
     }
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {

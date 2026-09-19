@@ -1,5 +1,10 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import {
   getLandingPreflightIssues,
   hasGitHubBackedProject,
@@ -17,10 +22,13 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
       return 'local'
     }
     const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
+    // Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
+    // transport is still up, and reading that as unreachable discarded the whole preflight
+    // result for a host that never went away (docs/reference/ssh-execution-boundary.md).
     const reachability = runtimeStatus
-      ? runtimeStatus.status === null
-        ? 'unreachable'
-        : 'reachable'
+      ? isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatus))
+        ? 'reachable'
+        : 'unreachable'
       : 'unknown'
     return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
   })
@@ -60,10 +68,16 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     if (preflightIssues.length === 0) {
       return
     }
-    const intervalId = window.setInterval(() => {
-      void refreshPreflightStatus({ force: true })
-    }, 30000)
-    return () => window.clearInterval(intervalId)
+    // Why gated: the effect above already force-refreshes on visibilitychange
+    // and focus, so a revealed window has fresh data without this poll firing
+    // while hidden — hence the no-op `runOnVisible`.
+    return installWindowVisibilityInterval({
+      run: () => {
+        void refreshPreflightStatus({ force: true })
+      },
+      runOnVisible: () => {},
+      intervalMs: 30000
+    })
   }, [preflightIssues.length, refreshPreflightStatus])
 
   return { preflightIssues }

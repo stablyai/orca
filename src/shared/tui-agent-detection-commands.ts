@@ -9,6 +9,8 @@ import {
 export type TuiAgentDetectionCommand = {
   id: TuiAgent
   cmd: string
+  /** Ask an execution host to report this CLI's `--version` output when found. */
+  reportVersion?: true
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
 }

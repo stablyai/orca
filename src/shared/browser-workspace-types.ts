@@ -2,6 +2,7 @@ export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
   title: string
+  faviconUrl?: string | null
   lastVisitedAt: number
   visitCount: number
 }
@@ -155,12 +156,6 @@ export type BrowserTab = BrowserWorkspace
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
-export type BrowserSessionUserAgentMode = 'clean' | 'native'
-
-export type BrowserSessionProfileCreateOptions = {
-  userAgentMode?: BrowserSessionUserAgentMode
-}
-
 export type BrowserSessionProfileSource = {
   browserFamily:
     | 'chrome'
@@ -182,7 +177,6 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
-  userAgentMode?: BrowserSessionUserAgentMode
 }
 
 export type BrowserCookieImportSummary = {

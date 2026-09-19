@@ -1,0 +1,37 @@
+{
+  "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
+  "overrides": [
+    {
+      "file": "src/transport/client-context.web.tsx",
+      "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
+    },
+    {
+      "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
+      "reason": "Vendored with the module, not added for Route A. The dictation hook imports @orca/expo-two-way-audio, whose native module is a Swift/Kotlin JSI binding with no browser counterpart; the web file answers the same surface with denied microphone permission and no playback."
+    },
+    {
+      "file": "src/navigation/route-handoff.web.ts",
+      "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
+    },
+    {
+      "file": "src/transport/host-store.web.ts",
+      "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
+    },
+    {
+      "file": "src/transport/host-device-token-store.web.ts",
+      "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
+    },
+    {
+      "file": "app/h/[hostId]/index.web.tsx",
+      "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    },
+    {
+      "file": "app/h/[hostId]/web.web.tsx",
+      "reason": "The hybrid shell route opens a WebView on this very page, so on web it redirects to the host instead of nesting the shell inside itself. Its native file pulls in OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    },
+    {
+      "file": "src/platform/external-link.web.ts",
+      "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
+    }
+  ]
+}

@@ -1,11 +1,12 @@
+import { reportWorkerTerminalUserInput } from './worker-terminal-takeover-report'
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
-import { isTerminalSendRpcAccepted } from './terminal-send-rpc-response'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
+import { terminalInputSend } from './mobile-terminal-operations'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
 type TerminalLiveAccessoryRawSendArgs = {
-  readonly client: Pick<RpcClient, 'sendRequest'> | null
+  readonly client: RpcClient | null
   readonly targetHandle: string
   readonly activeHandle: string | null
   readonly activeSessionTabType: string | null
@@ -26,9 +27,9 @@ export async function sendTerminalLiveAccessoryRawBytes(
   if (!args.client || !rawSendTarget || args.connState !== 'connected') {
     return false
   }
-  return args.client
-    .sendRequest(
-      'terminal.send',
+  return terminalInputSend
+    .request(
+      args.client,
       buildTerminalSendParams({
         terminal: rawSendTarget,
         text: args.bytes,
@@ -37,5 +38,14 @@ export async function sendTerminalLiveAccessoryRawBytes(
       }),
       TERMINAL_INPUT_SEND_OPTIONS
     )
-    .then(isTerminalSendRpcAccepted, () => false)
+    .then(
+      (reply) => {
+        const accepted = terminalInputSend.interpret(reply) === true
+        if (accepted) {
+          reportWorkerTerminalUserInput(args.client!, rawSendTarget)
+        }
+        return accepted
+      },
+      () => false
+    )
 }

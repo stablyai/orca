@@ -4,6 +4,7 @@ import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
 import { getUtf8ByteLength } from './utf8-byte-limits'
 import {
+  TERMINAL_SCROLLBACK_SESSION_HOMES,
   pruneLocalTerminalScrollbackBuffers,
   shouldPreserveTerminalScrollbackBuffers
 } from './workspace-session-terminal-buffers'
@@ -360,5 +361,92 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
 
     expect(JSON.stringify(result)).not.toContain(largeScrollback)
     expect(prunedBytes).toBeLessThan(originalBytes / 5)
+  })
+
+  // Why enumerated: a cap that silently skips one home is the failure this guards against, so
+  // each persisted home is driven through the same oversized input and read back independently.
+  describe.each(TERMINAL_SCROLLBACK_SESSION_HOMES)('scrollback home %s', (home) => {
+    const hugeScrollback = `start-${'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 10)}`
+    const sessionWithHome = (tabId: string, buffer: string): WorkspaceSessionState =>
+      home === 'terminalLayoutsByTabId'
+        ? makeSession({
+            terminalLayoutsByTabId: {
+              [tabId]: {
+                root: null,
+                activeLeafId: null,
+                expandedLeafId: null,
+                buffersByLeafId: { 'pane:1': buffer }
+              }
+            }
+          })
+        : makeSession({
+            terminalLayoutsByTabId: {},
+            localOnlyScrollbackByTabId: { [tabId]: { 'pane:1': buffer } }
+          })
+    const readBack = (session: WorkspaceSessionState, tabId: string): string | undefined =>
+      home === 'terminalLayoutsByTabId'
+        ? session.terminalLayoutsByTabId[tabId]?.buffersByLeafId?.['pane:1']
+        : session.localOnlyScrollbackByTabId?.[tabId]?.['pane:1']
+
+    it('caps a preserved SSH buffer at the session byte limit', () => {
+      const result = pruneLocalTerminalScrollbackBuffers(
+        sessionWithHome('remote-tab', hugeScrollback),
+        [{ id: 'remote-repo', connectionId: 'ssh-target-1' }]
+      )
+
+      const buffer = readBack(result, 'remote-tab')
+      expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
+      expect(buffer?.startsWith('start-')).toBe(false)
+    })
+
+    it('drops a local worktree buffer outright', () => {
+      const result = pruneLocalTerminalScrollbackBuffers(sessionWithHome('local-tab', 'bytes'), [
+        { id: 'local-repo', connectionId: null }
+      ])
+
+      expect(readBack(result, 'local-tab')).toBeUndefined()
+    })
+
+    it('drops an orphaned tab buffer', () => {
+      const result = pruneLocalTerminalScrollbackBuffers(sessionWithHome('orphan-tab', 'bytes'), [
+        { id: 'remote-repo', connectionId: 'ssh-target-1' }
+      ])
+
+      expect(readBack(result, 'orphan-tab')).toBeUndefined()
+    })
+
+    it('returns the same session object when nothing needed pruning', () => {
+      const session = sessionWithHome('remote-tab', 'small')
+      expect(
+        pruneLocalTerminalScrollbackBuffers(session, [
+          { id: 'remote-repo', connectionId: 'ssh-target-1' }
+        ])
+      ).toBe(session)
+    })
+  })
+
+  it('caps both homes of one tab in a single pass', () => {
+    const hugeScrollback = 'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 1)
+    const result = pruneLocalTerminalScrollbackBuffers(
+      makeSession({
+        terminalLayoutsByTabId: {
+          'remote-tab': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': hugeScrollback }
+          }
+        },
+        localOnlyScrollbackByTabId: { 'remote-tab': { 'pane:2': hugeScrollback } }
+      }),
+      [{ id: 'remote-repo', connectionId: 'ssh-target-1' }]
+    )
+
+    expect(result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId?.['pane:1']).toHaveLength(
+      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    )
+    expect(result.localOnlyScrollbackByTabId?.['remote-tab']['pane:2']).toHaveLength(
+      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    )
   })
 })

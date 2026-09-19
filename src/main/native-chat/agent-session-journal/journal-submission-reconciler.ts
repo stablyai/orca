@@ -100,24 +100,35 @@ export function reconcileSubmissions(input: {
       Boolean(item.clientMessageId) && item.clientMessageId === submission.clientMessageId
   )
 
+  // Resolve fingerprint candidates as a batch. Assigning the sole candidate to
+  // the first identical submission would make the later one look absent even
+  // though either submission could be the delivered one.
+  const submissionsByFingerprint = new Map<string, AgentJournalSubmission[]>()
   for (const submission of unsettled) {
-    if (matched.has(submission.clientMessageId)) {
+    if (matched.has(submission.clientMessageId) || !submission.payloadFingerprint) {
       continue
     }
+    const sameFingerprint = submissionsByFingerprint.get(submission.payloadFingerprint) ?? []
+    sameFingerprint.push(submission)
+    submissionsByFingerprint.set(submission.payloadFingerprint, sameFingerprint)
+  }
+  for (const [fingerprint, fingerprintSubmissions] of submissionsByFingerprint) {
     const candidates = input.history.items.filter(
-      (item) =>
-        !claimed.has(item.providerItemId) &&
-        Boolean(item.payloadFingerprint) &&
-        item.payloadFingerprint === submission.payloadFingerprint
+      (item) => !claimed.has(item.providerItemId) && item.payloadFingerprint === fingerprint
     )
-    const only = candidates.length === 1 ? candidates[0] : undefined
-    if (only) {
-      claimed.add(only.providerItemId)
-      matched.set(submission.clientMessageId, only)
-    } else if (candidates.length > 1) {
-      // Two identical payloads and no id to tell them apart: guessing would
-      // either duplicate the user's message or drop one of them.
-      ambiguous.add(submission.clientMessageId)
+    if (fingerprintSubmissions.length === 1 && candidates.length === 1) {
+      const [submission] = fingerprintSubmissions
+      const [only] = candidates
+      claimed.add(only!.providerItemId)
+      matched.set(submission!.clientMessageId, only!)
+      continue
+    }
+    if (candidates.length > 0) {
+      // Equal payloads without an id cannot be assigned safely, including when
+      // fewer provider items exist than unsettled submissions.
+      for (const submission of fingerprintSubmissions) {
+        ambiguous.add(submission.clientMessageId)
+      }
     }
   }
 

@@ -179,10 +179,15 @@ export function throwIfE2eWebRuntimeBrowserCapabilityUnavailable(): void {
 }
 
 export async function pauseAfterE2eWebRuntimeBrowserCreate(remotePageId: string): Promise<void> {
-  if (!e2eConfig.exposeStore || !armed || !createdPageBarrier) {
+  if (!e2eConfig.exposeStore) {
     return
   }
+  // Recorded before the arm check so a journey that never arms the barrier can still prove no host
+  // page was created — a null id is only evidence if a real create would have set one.
   createdPageId = remotePageId
+  if (!armed || !createdPageBarrier) {
+    return
+  }
   await createdPageBarrier
 }
 

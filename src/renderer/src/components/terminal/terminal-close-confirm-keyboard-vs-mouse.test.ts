@@ -5,7 +5,7 @@
  *
  * Mouse close path: SortableTab (X onClick / onAuxClick button===1) -> onClose
  *   -> Terminal.tsx handleCloseTab -> closeTerminalTab() -> running-process guard.
- * Keyboard path: Cmd+W -> TerminalPane.handleRequestClosePane -> inspectRuntimeTerminalProcess
+ * Keyboard path: Cmd+W -> TerminalPane.handleRequestClosePane -> probePtyRunningWork
  *   (split panes) or closeTerminalTab's guard (last pane) -> CloseTerminalDialog.
  */
 import { readFileSync } from 'node:fs'
@@ -94,10 +94,16 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
 
   // Control: the keyboard entry point does probe for running children.
   it('keyboard Cmd+W path probes for running child processes before closing', () => {
-    const source = readFileSync(join(__dirname, '../terminal-pane/TerminalPane.tsx'), 'utf8')
+    const source = readFileSync(
+      join(__dirname, '../terminal-pane/use-terminal-pane-close-actions.ts'),
+      'utf8'
+    )
     const handler = source.slice(source.indexOf('const handleRequestClosePane'))
+    // The shared probe, not a direct inspect: the pane path asks the same question as the tab
+    // guard, and routing both through one measurement is what stops them drifting on what an
+    // unanswered host means.
     expect(handler.slice(0, handler.indexOf('useImperativeHandle'))).toContain(
-      'inspectRuntimeTerminalProcess'
+      'probePtyRunningWork'
     )
   })
 

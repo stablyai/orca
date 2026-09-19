@@ -7,6 +7,20 @@ export {
 export type { RunListPage, TaskRuntimeLineageRow } from './db/run-list-page'
 export { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './db/messages/mailbox-routing-page'
 export { DISPATCH_CONTEXT_CLAIM_SQL } from './db/dispatch-row-writer'
+export { projectAttemptOutcome } from './db/attempt-outcome-projection'
+export type {
+  AttemptAdditiveOutcomeFact,
+  AttemptArtifactGitEvidence,
+  AttemptCoordinatorAcknowledgment,
+  AttemptFreshness,
+  AttemptLivenessObservation,
+  AttemptObservationFact,
+  AttemptObservationFactInput,
+  AttemptOutcomeProjection,
+  AttemptProcessTurnObservation,
+  AttemptProjectedOutcome,
+  AttemptWorkerReport
+} from './db/attempt-observation-types'
 export type {
   ForeignDirectMailboxRoutingPage,
   MailboxRoutingPage

@@ -13,6 +13,7 @@ import {
   readTerminalTail
 } from './terminal-tail-read'
 import { getTerminalState } from './terminal-wait-results'
+import { readStructuredWorkerTerminal } from './structured-worker-terminal-read'
 
 export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTerminalInteractiveWait {
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
@@ -77,10 +78,38 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       }
       throw new Error('terminal_not_recoverable')
     }
-    if (
-      !this.getRecentExpiredSshLease(expectedWorktreeId, parsed.tabId, parsed.leafId, pty.ptyId)
-    ) {
-      // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell recreation.
+    const expiredLease = this.getRecentExpiredSshLease(
+      expectedWorktreeId,
+      parsed.tabId,
+      parsed.leafId,
+      pty.ptyId
+    )
+    if (!expiredLease) {
+      // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell
+      // recreation. `getRecentExpiredSshLease` also refuses a superseded or relay-id-recycled
+      // lease, which is `expired` for a reason that already names the successor — the pane's id no
+      // longer routes to the shell it describes, so recovering through it would adopt a stranger's
+      // process or re-race a pane that already moved on.
+      throw new Error('terminal_not_recoverable')
+    }
+    // Why an `expired` lease is not on its own authority to spawn a replacement: every writer of
+    // that state records that the CLIENT lost its route — a superseded sibling, a recycled relay
+    // id, a persistPtyBinding refusal, a failed reattach, a relay reset — and each says in-place
+    // that it is not evidence the shell died (`terminated` is the attested-death state, refused
+    // above). `!pty.connected` is the same inference: one dropped relay clears it for every PTY it
+    // owned. So the pair can hold over a remote shell that is still running, and createTerminal
+    // would rebind the pane away from it, leaving the original orphaned and its agent duplicated.
+    // The runtime grades that: `live` is the host proving the shell survived, `unverifiable` is the
+    // client losing contact, and both refuse. What this gate must NOT require is a positive
+    // `exited`: the only answer that ever reaches it is a reachable relay reporting it has no such
+    // id, and that is a union — pty.attach throws not-found for an unknown id with no liveness
+    // check, and a relay restart makes every previously minted id unknown. No writer of
+    // `exited` co-occurs with a reattachable `expired` lease either, since a host-delivered exit
+    // frame tombstones the lease `terminated`. Demanding one would close this gate permanently, and
+    // an unrecoverable pane is its own failure (docs/reference/ssh-execution-boundary.md,
+    // shared/pty-liveness-verdict.ts).
+    const liveness = this.getPtyLivenessVerdict(pty.ptyId)
+    if (liveness?.status === 'unverifiable' || liveness?.status === 'live') {
       throw new Error('terminal_not_recoverable')
     }
     // Why: disconnected PTYs can reissue handles during graph cleanup; only a connected replacement satisfies the pane CAS.
@@ -93,7 +122,8 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       tabId: parsed.tabId,
       leafId: parsed.leafId,
       ptyId: terminal.ptyId ?? null,
-      worktreeId: expectedWorktreeId
+      worktreeId: expectedWorktreeId,
+      ...(terminal.incarnationId ? { incarnationId: terminal.incarnationId } : {})
     }))
     this.terminalPaneRecoveryByIdentity.set(recoveryKey, recovery)
     const clearRecovery = (): void => {
@@ -152,6 +182,18 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     opts: { cursor?: number; limit?: number; screen?: boolean } = {},
     providerSnapshot: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
+    // Before the PTY lookup, because a structured worker has no PTY and no leaf: without this the
+    // only peer read verb answers `terminal_handle_stale` for a perfectly live worker.
+    const structured = readStructuredWorkerTerminal({
+      handle,
+      db: this.getOrchestrationDbIfAvailable?.() ?? null,
+      ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),
+      ...(opts.limit === undefined ? {} : { limit: opts.limit })
+    })
+    if (structured) {
+      // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
+      return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)

@@ -117,7 +117,6 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       groupIndexByRowKey: session.groupIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,
       worktreeDragState: runtime.worktreeDragState,
-      worktreePointerDragRef: runtime.worktreePointerDragRef,
       nativeLineageDropTargetId: runtime.nativeLineageDropTargetId,
       activeWorktreeId: props.activeWorktreeId,
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,

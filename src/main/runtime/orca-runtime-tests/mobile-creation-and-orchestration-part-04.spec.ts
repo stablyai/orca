@@ -168,6 +168,8 @@ describe('OrcaRuntimeService', () => {
           agents: []
         }
       ],
+      // Why: the summary now names the hosts it covered; an absent scope would read as absolute.
+      hostScope: { hostIds: ['local'], omittedHostIds: [] },
       totalCount: 1,
       truncated: false
     })

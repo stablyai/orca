@@ -1,10 +1,24 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { admitSelfInitiatedTreeKill } from '../../own-chromium-tree-kill-guard'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 
 export function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
   const pid = child.pid
   if (!pid || process.platform !== 'win32') {
+    child.kill()
+    return Promise.resolve()
+  }
+  // Windows may reuse the pid after exit while inherited pipes still delay close.
+  if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
+    child.kill()
+    return Promise.resolve()
+  }
+  if (
+    !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
+  ) {
+    // Refusal blocks the pid-addressed tree walk, never the termination: the
+    // handle-addressed root kill cannot reach a recycled pid.
     child.kill()
     return Promise.resolve()
   }

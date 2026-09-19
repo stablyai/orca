@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
-import { resetTerminalWebglSuggestion, resetWebglTextureAtlas } from './pane-webgl-renderer'
+import {
+  primeTerminalWebglAddon,
+  resetTerminalWebglSuggestion,
+  resetWebglTextureAtlas
+} from './pane-webgl-renderer'
 import { PaneManager } from './pane-manager'
 
 type FakeWebglAddon = { clearTextureAtlas: ReturnType<typeof vi.fn> }
@@ -33,6 +37,7 @@ function createPane(options: { webglAddon?: FakeWebglAddon | null } = {}): Manag
     hasComplexScriptOutput: false,
     webglAddon: (options.webglAddon ?? null) as never,
     ligaturesAddon: null,
+    imageAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     pendingWebglRefreshRafId: null,
@@ -95,7 +100,8 @@ describe('schedulePaneRevealRepaint', () => {
     }
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
     rafQueue = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {

@@ -10,6 +10,8 @@ import {
 import { createTerminalCommandLifecycle } from '../terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-tracker'
 import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -126,9 +128,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       reconcile?.()
     }
   }
+  const isRemotePtyId = (id: string): boolean =>
+    Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))
   session.isForegroundTrackingAllowed = (id: string): boolean => {
-    if (isRemoteExecutionHostPtyId(id)) {
-      return false
+    if (isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id)) {
+      return true
     }
     if (!navigator.userAgent.includes('Windows')) {
       return true
@@ -153,8 +157,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({
     getPtyId: () => session.transport.getPtyId(),
     isTrackablePtyId: session.isForegroundTrackingAllowed,
-    readForegroundProcess: (id) => window.api.pty.getForegroundProcess(id),
-    confirmForegroundProcess: (id) => window.api.pty.confirmForegroundProcess(id),
+    readForegroundProcess: (id, options) =>
+      isRemotePtyId(id)
+        ? inspectRuntimeTerminalProcess(useAppStore.getState().settings, id, options)
+        : window.api.pty.getForegroundProcess(id),
+    confirmForegroundProcess: (id, options) =>
+      isRemotePtyId(id)
+        ? inspectRuntimeTerminalProcess(useAppStore.getState().settings, id, options)
+        : window.api.pty.confirmForegroundProcess(id),
+    isRemotePtyId,
+    getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {

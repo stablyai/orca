@@ -163,6 +163,7 @@ export class BrowserClientHostCommandDispatcher {
     for (const page of this.pages.values()) {
       page.retiring = true
       this.cancelPage(page, 'browser_host_command_cancelled')
+      this.resultCache.releasePage(page)
     }
     const settled = await joinBrowserClientHostCommands(
       [...this.pages.values()].flatMap((page) =>
@@ -297,7 +298,7 @@ export class BrowserClientHostCommandDispatcher {
   private removeActiveRecord(page: PageState, record: CommandRecord): void {
     if (removeActiveCommandRecord(page, record)) {
       this.activeCommands -= 1
-      this.resultCache.record(page, record)
+      this.resultCache.record(page, record, !this.closed)
     }
   }
 

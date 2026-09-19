@@ -18,34 +18,41 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 
 describe('feature interaction writer boundaries', () => {
   it('keeps Cmd+J feature writers in open/selection handlers, not query or navigation rendering', () => {
-    const source = componentSource('WorktreeJumpPalette.tsx')
-    const renderStart = source.lastIndexOf('  return (')
-    expect(renderStart).toBeGreaterThan(0)
-
-    const handlerSection = source.slice(0, renderStart)
-    const renderSection = source.slice(renderStart)
+    // Selection and create callbacks now live in focused hooks; the surface only renders them.
+    const selectionSource = componentSource('use-worktree-jump-palette-selection-actions.ts')
+    const lifecycleSource = componentSource('use-worktree-jump-palette-selection-lifecycle.ts')
+    const createSource = componentSource('use-worktree-jump-palette-create-action.ts')
+    const handlerSection = [selectionSource, lifecycleSource, createSource].join('\n')
+    const renderSection = componentSource('worktree-jump-palette-surface.tsx')
 
     const cmdJWriterPattern = /recordFeatureInteraction\('cmd-j/g
-    const allCmdJWriterCount = source.match(cmdJWriterPattern)?.length ?? 0
+    const allCmdJWriterCount = handlerSection.match(cmdJWriterPattern)?.length ?? 0
     expect(allCmdJWriterCount).toBeGreaterThanOrEqual(6)
     expect(handlerSection.match(cmdJWriterPattern)?.length ?? 0).toBe(allCmdJWriterCount)
     expect(renderSection).not.toContain("recordFeatureInteraction('cmd-j")
     expect(
-      sourceBetween(source, 'const handleQueryChange', 'const cancelFallbackFocusFrames')
+      sourceBetween(lifecycleSource, 'const handleQueryChange', 'const cancelFallbackFocusFrames')
     ).not.toContain("recordFeatureInteraction('cmd-j")
   })
 
   it('keeps task-provider writers off filters, tab switches, query edits, refresh, and pagination', () => {
     const providerWriter = /recordFeatureInteraction\('(github|gitlab|linear)-tasks'\)/
-    const taskPage = componentSource('TaskPage.tsx')
-    const pageLoader = componentSource('task-page/hooks/use-task-page-github-page-loader.ts')
+    const refreshSource = componentSource('use-task-page-github-cache-reconciliation.ts')
+    const paginationSource = componentSource('use-task-page-github-search-pagination.ts')
+    const searchSource = componentSource('use-task-page-search-actions.ts')
 
     const passiveSections = [
-      sourceBetween(taskPage, 'const handleRefreshGithubTasks', 'const {\n    newIssueOpen'),
-      sourceBetween(pageLoader, 'const handleLoadNextPage', 'return { handleLoadNextPage }'),
-      sourceBetween(taskPage, 'const handleApplyTaskSearch', 'const handleSetDefaultTaskPreset'),
+      sourceBetween(refreshSource, 'const handleRefreshGithubTasks', 'const nextModel'),
+      sourceBetween(paginationSource, 'const handleLoadNextPage', 'const commitTaskSearch'),
+      sourceBetween(searchSource, 'const applyPRFilterChange', 'const handleApplyTaskSearch'),
+      sourceBetween(searchSource, 'const handleApplyTaskSearch', 'const handleTaskSearchChange'),
       sourceBetween(
-        taskPage,
+        searchSource,
+        'const handleTaskSearchChange',
+        'const handleSetDefaultTaskPreset'
+      ),
+      sourceBetween(
+        searchSource,
         'const handleSelectGithubTaskKind',
         'const handleResetGithubTaskSearch'
       )
@@ -68,7 +75,7 @@ describe('feature interaction writer boundaries', () => {
     ).toContain(githubWriter)
     expect(
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-use-item-actions.ts'),
+        componentSource('use-task-page-workspace-actions.ts'),
         'const handleOpenOrUseGitHubWorkItem',
         'const openComposerForGitLabItem'
       )
@@ -77,43 +84,43 @@ describe('feature interaction writer boundaries', () => {
 
   it('threads GitHub task source context through inline task mutations', () => {
     const sections = [
-      componentSource('task-page/github/github-status-cell.tsx'),
-      componentSource('task-page/github/github-assignees-cell.tsx'),
-      componentSource('task-page/github/pr-review-cell.tsx'),
-      componentSource('task-page/github/pr-merge-cell.tsx'),
+      componentSource('task-page/github/StatusCell.tsx'),
+      componentSource('task-page/github/AssigneesCell.tsx'),
+      componentSource('task-page/github/ReviewCell.tsx'),
+      componentSource('task-page/github/MergeCell.tsx'),
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-create-github-submit.ts'),
+        componentSource('use-task-page-github-issue-creation.ts'),
         'const handleCreateNewIssue',
-        'return { handleCreateNewIssue }'
+        'const nextModel'
       )
     ]
 
     for (const section of sections) {
       expect(section).toContain('sourceContext')
     }
-    const rowSource = componentSource('task-page/github/github-work-item-row.tsx')
-    expect(rowSource).toContain(
-      "const rowSourceContext = getTaskPageRepoSourceContext(itemRepo, 'github')"
-    )
-    expect(rowSource).toContain('sourceContext={rowSourceContext}')
+    const rowSource = componentSource('task-page/github/Rows.tsx')
+    // Rows inline the repo lookup per cell rather than hoisting one const.
+    expect(
+      rowSource.match(/sourceContext=\{getTaskPageRepoSourceContext\(itemRepo, 'github'\)\}/g)
+    ).toHaveLength(4)
   })
 
   it('suppresses Tasks surface telemetry for in-page provider switches and detail opens', () => {
     const suppression = 'recordTasksInteraction: false'
     const githubDetailSection = sourceBetween(
-      componentSource('TaskPage.tsx'),
+      componentSource('use-task-page-github-detail.ts'),
       'const openGitHubDetailPage',
-      'const patchTaskPageWorkItemRows'
+      'const nextModel'
     )
 
     const inPageNavigationSections = [
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-selected-issue-state.ts'),
+        componentSource('use-task-page-detail-routing.ts'),
         'const openLinearDetailPage',
         'const openRelatedLinearIssue'
       ),
       sourceBetween(
-        componentSource('task-page/chrome/task-page-source-toolbar.tsx'),
+        componentSource('task-page/SourceBar.tsx'),
         'taskSourceManuallyChangedRef.current = true',
         'void updateSettings'
       )
@@ -129,8 +136,12 @@ describe('feature interaction writer boundaries', () => {
   })
 
   it('records Cmd+J create-workspace as its own destination, not a generic quick action', () => {
-    const source = componentSource('WorktreeJumpPalette.tsx')
-    const section = sourceBetween(source, 'const handleSelectQuickAction', 'const handleSelectItem')
+    const source = componentSource('use-worktree-jump-palette-selection-actions.ts')
+    const section = sourceBetween(
+      source,
+      'const handleSelectQuickAction',
+      'const handleSelectProjectTarget'
+    )
 
     expect(section).toContain("recordFeatureInteraction('cmd-j-create-workspace')")
     expect(section).toContain("recordFeatureInteraction('cmd-j-quick-action')")
@@ -154,16 +165,16 @@ describe('feature interaction writer boundaries', () => {
 
     expect(
       sourceBetween(
-        componentSource('task-page/gitlab/gitlab-work-item-list.tsx'),
+        componentSource('task-page/gitlab/ItemList.tsx'),
         '{displayedGitLabItems.map((item) => (',
         'handleUseGitLabItem(item)'
       ).match(/recordFeatureInteraction\('gitlab-tasks'\)/g)
     ).toHaveLength(2)
     expect(
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-use-item-actions.ts'),
+        componentSource('use-task-page-workspace-actions.ts'),
         'const handleUseGitLabItem',
-        'return {'
+        'const nextModel'
       )
     ).toContain(gitlabWriter)
 
@@ -189,18 +200,18 @@ describe('feature interaction writer boundaries', () => {
 
   it('keeps nested GitLab row actions from also opening task details by keyboard', () => {
     const rowSection = sourceBetween(
-      componentSource('task-page/gitlab/gitlab-work-item-list.tsx'),
-      'onKeyDown={(event) => {',
+      componentSource('task-page/gitlab/ItemList.tsx'),
+      'onKeyDown={(e) => {',
       'className="grid w-full cursor-pointer'
     )
-    expect(rowSection).toContain('event.target !== event.currentTarget')
-    expect(rowSection.indexOf('event.target !== event.currentTarget')).toBeLessThan(
-      rowSection.indexOf("event.key === 'Enter'")
+    expect(rowSection).toContain('e.target !== e.currentTarget')
+    expect(rowSection.indexOf('e.target !== e.currentTarget')).toBeLessThan(
+      rowSection.indexOf("e.key === 'Enter'")
     )
   })
 
   it('keys GitLab rows by repository and item identity across hosts', () => {
-    expect(componentSource('task-page/gitlab/gitlab-work-item-list.tsx')).toContain(
+    expect(componentSource('task-page/gitlab/ItemList.tsx')).toContain(
       'key={`${item.repoId}:${item.id}`}'
     )
   })
@@ -214,22 +225,22 @@ describe('feature interaction writer boundaries', () => {
 
     const taskPageSections = [
       sourceBetween(
-        componentSource('task-page/linear/linear-state-cell.tsx'),
+        componentSource('task-page-linear-issue-model.tsx'),
         'export function LinearStateCell',
         'return ('
       ),
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-linear-board.tsx'),
+        componentSource('use-task-page-linear-board.ts'),
         'const handleLinearBoardDrop',
         'const toggleLinearDisplayProperty'
       ),
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-create-linear-submits.tsx'),
+        componentSource('use-task-page-linear-issue-creation.ts'),
         'const handleCreateNewLinearIssue',
-        'return {'
+        'const nextModel'
       ),
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-linear-actions.ts'),
+        componentSource('use-task-page-composer-actions.ts'),
         'const handleUseLinearItem',
         'const handleLinearWorkspaceChange'
       )
@@ -259,9 +270,9 @@ describe('feature interaction writer boundaries', () => {
     // marker) no longer exists in TaskPage.
     expect(
       sourceBetween(
-        componentSource('task-page/hooks/use-task-page-jira-actions.ts'),
+        componentSource('use-task-page-composer-actions.ts'),
         'const handleUseJiraItem',
-        'return {'
+        'const nextModel'
       )
     ).toContain(jiraWriter)
   })

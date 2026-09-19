@@ -5,11 +5,25 @@ import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { canonicalWorktreeIdentity } from '../shared/worktree/identity'
 import { composeWorktreeHostIdentity } from '../shared/worktree/host-qualified-identity'
-import { createStore, readDataFile, testState, writeDataFile } from './persistence-test-harness'
+import type { Store } from './persistence/loading-store/store'
+import {
+  createStore,
+  makeRepo,
+  readDataFile,
+  testState,
+  writeDataFile
+} from './persistence-test-harness'
 
 describe('host-qualified worktree metadata', () => {
   const worktreeId = 'repo-1::/workspace/feature'
   const ROTATED_INSTANCE_ID = '44444444-4444-4444-8444-444444444444'
+
+  // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+  const createStoreWithRepo = (): Store => {
+    const store = createStore()
+    store.addRepo(makeRepo({ id: 'repo-1', path: '/workspace' }))
+    return store
+  }
 
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-worktree-identity-'))
@@ -52,7 +66,7 @@ describe('host-qualified worktree metadata', () => {
     })
   })
   it('reloads host-specific metadata without collapsing it to the legacy locator', () => {
-    const store = createStore()
+    const store = createStoreWithRepo()
     store.setWorktreeMetaForHost(worktreeId, 'local', { displayName: 'Local feature' })
     store.setWorktreeMetaForHost(worktreeId, 'ssh:build-box', { displayName: 'Remote feature' })
     store.flush()
@@ -72,7 +86,7 @@ describe('host-qualified worktree metadata', () => {
     expect(store.getWorktreeMetaForHost(worktreeId, 'local')?.comment).toBe('after')
   })
   it('backfills one stable instance for legacy metadata that omitted it', () => {
-    const seed = createStore()
+    const seed = createStoreWithRepo()
     seed.setWorktreeMeta(worktreeId, { displayName: 'Legacy feature' })
     seed.flush()
     const legacy = readDataFile() as PersistedState
@@ -97,7 +111,7 @@ describe('host-qualified worktree metadata', () => {
   // Fails open on purpose: an ambiguous alias used to brick reads and throw out of the worktree
   // listing loop, taking every workspace in the repo down with it and never self-healing.
   it('collapses an ambiguous locator onto its most recently active instance', () => {
-    const seed = createStore()
+    const seed = createStoreWithRepo()
     const first = seed.setWorktreeMetaForHost(worktreeId, 'local', { displayName: 'First' })
     seed.flush()
     const persisted = readDataFile() as PersistedState
@@ -262,7 +276,7 @@ describe('host-qualified worktree metadata', () => {
   it('repairs a missing canonical instance id while re-adopting an SSH target', () => {
     const oldHostId = 'ssh:old-target' as const
     const newHostId = 'ssh:new-target' as const
-    const seed = createStore()
+    const seed = createStoreWithRepo()
     seed.setWorktreeMetaForHost(worktreeId, oldHostId, { displayName: 'Remote feature' })
     seed.flush()
     const persisted = readDataFile() as PersistedState
@@ -318,7 +332,7 @@ describe('host-qualified worktree metadata', () => {
   it('deduplicates an equivalent destination during SSH target re-adoption', () => {
     const oldHostId = 'ssh:old-target' as const
     const newHostId = 'ssh:new-target' as const
-    const seed = createStore()
+    const seed = createStoreWithRepo()
     seed.setWorktreeMetaForHost(worktreeId, oldHostId, { displayName: 'Remote feature' })
     seed.flush()
     const persisted = readDataFile() as PersistedState

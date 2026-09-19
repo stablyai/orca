@@ -1,3 +1,4 @@
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import {
   installDeviceAttributesResponder,
   STARTUP_DA1_RESPONSE
@@ -19,7 +20,6 @@ import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
-// Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
 export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 
 export type SessionShellReadyBarrierDeps = {
@@ -69,7 +69,10 @@ export class SessionShellReadyBarrier {
       this._state = 'unsupported'
     }
 
-    this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
+    this.postReadyFlushGate = new PostReadyFlushGate(
+      () => this.flushPreReadyQueue(),
+      shellReadyMarkerComesFromLineEditor(deps.subprocess.shellPath ?? '')
+    )
   }
 
   get state(): ShellReadyState {

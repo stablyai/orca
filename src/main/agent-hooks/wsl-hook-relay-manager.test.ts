@@ -180,9 +180,13 @@ describe('WslHookRelayManager', () => {
   }
 
   function guestTransport(
-    options: { registerInstallPlugins?: boolean; detectedAgents?: string[] } = {}
+    options: {
+      registerInstallPlugins?: boolean
+      detectedAgents?: string[]
+      claudeVersion?: string
+    } = {}
   ): MultiplexerTransport {
-    const { registerInstallPlugins = true, detectedAgents = ['codex'] } = options
+    const { registerInstallPlugins = true, detectedAgents = ['codex'], claudeVersion } = options
     const harness = createGuestHarness()
     harnesses.push(harness)
     registerWslHookFsHandlers(harness.guestDispatcher, home)
@@ -190,7 +194,8 @@ describe('WslHookRelayManager', () => {
       replayed: 0
     }))
     harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
-      agents: detectedAgents
+      agents: detectedAgents,
+      ...(claudeVersion ? { versions: { claude: claudeVersion } } : {})
     }))
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
@@ -278,6 +283,22 @@ describe('WslHookRelayManager', () => {
     guest.notify(AGENT_HOOK_NOTIFICATION_METHOD, { payload: { state: 'working' } })
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(deps.ingest).toHaveBeenCalledTimes(1)
+    manager.disposeAll()
+  })
+
+  it('forwards the WSL guest Claude version to the shared remote installer', async () => {
+    const waitForSentinel = vi.fn(async () =>
+      guestTransport({ detectedAgents: ['claude'], claudeVersion: '2.1.261 (Claude Code)' })
+    )
+    const { manager, deps } = createManager({ waitForSentinel })
+
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+
+    expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
+      agents: ['claude'],
+      claudeVersion: '2.1.261'
+    })
     manager.disposeAll()
   })
 

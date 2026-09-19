@@ -25,6 +25,15 @@ afterEach(() => {
 })
 
 describe('agent picker search', () => {
+  it.each(['oh-my-pi', 'oh my pi', 'OH-MY-PI'])('finds OMP by its project name: %s', (query) => {
+    expect(searchAgentPickerEntries(AGENT_CATALOG, query).map((agent) => agent.id)).toEqual(['omp'])
+  })
+
+  it('does not offer unavailable OMP through a search alias', () => {
+    const available = AGENT_CATALOG.filter((agent) => agent.id !== 'omp')
+    expect(searchAgentPickerEntries(available, 'oh-my-pi')).toEqual([])
+  })
+
   it('keeps catalog order for an empty query', () => {
     expect(searchAgentPickerEntries(agents, '').map((agent) => agent.id)).toEqual(
       agents.map((agent) => agent.id)

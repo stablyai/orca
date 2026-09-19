@@ -25,6 +25,11 @@ function unavailable(): WorkspacePortScanResult {
   return { platform: 'unknown', scannedAt: 1, ports: [], unavailableReason: 'scan failed' }
 }
 
+/** What the ports popover publishes when its own scan fails: reason + last-good ports. */
+function unavailableWithRetainedPorts(portIds: string[]): WorkspacePortScanResult {
+  return { ...good(portIds), unavailableReason: 'scan failed' }
+}
+
 const FAILURE_THRESHOLD = 2
 
 function createHarness(): {
@@ -123,6 +128,33 @@ describe('reconcileTransientPortScanFailures', () => {
 
     apply([{ key: 'other:all', result: good(['tcp:4000']) }])
     expect(state.has('flaky:all')).toBe(false)
+  })
+
+  // Why: the popover publishes reason + last-good ports the moment its own scan
+  // fails. Counting that as a spent grace period would drop those ports on the
+  // very next poll, so the retention would never survive one poll interval.
+  it('still grants the grace period after a failure that retained its ports', () => {
+    const { apply, publish } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
+    const popoverResult = unavailableWithRetainedPorts(['tcp:3000'])
+    publish('h:all', popoverResult)
+
+    const next = apply([{ key: 'h:all', result: unavailable() }])
+
+    expect(next[0].result).toBe(popoverResult)
+    expect(next[0].result.ports).toHaveLength(1)
+  })
+
+  it('still drops retained ports once failures reach the tolerance', () => {
+    const { apply, publish } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
+    publish('h:all', unavailableWithRetainedPorts(['tcp:3000']))
+    apply([{ key: 'h:all', result: unavailable() }])
+
+    const next = apply([{ key: 'h:all', result: unavailable() }])
+
+    expect(next[0].result.ports).toHaveLength(0)
+    expect(next[0].result.unavailableReason).toBe('scan failed')
   })
 
   it('uses a newer manual result instead of resurrecting stale ports', () => {

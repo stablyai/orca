@@ -203,6 +203,39 @@ function aliasesStillMatch(
   })
 }
 
+/**
+ * Whether the local host is structurally allowed to drop this row, ignoring concurrent-change checks.
+ *
+ * Pure over persisted state — no filesystem, no expectation — so a caller can decide *before* paying
+ * for a `stat` whether a delete could ever accept the row. Several of these predicates reject the
+ * same row on every pass forever (a locator also known on a remote host keeps a second alias; a
+ * legacy row pinned to another host; identity rows that drifted or dangle), which is what turned the
+ * prune into an unbounded no-progress loop in #17775.
+ */
+export function isLocallyRemovableWorktreeMetadataRow(
+  state: PersistedState,
+  worktreeId: string,
+  currentAliases: readonly MetadataAliasEntry[]
+): boolean {
+  const localAlias = composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId)
+  if (currentAliases.some(([alias]) => alias !== localAlias)) {
+    return false
+  }
+  const legacy = state.worktreeMeta[worktreeId]
+  const identityKeys = state.worktreeIdentityAliases?.[localAlias]
+  if (identityKeys && identityKeys.length !== 1) {
+    return false
+  }
+  const canonical = identityKeys?.[0] ? state.worktreeMetaByIdentity?.[identityKeys[0]] : undefined
+  return !(
+    (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
+    (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||
+    (identityKeys && !canonical) ||
+    (legacy && canonical && !isDeepStrictEqual(legacy, canonical)) ||
+    (!legacy && !canonical)
+  )
+}
+
 export function removeRevalidatedLocalWorktreeMetadata(
   state: PersistedState,
   expected: LocalWorktreeMetadataPruneExpectation,
@@ -211,29 +244,13 @@ export function removeRevalidatedLocalWorktreeMetadata(
 ): boolean {
   if (
     !rowStillMatches(state.worktreeMeta, expected.worktreeId, expected.expectedLegacy) ||
-    !aliasesStillMatch(state, expected, currentAliases)
+    !aliasesStillMatch(state, expected, currentAliases) ||
+    !isLocallyRemovableWorktreeMetadataRow(state, expected.worktreeId, currentAliases)
   ) {
     return false
   }
   const localAlias = composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, expected.worktreeId)
-  if (currentAliases.some(([alias]) => alias !== localAlias)) {
-    return false
-  }
-  const legacy = state.worktreeMeta[expected.worktreeId]
   const identityKeys = state.worktreeIdentityAliases?.[localAlias]
-  if (identityKeys && identityKeys.length !== 1) {
-    return false
-  }
-  const canonical = identityKeys?.[0] ? state.worktreeMetaByIdentity?.[identityKeys[0]] : undefined
-  if (
-    (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
-    (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||
-    (identityKeys && !canonical) ||
-    (legacy && canonical && !isDeepStrictEqual(legacy, canonical)) ||
-    (!legacy && !canonical)
-  ) {
-    return false
-  }
   if (identityKeys?.[0]) {
     removedIdentityKeys?.add(identityKeys[0])
   }

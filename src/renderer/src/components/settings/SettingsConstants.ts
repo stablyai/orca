@@ -1,5 +1,6 @@
 import { DEFAULT_APP_FONT_FAMILY, getDefaultRepoHookSettings } from '../../../../shared/constants'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS } from '../../../../shared/terminal-scrollback-policy'
+import { uiZoomFactorFromLevel } from '../../../../shared/ui-zoom-level'
 
 export const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
 export const MAX_THEME_RESULTS = 80
@@ -11,7 +12,7 @@ export {
 } from '../../../../shared/ui-zoom-level'
 
 export function zoomLevelToPercent(level: number): number {
-  return Math.round(100 * 1.2 ** level)
+  return Math.round(100 * uiZoomFactorFromLevel(level))
 }
 
 export function mergeFontSuggestions(

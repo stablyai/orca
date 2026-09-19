@@ -9,6 +9,7 @@ import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset
 } from '../host-guest/browser-page-viewport'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
@@ -152,9 +153,11 @@ export function useBrowserPageWebviewUrlSync({
     }
 
     // Why: some Electron builds paint chrome-error pages without a did-fail-load event; poll only while the active tab loads as a fallback.
-    detectChromiumErrorPage()
-    const intervalId = window.setInterval(detectChromiumErrorPage, 250)
-    return () => window.clearInterval(intervalId)
+    // Why gated: a page stuck loading would otherwise poll 4x/sec forever behind a hidden window. The guest URL is durable state, so the becoming-visible run re-derives anything a hidden window skipped.
+    return installWindowVisibilityInterval({
+      run: detectChromiumErrorPage,
+      intervalMs: 250
+    })
   }, [
     addressBarValueRef,
     browserTabId,

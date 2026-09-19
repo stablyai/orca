@@ -98,7 +98,7 @@ describe('repos:addRemote', () => {
     })
     mockWindow.webContents.send.mockReset()
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('registers the repos:addRemote handler', () => {

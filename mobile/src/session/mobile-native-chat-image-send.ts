@@ -1,10 +1,11 @@
-import type { RpcClient } from '../transport/rpc-client'
+import { imagePasteWritesFollowedByText } from '../../../src/shared/image-paste-following-text'
 import { buildMobileImagePastePayload } from './mobile-clipboard-image'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   openMobileNativeChatSendBudget
 } from './mobile-native-chat-send'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { nativeChatTerminalWrite } from './mobile-session-write-operations'
+import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
 
 // Give the agent TUI a beat to register each bracketed image paste before the
 // message text + Enter arrive, so the image attaches instead of being treated as
@@ -19,10 +20,11 @@ const MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = '\x15'
 type MobileTerminalClient = { id: string; type: 'mobile' }
 
 type PasteImagesArgs = {
-  readonly client: Pick<RpcClient, 'sendRequest'>
+  readonly client: MobileNativeChatRpcSender
   readonly terminal: string
   readonly deviceToken: string | null
   readonly imagePaths: readonly string[]
+  readonly followedByText: boolean
   /** Budget shared with the rest of the user action (the text body that follows, or
    *  the send this is healing for). Omit to open a fresh one for this paste alone. */
   readonly deadline?: number
@@ -42,6 +44,7 @@ export async function pasteMobileNativeChatImagePaths({
   terminal,
   deviceToken,
   imagePaths,
+  followedByText,
   deadline: sharedDeadline,
   clearInput
 }: PasteImagesArgs): Promise<boolean> {
@@ -55,7 +58,7 @@ export async function pasteMobileNativeChatImagePaths({
   const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
   for (const text of [
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
-    ...imagePaths.map(buildMobileImagePastePayload)
+    ...imagePasteWritesFollowedByText(imagePaths.map(buildMobileImagePastePayload), followedByText)
   ]) {
     const remainingMs = deadline - Date.now()
     // Why: the budget is the whole sequence's — starting a write it can't fund would
@@ -64,8 +67,8 @@ export async function pasteMobileNativeChatImagePaths({
     if (remainingMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
       return false
     }
-    const response = await client.sendRequest(
-      'terminal.send',
+    const response = await nativeChatTerminalWrite.request(
+      client,
       {
         terminal,
         text,
@@ -76,7 +79,7 @@ export async function pasteMobileNativeChatImagePaths({
       // clock here would let one write outlast the whole sequence's ceiling.
       { timeoutMs: remainingMs, budgetSpansConnect: true }
     )
-    if (!isTerminalSendRpcAccepted(response)) {
+    if (nativeChatTerminalWrite.interpret(response) !== true) {
       return false
     }
   }

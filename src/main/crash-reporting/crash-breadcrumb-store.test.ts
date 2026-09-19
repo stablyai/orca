@@ -24,6 +24,285 @@ describe('crash breadcrumb store', () => {
     expect(snapshot[29].name).toBe('event_31')
   })
 
+  describe('fair-share eviction', () => {
+    it('spends the overflow on the most repeated series, not the oldest event', () => {
+      recordCrashBreadcrumb('app_started', { packaged: true })
+      recordCrashBreadcrumb('main_window_created')
+      recordCrashBreadcrumb('main_window_loaded')
+      for (let sample = 0; sample < 200; sample += 1) {
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.map((entry) => entry.name).slice(0, 3)).toEqual([
+        'app_started',
+        'main_window_created',
+        'main_window_loaded'
+      ])
+      expect(snapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(27)
+    })
+
+    it('thins the crowded series from its oldest end, keeping the run before the crash', () => {
+      recordCrashBreadcrumb('app_started')
+      for (let sample = 0; sample < 200; sample += 1) {
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const samples = getCrashBreadcrumbSnapshot()
+        .filter((entry) => entry.name === 'renderer_memory')
+        .map((entry) => entry.data?.sample)
+
+      expect(samples.at(-1)).toBe(199)
+      expect(samples).toEqual(
+        Array.from({ length: samples.length }, (_, i) => 200 - samples.length + i)
+      )
+    })
+
+    it('splits the ring between two competing series', () => {
+      for (let round = 0; round < 100; round += 1) {
+        recordCrashBreadcrumb('renderer_memory', { round })
+        recordCrashBreadcrumb('pr_refresh_queue', { round })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(15)
+      expect(snapshot.filter((entry) => entry.name === 'pr_refresh_queue')).toHaveLength(15)
+    })
+
+    // The interaction fair-share eviction could break, and the reason `ownsUnresolvedRepeats`
+    // exists: a coalesce key owns a ring entry by reference and carries its running
+    // suppressed count there. A crash report is the LAST snapshot, so an entry orphaned by
+    // eviction never gets re-claimed — the burst would simply vanish from the report.
+    it('does not evict a coalescing owner that still holds unfolded repeats', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      const hit = (key: string): void => {
+        recordCoalescedCrashBreadcrumb({
+          name: 'renderer_error',
+          data: { key },
+          coalesceKey: key,
+          minIntervalMs: 30_000
+        })
+      }
+
+      recordCrashBreadcrumb('app_started')
+      hit('hot')
+      vi.advanceTimersByTime(10)
+      for (let repeat = 0; repeat < 5; repeat += 1) {
+        hit('hot')
+      }
+      // Distinct messages make `renderer_error` the crowded group even though each entry
+      // is a different error — so the naive "oldest of the crowded name" would take the
+      // hot key's own crumb, which is the one carrying the count.
+      for (let index = 0; index < 40; index += 1) {
+        vi.advanceTimersByTime(10)
+        hit(`cold_${index}`)
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+      const hotCrumb = snapshot.find((entry) => entry.data?.key === 'hot')
+
+      // Plain FIFO loses this singleton; fair share is why it survives 41 same-name crumbs.
+      expect(snapshot.some((entry) => entry.name === 'app_started')).toBe(true)
+      expect(hotCrumb?.data?.suppressedSinceLast).toBe(5)
+    })
+
+    // The real field shape: THREE periodic emitters at roughly a quarter of the ring each,
+    // none of them past half. A policy that only engages once one name owns a majority
+    // reproduces the original bug exactly while every other test stays green.
+    it('protects the trail when three series share the ring, none holding a majority', () => {
+      recordCrashBreadcrumb('app_started')
+      recordCrashBreadcrumb('main_window_created')
+      recordCrashBreadcrumb('main_window_loaded')
+      for (let round = 0; round < 100; round += 1) {
+        recordCrashBreadcrumb('renderer_memory', { round })
+        recordCrashBreadcrumb('agent_state_changed', { round })
+        recordCrashBreadcrumb('pr_refresh_queue', { round })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.slice(0, 3).map((entry) => entry.name)).toEqual([
+        'app_started',
+        'main_window_created',
+        'main_window_loaded'
+      ])
+    })
+
+    // Engagement threshold: two slots is already enough redundancy to charge the overflow to.
+    it('charges the overflow to a name holding only two slots', () => {
+      for (let index = 0; index < 15; index += 1) {
+        recordCrashBreadcrumb(`single_${index}`)
+      }
+      recordCrashBreadcrumb('duplicated', { first: true })
+      for (let index = 15; index < 29; index += 1) {
+        recordCrashBreadcrumb(`single_${index}`)
+      }
+      recordCrashBreadcrumb('duplicated', { first: false })
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot[0].name).toBe('single_0')
+      expect(snapshot.filter((entry) => entry.name === 'duplicated')).toHaveLength(1)
+    })
+
+    // The newest entry must be counted, or a near-tie is resolved against the wrong series.
+    it('counts the entry that just arrived when two series are tied', () => {
+      recordCrashBreadcrumb('lifecycle_a')
+      recordCrashBreadcrumb('lifecycle_b')
+      for (let index = 0; index < 14; index += 1) {
+        recordCrashBreadcrumb('series_b', { index })
+      }
+      for (let index = 0; index < 14; index += 1) {
+        recordCrashBreadcrumb('series_a', { index })
+      }
+      recordCrashBreadcrumb('series_a', { index: 14 })
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.filter((entry) => entry.name === 'series_a')).toHaveLength(14)
+      expect(snapshot.filter((entry) => entry.name === 'series_b')).toHaveLength(14)
+    })
+
+    // Eviction counts per (name, origin); the snapshot is filtered per reporter, so one
+    // surface's sample must not make another surface's singleton look redundant.
+    it("does not let one renderer surface evict another surface's only sample", () => {
+      for (let index = 0; index < 15; index += 1) {
+        recordCrashBreadcrumb(`lifecycle_${index}`, undefined, 'main')
+      }
+      recordCrashBreadcrumb('renderer_memory', { surface: 'main' }, 'main')
+      for (let index = 15; index < 29; index += 1) {
+        recordCrashBreadcrumb(`lifecycle_${index}`, undefined, 'main')
+      }
+      recordCrashBreadcrumb('renderer_memory', { surface: 'popout' }, 'popout')
+
+      const mainSnapshot = getCrashBreadcrumbSnapshot('main')
+
+      expect(mainSnapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(1)
+    })
+
+    // Fallback path: when EVERY entry of the crowded group is a live owner there is no
+    // unowned candidate, and the overflow must still be charged to that group rather than
+    // to the oldest entry in the ring — which is the one-off the whole policy protects.
+    it('charges the crowded group even when all of its entries are live owners', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      recordCrashBreadcrumb('app_started')
+      for (let index = 0; index < 30; index += 1) {
+        const hit = (): void => {
+          recordCoalescedCrashBreadcrumb({
+            name: 'renderer_error',
+            data: { index },
+            coalesceKey: `key_${index}`,
+            minIntervalMs: 30_000
+          })
+        }
+        hit()
+        hit()
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.some((entry) => entry.name === 'app_started')).toBe(true)
+      // And the crumb that just arrived is kept: its coalesce state is linked only after
+      // the push, so treating it as a candidate would always discard the newest evidence.
+      expect(snapshot.some((entry) => entry.data?.index === 29)).toBe(true)
+    })
+
+    // The gap round 2 named: no test populated the retained lane together with a
+    // fair-share fixture. Retained crumbs take their share off the SAME 30-entry budget,
+    // and a plain tail slice would trim the ring's head — which is exactly where fair
+    // share parks the one-offs it just protected. Three retained crumbs erased the whole
+    // lifecycle trail from the snapshot.
+    it('keeps the lifecycle trail when the retained lane takes part of the budget', () => {
+      // Real timestamps: the snapshot sorts by createdAt, so a same-millisecond fixture
+      // would assert a tie-break order rather than the policy.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      const tick = (): void => {
+        vi.advanceTimersByTime(1_000)
+      }
+      recordCrashBreadcrumb('app_started')
+      tick()
+      recordCrashBreadcrumb('main_window_created')
+      tick()
+      recordCrashBreadcrumb('main_window_loaded')
+      for (let mark = 0; mark < 3; mark += 1) {
+        tick()
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: 'main',
+          thresholdPrivateMB: 600 + mark
+        })
+      }
+      for (let sample = 0; sample < 200; sample += 1) {
+        tick()
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+      const names = snapshot.map((entry) => entry.name)
+
+      expect(snapshot).toHaveLength(30)
+      expect(names.filter((name) => name === 'renderer_memory_highwater')).toHaveLength(3)
+      expect(names.slice(0, 3)).toEqual([
+        'app_started',
+        'main_window_created',
+        'main_window_loaded'
+      ])
+    })
+
+    // `isCoalescedCrumbStillInEvidence` and the snapshot must compute the SAME window.
+    // If the predicate keeps a tail slice while the snapshot uses fair share, an owner the
+    // report will carry is judged invisible, its handle is dropped, and the burst count
+    // never lands on the crumb the reader actually sees.
+    it('folds a burst into an owner the report keeps, even when the lane takes budget', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      for (let mark = 0; mark < 3; mark += 1) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: 'main',
+          thresholdPrivateMB: 600 + mark
+        })
+      }
+      recordCrashBreadcrumb('app_started')
+      const hit = (): void => {
+        recordCoalescedCrashBreadcrumb({
+          name: 'renderer_error',
+          data: { message: 'boom' },
+          coalesceKey: 'boom',
+          minIntervalMs: 30_000
+        })
+      }
+      hit()
+      for (let repeat = 0; repeat < 5; repeat += 1) {
+        vi.advanceTimersByTime(10)
+        hit()
+      }
+      for (let sample = 0; sample < 200; sample += 1) {
+        vi.advanceTimersByTime(10)
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+      const owner = snapshot.find((entry) => entry.name === 'renderer_error')
+
+      expect(owner?.data?.suppressedSinceLast).toBe(5)
+    })
+
+    it('degenerates to oldest-first when no name repeats', () => {
+      for (let index = 0; index < 40; index += 1) {
+        recordCrashBreadcrumb(`event_${index}`)
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot[0].name).toBe('event_10')
+      expect(snapshot[29].name).toBe('event_39')
+    })
+  })
+
   it('retains bounded renderer high-water profiles across later activity', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -235,7 +514,10 @@ describe('crash breadcrumb store', () => {
     }
     const burstSize = 34
 
-    it('erases the entire pre-crash trail when uncoalesced', () => {
+    // Fair-share eviction spares the one-off trail, but the burst still takes
+    // two thirds of the ring — enough to starve any *other* series and to lose
+    // the pane count entirely. Coalescing is still the right answer for bursts.
+    it('takes most of the ring when uncoalesced, but no longer erases the trail', () => {
       recordPreCrashTrail()
       for (let pane = 0; pane < burstSize; pane += 1) {
         recordCrashBreadcrumb('terminal_safe_fit_retry_exhausted', { paneId: 1 })
@@ -243,12 +525,16 @@ describe('crash breadcrumb store', () => {
 
       const snapshot = getCrashBreadcrumbSnapshot()
 
+      const bursts = snapshot.filter((entry) => entry.name === 'terminal_safe_fit_retry_exhausted')
+
       expect(snapshot.filter((entry) => entry.name.startsWith('pre_crash_evidence_'))).toHaveLength(
-        0
+        10
       )
-      expect(
-        snapshot.filter((entry) => entry.name === 'terminal_safe_fit_retry_exhausted')
-      ).toHaveLength(30)
+      expect(bursts).toHaveLength(20)
+      // The delta that still justifies coalescing: 20 slots against 1, and the population
+      // — the only signal multiplicity ever carried — is nowhere on the uncoalesced side.
+      expect(bursts.some((entry) => entry.data?.livePanes !== undefined)).toBe(false)
+      expect(bursts.every((entry) => entry.data?.suppressedSinceLast === undefined)).toBe(true)
     })
 
     it('costs one slot when coalesced, and keeps the pane count on the payload', () => {

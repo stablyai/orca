@@ -1,3 +1,4 @@
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from './runner'
 import { isShowRefNoMatchError } from './exact-ref-probe'
 import { hasCommitObjectViaGitExec } from './commit-object-ref'
@@ -6,6 +7,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
 type GitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 /**
@@ -40,6 +42,21 @@ export async function hasWorktreeBaseCommitRef(
   options: GitExecOptions = {}
 ): Promise<boolean> {
   return (await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)) !== null
+}
+
+/**
+ * The qualified ref a worktree base names in this repo, or the base unchanged when nothing
+ * matches. Callers that key on a base must compare this, not the raw string, or `main` and
+ * `refs/heads/main` look like different bases.
+ */
+export function resolveLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: GitExecOptions = {}
+): Promise<string> {
+  return resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  )
 }
 
 /**

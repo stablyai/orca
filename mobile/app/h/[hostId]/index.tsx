@@ -1,14 +1,39 @@
+import { useLocalSearchParams } from 'expo-router'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { HostScreenView } from '../../../src/host-screen/host-screen-view'
-import {
-  type HostScreenProps,
-  useHostScreenController
-} from '../../../src/host-screen/use-host-screen-controller'
+import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
+import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
+import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
-export function HostScreen(props: HostScreenProps = {}) {
-  const controller = useHostScreenController(props)
-  return <HostScreenView controller={controller} />
+/**
+ * The worktree list, from the desktop's bundle or from this app.
+ *
+ * The shell decides, not this switch: it renders the page only for a route the bundle lists with
+ * grants this app implements, and answers `native-route` otherwise, which is what `fallback` is.
+ * So the two ways to stay native are a flag that is off and a negotiation that said no, and the
+ * second one covers every host whose desktop is older than the page.
+ *
+ * `enabled === null` is the flag read still settling, and it renders the native screen: a store
+ * build never reaches storage at all, so that is the only frame it ever paints here.
+ *
+ * Encoded, not interpolated raw, for the reason `web.tsx` states: a deep-linked host id carrying
+ * `?`, `#` or whitespace would build a pathname the page refuses, and a refusal here is a failure
+ * screen rather than the native list this route already has.
+ */
+function HostListScreen() {
+  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const enabled = useMobileWebShellEnabled()
+
+  if (enabled !== true || !hostId) {
+    return <HostScreen />
+  }
+  return (
+    <MobileWebShellScreen
+      hostId={hostId}
+      route={{ pathname: `/h/${encodeURIComponent(hostId)}` }}
+      fallback={<HostScreen />}
+    />
+  )
 }
 
 // On wide layouts the sidebar hosts the list, so this route is just the empty detail pane.
@@ -17,5 +42,5 @@ export default function HostWorktreeRoute() {
   if (isWideLayout) {
     return <WorkspaceDetailPlaceholder />
   }
-  return <HostScreen />
+  return <HostListScreen />
 }

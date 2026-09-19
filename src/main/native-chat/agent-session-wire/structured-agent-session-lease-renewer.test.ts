@@ -189,8 +189,10 @@ describe('structured agent-session lease renewal', () => {
       renewer.start()
       now += 10_000
       await vi.advanceTimersByTimeAsync(10_000)
-      await vi.waitFor(() =>
-        expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(now)
+      // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
+      await vi.waitFor(
+        () => expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(now),
+        { timeout: 5000 }
       )
     } finally {
       renewer.stop()

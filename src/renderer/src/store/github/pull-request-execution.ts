@@ -153,7 +153,7 @@ export function startPullRequestLookup(args: {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
           if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
             skippedStaleLinkedPRLookup = true
-            return {}
+            return s
           }
           const updates = setGitHubPRResultCaches(s, {
             prCacheKey: cacheKey,
@@ -174,7 +174,7 @@ export function startPullRequestLookup(args: {
             requestStartedEntry: requestStartedHostedReviewEntry
           })
           didUpdatePRCache = updates.prCache !== undefined
-          return updates
+          return updates.prCache || updates.hostedReviewCache ? updates : s
         })
         if (skippedStaleLinkedPRLookup) {
           return null

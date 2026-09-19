@@ -288,19 +288,17 @@ describe('browserManager', () => {
       webContentsId: 102,
       rendererWebContentsId
     })
-    // Why: attach-before-registration teardown skips unregisterGuest, so global
-    // cleanup must independently release the private click-routing token.
-    browserManager.attachGuestPolicies({ ...guest, id: 103 } as never)
+    // Guests attached before registration still need their policy listeners released.
+    const unregisteredGuestOff = vi.fn()
+    browserManager.attachGuestPolicies({ ...guest, id: 103, off: unregisteredGuestOff } as never)
 
     browserManager.unregisterAll()
 
     expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
-    const managerState = browserManager as unknown as {
-      clickedLinkFrameNameByGuestId: Map<number, unknown>
-    }
-    expect(managerState.clickedLinkFrameNameByGuestId.size).toBe(0)
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('dom-ready', expect.any(Function))
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('frame-created', expect.any(Function))
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {
@@ -637,9 +635,9 @@ describe('browserManager', () => {
     ).toHaveLength(2)
   })
 
-  it('cancels pending anti-detection reattach timers when unregistering a guest', () => {
-    vi.useFakeTimers()
-
+  // Why: a plain browsing tab must never attach a debugger (Cloudflare treats CDP as a bot signal);
+  // the only debugger wiring it keeps is the detach listener that invalidates the auth-host UA override.
+  it('never attaches a debugger to a browsing guest and drops its detach listener on unregister', () => {
     const debuggerHandlers = new Map<string, () => void>()
     const debuggerAttachMock = vi.fn()
     const guest = {
@@ -670,18 +668,17 @@ describe('browserManager', () => {
 
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
-      browserPageId: 'browser-reattach',
+      browserPageId: 'browser-no-debugger',
       webContentsId: 809,
       rendererWebContentsId
     })
 
-    debuggerHandlers.get('detach')?.()
-    expect(vi.getTimerCount()).toBe(1)
+    expect(debuggerAttachMock).not.toHaveBeenCalled()
+    expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
+    expect(debuggerHandlers.has('detach')).toBe(true)
 
-    browserManager.unregisterGuest('browser-reattach')
-    expect(vi.getTimerCount()).toBe(0)
-
-    vi.advanceTimersByTime(500)
-    expect(debuggerAttachMock).toHaveBeenCalledTimes(1)
+    browserManager.unregisterGuest('browser-no-debugger')
+    expect(debuggerHandlers.has('detach')).toBe(false)
+    expect(debuggerAttachMock).not.toHaveBeenCalled()
   })
 })

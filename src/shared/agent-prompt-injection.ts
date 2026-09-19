@@ -1,8 +1,14 @@
 import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './terminal-input'
+import type { TuiAgent } from './tui-agent'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
+
+/** OMP recognizes a submitted bracketed paste only when Enter shares its PTY write. */
+export function agentPromptSubmitJoinsPasteFrame(agent: TuiAgent | null | undefined): boolean {
+  return agent === 'omp'
+}
 
 // Why: Windows ConPTY ingests pasted input linearly (first byte written -> child observes
 // ESC[201~), and the cost is input ingest, not rendering -- the child repaints in ~0 ms on
@@ -39,6 +45,19 @@ export function getTerminalPasteIngestMs(platform: NodeJS.Platform, byteLength: 
         ? WINDOWS_CONPTY_INGEST_BYTES_PER_MS
         : DEFAULT_PASTE_INGEST_BYTES_PER_MS)
   )
+}
+
+/** Largest paste whose host-ingest floor fits in `budgetMs`. */
+export function getMaxTerminalPasteBytesForIngestMs(
+  platform: NodeJS.Platform,
+  budgetMs: number
+): number {
+  if (!Number.isFinite(budgetMs) || budgetMs <= 0) {
+    return 0
+  }
+  const bytesPerMs =
+    platform === 'win32' ? WINDOWS_CONPTY_INGEST_BYTES_PER_MS : DEFAULT_PASTE_INGEST_BYTES_PER_MS
+  return Math.floor(budgetMs * bytesPerMs)
 }
 
 /** Open-loop wait before Enter for agents with no settlement signal: the paste cannot have

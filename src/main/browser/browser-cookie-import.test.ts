@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CookiesGetFilter } from 'electron'
 import type * as NodeFs from 'node:fs'
 
 const {
   appGetPathMock,
   copyFileSyncMock,
-  execFileSyncMock,
+  runProcessSyncMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
@@ -13,7 +14,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   copyFileSyncMock: vi.fn(),
-  execFileSyncMock: vi.fn(),
+  runProcessSyncMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
@@ -28,7 +29,11 @@ vi.mock('./browser-session-registry', () => ({
   }
 }))
 
-vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+// Why mock the chokepoint: command timeouts and hidden-console handling belong to
+// runProcessSync, while this suite only needs to control the credential output.
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcessSync: runProcessSyncMock
+}))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -49,11 +54,11 @@ vi.mock('electron', () => ({
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
-      get: (filter: object) => Promise<unknown>
+      get: (filter: CookiesGetFilter) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
     }
   }) => ({
-    get: (filter: object) => targetSession.cookies.get(filter),
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),
@@ -478,8 +483,8 @@ describe('importCookiesFromBrowser Chromium', () => {
     copyFileSyncMock.mockClear()
     setPendingCookieImportMock.mockClear()
     clearPendingCookieImportMock.mockClear()
-    execFileSyncMock.mockReset()
-    execFileSyncMock.mockImplementation(() => {
+    runProcessSyncMock.mockReset()
+    runProcessSyncMock.mockImplementation(() => {
       throw new Error('OS credential commands are unavailable in this test')
     })
     sessionFromPartitionMock.mockReset()
@@ -514,12 +519,6 @@ describe('importCookiesFromBrowser Chromium', () => {
     ]).close()
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    execFileSyncMock.mockImplementation((command: string) => {
-      if (command === 'defaults') {
-        return '120.0.6099.71\n'
-      }
-      throw new Error(`Unexpected command: ${command}`)
-    })
     try {
       expect(existsSync(`${sourceCookiesPath}-wal`)).toBe(true)
       const sourceFilesBefore = ['', '-wal', '-shm'].map((suffix) =>
@@ -539,8 +538,7 @@ describe('importCookiesFromBrowser Chromium', () => {
           value: 'source-value'
         })
       )
-      expect(execFileSyncMock.mock.calls.some(([command]) => command === 'security')).toBe(false)
-      expect(execFileSyncMock.mock.calls.some(([command]) => command === 'defaults')).toBe(false)
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
       expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
         true
       )
@@ -573,11 +571,12 @@ describe('importCookiesFromBrowser Chromium', () => {
       }
     ]).close()
     createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    execFileSyncMock.mockImplementation((command: string) => {
-      if (command === 'security') {
-        return `${password}\n`
-      }
-      throw new Error(`Unexpected command: ${command}`)
+    runProcessSyncMock.mockReturnValue({
+      code: 0,
+      signal: null,
+      stdout: `${password}\n`,
+      stderr: '',
+      timedOut: false
     })
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
 
@@ -588,11 +587,11 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(execFileSyncMock).toHaveBeenCalledWith(
-        'security',
-        expect.any(Array),
-        expect.any(Object)
-      )
+      expect(runProcessSyncMock).toHaveBeenCalledWith({
+        program: 'security',
+        args: ['find-generic-password', '-s', 'Chrome Safe Storage', '-a', 'Chrome', '-w'],
+        timeoutMs: 30_000
+      })
       expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'sid', value: 'encrypted-value' })
       )

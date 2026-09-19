@@ -30,6 +30,7 @@ export type QuickCreationRequestInput = {
   linkedPR: number | null
   pushTarget: GitPushTarget | undefined
   agent: TuiAgent | null
+  agentLaunchRoute?: WorktreeCreationRequest['agentLaunchRoute']
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
@@ -46,6 +47,7 @@ export type QuickCreationRequestInput = {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
   launchDraftPrompt: string | null | undefined
+  promptDelivery: 'draft' | 'auto-submit'
   quickTelemetry: AgentStartedTelemetry | null
   suppressTerminalFocusOnCompletion: boolean
 }
@@ -83,6 +85,7 @@ export function buildQuickCreationRequest(
     ...(input.linkedPR != null ? { linkedPR: input.linkedPR } : {}),
     ...(input.pushTarget ? { pushTarget: input.pushTarget } : {}),
     agent: input.agent,
+    ...(input.agentLaunchRoute ? { agentLaunchRoute: input.agentLaunchRoute } : {}),
     ...(input.linkedLinearIssue ? { linkedLinearIssue: input.linkedLinearIssue } : {}),
     ...(input.linkedLinearIssueWorkspaceId !== undefined
       ? { linkedLinearIssueWorkspaceId: input.linkedLinearIssueWorkspaceId }
@@ -106,6 +109,7 @@ export function buildQuickCreationRequest(
     startupPlan: input.startupPlan,
     quickPrompt: input.quickPrompt,
     ...(input.launchDraftPrompt ? { launchDraftPrompt: input.launchDraftPrompt } : {}),
+    promptDelivery: input.promptDelivery,
     quickTelemetry: input.quickTelemetry,
     ...(input.suppressTerminalFocusOnCompletion ? { suppressTerminalFocusOnCompletion: true } : {})
   }

@@ -8,7 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, parsePaneKey } from '../../../shared/stable-pane-id'
 import { findCrossHostPaneTabIds, withoutPaneTabIds } from './cross-host-pane-tab-ids'
 import {
   createLazyTerminalTabLookup,
@@ -22,6 +22,17 @@ import {
   migrationUnsupportedEntriesEqual,
   normalizeLegacyPaneKeyAliasEntries
 } from './pane-alias-normalization'
+import {
+  remapAcknowledgedAgentPaneKeys,
+  remapActivityClearedAtPaneKeys,
+  remapManuallyUnreadTurnPaneKeys
+} from './pane-key-remapping'
+
+export {
+  remapAcknowledgedAgentPaneKeys,
+  remapActivityClearedAtPaneKeys,
+  remapManuallyUnreadTurnPaneKeys
+} from './pane-key-remapping'
 
 export function normalizeWorkspaceSessionPaneIdentities(
   session: WorkspaceSessionState,
@@ -220,6 +231,14 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     state.ui?.acknowledgedAgentsByPaneKey,
     withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
   )
+  const remappedActivityCutoffs = remapActivityClearedAtPaneKeys(
+    state.ui?.activityClearedAtByPaneKey,
+    withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
+  )
+  const remappedManualUnread = remapManuallyUnreadTurnPaneKeys(
+    state.ui?.manuallyUnreadTurnsByPaneKey,
+    withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
+  )
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],
     mergedMigrationUnsupportedEntries
@@ -234,7 +253,9 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     !remappedLeases.changed &&
     !migrationUnsupportedChanged &&
     !legacyAliasesChanged &&
-    !remappedAcknowledgements.changed
+    !remappedAcknowledgements.changed &&
+    !remappedActivityCutoffs.changed &&
+    !remappedManualUnread.changed
   ) {
     return {
       state,
@@ -251,11 +272,21 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
       sshRemotePtyLeases: remappedLeases.leases,
       migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries,
       legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries,
-      ...(remappedAcknowledgements.changed
+      ...(remappedAcknowledgements.changed ||
+      remappedActivityCutoffs.changed ||
+      remappedManualUnread.changed
         ? {
             ui: {
               ...state.ui,
-              acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements
+              ...(remappedAcknowledgements.changed
+                ? { acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements }
+                : {}),
+              ...(remappedActivityCutoffs.changed
+                ? { activityClearedAtByPaneKey: remappedActivityCutoffs.cutoffs }
+                : {}),
+              ...(remappedManualUnread.changed
+                ? { manuallyUnreadTurnsByPaneKey: remappedManualUnread.turns }
+                : {})
             }
           }
         : {})
@@ -264,51 +295,4 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     migrationUnsupportedEntries: mergedMigrationUnsupportedEntries,
     legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
   }
-}
-
-export function remapAcknowledgedAgentPaneKeys(
-  acknowledgements: PersistedState['ui']['acknowledgedAgentsByPaneKey'],
-  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>
-): { acknowledgements: PersistedState['ui']['acknowledgedAgentsByPaneKey']; changed: boolean } {
-  if (!acknowledgements || Object.keys(acknowledgements).length === 0) {
-    return { acknowledgements, changed: false }
-  }
-
-  let changed = false
-  const next: NonNullable<PersistedState['ui']['acknowledgedAgentsByPaneKey']> = {}
-  const setAcknowledgement = (paneKey: string, acknowledgedAt: number): void => {
-    const existing = next[paneKey]
-    next[paneKey] = existing === undefined ? acknowledgedAt : Math.max(existing, acknowledgedAt)
-  }
-  for (const [paneKey, acknowledgedAt] of Object.entries(acknowledgements)) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed) {
-      setAcknowledgement(paneKey, acknowledgedAt)
-      continue
-    }
-
-    const delimiter = paneKey.indexOf(':')
-    if (delimiter <= 0 || delimiter === paneKey.length - 1) {
-      setAcknowledgement(paneKey, acknowledgedAt)
-      continue
-    }
-
-    const tabId = paneKey.slice(0, delimiter)
-    const legacyLeafId = paneKey.slice(delimiter + 1)
-    const remappedLeafId = leafIdByInputLeafIdByTabId.get(tabId)?.get(legacyLeafId)
-    if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
-      setAcknowledgement(paneKey, acknowledgedAt)
-      continue
-    }
-
-    try {
-      // Why: when a legacy leaf is promoted to a UUID, carry the read marker over so seen rows don't come back unread.
-      setAcknowledgement(makePaneKey(tabId, remappedLeafId), acknowledgedAt)
-      changed = true
-    } catch {
-      setAcknowledgement(paneKey, acknowledgedAt)
-    }
-  }
-
-  return { acknowledgements: next, changed }
 }

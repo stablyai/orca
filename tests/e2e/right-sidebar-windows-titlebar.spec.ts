@@ -6,41 +6,19 @@ type RightSidebarHeaderGeometry = {
   stripTop: number
   closeTop: number
   titlebarActivityButtonCount: number
+  activityButtonCount: number
   firstButtonCenterHitsFirst: boolean
   lastButtonCenterHitsLast: boolean
 }
 
-test.describe('Right sidebar Windows titlebar spacing', () => {
-  test('top activity buttons render inside the sidebar instead of the titlebar', async ({
-    orcaPage
-  }) => {
-    await orcaPage.addInitScript(() => {
-      const userAgent =
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
-      Object.defineProperty(navigator, 'userAgent', {
-        get: () => userAgent,
-        configurable: true
-      })
-    })
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+test.describe('Right sidebar native titlebar spacing', () => {
+  test('top activity buttons follow the native desktop chrome layout', async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
 
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => ({
-            hasWindowsUserAgent: navigator.userAgent.includes('Windows'),
-            hasWindowsTitlebarChrome: Boolean(document.querySelector('.window-controls'))
-          })),
-        {
-          timeout: 5_000,
-          message: 'Renderer did not switch to the Windows titlebar branch'
-        }
-      )
-      .toEqual({ hasWindowsUserAgent: true, hasWindowsTitlebarChrome: true })
+    const hasDesktopWindowChrome = process.platform !== 'darwin'
+    expect(await orcaPage.evaluate(() => window.api.platform.get().platform)).toBe(process.platform)
 
     await orcaPage.evaluate(() => {
       const store = window.__store
@@ -95,6 +73,7 @@ test.describe('Right sidebar Windows titlebar spacing', () => {
           stripTop: stripRect.top,
           closeTop: closeRect.top,
           titlebarActivityButtonCount,
+          activityButtonCount: activityButtons.length,
           firstButtonCenterHitsFirst:
             elementAtFirstCenter !== null && firstButton.contains(elementAtFirstCenter),
           lastButtonCenterHitsLast:
@@ -117,8 +96,13 @@ test.describe('Right sidebar Windows titlebar spacing', () => {
       .toBe(true)
 
     expect(headerGeometry).not.toBeNull()
-    expect(headerGeometry!.titlebarActivityButtonCount).toBe(0)
-    expect(headerGeometry!.stripTop).toBeGreaterThanOrEqual(headerGeometry!.headerBottom)
+    if (hasDesktopWindowChrome) {
+      expect(headerGeometry!.titlebarActivityButtonCount).toBe(0)
+      expect(headerGeometry!.stripTop).toBeGreaterThanOrEqual(headerGeometry!.headerBottom)
+    } else {
+      expect(headerGeometry!.titlebarActivityButtonCount).toBe(headerGeometry!.activityButtonCount)
+      expect(headerGeometry!.stripTop).toBeLessThan(headerGeometry!.headerBottom)
+    }
     expect(headerGeometry!.closeTop).toBeLessThan(headerGeometry!.headerBottom)
     expect(headerGeometry!.firstButtonCenterHitsFirst).toBe(true)
     expect(headerGeometry!.lastButtonCenterHitsLast).toBe(true)

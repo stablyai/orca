@@ -3,6 +3,7 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   createDefaultLocalOrcaProfile
 } from '../../../../shared/orca-profiles'
+import { noopUnsubscribe } from './web-storage'
 
 export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
   const webOrcaProfileAuthStatus = () =>
@@ -22,6 +23,7 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
           multiProfileUi: false
         }),
       authStatus: webOrcaProfileAuthStatus,
+      onAuthStatusChanged: () => noopUnsubscribe,
       createLocal: () =>
         Promise.resolve({
           activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,

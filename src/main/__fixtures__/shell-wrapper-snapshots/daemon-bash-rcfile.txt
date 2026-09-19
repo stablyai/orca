@@ -39,8 +39,8 @@ __orca_restore_agent_teams_path
 # their normal argv shape.
 __orca_omp_should_skip_extension() {
   case "${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
-    __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+    'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
+    '__complete'|'acp'|'agents'|'auth-broker'|'auth-gateway'|'bench'|'commit'|'completions'|'config'|'dry-balance'|'gallery'|'grep'|'grievances'|'install'|'join'|'models'|'plugin'|'read'|'say'|'search'|'setup'|'shell'|'ssh'|'stats'|'tiny-models'|'token'|'ttsr'|'update'|'usage'|'worktree'|'q'|'wt') return 0 ;;
   esac
   return 1
 }
@@ -127,10 +127,6 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\033]133;A\007"
-  # Why: emit the shell-ready marker here (not a trailing PROMPT_COMMAND entry)
-  # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
-  # displaced by one of Orca's own hooks.
-  [[ -n "$__orca_ready_marker" ]] && printf "\033]777;orca-shell-ready\007"
   return "$exit_code"
 }
 __orca_osc133_preexec() {
@@ -188,6 +184,11 @@ __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
+  if [[ -n "$__orca_ready_marker" ]]; then
+    PS1="${PS1-}"'\[\e]777;orca-shell-ready\a\]'
+    __orca_ready_marker=""
+  fi
 }
 __orca_normalize_prompt_command_part() {
   local __orca_value="$1" __orca_output_name="$2" __orca_character __orca_chunk

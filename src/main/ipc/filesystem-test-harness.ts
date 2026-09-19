@@ -28,6 +28,7 @@ export const realpathMock: IpcMock = vi.fn()
 export const lstatMock: IpcMock = vi.fn()
 export const commitChangesMock: IpcMock = vi.fn()
 export const getStatusMock: IpcMock = vi.fn()
+export const detectConflictOperationMock: IpcMock = vi.fn()
 export const abortMergeMock: IpcMock = vi.fn()
 export const abortRebaseMock: IpcMock = vi.fn()
 export const getDiffMock: IpcMock = vi.fn()
@@ -88,6 +89,7 @@ export const folderPromotionMock = {
 export const gitStatusModuleMock = {
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
+  detectConflictOperation: detectConflictOperationMock,
   abortMerge: abortMergeMock,
   abortRebase: abortRebaseMock,
   getDiff: getDiffMock,
@@ -105,6 +107,7 @@ export const gitStatusModuleMock = {
 export const gitIgnoredPathsMock = { checkIgnoredPaths: checkIgnoredPathsMock }
 
 export const gitWorktreeMock = {
+  listWorktreeGraph: listWorktreesMock,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock
 }
@@ -204,12 +207,16 @@ export async function withPlatform<T>(
   }
 }
 
-function collectMocks(moduleMock: object): IpcMock[] {
+function isMockContainer(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function collectMocks(moduleMock: Record<string, unknown>): IpcMock[] {
   return Object.values(moduleMock).flatMap((value) => {
     if (vi.isMockFunction(value)) {
       return [value as IpcMock]
     }
-    return value && typeof value === 'object' ? collectMocks(value) : []
+    return isMockContainer(value) ? collectMocks(value) : []
   })
 }
 

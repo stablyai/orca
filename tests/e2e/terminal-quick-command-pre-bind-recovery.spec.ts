@@ -160,14 +160,16 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
         observe()
       }, blocked.tabId)
 
-      const remounted = await orcaPage.evaluate((tabId) => {
+      // No request argument: an external lifecycle remount, which skips the
+      // recovery ledger entirely and so reports generation 0.
+      const remountResult = await orcaPage.evaluate((tabId) => {
         const state = window.__store?.getState()
         if (!state) {
           throw new Error('Renderer store unavailable')
         }
         return state.remountTerminalTabForRecovery(tabId)
       }, blocked.tabId)
-      expect(remounted).toBe(true)
+      expect(remountResult).toMatchObject({ remounted: true })
 
       // Keep the original pre-spawn attempt gated until React has committed the
       // successor pane. Releasing earlier lets a loaded CI renderer finish the

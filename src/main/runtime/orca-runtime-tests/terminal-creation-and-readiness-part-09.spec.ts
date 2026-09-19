@@ -472,8 +472,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(read.tail).toEqual(['Claude Code', 'Working on fix', 'Tool: Read'])
     expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 0,
-      altScreenForcesZeroRows: false
+      scrollbackRows: 0
     })
   })
 

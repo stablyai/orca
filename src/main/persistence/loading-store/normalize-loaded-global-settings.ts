@@ -85,6 +85,10 @@ export function normalizeLoadedGlobalSettings(
     ...migratedTerminalTuiScrollSensitivity.settings,
     experimentalActivity: migratedExperimentalActivity,
     experimentalActivityDefaultedOffForAllUsers: true,
+    // Preserve the legacy opt-in so the one-time introduction copy can target existing users.
+    agentsSidebarMigratedFromExperimental:
+      parsed.settings?.agentsSidebarMigratedFromExperimental === true ||
+      migratedExperimentalActivity,
     // Why: compact worktree cards graduated from Experimental; preserve the old opt-in for rollout-era profiles.
     compactWorktreeCards: loadedCompactWorktreeCards,
     experimentalCompactWorktreeCards: undefined,

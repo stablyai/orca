@@ -2,12 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// Why: Terminal.tsx is the passive half of the closed-last-terminal contract — it must keep
-// honouring the tombstone while explicit activation re-seeds. Mounting a 2892-line component
-// to prove that costs far more than it returns, and the e2e that covers it only runs when an
-// e2e spec changes. Assert the wiring as source text instead, the same way app-startup-routing
-// and the startup ordering tests pin call order they cannot cheaply execute.
-const TERMINAL_PATH = 'src/renderer/src/components/Terminal.tsx'
+// Why: the watcher owner is the passive half of the closed-last-terminal contract — it must keep
+// honouring the tombstone while explicit activation re-seeds. Assert the wiring as source text;
+// mounting the full terminal surface costs far more than it returns, and the e2e that covers it
+// only runs when an e2e spec changes.
+const TERMINAL_PATH = 'src/renderer/src/components/use-terminal-watcher-effects.ts'
 
 function readSource(relativePath: string): string {
   return readFileSync(join(process.cwd(), relativePath), 'utf8')
@@ -26,7 +25,7 @@ describe('Terminal auto-create wiring', () => {
     // Exactly one call site: a second (flagless) call could otherwise hide behind this one.
     expect(
       source.split('shouldAutoCreateInitialTerminal(').length - 1,
-      'expected exactly one shouldAutoCreateInitialTerminal call in Terminal.tsx'
+      'expected exactly one shouldAutoCreateInitialTerminal call in the watcher owner'
     ).toBe(1)
     expect(source).toContain(
       'shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)'

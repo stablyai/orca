@@ -1,4 +1,3 @@
-import { join, delimiter } from 'node:path'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -10,13 +9,12 @@ import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
-import { ensureLinuxTerminalOrcaCliShimDir } from '../../../cli/linux-terminal-orca-cli-shim'
+import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
-import { resolvePathEnvKey, mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
+import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
 import type { BuildPtyHostEnvOptions } from './types'
-import { readInheritedPath } from './path'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
 import {
   clearPiAgentShadowEnv,
@@ -235,34 +233,11 @@ export function buildPtyHostEnv(
     }
     delete baseEnv.ORCA_CLI_COMMAND
   }
-  // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
-  if (!opts.isPackaged) {
-    const devCliBin = join(opts.userDataPath, 'cli', 'bin')
-    const inheritedPath = readInheritedPath(baseEnv)
-    // Why: an empty PATH segment resolves as `.` in some shells (commands run from cwd); avoid a trailing delimiter.
-    baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
-      ? `${devCliBin}${delimiter}${inheritedPath}`
-      : devCliBin
-  } else if (process.platform === 'linux') {
-    // Why: bare-`orca` shim scoped to Orca PTYs — Linux CLI installs as `orca-ide` to avoid shadowing GNOME's /usr/bin/orca screen reader (stablyai/orca#7904).
-    const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath: opts.userDataPath })
-    if (shimDir) {
-      const inheritedEntries = readInheritedPath(baseEnv)
-        .split(delimiter)
-        .filter((entry) => entry.length > 0 && entry !== shimDir)
-      baseEnv.PATH = [shimDir, ...inheritedEntries].join(delimiter)
-    }
-  } else if (
-    opts.resourcesPath &&
-    (process.platform === 'darwin' || process.platform === 'win32')
-  ) {
-    // Why: global CLI registration is optional, but agents in Orca-managed PTYs must always reach this app's bundled CLI.
-    const bundledCliBin = join(opts.resourcesPath, 'bin')
-    const inheritedPath = readInheritedPath(baseEnv)
-    baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
-      ? `${bundledCliBin}${delimiter}${inheritedPath}`
-      : bundledCliBin
-  }
+  prependOrcaCliDirToChildPath(baseEnv, {
+    isPackaged: opts.isPackaged,
+    userDataPath: opts.userDataPath,
+    resourcesPath: opts.resourcesPath
+  })
 
   if (
     opts.routeBrowserOpensToClient === true &&

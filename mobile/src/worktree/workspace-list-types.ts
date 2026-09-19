@@ -9,6 +9,10 @@ export type Worktree = {
   repoId: string
   hostId?: ExecutionHostId
   terminalPlatform?: NodeJS.Platform
+  /** Display-only; set when the list spans hosts, so rows say which host they run on. */
+  hostContextLabel?: string
+  /** Resolved host for the display label; present when legacy rows omit hostId. */
+  hostContextHostId?: ExecutionHostId
   repo: string
   branch: string
   displayName: string

@@ -17,6 +17,7 @@ import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/os
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
+import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -48,4 +49,5 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
+  useBrowserIdentityMigrationNotice()
 }

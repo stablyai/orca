@@ -9,6 +9,7 @@ import {
 } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { findManagedTomlBlocks } from '../agent-hooks/managed-toml-ownership'
 import { writeConfigAtomically, type CodexTrustEntry } from './config-toml-trust'
 import {
   getConfigPath,
@@ -149,22 +150,37 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
   }
 }
 
-function stripLegacyManagedProfileBlock(content: string): string {
-  const start = content.indexOf(LEGACY_ORCA_PROFILE_BLOCK_START)
-  if (start === -1) {
+export function stripLegacyManagedProfileBlock(content: string): string {
+  const regions = findManagedTomlBlocks(content, {
+    startMarker: LEGACY_ORCA_PROFILE_BLOCK_START,
+    endMarker: LEGACY_ORCA_PROFILE_BLOCK_END
+  })
+  // A stray marker above a complete block must not hide it: take the first
+  // terminated region and leave the orphan (and the user text around it) alone.
+  const region = regions.find((candidate) => candidate.terminated) ?? regions[0]
+  if (!region) {
     return content
   }
-  const endMarker = content.indexOf(LEGACY_ORCA_PROFILE_BLOCK_END, start)
-  const end = endMarker === -1 ? content.length : endMarker + LEGACY_ORCA_PROFILE_BLOCK_END.length
-  const before = content.slice(0, start).replace(/[ \t]*(?:\r?\n)*$/, '')
-  const after = content.slice(end).replace(/^(?:\r?\n)+/, '')
+  if (!region.terminated) {
+    // #18861: deleting to EOF took user text appended below the block. This
+    // legacy body's shape is not knowable from current source, so there is
+    // nothing to recognize it by; leave the whole thing alone. The stale profile
+    // is inert (runtime CODEX_HOME supersedes it), so that costs nothing next to
+    // destroying the user's trust entries.
+    return content
+  }
+  // Rejoin with the file's own terminator; a bare \n seam here left Windows
+  // configs with mixed endings.
+  const eol = content.includes('\r\n') ? '\r\n' : '\n'
+  const before = content.slice(0, region.markerOffset).replace(/[ \t]*(?:\r?\n)*$/, '')
+  const after = content.slice(region.endOffset).replace(/^(?:\r?\n)+/, '')
   if (!before) {
     return after
   }
   if (!after) {
-    return before.endsWith('\n') ? before : `${before}\n`
+    return before.endsWith('\n') ? before : `${before}${eol}`
   }
-  return `${before}\n\n${after}`
+  return `${before}${eol}${eol}${after}`
 }
 
 function cleanupLegacyCodexProfileHooks(): void {

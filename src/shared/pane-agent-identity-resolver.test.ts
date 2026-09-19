@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PANE_AGENT_SOURCE_RANK } from './pane-agent-identity-adapter'
 import {
   PANE_AGENT_EVIDENCE_SOURCES,
   type PaneAgentEvidence,
@@ -11,6 +12,14 @@ const resolve = (evidence: PaneAgentEvidence[], extra = {}) =>
 const H = 'authority-a'
 
 describe('resolvePaneAgentIdentity', () => {
+  it('keeps every evidence source ranked exactly once', () => {
+    expect(PANE_AGENT_SOURCE_RANK).toBe(PANE_AGENT_EVIDENCE_SOURCES)
+    expect(new Set(PANE_AGENT_SOURCE_RANK).size).toBe(PANE_AGENT_SOURCE_RANK.length)
+    for (const source of PANE_AGENT_EVIDENCE_SOURCES) {
+      expect(PANE_AGENT_SOURCE_RANK.indexOf(source)).toBeGreaterThanOrEqual(0)
+    }
+  })
+
   describe('a display title is the last thing consulted', () => {
     it.each(PANE_AGENT_EVIDENCE_SOURCES.filter((s) => s !== 'title' && s !== 'sibling'))(
       'lets %s outrank a conflicting title',
@@ -43,8 +52,8 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('run generation separates the bug from the legitimate reclaim', () => {
-    // Both shapes are `completed hook = A, title = B`. Ordering alone cannot tell them apart.
-    const shape = (hookRun: number, titleRun: number): PaneAgentEvidence[] => [
+    // Both cases are `completed hook = A, title = B`. Ordering alone cannot tell them apart.
+    const evidenceFor = (hookRun: number, titleRun: number): PaneAgentEvidence[] => [
       { source: 'completed-hook', agent: 'claude', run: { authorityId: H, incarnation: hookRun } },
       { source: 'title', agent: 'codex', run: { authorityId: H, incarnation: titleRun } }
     ]
@@ -52,7 +61,7 @@ describe('resolvePaneAgentIdentity', () => {
     it('keeps the completed hook when both belong to the current run', () => {
       // The reported bug: nothing new started, so the hook is still the truth.
       const result = resolvePaneAgentIdentity({
-        evidence: shape(7, 7),
+        evidence: evidenceFor(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
       expect(result).toMatchObject({ agent: 'claude', source: 'completed-hook' })
@@ -63,7 +72,7 @@ describe('resolvePaneAgentIdentity', () => {
       // The legitimate reclaim: the pane was reused, so run 7's hook describes an agent that is
       // no longer there. It is ineligible, not merely outranked.
       const result = resolvePaneAgentIdentity({
-        evidence: shape(7, 8),
+        evidence: evidenceFor(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
       expect(result).toMatchObject({ agent: 'codex', source: 'title' })
@@ -73,11 +82,11 @@ describe('resolvePaneAgentIdentity', () => {
     it('produces opposite answers from identical evidence, given only the run ids', () => {
       // The whole point, stated as one assertion.
       const bug = resolvePaneAgentIdentity({
-        evidence: shape(7, 7),
+        evidence: evidenceFor(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
       const reclaim = resolvePaneAgentIdentity({
-        evidence: shape(7, 8),
+        evidence: evidenceFor(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
       expect(bug.agent).not.toBe(reclaim.agent)
@@ -151,6 +160,17 @@ describe('resolvePaneAgentIdentity', () => {
       expect(result.agent).toBeNull()
       expect(result.supersededSources).toEqual(['live-hook', 'title'])
     })
+  })
+
+  it('fails loudly when an evidence source is missing from the rank', () => {
+    expect(() =>
+      resolve([
+        {
+          source: 'future-source' as PaneAgentEvidence['source'],
+          agent: 'codex'
+        }
+      ])
+    ).toThrow('Unknown pane-agent evidence source')
   })
 
   describe('input order does not decide the answer', () => {

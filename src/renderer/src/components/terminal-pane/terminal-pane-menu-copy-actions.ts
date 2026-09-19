@@ -3,14 +3,15 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
-import { runCopyPaneId, runTerminalCopy } from './terminal-copy-rejection-guards'
+import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
+import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
     return
   }
   await runTerminalCopy({
-    selection: pane.terminal.getSelection(),
+    selection: readTerminalClipboardSelection(pane.terminal),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
     // Why: Radix returns focus to the menu trigger (the pane container) on
     // close, but xterm.js only accepts input when its own helper textarea is
@@ -27,10 +28,10 @@ export const copyTerminalPaneMenuPaneId = async (
   if (!pane) {
     return
   }
-  await runCopyPaneId({
+  await runTerminalIdentityCopy({
     // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
-    paneKey: makePaneKey(tabId, pane.leafId),
+    text: makePaneKey(tabId, pane.leafId),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
     onSuccess: () =>
       toast.success(
@@ -82,4 +83,36 @@ export const copyTerminalPaneMenuTerminalId = async (
   } finally {
     pane.terminal.focus()
   }
+}
+
+export const copyTerminalPaneMenuAgentSessionId = async (
+  pane: ManagedPane | null,
+  sessionId: string | null
+): Promise<void> => {
+  if (!pane) {
+    return
+  }
+  if (!sessionId) {
+    pane.terminal.focus()
+    return
+  }
+  await runTerminalIdentityCopy({
+    text: sessionId,
+    writeClipboardText: window.api.ui.writeTerminalClipboardText,
+    onSuccess: () =>
+      toast.success(
+        translate(
+          'components.terminalPane.TerminalContextMenu.copySessionIdSuccess',
+          'Session ID copied'
+        )
+      ),
+    onError: () =>
+      toast.error(
+        translate(
+          'components.terminalPane.TerminalContextMenu.copySessionIdError',
+          'Unable to copy session ID'
+        )
+      ),
+    focus: () => pane.terminal.focus()
+  })
 }

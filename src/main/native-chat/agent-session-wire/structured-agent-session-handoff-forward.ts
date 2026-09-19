@@ -12,7 +12,10 @@ import type {
   StructuredAgentSessionHandoffFlowContext,
   StructuredTuiOwner
 } from './structured-agent-session-handoff-types'
-import { StructuredTuiLaunchCleanupError } from './structured-agent-session-handoff-types'
+import {
+  StructuredTuiCatchupStoppedError,
+  StructuredTuiLaunchCleanupError
+} from './structured-agent-session-handoff-types'
 
 export async function handoffStructuredSessionToTui(
   context: StructuredAgentSessionHandoffFlowContext,
@@ -55,6 +58,7 @@ export async function handoffStructuredSessionToTui(
     operationId,
     now: deps.now()
   })
+  deps.acknowledgeNativeRelease?.(sessionId)
   context.publishStage(record, 'to-tui')
   if (nativeSuspend.state === 'stopped-cleanup-failed') {
     await markStructuredHandoffManualRecovery(context, sessionId, operationId)
@@ -74,7 +78,8 @@ export async function handoffStructuredSessionToTui(
   let owner: StructuredTuiOwner | null = null
   let processIdentityCommitted = false
   try {
-    await deps.prepareTuiHistoryCatchup?.(sessionId, record.lease.runtimeFence)
+    const prepared = await deps.prepareTuiHistoryCatchup?.(sessionId, record.lease.runtimeFence)
+    prepared?.throwIfAborted()
     owner = await deps.transport!.launchTui({
       record,
       fence: record.lease.runtimeFence,
@@ -90,6 +95,7 @@ export async function handoffStructuredSessionToTui(
         processIdentityCommitted = true
       }
     })
+    prepared?.throwIfAborted()
     if (!processIdentityCommitted) {
       await deps.store.commitProcessIdentity({
         sessionId,
@@ -126,6 +132,16 @@ export async function handoffStructuredSessionToTui(
           'The failed terminal launch could not be proven stopped.'
         )
       }
+    }
+    if (error instanceof StructuredTuiCatchupStoppedError && (owner || !processIdentityCommitted)) {
+      await abandonStoredAgentSessionHandoffAttempt(deps.store, {
+        sessionId,
+        expectedFence: record.lease.runtimeFence,
+        operationId,
+        recoverableRuntimeKind: 'native',
+        now: deps.now()
+      })
+      throw error
     }
     await recoverNativeAfterTuiFailure(context, sessionId, operationId)
     throw error

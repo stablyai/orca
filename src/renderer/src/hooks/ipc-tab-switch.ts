@@ -343,13 +343,18 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   if (terminalTabs.length === 0) {
     return false
   }
+  // Why: this list is pre-filtered to terminals, so the index search below has no type check to
+  // reject a stale terminal id — a structured tab must resolve to its own entity or the chord
+  // cycles from whichever terminal was last active.
+  const activeTab = store.getActiveTab(worktreeId)
   const currentId = getActiveEntityIdForTabType(
     store.activeTabType,
     store.activeTabId,
     store.activeFileId,
-    store.activeBrowserTabId
+    store.activeBrowserTabId,
+    activeTab?.contentType === 'agent-session' ? activeTab.entityId : null
   )
-  // Why: when an editor/browser tab is active, jump to the first terminal on
+  // Why: when an editor/browser/structured tab is active, jump to the first terminal on
   // forward navigation instead of skipping to index 1.
   const idx = terminalTabs.findIndex((t) => t.id === currentId)
   // Why: only no-op when the sole terminal is already focused. With one terminal

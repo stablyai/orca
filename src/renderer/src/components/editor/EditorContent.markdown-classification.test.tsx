@@ -9,8 +9,11 @@ const classifiers = vi.hoisted(() => ({
   exceedsSizeLimit: vi.fn<(content: string) => boolean>()
 }))
 
+// Why: the decision is what gets cached; the message is resolved from it per
+// read so it can follow the active UI language. The stub uses the message text
+// itself as the reason token so both seams stay observable.
 vi.mock('./markdown-rich-mode', () => ({
-  getMarkdownRichModeEligibility: ({
+  getMarkdownRichModeEligibilityDecision: ({
     content,
     sizeOverridden
   }: {
@@ -18,8 +21,9 @@ vi.mock('./markdown-rich-mode', () => ({
     sizeOverridden: boolean
   }) => ({
     exceedsSizeLimit: !sizeOverridden && classifiers.exceedsSizeLimit(content),
-    unsupportedMessage: classifiers.getUnsupportedMessage(content)
-  })
+    unsupportedReason: classifiers.getUnsupportedMessage(content)
+  }),
+  resolveMarkdownRichModeUnsupportedMessage: (reason: string | null) => reason
 }))
 
 vi.mock('./editor-lazy-views', () => {
@@ -71,6 +75,7 @@ vi.mock('@/store', () => {
 
 import { EditorContent } from './EditorContent'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
+import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-eligibility-cache'
 
 function openFile(
   language: 'markdown' | 'typescript' = 'markdown',
@@ -172,6 +177,7 @@ function getGuardedRenderModel({
 }
 
 beforeEach(() => {
+  resetMarkdownRichModeEligibilityCache()
   classifiers.getUnsupportedMessage.mockImplementation((content) =>
     content.includes('[reference]:') ? 'Reference links require source mode.' : null
   )
@@ -181,6 +187,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  resetMarkdownRichModeEligibilityCache()
 })
 
 describe('inline Markdown render classification', () => {

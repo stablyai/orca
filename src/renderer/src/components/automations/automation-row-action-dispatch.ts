@@ -12,6 +12,7 @@
 import type {
   Automation,
   AutomationRun,
+  AutomationRunsPage,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
@@ -25,6 +26,7 @@ import {
 import {
   deleteOwnedAutomation,
   listOwnedAutomationRuns,
+  listOwnedAutomationRunsPage,
   runOwnedAutomationNow,
   showOwnedAutomation,
   updateOwnedAutomation,
@@ -187,13 +189,31 @@ export async function dispatchAutomationReread(
 export async function dispatchAutomationRunHistory(
   context: AutomationDispatchContext,
   row: AutomationDispatchRow,
-  legacy: () => Promise<AutomationRun[]>
+  legacy: () => Promise<AutomationRun[]>,
+  authority: AutomationAuthorityRef = context.authority
 ): Promise<AutomationDispatchResult<AutomationRun[]>> {
   return await dispatch(
     context,
     row,
     'history',
-    (availability) => listOwnedAutomationRuns(availability, context.authority, row.automationId),
+    (availability) => listOwnedAutomationRuns(availability, authority, row.automationId),
+    legacy
+  )
+}
+
+export async function dispatchAutomationRunHistoryPage(
+  context: AutomationDispatchContext,
+  row: AutomationDispatchRow,
+  options: { limit?: number; cursor?: string },
+  legacy: () => Promise<AutomationRunsPage>,
+  authority: AutomationAuthorityRef = context.authority
+): Promise<AutomationDispatchResult<AutomationRunsPage>> {
+  return await dispatch(
+    context,
+    row,
+    'history',
+    (availability) =>
+      listOwnedAutomationRunsPage(availability, authority, row.automationId, options),
     legacy
   )
 }

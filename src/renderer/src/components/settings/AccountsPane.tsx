@@ -80,6 +80,8 @@ export function AccountsPane({
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
+  const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
+  const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
@@ -222,18 +224,23 @@ export function AccountsPane({
   const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
     try {
       const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
     } catch (error) {
       console.error('Failed to load MiniMax credential status:', error)
     }
   }
-  const { saveMiniMaxCookie, clearMiniMaxCookie } = createMiniMaxCredentialActions({
-    miniMaxCookieDraft,
-    setMiniMaxCookieDraft,
-    setMiniMaxConfigured,
-    setMiniMaxCredentialBusy,
-    recordFeatureInteraction
-  })
+  const { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey } =
+    createMiniMaxCredentialActions({
+      miniMaxCookieDraft,
+      setMiniMaxCookieDraft,
+      miniMaxApiKeyDraft,
+      setMiniMaxApiKeyDraft,
+      setMiniMaxApiKeyConfigured,
+      setMiniMaxConfigured,
+      setMiniMaxCredentialBusy,
+      recordFeatureInteraction
+    })
 
   useEffect(() => {
     void refreshMiniMaxCredentialStatus()
@@ -335,6 +342,11 @@ export function AccountsPane({
     runCodexAccountAction,
     recordOpenCodeSettingEdit,
     miniMaxRateLimits,
+    miniMaxApiKeyDraft,
+    setMiniMaxApiKeyDraft,
+    miniMaxApiKeyConfigured,
+    saveMiniMaxApiKey,
+    clearMiniMaxApiKey,
     miniMaxCookieDraft,
     setMiniMaxCookieDraft,
     miniMaxConfigured,

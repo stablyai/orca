@@ -235,3 +235,58 @@ describe('useAiVaultSessionWorktreeMap', () => {
     expect(elapsedMs).toBeLessThan(150)
   })
 })
+
+import { resolveAiVaultHistorySessionResumeState } from './ai-vault-session-resume'
+
+describe('lazy OMP child resume targets', () => {
+  it.each([worktreeA.id, worktreeB.id, null])(
+    'keeps child and grandchild in their own worktree with active %s',
+    (activeWorktreeId) => {
+      const parent = makeSession({ agent: 'omp', id: 'omp:parent', cwd: worktreeA.path })
+      const { result } = renderHook(() =>
+        useAiVaultSessionWorktreeMap({ sessions: [parent], repos, worktrees })
+      )
+      for (const id of ['child', 'grandchild']) {
+        const session = makeSession({
+          agent: 'omp',
+          id,
+          cwd: worktreeA.path,
+          subagent: { parentSessionId: parent.sessionId, agentType: null, status: null }
+        })
+        expect(result.current.has(id)).toBe(false)
+        const target = resolveAiVaultHistorySessionResumeState({
+          session,
+          worktreeInfo: result.current.get(id) ?? null,
+          activeWorktreeId,
+          worktrees,
+          repos
+        })
+        expect(target).toEqual({
+          blocked: false,
+          worktreeId: worktreeA.id,
+          usesSessionWorktree: true
+        })
+      }
+    }
+  )
+  it.each([{ cwd: null }, { cwd: '/missing' }, { executionHostId: 'ssh:other' as const }])(
+    'refuses unmatched child %j instead of active-workspace fallback',
+    (overrides) => {
+      const session = makeSession({
+        agent: 'omp',
+        cwd: worktreeA.path,
+        subagent: { parentSessionId: 'parent', agentType: null, status: null },
+        ...overrides
+      })
+      expect(
+        resolveAiVaultHistorySessionResumeState({
+          session,
+          worktreeInfo: null,
+          activeWorktreeId: worktreeB.id,
+          worktrees,
+          repos
+        })
+      ).toEqual({ blocked: true, worktreeId: null, usesSessionWorktree: false })
+    }
+  )
+})

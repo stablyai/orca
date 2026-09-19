@@ -821,7 +821,9 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     expect(persisted.sshRemotePtyLeases).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ptyId: 'pty-1', state: 'attached' }),
-        expect.objectContaining({ ptyId: 'pty-2', state: 'expired' }),
+        // An id-qualified reattach named this pty and succeeded, which is the one thing that can
+        // settle what `expired` meant: the client had lost its route, not that the shell died.
+        expect.objectContaining({ ptyId: 'pty-2', state: 'attached' }),
         expect.objectContaining({ ptyId: 'pty-3', state: 'detached' }),
         expect.objectContaining({ ptyId: 'pty-4', state: 'terminated' })
       ])

@@ -11,9 +11,8 @@ import type {
 } from './runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
-import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import type { WaitBlockedCheckState } from './wait-blocked-check-state'
 import type { createAgentStatusOscProcessor } from '../../shared/agent-status-osc'
-import { RuntimeAgentRowStore } from './runtime-agent-row-store'
 import { RuntimeTerminalViewSubscribers } from './runtime-terminal-view-subscribers'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 
@@ -94,16 +93,7 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
   // arbitrary, so running the identical computation over coalesced chunks at
   // a bounded cadence (plus a trailing-edge timer so burst-final state is
   // always evaluated) preserves semantics while removing it from the hot path.
-  protected waitBlockedCheckStateByPtyId = new Map<
-    string,
-    {
-      lastAt: number
-      lastWaitState: TerminalTailWaitState | null
-      appended: string
-      keywordCarry: string
-      timer: ReturnType<typeof setTimeout> | null
-    }
-  >()
+  protected waitBlockedCheckStateByPtyId = new Map<string, WaitBlockedCheckState>()
 
   protected agentStatusOscProcessorsByPtyId = new Map<
     string,
@@ -133,11 +123,6 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
   protected terminalCwdByPtyId = new Map<string, string>()
 
   protected terminalFileUriHostnameByPtyId = new Map<string, string>()
-
-  // Why: latest agent-status payload per pane, retained so worktree.ps can serve
-  // mobile the same inline agent rows the desktop sidebar renders. Cleared on pty
-  // teardown so dead agents don't linger. See RuntimeAgentRowSnapshot.
-  protected readonly agentRows = new RuntimeAgentRowStore()
 
   // Why: per-PTY hydration state guards against double-hydration. Keys:
   //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight

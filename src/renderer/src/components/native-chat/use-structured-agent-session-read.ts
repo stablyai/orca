@@ -20,13 +20,6 @@ function useReadOwnerSnapshot(
   return { owner, snapshot }
 }
 
-export function useStructuredAgentSessionReadObservation(args: {
-  sessionId: string
-  target: RuntimeClientTarget
-}): StructuredAgentSessionReadSnapshot {
-  return useReadOwnerSnapshot(args.sessionId, args.target).snapshot
-}
-
 export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget
@@ -36,19 +29,6 @@ export function useStructuredAgentSessionRead(args: {
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
 
   useEffect(() => (isVisible ? owner.activate() : undefined), [isVisible, owner])
-
-  useEffect(() => {
-    if (!isVisible) {
-      return
-    }
-    const refresh = (): void => {
-      if (document.hasFocus()) {
-        owner.refresh()
-      }
-    }
-    window.addEventListener('focus', refresh)
-    return () => window.removeEventListener('focus', refresh)
-  }, [isVisible, owner])
 
   return {
     state: snapshot.state,

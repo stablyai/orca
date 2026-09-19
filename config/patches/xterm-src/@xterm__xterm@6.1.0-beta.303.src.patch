@@ -1104,31 +1104,124 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
    }
  }
 diff --git a/src/common/SortedList.ts b/src/common/SortedList.ts
-index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..df0761c35907ddc48eb102ba181b0dac8e61f00d 100644
+index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e550d96f915 100644
 --- a/src/common/SortedList.ts
 +++ b/src/common/SortedList.ts
-@@ -87,6 +87,24 @@ export class SortedList<T> {
-     if (key === undefined) {
-       return false;
+@@ -22,7 +22,8 @@ export class SortedList<T> {
+   private readonly _flushInsertedTask: InstanceType<typeof IdleTaskQueue>;
+   private _isFlushingInserted = false;
+ 
+-  private readonly _deletedIndices: number[] = [];
++  private readonly _deletedIndices = new Set<number>();
++  private readonly _indicesByValue = new Map<T, number | number[]>();
+   private readonly _flushDeletedTask: InstanceType<typeof IdleTaskQueue>;
+   private _isFlushingDeleted = false;
+ 
+@@ -36,10 +37,11 @@ export class SortedList<T> {
+ 
+   public clear(): void {
+     this._array.length = 0;
++    this._indicesByValue.clear();
+     this._insertedValues.length = 0;
+     this._flushInsertedTask.clear();
+     this._isFlushingInserted = false;
+-    this._deletedIndices.length = 0;
++    this._deletedIndices.clear();
+     this._flushDeletedTask.clear();
+     this._isFlushingDeleted = false;
+   }
+@@ -69,6 +71,7 @@ export class SortedList<T> {
      }
-+    if (this._deleteAtKey(value, key)) {
-+      return true;
+ 
+     this._array = newArray;
++    this._rebuildIdentityIndex();
+     this._insertedValues.length = 0;
+   }
+ 
+@@ -78,54 +81,60 @@ export class SortedList<T> {
+     }
+   }
+ 
++  private _rebuildIdentityIndex(): void {
++    this._indicesByValue.clear();
++    // Reverse indices let duplicate identities remove their first occurrence in O(1).
++    for (let index = this._array.length - 1; index >= 0; index--) {
++      const value = this._array[index];
++      const indices = this._indicesByValue.get(value);
++      if (indices === undefined) {
++        this._indicesByValue.set(value, index);
++      } else if (typeof indices === 'number') {
++        this._indicesByValue.set(value, [indices, index]);
++      } else {
++        indices.push(index);
++      }
 +    }
-+    // A pending deletion whose key mutated after `delete()` (disposing a marker
-+    // resets `line` to -1, and `line` is the sort key) leaves `_array` out of
-+    // order, so the binary search above can miss a value that is present.
-+    // Compacting those entries out restores the order; retry before reporting
-+    // the value absent, else its `onDecorationRemoved` never fires and the
-+    // decoration paints forever. Miss path only, so the common bulk delete
-+    // keeps its O(log n) search and deferred-compaction batching.
-+    if (this._deletedIndices.length === 0) {
-+      return false;
-+    }
-+    this._flushCleanupDeleted();
-+    return this._deleteAtKey(value, key);
 +  }
 +
-+  private _deleteAtKey(value: T, key: number): boolean {
-     i = this._search(key);
-     if (i === -1) {
+   public delete(value: T): boolean {
+     this._flushCleanupInserted();
+-    if (this._array.length === 0) {
++    // Marker disposal mutates the sort key before removal; identity stays stable.
++    const indices = this._indicesByValue.get(value);
++    if (indices === undefined) {
        return false;
+     }
+-    const key = this._getKey(value);
+-    if (key === undefined) {
++    const index = typeof indices === 'number' ? indices : indices.pop();
++    if (index === undefined) {
+       return false;
+     }
+-    i = this._search(key);
+-    if (i === -1) {
+-      return false;
++    if (typeof indices === 'number' || indices.length === 0) {
++      this._indicesByValue.delete(value);
+     }
+-    if (this._getKey(this._array[i]) !== key) {
+-      return false;
++    if (this._deletedIndices.size === 0) {
++      this._flushDeletedTask.enqueue(() => this._flushDeleted());
+     }
+-    do {
+-      if (this._array[i] === value) {
+-        if (this._deletedIndices.length === 0) {
+-          this._flushDeletedTask.enqueue(() => this._flushDeleted());
+-        }
+-        this._deletedIndices.push(i);
+-        return true;
+-      }
+-    } while (++i < this._array.length && this._getKey(this._array[i]) === key);
+-    return false;
++    this._deletedIndices.add(index);
++    return true;
+   }
+ 
+   private _flushDeleted(): void {
+     this._isFlushingDeleted = true;
+-    const sortedDeletedIndices = this._deletedIndices.sort((a, b) => a - b);
+-    let sortedDeletedIndicesIndex = 0;
+-    const newArray = new Array(this._array.length - sortedDeletedIndices.length);
++    const newArray = new Array(this._array.length - this._deletedIndices.size);
+     let newArrayIndex = 0;
+     for (let i = 0; i < this._array.length; i++) {
+-      if (sortedDeletedIndices[sortedDeletedIndicesIndex] === i) {
+-        sortedDeletedIndicesIndex++;
+-      } else {
++      if (!this._deletedIndices.has(i)) {
+         newArray[newArrayIndex++] = this._array[i];
+       }
+     }
+     this._array = newArray;
+-    this._deletedIndices.length = 0;
++    this._rebuildIdentityIndex();
++    this._deletedIndices.clear();
+     this._isFlushingDeleted = false;
+   }
+ 
+   private _flushCleanupDeleted(): void {
+-    if (!this._isFlushingDeleted && this._deletedIndices.length > 0) {
++    if (!this._isFlushingDeleted && this._deletedIndices.size > 0) {
+       this._flushDeletedTask.flush();
+     }
+   }

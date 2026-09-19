@@ -339,7 +339,7 @@ function annotateMeasurement(
 }
 
 test.describe('Terminal foreground redraw freeze repro', () => {
-  test('Codex-style line rewrites request a visible row refresh', async ({
+  test('@headful Codex-style line rewrites request a visible row refresh', async ({
     orcaPage
   }, testInfo) => {
     await waitForSessionReady(orcaPage)

@@ -1,5 +1,5 @@
 import type { Repo } from '../../shared/repo-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { GitPushTarget } from '../../shared/worktree/types'
 
@@ -26,20 +26,41 @@ export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
   return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
+/**
+ * Options for `removeManagedWorktree`. Named rather than positional on purpose: three of the
+ * four are interchangeable booleans that each waive a different safety check on a destructive
+ * delete, so a transposition would silently delete a checkout the caller meant to protect.
+ */
+export type RemoveManagedWorktreeOptions = {
+  force?: boolean
+  runHooks?: boolean
+  /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
+  allowUnverifiedPtyStop?: boolean
+  /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
+  allowFailedArchiveHook?: boolean
+  hostId?: string
+}
+
 export function getRuntimeWorktreeRemovalOptionsKey(
-  force: boolean,
-  runHooks: boolean,
-  allowUnverifiedPtyStop: boolean
+  options: Pick<
+    RemoveManagedWorktreeOptions,
+    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
+  >
 ): string {
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
   // failed the PTY gate — it would inherit that failure instead of retrying.
-  const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
+  const ptyKey = options.allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
+  // Same reason for the archive waiver: a retry that waives the failed hook must not coalesce
+  // onto the in-flight attempt that is about to refuse on it.
+  const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
+  const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
-// host can adopt a legacy (unstamped) repo. But an unstamped repo with a connectionId is an SSH repo
-// (resolves to ssh:<id>), so it must not be adopted/matched by a runtime host at the same path.
+// host can adopt a legacy (unstamped) repo. A repo that names a host in *either* spelling matches
+// only that host — including its own ssh:<connectionId>, which an executionHostId-only comparison
+// used to reject, so an unstamped SSH repo failed to dedupe against itself.
 export function runtimeRepoMatchesExecutionHost(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   executionHostId?: ExecutionHostId | null
@@ -47,10 +68,10 @@ export function runtimeRepoMatchesExecutionHost(
   if (executionHostId == null) {
     return true
   }
-  if (repo.executionHostId != null) {
-    return repo.executionHostId === executionHostId
+  if (repo.executionHostId == null && repo.connectionId == null) {
+    return true
   }
-  return repo.connectionId == null
+  return getRepoExecutionHostId(repo) === executionHostId
 }
 
 export function parseExactWorktreeIdSelector(

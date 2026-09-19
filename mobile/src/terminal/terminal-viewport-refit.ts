@@ -4,9 +4,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 import { shouldRecoverTerminalOnAppStateChange } from './terminal-foreground-recovery'
+import { terminalViewportUpdate } from './mobile-terminal-operations'
 import {
-  isTerminalUpdateViewportApplied,
-  isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent,
   reduceTerminalFrameHeightRefit,
   resolveTerminalUpdateViewportCapability,
@@ -142,7 +141,7 @@ export function useTerminalViewportRefit(
           const deviceToken = deviceTokenRef.current
           if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
             try {
-              const response = await rpc.sendRequest('terminal.updateViewport', {
+              const reply = await terminalViewportUpdate.request(rpc, {
                 terminal: handle,
                 client: { id: deviceToken, type: 'mobile' as const },
                 viewport: dims
@@ -150,11 +149,11 @@ export function useTerminalViewportRefit(
               if (!isCurrentTarget()) {
                 return
               }
-              updateViewportCapabilityRef.current =
-                resolveTerminalUpdateViewportCapability(response)
-              if (isTerminalUpdateViewportUpdated(response)) {
+              updateViewportCapabilityRef.current = resolveTerminalUpdateViewportCapability(reply)
+              const outcome = terminalViewportUpdate.interpret(reply)
+              if (outcome?.updated) {
                 rpc.updateTerminalSubscriptionViewport(handle, dims)
-                if (isTerminalUpdateViewportApplied(response)) {
+                if (outcome.applied) {
                   // Why: updateViewport re-streams only the visible screen, so local scrollback stays wrapped at the old width — reflow it locally.
                   ref.reflow(dims.cols, dims.rows)
                 }

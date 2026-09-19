@@ -6,6 +6,7 @@ import {
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { AgentHookTarget } from '../shared/agent-hook-types'
 import { isManagedAgentHookTarget } from '../shared/managed-agent-hook-targets'
+import { parseClaudeCliVersion } from '../main/claude/claude-session-end-hook-capability'
 
 export type ManagedHookInstallSummary = {
   installers: number
@@ -17,6 +18,7 @@ export type ManagedHookRuntime = {
     signal?: AbortSignal
     hostKeyFingerprint?: string
     agents?: readonly AgentHookTarget[]
+    claudeVersion?: string
   }) => Promise<ManagedHookInstallSummary>
 }
 
@@ -41,6 +43,14 @@ function readAgents(params: unknown): AgentHookTarget[] {
   return [...new Set(raw)]
 }
 
+function readClaudeVersion(params: unknown): string | undefined {
+  const raw =
+    params !== null && typeof params === 'object' && 'claudeVersion' in params
+      ? params.claudeVersion
+      : null
+  return parseClaudeCliVersion(typeof raw === 'string' ? raw : null) ?? undefined
+}
+
 let managedHookRuntime: ManagedHookRuntime | null = null
 
 function loadManagedHookRuntime(): ManagedHookRuntime {
@@ -62,10 +72,12 @@ export function registerManagedHookInstaller(
       context.signal?.throwIfAborted()
       const hostKeyFingerprint = readHostKeyFingerprint(params)
       const agents = readAgents(params)
+      const claudeVersion = readClaudeVersion(params)
       return await loadRuntime().installManagedHooks({
         signal: context.signal,
         ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
-        agents
+        agents,
+        ...(claudeVersion ? { claudeVersion } : {})
       })
     }
   )

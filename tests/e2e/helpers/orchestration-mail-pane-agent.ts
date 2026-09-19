@@ -42,7 +42,12 @@ export type AgentLedgerEntry = {
 const AGENT_SOURCE = `
 const { appendFileSync, existsSync, readFileSync, statSync } = require('node:fs')
 
-const [ledgerPath, controlPath] = process.argv.slice(2)
+const [ledgerPath, controlPath, encodedReaction] = process.argv.slice(2)
+const reaction = encodedReaction
+  ? JSON.parse(Buffer.from(encodedReaction, 'base64').toString('utf8'))
+  : null
+let reactionSeen = ''
+let reacted = false
 
 function log(entry) {
   try {
@@ -60,7 +65,16 @@ if (process.stdin.isTTY) {
 }
 
 // Every byte orchestration pushes lands here — pointer text and Enter alike.
-process.stdin.on('data', (chunk) => log({ event: 'stdin', data: chunk.toString() }))
+process.stdin.on('data', (chunk) => {
+  const data = chunk.toString()
+  log({ event: 'stdin', data })
+  if (!reaction || reacted) return
+  reactionSeen = (reactionSeen + data).slice(-8192)
+  if (!reactionSeen.includes(reaction.needle)) return
+  reacted = true
+  process.stdout.write('\\u001b]0;' + reaction.title + '\\u0007')
+  log({ event: 'title', title: reaction.title })
+})
 process.stdin.resume()
 
 // No title is emitted until the test asks for one, so a pane can be held in the
@@ -101,6 +115,10 @@ export type MailPaneAgent = {
   titleEmitCount: () => number
 }
 
+type MailPaneAgentOptions = {
+  titleOnStdin?: { needle: string; title: string }
+}
+
 // Why worker exit and not a spec's afterAll: Playwright reuses a worker across
 // spec files, and a temp dir removed while another spec still polls its ledger
 // surfaces as an agent that mysteriously stopped reporting.
@@ -112,7 +130,7 @@ process.once('exit', () => {
 })
 
 /** One isolated agent: its own script copy, ledger, and control file. */
-export function createMailPaneAgent(): MailPaneAgent {
+export function createMailPaneAgent(options: MailPaneAgentOptions = {}): MailPaneAgent {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-mail-agent-'))
   agentDirs.push(dir)
   const scriptPath = path.join(dir, 'agent.cjs')
@@ -142,8 +160,12 @@ export function createMailPaneAgent(): MailPaneAgent {
       })
   }
 
+  const encodedReaction = Buffer.from(JSON.stringify(options.titleOnStdin ?? null)).toString(
+    'base64'
+  )
+
   return {
-    launchCommand: `node ${quote(scriptPath)} ${quote(ledgerPath)} ${quote(controlPath)}`,
+    launchCommand: `node ${quote(scriptPath)} ${quote(ledgerPath)} ${quote(controlPath)} ${quote(encodedReaction)}`,
     setTitle: (title: string) => writeFileSync(controlPath, title),
     readLedger,
     readStdin: () =>

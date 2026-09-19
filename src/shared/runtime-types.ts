@@ -160,6 +160,8 @@ export type {
   RuntimeTerminalOrphanTopologyGroup,
   RuntimeTerminalOrphanTopologyTab,
   RuntimeTerminalPresentation,
+  RuntimeTerminalPromptDelivery,
+  RuntimeTerminalPromptStage,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalResolvePane,
@@ -177,6 +179,7 @@ export type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition,
+  RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from './runtime-terminal-contracts'
 export type {

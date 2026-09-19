@@ -11,7 +11,11 @@ describe('MobileRelayBackgroundGraceTimer', () => {
     vi.useFakeTimers()
     const onExpired = vi.fn()
     const timer = new MobileRelayBackgroundGraceTimer(
-      { now: Date.now, setTimer: setTimeout, clearTimer: clearTimeout },
+      {
+        now: Date.now,
+        setTimer: (handler, ms) => setTimeout(handler, ms),
+        clearTimer: (handle) => clearTimeout(handle)
+      },
       onExpired
     )
 

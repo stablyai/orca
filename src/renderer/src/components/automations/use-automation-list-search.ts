@@ -61,7 +61,6 @@ export function useAutomationListSearch({
   selectExternalKey: (externalKey: string | null) => void
 }): {
   isListSearchQueryTooLarge: boolean
-  isListSearchActive: boolean
   filteredRows: readonly AutomationListRow[]
   filteredExternalAutomationEntries: readonly ExternalAutomationListEntry[]
   hasListItems: boolean
@@ -200,7 +199,6 @@ export function useAutomationListSearch({
 
   return {
     isListSearchQueryTooLarge,
-    isListSearchActive,
     filteredRows,
     filteredExternalAutomationEntries,
     hasListItems: hostRowCount > 0,

@@ -1,4 +1,4 @@
-import { getActiveMultiplexer } from '../ssh'
+import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
 
 export async function resolveRemoteHomePath(connectionId: string, path: string): Promise<string> {
   if (path !== '~' && path !== '~/' && !path.startsWith('~/')) {

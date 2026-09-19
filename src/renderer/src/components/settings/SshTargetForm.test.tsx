@@ -184,6 +184,34 @@ describe('SshTargetForm', () => {
     act(() => root.unmount())
   })
 
+  it('blocks a backdrop dismissal while the draft differs from the baseline', async () => {
+    const editTarget: EditingTarget = { ...EMPTY_FORM, label: 'dev-box', host: 'dev-box.lan' }
+    const onOpenChange = vi.fn()
+    const root = await renderForm({ open: false, onOpenChange })
+    await renderForm({ open: true, editingId: 'target-1', form: editTarget, onOpenChange }, root)
+    await renderForm(
+      {
+        open: true,
+        editingId: 'target-1',
+        form: { ...editTarget, host: 'other.lan' },
+        onOpenChange
+      },
+      root
+    )
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await act(async () => {
+      document.body.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true })
+      )
+      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    expect(onOpenChange).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
   it('opens Advanced by default when the target already has advanced values', async () => {
     const root = await renderForm({
       editingId: 'target-1',

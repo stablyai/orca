@@ -128,4 +128,34 @@ describe('SshRelaySession managed hooks', () => {
       muxRequestMock.mock.invocationCallOrder[managedIndex]
     )
   })
+
+  it('forwards the execution-host Claude version to the remote installer', async () => {
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return {
+          agents: ['claude'],
+          versions: { claude: '2.1.261 (Claude Code)' }
+        }
+      }
+      return method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
+        ? { installers: 1, errors: 0 }
+        : { ok: true }
+    })
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: establish only reads these mocked connection members in this harness.
+    const connection = {
+      sftp: vi.fn(),
+      getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(connection)
+    await vi.waitFor(() =>
+      expect(muxRequestMock).toHaveBeenCalledWith(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, {
+        hostKeyFingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        agents: ['claude'],
+        claudeVersion: '2.1.261'
+      })
+    )
+  })
 })

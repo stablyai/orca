@@ -18,6 +18,7 @@ function modelDescriptor(
     id: 'model',
     label: 'Model',
     valueSource,
+    transport: 'catalog',
     settable: true,
     kind: {
       type: 'select',

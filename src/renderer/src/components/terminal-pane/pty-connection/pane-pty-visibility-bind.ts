@@ -193,13 +193,18 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       // Do not strand a successful spawn because a delivery callback failed.
     }
   }
-  session.onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
+  session.onPtyRebind = (
+    ptyId: string,
+    replacedPtyId: string,
+    incarnationId?: string | null
+  ): void => {
     if (session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport) {
       return
     }
     if (!session.canAdoptCapturedDirectSshRetryPty(ptyId)) {
       return
     }
+    session.remotePtyIncarnationId = incarnationId ?? null
     // Why: provider handle rotation keeps the existing pane/session generation;
     // replace its stale store identity without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
@@ -224,9 +229,9 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
     session.deps.markWorktreeUnread(session.deps.worktreeId)
-    session.deps.markTerminalTabUnread(session.deps.tabId)
+    session.deps.markTerminalTabUnread(session.deps.tabId, 'terminal-bell')
     if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {
-      session.deps.markTerminalPaneUnread(session.cacheKey)
+      session.deps.markTerminalPaneUnread(session.cacheKey, 'terminal-bell')
     }
     // Why: agent CLIs often emit BEL in the same completion burst as their
     // working->idle title change. Delay only the OS notification so the richer

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SshGitProvider } from '../providers/ssh-git-provider'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache,
@@ -9,6 +10,9 @@ import {
   resetWslLinkedWorktreeGitRoutingForTests,
   seedWslLinkedWorktreeGitRoutingForTests
 } from './wsl-linked-worktree-git-routing'
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cache keys providers by reference only and never calls a method on them.
+const createProviderIdentity = (): SshGitProvider => ({}) as SshGitProvider
 
 describe('Git capability execution-host state', () => {
   beforeEach(() => {
@@ -32,8 +36,8 @@ describe('Git capability execution-host state', () => {
   })
 
   it('shares one SSH provider lifetime without leaking into a replacement provider', () => {
-    const provider = {}
-    const replacementProvider = {}
+    const provider = createProviderIdentity()
+    const replacementProvider = createProviderIdentity()
 
     expect(getSshGitCapabilityCache(provider)).toBe(getSshGitCapabilityCache(provider))
     expect(getSshGitCapabilityCache(provider)).not.toBe(

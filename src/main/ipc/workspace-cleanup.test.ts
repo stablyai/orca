@@ -55,7 +55,8 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  getSshGitProvider: getSshGitProviderMock,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH git provider unavailable'
 }))
 
 vi.mock('../project-runtime-git-options', () => ({

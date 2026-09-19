@@ -7,6 +7,7 @@ import {
   NATIVE_CHAT_SUPPORTED_AGENT_LIST
 } from '../../../../shared/native-chat-agent-support'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import en from '@/i18n/locales/en.json'
 import { i18n } from '@/i18n/i18n'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
@@ -69,9 +70,16 @@ describe('NativeChatSupportedAgents', () => {
   })
 
   it('keeps the label in the English catalog', () => {
-    expect(i18n.getResource('en', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBe(
-      'Supported agents:'
+    // Against en.json, not the runtime resource: the renderer only bundles the
+    // English entries i18next cannot rebuild from a call site default, and this
+    // label's default already spells the same string.
+    const value = SUPPORTED_AGENTS_LABEL_KEY.split('.').reduce<unknown>(
+      (node, part) =>
+        node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined,
+      en
     )
+
+    expect(value).toBe('Supported agents:')
   })
 
   it('renders the English fallback when the active locale lacks the label key', async () => {

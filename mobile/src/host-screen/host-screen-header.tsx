@@ -55,6 +55,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             state: connState,
             reconnectAttempts,
             lastConnectedAt,
+            hostName: state.hostName,
             ...relayRecovery
           })
           return (

@@ -121,3 +121,40 @@ export function parseNodeAbiMismatch(loaderError: string): { built: string; host
   const match = loaderError.match(/NODE_MODULE_VERSION\s+(\d+)\D+NODE_MODULE_VERSION\s+(\d+)/)
   return match ? { built: match[1], host: match[2] } : null
 }
+
+/**
+ * The architecture the loader refused, e.g. `incompatible architecture (have 'arm64',
+ * need 'x86_64')` -> { built: 'arm64', host: 'x86_64' }. ELF hosts name no architecture
+ * (`invalid ELF header`, `wrong ELF class: ELFCLASS32`), so both sides read null there —
+ * the verdict still holds, only the numbers are missing.
+ */
+export function parseIncompatibleArchitecture(
+  loaderError: string
+): { built: string | null; host: string | null } | null {
+  const machO = loaderError.match(
+    /incompatible architecture \(have '?([\w.]+)'?,?\s*need '?([\w.]+)'?/
+  )
+  if (machO) {
+    return { built: machO[1], host: machO[2] }
+  }
+  if (/invalid ELF header|wrong ELF class|Exec format error|ELFCLASS(?:32|64)/.test(loaderError)) {
+    return { built: null, host: null }
+  }
+  return null
+}
+
+/**
+ * The shared object the loader could not find, e.g.
+ * `libstdc++.so.6: cannot open shared object file` -> 'libstdc++.so.6'.
+ *
+ * Kept apart from the glibc floor deliberately: a missing library can be installed,
+ * whereas a symbol version that does not exist can only be fixed by rebuilding.
+ */
+export function parseMissingSharedLibrary(loaderError: string): string | null {
+  const elf = loaderError.match(/([\w.+-]+\.so[\w.]*): cannot open shared object file/)
+  if (elf) {
+    return elf[1]
+  }
+  const machO = loaderError.match(/Library not loaded:\s*(\S+)/)
+  return machO ? machO[1] : null
+}

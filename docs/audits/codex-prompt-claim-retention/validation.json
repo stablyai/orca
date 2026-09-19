@@ -1,0 +1,69 @@
+{
+  "backgroundLaunch": true,
+  "newRegressionCases": 4,
+  "before": {
+    "config": "docs/audits/codex-prompt-claim-retention/before.config.mjs",
+    "passed": 31,
+    "failed": 3,
+    "exitCode": 1,
+    "paths": [
+      "src/main/codex/codex-prompt-registry-retention.test.ts",
+      "src/main/codex/codex-structured-prompt-ownership.test.ts",
+      "src/main/codex/codex-structured-prompt-replies.test.ts"
+    ],
+    "expectedFailures": [
+      "releases 32 evicted claims only when their exact turn completes",
+      "preserves a replacement prompt and its active claim when the old turn completes",
+      "finds an evicted claim through its bounded turn digest"
+    ]
+  },
+  "after": {
+    "config": "config/vitest.config.ts",
+    "passed": 71,
+    "failed": 0,
+    "exitCode": 0,
+    "paths": [
+      "src/main/codex/codex-prompt-registry-retention.test.ts",
+      "src/main/codex/codex-structured-prompt-ownership.test.ts",
+      "src/main/codex/codex-structured-prompt-replies.test.ts",
+      "src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts",
+      "src/main/codex/codex-structured-journal-translation-settlement.test.ts",
+      "src/main/codex/codex-structured-session-close.test.ts"
+    ]
+  },
+  "typechecks": {
+    "command": "node config/scripts/run-typecheck-projects-in-parallel.mjs",
+    "projects": [
+      "config/tsconfig.node.json",
+      "config/tsconfig.tc.cli.json",
+      "config/tsconfig.tc.web.json"
+    ],
+    "exitCode": 0
+  },
+  "focusedOxlint": {
+    "ordinaryExitCode": 0,
+    "typeAwareExitCode": 0,
+    "noIgnore": true,
+    "files": 6
+  },
+  "changedCodeQuality": {
+    "command": "node config/scripts/check-changed-code-quality.mjs",
+    "base": "2fccacadbe23",
+    "changedFiles": 310,
+    "newFindings": 0,
+    "exitCode": 0
+  },
+  "proof": {
+    "command": "node --expose-gc --max-old-space-size=192 docs/audits/codex-prompt-claim-retention/reproduce.cjs",
+    "node": "26.6.0",
+    "electron": "43.7.0",
+    "electronNode": "24.21.0",
+    "bothExitCode": 0,
+    "beforeRetainedAfterExactCompletion": 32,
+    "afterRetainedAfterExactCompletion": 0,
+    "ordinaryPromptBytes": "not measured",
+    "payloadAmplification": false,
+    "ordering": "injected delayed child-turn completion, not an affected-host capture"
+  },
+  "formatCheckExitCode": 0
+}

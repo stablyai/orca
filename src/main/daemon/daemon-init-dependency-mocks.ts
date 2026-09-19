@@ -50,7 +50,8 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock,
     trackDaemonReplacedMock,
-    trackDaemonRetiredMock
+    trackDaemonRetiredMock,
+    trackDaemonAdoptedMock
   } = state
 
   // Why: both fakes are annotated with constructor types so the exported factories widen to
@@ -81,6 +82,9 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
           }
           if (result.mode) {
             this.handle.mode = result.mode
+          }
+          if (result.adopted) {
+            this.handle.adopted = true
           }
           return {
             socketPath: result.socketPath,
@@ -198,6 +202,9 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     daemonLifecycleEvent: () => ({
       trackDaemonReplaced: trackDaemonReplacedMock,
       trackDaemonRetired: trackDaemonRetiredMock
+    }),
+    daemonAdoptionTelemetryEvent: () => ({
+      trackDaemonAdopted: trackDaemonAdoptedMock
     }),
     daemonSpawner: () => ({
       DaemonSpawner: MockDaemonSpawner,

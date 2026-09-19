@@ -10,6 +10,7 @@ import {
   createStore,
   writeDataFile,
   readDataFile,
+  makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
 
@@ -53,6 +54,11 @@ describe('cross-host pane identity migration', () => {
   it('refuses hostless alias and acknowledgement rewrites for a tab id two partitions share', async () => {
     writeDataFile({
       schemaVersion: 1,
+      // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+      repos: [
+        makeRepo({ id: 'repo-local', path: '/repo-local' }),
+        makeRepo({ id: 'repo-a', path: '/repo-a' })
+      ],
       workspaceSession: makeLegacyPaneSession('repo-local', 'local-pty'),
       workspaceSessionsByHostId: {
         'ssh:host-a': makeLegacyPaneSession('repo-a', 'pty-a')

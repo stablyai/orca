@@ -6,10 +6,12 @@ import {
   toError
 } from './mobile-endpoint-supervisor-support'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
+import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
 import type { HostProfile } from './types'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
@@ -65,7 +67,7 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!this.args.controller.shouldTryGraceAfterRelayFailure(result.error)) {
+      if (!relayFailureAllowsGraceRetry(result.error)) {
         break
       }
       // Why: a rejected version stays invalid; retry only the grace credential.
@@ -100,7 +102,15 @@ export class MobileRelaySessionEstablisher {
     const session = args.openRelay(
       relay,
       credential,
-      `confirm-${encodeBase64Url(args.randomBytes(16))}`
+      `confirm-${encodeBase64Url(args.randomBytes(16))}`,
+      // Asserted on the controller's latch, not on the dial result: the close
+      // that carries the reason can land after this dial has already reported
+      // its failure. Only a connection retires it.
+      (reason) => {
+        if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
+          args.controller.assertHostReachability('signed-out')
+        }
+      }
     )
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.

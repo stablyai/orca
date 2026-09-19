@@ -12,6 +12,10 @@ import {
 } from './floating-terminal-panel-test-fixtures'
 import { mocks, setupFloatingTerminalPanelTest } from './floating-terminal-panel-test-harness'
 import {
+  RENAME_TERMINAL_TAB_EVENT,
+  type RenameTerminalTabDetail
+} from '@/components/tab-bar/terminal-tab-rename-request'
+import {
   attachRef,
   bindFocusedFloatingPanelKeydown,
   findByProp,
@@ -158,6 +162,15 @@ vi.mock('./FloatingTerminalWindowControls', async () => {
 vi.mock('@/components/ShortcutKeyCombo', async () => {
   return (await import('./floating-terminal-panel-component-stubs')).createShortcutKeyComboModule()
 })
+
+/** Tab ids the panel asked to rename, in dispatch order. */
+function dispatchedRenameTabIds(): string[] {
+  return vi
+    .mocked(window.dispatchEvent)
+    .mock.calls.map(([event]) => event as CustomEvent<RenameTerminalTabDetail>)
+    .filter((event) => event.type === RENAME_TERMINAL_TAB_EVENT)
+    .map((event) => event.detail.tabId)
+}
 
 describe('FloatingTerminalPanel close behavior', () => {
   beforeEach(setupFloatingTerminalPanelTest)
@@ -434,7 +447,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(preventDefault).toHaveBeenCalledWith()
     expect(stopPropagation).toHaveBeenCalledWith()
     expect(stopImmediatePropagation).toHaveBeenCalledWith()
-    expect(mocks.setRenamingTabId).toHaveBeenCalledWith('tab-1')
+    expect(dispatchedRenameTabIds()).toEqual(['tab-1'])
     expect(mocks.setTabCustomTitle).not.toHaveBeenCalled()
   })
 
@@ -607,7 +620,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       })
     )
 
-    expect(mocks.setRenamingTabId).not.toHaveBeenCalled()
+    expect(dispatchedRenameTabIds()).toEqual([])
   })
 
   it('leaves focused floating xterm tab index shortcuts to terminal-first terminals', async () => {

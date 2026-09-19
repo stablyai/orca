@@ -25,6 +25,9 @@ function mergeBatch(
   }
   return {
     type: 'batch',
+    ...(right.commands !== undefined || left.commands !== undefined
+      ? { commands: right.commands !== undefined ? right.commands : left.commands }
+      : {}),
     sessionId: right.sessionId,
     batch: {
       cursor: right.batch.cursor,
@@ -35,7 +38,18 @@ function mergeBatch(
     ...(right.fence !== undefined || left.fence !== undefined
       ? { fence: right.fence ?? left.fence }
       : {}),
-    ...(right.handoff || left.handoff ? { handoff: right.handoff ?? left.handoff } : {})
+    ...(right.handoff || left.handoff ? { handoff: right.handoff ?? left.handoff } : {}),
+    ...(right.backgroundTasks !== undefined || left.backgroundTasks !== undefined
+      ? {
+          backgroundTasks:
+            right.backgroundTasks !== undefined
+              ? right.backgroundTasks
+              : (left.backgroundTasks ?? null)
+        }
+      : {}),
+    ...(right.activity !== undefined || left.activity !== undefined
+      ? { activity: right.activity !== undefined ? right.activity : (left.activity ?? null) }
+      : {})
   }
 }
 

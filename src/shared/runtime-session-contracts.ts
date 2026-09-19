@@ -78,6 +78,8 @@ export type RuntimeStatus = {
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number
   }
+  /** True only when this Windows host can prove process creation times for PID ownership. */
+  windowsProcessStartTimeAvailable?: boolean
   /**
    * Optional for mixed-version peers. Absence means the host predates structured
    * degradation reporting, not that the host proved every optional feature available.
@@ -141,6 +143,8 @@ export type RuntimeSyncedLeaf = {
   ptyId: string | null
   paneTitle?: string | null
   title?: string | null
+  /** True when this leaf is retained by a parked PTY watcher, not mounted in the renderer. */
+  parked?: boolean
 }
 
 export type RuntimeSyncWindowGraph = {
@@ -215,6 +219,8 @@ export const UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH = 'none'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
+  /** Immutable catalog identity used to fence snapshots across path reuse. */
+  worktreeInstanceId?: string
   publicationEpoch: string
   snapshotVersion: number
   activeGroupId: string | null

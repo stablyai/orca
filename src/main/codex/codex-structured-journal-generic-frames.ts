@@ -64,19 +64,24 @@ export class CodexJournalGenericFrames {
     threadId = 'session'
   ): CodexJournalTranslationAdmission {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+    // A frame the classifier declines is deliberately not journaled, which is success.
+    // Failing admission here force-closes the provider through the retry queue.
     if (!translated) {
-      return { accepted: false, reason: 'untranslated' }
+      return CODEX_JOURNAL_ADMITTED
     }
     const turnId = readCodexTurnId(payload) ?? this.activeTurn(threadId) ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
     const rowCount = this.genericRowsByTurn.get(bucket) ?? 0
-    if (rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
+    // The cap bounds noise, never evidence: an error frame is always journaled, and
+    // capped frames stay countable through one summary row per turn.
+    const isError = translated.classification === 'error-surface'
+    if (!isError && rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
       this.addSuppressed(bucket, 1)
       this.recordBucket(bucket)
       this.scheduleSuppressedRows()
       return CODEX_JOURNAL_ADMITTED
     }
-    if (translated.classification === 'error-surface') {
+    if (isError) {
       const suppressionAdmission = this.flush()
       if (!suppressionAdmission.accepted) {
         return suppressionAdmission
@@ -86,13 +91,11 @@ export class CodexJournalGenericFrames {
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(
           { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
-          translated.body,
-          translated.blobs
+          translated.body
         )
       : (this.deps.sink.appendItem(
           { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
-          translated.body,
-          translated.blobs
+          translated.body
         ),
         CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
@@ -131,13 +134,11 @@ export class CodexJournalGenericFrames {
               kind: 'status',
               text
             },
-            [],
             { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
           )
         : (this.deps.sink.appendItem(
             { provider: 'orca', clientMessageId: `provider-frame-suppressed:codex:${bucket}` },
             { kind: 'status', text },
-            [],
             { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
           ),
           CODEX_JOURNAL_ADMITTED)

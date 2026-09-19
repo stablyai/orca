@@ -651,4 +651,52 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
     expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
   })
+
+  it('removes an ssh folder workspace from the partition that owns it', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote',
+      parentPath: '/remote/platform',
+      createdFrom: 'folder-scan',
+      connectionId: 'target-1'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Remote fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [key]: [makeTerminalTab({ id: 'remote-folder-tab', worktreeId: key })] }
+      },
+      'ssh:target-1'
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    // Boot enumerates partitions from persistence itself, so a row left in `ssh:target-1` comes
+    // back on the next launch as a workspace the user already deleted.
+    expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
+  })
+
+  it('removes a deleted project group’s folder workspaces from every partition', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote group',
+      parentPath: '/remote/group',
+      createdFrom: 'folder-scan',
+      connectionId: 'target-1'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Group fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [key]: [makeTerminalTab({ id: 'group-folder-tab', worktreeId: key })] }
+      },
+      'ssh:target-1'
+    )
+
+    expect(store.deleteProjectGroup(group.id)).toBe(true)
+
+    expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
+  })
 })

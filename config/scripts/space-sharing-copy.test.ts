@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,6 +19,7 @@ import {
   copyPrivateTree,
   hardlinkTree,
   makeTreeReadOnly,
+  makeTreeWritable,
   shareTree
 } from './space-sharing-copy.mjs'
 
@@ -145,6 +147,16 @@ describe('makeTreeReadOnly', () => {
     expect(readFileSync(path.join(source, 'nested', 'file'), 'utf8')).toBe('contents')
   })
 
+  it.runIf(process.platform !== 'win32')('preserves setuid, which chrome-sandbox needs', () => {
+    const { source } = makeTree()
+    const sandbox = path.join(source, 'chrome-sandbox')
+    writeFileSync(sandbox, 'binary')
+    chmodSync(sandbox, 0o4755)
+    makeTreeReadOnly(source)
+    expect(statSync(sandbox).mode & 0o4000).toBe(0o4000)
+    expect(statSync(sandbox).mode & 0o222).toBe(0)
+  })
+
   it.runIf(process.platform !== 'win32')(
     'keeps the executable bit, which Electron needs to launch',
     () => {
@@ -159,7 +171,41 @@ describe('makeTreeReadOnly', () => {
   )
 })
 
+describe('makeTreeWritable', () => {
+  it.runIf(process.platform !== 'win32')('undoes makeTreeReadOnly for the owner', () => {
+    const { source } = makeTree()
+    makeTreeReadOnly(source)
+    makeTreeWritable(source)
+    const file = path.join(source, 'nested', 'file')
+    expect(statSync(file).mode & 0o200).toBe(0o200)
+    expect(() => writeFileSync(file, 'mutated')).not.toThrow()
+  })
+
+  it.runIf(process.platform !== 'win32')('adds no write permission beyond the owner', () => {
+    const { source } = makeTree()
+    const executable = path.join(source, 'electron')
+    writeFileSync(executable, 'binary')
+    chmodSync(executable, 0o555)
+    makeTreeWritable(source)
+    expect(statSync(executable).mode & 0o777).toBe(0o755)
+  })
+})
+
 describe('copyPrivateTree', () => {
+  it.runIf(process.platform !== 'win32')(
+    'hands back a tree the caller can patch, even from a write-protected source',
+    () => {
+      const { root, source } = makeTree()
+      const destination = path.join(root, 'private')
+      makeTreeReadOnly(source)
+      copyPrivateTree(source, destination)
+      // The regression this guards: the shared Electron dist is read-only, clonefile/reflink/cpSync
+      // all carry that across, and `pn dev` then died patching the copied bundle's Info.plist.
+      expect(() => writeFileSync(path.join(destination, 'nested', 'file'), 'patched')).not.toThrow()
+      expect(readFileSync(path.join(source, 'nested', 'file'), 'utf8')).toBe('contents')
+    }
+  )
+
   it('never hardlinks, because the caller patches what it gets back', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'private')

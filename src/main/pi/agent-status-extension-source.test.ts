@@ -195,15 +195,16 @@ describe('getPiAgentStatusExtensionSource', () => {
   it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
     const harness = createHarness({ kind: 'omp' })
     let sessionId = 'omp-session-8'
-    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => '/tmp/s' }
+    let sessionFile: string | undefined = '/tmp/s'
+    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => sessionFile }
 
     await harness.callHook('agent_start', undefined, { sessionManager })
     sessionId = 'omp-session-9'
     await harness.callHook('before_agent_start', { prompt: 'hi' }, { sessionManager })
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-    await harness.callHook('agent_end', undefined, {
-      sessionManager: { getSessionId: () => 'omp-ephemeral' }
-    })
+    sessionId = 'omp-ephemeral'
+    sessionFile = undefined
+    await harness.callHook('agent_end', undefined, { sessionManager })
 
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
     expect(
@@ -236,21 +237,17 @@ describe('getPiAgentStatusExtensionSource', () => {
         )
       })
 
-      await harness.callHook('agent_start', undefined, {
-        sessionManager: {
-          getSessionId: () => 'omp-session-8',
-          getSessionFile: () => '/tmp/omp-session-8.jsonl'
-        }
-      })
+      let sessionId = 'omp-session-8'
+      const sessionManager = {
+        getSessionId: () => sessionId,
+        getSessionFile: () => '/tmp/session.jsonl'
+      }
+      await harness.callHook('agent_start', undefined, { sessionManager })
+      sessionId = 'omp-session-9'
       await harness.callHook(
         'message_end',
         { message: { role: 'assistant', content: 'done' } },
-        {
-          sessionManager: {
-            getSessionId: () => 'omp-session-9',
-            getSessionFile: () => '/tmp/omp-session-9.jsonl'
-          }
-        }
+        { sessionManager }
       )
       await harness.callHook('message_end', { message: { role: 'user', content: 'next' } }, {})
 
@@ -349,6 +346,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(command).toBe('/mnt/c/Windows/System32/curl.exe')
     expect(args).toEqual([
       '-sS',
+      '--fail',
       '--connect-timeout',
       '3',
       '--max-time',
@@ -481,12 +479,14 @@ describe('getPiAgentStatusExtensionSource', () => {
     await handlerCall
   })
 
-  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', () => {
+  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', async () => {
     const harness = createHarness({ kind: 'pi' })
 
-    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY
-    // stays alive. agent_end is the only extension event that proves done.
-    expect(harness.handlers.session_shutdown).toBeUndefined()
+    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY stays
+    // alive. agent_end is the only extension event that proves done, so the handler
+    // exists solely to release a dialog Pi tore down without a close.
+    await harness.callHook('session_shutdown')
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
   it('bounds stalled delivery to one active request and the latest pending status', async () => {

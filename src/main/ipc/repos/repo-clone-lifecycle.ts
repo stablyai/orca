@@ -17,6 +17,7 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey
 } from '../../git/repo-clone-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
@@ -257,7 +258,11 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             return existing
           }
 
-          const detected = await detectRepoIconAndUpstream({ repoPath: clonePath, kind: 'git' })
+          const detected = await detectRepoIconAndUpstream({
+            repoPath: clonePath,
+            kind: 'git',
+            executionHostId: LOCAL_EXECUTION_HOST_ID
+          })
           const repo: Repo = {
             id: randomUUID(),
             path: clonePath,

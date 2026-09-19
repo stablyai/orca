@@ -18,6 +18,8 @@ import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recov
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
 import { serializeTerminalCheckpointWithinLimit } from './terminal-checkpoint-serializer'
+import { PRIVATE_FILE_MODE, tightenPathMode } from './daemon-private-file-modes'
+import { tightenTerminalHistorySessionDirMode } from './terminal-history-session-files'
 
 // Why 5MB: bounds cold-restore replay time and per-session disk; hitting the cap triggers one checkpoint that resets the log.
 const LOG_MAX_BYTES = 5 * 1024 * 1024
@@ -37,6 +39,8 @@ export class TerminalHistorySessionWriter {
     this.logPath = join(dir, 'output.log')
     this.logGeneration = fresh ? 0 : null
     this.logBytes = fresh ? 0 : null
+    // Why here: a warm attach reuses files an older daemon created at umask, which `mode` cannot fix.
+    tightenTerminalHistorySessionDirMode(dir)
   }
 
   async appendIncrements(
@@ -50,10 +54,12 @@ export class TerminalHistorySessionWriter {
       return 'needs-checkpoint'
     }
     if (this.logBytes === 0) {
-      await fsPromises.writeFile(this.logPath, encodeLogHeader(this.logGeneration ?? 0))
+      await fsPromises.writeFile(this.logPath, encodeLogHeader(this.logGeneration ?? 0), {
+        mode: PRIVATE_FILE_MODE
+      })
       this.logBytes = LOG_HEADER_BYTES
     }
-    await fsPromises.appendFile(this.logPath, batch)
+    await fsPromises.appendFile(this.logPath, batch, { mode: PRIVATE_FILE_MODE })
     this.logBytes = (this.logBytes ?? LOG_HEADER_BYTES) + batch.length
     return 'ok'
   }
@@ -87,9 +93,14 @@ export class TerminalHistorySessionWriter {
       }
     }
     const tmpPath = `${this.checkpointPath}.tmp`
-    await fsPromises.writeFile(tmpPath, data)
+    // Mode on the tmp file, not after the rename: the checkpoint is never briefly world-readable.
+    await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
+    // A tmp left behind by a pre-fix crash is reused in place, where `mode` no longer applies.
+    tightenPathMode(tmpPath, PRIVATE_FILE_MODE)
     await fsPromises.rename(tmpPath, this.checkpointPath)
-    await fsPromises.writeFile(this.logPath, encodeLogHeader(generation))
+    await fsPromises.writeFile(this.logPath, encodeLogHeader(generation), {
+      mode: PRIVATE_FILE_MODE
+    })
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
     clearTerminalHistoryRecoveryProtection(this.dir)

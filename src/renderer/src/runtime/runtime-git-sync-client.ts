@@ -72,6 +72,7 @@ export async function fetchRuntimeGit(
     await window.api.git.fetch({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
+      ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
       ...(pushTarget ? { pushTarget } : {})
     })
     return
@@ -116,6 +117,7 @@ export async function pullRuntimeGit(
     await window.api.git.pull({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
+      ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
       ...(pushTarget ? { pushTarget } : {})
     })
     return
@@ -140,6 +142,7 @@ export async function fastForwardRuntimeGit(
     await window.api.git.fastForward({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
+      ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
       ...(pushTarget ? { pushTarget } : {})
     })
     return
@@ -185,6 +188,7 @@ export async function pushRuntimeGit(
     await window.api.git.push({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
+      ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
       ...(args.publish !== undefined ? { publish: args.publish } : {}),
       ...(args.pushTarget !== undefined ? { pushTarget: args.pushTarget } : {}),
       ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {})

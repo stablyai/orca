@@ -39,11 +39,13 @@ export function useEmulatorPaneSession({
   const configuredDefaultUdid = useAppStore(
     (state) => state.settings?.mobileEmulatorDefaultDeviceUdid ?? null
   )
-  const prelaunchedSessionRef = useRef<EmulatorPaneSession['info'] | null>(
+  // Why the lazy initializer: the consume deletes the handoff entry, and a `useRef(expr)` argument
+  // re-runs every render — so a prelaunch registered after mount was consumed and then discarded.
+  const [prelaunchedSession] = useState<EmulatorPaneSession['info'] | null>(() =>
     consumePrelaunchedSimulatorSession(worktreeId)
   )
   const prelaunchedState = buildPrelaunchedEmulatorSessionState(
-    prelaunchedSessionRef.current,
+    prelaunchedSession,
     configuredDefaultUdid
   )
   const [selectedUdid, setSelectedUdid] = useState<string | null>(prelaunchedState.selectedUdid)

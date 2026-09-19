@@ -1,3 +1,7 @@
+import type {
+  RuntimeHostStatusSnapshot,
+  RuntimeHostStatusResponse
+} from '../../../../shared/runtime-host-status'
 import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
 import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
@@ -30,6 +34,43 @@ export const webRuntimeState: {
   cachedDetectedWorktrees: null
 }
 
+const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
+export function subscribeWebRuntimeStatus(
+  callback: (snapshot: RuntimeHostStatusSnapshot) => void
+): () => void {
+  statusListeners.add(callback)
+  return () => {
+    statusListeners.delete(callback)
+  }
+}
+export function readWebRuntimeStatusSnapshots(): RuntimeHostStatusSnapshot[] {
+  const snapshot = webRuntimeState.activeClient?.statusOwner?.read()
+  return snapshot ? [snapshot] : []
+}
+export async function observeWebRuntimeStatus(
+  selector: string,
+  timeoutMs?: number
+): Promise<RuntimeHostStatusResponse> {
+  const environment = resolveEnvironment(selector)
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
+  const existing = webRuntimeState.activeClient?.statusOwner
+  if (existing) {
+    return existing.refresh({ timeoutMs, observeOnly: true })
+  }
+  const transient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
+    reconnect: false
+  })
+  try {
+    return (await transient.call('status.get', undefined, {
+      timeoutMs
+    })) as RuntimeHostStatusResponse
+  } finally {
+    transient.close()
+  }
+}
+
 export const manuallyDisconnectedEnvironmentIds = new Set<string>()
 
 export const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
@@ -50,7 +91,18 @@ export function getClientForEnvironment(
     webRuntimeState.activeClientEnvironmentId !== environment.id
   ) {
     webRuntimeState.activeClient?.close()
-    webRuntimeState.activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment))
+    webRuntimeState.activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
+      status: {
+        environmentId: environment.id,
+        pairingRevision: environment.pairingRevision ?? environment.createdAt,
+        publish: (snapshot) => {
+          for (const listener of statusListeners) {
+            listener(snapshot)
+          }
+        },
+        verified: (response) => updateEnvironmentFromResponse(environment, response)
+      }
+    })
     webRuntimeState.activeClientEnvironmentId = environment.id
   }
   return webRuntimeState.activeClient

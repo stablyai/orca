@@ -1,3 +1,4 @@
+import { ownRetainedString } from './own-retained-string'
 import { parseTerminalKittyKeyboardFlags } from './terminal-kitty-keyboard-flags'
 
 // Why: PTY/SSH chunks can split an escape sequence before its final byte.
@@ -308,7 +309,7 @@ export class TerminalKittyKeyboardModeTracker {
     if (body === null) {
       return ''
     }
-    return this.isIncompleteSequenceBody(body) ? tail : ''
+    return this.isIncompleteSequenceBody(body) ? ownRetainedString(tail) : ''
   }
 
   private isIncompleteSequenceBody(body: string): boolean {

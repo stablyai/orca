@@ -5,6 +5,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles,
@@ -25,6 +26,8 @@ export type RuntimeFileListState = {
   loading: boolean
   loadError: string | null
   truncated?: boolean
+  /** Query that produced `files`; null means a request is still settling. */
+  resolvedQuery?: string | null
   operationOwner?: FileExplorerOperationOwner
 }
 
@@ -144,6 +147,7 @@ export function useRuntimeFileListForWorktree({
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
+  const [resolvedQuery, setResolvedQuery] = useState<string | null | undefined>(undefined)
   const [listedOperationOwner, setListedOperationOwner] = useState<FileExplorerOperationOwner>({
     kind: 'unresolved'
   })
@@ -204,7 +208,7 @@ export function useRuntimeFileListForWorktree({
   useEffect(() => {
     if (!enabled) {
       setLoading(false)
-      setTruncated(false)
+      setResolvedQuery(null)
       setListedOperationOwner({ kind: 'unresolved' })
       return
     }
@@ -212,9 +216,10 @@ export function useRuntimeFileListForWorktree({
     if (!target.canList || !worktreeId || !worktreePath || !operationRouteAvailable) {
       setFiles([])
       setListedOperationOwner({ kind: 'unresolved' })
-      setLoadError(operationRouteAvailable ? null : getFileExplorerOwnerUnresolvedMessage())
+      setLoadError(!operationRouteAvailable ? getFileExplorerOwnerUnresolvedMessage() : null)
       setLoading(false)
       setTruncated(false)
+      setResolvedQuery(null)
       return
     }
 
@@ -222,6 +227,7 @@ export function useRuntimeFileListForWorktree({
     const requestKeyChanged = lastRequestKeyRef.current !== requestKey
     if (requestKeyChanged) {
       setFiles([])
+      setResolvedQuery(null)
     }
     lastRequestKeyRef.current = requestKey
     setLoadError(null)
@@ -230,6 +236,7 @@ export function useRuntimeFileListForWorktree({
     if (usesRuntimePathSearch && (remoteQuery.length === 0 || remoteQueryTooLarge)) {
       setFiles([])
       setLoading(false)
+      setResolvedQuery(remoteQuery)
       setListedOperationOwner(operationOwnerRef.current)
       return
     }
@@ -261,14 +268,22 @@ export function useRuntimeFileListForWorktree({
           rootPath: worktreePath,
           excludePaths,
           requestToken,
+          maxResults: QUICK_OPEN_LISTING_MAX_RESULTS,
           signal: requestAbortController.signal
-        }).then((files) => ({ files, truncated: false }))
+        }).then((files) => ({
+          // #12547: naming the cap is what makes a full page readable as "there is more". Reporting
+          // false unconditionally is what made the truncation silent — the host bounds the scan to
+          // the cap it is given, so a full page means there are more paths behind it.
+          files,
+          truncated: files.length >= QUICK_OPEN_LISTING_MAX_RESULTS
+        }))
 
     void request
       .then((result) => {
         if (!cancelled) {
           setFiles(result.files)
           setTruncated(result.truncated)
+          setResolvedQuery(usesRuntimePathSearch ? remoteQuery : undefined)
           setListedOperationOwner(requestOperationOwner)
         }
       })
@@ -276,6 +291,7 @@ export function useRuntimeFileListForWorktree({
         if (!cancelled) {
           setFiles([])
           setTruncated(false)
+          setResolvedQuery(usesRuntimePathSearch ? remoteQuery : null)
           setLoadError(cleanRuntimeFileListError(error))
         }
       })
@@ -315,6 +331,7 @@ export function useRuntimeFileListForWorktree({
     loading: loading || connectionPending,
     loadError,
     truncated,
+    resolvedQuery,
     operationOwner: listedOperationOwner
   }
 }

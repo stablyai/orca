@@ -1,4 +1,3 @@
-import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -28,6 +27,7 @@ import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
 import type { GitOperationApi } from './api/git-operation-api'
+import type { GithubAccountApi } from './api/github-account-api'
 import type { GithubPullRequestApi } from './api/github-pull-request-api'
 import type { GithubWorkItemApi } from './api/github-work-item-api'
 import type { GitLabApi } from './api/gitlab-api'
@@ -84,7 +84,7 @@ export type PreloadApi = {
   feedback: FeedbackApi
   crashReports: CrashReportsApi
   export: ExportApi
-  gh: Merged<GithubPullRequestApi & GithubWorkItemApi>
+  gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi>
   hostedReview: HostedReviewApi
   gl: GitLabApi
   bitbucket: BitbucketApi
@@ -205,7 +205,6 @@ export type {
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
-    electron: ElectronAPI
     api: PreloadApi
   }
 }

@@ -8,10 +8,11 @@
  *  frames to ~350 KB, so a full-cap response takes the control lane instead.
  *
  *  The control lane is a shared budget, not a per-frame one: two full-cap
- *  responses fit alongside each other, and the third overflows -- which for a
- *  response is fatal, it closes the client. That is the same exposure every
- *  control-lane response already carries (`fs.readFile` frames any sub-1 MiB
- *  file the same way), and the two-deep headroom is pinned by a test. Widening
+ *  responses fit alongside each other, and the third is refused. That refusal
+ *  costs the one request -- `sendResponse` admits responses with
+ *  `controlOverflow: 'reject'` and substitutes a `ResponseOverCapacity` error
+ *  rather than closing the connection -- but it still turns on unrelated load,
+ *  so the two-deep headroom that keeps it rare is pinned by a test. Widening
  *  the cap spends that headroom, so bigger transfers belong on the ack-paced
  *  bulk lane (`fs.readFileStream`) rather than on a wider window here.
  *

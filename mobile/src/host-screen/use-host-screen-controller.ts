@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useLocalSearchParams, usePathname, useRouter } from 'expo-router'
+import { useLocalSearchParams, usePathname } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/HostProtocolGate'
 import { visibleHostRouteNotice } from '../host-route-notice'
@@ -14,6 +15,7 @@ import {
   useRelayRecoveryStatus
 } from '../transport/client-context-connection-metrics'
 import { applyWorktreeRowDisplayState } from '../worktree/worktree-host-row-identity'
+import { applyWorktreeHostContextLabels } from '../worktree/worktree-host-context-labels'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenIdentity } from './use-host-screen-identity'
@@ -43,7 +45,10 @@ export function useHostScreenController({
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
-  const router = useRouter()
+  // Not `useRouter` directly: the list is the one screen that also runs inside the shell's page,
+  // where a route it does not render is handed back to the app rather than pushed into this
+  // document. On a phone this is the router and nothing else.
+  const router = useRouteHandoff()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
   // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
@@ -95,17 +100,23 @@ export function useHostScreenController({
     // Why: live `worktrees` is authoritative only while connected; under the amber
     // mount default, connecting/handshaking must keep the pre-reconnect list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
-    return applyWorktreeRowDisplayState(
-      base,
-      state.sleptIds,
-      state.optimisticActiveWorktreeIdentity
+    return applyWorktreeHostContextLabels(
+      applyWorktreeRowDisplayState(base, state.sleptIds, state.optimisticActiveWorktreeIdentity),
+      {
+        repoHostIdByRepoId: state.repoHostIdByRepoId,
+        hostLabelById: state.hostLabelById,
+        hostPlatform: state.hostPlatform
+      }
     )
   }, [
     connState,
     state.worktrees,
     state.lastKnownWorktrees,
     state.sleptIds,
-    state.optimisticActiveWorktreeIdentity
+    state.optimisticActiveWorktreeIdentity,
+    state.repoHostIdByRepoId,
+    state.hostLabelById,
+    state.hostPlatform
   ])
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,

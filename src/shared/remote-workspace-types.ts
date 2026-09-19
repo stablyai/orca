@@ -1,6 +1,12 @@
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 
-export type RemoteWorkspaceTerminalTab = Omit<TerminalTab, 'worktreeId'> & {
+// Transient client-local fields are omitted, not merely unset: `recovery` is
+// this client's in-flight heal, stamped with this machine's clock, so the type
+// must not let a future producer put one on the wire.
+export type RemoteWorkspaceTerminalTab = Omit<
+  TerminalTab,
+  'worktreeId' | 'pendingActivationSpawn' | 'recovery'
+> & {
   worktreePath: string
 }
 
@@ -58,6 +64,19 @@ export type RemoteWorkspaceObservedPatchResult =
       snapshot?: RemoteWorkspaceObservedSnapshot
       message?: string
     }
+
+export const REMOTE_WORKSPACE_CHANGED_NOTIFICATION = 'workspace.changed'
+
+/**
+ * Sent instead of `workspace.changed` when the snapshot frame did not fit the client's producer
+ * frame capacity. Carries no session: the client re-reads through `workspace.get`, whose response
+ * lane is budgeted in megabytes rather than in one ~12KB producer frame.
+ *
+ * Wire contract: a relay that predates this never sends it, and a client that predates it drops it
+ * the same way it drops any unknown notification method — which is exactly the silent drop this
+ * replaces, so an un-negotiated pairing is never worse than before.
+ */
+export const REMOTE_WORKSPACE_STALE_NOTIFICATION = 'workspace.stale'
 
 export type RemoteWorkspaceChangedEvent = {
   targetId: string

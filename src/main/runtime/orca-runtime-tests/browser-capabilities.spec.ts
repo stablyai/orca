@@ -23,8 +23,29 @@ import {
   attachClientBrowserHost,
   publishClientHostedPage
 } from '../orca-runtime-test-scenario-builders.spec'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  initializeBrowserIdentityModeStore,
+  resetBrowserIdentityModeStoreForTests
+} from '../../browser/browser-identity-mode-store'
 
 describe('OrcaRuntimeService', () => {
+  // The mixed-version guarantee: a host that never initialized the identity store must not
+  // advertise a method that can only throw there.
+  it('advertises the browser identity capability only where an identity store exists', () => {
+    resetBrowserIdentityModeStoreForTests()
+    expect(createRuntime().getStatus().capabilities).not.toContain('browser.identity.v1')
+
+    initializeBrowserIdentityModeStore(mkdtempSync(join(tmpdir(), 'orca-identity-capability-')))
+    try {
+      expect(createRuntime().getStatus().capabilities).toContain('browser.identity.v1')
+    } finally {
+      resetBrowserIdentityModeStoreForTests()
+    }
+  })
+
   it('advertises headless browser capability when an offscreen backend backs a windowless host', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
@@ -499,6 +520,23 @@ describe('OrcaRuntimeService', () => {
     expect(closeTab).toHaveBeenCalledWith('page-a')
     expect(closeTab).toHaveBeenCalledWith('page-b')
     expect(closeTab).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not rescue a paired renderer PTY into a recreated worktree', () => {
+    const runtime = createRuntime()
+    const ptyId = 'paired-pty-deleted-worktree'
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'tab-deleted-worktree',
+      leafId: 'leaf-deleted-worktree'
+    })
+    const internals = runtime as unknown as {
+      pairedRendererSessionOwnedPtyIds: Set<string>
+    }
+    internals.pairedRendererSessionOwnedPtyIds.add(ptyId)
+
+    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+
+    expect(internals.pairedRendererSessionOwnedPtyIds.has(ptyId)).toBe(false)
   })
 
   it('closes a worktree’s client-hosted browser pages when its metadata is removed (leak fix)', async () => {

@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import {
+  describeNativeChatTurnStatus,
+  formatNativeChatDuration,
+  NATIVE_CHAT_TURN_STATUS_COPY
+} from '../../../../shared/native-chat-turn-status'
+import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
+
+export { formatNativeChatDuration }
 
 export function NativeChatWorkingStatus({
   startedAt,
@@ -15,30 +22,30 @@ export function NativeChatWorkingStatus({
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const counting = !thinking && workedSeconds == null
+  const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, counting)
 
-  useEffect(() => {
-    if (thinking || workedSeconds != null) {
-      return
-    }
-    const epoch = startedAt ?? Date.now()
-    setElapsedSeconds(Math.max(0, Math.floor((Date.now() - epoch) / 1000)))
-    const update = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - epoch) / 1000)))
-    const timer = window.setInterval(update, 1000)
-    return () => window.clearInterval(timer)
-  }, [startedAt, thinking, workedSeconds])
-
+  const { key, duration } = describeNativeChatTurnStatus({
+    thinking,
+    workedSeconds,
+    elapsedSeconds
+  })
   const label =
-    workedSeconds != null
-      ? translate('components.native-chat.status.workedFor', 'Worked for {{value0}} seconds', {
-          value0: workedSeconds
-        })
-      : thinking
-        ? translate('components.native-chat.status.thinking', 'Thinking')
-        : translate('components.native-chat.status.workingFor', 'Working for {{value0}} seconds', {
-            value0: elapsedSeconds
-          })
-
+    key === 'workedFor'
+      ? translate(
+          'components.native-chat.status.workedFor',
+          NATIVE_CHAT_TURN_STATUS_COPY.workedFor,
+          {
+            value0: duration
+          }
+        )
+      : key === 'thinking'
+        ? translate('components.native-chat.status.thinking', NATIVE_CHAT_TURN_STATUS_COPY.thinking)
+        : translate(
+            'components.native-chat.status.workingFor',
+            NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
+            { value0: duration }
+          )
   const className = `flex min-h-8 items-center gap-1 text-sm text-muted-foreground${thinking ? '' : ' border-b border-border'}`
   const caret =
     workedSeconds != null ? (
@@ -51,8 +58,12 @@ export function NativeChatWorkingStatus({
     return (
       <button
         type="button"
+        data-native-chat-turn-status="settled"
         className={`${className} w-full text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70`}
-        aria-label={translate('components.native-chat.status.toggleDetails', 'Toggle turn details')}
+        aria-label={translate(
+          'components.native-chat.status.toggleDetails',
+          NATIVE_CHAT_TURN_STATUS_COPY.toggleDetails
+        )}
         aria-expanded={expanded}
         onClick={onToggleExpanded}
       >
@@ -65,7 +76,11 @@ export function NativeChatWorkingStatus({
   return (
     <div
       className={className}
-      aria-label={translate('components.native-chat.status.responding', 'Agent is responding')}
+      data-native-chat-turn-status={workedSeconds == null ? 'active' : 'settled'}
+      aria-label={translate(
+        'components.native-chat.status.responding',
+        NATIVE_CHAT_TURN_STATUS_COPY.responding
+      )}
       aria-live="polite"
     >
       <span className={thinking ? 'animate-pulse' : undefined}>{label}</span>

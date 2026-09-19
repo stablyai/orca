@@ -1,30 +1,43 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
+import { ArrowUp, Check, CircleHelp, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { formatQuestionAnswer, type MobileChatQuestion } from './mobile-native-chat-question'
+import {
+  formatQuestionAnswerByIndexes,
+  formatQuestionAnswerWithOtherByIndexes,
+  formatQuestionFreeTextAnswer,
+  type MobileChatQuestion
+} from './mobile-native-chat-question'
 
 type Props = {
   question: MobileChatQuestion
   onAnswer: (text: string) => Promise<boolean>
+  onCancel?: (prompt?: NonNullable<MobileChatQuestion['prompt']>) => Promise<boolean>
 }
 
 /** Renders an agent's choice prompt as a tappable card. Single-select answers
  *  on tap; multi-select toggles then Submits; an always-present text entry lets
  *  the user answer freely (the escape hatch) when the heuristic misreads the
  *  options or none apply. */
-export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.JSX.Element {
-  const [selected, setSelected] = useState<string[]>([])
+export function MobileNativeChatQuestion({
+  question,
+  onAnswer,
+  onCancel
+}: Props): React.JSX.Element {
+  const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState('')
   const [sending, setSending] = useState(false)
   const sendingRef = useRef(false)
+  const allowOther = question.allowOther !== false
 
   const hasOptions = question.options.length > 0
   const trimmedFreeText = freeText.trim()
 
-  const toggle = (option: string): void => {
-    setSelected((prev) =>
-      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
+  const toggle = (optionIndex: number): void => {
+    setSelectedOptionIndexes((prev) =>
+      prev.includes(optionIndex)
+        ? prev.filter((index) => index !== optionIndex)
+        : [...prev, optionIndex]
     )
   }
 
@@ -42,34 +55,51 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
     }
   }
 
-  const answerSingle = async (option: string): Promise<void> => {
-    await sendAnswer(formatQuestionAnswer(question, [option]))
+  const answerSingle = async (optionIndex: number): Promise<void> => {
+    const token = question.optionTokens[optionIndex]
+    await sendAnswer(
+      token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
+    )
   }
 
   const submitMulti = async (): Promise<void> => {
-    if (selected.length === 0) {
+    if (selectedOptionIndexes.length === 0) {
       return
     }
-    await sendAnswer(formatQuestionAnswer(question, selected))
+    const answer =
+      question.freeTextToken && trimmedFreeText.length > 0
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
+        : formatQuestionAnswerByIndexes(question, selectedOptionIndexes)
+    if (await sendAnswer(answer)) {
+      setFreeText('')
+    }
   }
 
   const submitFreeText = async (): Promise<void> => {
     if (trimmedFreeText.length === 0) {
       return
     }
-    // Free text is an unknown entry; formatQuestionAnswer passes it through.
-    if (await sendAnswer(formatQuestionAnswer(question, [trimmedFreeText]))) {
+    const answer =
+      question.multiSelect && question.freeTextToken && selectedOptionIndexes.length > 0
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
+        : formatQuestionFreeTextAnswer(question, trimmedFreeText)
+    if (await sendAnswer(answer)) {
       setFreeText('')
     }
   }
 
-  const canSubmitMulti = selected.length > 0 && !sending
-  const canSendFreeText = trimmedFreeText.length > 0 && !sending
+  const canSubmitMulti = selectedOptionIndexes.length > 0 && !sending
+  const canSendFreeText = allowOther && trimmedFreeText.length > 0 && !sending
 
   // Stable keys for option rows even if an agent repeats a label.
   const optionRows = useMemo(
-    () => question.options.map((label, index) => ({ label, key: `${index}:${label}` })),
-    [question.options]
+    () =>
+      question.options.map((label, index) => ({
+        label,
+        description: question.optionDescriptions?.[index],
+        key: `${index}:${label}`
+      })),
+    [question.optionDescriptions, question.options]
   )
 
   return (
@@ -77,12 +107,23 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
       <View style={styles.header}>
         <CircleHelp size={15} color={colors.accentBlue} strokeWidth={2.2} />
         <Text style={styles.question}>{question.question}</Text>
+        {onCancel ? (
+          <Pressable
+            accessibilityLabel="Cancel"
+            hitSlop={8}
+            style={styles.cancel}
+            onPress={() => void onCancel(question.prompt)}
+            disabled={sending}
+          >
+            <X size={16} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
 
       {hasOptions ? (
         <View style={styles.options}>
-          {optionRows.map(({ label, key }) => {
-            const isSelected = selected.includes(label)
+          {optionRows.map(({ label, description, key }, optIndex) => {
+            const isSelected = selectedOptionIndexes.includes(optIndex)
             return (
               <Pressable
                 key={key}
@@ -93,14 +134,21 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
                   isSelected && styles.optionSelected,
                   pressed && styles.pressed
                 ]}
-                onPress={() => (question.multiSelect ? toggle(label) : answerSingle(label))}
+                onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
               >
                 {question.multiSelect ? (
                   <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
                     {isSelected ? <Check size={13} color={colors.bgBase} strokeWidth={3} /> : null}
                   </View>
                 ) : null}
-                <Text style={styles.optionText}>{label}</Text>
+                <View style={styles.optionBody}>
+                  <Text style={styles.optionText}>{label}</Text>
+                  {description ? (
+                    <Text style={styles.optionDescription} numberOfLines={2}>
+                      {description}
+                    </Text>
+                  ) : null}
+                </View>
               </Pressable>
             )
           })}
@@ -119,40 +167,42 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
           disabled={!canSubmitMulti}
         >
           <Text style={[styles.submitText, !canSubmitMulti && styles.submitTextDisabled]}>
-            Submit{selected.length > 0 ? ` (${selected.length})` : ''}
+            Submit{selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}
           </Text>
         </Pressable>
       ) : null}
 
-      <View style={styles.freeTextRow}>
-        <TextInput
-          style={styles.freeInput}
-          value={freeText}
-          onChangeText={setFreeText}
-          placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.accentBlue}
-          onSubmitEditing={submitFreeText}
-          returnKeyType="send"
-          multiline
-        />
-        <Pressable
-          accessibilityLabel="Send reply"
-          style={({ pressed }) => [
-            styles.freeSend,
-            !canSendFreeText && styles.freeSendDisabled,
-            pressed && canSendFreeText && styles.pressed
-          ]}
-          onPress={submitFreeText}
-          disabled={!canSendFreeText}
-        >
-          <ArrowUp
-            size={18}
-            color={canSendFreeText ? colors.bgBase : colors.textMuted}
-            strokeWidth={2.6}
+      {allowOther ? (
+        <View style={styles.freeTextRow}>
+          <TextInput
+            style={styles.freeInput}
+            value={freeText}
+            onChangeText={setFreeText}
+            placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accentBlue}
+            onSubmitEditing={submitFreeText}
+            returnKeyType="send"
+            multiline
           />
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityLabel="Send reply"
+            style={({ pressed }) => [
+              styles.freeSend,
+              !canSendFreeText && styles.freeSendDisabled,
+              pressed && canSendFreeText && styles.pressed
+            ]}
+            onPress={submitFreeText}
+            disabled={!canSendFreeText}
+          >
+            <ArrowUp
+              size={18}
+              color={canSendFreeText ? colors.bgBase : colors.textMuted}
+              strokeWidth={2.6}
+            />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -180,6 +230,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: typography.bodySize + 7
   },
+  cancel: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   options: {
     gap: spacing.xs
   },
@@ -198,10 +254,18 @@ const styles = StyleSheet.create({
   optionSelected: {
     borderColor: colors.accentBlue
   },
-  optionText: {
+  optionBody: {
     flex: 1,
+    gap: 2
+  },
+  optionText: {
     color: colors.textPrimary,
     fontSize: typography.bodySize + 1
+  },
+  optionDescription: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    lineHeight: typography.metaSize + 5
   },
   checkbox: {
     width: 20,

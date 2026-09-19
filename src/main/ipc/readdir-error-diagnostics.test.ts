@@ -1,24 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { buildReadDirErrorBreadcrumb, describeReadDirPathShape } from './readdir-error-diagnostics'
+import { buildReadDirErrorBreadcrumb, classifyReadDirPath } from './readdir-error-diagnostics'
 
-describe('describeReadDirPathShape', () => {
+describe('classifyReadDirPath', () => {
   it('classifies a WSL UNC path without leaking it', () => {
-    const shape = describeReadDirPathShape('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo', undefined)
-    expect(shape).toEqual({ hasConnectionId: false, isUNC: true, isWsl: true })
+    const classification = classifyReadDirPath(
+      '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
+      undefined
+    )
+    expect(classification).toEqual({ hasConnectionId: false, isUNC: true, isWsl: true })
   })
 
   it('classifies the legacy \\\\wsl$ root as WSL', () => {
-    expect(describeReadDirPathShape('\\\\wsl$\\Ubuntu\\home', undefined).isWsl).toBe(true)
+    expect(classifyReadDirPath('\\\\wsl$\\Ubuntu\\home', undefined).isWsl).toBe(true)
   })
 
   it('classifies a plain network UNC share as UNC but not WSL', () => {
-    const shape = describeReadDirPathShape('\\\\fileserver\\share\\dir', undefined)
-    expect(shape).toMatchObject({ isUNC: true, isWsl: false })
-    expect(shape.driveLetter).toBeUndefined()
+    const classification = classifyReadDirPath('\\\\fileserver\\share\\dir', undefined)
+    expect(classification).toMatchObject({ isUNC: true, isWsl: false })
+    expect(classification.driveLetter).toBeUndefined()
   })
 
   it('extracts an uppercased drive letter for mapped drives', () => {
-    expect(describeReadDirPathShape('z:\\projects\\repo', undefined)).toEqual({
+    expect(classifyReadDirPath('z:\\projects\\repo', undefined)).toEqual({
       hasConnectionId: false,
       isUNC: false,
       isWsl: false,
@@ -27,18 +30,18 @@ describe('describeReadDirPathShape', () => {
   })
 
   it('flags the SSH connection without recording it', () => {
-    const shape = describeReadDirPathShape('/remote/repo', 'ssh-1')
-    expect(shape).toEqual({ hasConnectionId: true, isUNC: false, isWsl: false })
+    const classification = classifyReadDirPath('/remote/repo', 'ssh-1')
+    expect(classification).toEqual({ hasConnectionId: true, isUNC: false, isWsl: false })
   })
 
-  it('never includes the raw path in the shape', () => {
-    const shape = describeReadDirPathShape('\\\\wsl.localhost\\Ubuntu\\secret\\path', 'ssh-9')
-    expect(JSON.stringify(shape)).not.toContain('secret')
+  it('never includes the raw path in the classification', () => {
+    const classification = classifyReadDirPath('\\\\wsl.localhost\\Ubuntu\\secret\\path', 'ssh-9')
+    expect(JSON.stringify(classification)).not.toContain('secret')
   })
 })
 
 describe('buildReadDirErrorBreadcrumb', () => {
-  it('captures throw site, error code/name, and path shape', () => {
+  it('captures throw site, error code/name, and path classification', () => {
     const breadcrumb = buildReadDirErrorBreadcrumb({
       dirPath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
       connectionId: undefined,

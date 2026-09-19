@@ -1,5 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
+import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveGitDir } from './resolve-git-dir'
 
 /**
@@ -68,11 +70,20 @@ export function isDiffStampClockSkewed(stamp: WorktreeDiffStamp): boolean {
 export async function readWorktreeDiffStamp(
   worktreePath: string,
   filePath: string,
-  includeWorkingTree: boolean
+  includeWorkingTree: boolean,
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
 ): Promise<WorktreeDiffStamp | null> {
   const capturedAtMs = Date.now()
   try {
-    const gitDir = await resolveGitDir(worktreePath)
+    // Git can run in the distro against a raw Linux worktree path while Node stats it through Win32.
+    const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
+    if (!hostWorktreePath) {
+      // Only an empty worktree path lands here, and nothing about it is provably unchanged.
+      return null
+    }
+    // Why still pass options: the host spelling above only encodes the distro when it lands on a
+    // UNC share, so a drvfs-spelled worktree needs it again to resolve a non-drvfs gitdir pointer.
+    const gitDir = await resolveGitDir(hostWorktreePath, options)
     const [head, index, gitmodules, workingTree] = await Promise.all([
       readHeadComponent(gitDir),
       // Over-invalidates on purpose: git run outside Orca (a terminal `git status`/`git add`)
@@ -81,9 +92,9 @@ export async function readWorktreeDiffStamp(
       // index from the stamp, because `git add` then becomes invisible and the cache serves a
       // pre-staging diff.
       readFileStampComponent(path.join(gitDir, 'index')),
-      readFileStampComponent(path.join(worktreePath, '.gitmodules')),
+      readFileStampComponent(path.join(hostWorktreePath, '.gitmodules')),
       includeWorkingTree
-        ? readWorkingTreeComponent(path.join(worktreePath, filePath))
+        ? readWorkingTreeComponent(path.join(hostWorktreePath, filePath))
         : Promise.resolve(ABSENT)
     ])
     if (!head) {

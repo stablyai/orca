@@ -1,11 +1,16 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
-import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
+import { parseUnameToRelayPlatform, RELAY_REMOTE_DIR } from '../main/ssh/relay-protocol'
+import { DEFAULT_AI_VAULT_SEARCH_SETTINGS } from '../shared/ai-vault-search-settings'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { installInProcessSessionSearchService } from '../main/ai-vault-search/session-search-in-process-service'
 import type { RelayDispatcher } from './dispatcher'
 import { RelayContext, expandTilde } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { GitResponseStreamRegistry } from './git-response-stream'
 import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
@@ -28,6 +33,7 @@ export class RelayRuntimeServices {
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
+  private readonly sessionSearch: { dispose(): void } | null
   private readonly registeredHandlers: readonly unknown[]
 
   constructor(
@@ -44,6 +50,11 @@ export class RelayRuntimeServices {
       (id, paused) => this.ptyHandler.setConsumerDeliveryPaused(id, paused),
       (id) => this.ptyHandler.handleSourceCreditAvailable(id)
     )
+    // Why wired after construction: the handler is built first, but PTY ownership has to be
+    // attested from the consumer grant the adapter holds.
+    this.ptyHandler.setConsumerIdentityResolver((clientId) =>
+      this.ptyConsumerSessionAdapter.clientInstanceIdFor(clientId)
+    )
     this.ptySourcePublication = new RelayPtySourcePublication(
       dispatcher,
       this.ptyConsumerSessionAdapter,
@@ -51,13 +62,17 @@ export class RelayRuntimeServices {
     )
     this.ptyHandler.setSourcePublication(this.ptySourcePublication)
 
-    this.fsHandler = new FsHandler(dispatcher, context)
+    // Why one instance for both handlers: a client reassembles a streamed reply by `streamId` alone,
+    // so two registries would hand out the same id, and only GitHandler routes the `git.responseAck`
+    // credit every pump waits on. A second registry is not an option — see git-response-stream.ts.
+    const responseStreams = new GitResponseStreamRegistry()
+    this.fsHandler = new FsHandler(dispatcher, context, undefined, responseStreams)
     const watchRegistry = this.fsHandler.getWatchRegistry()
     this.ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
     watchRegistry.setWorktreePtyTeardown((rootPath) =>
       this.ptyHandler.shutdownForWorktreePath(rootPath)
     )
-    this.gitHandler = new GitHandler(dispatcher, context, watchRegistry)
+    this.gitHandler = new GitHandler(dispatcher, context, watchRegistry, responseStreams)
     const preflightHandler = new PreflightHandler(dispatcher)
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
     const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
@@ -67,6 +82,22 @@ export class RelayRuntimeServices {
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
     this.aiVaultService = hostPlatform ? createRelayAiVaultService(homedir(), hostPlatform) : null
+    // Why beside the AI Vault sidecar and not inside it: that sidecar runs the
+    // remote scanner, which reads through a filesystem provider and publishes
+    // nothing to the transcript channel the index consumes. This process is the
+    // one that would drive the index's own reads, and the only writer on the file.
+    // Off until something can carry consent to a remote host (see the PR body);
+    // registering it anyway is what makes this host answer `disabled` and not
+    // `no-service`, which is the difference between off and too old.
+    this.sessionSearch = installInProcessSessionSearchService({
+      dataRoot: join(homedir(), RELAY_REMOTE_DIR),
+      roots: { executionHostId: LOCAL_EXECUTION_HOST_ID },
+      settings: DEFAULT_AI_VAULT_SEARCH_SETTINGS,
+      onError: (error) =>
+        relayLogLine(
+          `[relay] session search: ${error instanceof Error ? error.message : String(error)}`
+        )
+    })
     this.registeredHandlers = [
       preflightHandler,
       this.skillInstallHandler,
@@ -102,6 +133,7 @@ export class RelayRuntimeServices {
   }
 
   disposeHandlers(): void {
+    this.sessionSearch?.dispose()
     this.fsHandler.dispose()
     this.gitHandler.dispose()
     void this.registeredHandlers

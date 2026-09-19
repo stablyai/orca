@@ -15,6 +15,8 @@ vi.mock('@/components/tab-bar/group-tab-order', () => ({
   getActiveTabNavOrder: getActiveTabNavOrderMock
 }))
 
+import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
+import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -54,10 +56,11 @@ type MockStore = {
   setActiveBrowserTab: ReturnType<typeof vi.fn>
   activateTab: ReturnType<typeof vi.fn>
   setActiveTabType: ReturnType<typeof vi.fn>
+  getActiveTab: (worktreeId: string) => unknown
 }
 
 function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> = {}): MockStore {
-  return {
+  const store: MockStore = {
     activeWorktreeId: 'wt-1',
     activeTabType,
     activeTabId: 'term-1',
@@ -72,8 +75,16 @@ function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> =
     setActiveBrowserTab: vi.fn(),
     activateTab: vi.fn(),
     setActiveTabType: vi.fn(),
+    getActiveTab: () => null,
     ...overrides
   }
+  // Why the real resolver: the group-scoped active tab is what the code under test reads, so a
+  // hand-written stub here would decide the answer instead of exercising it.
+  store.getActiveTab = createTabsFocusActions(
+    (() => {}) as unknown as TabsSliceSet,
+    (() => store) as unknown as TabsSliceGet
+  ).getActiveTab
+  return store
 }
 
 describe('handleSwitchTerminalTab', () => {

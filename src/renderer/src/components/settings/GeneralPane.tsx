@@ -158,6 +158,35 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+            'Confirm before closing running terminals'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+            'Ask before stopping a running agent or command when closing a terminal.'
+          )}
+          keywords={['terminal', 'agent', 'command', 'confirm', 'close', 'OMP']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+              'Confirm before closing running terminals'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+              'Ask before stopping a running agent or command when closing a terminal.'
+            )}
+            checked={!settings.skipCloseTerminalWithRunningProcessConfirm}
+            onChange={() =>
+              updateSettings({
+                skipCloseTerminalWithRunningProcessConfirm:
+                  !settings.skipCloseTerminalWithRunningProcessConfirm
+              })
+            }
+          />
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (

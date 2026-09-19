@@ -2,6 +2,7 @@ import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getRepoKind } from '../../../shared/repo-kind'
+import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
 import { isWslUncPath } from '../../../shared/wsl-paths'
@@ -13,6 +14,7 @@ import {
 } from '../restoring-sessions/session-worktree-ownership'
 import {
   indexMetadataAliasesForWorktreeIds,
+  isLocallyRemovableWorktreeMetadataRow,
   removeRevalidatedLocalWorktreeMetadata,
   type LocalWorktreeMetadataPruneExpectation,
   type NativeLocalWorktreeMetadataScanExpectation
@@ -39,6 +41,13 @@ function collectPersistedWorkspaceOwners(
     }
   }
   for (const lease of state.sshRemotePtyLeases) {
+    // A lease that can never be reattached is a routing tombstone, not a claim on a workspace:
+    // `terminated` is the operator close, and an `expired` row marked `supersededBy` /
+    // `relayIdRecycled` already lost its pane to a newer lease. Counting them as owners pinned
+    // their worktree's metadata row permanently, so the prune could never make progress (#17775).
+    if (!sshRemotePtyLeaseAllowsReattach(lease)) {
+      continue
+    }
     add(lease.worktreeId)
   }
   for (const entry of state.migrationUnsupportedPtyEntries) {
@@ -105,6 +114,42 @@ function isValidCandidateId(
       ? isWindowsAbsolutePathLike(parsed.worktreePath)
       : parsed.worktreePath.startsWith('/')) &&
     !worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+  )
+}
+
+/**
+ * The captured candidates a delete could still accept, decided without touching the disk.
+ *
+ * Why this exists: the caller `stat`s every candidate whose path Git no longer lists, then discovers
+ * here that most of them are refused anyway — pinned by a persisted session, or structurally
+ * unremovable on this host. Those verdicts are pure functions of persisted state, so paying for the
+ * filesystem first inverts the cheap and expensive halves of the decision. On a store with ~1.4k
+ * dangling rows that was the bulk of a permanent `stat` storm (#17775).
+ *
+ * Deliberately advisory: `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks everything
+ * authoritatively against the capture, so a disagreement here costs at most a wasted `stat` or a row
+ * lingering one more pass — it can never widen what gets deleted.
+ */
+export function selectProbeableLocalWorktreeMetadataCandidates(
+  state: PersistedState,
+  scan: NativeLocalWorktreeMetadataScanExpectation,
+  platform = process.platform
+): readonly LocalWorktreeMetadataPruneExpectation[] {
+  const candidateIds = new Set(scan.metadata.map(({ worktreeId }) => worktreeId))
+  if (candidateIds.size === 0) {
+    return scan.metadata
+  }
+  const sessionOwners = collectPersistedWorkspaceOwners(state, candidateIds, platform)
+  const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
+  return scan.metadata.filter(
+    ({ worktreeId }) =>
+      isValidCandidateId(scan.repo.id, worktreeId, platform) &&
+      !sessionOwners.has(worktreeId) &&
+      isLocallyRemovableWorktreeMetadataRow(
+        state,
+        worktreeId,
+        aliasesByWorktreeId.get(worktreeId) ?? []
+      )
   )
 }
 

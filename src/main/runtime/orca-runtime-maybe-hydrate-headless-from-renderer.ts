@@ -51,12 +51,21 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     // setting headlessTerminals, the live byte would lazy-create a separate
     // state and the seed-resolve would overwrite it, dropping live bytes.
     state.writeChain = state.writeChain.then(async () => {
+      if (this.headlessTerminals.get(ptyId) !== state) {
+        return
+      }
       try {
+        // Why the scrollback is not suppressed mid-TUI: the seed IS the model's
+        // normal buffer, so zeroing it while an alt-screen agent was up left the
+        // model with no pre-TUI history to restore from (#6106).
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
-          altScreenForcesZeroRows: true
+          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
         })
-        if (!rendered || rendered.data.length === 0) {
+        if (
+          this.headlessTerminals.get(ptyId) !== state ||
+          !rendered ||
+          rendered.data.length === 0
+        ) {
           return
         }
         this.recordOsc7MetadataForPty(ptyId, rendered.data)
@@ -68,6 +77,9 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
           state.emulator.resize(rendered.cols, rendered.rows)
         }
         await state.emulator.write(rendered.data)
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         const ptyDims = this.getTerminalSize(ptyId)
         if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
           state.emulator.resize(ptyDims.cols, ptyDims.rows)
@@ -89,7 +101,9 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
         // Hydration is best-effort. Live writes continue via the same
         // writeChain that this catch-arm leaves intact.
       } finally {
-        this.headlessHydrationState.set(ptyId, 'done')
+        if (this.headlessTerminals.get(ptyId) === state) {
+          this.headlessHydrationState.set(ptyId, 'done')
+        }
       }
     })
   }

@@ -152,6 +152,10 @@ export function updatePersistedUI(
       sanitizedUpdates.visibleWorkspaceHostIds !== undefined
         ? normalizeVisibleExecutionHostIds(sanitizedUpdates.visibleWorkspaceHostIds)
         : normalizeVisibleExecutionHostIds(operations.state.ui?.visibleWorkspaceHostIds),
+    agentsVisibleHostIds:
+      sanitizedUpdates.agentsVisibleHostIds !== undefined
+        ? normalizeVisibleExecutionHostIds(sanitizedUpdates.agentsVisibleHostIds)
+        : normalizeVisibleExecutionHostIds(operations.state.ui?.agentsVisibleHostIds),
     workspaceHostOrder:
       sanitizedUpdates.workspaceHostOrder !== undefined
         ? normalizeExecutionHostOrder(sanitizedUpdates.workspaceHostOrder)

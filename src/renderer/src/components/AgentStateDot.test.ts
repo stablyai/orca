@@ -93,6 +93,15 @@ describe('AgentStateDot', () => {
     }
   )
 
+  it('renders unverifiable as an amber dashed ring, never the done check or the spinner', () => {
+    const markup = renderMarkup('unverifiable')
+
+    expect(markup).toContain('lucide-circle-dashed')
+    expect(markup).toContain('text-amber-500')
+    expect(markup).not.toContain('lucide-circle-check')
+    expect(markup).not.toContain('data-agent-spinner')
+  })
+
   it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
@@ -112,6 +121,7 @@ describe('AgentStateDot', () => {
     'failed',
     'done',
     'idle',
+    'unverifiable',
     'permission'
   ] satisfies AgentDotState[]
 

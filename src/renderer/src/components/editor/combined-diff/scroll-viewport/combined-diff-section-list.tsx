@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useMemo } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
@@ -69,6 +70,14 @@ export function CombinedDiffSectionList({
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
+  // Why: per-row filter() rescanned all worktree comments per visible row per render — index once, same order preserved.
+  const commentCountByFilePath = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const comment of diffCommentsForWorktree) {
+      counts.set(comment.filePath, (counts.get(comment.filePath) ?? 0) + 1)
+    }
+    return counts
+  }, [diffCommentsForWorktree])
   return (
     <div className="relative min-w-0 flex-1">
       <div
@@ -130,10 +139,8 @@ export function CombinedDiffSectionList({
                   modifiedEditorsRef={modifiedEditorsRef}
                   handleSectionSaveRef={handleSectionSaveRef}
                   renderHeaderTrailingContent={(section) => {
-                    const fileNotes = diffCommentsForWorktree.filter(
-                      (comment) => comment.filePath === section.path
-                    )
-                    return fileNotes.length > 0 ? (
+                    const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0
+                    return fileNoteCount > 0 ? (
                       <DiffNotesSendMenu
                         worktreeId={file.worktreeId}
                         groupId={activeGroupId ?? file.worktreeId}

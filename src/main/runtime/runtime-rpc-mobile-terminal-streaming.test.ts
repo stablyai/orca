@@ -404,6 +404,7 @@ describe('OrcaRuntimeRpcServer', () => {
     // activation is a local-host concern, so the proxy legitimately lacks
     // activateRecentPtyPathCandidateTracking and onReady must not throw.
     const runtimeProxy = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'proxy-runtime-test',
       getStartedAt: () => 1,
       getStatus: () => ({ graphStatus: 'unavailable' }),

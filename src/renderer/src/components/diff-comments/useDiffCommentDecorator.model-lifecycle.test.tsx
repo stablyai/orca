@@ -19,6 +19,13 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+/** No zones exist in this suite, so the hook never reaches these. */
+const viewZoneAccessor: MonacoEditor.IViewZoneChangeAccessor = {
+  addZone: () => '',
+  removeZone: () => undefined,
+  layoutZone: () => undefined
+}
+
 describe('useDiffCommentDecorator model lifecycle', () => {
   it('rebuilds model-scoped resources when a retained editor swaps models', () => {
     const editorDomNode = document.createElement('div')
@@ -26,13 +33,15 @@ describe('useDiffCommentDecorator model lifecycle', () => {
     const disposeMouseMove = vi.fn()
     const disposeMouseLeave = vi.fn()
     const disposeScroll = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial stand-in for Monaco's ICodeEditor; useDiffCommentDecorator calls only the members defined here, and a real editor needs a laid-out DOM this suite does not build.
     const editor = {
       getDomNode: () => editorDomNode,
       getOption: () => 19,
       onMouseMove: () => ({ dispose: disposeMouseMove }),
       onMouseLeave: () => ({ dispose: disposeMouseLeave }),
       onDidScrollChange: () => ({ dispose: disposeScroll }),
-      changeViewZones: (callback: (accessor: object) => void) => callback({})
+      changeViewZones: (callback: (accessor: MonacoEditor.IViewZoneChangeAccessor) => void) =>
+        callback(viewZoneAccessor)
     } as unknown as MonacoEditor.ICodeEditor
     const hook = renderHook(
       ({ monacoModelIdentity }) =>

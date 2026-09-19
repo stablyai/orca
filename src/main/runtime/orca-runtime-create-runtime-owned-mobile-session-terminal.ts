@@ -10,6 +10,7 @@ import type {
 } from '../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { placeCreatedSessionTab } from '../../shared/session-tab-placement'
 import {
   buildHeadlessMobileSessionTabGroups,
   buildMaterializedHeadlessParentLayout,
@@ -31,6 +32,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
+      supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     } = {}
@@ -95,6 +97,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentTabId,
       leafId,
       ptyId: livePty.pty.ptyId,
+      incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
@@ -102,24 +105,22 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentLayout,
       isActive: activate
     }
-    const tabs = (existing?.tabs ?? [])
-      .filter((candidate) => candidate.id !== tab.id)
-      .map((candidate) => ({
+    const tabs = placeCreatedSessionTab(
+      (existing?.tabs ?? []).map((candidate) => ({
         ...candidate,
         ...(candidate.type === 'terminal' && candidate.parentTabId === parentTabId
           ? { parentLayout }
           : {}),
         isActive: activate ? false : candidate.isActive
-      }))
-    const insertAfter = afterTabId ? tabs.findIndex((candidate) => candidate.id === afterTabId) : -1
-    if (insertAfter >= 0) {
-      tabs.splice(insertAfter + 1, 0, tab)
-    } else {
-      tabs.push(tab)
-    }
+      })),
+      tab,
+      afterTabId,
+      { afterParentGroup: opts.supportsSplitGroupPlacement !== false }
+    )
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.
+      publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
       activeGroupId:
@@ -139,8 +140,10 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, next)
-    const result = this.toMobileSessionTabsResult(next)
+    // Why: emit the stored snapshot, not the pre-store one — storing grafts on retirement
+    // proofs, and subscribers dedupe on version so they would never see them otherwise.
+    const stored = this.storeMobileSessionSnapshot(worktreeId, next)
+    const result = this.toMobileSessionTabsResult(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(

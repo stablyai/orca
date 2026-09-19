@@ -64,7 +64,7 @@ describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
 
   it('still runs the fan-out once a dispatch exists (correctness preserved)', () => {
     const db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
     createRootDispatch(db, task.id, 'term_5')
     const handles = Array.from({ length: 10 }, (_, i) => `term_${i}`)
 
@@ -76,7 +76,11 @@ describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
   it('predicate lifecycle: false when empty, true after dispatch (even completed), false after reset', () => {
     const db = new OrchestrationDb(':memory:')
     expect(db.hasAnyDispatchContexts()).toBe(false)
-    const ctx = createRootDispatch(db, db.createTask({ spec: 'work' }).id, 'term_worker')
+    const ctx = createRootDispatch(
+      db,
+      db.createTask({ runId: 'run_legacy_local', spec: 'work' }).id,
+      'term_worker'
+    )
     expect(db.hasAnyDispatchContexts()).toBe(true)
     // Completed rows still count — recent-completed lookups must stay valid.
     db.completeDispatch(ctx.id)

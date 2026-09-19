@@ -1,3 +1,4 @@
+import { getRepoSshConnectionId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoUpstream } from '../github/client'
@@ -28,7 +29,10 @@ export class RuntimeRepositoryForkBackfill {
       }
       let changed = false
       for (const repo of store.getRepos()) {
-        if (repo.upstream !== undefined || repo.kind === 'folder' || repo.connectionId) {
+        // Why the resolved SSH target and not the raw `connectionId`: this backfill runs `gh`/git
+        // in this process, so any row whose files sit on an SSH host must be skipped — including
+        // one that carries only `executionHostId: ssh:…`, which the raw field reads as local.
+        if (repo.upstream !== undefined || repo.kind === 'folder' || getRepoSshConnectionId(repo)) {
           continue
         }
         let upstream: GitHubOwnerRepo | null
@@ -39,7 +43,7 @@ export class RuntimeRepositoryForkBackfill {
         }
         const repoIcon =
           upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
-            ? await detectGitHubAvatarIcon(repo.path, null, upstream)
+            ? await detectGitHubAvatarIcon(repo.path, LOCAL_EXECUTION_HOST_ID, upstream)
             : null
         const current = store.getRepos().find((candidate) => candidate.id === repo.id)
         if (!current || current.upstream !== undefined) {

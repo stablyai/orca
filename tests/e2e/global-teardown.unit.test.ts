@@ -39,7 +39,7 @@ describe('E2E global teardown ownership', () => {
     git(repoPath, ['worktree', 'add', '-b', 'second-owned', secondWorktreePath])
 
     expect(new Set(linkedWorktreePaths(repoPath))).toEqual(
-      new Set([realpathSync(firstWorktreePath), realpathSync(secondWorktreePath)])
+      new Set([realpathSync.native(firstWorktreePath), realpathSync.native(secondWorktreePath)])
     )
     cleanupTestRepository(repoPath)
 

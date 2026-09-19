@@ -4,8 +4,7 @@ import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-
 import { expect } from './orca-app'
 import {
   callColdActivationRuntime,
-  expectStableColdActivationMountState,
-  readColdActivationMountState
+  expectStableColdActivationMountState
 } from './paired-terminal-cold-activation-observation'
 import { createPairedTerminalParkingFixture } from './paired-terminal-parking-fixture'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
@@ -161,7 +160,14 @@ export async function runPairedTerminalColdActivationOracle(
       originalPtyId: originalPtyIds[index]!
     }))
     const tabIds = tabs.map((tab) => tab.tabId)
-    expect(await readColdActivationMountState(page, tabIds)).toEqual({ mounted: 0, parked: 0 })
+    // Why: background tabs park eagerly (parking delay is 100ms while tab
+    // creation plus the PTY-id poll above takes far longer), so a one-shot
+    // read races the sweeper. Parked-but-unmounted is the cold resting state
+    // this oracle asserts again after first activation (1 mounted + 7 parked).
+    await expectStableColdActivationMountState(page, tabIds, {
+      mounted: 0,
+      parked: TARGET_TAB_COUNT
+    })
 
     await page.evaluate(
       ({ activeTabId, targetWorktreeId }) => {

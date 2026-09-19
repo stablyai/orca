@@ -102,6 +102,7 @@ export type RuntimePtySpawnArgs = {
   tabId?: string
   leafId?: string
   sessionId?: string
+  shellOverride?: string
   isNewSession?: boolean
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation

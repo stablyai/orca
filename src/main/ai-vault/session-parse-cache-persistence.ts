@@ -11,9 +11,11 @@ import {
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 
-// Bump when the persisted entry layout changes; a mismatched file is discarded whole.
-const SCHEMA_VERSION = 1
+// Bump when the persisted entry layout or cached session semantics change; a
+// mismatched file is discarded whole.
+const SCHEMA_VERSION = 2
 // Debounce so back-to-back scans (desktop IPC + runtime RPC) collapse into one write.
 const SAVE_DEBOUNCE_MS = 1_500
 // The payload contains transcript-derived preview text; keep it user-only
@@ -63,11 +65,13 @@ export function ensureSessionParseCacheLoaded(): Promise<void> {
 }
 
 /**
- * Schedule a debounced snapshot write after a scan that parsed something.
- * Reused-only scans schedule no write (the file already reflects the cache).
+ * Schedule a debounced snapshot write after a scan that parsed something. An
+ * early-stopped transcript counts: its stat key moved, so the entry must be
+ * re-persisted or the next launch re-reads it. Reused-only scans schedule no
+ * write (the file already reflects the cache).
  */
 export function scheduleSessionParseCachePersist(stats: SessionParseStats): void {
-  if (options === null || stats.incremental + stats.fullParses <= 0) {
+  if (options === null || stats.incremental + stats.fullParses + stats.earlyStopped <= 0) {
     return
   }
   const current = options
@@ -105,7 +109,7 @@ async function loadPersistedEntries(current: SessionParseCachePersistenceOptions
   await sweepOrphanedTempFiles(current.filePath)
   try {
     const raw = await readFile(current.filePath, 'utf-8')
-    const entries = parsePersistedFile(JSON.parse(raw), current.appVersion)
+    const entries = parsePersistedFile(JSON.parse(raw))
     if (entries) {
       seedSessionParseCache(entries)
     }
@@ -132,17 +136,14 @@ async function sweepOrphanedTempFiles(filePath: string): Promise<void> {
   }
 }
 
-function parsePersistedFile(
-  parsed: unknown,
-  appVersion: string
-): [string, PersistedSessionParseCacheEntry][] | null {
+function parsePersistedFile(parsed: unknown): [string, PersistedSessionParseCacheEntry][] | null {
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
   const file = parsed as Record<string, unknown>
-  // Why: parser output shape/semantics may change between app versions, so a
-  // cross-version file is discarded — one cold scan per update is the price.
-  if (file.schemaVersion !== SCHEMA_VERSION || file.appVersion !== appVersion) {
+  // Why: application releases that keep this schema promise compatible cached
+  // session semantics, so an update does not force a multi-gigabyte cold scan.
+  if (file.schemaVersion !== SCHEMA_VERSION || typeof file.appVersion !== 'string') {
     return null
   }
   if (!Array.isArray(file.entries)) {
@@ -181,15 +182,35 @@ function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCache
   if (entry.session !== null && typeof entry.session !== 'object') {
     return null
   }
+  const sidecar = parsePersistedSidecar(entry.sidecar)
   return [
     path,
     {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
       platform: entry.platform as NodeJS.Platform,
-      session: entry.session as PersistedSessionParseCacheEntry['session']
+      session: entry.session as PersistedSessionParseCacheEntry['session'],
+      ...(sidecar === undefined ? {} : { sidecar })
     }
   ]
+}
+
+// Why: added after SCHEMA_VERSION 2 shipped, so a file an older build wrote has
+// no such field. Absent (or unreadable) means unknown, which costs one re-parse
+// of the rows that have a sibling and nothing at all for the rest.
+function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
+  if (value === 'none' || value === 'unknown') {
+    return value
+  }
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  return typeof record.path === 'string' &&
+    typeof record.mtimeMs === 'number' &&
+    typeof record.sizeBytes === 'number'
+    ? { path: record.path, mtimeMs: record.mtimeMs, sizeBytes: record.sizeBytes }
+    : undefined
 }
 
 async function persistSnapshot(current: SessionParseCachePersistenceOptions): Promise<void> {

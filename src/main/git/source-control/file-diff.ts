@@ -1,5 +1,6 @@
 import * as path from 'node:path'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
@@ -7,6 +8,7 @@ import { gitDiffReadDedupe, settledDiffCache } from './git-read-cache-invalidati
 import { readWorktreeDiffStamp } from './worktree-diff-stamp'
 import { buildDiffResult } from './diff-result'
 import {
+  type GitBlobReadResult,
   readGitBlobAtIndexPath,
   readGitBlobAtOidPath,
   readUnstagedLeftBlob,
@@ -76,7 +78,7 @@ async function loadDiffThroughSettledCache(
   // lands entirely inside that window would otherwise leave the fence covering only the git read.
   const readGeneration = settledDiffCache.beginRead()
   // A staged diff compares HEAD to the index, so the working tree is not one of its inputs.
-  const stamp = await readWorktreeDiffStamp(worktreePath, filePath, !staged)
+  const stamp = await readWorktreeDiffStamp(worktreePath, filePath, !staged, options)
   const cached = settledDiffCache.get(readKey, stamp)
   if (cached) {
     return cached
@@ -173,11 +175,15 @@ async function loadDiff(
     } else {
       // The left chain (index→HEAD) is sequential within itself, but the working
       // tree read is a plain fs read that does not depend on it.
+      // Git can run in the distro against a raw Linux worktree path while Node reads it through Win32.
+      const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
           ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
           : readUnstagedLeftBlob(worktreePath, filePath, options),
-        readWorkingTreeFile(path.join(worktreePath, filePath))
+        hostWorktreePath
+          ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
+          : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
       ])
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
@@ -203,6 +209,14 @@ async function loadDiff(
     return { result: { ...result, modifiedDeleted: true }, reusable: !readFailed }
   }
   return { result, reusable: !readFailed }
+}
+
+/** A worktree path with no host spelling is a read failure, never a proven deletion. */
+const UNSPELLABLE_WORKING_TREE_READ: GitBlobReadResult = {
+  content: '',
+  isBinary: false,
+  exists: true,
+  failed: true
 }
 
 function notReusable(result: GitDiffResult): LoadedDiff {

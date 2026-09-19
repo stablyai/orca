@@ -23,18 +23,12 @@ export type NewWorktreeModalProps = {
   hostId?: string
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
-  onCreated: (worktreeId: string, name: string) => void
+  openExternalUrl: (url: string) => Promise<unknown>
+  onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
-
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: SetupHookTrust
-}
 
 export type SetupHookDetails = {
   repoId: string

@@ -1,0 +1,146 @@
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import {
+  logMiniMaxFetchFailure,
+  redactMiniMaxSecret,
+  type MiniMaxFetchResponse
+} from './minimax-request-context'
+import {
+  makeMiniMaxError,
+  parseMiniMaxModels,
+  parseMiniMaxUsageItem,
+  selectMiniMaxSnapshot,
+  type MiniMaxModelList,
+  type MiniMaxUsageSnapshot
+} from './minimax-fetcher-data'
+
+// Why: split out of minimax-fetcher.ts so the transport + routing file
+// stays under the 300-line cap (AGENTS.md disallows max-lines disables).
+// Pure data-shape → ProviderRateLimits translation; no I/O.
+
+export type MiniMaxUsageResponse = {
+  base_resp?: {
+    status_code?: unknown
+    status_msg?: unknown
+  }
+  model_remains?: {
+    model_name?: unknown
+    current_interval_remaining_percent?: unknown
+    start_time?: unknown
+    end_time?: unknown
+    remains_time?: unknown
+    current_weekly_remaining_percent?: unknown
+    weekly_remains_time?: unknown
+    weekly_boost_permille?: unknown
+  }[]
+}
+
+// Why: MiniMax answers an expired cookie/key with HTTP 200 + base_resp.status_code 1004,
+// so the credential-expiry signal has to be read from the payload, not the status line.
+const MINIMAX_UNAUTHENTICATED_STATUS_CODE = 1004
+
+function makeMiniMaxExpiredCredentialError(fetchResult: MiniMaxFetchResponse): ProviderRateLimits {
+  const usesApiKey = fetchResult.transport === 'api-key'
+  return makeMiniMaxError(
+    `MiniMax ${usesApiKey ? 'API key' : 'session cookie'} expired. Replace it in Settings.`,
+    'stale-token',
+    usesApiKey ? 'api-key' : 'session-cookie'
+  )
+}
+
+function handleMiniMaxHttpError(fetchResult: MiniMaxFetchResponse): ProviderRateLimits | null {
+  const { response } = fetchResult
+  if (response.status === 401 || response.status === 403) {
+    logMiniMaxFetchFailure({
+      transport: fetchResult.transport,
+      responseStatus: response.status,
+      cookieNames: fetchResult.cookieNames,
+      requestHeaderNames: fetchResult.requestHeaderNames
+    })
+    return makeMiniMaxExpiredCredentialError(fetchResult)
+  }
+  if (!response.ok) {
+    logMiniMaxFetchFailure({
+      transport: fetchResult.transport,
+      responseStatus: response.status,
+      cookieNames: fetchResult.cookieNames,
+      requestHeaderNames: fetchResult.requestHeaderNames
+    })
+    return makeMiniMaxError(`MiniMax usage fetch failed (${response.status})`, 'server')
+  }
+  return null
+}
+
+function handleMiniMaxPayloadError(
+  fetchResult: MiniMaxFetchResponse,
+  payload: MiniMaxUsageResponse
+): ProviderRateLimits | null {
+  const statusCode = payload.base_resp?.status_code
+  if (statusCode === undefined || statusCode === 0) {
+    return null
+  }
+  logMiniMaxFetchFailure({
+    transport: fetchResult.transport,
+    responseStatus: fetchResult.response.status,
+    statusCode,
+    statusMsg: payload.base_resp?.status_msg,
+    cookieNames: fetchResult.cookieNames,
+    requestHeaderNames: fetchResult.requestHeaderNames
+  })
+  if (statusCode === MINIMAX_UNAUTHENTICATED_STATUS_CODE) {
+    return makeMiniMaxExpiredCredentialError(fetchResult)
+  }
+  const message =
+    typeof payload.base_resp?.status_msg === 'string'
+      ? payload.base_resp.status_msg
+      : 'MiniMax returned an error'
+  return makeMiniMaxError(redactMiniMaxSecret(message), 'usage-unavailable')
+}
+
+export async function parseMiniMaxUsageResponse(
+  fetchResult: MiniMaxFetchResponse,
+  models: MiniMaxModelList
+): Promise<ProviderRateLimits> {
+  const httpError = handleMiniMaxHttpError(fetchResult)
+  if (httpError) {
+    return httpError
+  }
+  let payload: MiniMaxUsageResponse
+  try {
+    const value: unknown = await fetchResult.response.json()
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return makeMiniMaxError('Invalid MiniMax usage response', 'parse')
+    }
+    payload = value
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid MiniMax usage response'
+    return makeMiniMaxError(redactMiniMaxSecret(message), 'parse')
+  }
+  const payloadError = handleMiniMaxPayloadError(fetchResult, payload)
+  if (payloadError) {
+    return payloadError
+  }
+  // Why: a non-array `model_remains` (object / string) throws inside `.map`
+  // and surfaces as a 'network' error rather than 'parse'. Treat any
+  // non-array as an empty list and let the snapshot selection flag the
+  // missing usage.
+  const rawItems = Array.isArray(payload.model_remains) ? payload.model_remains : []
+  const snapshots = rawItems
+    .map(parseMiniMaxUsageItem)
+    .filter((snapshot): snapshot is MiniMaxUsageSnapshot => snapshot !== null)
+  const selected = selectMiniMaxSnapshot(snapshots, parseMiniMaxModels(models))
+  if (!selected) {
+    return makeMiniMaxError(
+      'MiniMax usage data for the configured model was not found',
+      'usage-unavailable'
+    )
+  }
+  return {
+    provider: 'minimax',
+    session: selected.session,
+    weekly: selected.weekly,
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok',
+    usageMetadata: { source: 'web' }
+  }
+}

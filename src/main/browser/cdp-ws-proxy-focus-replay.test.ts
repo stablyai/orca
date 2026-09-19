@@ -52,7 +52,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
       ['DOM.focus', { backendNodeId: 99 }],
       ['DOM.focus', { backendNodeId: 99 }],
       ['Input.insertText', { text: 'hello' }]
@@ -80,7 +79,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(insertResponse.result).toEqual({})
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
       ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
       ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
       ['Input.insertText', { text: 'frame text' }, 'oopif-session-123']
@@ -112,7 +110,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
       ['DOM.focus', { backendNodeId: 44 }],
       ['Runtime.callFunctionOn', { functionDeclaration: '() => document.activeElement?.id' }],
       ['Input.insertText', { text: 'after eval' }]
@@ -155,7 +152,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
       ['DOM.focus', { backendNodeId: 55 }],
       ['Input.insertText', { text: 'fallback' }]
     ])
@@ -197,7 +193,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
       ['DOM.focus', { backendNodeId: 77 }],
       ['DOM.focus', { backendNodeId: 77 }]
     ])
@@ -242,7 +237,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(insertResponse?.result).toEqual({})
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
       'DOM.focus',
       'DOM.focus',
       'Input.insertText'
@@ -270,12 +264,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     // Why: both Page.bringToFront and Input.insertText natively call focus(),
     // independent of the (now-cleared) DOM.focus replay.
     expect(mock.webContents.focus).toHaveBeenCalledTimes(2)
-    expect(getSendCommandMethods(mock)).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'DOM.focus',
-      'Input.insertText'
-    ])
+    expect(getSendCommandMethods(mock)).toEqual(['Page.enable', 'DOM.focus', 'Input.insertText'])
     client.close()
   })
 
@@ -298,7 +287,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(insertResponse.result).toEqual({})
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
       'DOM.focus',
       'Page.captureScreenshot',
       'Input.insertText'
@@ -322,12 +310,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
     expect(insertResponse.id).toBe(34)
     expect(insertResponse.result).toEqual({})
-    expect(getSendCommandMethods(mock)).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'DOM.focus',
-      'Input.insertText'
-    ])
+    expect(getSendCommandMethods(mock)).toEqual(['Page.enable', 'DOM.focus', 'Input.insertText'])
     second.close()
   })
 

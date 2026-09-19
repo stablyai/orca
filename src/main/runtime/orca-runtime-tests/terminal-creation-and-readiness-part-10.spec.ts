@@ -532,8 +532,7 @@ describe('OrcaRuntimeService', () => {
       draft: 'proceed with the release'
     })
     expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 0,
-      altScreenForcesZeroRows: false
+      scrollbackRows: 0
     })
   })
 
@@ -595,8 +594,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(read.tail).toEqual([''])
     expect(serializeBuffer).not.toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 0,
-      altScreenForcesZeroRows: false
+      scrollbackRows: 0
     })
   })
 
@@ -623,8 +621,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(read.tail).toEqual(['', ''])
     expect(serializeBuffer).not.toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 0,
-      altScreenForcesZeroRows: false
+      scrollbackRows: 0
     })
   })
 })

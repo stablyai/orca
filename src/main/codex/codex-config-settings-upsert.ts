@@ -2,7 +2,10 @@ import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
-  updateTomlLineScanState
+  joinPreservingTrailingNewline,
+  updateTomlLineScanState,
+  withCrLine,
+  withTrailingCr
 } from './config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
 
@@ -301,22 +304,4 @@ function appendNewTuiTable(lines: string[], keyRenders: string[], usesCrlf: bool
   // file was empty/blank, where a leading blank would be spurious.
   const block = appendAt > 0 ? ['', '[tui]', ...keyRenders] : ['[tui]', ...keyRenders]
   lines.splice(appendAt, 0, ...block.map((line) => withCrLine(line, usesCrlf)))
-}
-
-function withTrailingCr(originalLine: string, rendered: string): string {
-  return originalLine.endsWith('\r') ? `${rendered}\r` : rendered
-}
-
-function withCrLine(rendered: string, usesCrlf: boolean): string {
-  return usesCrlf ? `${rendered}\r` : rendered
-}
-
-// Why: a missing trailing newline is restored in the file's own EOL so a
-// preamble-only or table-appended rewrite matches the source's newline behavior.
-function joinPreservingTrailingNewline(lines: string[], usesCrlf: boolean): string {
-  const result = lines.join('\n')
-  if (result.endsWith('\n') || result.length === 0) {
-    return result
-  }
-  return result.endsWith('\r') ? `${result}\n` : `${result}${usesCrlf ? '\r\n' : '\n'}`
 }

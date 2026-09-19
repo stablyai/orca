@@ -3,6 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -20,7 +21,13 @@ function identity(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
 }
 
-type Recorded = { call: string; fence?: number; ordinal?: number; settlementId?: string }
+type Recorded = {
+  call: string
+  fence?: number
+  ordinal?: number
+  settlementId?: string
+  activity?: AgentSessionTurnActivity | null
+}
 
 function target(
   fence: number,
@@ -47,9 +54,15 @@ function target(
     appendLifecycleBatch: vi.fn(async (input: { settlementId: string }) => {
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
       return { epoch: 'e', sequence: 0 }
-    })
+    }),
+    latestItemMatching: vi.fn(() => null)
   } as unknown as AgentSessionJournal
-  return { journal, fence, publish: () => log.push({ call: 'publish', fence }) }
+  return {
+    journal,
+    fence,
+    publish: (activity) =>
+      log.push({ call: 'publish', fence, ...(activity !== undefined ? { activity } : {}) })
+  }
 }
 
 describe('deferred structured agent-session event sink', () => {
@@ -101,6 +114,25 @@ describe('deferred structured agent-session event sink', () => {
     await deferred.drained()
 
     expect(log).toEqual([{ call: 'appendItem', fence: 2, ordinal: 0 }])
+  })
+
+  it('resolves a lifecycle transition after journal bind and skips an existing state', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+
+    expect(
+      deferred.sink.tryAppendLifecycleTransition?.(identity(0), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendLifecycleTransition?.(identity(0), BODY, () => null)).toEqual({
+      accepted: true
+    })
+    deferred.bind(target(2, log))
+    await deferred.drained()
+
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 2, ordinal: 1 },
+      { call: 'publish', fence: 2 }
+    ])
   })
 
   it('drops buffered and later writes once closed, and refuses to rebind', async () => {
@@ -190,6 +222,35 @@ describe('deferred structured agent-session event sink', () => {
     expect(readingControl.pauseReading).toHaveBeenCalledOnce()
     expect(readingControl.resumeReading).toHaveBeenCalledOnce()
     expect(log).toHaveLength(2)
+  })
+
+  it('admits a resolved append and publication as one bounded operation', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink({
+      watermarks: {
+        pauseQueuedOperations: 1,
+        maxQueuedOperations: 2,
+        lowQueuedOperations: 0,
+        maxQueuedBytes: 1_000_000
+      }
+    })
+
+    expect(deferred.sink.tryAppendItem?.(identity(0), BODY)).toEqual({ accepted: true })
+    expect(
+      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendItem?.(identity(2), BODY)).toEqual({
+      accepted: false,
+      reason: 'backpressure'
+    })
+
+    deferred.bind(target(5, log))
+    await deferred.drained()
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 5, ordinal: 0 },
+      { call: 'appendItem', fence: 5, ordinal: 1 },
+      { call: 'publish', fence: 5 }
+    ])
   })
 
   it('pauses provider reading at the soft byte watermark before rejecting writes', async () => {
@@ -287,13 +348,13 @@ describe('deferred structured agent-session event sink', () => {
     releaseSecond?.()
   })
 
-  it('replaces a queued same-item checkpoint before any blob is created', async () => {
+  it('replaces a queued same-item checkpoint before it runs', async () => {
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const options = { coalescingKey: 'checkpoint:item-1' }
 
-    deferred.sink.appendItem(identity(0), BODY, [], options)
-    deferred.sink.appendItem(identity(1), BODY, [], options)
+    deferred.sink.appendItem(identity(0), BODY, options)
+    deferred.sink.appendItem(identity(1), BODY, options)
     expect(deferred.state().queuedOperations).toBe(1)
 
     deferred.bind(target(6, log))
@@ -306,15 +367,33 @@ describe('deferred structured agent-session event sink', () => {
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const options = { coalescingKey: 'checkpoint:item-1' }
 
-    deferred.sink.appendItem(identity(0), BODY, [], options)
+    deferred.sink.appendItem(identity(0), BODY, options)
     deferred.sink.appendItem(identity(1), BODY)
-    deferred.sink.appendItem(identity(2), BODY, [], options)
+    deferred.sink.appendItem(identity(2), BODY, options)
     deferred.bind(target(6, log))
     await deferred.drained()
 
     expect(log).toEqual([
       { call: 'appendItem', fence: 6, ordinal: 1 },
       { call: 'appendItem', fence: 6, ordinal: 2 }
+    ])
+  })
+
+  it('coalesces provider activity as a publication without a journal write', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+
+    deferred.sink.setActivity?.({ turnId: 'turn-1', text: 'Thinking' })
+    deferred.sink.setActivity?.({ turnId: 'turn-1', text: 'Checking the result' })
+    deferred.bind(target(6, log))
+    await deferred.drained()
+
+    expect(log).toEqual([
+      {
+        call: 'publish',
+        fence: 6,
+        activity: { turnId: 'turn-1', text: 'Checking the result' }
+      }
     ])
   })
 })

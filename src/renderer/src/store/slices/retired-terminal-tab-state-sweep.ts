@@ -58,7 +58,8 @@ export function sweepRetiredTerminalTabState(
 export function buildRetiredTerminalTabStateSweepPatch(
   state: RetiredTerminalTabSweepState,
   tabIds: readonly string[],
-  worktreeId?: string | null
+  worktreeId?: string | null,
+  opts?: { preserveActivityClearedState?: boolean }
 ): Partial<RetiredTerminalTabSweepState> | null {
   if (tabIds.length === 0) {
     return null
@@ -73,7 +74,10 @@ export function buildRetiredTerminalTabStateSweepPatch(
       swept,
       tabId,
       retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
-      worktreeId ? { worktreeId } : undefined
+      {
+        ...(worktreeId ? { worktreeId } : {}),
+        ...(opts?.preserveActivityClearedState ? { preserveActivityClearedState: true } : {})
+      }
     )
     const foreground = buildPaneForegroundAgentTabPrefixClearPatch(
       swept.paneForegroundAgentByPaneKey,

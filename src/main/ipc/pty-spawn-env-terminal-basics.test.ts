@@ -298,6 +298,10 @@ describe('registerPtyHandlers', () => {
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
     })
+    it('hints inline-image support to agents via ORCA_IMAGE_PROTOCOL', async () => {
+      const env = await spawnAndGetEnv()
+      expect(env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
+    })
     it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
       expect(env.GIT_TERMINAL_PROMPT).toBe('0')

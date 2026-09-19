@@ -86,7 +86,7 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
 export function requestSerializedBuffer(
   session: PtyIpcSession,
   ptyId: string,
-  opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  opts?: { scrollbackRows?: number }
 ): Promise<SerializeResult> {
   if (session.mainWindow.isDestroyed()) {
     return Promise.resolve(null)
@@ -101,7 +101,7 @@ export function requestSerializedBuffer(
     const payload: {
       requestId: string
       ptyId: string
-      opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      opts?: { scrollbackRows?: number }
     } = { requestId, ptyId }
     if (opts) {
       payload.opts = opts

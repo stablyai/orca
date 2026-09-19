@@ -433,7 +433,7 @@ describe('OrcaRuntimeService', () => {
     expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: '/remote/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/ssh'
       })
     )
@@ -444,7 +444,7 @@ describe('OrcaRuntimeService', () => {
         head: 'feature/ssh',
         title: 'Feature SSH'
       }),
-      'ssh-1',
+      'ssh:ssh-1',
       { localGitExecOptions: { admissionTier: 'interactive' } }
     )
     expect(createStackedHostedReviewMock).toHaveBeenCalledWith(
@@ -454,7 +454,7 @@ describe('OrcaRuntimeService', () => {
         base: 'stack/parent',
         head: 'feature/ssh'
       }),
-      'ssh-1',
+      'ssh:ssh-1',
       { localGitExecOptions: { admissionTier: 'interactive' } }
     )
   })
@@ -532,7 +532,7 @@ describe('OrcaRuntimeService', () => {
     expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: TEST_REPO_PATH,
-        connectionId: null,
+        executionHostId: 'local',
         branch: 'feature/wsl',
         localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' }
       })
@@ -540,7 +540,7 @@ describe('OrcaRuntimeService', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: TEST_REPO_PATH,
-        connectionId: null,
+        executionHostId: 'local',
         branch: 'feature/wsl',
         linkedGitHubPR: 76,
         localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'background' }
@@ -553,7 +553,7 @@ describe('OrcaRuntimeService', () => {
         head: 'feature/wsl',
         title: 'Feature WSL'
       }),
-      null,
+      'local',
       { localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' } }
     )
     expect(createStackedHostedReviewMock).toHaveBeenCalledWith(
@@ -563,7 +563,7 @@ describe('OrcaRuntimeService', () => {
         base: 'stack/parent',
         head: 'feature/wsl'
       }),
-      null,
+      'local',
       { localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' } }
     )
   })

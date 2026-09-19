@@ -1,0 +1,15 @@
+.git/
+.github/
+.local/
+.terraform/
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.env.local.generated
+*.log
+*.tfplan
+*.tfstate
+*.tfstate.*
+

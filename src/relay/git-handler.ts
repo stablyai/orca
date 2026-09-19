@@ -10,8 +10,7 @@ import {
   createSubmodulePathsCache,
   type SubmodulePathsCache
 } from './git-handler-submodule-ops'
-import { GitResponseStreamRegistry } from './git-response-stream'
-import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
+import { GitResponseStreamRegistry, maybeStreamRpcResponse } from './git-response-stream'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
@@ -68,9 +67,6 @@ export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
   private readonly gitCapabilities = new GitCapabilityCache()
-  // Why: use the bulk lane so large responses do not block interactive PTY echo.
-  private readonly responseStreams = new GitResponseStreamRegistry()
-
   // Why: cache .gitmodules per instance to avoid SSH reads and test leakage.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
 
@@ -78,7 +74,12 @@ export class GitHandler {
   constructor(
     dispatcher: RelayDispatcher,
     _context: RelayContext,
-    private readonly watcherRegistry?: GitHandlerWatcherRegistry
+    private readonly watcherRegistry?: GitHandlerWatcherRegistry,
+    // Why: use the bulk lane so large responses do not block interactive PTY echo. This handler
+    // registers the `git.responseAck` route below, so in production it takes the relay's single
+    // registry and FsHandler is handed the same one — see the header of git-response-stream.ts for
+    // why a second registry both collides on stream ids and stalls on credit.
+    private readonly responseStreams: GitResponseStreamRegistry = new GitResponseStreamRegistry()
   ) {
     this.dispatcher = dispatcher
     const handlers = createGitHandlerOperationSet({
@@ -132,14 +133,7 @@ export class GitHandler {
     params: Record<string, unknown>,
     context: RequestContext | undefined
   ): unknown {
-    if (params.__streamResponse !== true || !context) {
-      return result
-    }
-    const payload = Buffer.from(JSON.stringify(result ?? null), 'utf-8')
-    if (payload.length <= GIT_RESPONSE_STREAM_THRESHOLD) {
-      return result
-    }
-    return this.responseStreams.startStream(payload, this.dispatcher, context)
+    return maybeStreamRpcResponse(result, params, context, this.responseStreams, this.dispatcher)
   }
 
   private clearGitMutationReadCaches(): void {

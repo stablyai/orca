@@ -7,6 +7,7 @@ import {
   readdirSync,
   readlinkSync,
   rmSync,
+  statSync,
   symlinkSync
 } from 'node:fs'
 import { join } from 'node:path'
@@ -100,7 +101,31 @@ export function makeTreeReadOnly(targetPath, chmod = chmodSync) {
     if (entry.isDirectory()) {
       makeTreeReadOnly(entryPath, chmod)
     } else if (!entry.isSymbolicLink()) {
-      chmod(entryPath, 0o555)
+      // Clear the write bits and nothing else. A flat 0o555 would strip setuid from
+      // chrome-sandbox, and under hardlink sharing it would strip it in every worktree at once.
+      const mode = statSync(entryPath, { throwIfNoEntry: false })?.mode
+      chmod(entryPath, mode === undefined ? 0o555 : mode & ~0o222)
+    }
+  }
+  chmod(targetPath, 0o755)
+}
+
+/**
+ * Restore owner write permission across a private copy.
+ *
+ * Counterpart to `makeTreeReadOnly`: clonefile, reflink and `cpSync` all carry the source's mode
+ * across, so a tree copied from the write-protected shared cache lands read-only and every patch
+ * the caller then makes -- `plutil -replace`, `codesign` -- fails with EACCES. Only the owner bit
+ * comes back; group and other stay as the source left them.
+ */
+export function makeTreeWritable(targetPath, chmod = chmodSync) {
+  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
+    const entryPath = join(targetPath, entry.name)
+    if (entry.isDirectory()) {
+      makeTreeWritable(entryPath, chmod)
+    } else if (!entry.isSymbolicLink()) {
+      const mode = statSync(entryPath, { throwIfNoEntry: false })?.mode
+      chmod(entryPath, mode === undefined ? 0o644 : mode | 0o200)
     }
   }
   chmod(targetPath, 0o755)
@@ -110,28 +135,35 @@ export function makeTreeReadOnly(targetPath, chmod = chmodSync) {
  * Share storage when possible, otherwise copy the bytes.
  *
  * Never hardlinks: this is for trees the caller goes on to patch, where shared inodes would write
- * through into the source.
+ * through into the source. The copy is unprotected on the way out for the same reason -- a private
+ * tree the caller cannot write to is useless to it.
  */
 export function copyPrivateTree(sourcePath, destinationPath, options = {}) {
   const platform = options.platform ?? process.platform
   const copy = options.copy ?? copyTreeVerbatim
+  const unprotect = options.unprotect ?? makeTreeWritable
   const privateMechanisms = new Set(['clone', 'reflink'])
+  let result = { mechanism: null, copyError: null }
   if (getShareMechanisms(platform).some((mechanism) => privateMechanisms.has(mechanism))) {
     try {
-      const mechanism = shareTree(sourcePath, destinationPath, {
-        ...options,
-        hardlink: () => {
-          throw new Error('hardlinks would not be private')
-        }
-      })
-      return { mechanism, copyError: null }
+      result = {
+        mechanism: shareTree(sourcePath, destinationPath, {
+          ...options,
+          hardlink: () => {
+            throw new Error('hardlinks would not be private')
+          }
+        }),
+        copyError: null
+      }
     } catch (copyError) {
       copy(sourcePath, destinationPath)
-      return { mechanism: null, copyError }
+      result = { mechanism: null, copyError }
     }
+  } else {
+    copy(sourcePath, destinationPath)
   }
-  copy(sourcePath, destinationPath)
-  return { mechanism: null, copyError: null }
+  unprotect(destinationPath)
+  return result
 }
 
 function copyTreeVerbatim(sourcePath, destinationPath) {

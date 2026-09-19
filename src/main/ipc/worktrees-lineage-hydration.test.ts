@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { LINEAGE_HYDRATION_TIMEOUT_MS } from './worktrees/metadata/host-lineage-listing'
@@ -390,7 +391,7 @@ describe('registerWorktreeHandlers', () => {
       [childId]: { instanceId: 'child-instance' }
     }
     store.getWorktreeMeta.mockImplementation((id: string) => metaById[id])
-    store.setWorktreeMeta.mockImplementation((id: string, updates: object) => ({
+    store.setWorktreeMeta.mockImplementation((id: string, updates: Partial<WorktreeMeta>) => ({
       ...metaById[id],
       ...updates
     }))

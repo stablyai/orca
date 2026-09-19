@@ -35,6 +35,26 @@ export function getLocalWorkspacePortSections(
   }
 }
 
+/**
+ * Whether the panel still renders its port sections under a failure notice.
+ * Why: a failed scan retains the host's last-good ports, so hiding every
+ * section would drop the stop and open actions for ports the status bar still
+ * counts and lists.
+ */
+export function shouldShowLocalWorkspacePortSections(
+  scan: { unavailableReason?: string } | null | undefined,
+  sections: { activePorts: unknown[]; otherWorkspacePorts: unknown[]; externalPorts: unknown[] }
+): boolean {
+  if (!scan?.unavailableReason) {
+    return true
+  }
+  return (
+    sections.activePorts.length > 0 ||
+    sections.otherWorkspacePorts.length > 0 ||
+    sections.externalPorts.length > 0
+  )
+}
+
 function workspacePortAsExternal(port: WorkspacePort & { kind: 'workspace' }): WorkspacePort {
   return {
     id: port.id,

@@ -1,5 +1,6 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -9,6 +10,8 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
+
+export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -63,6 +66,10 @@ export type PaneManagerOptions = {
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
+  terminalLigaturesEnabled?: () => boolean
+  /** Whether inline terminal images (SIXEL / iTerm2 IIP / Kitty graphics) are
+   *  enabled. Resolved per pane open and toggleable at runtime. */
+  terminalInlineImagesEnabled?: () => boolean
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
@@ -76,6 +83,7 @@ export type PaneManagerOptions = {
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
   initialRenderingSuspended?: boolean
+  retainHiddenWebgl?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal
   // helpers log warnings that are hard to correlate without knowing which
@@ -165,6 +173,13 @@ export type ManagedPaneInternal = {
   // so the addon instance only exists while the feature is active. A null
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
+  // Why nullable: inline images are opt-in and toggleable at runtime, and the
+  // addon is lazy-loaded, so the instance only exists while the feature is
+  // active and its chunk has resolved. Null means "currently disabled".
+  imageAddon: ImageAddon | null
+  // Set while the setting is on but the lazy addon chunk is still loading; the
+  // loader's onLoaded handler drains these into a real attach.
+  imageAttachmentDeferred?: boolean
   fitResizeObserver: ResizeObserver | null
   // Why: fit-element pixel size at the last successful fit; the reveal fit compares
   // against it to tell a real hidden-time resize from a transient cell-metric wobble.

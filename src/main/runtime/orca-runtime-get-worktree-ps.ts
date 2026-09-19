@@ -1,7 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner } from './orca-runtime-structured-agent-session-recover-tui-owner'
 import { DEFAULT_WORKTREE_PS_LIMIT } from './orca-runtime-postlude'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import type { RuntimeWorktreePsResult } from '../../shared/runtime-types'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import { buildRuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import {
@@ -13,16 +14,17 @@ import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../agent-hooks/first-work-structured-session-rename'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
+import { buildWorktreeListingPage } from './worktree-listing-host-scope'
+import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
+import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { hostname } from 'node:os'
+import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
@@ -30,11 +32,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
-  ): Promise<{
-    worktrees: RuntimeWorktreePsSummary[]
-    totalCount: number
-    truncated: boolean
-  }> {
+  ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
@@ -93,6 +91,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         missingIds: missingRuntimeWorktreeIds,
         ptysById: this.ptysById,
         tabs: this.tabs,
+        getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
           this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
       })
@@ -100,22 +99,22 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
       missingWorktreeIds: missingRuntimeWorktreeIds,
-      mirroredWorktreeIdByTabId,
-      connectedPtyEvidence,
       workingTerminalEvidenceByWorktreeId,
-      retainedSnapshots: this.agentRows.values(),
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      rowSources: collectRuntimeWorktreeAgentSources({
+        mirroredWorktreeIdByTabId,
+        connectedPtyEvidence,
+        // Structured sessions are in here too: the host publishes them into the same store.
+        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
+      }),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
-    return {
-      worktrees: sorted.slice(0, limit),
-      totalCount: sorted.length,
-      truncated: sorted.length > limit
-    }
+    // Why: the same cap starvation as worktree.list — a host whose rows all sort last gets no
+    // page at all, which is indistinguishable from it having no workspaces (#18104).
+    return buildWorktreeListingPage(sorted, limit, this.listKnownExecutionHostIds())
   }
 
   listRepos(): Repo[] {
@@ -149,24 +148,32 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveLaunchArgs: () => this.resolveConfiguredCodexStructuredArgs(),
       resolveLaunchEnvOverlay: () =>
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
+      resolveClaudeLaunchEnv: () =>
+        resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      resolveClaudeAuthPolicy: () =>
+        claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
+      // Re-read per acquisition, like the auth policy above it: the Agent Permissions setting is
+      // the one copy of this fact, and the configured CLI arguments never reach a structured launch.
+      resolveClaudePermissionMode: () =>
+        claudeStructuredPermissionModeForSettings(this.requireStore().getSettings()),
+      resolveCodexPermissionPolicy: () =>
+        codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
+      // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
+      getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
+      // Structured chat has no agent CLI hooks, so this projection is what the first-work
+      // workspace rename listens to instead of `agentStatus:set`.
+      onSessionStatusChanged: (summary, options) => {
+        void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
+          summary,
+          options,
+          firstWorkRenameDeps(this.requireStore(), this)
+        )
+      },
+      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
-  }
-
-  protected resolveConfiguredCodexStructuredArgs(): string[] {
-    const settings = this.requireStore().getSettings()
-    const shell = resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: false,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    return resolveCodexStructuredAppServerArgs(
-      resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
-      shell ?? 'posix'
-    )
   }
 
   protected createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport {
@@ -200,7 +207,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       tuiStatus: (owner) => this.structuredTuiStatus(owner),
       closeTuiOwner: (owner) => this.closeStructuredTuiOwner(owner),
       revealNativeSession: async ({ workspaceId, sessionId, agent = 'codex', adoptedTerminal }) => {
-        if (adoptedTerminal || agent !== 'codex') {
+        if (adoptedTerminal || (agent !== 'codex' && agent !== 'claude')) {
           return
         }
         await this.publishStructuredAgentSessionTab({
