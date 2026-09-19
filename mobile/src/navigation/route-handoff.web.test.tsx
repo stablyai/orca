@@ -180,22 +180,25 @@ describe('a route the page does not render', () => {
     handoff.push('/h/host-b?from=list')
     // `/h/host-b` is a page route; the query is not part of what the pattern matches.
     expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith('/h/host-b?from=list')
+    expect(router.push).toHaveBeenCalledWith('/h/host-b?from=list', undefined)
   })
 })
 
+// `undefined` is asserted rather than elided below: each wrapper forwards `(href, options)` whole,
+// so a caller that passed none reaches the router with the second argument present and undefined,
+// which is what expo-router reads as absent.
 describe('a route the page does render', () => {
   it('stays in this document rather than re-entering the shell for it', () => {
     const { posted, handoff } = mount(INIT)
     handoff.push('/h/host-b')
     expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith('/h/host-b')
+    expect(router.push).toHaveBeenCalledWith('/h/host-b', undefined)
   })
 
   it('replaces locally, which is a history entry the native stack never had', () => {
     const { handoff } = mount(INIT)
     handoff.replace('/h/host-b')
-    expect(router.replace).toHaveBeenCalledWith('/h/host-b')
+    expect(router.replace).toHaveBeenCalledWith('/h/host-b', undefined)
   })
 })
 
@@ -391,7 +394,7 @@ describe('navigate, which is a push that may collapse onto an existing screen', 
     const { posted, handoff } = mount(INIT)
     handoff.navigate('/h/host-b')
     expect(navigations(posted)).toEqual([])
-    expect(router.navigate).toHaveBeenCalledWith('/h/host-b')
+    expect(router.navigate).toHaveBeenCalledWith('/h/host-b', undefined)
   })
 
   it('refuses rather than opening a target the shell would not take', () => {
@@ -427,5 +430,48 @@ describe('prefetch', () => {
     const { handoff } = mount(INIT)
     handoff.prefetch('/h/host-a/session/wt-1')
     expect(warned).toEqual([])
+  })
+})
+
+/**
+ * The second argument expo-router's target-takers accept.
+ *
+ * `push`, `replace`, `navigate` and `dismissTo` are `(href, options?)`, and the wrappers took only
+ * the href: a local push that asked for `{ withAnchor: false }` reached the router without it, so
+ * the page silently did something other than what the caller wrote. Nothing in this tree passes
+ * one today, which is why it went unnoticed and why it has to be pinned rather than left.
+ */
+describe('navigation options', () => {
+  const options = { withAnchor: false }
+
+  it('reach the router on the branch this document serves', () => {
+    const { handoff } = mount(INIT)
+    handoff.push('/h/host-b', options)
+    expect(router.push).toHaveBeenCalledWith('/h/host-b', options)
+  })
+
+  it('reach it from every target-taker that has a local branch', () => {
+    const { handoff } = mount(INIT)
+    handoff.replace('/h/host-b', options)
+    handoff.navigate('/h/host-b', options)
+    handoff.dismissTo('/h/host-b', options)
+    expect(router.replace).toHaveBeenCalledWith('/h/host-b', options)
+    expect(router.navigate).toHaveBeenCalledWith('/h/host-b', options)
+    expect(router.dismissTo).toHaveBeenCalledWith('/h/host-b', options)
+  })
+
+  it('do not cross to the shell, which the notify has no room for', () => {
+    const { posted, handoff } = mount(INIT)
+    handoff.push('/h/host-a/session/wt-1', options)
+    // The frame carries an href and nothing else, so a handed-off target loses them. That is the
+    // native stack's push to configure, not this document's.
+    expect(navigations(posted)).toEqual([
+      {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: 'navigate',
+        href: '/h/host-a/session/wt-1'
+      }
+    ])
   })
 })

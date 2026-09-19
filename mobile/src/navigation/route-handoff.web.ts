@@ -119,6 +119,12 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
  * target to mount, so `router.back()` on a document holding one history entry is the same nothing
  * a refusal would have been.
  *
+ * Each target-taker is `(href, options?)` and forwards both on its local branch. Options do not
+ * cross to the shell: the `navigate` notify carries an href and nothing else, so a target handed
+ * over is opened by the native stack on that stack's own terms. Nothing in this tree passes one
+ * today; the wrappers took the href alone until a review found it, which is exactly how a caller
+ * that starts passing one would have had it dropped without a word.
+ *
  * Whether the target names a screen that exists is nobody's business here; the shape is all this
  * can check, and C1.7 is where a real route-existence check belongs.
  */
@@ -158,25 +164,25 @@ export function useRouteHandoff(): RouteHandoff {
     }
     return {
       ...router,
-      push: (href) => {
+      push: (href, options) => {
         if (handOff(href) === 'local') {
-          router.push(href)
+          router.push(href, options)
         }
       },
       // expo-router's own `navigate` is a push that may collapse onto an existing screen instead.
       // Which of the two it does is a decision about this document's stack, and a target outside
       // this document has no such stack, so it is handed over exactly as a push is.
-      navigate: (href) => {
+      navigate: (href, options) => {
         if (handOff(href) === 'local') {
-          router.navigate(href)
+          router.navigate(href, options)
         }
       },
       // The shell has one way to open a screen and it is a push, so a replace the page cannot keep
       // becomes one too. What it replaces is a history entry inside this document, which the native
       // stack never had; leaving it is what lets Back come back to the page.
-      replace: (href) => {
+      replace: (href, options) => {
         if (handOff(href) === 'local') {
-          router.replace(href)
+          router.replace(href, options)
         }
       },
       // The one member whose handoff needs no target: inside the page there is nothing behind this
@@ -191,9 +197,9 @@ export function useRouteHandoff(): RouteHandoff {
       },
       // The list's own way out of the host. Inside the page there is no stack to pop to: the phone's
       // home screen is a native route, so it is handed over like any other.
-      dismissTo: (href) => {
+      dismissTo: (href, options) => {
         if (handOff(href) === 'local') {
-          router.dismissTo(href)
+          router.dismissTo(href, options)
         }
       },
       // The one target-taker that must never reach the shell. A prefetch is a background load, not
