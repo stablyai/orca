@@ -296,16 +296,25 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
 
 // Antigravity readiness, and what this file does NOT claim about it.
 //
-// The detector recognizes a ready screen by header + a 'gemini'-prefixed model line + a lone '>'
-// caret. That is narrow: an Antigravity user on a non-Gemini model never reaches ready and the pane
-// wedges. Widening it was attempted and reverted -- every candidate rule was tuned against the
-// constructed fixtures below, and the last one let a live sign-in dialog read as ready (the
-// orchestrator then types the task prompt into an authentication dialog, which is strictly worse
-// than a timeout). No real Antigravity transcript exists in this repo; the cursor-agent rules are
-// derived from captures under src/main/runtime/__fixtures__ and Antigravity has no equivalent.
-// Widening the model rule needs one first. See the ratchet at the bottom of this block for the
-// shapes any replacement has to refuse.
+// Real transcripts now exist -- fifteen, under src/main/runtime/__fixtures__, across two agy
+// versions -- and they replaced the model-line rule this block was written against. The detector
+// no longer reads the header's model row, the account row, or any identity text: it asks only
+// whether the last line with content is a bare '>' sitting directly under the composer's box rule.
+// See docs/reference/antigravity-readiness-evidence.md.
+//
+// Consequence for the screens below: every one of them is hand-written, and the ready-shaped ones
+// were missing the composer rule, because whoever wrote them had never seen a real ready screen.
+// The two that assert readiness now carry it, which is the only reason they are screens agy could
+// print. The dialogs are left exactly as they were -- a dialog's caret is its selected row and has
+// dialog text above it, not a rule, which is what keeps refusing them.
+//
+// The behavioural claims here are all corroborated by a capture, so this block is a cheap unit
+// echo of them rather than the evidence: antigravity-dialog-dismissed.txt is a real dismissed
+// dialog above a redrawn composer, and antigravity-dialog-trust-workspace.txt is a real live one.
 describe('Antigravity readiness does not absorb its own startup dialog', () => {
+  /** The composer's box rule. Every captured ready screen has one directly above the caret. */
+  const COMPOSER_RULE = '\u2500'.repeat(120)
+
   const TRUST_DIALOG_WITH_CARET = [
     'Antigravity CLI 1.0.3',
     'Do you trust the files in this folder?',
@@ -374,14 +383,17 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-interactive-prompt')
   })
 
-  // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
-  // which is the whole point of the dismissed-modal rule.
-  it('clears once a Gemini ready screen replaces the dialog', () => {
+  // Discriminating: a stale dialog above a redrawn composer must stop being reported, which is the
+  // whole point of the dismissed-modal rule. The composer rule is what makes the bottom of this a
+  // composer rather than one more dialog row; without it agy has drawn no composer and the pane is
+  // correctly refused. antigravity-dialog-dismissed.txt is the captured version of this case.
+  it('clears once a redrawn composer replaces the dialog', () => {
     const waitText = waitTextFor([
       ...TRUST_DIALOG_WITH_CARET,
       'Antigravity CLI 1.0.3',
       'user@example.com (Antigravity Business)',
       'Gemini 3.5 Flash (High)',
+      COMPOSER_RULE,
       '>'
     ])
 
@@ -389,27 +401,29 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
   })
 
-  // Characterization, not a guard: records the wedge this file has not fixed. An Antigravity user on
-  // a non-Gemini model has no 'gemini' line, so readiness never resolves and the wait times out.
-  // Flipping this to true is the goal of the follow-up, and needs a captured transcript first.
-  it('does not yet recognize a non-Gemini ready screen (known wedge)', () => {
+  // This was the wedge this file recorded as unfixed: a non-Gemini model row meant no 'gemini' line,
+  // so readiness never resolved and every wait timed out. The detector reads no model text at all
+  // now, so the model name cannot change the verdict -- which is the whole user-visible point of
+  // the rewrite, and is asserted here rather than left as a stale characterization.
+  it('recognizes a non-Gemini ready screen, because no model text is read', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
       'user@example.com (Antigravity Business)',
       'Claude Sonnet 4.5 (High)',
       '~/orca/workspaces/orca/agy-dispatch-issue',
+      COMPOSER_RULE,
       '>'
     ])
 
-    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
   })
 
-  // Ratchet, not a guard of today's code: these pass now only because none of them prints a 'gemini'
-  // model line. They exist so the next attempt to widen the model rule has to refuse them -- the
-  // reverted attempt accepted all five as ready on the strength of the account row alone (and an
-  // 'x@y.z' anywhere in the dialog body did just as well), and readiness is what gates typing the
-  // task prompt into the pane. A replacement must rest on positive evidence that the agent's input
-  // prompt is accepting input, not on absence-of-dialog plus an account row.
+  // Ratchet. These no longer pass for the reason originally written here -- the model line is not
+  // read any more -- they pass because each one's last line is a dialog row rather than a bare '>'
+  // under the composer rule. The ratchet's purpose is unchanged and is the reason to keep them:
+  // readiness gates typing the task prompt into the pane, the reverted attempt accepted all five on
+  // the strength of an account row (and an 'x@y.z' anywhere in the body did just as well), and any
+  // replacement must rest on positive evidence that the composer is accepting input.
   const SILENT_STARTUP_DIALOGS: { name: string; lines: string[] }[] = [
     {
       name: 'an update banner',
