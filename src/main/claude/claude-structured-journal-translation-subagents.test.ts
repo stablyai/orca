@@ -7,7 +7,10 @@ import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock
 } from '../../shared/native-chat-types'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionAppendOptions,
+  StructuredAgentSessionEventSink
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 
 const GROUP_ITEM_ID = 'claude-subagents:claude-session:user-1'
@@ -17,10 +20,16 @@ function orcaClientMessageId(identity: AgentJournalItemIdentity): string | null 
   return identity.provider === 'orca' ? identity.clientMessageId : null
 }
 
+type AppendedItem = {
+  identity: AgentJournalItemIdentity
+  body: AgentJournalItemBody
+  options: StructuredAgentSessionAppendOptions | undefined
+}
+
 function harness() {
-  const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
+  const items: AppendedItem[] = []
   const sink: StructuredAgentSessionEventSink = {
-    appendItem: (identity, body) => items.push({ identity, body }),
+    appendItem: (identity, body, options) => items.push({ identity, body, options }),
     appendTombstone: vi.fn(),
     publish: vi.fn()
   }
@@ -50,7 +59,10 @@ function harness() {
     items
       .filter((item) => (orcaClientMessageId(item.identity) ?? '').startsWith('provider-frame:'))
       .map((item) => item.body)
-  return { translator, groupRows, roster, rosterIn, rosterOf, fallbackRows }
+  /** Every append the translator made, with the options it passed — the third argument
+   *  this harness used to discard, which is where producer attribution rides. */
+  const appended = (): AppendedItem[] => items
+  return { translator, groupRows, roster, rosterIn, rosterOf, fallbackRows, appended }
 }
 
 function userTurn(uuid: string) {
@@ -105,6 +117,64 @@ function resultFrame() {
       result: 'ok'
     }
   }
+}
+
+/** An assistant frame; a string `parentToolUseId` makes it a subagent's. */
+function assistantFrame(
+  uuid: string,
+  parentToolUseId: string | null,
+  content: readonly Record<string, unknown>[]
+) {
+  return {
+    type: 'message' as const,
+    sessionId: 'orca-session',
+    message: {
+      type: 'assistant',
+      uuid,
+      session_id: 'claude-session',
+      parent_tool_use_id: parentToolUseId,
+      message: { role: 'assistant', content }
+    }
+  }
+}
+
+/** A tool_result frame; a string `parentToolUseId` makes it a subagent's inner result. */
+function toolResultFrame(uuid: string, parentToolUseId: string | null, toolUseId: string) {
+  return {
+    type: 'message' as const,
+    sessionId: 'orca-session',
+    message: {
+      type: 'user',
+      uuid,
+      session_id: 'claude-session',
+      parent_tool_use_id: parentToolUseId,
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'found it' }]
+      }
+    }
+  }
+}
+
+// Partial-message cadence: every stream_event carries its own uuid, and the block's
+// scope is (session_id, parent_tool_use_id) — the only place a streamed delta says
+// who produced it, because the persist callback sees no message envelope.
+function streamEvent(uuid: string, parentToolUseId: string | null, event: Record<string, unknown>) {
+  return {
+    type: 'message' as const,
+    sessionId: 'orca-session',
+    message: {
+      type: 'stream_event',
+      uuid,
+      session_id: 'claude-session',
+      parent_tool_use_id: parentToolUseId,
+      event
+    }
+  }
+}
+
+function textDeltaEvent(index: number, text: string) {
+  return { type: 'content_block_delta', index, delta: { type: 'text_delta', text } }
 }
 
 describe('claude journal translation — subagents', () => {
@@ -255,5 +325,82 @@ describe('claude journal translation — subagents', () => {
     translator.handle(resultFrame())
     translator.handle({ type: 'ended', sessionId: 'orca-session', reason: 'closed' })
     expect(rosterIn('outside-turn')).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+  })
+})
+
+describe('producer attribution', () => {
+  it("stamps a subagent frame's message, tool call and tool result, and leaves the roster row alone", () => {
+    const { translator, appended } = harness()
+    translator.handle(userTurn('user-1'))
+    translator.handle(assistantFrame('root-1', null, [{ type: 'text', text: 'delegating' }]))
+    translator.handle(
+      assistantFrame('child-1', 'toolu_1', [
+        { type: 'text', text: 'looking' },
+        { type: 'tool_use', id: 'toolu_child', name: 'Grep', input: { pattern: 'x' } }
+      ])
+    )
+    translator.handle(toolResultFrame('child-2', 'toolu_1', 'toolu_child'))
+
+    const stamped = appended()
+      .filter((item) => item.options?.producedBySubagent === true)
+      .map((item) => item.body.kind)
+    expect(stamped).toEqual(['message', 'tool-call', 'tool-call'])
+
+    // The parent's own prose is NOT stamped, or the row would go blank instead of
+    // showing what the session's own agent said.
+    const rootProse = appended().find(
+      (item) => item.body.kind === 'message' && item.body.role === 'assistant'
+    )
+    expect(rootProse?.options?.producedBySubagent).toBeUndefined()
+
+    // The roster group row is the PARENT's own display of its children, so it must
+    // stay root — stamping it would hide the subagent list from the parent.
+    const rosterRow = appended().findLast(
+      (item) => orcaClientMessageId(item.identity) === GROUP_ITEM_ID
+    )
+    expect(rosterRow).toBeDefined()
+    expect(rosterRow?.options?.producedBySubagent).toBeUndefined()
+  })
+
+  it("stamps a subagent's STREAMED prose, which carries no message envelope when it persists", () => {
+    const { translator, appended } = harness()
+    translator.handle(userTurn('user-1'))
+    translator.handle(streamEvent('root-s1', null, textDeltaEvent(0, 'thinking it over')))
+    translator.handle(streamEvent('child-s1', 'toolu_1', textDeltaEvent(0, 'searching the tree')))
+    translator.flush()
+
+    const streamed = appended().filter(
+      (item) => item.body.kind === 'message' && item.body.role === 'assistant'
+    )
+    expect(streamed.map((item) => item.options?.producedBySubagent)).toEqual([undefined, true])
+  })
+
+  it('leaves every row of a root-only turn unstamped', () => {
+    const { translator, appended } = harness()
+    translator.handle(userTurn('user-1'))
+    translator.handle(
+      assistantFrame('root-1', null, [
+        { type: 'text', text: 'on it' },
+        { type: 'tool_use', id: 'toolu_1', name: 'Task', input: { description: 'explore' } }
+      ])
+    )
+    translator.handle(streamEvent('root-s1', null, textDeltaEvent(0, 'more prose')))
+    translator.flush()
+    translator.handle(resultFrame())
+
+    expect(appended().every((item) => item.options?.producedBySubagent === undefined)).toBe(true)
+    // Positive control: the instrument can see a stamp when there is one.
+    expect(appended().length).toBeGreaterThan(0)
+  })
+
+  it('leaves the turn record unstamped — a turn is only ever opened by a root frame', () => {
+    const { translator, appended } = harness()
+    translator.handle(userTurn('user-1'))
+    translator.handle(assistantFrame('child-1', 'toolu_1', [{ type: 'text', text: 'looking' }]))
+    translator.handle(resultFrame())
+
+    const turnRows = appended().filter((item) => item.body.kind === 'turn')
+    expect(turnRows.length).toBeGreaterThan(0)
+    expect(turnRows.every((item) => item.options?.producedBySubagent === undefined)).toBe(true)
   })
 })

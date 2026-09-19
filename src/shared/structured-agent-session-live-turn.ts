@@ -2,12 +2,17 @@
 // tail of the item list. Every scan here stops at the turn's own record — the
 // typed `turn` item, or the legacy status row that carries one — because state
 // from an earlier turn is never this turn's state.
+//
+// These scans answer for the SESSION'S OWN agent. A subagent's rows share this
+// journal, so each scan skips anything a subagent produced; the transcript still
+// renders every agent's output.
 
 import type {
   AgentJournalRenderItem,
   AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
+import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 
 export function activeStructuredAgentSessionTurnId(
@@ -76,12 +81,13 @@ export function isStructuredAgentSessionThinking(
 ): boolean {
   let newestContentIsReasoning: boolean | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
+    const item = items[index]
+    const body = item?.body
     const turn = readAgentJournalTurn(body)
     if (turn) {
       return turn.state === 'running' && newestContentIsReasoning === true
     }
-    if (newestContentIsReasoning !== null) {
+    if (newestContentIsReasoning !== null || !isRootAgentJournalItem(item)) {
       continue
     }
     if (body?.kind === 'message') {
@@ -99,18 +105,20 @@ export function isStructuredAgentSessionThinking(
   return false
 }
 
-/** The tool call the newest turn is still inside, or null when nothing is running.
- *  An abandoned `running` call from an earlier crashed turn can never be reported
- *  as live work. */
+/** The tool call the SESSION'S OWN agent is still inside, or null when nothing is
+ *  running. An abandoned `running` call from an earlier crashed turn can never be
+ *  reported as live work, and neither can a subagent's — while a child runs a tool,
+ *  the parent is still inside the call that spawned it. */
 export function activeStructuredAgentSessionToolCall(
   items: readonly AgentJournalRenderItem[]
 ): AgentJournalToolCallItem | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
+    const item = items[index]
+    const body = item?.body
     if (readAgentJournalTurn(body)) {
       return null
     }
-    if (body?.kind === 'tool-call' && body.state === 'running') {
+    if (body?.kind === 'tool-call' && body.state === 'running' && isRootAgentJournalItem(item)) {
       return body
     }
   }

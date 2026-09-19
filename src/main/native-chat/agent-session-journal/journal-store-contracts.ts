@@ -39,7 +39,12 @@ export type JournalAppendResult = {
   revision: number
 }
 
-export type JournalItemAppendOptions = { fence: number; observedAt?: number; recovered?: true }
+export type JournalItemAppendOptions = {
+  fence: number
+  observedAt?: number
+  recovered?: true
+  producedBySubagent?: true
+}
 export type JournalTombstoneInput = { fence: number }
 
 export type JournalLifecycleBatchInput = {

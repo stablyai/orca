@@ -243,7 +243,8 @@ export const AgentJournalRenderItemSchema = z.object({
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
   observedAt: z.number(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  producedBySubagent: z.literal(true).optional()
 })
 
 export const AgentJournalSubmissionSchema = z.object({

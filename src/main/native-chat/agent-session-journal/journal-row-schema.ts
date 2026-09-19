@@ -28,6 +28,11 @@ type JournalRowBase = {
   ts: number
   /** Set when crash reconciliation appended the row after the fact. */
   recovered?: true
+  /** Set when a subagent, not the session's own agent, produced the row. Deliberately
+   *  NOT a `v` bump: an unknown `v` makes a row unreadable and latches the host
+   *  read-only, whereas an unknown KEY is ignored below, so an older host reads a
+   *  stamped row and behaves exactly as it does today. */
+  producedBySubagent?: true
 }
 
 /** First row of every epoch: binds the epoch to a provider handle and records why it opened. */

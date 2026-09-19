@@ -9,6 +9,7 @@
 
 import type {
   AgentJournalAcceptanceReceipt,
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
@@ -73,14 +74,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
-    upsertItem(state, itemId, row.revision, {
-      itemId,
-      revision: row.revision,
-      body: row.body,
-      sequence: row.seq,
-      observedAt: row.ts,
-      ...(row.recovered ? { recovered: row.recovered } : {})
-    })
+    upsertItem(state, itemId, row.revision, renderedItem(itemId, row.revision, row.body, row))
     return
   }
   if (row.kind === 'tombstone') {
@@ -98,14 +92,8 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
         }
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
-        upsertItem(state, itemId, mutation.revision, {
-          itemId,
-          revision: mutation.revision,
-          body: mutation.body,
-          sequence: row.seq,
-          observedAt: row.ts,
-          ...(row.recovered ? { recovered: row.recovered } : {})
-        })
+        const next = renderedItem(itemId, mutation.revision, mutation.body, row)
+        upsertItem(state, itemId, mutation.revision, next)
       } else {
         removeItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
       }
@@ -185,6 +173,27 @@ function resolveItemId(state: JournalReducerState, itemId: string): string {
   return state.aliases.get(itemId) ?? itemId
 }
 
+/** One render item, built the same way by every upsert path. Both row-level markers
+ *  are copied here rather than at each call site: they used to be two spreads that
+ *  had to stay in sync, and absence is the claim in both cases — appended live, and
+ *  produced by the session's own agent. */
+function renderedItem(
+  itemId: string,
+  revision: number,
+  body: AgentJournalItemBody,
+  row: JournalRow
+): AgentJournalRenderItem {
+  return {
+    itemId,
+    revision,
+    body,
+    sequence: row.seq,
+    observedAt: row.ts,
+    ...(row.recovered ? { recovered: row.recovered } : {}),
+    ...(row.producedBySubagent ? { producedBySubagent: row.producedBySubagent } : {})
+  }
+}
+
 function upsertItem(
   state: JournalReducerState,
   itemId: string,
@@ -251,13 +260,7 @@ function applySubmission(
     resolvedAt: null
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  upsertItem(state, itemId, 0, {
-    itemId,
-    revision: 0,
-    body: row.body,
-    sequence: row.seq,
-    observedAt: row.ts
-  })
+  upsertItem(state, itemId, 0, renderedItem(itemId, 0, row.body, row))
 }
 
 function applyDispatch(

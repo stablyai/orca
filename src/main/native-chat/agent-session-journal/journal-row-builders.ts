@@ -29,7 +29,7 @@ export function journalItemRowBuilder(
   state: () => JournalReducerState,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  options: { fence: number; observedAt?: number; recovered?: true }
+  options: { fence: number; observedAt?: number; recovered?: true; producedBySubagent?: true }
 ): RowBuilder<JournalItemRow> {
   return (seq, ts) =>
     buildJournalItemRow({
@@ -39,7 +39,8 @@ export function journalItemRowBuilder(
       seq,
       fence: options.fence,
       ts: options.observedAt ?? ts,
-      recovered: options.recovered
+      recovered: options.recovered,
+      producedBySubagent: options.producedBySubagent
     })
 }
 
@@ -164,6 +165,7 @@ export function buildJournalItemRow(input: {
   fence: number
   ts: number
   recovered?: true
+  producedBySubagent?: true
 }): JournalItemRow {
   const itemId = agentJournalItemKey(input.identity)
   const resolved = input.state.aliases.get(itemId) ?? itemId
@@ -180,7 +182,8 @@ export function buildJournalItemRow(input: {
     revision,
     body: input.body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [input.body]),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    ...(input.recovered ? { recovered: input.recovered } : {}),
+    ...(input.producedBySubagent ? { producedBySubagent: input.producedBySubagent } : {})
   }
 }
 

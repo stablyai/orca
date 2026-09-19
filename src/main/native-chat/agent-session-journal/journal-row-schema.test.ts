@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
-import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS, parseJournalRow } from './journal-row-schema'
+import {
+  MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS,
+  parseJournalRow,
+  type JournalRow
+} from './journal-row-schema'
+import { createJournalReducerState } from './journal-reducer'
+import { buildJournalItemRow } from './journal-row-builders'
 
 const BASE = { v: 1, epoch: 'epoch-1', seq: 1, fence: 1, ts: 1 }
 
@@ -236,5 +242,52 @@ describe('journal row validation', () => {
         mutations: Array.from({ length: MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS + 1 }, () => mutation)
       })
     ).toBe(false)
+  })
+})
+
+describe('producer attribution on the persisted row', () => {
+  const state = createJournalReducerState('session-1', 'epoch-1')
+  const identity = { provider: 'claude' as const, sessionId: 'claude-session', uuid: 'u-1' }
+  const body = { kind: 'status' as const, text: 'child work' }
+
+  /** The full durable path: build the row the appender would write, serialize it the
+   *  way the journal file does, and read it back. */
+  function roundTrip(producedBySubagent?: true): JournalRow | null {
+    const row = buildJournalItemRow({
+      state,
+      identity,
+      body,
+      seq: 1,
+      fence: 1,
+      ts: 1_700_000_000_000,
+      ...(producedBySubagent ? { producedBySubagent } : {})
+    })
+    const parsed = parseJournalRow(JSON.stringify(row))
+    return parsed.ok ? parsed.row : null
+  }
+
+  it('writes and reads back the marker without bumping the schema version', () => {
+    const row = roundTrip(true)
+    expect(row?.producedBySubagent).toBe(true)
+    // Deliberately NOT a version bump: an unknown `v` is unreadable and latches the
+    // host read-only, while an unknown KEY is simply ignored by an older host.
+    expect(row?.v).toBe(AGENT_SESSION_JOURNAL_SCHEMA_VERSION)
+  })
+
+  it("omits the key entirely on a row the session's own agent produced", () => {
+    const row = roundTrip()
+    expect(row && 'producedBySubagent' in row).toBe(false)
+  })
+
+  it('accepts a real pre-change journal line, which carries no marker at all', () => {
+    // A literal line rather than a constructed row, so this also pins that no
+    // unknown-key rejection crept in.
+    const legacy =
+      '{"v":3,"epoch":"epoch-1","seq":7,"fence":1,"ts":1700000000000,"kind":"item",' +
+      '"itemId":"i-1","revision":1,"body":{"kind":"message","role":"assistant",' +
+      '"blocks":[{"type":"text","text":"hello"}]}}'
+    const parsed = parseJournalRow(legacy)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.ok && 'producedBySubagent' in parsed.row).toBe(false)
   })
 })

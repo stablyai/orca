@@ -261,6 +261,11 @@ export type AgentJournalRenderItem = {
   observedAt: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
+  /** Set when a subagent running inside this session produced the row, rather than
+   *  the session's own agent. Absent on every root row and on every row written
+   *  before this field existed, so absence is a positive claim of root-ness and
+   *  never "unknown" — the one producer of these rows always knows which it is. */
+  producedBySubagent?: true
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────

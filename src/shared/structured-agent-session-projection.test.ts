@@ -7,6 +7,9 @@ import {
   hasPersistedStructuredAgentSessionTurn,
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
+  projectStructuredItemsToNativeChat,
+  latestStructuredAgentSessionAssistantMessage,
+  activeStructuredAgentSessionToolCall,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
@@ -511,5 +514,108 @@ it('preserves confirmed MCP identity and the raw name through projection', () =>
     name: body.name,
     mcpIdentity: body.mcpIdentity,
     type: 'tool-call'
+  })
+})
+
+describe("producer attribution — a subagent's output never speaks for the parent", () => {
+  /** A row a subagent produced. Same journal, same session id; only the marker differs. */
+  function childItem(
+    itemId: string,
+    sequence: number,
+    body: AgentJournalRenderItem['body']
+  ): AgentJournalRenderItem {
+    return { ...item(itemId, sequence, body), producedBySubagent: true }
+  }
+
+  const userAsk = item('user-1', 1, {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'summarise the repo' }]
+  })
+  const turnRunning = item('turn-1', 2, {
+    kind: 'turn',
+    turnId: 'turn-1',
+    state: 'running'
+  })
+  const parentProse = item('root-prose', 3, {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'delegating' }]
+  })
+  const spawnCall = item('root-task', 4, {
+    kind: 'tool-call',
+    name: 'Task',
+    input: { description: 'explore the lane' },
+    state: 'running'
+  })
+  const childProse = childItem('child-prose', 5, {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'looking' }]
+  })
+  const childCall = childItem('child-grep', 6, {
+    kind: 'tool-call',
+    name: 'Grep',
+    input: { pattern: 'x' },
+    state: 'running'
+  })
+  const items = [userAsk, turnRunning, parentProse, spawnCall, childProse, childCall]
+
+  it("shows the parent's own prose and its own running call, not the child's newer ones", () => {
+    expect(latestStructuredAgentSessionAssistantMessage(items)).toBe('delegating')
+    expect(activeStructuredAgentSessionToolCall(items)?.name).toBe('Task')
+  })
+
+  it("publishes the parent's own line and call on the status summary the sidebar reads", () => {
+    const summary = projectStructuredAgentSessionStatusSummary(items)
+    expect(summary.status).toBe('working')
+    expect(summary.lastAssistantMessage).toBe('delegating')
+    expect(summary.toolName).toBe('Task')
+    // The row does not go blank while a child runs: the spawn call is still the
+    // parent's own live work.
+    expect(summary.toolInput).toBeTruthy()
+  })
+
+  it("still renders the child's output in the transcript", () => {
+    // The other direction: scoping the STATUS readers must not delete subagent
+    // output from the chat.
+    const prose = projectStructuredItemsToNativeChat(items).flatMap((message) =>
+      message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+    )
+    expect(prose).toContain('looking')
+    expect(prose).toContain('delegating')
+  })
+
+  it("reads a row written before the marker existed as the parent's own", () => {
+    // A journal open across the upgrade has unmarked child rows below marked ones.
+    // Absence means root, which reproduces today\'s behaviour for that history
+    // exactly — it is never "unknown".
+    const legacyChildProse = item('legacy-child', 5, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'legacy child line' }]
+    })
+    expect(
+      latestStructuredAgentSessionAssistantMessage([
+        userAsk,
+        turnRunning,
+        parentProse,
+        spawnCall,
+        legacyChildProse,
+        childProse
+      ])
+    ).toBe('legacy child line')
+  })
+
+  it("falls back to nothing rather than a child's line when the parent said nothing", () => {
+    const summary = projectStructuredAgentSessionStatusSummary([
+      userAsk,
+      turnRunning,
+      spawnCall,
+      childProse,
+      childCall
+    ])
+    expect(summary.lastAssistantMessage).toBeUndefined()
+    expect(summary.toolName).toBe('Task')
   })
 })

@@ -113,7 +113,7 @@ export function createClaudeProviderFrameFallback(
     /** Runs only when a row is actually going to be written, so a frame that
      *  translates to nothing never opens a turn. */
     beforeAppend?: () => void,
-    options?: UnhandledProviderFrameJournalItemOptions
+    options?: UnhandledProviderFrameJournalItemOptions & { producedBySubagent?: true }
   ) => boolean
 } {
   let sequence = 0
@@ -139,7 +139,8 @@ export function createClaudeProviderFrameFallback(
           provider: 'orca',
           clientMessageId: `provider-frame:claude:${acquisitionId}:${sequence}`
         },
-        bounded ? { ...translated.body, text: bounded } : translated.body
+        bounded ? { ...translated.body, text: bounded } : translated.body,
+        options?.producedBySubagent ? { producedBySubagent: true } : undefined
       )
       sink.publish()
       return true
@@ -156,7 +157,8 @@ export function appendUnmodeledContent(
   fallback: ClaudeProviderFrameFallback,
   envelope: ClaudeMessageEnvelope,
   message: Record<string, unknown>,
-  beforeAppend: () => void
+  beforeAppend: () => void,
+  producer: { producedBySubagent?: true } = {}
 ): boolean {
   let changed = false
   for (const part of envelope.content.filter((part) => !isModeledClaudeContent(part))) {
@@ -166,13 +168,16 @@ export function appendUnmodeledContent(
         `message:${envelope.role}:content:${partType}`,
         part,
         readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT,
-        beforeAppend
+        beforeAppend,
+        producer
       ) || changed
   }
   if (envelope.content.length === 0 && envelope.role === 'assistant') {
     // Empty provider placeholders do not prove work began, and may have no
     // later result capable of closing a turn.
-    changed = fallback.append(`message:${envelope.role}:empty`, message) || changed
+    changed =
+      fallback.append(`message:${envelope.role}:empty`, message, undefined, undefined, producer) ||
+      changed
   }
   return changed
 }

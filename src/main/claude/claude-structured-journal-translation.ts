@@ -104,8 +104,8 @@ export function createClaudeJournalTranslator(
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    persist: (identity, text) => {
-      deps.sink.appendItem(identity, claudeStreamingMessageBody(text))
+    persist: (identity, text, options) => {
+      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), options)
       deps.sink.publish()
     }
   })
@@ -130,7 +130,11 @@ export function createClaudeJournalTranslator(
     if (!delta) {
       return false
     }
-    streamedText.append(delta.identity, delta.text)
+    streamedText.append(
+      delta.identity,
+      delta.text,
+      delta.producedBySubagent ? { producedBySubagent: true } : undefined
+    )
     return true
   }
 
@@ -198,7 +202,13 @@ export function createClaudeJournalTranslator(
         const kind = claudeProviderFrameKind(event.message)
         const failure = claudeResultFailure(event.message)
         if (failure || !isSettledClaudeResultKind(kind)) {
-          providerFallback.append(kind, event.message, failure?.text)
+          providerFallback.append(
+            kind,
+            event.message,
+            failure?.text,
+            undefined,
+            settlesTurn ? undefined : { producedBySubagent: true }
+          )
         }
       } else if (event.type === 'message') {
         subagents.observeSystemFrame(event.message)
@@ -220,7 +230,10 @@ export function createClaudeJournalTranslator(
             event.message,
             taskFrameSentence(event.message),
             undefined,
-            { coveredByTypedTranslator: backgroundTaskCovered }
+            {
+              coveredByTypedTranslator: backgroundTaskCovered,
+              ...(isRootClaudeFrame(event.message) ? {} : { producedBySubagent: true as const })
+            }
           )
         }
         publishActivity(kind, event.message)

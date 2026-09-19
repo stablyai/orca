@@ -658,3 +658,63 @@ describe('re-adding a tombstoned row', () => {
     expect(renderJournalState(state).items).toEqual([])
   })
 })
+
+describe('producer attribution round-trips through the reducer', () => {
+  const identity: AgentJournalItemIdentity = {
+    provider: 'claude',
+    sessionId: 'claude-session',
+    uuid: 'child-1'
+  }
+
+  it('copies the marker onto the render item on the plain item path, and omits it otherwise', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(state, {
+      ...buildJournalItemRow({
+        state,
+        identity,
+        body: text('looking'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        producedBySubagent: true
+      })
+    })
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity: { provider: 'claude', sessionId: 'claude-session', uuid: 'root-1' },
+        body: text('delegating'),
+        seq: 2,
+        fence: 1,
+        ts: 1_002
+      })
+    )
+    const rendered = renderJournalState(state).items
+    expect(rendered.map((item) => item.producedBySubagent)).toEqual([true, undefined])
+  })
+
+  it('copies the marker on the lifecycle-batch path too — a separate spread', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(state, {
+      kind: 'lifecycle-batch',
+      settlementId: 'settle-1',
+      mutations: [{ kind: 'item', itemId: 'i-child', revision: 1, body: text('looking') }],
+      ...base(1),
+      producedBySubagent: true
+    })
+    expect(renderJournalState(state).items[0]?.producedBySubagent).toBe(true)
+  })
+
+  it("renders a row that predates the marker as the session's own", () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(state, {
+      kind: 'item',
+      itemId: 'i-legacy',
+      revision: 1,
+      body: text('written before the marker existed'),
+      ...base(1)
+    })
+    expect(renderJournalState(state).items[0]?.producedBySubagent).toBeUndefined()
+  })
+})

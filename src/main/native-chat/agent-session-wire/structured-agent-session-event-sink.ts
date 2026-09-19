@@ -30,6 +30,10 @@ export type StructuredAgentSessionAppendOptions = {
   lifecycle?: boolean
   /** Host clock to stamp on the row instead of its append time. */
   observedAt?: number
+  /** Set by a producer journaling a subagent's output into the session's journal.
+   *  Lifecycle appends never carry it: a turn is only ever opened by a root frame,
+   *  so those rows are root by construction. */
+  producedBySubagent?: true
 }
 
 export type StructuredAgentSessionLifecycleJournal = Pick<
@@ -203,7 +207,8 @@ export function createDeferredStructuredAgentSessionEventSink(
             run: (bound) =>
               bound.journal.appendItem(identity, body, {
                 fence: bound.fence,
-                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt }),
+                ...(options.producedBySubagent ? { producedBySubagent: true as const } : {})
               })
           },
           options
@@ -217,7 +222,8 @@ export function createDeferredStructuredAgentSessionEventSink(
             run: (bound) =>
               bound.journal.appendItem(identity, body, {
                 fence: bound.fence,
-                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt }),
+                ...(options.producedBySubagent ? { producedBySubagent: true as const } : {})
               })
           },
           options
