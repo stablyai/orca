@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { InactiveAccountUsage, ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 const mocks = vi.hoisted(() => ({
   now: 1_000_000_000,
@@ -23,9 +23,15 @@ vi.mock('@/hooks/useResetCountdownClock', () => ({
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({
     children,
-    onSelect: _onSelect,
+    onSelect,
     ...props
-  }: React.PropsWithChildren<{ onSelect?: () => void }>) => <div {...props}>{children}</div>
+  }: React.PropsWithChildren<{
+    onSelect?: (event: { preventDefault: () => void }) => void
+  }>) => (
+    <div {...props} onClick={() => onSelect?.({ preventDefault() {} })}>
+      {children}
+    </div>
+  )
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -324,5 +330,201 @@ describe('UsageRosterPanel density picker', () => {
       segmentButton('Compact').click()
     })
     expect(onStatusBarUsageModeChange).toHaveBeenLastCalledWith('compact')
+  })
+})
+
+function usageWindow(
+  usedPercent: number,
+  windowMinutes: number
+): NonNullable<ProviderRateLimits['session']> {
+  return { usedPercent, windowMinutes, resetsAt: null, resetDescription: null }
+}
+
+const activeCodex: ProviderRateLimits = {
+  provider: 'codex',
+  session: usageWindow(22, 300),
+  weekly: usageWindow(11, 10_080),
+  updatedAt: mocks.now,
+  error: null,
+  status: 'ok',
+  planType: 'plus'
+}
+
+const inactiveCodexLimits: ProviderRateLimits = {
+  provider: 'codex',
+  session: usageWindow(81, 300),
+  weekly: usageWindow(44, 10_080),
+  updatedAt: mocks.now - 5 * 60_000,
+  error: null,
+  status: 'ok',
+  planType: 'pro'
+}
+
+const inactiveCodexAccount: InactiveAccountUsage = {
+  accountId: 'acct-work',
+  rateLimits: inactiveCodexLimits,
+  updatedAt: mocks.now - 5 * 60_000,
+  isFetching: false
+}
+
+const panelCallbacks = {
+  onStatusBarUsageModeChange: () => {},
+  onRefresh: () => {},
+  onOpenProvider: () => {},
+  onSignIn: () => {},
+  canSignIn: () => true,
+  onManageAccounts: () => {},
+  onUsageDetails: () => {}
+}
+
+describe('UsageRosterPanel inactive Codex accounts', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    mocks.useResetCountdownClock.mockClear()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  function renderInactivePanel(
+    overrides: {
+      onOpenProvider?: (provider: ProviderRateLimits['provider']) => void
+      onSignIn?: (provider: ProviderRateLimits['provider']) => void
+      onRefresh?: () => void
+      onFetchInactiveCodexAccounts?: () => void
+      renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
+    } = {}
+  ): void {
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <UsageRosterPanel
+            providers={[activeCodex]}
+            display="used"
+            statusBarUsageMode="verbose"
+            isRefreshing={false}
+            inactiveCodexAccounts={[inactiveCodexAccount]}
+            codexAccountLabels={{ 'acct-work': 'work@example.com' }}
+            {...panelCallbacks}
+            {...overrides}
+          />
+        </TooltipProvider>
+      )
+    })
+  }
+
+  it('renders the active Codex row and the inactive account with last-known percents', () => {
+    renderInactivePanel()
+
+    expect(container.querySelectorAll('[data-usage-provider="codex"]')).toHaveLength(2)
+    expect(container.querySelector('[data-inactive-codex-account="acct-work"]')).not.toBeNull()
+    expect(container.textContent).toContain('work@example.com')
+    expect(container.textContent).toContain('22%')
+    expect(container.textContent).toContain('11%')
+    expect(container.textContent).toContain('81%')
+    expect(container.textContent).toContain('44%')
+    expect(container.textContent).toContain('Updated 5m ago')
+  })
+
+  it('does not switch accounts when the inactive Codex row is clicked', () => {
+    const onOpenProvider = vi.fn()
+    const onSignIn = vi.fn()
+    const renderRow = vi.fn((_p: ProviderRateLimits, row: React.ReactNode) => row)
+    renderInactivePanel({ onOpenProvider, onSignIn, renderRow })
+
+    const inactiveRow = container.querySelector('[data-inactive-codex-account="acct-work"]')
+    expect(inactiveRow).not.toBeNull()
+    act(() => {
+      inactiveRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onOpenProvider).not.toHaveBeenCalled()
+    expect(onSignIn).not.toHaveBeenCalled()
+    expect(renderRow).toHaveBeenCalledTimes(1)
+    expect(renderRow.mock.calls[0]?.[0]).toBe(activeCodex)
+  })
+
+  it('requests inactive Codex usage when the popover opens and when refresh is selected', () => {
+    const onFetchInactiveCodexAccounts = vi.fn()
+    const onRefresh = vi.fn()
+    renderInactivePanel({ onFetchInactiveCodexAccounts, onRefresh })
+
+    expect(onFetchInactiveCodexAccounts).toHaveBeenCalledTimes(1)
+
+    const refresh = container.querySelector('[aria-label="Refresh rate limits"]')
+    expect(refresh).not.toBeNull()
+    act(() => {
+      refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+    expect(onFetchInactiveCodexAccounts).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('UsageRosterPanel live Updated labels', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(mocks.now)
+    mocks.useResetCountdownClock.mockClear()
+    mocks.useResetCountdownClock.mockReturnValue(mocks.now)
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+    mocks.useResetCountdownClock.mockReturnValue(mocks.now)
+    vi.useRealTimers()
+  })
+
+  it('refreshes Updated labels every minute when reset timestamps are null', () => {
+    const updatedAt = mocks.now - 30_000
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <UsageRosterPanel
+            providers={[activeCodex]}
+            display="used"
+            statusBarUsageMode="verbose"
+            isRefreshing={false}
+            inactiveCodexAccounts={[
+              {
+                ...inactiveCodexAccount,
+                updatedAt,
+                rateLimits: { ...inactiveCodexLimits, updatedAt }
+              }
+            ]}
+            codexAccountLabels={{ 'acct-work': 'work@example.com' }}
+            {...panelCallbacks}
+          />
+        </TooltipProvider>
+      )
+    })
+
+    expect(container.textContent).toContain('Updated just now')
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(container.textContent).toContain('Updated 1m ago')
+    expect(container.textContent).not.toContain('Updated just now')
   })
 })
