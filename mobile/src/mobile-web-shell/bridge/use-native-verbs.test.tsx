@@ -17,7 +17,7 @@ vi.mock('../../transport/host-client-hooks', () => ({
 import { RpcClientProvider } from '../../transport/client-context.web'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
-import { useNativeVerbs, type NativeVerbs } from './use-native-verbs'
+import { NativeVerbError, useNativeVerbs, type NativeVerbs } from './use-native-verbs'
 
 const held: { verbs: NativeVerbs | null } = { verbs: null }
 
@@ -134,5 +134,55 @@ describe('the native verb member on the client', () => {
     )
     await pair.flush()
     expect(pair.rpc.requests).toEqual([])
+  })
+})
+
+/**
+ * Every refusal reaches the caller under one type, carrying the shell's own code.
+ *
+ * Without this a caller had to read message text to tell an out-of-scope mime from a clipboard too
+ * large to send, and those are different things to do something about.
+ */
+describe('a verb the shell refuses', () => {
+  async function rejectionFrom(serveNativeVerb: () => Promise<unknown>): Promise<NativeVerbError> {
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
+    const verbs = await mount(pair)
+    const read = verbs.readClipboardText().catch((error: unknown) => error)
+    await pair.flush()
+    const caught = await read
+    if (!(caught instanceof NativeVerbError)) {
+      throw new Error(`expected a NativeVerbError, got ${String(caught)}`)
+    }
+    return caught
+  }
+
+  it('names the seam when the handler declines', async () => {
+    const error = await rejectionFrom(() =>
+      Promise.reject(new Error('image is not served by this build for native.clipboard.read'))
+    )
+    expect(error.reason).toBe('native_verb_refused')
+    expect(error.message).toContain('not served by this build')
+  })
+
+  it('names the frame refusal when the reply could never have reached the page', async () => {
+    const error = await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))
+    expect(error.reason).toBe('reply-too-large')
+  })
+
+  it('names the grant when this side refused before sending', async () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
+    act(() => {
+      create(
+        <RpcClientProvider client={page.client}>
+          <Screen />
+        </RpcClientProvider>
+      )
+    })
+    const verbs = held.verbs
+    if (verbs === null) {
+      throw new Error('nothing mounted')
+    }
+    await expect(verbs.readClipboardText()).rejects.toMatchObject({ reason: 'ungranted' })
   })
 })

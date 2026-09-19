@@ -7,7 +7,8 @@ import {
 import {
   BRIDGE_NATIVE_VERBS,
   isBridgeNativeMethod,
-  readBridgeNativeVerbCall
+  readBridgeNativeVerbCall,
+  type BridgeNativeVerb
 } from './bridge/bridge-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
@@ -174,7 +175,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (!call.ok) {
       throw new BridgeNativeVerbRefusedError(call.detail)
     }
-    const answered = await options.serveNativeVerb(call.verb, call.params)
+    const answered = await serveVerbCoded(call.verb, call.params)
     // The table declares what a verb answers, and without this that claim was decoration: a
     // handler could hand the page any shape and the page's own parse would be the first to notice,
     // halfway through a screen.
@@ -183,6 +184,18 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       throw new BridgeNativeVerbRefusedError(`${call.verb} answered a result it does not declare`)
     }
     return { id, ok: true, result: result.data }
+  }
+
+  /** A handler's own failure, re-raised under the seam's code so every native refusal names itself
+   *  the same way page-side. The message is the handler's, because it is the one that says why. */
+  async function serveVerbCoded(verb: BridgeNativeVerb, params: unknown): Promise<unknown> {
+    try {
+      return await options.serveNativeVerb(verb, params)
+    } catch (error) {
+      throw new BridgeNativeVerbRefusedError(
+        error instanceof Error ? error.message : `${verb} could not be served`
+      )
+    }
   }
 
   const requests = new BridgeHostRequests({

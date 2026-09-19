@@ -21,9 +21,13 @@ export class BridgeCapExceededError extends Error {
 
 /** A reply the page's own reader would refuse, failed on the sending side so the page hears why. */
 export class BridgeReplyUndeliverableError extends Error {
+  /** Carried so a page switches on the refusal rather than reading it out of the message. */
+  readonly code: BridgeRefusal
+
   constructor(refusal: BridgeRefusal) {
     super(`the reply could not be delivered to the page (${refusal})`)
     this.name = 'BridgeReplyUndeliverableError'
+    this.code = refusal
   }
 }
 

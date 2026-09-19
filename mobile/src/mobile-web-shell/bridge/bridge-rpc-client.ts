@@ -1,6 +1,6 @@
 import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
-import type { ConnectionState, RpcResponse } from '../../transport/types'
+import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
@@ -79,7 +79,7 @@ export type BridgeRpcClient = RpcClient & {
    * port inside the module that owns it — a native verb is bridge machinery, not an RPC to a
    * runtime, so it has no `RpcOperation` and no entry in the desktop's method catalog.
    */
-  callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcResponse>
+  callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -334,7 +334,15 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       if (!isBridgeNativeMethod(verb)) {
         return Promise.reject(new BridgeClientNotNativeVerbError(verb))
       }
-      return sendRequest(verb, params)
+      return sendRequest(verb, params).then((reply) => {
+        // A refusal crosses as an `error` frame and rejects above, and nothing forwards a native
+        // method, so no host `RpcFailure` can arrive on one. Narrowed here rather than at every
+        // caller, which is what lets this member promise a success or a rejection and nothing else.
+        if (!reply.ok) {
+          throw new Error(reply.error.message)
+        }
+        return reply
+      })
     },
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyPageFault: notifications.notifyPageFault,

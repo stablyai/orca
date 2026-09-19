@@ -1,6 +1,7 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import type { BridgeNativeVerb } from './bridge-native-verbs'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
 import {
   readBridgeClientMessage,
@@ -81,6 +82,8 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
    * the payload itself does. Nothing in the product rewrites a frame in flight.
    */
   rewriteToPage?: (json: string) => string
+  /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
+  serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
 }
 
 type Lane = {
@@ -176,7 +179,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
     // The pair has no device: what a test reads here is that the host answered without forwarding.
-    serveNativeVerb: (verb) =>
+    serveNativeVerb: (verb, params) =>
+      options.serveNativeVerb?.(verb, params) ??
       Promise.resolve(
         verb === 'native.clipboard.write' ? { written: true } : { value: 'pasteboard' }
       ),

@@ -31,11 +31,28 @@ export type NativeVerbs = {
   readClipboardText: () => Promise<string>
 }
 
-class NativeVerbUngrantedError extends Error {
-  constructor(verb: string) {
-    super(`this shell did not grant ${verb}`)
-    this.name = 'NativeVerbUngrantedError'
+/**
+ * Every way a verb can fail, in one shape a caller can switch on.
+ *
+ * `reason` is the shell's own code where there is one — `native_verb_refused` for anything the seam
+ * declined, or the frame refusal such as `reply-too-large` for a reply the page could never have
+ * received. `ungranted` is this side's, decided before a frame is sent. The message stays the
+ * shell's words, because that is what says which verb and why, but nothing should switch on it.
+ */
+export class NativeVerbError extends Error {
+  readonly reason: string
+
+  constructor(reason: string, message: string) {
+    super(message)
+    this.name = 'NativeVerbError'
+    this.reason = reason
   }
+}
+
+/** Reads the code the shell attached, which `reconstructBridgeError` copies onto the rejection. */
+function nativeVerbReason(error: unknown): string {
+  const code: unknown = error instanceof Error ? Reflect.get(error, 'code') : undefined
+  return typeof code === 'string' ? code : 'unknown'
 }
 
 export function useNativeVerbs(): NativeVerbs {
@@ -47,12 +64,27 @@ export function useNativeVerbs(): NativeVerbs {
 
     async function call(verb: keyof typeof BRIDGE_NATIVE_VERBS, params: unknown): Promise<unknown> {
       if (!has(verb)) {
-        throw new NativeVerbUngrantedError(verb)
+        throw new NativeVerbError('ungranted', `this shell did not grant ${verb}`)
       }
+      try {
+        return await sendVerb(verb, params)
+      } catch (error) {
+        throw error instanceof NativeVerbError
+          ? error
+          : new NativeVerbError(
+              nativeVerbReason(error),
+              error instanceof Error ? error.message : `${verb} failed`
+            )
+      }
+    }
+
+    async function sendVerb(
+      verb: keyof typeof BRIDGE_NATIVE_VERBS,
+      params: unknown
+    ): Promise<unknown> {
+      // No `ok: false` arm: a refusal crosses as an `error` frame and rejects this await, and a
+      // `native.` method is never forwarded, so there is no host `RpcFailure` to carry back.
       const reply = await client.callNativeVerb(verb, params)
-      if (!reply.ok) {
-        throw new Error(reply.error.message)
-      }
       return BRIDGE_NATIVE_VERBS[verb].result.parse(reply.result)
     }
 
