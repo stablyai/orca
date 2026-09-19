@@ -4,7 +4,10 @@ import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import {
+  runtimeExpectsLiveSshRelay,
+  type EphemeralVmRuntimeRecord
+} from '../../shared/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
@@ -29,6 +32,7 @@ import {
   disconnectRuntimeOwnedSshTarget,
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm-runtime-ssh'
+import { ensureRuntimeOwnedSshTargetAttached } from '../ephemeral-vm-runtime-ssh-reattach'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm-runtime-attachment'
@@ -203,6 +207,13 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         return null
       }
       if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+        // Why: after an app restart a record persisted as running has a live VM but no
+        // relay in this process (the provisioning connect does not survive restarts);
+        // activation is the moment to re-attach it. The record is left unchanged on
+        // failure — a relay that will not attach is not evidence the VM is gone.
+        if (runtimeExpectsLiveSshRelay(runtime)) {
+          await ensureRuntimeOwnedSshTargetAttached(runtime)
+        }
         return runtime
       }
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)

@@ -1,4 +1,5 @@
 import type { IFilesystemProvider } from './types'
+import { scheduleSshProviderMissRecovery } from './ssh-provider-miss-recovery'
 
 const sshProviders = new Map<string, IFilesystemProvider>()
 
@@ -44,6 +45,8 @@ export function getSshFilesystemProvider(connectionId: string): IFilesystemProvi
 export function requireSshFilesystemProvider(connectionId: string): IFilesystemProvider {
   const provider = getSshFilesystemProvider(connectionId)
   if (!provider) {
+    // Why: same as the git dispatcher — a runtime-owned relay re-attaches in the background.
+    scheduleSshProviderMissRecovery(connectionId)
     throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
   }
   return provider

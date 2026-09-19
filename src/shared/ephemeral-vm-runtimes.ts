@@ -2,7 +2,8 @@ import { z } from 'zod'
 import {
   EphemeralVmRecipeConnectionResultSchema,
   EphemeralVmRecipeLegacyResultSchema,
-  EphemeralVmRecipeResultSchema
+  EphemeralVmRecipeResultSchema,
+  getEphemeralVmRecipeResultConnection
 } from './ephemeral-vm-recipes'
 
 export const EphemeralVmRuntimeStatusSchema = z.enum([
@@ -69,6 +70,23 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
 })
 
 export type EphemeralVmRuntimeRecord = z.infer<typeof EphemeralVmRuntimeRecordSchema>
+
+/**
+ * A runtime whose VM is expected to be up but whose SSH relay lives only in the app
+ * process: the connect at provision/resume does not survive an app restart, and every
+ * generic SSH connect path (startup restore, pane connect, host list) skips runtime-owned
+ * targets, so the runtime layer must re-attach these itself.
+ */
+export function runtimeExpectsLiveSshRelay(
+  runtime: EphemeralVmRuntimeRecord
+): runtime is EphemeralVmRuntimeRecord & { sshTargetId: string } {
+  return (
+    runtime.connectionMode === 'ssh' &&
+    typeof runtime.sshTargetId === 'string' &&
+    (runtime.status === 'running' || runtime.status === 'suspend_failed') &&
+    getEphemeralVmRecipeResultConnection(runtime.recipeResult).type === 'ssh'
+  )
+}
 
 export const EphemeralVmRuntimeStoreSchema = z.object({
   version: z.literal(1),

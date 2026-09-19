@@ -16,12 +16,21 @@ import {
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
+import { recoverMissingSshPtyProvider } from '../provider/missing-ssh-pty-provider-recovery'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  // Establish daemon identity before the first await so hidden delivery is gated before byte zero.
+  // Why before the provider lookup: a runtime-owned SSH target has no relay after an app
+  // restart until its owner re-attaches it; the spawn would otherwise fail on the miss.
+  // Only an SSH spawn can await here — a null connectionId returns undefined — so the
+  // daemon-identity invariant below still holds for the daemon-host path it governs.
+  const providerRecovery = recoverMissingSshPtyProvider(args.connectionId)
+  if (providerRecovery) {
+    await providerRecovery
+  }
+  // Establish daemon identity before the first await (of a local spawn) so hidden delivery is gated before byte zero.
   ctx.provider = getProvider(args.connectionId)
   ctx.isDaemonHostSpawn =
     !args.connectionId &&
