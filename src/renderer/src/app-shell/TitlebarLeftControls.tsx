@@ -32,6 +32,9 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
 
+  const sidebarCollapseMode = useAppStore((s) => s.sidebarCollapseMode)
+  const setSidebarCollapseMode = useAppStore((s) => s.setSidebarCollapseMode)
+
   return (
     // Why: measure the ENTIRE row so TabGroupPanel's collapse spacer reserves enough width; measuring only the inner cluster left back/forward over the first tab.
     // Why: collapsed mode floats in a w-0 wrapper; w-max stops Windows Chromium from shrinking the app name to one glyph.
@@ -90,22 +93,45 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
           </ContextMenu>
         )}
         {layout.showSidebar && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="sidebar-toggle"
-                onClick={toggleSidebar}
-                aria-label={translate('auto.App.e4b9e7dff7', 'Toggle sidebar')}
+          <ContextMenu>
+            <Tooltip>
+              <ContextMenuTrigger asChild>
+                <TooltipTrigger asChild>
+                  <button
+                    className="sidebar-toggle"
+                    onClick={toggleSidebar}
+                    aria-label={translate('auto.App.e4b9e7dff7', 'Toggle sidebar')}
+                  >
+                    <PanelLeft size={16} />
+                  </button>
+                </TooltipTrigger>
+              </ContextMenuTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+                  value0: leftSidebarShortcutLabel
+                })}
+              </TooltipContent>
+            </Tooltip>
+            <ContextMenuContent>
+              <ContextMenuItem
+                onSelect={() => setSidebarCollapseMode('rail')}
+                disabled={sidebarCollapseMode === 'rail'}
               >
-                <PanelLeft size={16} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
-                value0: leftSidebarShortcutLabel
-              })}
-            </TooltipContent>
-          </Tooltip>
+                {sidebarCollapseMode === 'rail' ? '✓ ' : '   '}
+                {translate('auto.components.sidebar.collapseModeRail', 'Collapse mode: Icon Rail')}
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => setSidebarCollapseMode('hidden')}
+                disabled={sidebarCollapseMode === 'hidden'}
+              >
+                {sidebarCollapseMode === 'hidden' ? '✓ ' : '   '}
+                {translate(
+                  'auto.components.sidebar.collapseModeHidden',
+                  'Collapse mode: Completely Hidden'
+                )}
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         )}
       </div>
       {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}

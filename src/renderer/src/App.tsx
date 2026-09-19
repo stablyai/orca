@@ -79,7 +79,11 @@ function App(): React.JSX.Element {
       className="app-layout"
       style={
         {
-          '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+          '--collapsed-sidebar-header-width': `${
+            layout.isSidebarRail
+              ? Math.max(0, layout.collapsedSidebarHeaderWidth - 48)
+              : layout.collapsedSidebarHeaderWidth
+          }px`,
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
           '--window-controls-width': WINDOW_CONTROLS_WIDTH,
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
