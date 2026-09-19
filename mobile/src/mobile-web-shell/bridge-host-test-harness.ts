@@ -8,6 +8,7 @@ import {
 } from './bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
+import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 import {
   BRIDGE_NATIVE_VERBS,
   clipboardWriteParamsSchema,
@@ -63,6 +64,8 @@ export function harness(
      * host serves no request until it has issued an `init`. Off by default so a case about the
      * pre-ready refusals can still be written.
      */
+    /** What the mounted route declared; everything this shell implements unless a case narrows it. */
+    routeGrants?: readonly string[]
     ready?: boolean
     /** What the pasteboard answers a read with. */
     clipboardText?: string
@@ -91,6 +94,7 @@ export function harness(
     sessionId: 'session-a',
     route: options.route ?? ROUTE,
     pageRoutes: PAGE_ROUTES,
+    routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     host: HOST,
     readStorage: options.readStorage ?? (() => options.storage ?? {}),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),

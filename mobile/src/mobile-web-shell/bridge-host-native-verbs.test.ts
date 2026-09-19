@@ -254,3 +254,53 @@ describe('a native method the page asks for', () => {
     expect(refusal(bridge)?.message).toContain('reply-too-large')
   })
 })
+
+/**
+ * A session is granted what its route asked for, not what the app can do.
+ *
+ * Before this the host handed every page the whole capability set, so a route declaring only
+ * navigation and storage could still read the clipboard. Harmless while every grant was something
+ * the page could do anyway; not harmless once a verb reads something back.
+ */
+describe('grants scoped to the route the page was opened for', () => {
+  const navigationOnly = ['navigate', 'storage'] as const
+
+  it('grants a route only what it declared', () => {
+    const bridge = harness({ routeGrants: navigationOnly })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.grants.native).toEqual(['fault', 'navigate', 'storage'])
+  })
+
+  it('refuses a verb that route never asked for', async () => {
+    const bridge = harness({ routeGrants: navigationOnly, ready: true })
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(reachedTheDesktop(bridge)).toEqual([])
+    expect(refusal(bridge)?.code).toBe('native_verb_ungranted')
+  })
+
+  it('serves it for a route that did ask', async () => {
+    const bridge = harness({
+      routeGrants: [...navigationOnly, 'native.clipboard.read'],
+      clipboardText: 'granted',
+      ready: true
+    })
+    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
+    await flushBridge()
+    expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { value: 'granted' } })
+  })
+
+  it('refuses a notify that route never asked for, under the protocol name', () => {
+    const bridge = harness({ routeGrants: ['storage'], ready: true })
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'externalLink', url: 'https://example.com/' })
+    )
+    expect(bridge.externalLinks).toEqual([])
+    expect(bridge.diagnostics).toContainEqual({
+      kind: 'notify-refused',
+      name: 'externalLink',
+      why: 'ungranted'
+    })
+  })
+})

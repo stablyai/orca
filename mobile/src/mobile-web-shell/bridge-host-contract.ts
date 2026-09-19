@@ -58,6 +58,14 @@ export type BridgeHostOptions = {
   route: BridgeInitRoute
   /** Every route pattern the shell would render from the page, so the page knows what to keep. */
   pageRoutes: readonly string[]
+  /**
+   * What the route this session was opened for declared, narrowed to what this shell implements.
+   *
+   * This is the session's whole capability, not the app's: `init` grants exactly these plus the
+   * protocol's own `fault`, and every grant check reads the same list. A route asking for
+   * navigation does not get the clipboard because some other route needs it.
+   */
+  routeGrants: readonly string[]
   /** The host the page is showing, minus the credential the bridge already carries for it. */
   host: BridgeInitHost
   /**

@@ -10,7 +10,10 @@ import {
 } from './bridge-envelope'
 
 /**
- * What `init` offers every page.
+ * Every grant this app implements, which is the ceiling a session's own list is drawn from. A page
+ * is granted the intersection of this and what its route declared, never this.
+ *
+ * What `init` offers a page.
  *
  * A name added here is never a version bump; a page that does not know one simply never posts it.
  * `fault` leads because it is the protocol's rather than a screen's: every page gets it and no
@@ -31,6 +34,8 @@ export function createBridgeInitFrame(args: {
   route: BridgeInitRoute
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
+  /** What this session may do: the protocol's own grant plus what its route declared. */
+  granted: readonly string[]
   /** The host the page is showing, minus the credential the bridge already carries for it. */
   host: BridgeInitHost
   /** The allowlisted keys as the app holds them right now. */
@@ -49,7 +54,7 @@ export function createBridgeInitFrame(args: {
       },
       // Copied, not shared: the list the host enforces must not be reachable through a frame it
       // hands out.
-      native: [...BRIDGE_NATIVE_GRANTS]
+      native: [...args.granted]
     },
     route: args.route,
     pageRoutes: [...args.pageRoutes],

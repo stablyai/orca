@@ -15,7 +15,7 @@ import type {
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
 import { awaitsGates, gateKey, gateVerdict } from './mobile-web-shell-gates'
-import { implementedPageRoutes, matchesRoutePattern } from './page-route-policy'
+import { grantsForRoute, implementedPageRoutes, matchesRoutePattern } from './page-route-policy'
 
 /**
  * The host's connection state as the three answers a step here needs.
@@ -49,6 +49,7 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
   return {
     routePathname,
     pageRoutes: [],
+    routeGrants: [],
     state: CHECKING,
     retriedOnce: false,
     remountedOnce: false,
@@ -148,9 +149,10 @@ function onCacheRead(
     }
     // The cached bundle's own list, which is the only one an unreachable host can be judged by.
     const pageRoutes = implementedPageRoutes(generation.routes)
+    const routeGrants = grantsForRoute(generation.routes, session.routePathname)
     return rendersRoute(pageRoutes, session.routePathname)
-      ? openCached(session, generation, { cached: generation, pageRoutes })
-      : step(session, { cached: generation, pageRoutes, state: NATIVE_ROUTE })
+      ? openCached(session, generation, { cached: generation, pageRoutes, routeGrants })
+      : step(session, { cached: generation, pageRoutes, routeGrants, state: NATIVE_ROUTE })
   }
   return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
 }
@@ -166,8 +168,9 @@ function onManifestRead(
   // Before the compat verdict, because a route that stays native has nothing to wall about: a
   // bundle this shell could not open is not a reason to refuse a screen it was never going to open.
   const pageRoutes = implementedPageRoutes(manifest.routes)
+  const routeGrants = grantsForRoute(manifest.routes, session.routePathname)
   if (!rendersRoute(pageRoutes, session.routePathname)) {
-    return step(session, { pageRoutes, state: NATIVE_ROUTE })
+    return step(session, { pageRoutes, routeGrants, state: NATIVE_ROUTE })
   }
   const verdict = evaluateMobileWebBundleCompat({
     hostCapabilities: gates.hostCapabilities,
@@ -179,12 +182,13 @@ function onManifestRead(
   }
   const cached = session.cached
   if (cached !== null && cached.buildId === manifest.buildId) {
-    return openCached(session, cached, { pageRoutes })
+    return openCached(session, cached, { pageRoutes, routeGrants })
   }
   return step(
     session,
     {
       pageRoutes,
+      routeGrants,
       state: {
         kind: 'fetching',
         completedAssets: 0,

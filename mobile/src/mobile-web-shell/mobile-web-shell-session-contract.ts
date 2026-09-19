@@ -186,6 +186,9 @@ export type MobileWebShellSession = {
   /** Every route pattern this shell would render from the page, as the bundle in hand declares
    *  them. The page is told, so it keeps a navigation into one of them instead of handing it back. */
   readonly pageRoutes: readonly string[]
+  /** What the route this mount stands for declared, narrowed to what this shell implements. It is
+   *  what `init` grants, so a route that asked for less is served less. */
+  readonly routeGrants: readonly string[]
   readonly state: MobileWebShellSessionState
   readonly retriedOnce: boolean
   readonly remountedOnce: boolean

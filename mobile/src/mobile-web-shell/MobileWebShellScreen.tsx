@@ -141,14 +141,22 @@ export function MobileWebShellScreen({
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const popShellStack = useShellStackPop()
-  const { state, pageRoutes, retry, reportShellFailure, reportDocumentLoaded, reportPageReady } =
-    useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
+  const {
+    state,
+    pageRoutes,
+    routeGrants,
+    retry,
+    reportShellFailure,
+    reportDocumentLoaded,
+    reportPageReady
+  } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } =
     usePageHostSnapshot(hostId)
   const bridge = useMobileWebShellBridge({
     hostId,
     route,
     pageRoutes,
+    routeGrants,
     session: state,
     snapshot,
     readStorage,

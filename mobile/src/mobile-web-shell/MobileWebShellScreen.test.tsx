@@ -19,6 +19,7 @@ type ScreenDependencies = {
   canGoBack: boolean
   pathname: string
   pageRoutes: readonly string[]
+  routeGrants: readonly string[]
   lifecycle: string[]
   state: MobileWebShellSessionState
   /** Null for every case but the bridge's: with no client the hook builds no host at all. */
@@ -42,6 +43,7 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     canGoBack: true,
     pathname: '/h/host-1',
     pageRoutes: ['/h/[hostId]'],
+    routeGrants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write'],
     lifecycle: [],
     state: { kind: 'checking' },
     client: null
@@ -118,6 +120,7 @@ vi.mock('./use-mobile-web-shell-session', () => ({
   useMobileWebShellSession: () => ({
     state: dependencies.state,
     pageRoutes: dependencies.pageRoutes,
+    routeGrants: dependencies.routeGrants,
     retry: dependencies.retry,
     reportShellFailure: dependencies.reportShellFailure,
     reportDocumentLoaded: dependencies.reportDocumentLoaded,

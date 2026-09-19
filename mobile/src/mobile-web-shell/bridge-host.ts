@@ -21,7 +21,7 @@ import {
   type BridgeHostMessage
 } from './bridge/bridge-envelope'
 import { captureBridgeError } from './bridge/bridge-error-capture'
-import { BRIDGE_NATIVE_GRANTS, createBridgeInitFrame } from './bridge/bridge-init-frame'
+import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
 import { isPageStorageKeyForHost } from './page-storage-keys'
@@ -48,6 +48,8 @@ export type BridgeHost = {
  */
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
+  // The protocol's own grant rides with every session; the rest is what this route asked for.
+  const granted: readonly string[] = [BRIDGE_FAULT_GRANT, ...options.routeGrants]
   // Parsed here, once, against the same schema the page reads it with. The producer interpolates a
   // host id into a pathname, so a host id carrying `?`, `#`, whitespace or a dot segment reaches
   // the wire as a route no page will accept; without this the page refuses the whole `init`, asks
@@ -143,6 +145,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         connection: snapshot(),
         route,
         pageRoutes,
+        granted,
         host,
         storage: options.readStorage()
       })
@@ -167,7 +170,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     sendError,
     capExceeded: (message) => new BridgeCapExceededError(message),
     serveNative: createNativeVerbServer({
-      granted: BRIDGE_NATIVE_GRANTS,
+      granted,
       serveVerb: (verb, params) => options.serveNativeVerb(verb, params)
     })
   })
@@ -212,7 +215,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     const refusal = bridgeNotifyRefusal({
       name: message.name,
       initSent,
-      granted: BRIDGE_NATIVE_GRANTS
+      granted
     })
     if (refusal !== null) {
       options.onDiagnostic?.({ kind: 'notify-refused', name: message.name, why: refusal })

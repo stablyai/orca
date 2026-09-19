@@ -2,6 +2,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge-native-verbs'
+import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
 import {
   readBridgeClientMessage,
@@ -82,6 +83,8 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
    * the payload itself does. Nothing in the product rewrites a frame in flight.
    */
   rewriteToPage?: (json: string) => string
+  /** What the mounted route declared; everything this shell implements unless a case narrows it. */
+  routeGrants?: readonly string[]
   /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
 }
@@ -176,6 +179,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     sessionId: options.sessionId ?? 'session-a',
     route: options.route ?? { pathname: '/h/host-a' },
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
+    routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
     // The pair has no device: what a test reads here is that the host answered without forwarding.

@@ -69,3 +69,23 @@ export function pageRendersRoute(
 ): boolean {
   return implementedPageRoutes(routes).some((pattern) => matchesRoutePattern(pathname, pattern))
 }
+
+/**
+ * The grants one page session gets: what this shell implements, narrowed to what the route it was
+ * opened for declared.
+ *
+ * Narrowed, because `init.grants.native` is what the page is allowed to do, and handing every
+ * session the shell's whole capability set gives a route that asked for `navigate` and `storage`
+ * the clipboard as well. That was harmless while every grant was a navigation or a write the page
+ * could make anyway, and stopped being harmless the moment a verb reads something back.
+ *
+ * A route the bundle does not declare gets nothing, which is the same answer as a page the shell
+ * would not render at all.
+ */
+export function grantsForRoute(
+  routes: readonly MobileWebPageRoute[] | undefined,
+  pathname: string
+): string[] {
+  const declared = (routes ?? []).find((route) => matchesRoutePattern(pathname, route.pathname))
+  return declared === undefined ? [] : declared.grants.filter(implementsGrant)
+}
