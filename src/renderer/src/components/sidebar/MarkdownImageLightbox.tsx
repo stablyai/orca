@@ -13,6 +13,8 @@ import { translate } from '@/i18n/i18n'
 
 type ExpandableMarkdownImageProps = {
   src: string
+  width?: number | string
+  height?: number | string
   alt?: string
   className?: string
   triggerClassName?: string
@@ -22,8 +24,11 @@ type ExpandableMarkdownImageProps = {
  * Inline markdown image that opens a viewport-centered lightbox on click.
  * The shared dialog primitive owns modal focus, Escape, and focus restoration.
  */
+/** Preserve authored preview dimensions while opening the full image in the lightbox. */
 export function ExpandableMarkdownImage({
   src,
+  width,
+  height,
   alt,
   className,
   triggerClassName
@@ -51,7 +56,13 @@ export function ExpandableMarkdownImage({
             'Expand image'
           )}
         >
-          <img src={src} alt={alt ?? ''} className={cn(className, 'pointer-events-none')} />
+          <img
+            src={src}
+            width={width}
+            height={height}
+            alt={alt ?? ''}
+            className={cn(className, 'pointer-events-none')}
+          />
         </button>
       </DialogTrigger>
       <DialogContent

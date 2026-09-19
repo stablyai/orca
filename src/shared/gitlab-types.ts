@@ -252,6 +252,8 @@ export type GitLabPipelineJob = {
 
 // Why: aggregated detail for GitLabItemDialog; flattens discussions into one comments list (inline positioning is v1.5 work).
 export type GitLabWorkItemDetails = {
+  /** Authenticated previews only; body and comment markdown remain editable originals. */
+  imageSources?: Record<string, string>
   /** repoId is stamped by the renderer's caller — the main process doesn't know Orca's Repo.id. */
   item: Omit<GitLabWorkItem, 'repoId'>
   body: string

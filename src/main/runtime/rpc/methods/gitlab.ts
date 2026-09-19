@@ -1,3 +1,7 @@
+import {
+  remoteRpcContentBudget,
+  remoteRpcResultExceedsContentBudget
+} from '../../../../shared/remote-rpc-content-budget'
 import { defineMethod } from '../core'
 import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
 import { toGitLabJobLogExcerptResult } from '../../../../shared/gitlab-job-log-excerpt'
@@ -174,8 +178,23 @@ export const GITLAB_METHODS = [
   defineMethod({
     name: 'gitlab.workItemDetails',
     params: WorkItemDetails,
-    handler: async (params, { runtime }) =>
-      runtime.getGitLabRepoWorkItemDetails(params.repo, params.iid, params.type, params.projectRef)
+    handler: async (params, { runtime, clientKind, requestId }) => {
+      const maxReplyBytes = clientKind ? remoteRpcContentBudget(requestId ?? '') : undefined
+      const details = await runtime.getGitLabRepoWorkItemDetails(
+        params.repo,
+        params.iid,
+        params.type,
+        params.projectRef,
+        { includeImages: params.includeImages, maxReplyBytes }
+      )
+      if (
+        maxReplyBytes !== undefined &&
+        remoteRpcResultExceedsContentBudget(details, maxReplyBytes)
+      ) {
+        throw new Error('GitLab item details exceed the remote response limit.')
+      }
+      return details
+    }
   }),
   defineMethod({
     name: 'gitlab.workItemByPath',
