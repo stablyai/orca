@@ -2,6 +2,7 @@ import type {
   TaskStatus,
   DispatchStatus,
   WorkerDispatchRow,
+  DispatchContextRow,
   LegacyWorkerTerminalRecoveryRow
 } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
@@ -9,6 +10,7 @@ import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-ci
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { DISPATCH_CONTEXT_COLUMNS, selectColumns } from '../row-column-lists'
 
 export function listLegacyWorkerTerminalRecoveryRows(
   this: OrchestrationDb
@@ -27,25 +29,50 @@ export function listLegacyWorkerTerminalRecoveryRows(
     .all() as LegacyWorkerTerminalRecoveryRow[]
 }
 
+// Residual M: a Dispatch created by `orchestration dispatch --inject` (or any other
+// context-only claim) has no worker_dispatches row, so listLegacyWorkerTerminalRecoveryRows'
+// INNER JOIN never surfaces it and it stays pending/dispatched forever if its pane never
+// exits under Orca's own eyes. `findActiveDispatchForAssignee` already keeps at most one
+// active Dispatch per assignee handle/pane, so this needs no ambiguity filter of its own.
+export function listUnsupervisedActiveDispatches(this: OrchestrationDb): DispatchContextRow[] {
+  return this.db
+    .prepare(
+      `SELECT ${selectColumns(DISPATCH_CONTEXT_COLUMNS, 'dc')} FROM dispatch_contexts dc
+       LEFT JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
+       WHERE wd.dispatch_id IS NULL
+         AND dc.status IN ('pending', 'dispatched')
+         AND dc.assignee_handle IS NOT NULL`
+    )
+    .all() as DispatchContextRow[]
+}
+
+// Why the return type is nullable: an unsupervised (context-only) Dispatch has no
+// worker_dispatches row to report back — residual M reuses this path for those, and it
+// must not fabricate one (see the `!worker` branch below).
 export function reconcileMissingWorkerTerminal(
   this: OrchestrationDb,
   dispatchId: string,
   reason: string
-): WorkerDispatchRow {
+): WorkerDispatchRow | null {
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
-    if (!dispatch || !worker) {
+    if (!dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
-    if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
+    if (worker && ['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
       this.db.exec('COMMIT')
       return worker
     }
 
     const activeDispatch = dispatch.status === 'pending' || dispatch.status === 'dispatched'
-    const stopWasPending = worker.state === 'stopping' || worker.state === 'stop_unknown'
+    if (!worker && !activeDispatch) {
+      // Why: an unsupervised Dispatch already settled has nothing left to reconcile.
+      this.db.exec('COMMIT')
+      return null
+    }
+    const stopWasPending = worker?.state === 'stopping' || worker?.state === 'stop_unknown'
     if (activeDispatch) {
       const failureCount = dispatch.failure_count + 1
       const dispatchStatus: DispatchStatus =
@@ -58,6 +85,9 @@ export function reconcileMissingWorkerTerminal(
         projection: {
           failure_count: failureCount,
           last_failure: reason,
+          // Why 'unknown': a missing terminal proves nothing about how the process ended,
+          // only that Orca lost the ability to observe it. Never a proven exit.
+          termination_reason: 'unknown',
           completed_at: new Date().toISOString(),
           capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
         }
@@ -86,6 +116,12 @@ export function reconcileMissingWorkerTerminal(
       }
       this.closeQuestionsForDispatch(dispatchId)
     }
+    if (!worker) {
+      // Why: an unsupervised Dispatch has no worker_dispatches row; the dispatch_contexts
+      // failure above is its whole settlement, and there is nothing here to update.
+      this.db.exec('COMMIT')
+      return null
+    }
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -107,12 +143,14 @@ export function reconcileMissingWorkerTerminal(
 
 export type WorkerTerminalRecoveryMethods = {
   listLegacyWorkerTerminalRecoveryRows: typeof listLegacyWorkerTerminalRecoveryRows
+  listUnsupervisedActiveDispatches: typeof listUnsupervisedActiveDispatches
   reconcileMissingWorkerTerminal: typeof reconcileMissingWorkerTerminal
 }
 
 export function attachWorkerTerminalRecovery(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     listLegacyWorkerTerminalRecoveryRows,
+    listUnsupervisedActiveDispatches,
     reconcileMissingWorkerTerminal
   })
 }

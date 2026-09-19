@@ -23,6 +23,10 @@ describe('orchestration worker release archive', () => {
     vi.mocked(h.runtime.showTerminal).mockImplementation(
       async (handle) => ({ handle, worktreeId: 'repo::worktree', connected: false }) as never
     )
+    // O1: `connected: false` alone is contact loss, not proof — inspectWorkerTerminal now reports
+    // `unverifiable` for it unless a liveness verdict actually vouches for the exit, so this
+    // "already-exited" scenario needs one.
+    vi.spyOn(h.runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'exited' })
     vi.mocked(h.runtime.readTerminal).mockResolvedValue({
       handle: 'term_worker',
       status: 'exited',
