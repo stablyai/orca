@@ -6,11 +6,13 @@ import {
   scrollTopCache
 } from '@/lib/scroll-cache'
 import type { OpenFile } from '@/store/slices/editor'
-import { disposeClosedEditorTabs } from './closed-editor-tab-disposal'
+import {
+  disposeClosedEditorTabs,
+  type ClosedEditorTabMonacoRegistry
+} from './closed-editor-tab-disposal'
 import {
   getDiffViewerMonacoModelPaths,
-  getDiffViewerMonacoModelPathPrefixes,
-  type MonacoModelRegistry
+  getDiffViewerMonacoModelPathPrefixes
 } from './diff-monaco-model-disposal'
 
 const CLOSED_DIFF_TAB_COUNT = 100
@@ -25,7 +27,7 @@ type FakeModel = {
   uri: { toString: (skipEncoding?: boolean) => string }
 }
 
-type FakeRegistry = MonacoModelRegistry & {
+type FakeRegistry = ClosedEditorTabMonacoRegistry & {
   models: FakeModel[]
   counters: { getModelsCalls: number; uriToStringCalls: number }
 }
@@ -42,7 +44,7 @@ function createRegistry(models: FakeModel[]): FakeRegistry {
   return {
     models,
     counters,
-    Uri: { parse: (value: string) => value },
+    Uri: { parse: (value: string) => value, file: (value: string) => ({ toString: () => value }) },
     editor: {
       getModel: (uri: unknown) => byPath.get(String(uri)) ?? null,
       getModels: () => {
