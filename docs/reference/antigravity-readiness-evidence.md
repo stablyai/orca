@@ -1,7 +1,7 @@
 # Antigravity readiness: what the transcripts show
 
-`findAntigravityReadyPromptIndex` in `src/main/runtime/terminal-wait-detection.ts` decides whether
-an Antigravity pane is ready for a prompt. It has been written five times, each version tuned
+`findAntigravityReadyPromptIndex` in `src/main/runtime/antigravity-terminal-readiness.ts` decides
+whether an Antigravity pane is ready for a prompt. Its predecessor was written five times, each version tuned
 against a five-line screen typed from memory into a `.spec.ts` fixture. Three of the first four
 were found worse than the bug they replaced, and the fifth was reverted.
 
@@ -10,10 +10,10 @@ Real transcripts now exist. They were recorded from a live `agy` on macOS with
 `src/main/runtime/__fixtures__/`. `src/main/runtime/antigravity-readiness-transcripts.test.ts`
 replays them through the runtime.
 
-**Headline: on real output the current detector is inverted.** It refuses a genuinely ready screen
-and accepts a live model picker. The five attempts argued about which extra condition to add; none
-of them had noticed that the condition they all shared — a line beginning with the model name —
-never matches a real Antigravity ready screen at all.
+**Resolved behavior:** readiness now requires the last retained or visible-screen row to be the
+bare `>` composer. Model and account rows are deliberately ignored. Antigravity waits also take a
+bounded visible-screen snapshot because cursor-addressed redraws can leave the retained byte tail
+ending on an older response after the composer has returned.
 
 ## Versions
 
@@ -177,7 +177,7 @@ Nothing else in the capture distinguishes the two states. The hint row (`esc to 
 
 Evidence column names the fixture; all quoted text is from the committed transcripts.
 
-### Attempt 1 — the rule at HEAD
+### Attempt 1 — the pre-fix rule
 
 | #    | Claim                                                    | Verdict                     | Evidence                                                                                                                                                 |
 | ---- | -------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -233,9 +233,9 @@ expressed against the model/caret positions, which is what 1.2 and 1.3b just inv
 | X4  | Banner-to-caret distance                                   | ~8 derived lines on a 120x40 PTY; the banner falls outside the 6-line preview window, so only the full retained tail can see it |
 | X5  | Pane title on the trust screen versus ready                | Identical: none                                                                                                                 |
 
-## Can attempt six be written?
+## Attempt six
 
-Yes — but not as a variation on any of the five. Every one of them refined a predicate over
+Implemented, but not as a variation on any of the five. Every one of them refined a predicate over
 `\n`-delimited lines, and that is the layer where the evidence says the information is not.
 
 What the captures support:

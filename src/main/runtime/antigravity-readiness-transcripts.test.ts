@@ -6,9 +6,6 @@
  * Antigravity prints: the transcripts do. Six are recorded from a live `agy`; the rest name
  * themselves as skipped until someone can reach them.
  *
- * Four cases are pinned as KNOWN DEFECT: on real output the shipped detector refuses the ready
- * screen and accepts the live model picker. Those assert what it does, not what it should.
- *
  * Capture protocol: docs/reference/agent-pty-transcript-capture.md
  * What each transcript decides: docs/reference/antigravity-readiness-evidence.md
  */
@@ -51,14 +48,8 @@ type TranscriptCase = {
   /** Capture in docs/reference/antigravity-readiness-evidence.md. */
   capture: string
   what: string
-  /** What a correct detector must answer. Not what the shipped one answers. */
+  /** What the detector must answer. */
   expectReady: boolean
-  /**
-   * Set where the shipped detector contradicts the transcript. The case then runs inverted, so
-   * CI pins the defect instead of going permanently red — and flips to failing the moment
-   * someone fixes it, which is exactly when these expectations need re-reading.
-   */
-  knownDefect?: string
 }
 
 const TRANSCRIPTS: readonly TranscriptCase[] = [
@@ -66,15 +57,13 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     name: 'antigravity-ready-api-key-gemini-model',
     capture: 'B',
     what: 'ready screen, API-key identity — the account row reads "Gemini API key", not an email',
-    expectReady: true,
-    knownDefect: 'refused: the model row never starts a line, the logo shares it'
+    expectReady: true
   },
   {
     name: 'antigravity-ready-account-info-hidden',
     capture: 'B',
     what: 'ready screen with AGY_CLI_HIDE_ACCOUNT_INFO=1 — no account row at all',
-    expectReady: true,
-    knownDefect: 'refused: same line-start defect, and no account row exists to require'
+    expectReady: true
   },
   {
     name: 'antigravity-dialog-trust-workspace',
@@ -86,8 +75,7 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     name: 'antigravity-dialog-model-picker',
     capture: 'C',
     what: 'model picker owning the screen',
-    expectReady: false,
-    knownDefect: "accepted: the picker's own `Gemini 3.x Flash` rows satisfy the model rule"
+    expectReady: false
   },
   {
     name: 'antigravity-dialog-command-palette',
@@ -102,20 +90,18 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     expectReady: false
   },
   {
-    // Expected ready because the turn is over and the composer is back on screen. The captured
-    // turn ends in a backend error, which is the only ending this account's key can produce.
+    // The retained bytes contain an error footer, but the rendered capture still shows a spinner;
+    // fail closed until a live provider screen proves that the composer returned.
     name: 'antigravity-busy-turn-ended',
     capture: 'E',
-    what: 'the turn has ended and the composer has returned, process still alive',
-    expectReady: true,
-    knownDefect: 'refused: the retained tail ends on the error block, with no composer row in it'
+    what: 'error-ended turn with an ambiguous rendered screen',
+    expectReady: false
   },
   {
     name: 'antigravity-dialog-dismissed',
     capture: 'D',
     what: 'the screen immediately after the model picker is dismissed',
-    expectReady: true,
-    knownDefect: 'refused: the banner is not reprinted and no model row starts a line'
+    expectReady: true
   },
   // Not captured: this machine's agy has no OAuth session and offers only Gemini models, and
   // reaching the rest would mean signing the operator out or deleting their config. See
@@ -171,6 +157,7 @@ async function readinessVerdict(
     // capture carries the OSC bytes, so the pane wears whatever the CLI actually set.
     paneTitle: extractLastOscTitle(transcript) ?? ANTIGRAVITY_COMMAND,
     foregroundProcess: ANTIGRAVITY_COMMAND,
+    launchAgent: 'antigravity',
     data: transcript
   })
   try {
@@ -194,15 +181,7 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
     const captured = existsSync(path)
     const label = `capture ${transcript.capture}: ${transcript.what}`
 
-    // A pinned defect asserts what the detector DOES, so CI is honest rather than permanently
-    // red; fixing the detector flips this case to failing, which is when these expectations
-    // need re-reading. The correct answer stays in `expectReady` and in the test's name.
-    const shipped =
-      transcript.knownDefect === undefined ? transcript.expectReady : !transcript.expectReady
-    const verdictName =
-      transcript.knownDefect === undefined
-        ? `${label} → ${transcript.expectReady ? 'ready' : 'not ready'}`
-        : `${label} → must be ${transcript.expectReady ? 'ready' : 'not ready'}; KNOWN DEFECT, ${transcript.knownDefect}`
+    const verdictName = `${label}: ${transcript.expectReady ? 'ready' : 'not ready'}`
 
     it.skipIf(!captured)(
       verdictName,
@@ -216,7 +195,7 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
         // A silent dialog carries no blocked-signal wording, so the assertion is only that Orca
         // does not call the pane ready and type a prompt into a dialog that owns the screen.
         expect({ ready: verdict.ready, outcome: verdict.outcome }).toMatchObject({
-          ready: shipped
+          ready: transcript.expectReady
         })
       },
       READY_TIMEOUT_MS + 10_000

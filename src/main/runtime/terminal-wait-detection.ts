@@ -6,6 +6,10 @@ import {
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import {
+  findAntigravityReadyPromptIndex as findAntigravityComposerIndex,
+  isAntigravityReadyPromptSnapshot
+} from './antigravity-terminal-readiness'
+import {
   isTerminalWaitWhitespace,
   startOfLastLines,
   startOfLastNonBlankLines
@@ -83,6 +87,7 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
+    findAntigravityComposerIndex(normalized),
     findCursorActivePromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
@@ -94,6 +99,9 @@ function findKnownReadyPromptIndex(normalized: string): number | null {
     findAntigravityReadyPromptIndex(normalized),
     findCursorReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
+  if (isAntigravityReadyPromptSnapshot(normalized)) {
+    indexes.push(normalized.lastIndexOf('antigravity cli'))
+  }
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
 
@@ -135,8 +143,6 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   let lineStart = headerIndex
   let modelIndex: number | null = null
   let promptIndex: number | null = null
-
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
   for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
     if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
       continue
@@ -163,7 +169,6 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
     }
     lineStart = cursor + 1
   }
-
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 

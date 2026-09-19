@@ -389,10 +389,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
   })
 
-  // Characterization, not a guard: records the wedge this file has not fixed. An Antigravity user on
-  // a non-Gemini model has no 'gemini' line, so readiness never resolves and the wait times out.
-  // Flipping this to true is the goal of the follow-up, and needs a captured transcript first.
-  it('does not yet recognize a non-Gemini ready screen (known wedge)', () => {
+  it('recognizes a ready screen for a non-Gemini model', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
       'user@example.com (Antigravity Business)',
@@ -401,7 +398,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       '>'
     ])
 
-    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
   })
 
   // Ratchet, not a guard of today's code: these pass now only because none of them prints a 'gemini'

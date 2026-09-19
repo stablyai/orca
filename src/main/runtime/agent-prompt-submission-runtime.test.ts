@@ -475,7 +475,7 @@ describe('agent prompt submission runtime', () => {
       state: 'done' | 'working'
       stateStartedAt: number
     },
-    launchAgent: 'kimi' | 'codex' = 'kimi'
+    launchAgent: 'antigravity' | 'kimi' | 'codex' = 'kimi'
   ): Promise<{
     runtime: OrcaRuntimeService
     handle: string
@@ -539,6 +539,43 @@ describe('agent prompt submission runtime', () => {
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('settles an Antigravity prompt when PreInvocation starts a new hook turn', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const hook = { state: 'done' as 'done' | 'working', stateStartedAt: 1_000 }
+    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'antigravity')
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        if (data === '\r') {
+          vi.setSystemTime(3_000)
+          hook.state = 'working'
+          hook.stateStartedAt = 3_000
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      acceptQueued: true,
+      requestId: 'antigravity-pre-invocation',
+      observationTimeoutMs: 20_000
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({
+      prompt: {
+        provider: 'antigravity',
+        observation: 'supported',
+        stages: ['input_accepted', 'turn_started']
+      }
+    })
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
