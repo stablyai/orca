@@ -28,5 +28,18 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/tasks',
     grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
+  },
+  // The file explorer. `navigate` because its Back pops the native stack, and because a row opens
+  // the preview beside it, which is a page route the handoff keeps inside the document. `storage`
+  // for the shared components the host layout renders above it. No `externalLink`: the only thing
+  // in this closure that opens a URL is the protocol wall in the shared layout, which every page
+  // route reaches and which the worktree list is granted nothing for either.
+  { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage'] },
+  // The file preview. Same two, plus `externalLink`: a Markdown preview renders links, and
+  // `MobileMarkdown` opens them through the platform seam. That is a consumer inside the domain
+  // rather than the shared wall, which is what makes this route's list longer than the explorer's.
+  {
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink']
   }
 ]

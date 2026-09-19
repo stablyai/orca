@@ -73,6 +73,42 @@ export const filePreviewStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
+  discardPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.bgRaised,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle
+  },
+  discardPromptText: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize
+  },
+  discardPromptAction: {
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.md
+  },
+  discardPromptActionPressed: {
+    backgroundColor: colors.bgPanel
+  },
+  discardPromptStayText: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  discardPromptDiscardText: {
+    color: colors.statusRed,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
   saveButton: {
     width: 36,
     height: 36,

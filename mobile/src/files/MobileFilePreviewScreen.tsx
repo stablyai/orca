@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, BackHandler, Pressable, Text, View, useWindowDimensions } from 'react-native'
+import { Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import { ChevronLeft, Save } from 'lucide-react-native'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
@@ -14,6 +14,7 @@ import {
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
+import { MobileFilePreviewDiscardPrompt } from './MobileFilePreviewDiscardPrompt'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
@@ -26,13 +27,14 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
 
 type Props = {
   route: MobileFilePreviewRouteState
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
-  const router = useRouter()
+  const router = useRouteHandoff()
   const previewParams = route.ok ? route.params : null
   const { client, state: connState } = useHostClient(previewParams?.hostId)
   const forceReconnect = useForceReconnect()
@@ -219,22 +221,11 @@ export function MobileFilePreviewScreen({ route }: Props) {
     }
   }, [canSaveArtifact, client, draftContent, previewSource, savedContent, saving])
 
-  const requestBack = useCallback(() => {
-    if (!hasUnsavedTerminalArtifactDraft) {
-      router.back()
-      return true
-    }
-    Alert.alert('Discard changes?', 'Unsaved edits will be lost.', [
-      { text: 'Stay', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => router.back() }
-    ])
-    return true
-  }, [hasUnsavedTerminalArtifactDraft, router])
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', requestBack)
-    return () => subscription.remove()
-  }, [requestBack])
+  const leave = useCallback(() => router.back(), [router])
+  const { confirmingDiscard, requestBack, stay, discard } = useMobileFilePreviewBack({
+    hasUnsavedDraft: hasUnsavedTerminalArtifactDraft,
+    leave
+  })
 
   return (
     <View style={styles.container}>
@@ -267,6 +258,9 @@ export function MobileFilePreviewScreen({ route }: Props) {
             </Pressable>
           ) : null}
         </View>
+        {confirmingDiscard ? (
+          <MobileFilePreviewDiscardPrompt onStay={stay} onDiscard={discard} />
+        ) : null}
       </SafeAreaView>
       <MobileFilePreviewBody
         preview={preview}
