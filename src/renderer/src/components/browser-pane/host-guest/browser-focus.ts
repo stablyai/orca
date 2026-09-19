@@ -80,3 +80,8 @@ export function consumeBrowserFocusRequest(pageId: string): BrowserFocusTarget |
   clearExpiredRequestCleanupTimerIfIdle()
   return pending.target
 }
+
+export function peekBrowserFocusRequest(pageId: string): BrowserFocusTarget | null {
+  purgeExpiredFocusRequests()
+  return pendingBrowserFocusByPageId.get(pageId)?.target ?? null
+}
