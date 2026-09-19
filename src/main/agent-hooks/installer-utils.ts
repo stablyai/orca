@@ -156,6 +156,19 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
 }
 
 /**
+ * Launcher for agents that hand the hook to `cmd.exe /c` as a command line rather than
+ * spawning it as argv[0] (Junie). Freed from the one-token rule of
+ * `wrapWindowsCmdHookCommand`, this keeps the POSIX wrapper's two guarantees that the
+ * bare-path form gives up: a missing script drains stdin instead of stranding the writer
+ * (#11549), and a quoted path survives the spaces in `C:\\Users\\Ada Lovelace\\…` without
+ * paying PowerShell's ~300ms startup on every hook event.
+ */
+export function wrapWindowsCmdShellHookCommand(scriptPath: string): string {
+  const quoted = `"${scriptPath}"`
+  return `if exist ${quoted} (call ${quoted}) else (${WINDOWS_HOOK_STDIN_DRAIN_COMMAND})`
+}
+
+/**
  * Extra form lines inserted before the final `payload@-` line (each should end with ` ^`).
  * Used by Grok to attach `grokHome` without fragile string replace on the shared template.
  */

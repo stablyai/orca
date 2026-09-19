@@ -44,6 +44,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   rovo: 'atlassian.com',
   hermes: 'nousresearch.com',
   devin: 'devin.ai',
+  junie: 'jetbrains.com',
   openclaw: 'openclaw.ai'
 }
 

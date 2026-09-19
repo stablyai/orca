@@ -18,7 +18,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'omp',
   'droid',
   'hermes',
-  'devin'
+  'devin',
+  'junie'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -75,6 +76,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Devin',
     permissionLabel: 'Devin - action required',
     idleLabel: 'Devin ready'
+  },
+  junie: {
+    workingLabel: 'Junie',
+    permissionLabel: 'Junie - action required',
+    idleLabel: 'Junie ready',
+    // Why: Junie writes the running task name as its own OSC 0 working title; only
+    // synthesize terminal states so that label survives.
+    synthesizeWorkingTitle: false
   }
 }
 

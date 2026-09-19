@@ -11,6 +11,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   openclaude: 'OpenClaude',
   codex: 'Codex',
   devin: 'Devin',
+  junie: 'Junie',
   ante: 'Ante',
   trae: 'Trae',
   autohand: 'Autohand Code',

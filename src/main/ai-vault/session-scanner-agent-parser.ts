@@ -5,6 +5,7 @@ import { parseDroidSessionFile } from './session-scanner-droid-parser'
 import { parseClineSessionFile } from './session-scanner-cline-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
+import { parseJunieSessionFile } from './session-scanner-junie-parser'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import {
@@ -111,5 +112,7 @@ export async function parseAgentSessionFile(
       return parseDevinSessionFile(candidate.file, platform, messages)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform, messages)
+    case 'junie':
+      return parseJunieSessionFile(candidate.file, platform)
   }
 }

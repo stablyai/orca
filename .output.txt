@@ -1,0 +1,424 @@
+Command finished with exit code 1.
+Command output:
+Scope: all 2 workspace projects
+✓ Lockfile passes supply-chain policies (verified 6h ago)
+Lockfile is up to date, resolution step is skipped
+Already up to date
+.../node_modules/cpu-features install$ node buildcheck.js > buildcheck.gypi && node-gyp rebuild
+.../node_modules/cpu-features install: gyp info it worked if it ends with ok
+.../node_modules/cpu-features install: gyp info using node-gyp@12.3.0
+.../node_modules/cpu-features install: gyp info using node@26.3.0 | darwin | arm64
+.../node_modules/cpu-features install: gyp info find Python using Python version 3.14.3 found at "/opt/homebrew/opt/python@3.14/bin/python3.14"
+.../node_modules/cpu-features install: 
+.../node_modules/cpu-features install: gyp info spawn /opt/homebrew/opt/python@3.14/bin/python3.14
+.../node_modules/cpu-features install: gyp info spawn args [
+.../node_modules/cpu-features install: gyp info spawn args '/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/node-gyp@12.3.0/node_modules/node-gyp/gyp/gyp_main.py',
+.../node_modules/cpu-features install: gyp info spawn args 'binding.gyp',
+.../node_modules/cpu-features install: gyp info spawn args '-f',
+.../node_modules/cpu-features install: gyp info spawn args 'make',
+.../node_modules/cpu-features install: gyp info spawn args '-I',
+.../node_modules/cpu-features install: gyp info spawn args '/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/cpu-features@0.0.10/node_modules/cpu-features/build/config.gypi',
+.../node_modules/cpu-features install: gyp info spawn args '-I',
+.../node_modules/cpu-features install: gyp info spawn args '/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/node-gyp@12.3.0/node_modules/node-gyp/addon.gypi',
+.../node_modules/cpu-features install: gyp info spawn args '-I',
+.../node_modules/cpu-features install: gyp info spawn args '/Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/common.gypi',
+.../node_modules/cpu-features install: gyp info spawn args '-Dlibrary=shared_library',
+.../node_modules/cpu-features install: gyp info spawn args '-Dvisibility=default',
+.../node_modules/cpu-features install: gyp info spawn args '-Dnode_root_dir=/Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0',
+.../node_modules/cpu-features install: gyp info spawn args '-Dnode_gyp_dir=/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/node-gyp@12.3.0/node_modules/node-gyp',
+.../node_modules/cpu-features install: gyp info spawn args '-Dnode_lib_file=/Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/<(target_arch)/node.lib',
+.../node_modules/cpu-features install: gyp info spawn args '-Dmodule_root_dir=/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/cpu-features@0.0.10/node_modules/cpu-features',
+.../node_modules/cpu-features install: gyp info spawn args '-Dnode_engine=v8',
+.../node_modules/cpu-features install: gyp info spawn args '--depth=.',
+.../node_modules/cpu-features install: gyp info spawn args '--no-parallel',
+.../node_modules/cpu-features install: gyp info spawn args '--generator-output',
+.../node_modules/cpu-features install: gyp info spawn args 'build',
+.../node_modules/cpu-features install: gyp info spawn args '-Goutput_dir=.'
+.../node_modules/cpu-features install: gyp info spawn args ]
+.../node_modules/cpu-features install: gyp info spawn make
+.../node_modules/cpu-features install: gyp info spawn args [ 'BUILDTYPE=Release', '-C', 'build' ]
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_aarch64_linux_or_android.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_aarch64_macos_or_iphone.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_aarch64_windows.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_arm_linux_or_android.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_mips_linux_or_android.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_ppc_linux.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_x86_freebsd.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_x86_linux_or_android.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_x86_macos.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/impl_x86_windows.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/filesystem.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/stack_line_reader.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/string_view.o
+.../node_modules/cpu-features install:   CC(target) Release/obj.target/cpu_features/deps/cpu_features/src/hwcaps.o
+.../node_modules/cpu-features install:   LIBTOOL-STATIC Release/cpu_features.a
+.../node_modules/cpu-features install:   CXX(target) Release/obj.target/cpufeatures/src/binding.o
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:74:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8.h:24:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-array-buffer.h:14:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-object.h:8:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/cppgc/garbage-collected.h:9:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/cppgc/platform.h:11:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:5:2: error: unterminated conditional directive
+.../node_modules/cpu-features install: #ifndef V8_V8_PLATFORM_H_
+.../node_modules/cpu-features install:  ^
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:888:15: error: expected ';' at end of declaration list
+.../node_modules/cpu-features install:   Address base
+.../node_modules/cpu-features install:               ^
+.../node_modules/cpu-features install:               ;
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:74:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8.h:24:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-array-buffer.h:15:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:5:2: error: unterminated conditional directive
+.../node_modules/cpu-features install: #ifndef V8_V8_PLATFORM_H_
+.../node_modules/cpu-features install:  ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:74:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8.h:34:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-initialization.h:14:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:5:2: error: unterminated conditional directive
+.../node_modules/cpu-features install: #ifndef V8_V8_PLATFORM_H_
+.../node_modules/cpu-features install:  ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:76:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:5:2: error: unterminated conditional directive
+.../node_modules/cpu-features install: #ifndef V8_V8_PLATFORM_H_
+.../node_modules/cpu-features install:  ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:79:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node_api_types.h:4:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:173:47: error: unknown type name 'napi_env'; did you mean 'napi_env__'?
+.../node_modules/cpu-features install: typedef napi_value(NAPI_CDECL* napi_callback)(napi_env env,
+.../node_modules/cpu-features install:                                               ^~~~~~~~
+.../node_modules/cpu-features install:                                               napi_env__
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:77:16: note: 'napi_env__' declared here
+.../node_modules/cpu-features install: typedef struct napi_env__* node_api_nogc_env;
+.../node_modules/cpu-features install:                ^
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:175:41: error: unknown type name 'napi_env'; did you mean 'napi_env__'?
+.../node_modules/cpu-features install: typedef void(NAPI_CDECL* napi_finalize)(napi_env env,
+.../node_modules/cpu-features install:                                         ^~~~~~~~
+.../node_modules/cpu-features install:                                         napi_env__
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:77:16: note: 'napi_env__' declared here
+.../node_modules/cpu-features install: typedef struct napi_env__* node_api_nogc_env;
+.../node_modules/cpu-features install:                ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:79:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node_api_types.h:6:58: error: unknown type name 'napi_env'; did you mean 'napi_env__'?
+.../node_modules/cpu-features install: typedef napi_value(NAPI_CDECL* napi_addon_register_func)(napi_env env,
+.../node_modules/cpu-features install:                                                          ^~~~~~~~
+.../node_modules/cpu-features install:                                                          napi_env__
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:77:16: note: 'napi_env__' declared here
+.../node_modules/cpu-features install: typedef struct napi_env__* node_api_nogc_env;
+.../node_modules/cpu-features install:                ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:79:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node_api_types.h:36:55: error: unknown type name 'napi_env'; did you mean 'napi_env__'?
+.../node_modules/cpu-features install: typedef void(NAPI_CDECL* napi_async_execute_callback)(napi_env env, void* data);
+.../node_modules/cpu-features install:                                                       ^~~~~~~~
+.../node_modules/cpu-features install:                                                       napi_env__
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:77:16: note: 'napi_env__' declared here
+.../node_modules/cpu-features install: typedef struct napi_env__* node_api_nogc_env;
+.../node_modules/cpu-features install:                ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:79:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node_api_types.h:37:56: error: unknown type name 'napi_env'; did you mean 'napi_env__'?
+.../node_modules/cpu-features install: typedef void(NAPI_CDECL* napi_async_complete_callback)(napi_env env,
+.../node_modules/cpu-features install:                                                        ^~~~~~~~
+.../node_modules/cpu-features install:                                                        napi_env__
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:77:16: note: 'napi_env__' declared here
+.../node_modules/cpu-features install: typedef struct napi_env__* node_api_nogc_env;
+.../node_modules/cpu-features install:                ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:79:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node_api_types.h:42:5: error: unknown type name 'napi_env'; did you mean 'napi_env__'?
+.../node_modules/cpu-features install:     napi_env env, napi_value js_callback, void* context, void* data);
+.../node_modules/cpu-features install:     ^~~~~~~~
+.../node_modules/cpu-features install:     napi_env__
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/js_native_api_types.h:77:16: note: 'napi_env__' declared here
+.../node_modules/cpu-features install: typedef struct napi_env__* node_api_nogc_env;
+.../node_modules/cpu-features install:                ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:74:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8.h:24:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-array-buffer.h:14:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-object.h:8:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/cppgc/garbage-collected.h:9:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/cppgc/platform.h:11:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:849:7: error: missing '}' at end of definition of 'v8::VirtualAddressSpace'
+.../node_modules/cpu-features install: class VirtualAddressSpace {
+.../node_modules/cpu-features install:       ^
+.../node_modules/cpu-features install: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bitset:141:1: note: still within definition of 'v8::VirtualAddressSpace' here
+.../node_modules/cpu-features install: _LIBCPP_BEGIN_NAMESPACE_STD
+.../node_modules/cpu-features install: ^
+.../node_modules/cpu-features install: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:713:39: note: expanded from macro '_LIBCPP_BEGIN_NAMESPACE_STD'
+.../node_modules/cpu-features install: #  define _LIBCPP_BEGIN_NAMESPACE_STD namespace std { inline namespace _LIBCPP_ABI_NAMESPACE {
+.../node_modules/cpu-features install:                                       ^
+.../node_modules/cpu-features install: In file included from ../src/binding.cc:1:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/node.h:74:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8.h:24:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-array-buffer.h:14:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-object.h:8:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/cppgc/garbage-collected.h:9:
+.../node_modules/cpu-features install: In file included from /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/cppgc/platform.h:11:
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:856:9: error: member initializer 'page_size_' does not name a non-static data member or base class
+.../node_modules/cpu-features install:       : page_size_(page_size),
+.../node_modules/cpu-features install:         ^~~~~~~~~~~~~~~~~~~~~
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:857:9: error: member initializer 'allocation_granularity_' does not name a non-static data member or base class
+.../node_modules/cpu-features install:         allocation_granularity_(allocation_granularity),
+.../node_modules/cpu-features install:         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:858:9: error: initializer 'base_' does not name a non-static data member or base class; did you mean the member 'base'?
+.../node_modules/cpu-features install:         base_(base),
+.../node_modules/cpu-features install:         ^~~~~
+.../node_modules/cpu-features install:         base
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:888:11: note: 'base' declared here
+.../node_modules/cpu-features install:   Address base
+.../node_modules/cpu-features install:           ^
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:859:9: error: member initializer 'size_' does not name a non-static data member or base class
+.../node_modules/cpu-features install:         size_(size),
+.../node_modules/cpu-features install:         ^~~~~~~~~~~
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:860:9: error: member initializer 'max_page_permissions_' does not name a non-static data member or base class
+.../node_modules/cpu-features install:         max_page_permissions_(max_page_permissions) {}
+.../node_modules/cpu-features install:         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:871:37: error: use of undeclared identifier 'page_size_'; did you mean 'page_size'?
+.../node_modules/cpu-features install:   size_t page_size() const { return page_size_; }
+.../node_modules/cpu-features install:                                     ^~~~~~~~~~
+.../node_modules/cpu-features install:                                     page_size
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:871:10: note: 'page_size' declared here
+.../node_modules/cpu-features install:   size_t page_size() const { return page_size_; }
+.../node_modules/cpu-features install:          ^
+.../node_modules/cpu-features install: /Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/v8-platform.h:871:37: error: reference to non-static member function must be called; did you mean to call it with no arguments?
+.../node_modules/cpu-features install:   size_t page_size() const { return page_size_; }
+.../node_modules/cpu-features install:                                     ^~~~~~~~~~
+.../node_modules/cpu-features install:                                               ()
+.../node_modules/cpu-features install: fatal error: too many errors emitted, stopping now [-ferror-limit=]
+.../node_modules/cpu-features install: 20 errors generated.
+.../node_modules/cpu-features install: make: *** [Release/obj.target/cpufeatures/src/binding.o] Error 1
+.../node_modules/cpu-features install: gyp ERR! build error 
+.../node_modules/cpu-features install: gyp ERR! stack Error: `make` failed with exit code: 2
+.../node_modules/cpu-features install: gyp ERR! stack at ChildProcess.<anonymous> (/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/node-gyp@12.3.0/node_modules/node-gyp/lib/build.js:219:23)
+.../node_modules/cpu-features install: gyp ERR! System Darwin 25.3.0
+.../node_modules/cpu-features install: gyp ERR! command "/Users/Irina.Chichikova/.nvm/versions/node/v26.3.0/bin/node" "/Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/node-gyp/bin/node-gyp.js" "rebuild"
+.../node_modules/cpu-features install: gyp ERR! cwd /Users/Irina.Chichikova/Desktop/Reps/orca/node_modules/.pnpm/cpu-features@0.0.10/node_modules/cpu-features
+.../node_modules/cpu-features install: gyp ERR! node -v v26.3.0
+.../node_modules/cpu-features install: gyp ERR! node-gyp -v v12.3.0
+.../node_modules/cpu-features install: gyp ERR! $npm_package_name cpu-features
+.../node_modules/cpu-features install: gyp ERR! $npm_package_version 0.0.10
+.../node_modules/cpu-features install: gyp ERR! not ok 
+.../node_modules/cpu-features install: Failed
+native/windows-registry install$ node-gyp rebuild
+native/windows-registry install: gyp info it worked if it ends with ok
+native/windows-registry install: gyp info using node-gyp@12.3.0
+native/windows-registry install: gyp info using node@26.3.0 | darwin | arm64
+native/windows-registry install: gyp info find Python using Python version 3.14.3 found at "/opt/homebrew/opt/python@3.14/bin/python3.14"
+native/windows-registry install: 
+native/windows-registry install: gyp info spawn /opt/homebrew/opt/python@3.14/bin/python3.14
+native/windows-registry install: gyp info spawn args [
+native/windows-registry install: gyp info spawn args '/Users/Irina.Chichikova/Library/pnpm/store/v11/links/@/pnpm/12.0.0/4df364c38b7ce72998b2c4070979d3edc80ef33c9159f9b158f7c65d0e51c110/node_modules/pnpm/dist/node_modules/node-gyp/gyp/gyp_main.py',
+native/windows-registry install: gyp info spawn args 'binding.gyp',
+native/windows-registry install: gyp info spawn args '-f',
+native/windows-registry install: gyp info spawn args 'make',
+native/windows-registry install: gyp info spawn args '-I',
+native/windows-registry install: gyp info spawn args '/Users/Irina.Chichikova/Desktop/Reps/orca/native/windows-registry/build/config.gypi',
+native/windows-registry install: gyp info spawn args '-I',
+native/windows-registry install: gyp info spawn args '/Users/Irina.Chichikova/Library/pnpm/store/v11/links/@/pnpm/12.0.0/4df364c38b7ce72998b2c4070979d3edc80ef33c9159f9b158f7c65d0e51c110/node_modules/pnpm/dist/node_modules/node-gyp/addon.gypi',
+native/windows-registry install: gyp info spawn args '-I',
+native/windows-registry install: gyp info spawn args '/Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/include/node/common.gypi',
+native/windows-registry install: gyp info spawn args '-Dlibrary=shared_library',
+native/windows-registry install: gyp info spawn args '-Dvisibility=default',
+native/windows-registry install: gyp info spawn args '-Dnode_root_dir=/Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0',
+native/windows-registry install: gyp info spawn args '-Dnode_gyp_dir=/Users/Irina.Chichikova/Library/pnpm/store/v11/links/@/pnpm/12.0.0/4df364c38b7ce72998b2c4070979d3edc80ef33c9159f9b158f7c65d0e51c110/node_modules/pnpm/dist/node_modules/node-gyp',
+native/windows-registry install: gyp info spawn args '-Dnode_lib_file=/Users/Irina.Chichikova/Library/Caches/node-gyp/26.3.0/<(target_arch)/node.lib',
+native/windows-registry install: gyp info spawn args '-Dmodule_root_dir=/Users/Irina.Chichikova/Desktop/Reps/orca/native/windows-registry',
+native/windows-registry install: gyp info spawn args '-Dnode_engine=v8',
+native/windows-registry install: gyp info spawn args '--depth=.',
+native/windows-registry install: gyp info spawn args '--no-parallel',
+native/windows-registry install: gyp info spawn args '--generator-output',
+native/windows-registry install: gyp info spawn args 'build',
+native/windows-registry install: gyp info spawn args '-Goutput_dir=.'
+native/windows-registry install: gyp info spawn args ]
+native/windows-registry install: gyp info spawn make
+native/windows-registry install: gyp info spawn args [ 'BUILDTYPE=Release', '-C', 'build' ]
+native/windows-registry install:   TOUCH Release/obj.target/orca_windows_registry.stamp
+native/windows-registry install: gyp info ok 
+native/windows-registry install: Done
+. postinstall$ node config/scripts/rebuild-native-deps.mjs
+. postinstall: [rebuild] Skipping optional Electron rebuild modules: cpu-features
+. postinstall: [rebuild] Electron package binary is missing; installing Electron package binary.
+. postinstall: [electron-package] Electron package binary is missing; running Electron install.
+. postinstall: 
+. postinstall: 
+. postinstall: [electron-package] Repaired Electron path.txt -> Electron.app/Contents/MacOS/Electron
+. postinstall: [rebuild] Patched node-pty build artifacts are missing; rebuilding from source.
+. postinstall: Done
+. prepare$ husky
+. prepare: Done
+Done in 1m 10.4s using pnpm v12.0.0
+[STARTED] Backing up original state...
+[COMPLETED] Backed up original state (30f226fd61)
+[STARTED] Hiding unstaged changes to partially staged files...
+[COMPLETED] Hiding unstaged changes to partially staged files...
+[STARTED] Running tasks for staged files...
+[STARTED] package.json — 1217 files (chunk 1/13)...
+[STARTED] package.json — 1217 files (chunk 2/13)...
+[STARTED] package.json — 1217 files (chunk 3/13)...
+[STARTED] package.json — 1217 files (chunk 4/13)...
+[STARTED] package.json — 1217 files (chunk 5/13)...
+[STARTED] package.json — 1217 files (chunk 6/13)...
+[STARTED] package.json — 1217 files (chunk 7/13)...
+[STARTED] package.json — 1217 files (chunk 8/13)...
+[STARTED] package.json — 1217 files (chunk 9/13)...
+[STARTED] package.json — 1217 files (chunk 10/13)...
+[STARTED] package.json — 1216 files (chunk 11/13)...
+[STARTED] package.json — 1216 files (chunk 12/13)...
+[STARTED] package.json — 1216 files (chunk 13/13)...
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 359 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 118 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 249 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 809 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1151 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 7 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1217 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 0 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1216 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 1 file
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1198 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 9 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1216 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 0 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1212 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 1 file
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1215 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 2 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1217 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 0 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1208 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 8 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1212 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 0 files
+[STARTED] {*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}} — 1189 files
+[STARTED] {*.{json,css},!(cloud)/**/*.{json,css}} — 4 files
+[SKIPPED] {*.{json,css},!(cloud)/**/*.{json,css}} — no files
+[SKIPPED] {*.{json,css},!(cloud)/**/*.{json,css}} — no files
+[SKIPPED] {*.{json,css},!(cloud)/**/*.{json,css}} — no files
+[SKIPPED] {*.{json,css},!(cloud)/**/*.{json,css}} — no files
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[STARTED] oxlint
+[STARTED] oxlint
+[STARTED] oxfmt --write
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 4 files
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 1 file
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 2 files
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 1 file
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 9 files
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 118 files
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 7 files
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 8 files
+[COMPLETED] oxfmt --write
+[COMPLETED] {*.{json,css},!(cloud)/**/*.{json,css}} — 809 files
+[COMPLETED] oxlint
+[STARTED] oxlint --config config/oxlint-react-doctor.json
+[COMPLETED] oxlint
+[STARTED] oxlint --config config/oxlint-react-doctor.json
+[COMPLETED] oxlint
+[STARTED] oxlint --config config/oxlint-react-doctor.json
+[COMPLETED] oxlint
+[STARTED] oxlint --config config/oxlint-react-doctor.json
+[COMPLETED] oxlint
+[STARTED] oxlint --config config/oxlint-react-doctor.json
+[COMPLETED] oxlint
+[STARTED] oxlint --config config/oxlint-react-doctor.json
+[FAILED] oxlint [FAILED]
+[FAILED] oxlint [FAILED]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[FAILED] oxlint --config config/oxlint-react-doctor.json [SIGKILL]
+[COMPLETED] Running tasks for staged files...
+[STARTED] Applying modifications from tasks...
+[SKIPPED] Skipped because of errors from tasks.
+[STARTED] Restoring unstaged changes...
+[SKIPPED] Skipped because of errors from tasks.
+[STARTED] Reverting to original state because of errors...
+[COMPLETED] Reverting to original state because of errors...
+[STARTED] Cleaning up temporary files...
+[COMPLETED] Cleaning up temporary files...
+
+✖ oxlint:
+file:///Users/Irina.Chichikova/Desktop/Reps/orca/src/main/ai-vault/session-scanner.test.ts:10:3: error eslint(no-unused-vars): Identifier 'writeAntigravityScannerFixture' is imported but never used. help: Consider removing this import.
+file:///Users/Irina.Chichikova/Desktop/Reps/orca/src/main/ai-vault/session-scanner.test.ts:12:3: error eslint(no-unused-vars): Identifier 'writeOmpScannerFixture' is imported but never used. help: Consider removing this import.
+file:///Users/Irina.Chichikova/Desktop/Reps/orca/src/main/ai-vault/session-scanner.test.ts:13:3: error eslint(no-unused-vars): Identifier 'writePrimeAgentScannerFixture' is imported but never used. help: Consider removing this import.
+file:///Users/Irina.Chichikova/Desktop/Reps/orca/src/main/agent-hooks/remote-hook-service-installers.test.ts:24:28: error eslint(no-unused-vars): Identifier 'junieHookService' is imported but never used. help: Consider removing this import.
+file:///Users/Irina.Chichikova/Desktop/Reps/orca/src/main/agent-hooks/remote-hook-service-installers.test.ts:916:3: error eslint(max-lines): File has too many lines (825). help: Maximum allowed is 800.
+
+✖ Task killed: oxlint --config config/oxlint-react-doctor.json
+
+✖ Task killed: oxlint --config config/oxlint-react-doctor.json
+
+✖ Task killed: oxlint --config config/oxlint-react-doctor.json
+
+✖ Task killed: oxlint
+
+✖ Task killed: oxlint
+
+✖ Task killed: oxlint --config config/oxlint-react-doctor.json
+
+✖ Task killed: oxlint
+
+✖ Task killed: oxlint
+
+✖ Task killed: oxlint
+
+✖ Task killed: oxlint
+
+✖ Task killed: oxlint --config config/oxlint-react-doctor.json
+
+✖ Task killed: oxlint --config config/oxlint-react-doctor.json
+husky - pre-commit script failed (code 1)
