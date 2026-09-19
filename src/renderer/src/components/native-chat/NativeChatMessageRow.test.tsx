@@ -24,10 +24,36 @@ function renderMessage(role: NativeChatMessage['role'], timestamp: number | null
 }
 
 describe('MessageRow control visibility', () => {
-  it('renders and copies a fenced code block through the markdown path', async () => {
-    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
-    Object.assign(window, { api: { ui: { writeClipboardText } } })
+  it.each(['```sh\necho $1\n', '    echo $1\n'])(
+    'preserves shell dollars when rendering and copying code: %s',
+    async (content) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      Object.assign(window, { api: { ui: { writeClipboardText } } })
 
+      render(
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: content }]
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={vi.fn()}
+        />
+      )
+
+      expect(document.querySelector('pre')?.textContent).toContain('echo $1')
+      fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+
+      await waitFor(() => {
+        expect(writeClipboardText).toHaveBeenCalledWith('echo $1\n')
+      })
+    }
+  )
+
+  it('renders assistant math while preserving currency dollar signs', () => {
     render(
       <MessageRow
         message={{
@@ -35,19 +61,21 @@ describe('MessageRow control visibility', () => {
           role: 'assistant',
           timestamp: 0,
           source: 'transcript',
-          blocks: [{ type: 'text', text: '```ts\nconst answer = 42\n```' }]
+          blocks: [
+            {
+              type: 'text',
+              text: String.raw`Confidence: $P = \text{Success}$. Cost: $148+ → $19.`
+            }
+          ]
         }}
         expandSignal={false}
         onScrollMessageToTop={vi.fn()}
       />
     )
 
-    expect(screen.getByText('ts')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
-
-    await waitFor(() => {
-      expect(writeClipboardText).toHaveBeenCalledWith('const answer = 42\n')
-    })
+    expect(document.querySelector('.katex')).not.toBeNull()
+    expect(document.body.textContent).toContain('Success')
+    expect(document.body.textContent).toContain('Cost: $148+ → $19.')
   })
 
   it('appends time to the existing agent controls and inherits their reveal', () => {
