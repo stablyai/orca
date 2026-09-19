@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { PersistedOpenFile } from '../../../../shared/workspace-session-state-types'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 
@@ -25,6 +26,25 @@ function ownedEditorFileId(
 ): string {
   const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
+function hydratePersistedOpenFiles(files: PersistedOpenFile[]) {
+  const store = createTestStore()
+  const wt = 'repo1::/path/wt1'
+  store.setState({
+    repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
+    worktreesByRepo: { repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })] },
+    activeWorktreeId: wt
+  })
+  store.getState().hydrateEditorSession({
+    activeRepoId: 'repo1',
+    activeWorktreeId: wt,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    openFilesByWorktree: { [wt]: files }
+  })
+  return store
 }
 
 describe('hydrateEditorSession', () => {
@@ -422,6 +442,64 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles.map((file) => file.id)).toEqual([
       ownedEditorFileId(filePath, wt, runtimeEnvironmentId)
     ])
+  })
+
+  it('reuses a persisted OpenFile id instead of minting a computed one', () => {
+    const persistedId = 'persisted-open-file-id'
+    const store = hydratePersistedOpenFiles([
+      {
+        id: persistedId,
+        filePath: '/path/wt1/src/app.ts',
+        relativePath: 'src/app.ts',
+        worktreeId: 'repo1::/path/wt1',
+        language: 'typescript'
+      }
+    ])
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual([persistedId])
+  })
+
+  it('keeps one OpenFile when two persisted rows share an id', () => {
+    const sharedId = 'shared-open-file-id'
+    const store = hydratePersistedOpenFiles([
+      {
+        id: sharedId,
+        filePath: '/path/wt1/src/app.ts',
+        relativePath: 'src/app.ts',
+        worktreeId: 'repo1::/path/wt1',
+        language: 'typescript'
+      },
+      {
+        id: sharedId,
+        filePath: '/path/wt1/src/other.ts',
+        relativePath: 'src/other.ts',
+        worktreeId: 'repo1::/path/wt1',
+        language: 'typescript'
+      }
+    ])
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({ id: sharedId, filePath: '/path/wt1/src/app.ts' })
+    ])
+  })
+
+  it('collapses identical-path persisted rows onto the first id', () => {
+    const filePath = '/path/wt1/src/app.ts'
+    const store = hydratePersistedOpenFiles([
+      {
+        id: 'open-file-a',
+        filePath,
+        relativePath: 'src/app.ts',
+        worktreeId: 'repo1::/path/wt1',
+        language: 'typescript'
+      },
+      {
+        id: 'open-file-b',
+        filePath,
+        relativePath: 'src/app.ts',
+        worktreeId: 'repo1::/path/wt1',
+        language: 'typescript'
+      }
+    ])
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual(['open-file-a'])
   })
 
   it('keeps floating owner-qualified editor ids aligned with restored unified tabs', () => {
