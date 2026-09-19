@@ -105,9 +105,21 @@ function navigations(posted: readonly string[]): unknown[] {
     .filter((frame: { name?: string }) => frame.name === 'navigate')
 }
 
+/** What the page said about a target it would not open. One entry per warn, in order. */
+const warned: unknown[][] = []
+let restoreWarn: (() => void) | null = null
+
 beforeEach(() => {
   vi.useFakeTimers()
   held.handoff = null
+  warned.length = 0
+  const original = console.warn
+  console.warn = (...args: unknown[]) => {
+    warned.push(args)
+  }
+  restoreWarn = () => {
+    console.warn = original
+  }
   router.push.mockClear()
   router.replace.mockClear()
   router.dismissTo.mockClear()
@@ -115,6 +127,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  restoreWarn?.()
+  restoreWarn = null
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'orcaBridge')
 })
@@ -183,18 +197,27 @@ describe('the members that stay inside this document', () => {
 })
 
 describe('a shell that granted no navigate', () => {
-  it('falls through to this document rather than doing nothing at all', () => {
-    // Unmatched is a worse screen than the one the page is on, and a tap that does nothing is
-    // worse than both. The route policy is what keeps this case off a device: a shell with no
-    // `navigate` renders no page route in the first place.
+  it('stays where it is rather than mounting a screen this page does not serve', () => {
+    // The bundle carries every route under `app/h`, so a local push here does not paint Unmatched:
+    // it mounts the native screen on React Native Web, inside the shell. A tap that goes nowhere
+    // and says why is the better of the two, and the route policy keeps the case off a device.
     const { posted, handoff } = mount({
       ...INIT,
       grants: { ...INIT.grants, native: [] },
       pageRoutes: []
     })
-    handoff.push('/h/host-a/tasks')
+    handoff.push('/h/host-a/session/wt-1')
     expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith('/h/host-a/tasks')
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('names the reason once per client, not once per tap', () => {
+    const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] }, pageRoutes: [] })
+    handoff.push('/h/host-a/session/wt-1')
+    handoff.push('/h/host-a/session/wt-2')
+    handoff.replace('/h/host-a/tasks')
+    expect(warned).toHaveLength(1)
+    expect(JSON.stringify(warned[0])).toContain('shell-refused')
   })
 })
 
@@ -233,7 +256,7 @@ describe('a target the shell would refuse', () => {
     ])
   })
 
-  it('falls through locally for an href the pattern refuses, instead of a tap that does nothing', () => {
+  it('refuses an href the pattern refuses, rather than opening it here instead', () => {
     for (const href of [
       '/h/host-a/tasks#top',
       '/h/host-a/../tasks',
@@ -245,18 +268,24 @@ describe('a target the shell would refuse', () => {
       router.push.mockClear()
       const { posted, handoff } = mount(INIT)
       handoff.push(href)
-      // Posted whole before this: `pathnameOf` strips the fragment to match, and the unstripped
+      // Posted whole before C5.1: `pathnameOf` strips the fragment to match, and the unstripped
       // href went on the wire and was dropped by the shell's reader.
       expect(navigations(posted), href).toEqual([])
-      expect(router.push, href).toHaveBeenCalledWith(href)
+      expect(router.push, href).not.toHaveBeenCalled()
     }
   })
 
-  it('falls through for a target over the href cap', () => {
+  it('refuses a target over the href cap', () => {
     const { posted, handoff } = mount(INIT)
     const href = `/h/host-a/${'a'.repeat(BRIDGE_MAX_ROUTE_HREF_CHARS)}`
     handoff.push(href)
     expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith(href)
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('names a malformed href separately from a shell that would not take it', () => {
+    const { handoff } = mount(INIT)
+    handoff.push('/h/host-a/tasks#top')
+    expect(JSON.stringify(warned[0])).toContain('malformed-href')
   })
 })

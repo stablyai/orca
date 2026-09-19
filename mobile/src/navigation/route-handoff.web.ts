@@ -15,20 +15,40 @@ function pathnameOf(href: string): string {
   return cut === -1 ? href : href.slice(0, cut)
 }
 
+/** What became of a target, which is three answers and not two. */
+type RouteHandoffOutcome = 'local' | 'handed-off' | 'refused'
+
+/** Why a target went nowhere: a shape the protocol drops, or a shell that would not take it. */
+type RouteHandoffRefusal = 'malformed-href' | 'shell-refused'
+
+/** One line per reason for the life of one client, the bound every page-side reporter here takes. */
+function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) => void {
+  const reported = new Set<RouteHandoffRefusal>()
+  return (reason, target) => {
+    if (reported.has(reason)) {
+      return
+    }
+    reported.add(reason)
+    console.warn('[page-bridge] route-handoff-refused', { reason, target })
+  }
+}
+
 /**
- * Web sibling: a route the page renders it takes, and a route it does not it hands back.
+ * Web sibling: a route the page renders it takes, a route it does not it hands back, and a target
+ * it can do neither with it refuses.
  *
- * The page is one document standing in for one screen. Pushing a screen it does not carry would
- * paint expo-router's Unmatched, and re-entering the shell for it would re-execute a multi-megabyte
- * bundle on every tap, so the shell pushes the native screen over the still-mounted view instead
- * and Back reveals the page with nothing reloaded.
+ * The page is one document standing in for one screen, so a route the shell says is the page's is
+ * pushed here and every other one goes to the shell, which pushes the native screen over the
+ * still-mounted view; Back reveals the page with nothing reloaded, and the multi-megabyte bundle is
+ * never re-executed.
  *
- * The three members that leave this document are wrapped and the rest are the router's own: the
- * shell says which routes are the page's, in `init`, and the same answer drives all three. A
- * handoff the shell cannot honour — an older shell that granted no `navigate`, or a target the
- * protocol refuses — falls through to the local router: Unmatched is a worse screen than the one
- * the page is on, but a tap that does nothing at all is worse than both, and the route policy is
- * what keeps that case off a device.
+ * The third answer is the one this file used not to have. `handOff` fails for two reasons that are
+ * nothing like a page route — an href the protocol's own pattern drops, and a shell that answered
+ * no — and falling through to the local router for either mounts a screen this page does not serve:
+ * the bundle carries every route under `app/h`, so the fallback does not paint Unmatched, it runs
+ * `session/[worktreeId]` on React Native Web inside the shell. Staying put and naming the reason is
+ * the lesser failure, and the route policy is what keeps the case off a device in the first place:
+ * a shell that grants no `navigate` renders no page route at all.
  *
  * Whether the target names a screen that exists is nobody's business here; the shape is all this
  * can check, and C1.7 is where a real route-existence check belongs.
@@ -38,14 +58,15 @@ export function useRouteHandoff(): RouteHandoff {
   const router = useRouter()
 
   return useMemo<RouteHandoff>(() => {
-    const handOff = (href: RouterHref): boolean => {
+    const report = createRefusalReporter()
+    const handOff = (href: RouterHref): RouteHandoffOutcome => {
       // Resolved, not stringified: the object form is `[object Object]` under `String`, and the
       // Connection-log link on a reconnecting host builds one every time it renders.
       const target = stringifyRouteHref(href)
       const pathname = pathnameOf(target)
       const pageRoutes = client.getShellSession()?.pageRoutes ?? []
       if (pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))) {
-        return false
+        return 'local'
       }
       // Checked here, because `notifyNavigate` answers whether the frame left the page and not
       // whether the shell accepted it. The shell's reader drops a frame the pattern refuses, and a
@@ -53,14 +74,19 @@ export function useRouteHandoff(): RouteHandoff {
       // `pathnameOf` strips a fragment before matching, so without this an href carrying one is
       // posted whole and refused on the other side.
       if (target.length > BRIDGE_MAX_ROUTE_HREF_CHARS || !BRIDGE_ROUTE_HREF_PATTERN.test(target)) {
-        return false
+        report('malformed-href', target)
+        return 'refused'
       }
-      return client.notifyNavigate(target)
+      if (!client.notifyNavigate(target)) {
+        report('shell-refused', target)
+        return 'refused'
+      }
+      return 'handed-off'
     }
     return {
       ...router,
       push: (href) => {
-        if (!handOff(href)) {
+        if (handOff(href) === 'local') {
           router.push(href)
         }
       },
@@ -68,14 +94,14 @@ export function useRouteHandoff(): RouteHandoff {
       // becomes one too. What it replaces is a history entry inside this document, which the native
       // stack never had; leaving it is what lets Back come back to the page.
       replace: (href) => {
-        if (!handOff(href)) {
+        if (handOff(href) === 'local') {
           router.replace(href)
         }
       },
       // The list's own way out of the host. Inside the page there is no stack to pop to: the phone's
       // home screen is a native route, so it is handed over like any other.
       dismissTo: (href) => {
-        if (!handOff(href)) {
+        if (handOff(href) === 'local') {
           router.dismissTo(href)
         }
       }

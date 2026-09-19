@@ -562,6 +562,31 @@ describeRender('the Route A page in a real browser', () => {
     }
   }, 60_000)
 
+  it('refuses a target the shell will not take, rather than opening it in the page', async () => {
+    // The double grants only `fault`, so `notifyNavigate` answers false -- the shell-disposed and
+    // older-shell cases reach the page the same way. Before C5.1 this left the host route and
+    // painted Unmatched; the bundle carries every route under app/h, so for a target like
+    // `session/[worktreeId]` the same fallback mounts a native-only screen on React Native Web.
+    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
+    const { page, errors } = opened
+    await page.goto(`${origin}/`, { waitUntil: 'load' })
+    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
+    // The one labelled control on this screen that leaves the page: `leaveHostRoute` dismisses to
+    // `/`, which is a native route and never one the page serves.
+    await page.getByLabel('Back to hosts').click()
+    // Nothing to wait for but the absence of a navigation, so settle the microtask the handoff
+    // would have posted on and then read the page that is still there.
+    await page.waitForTimeout(1_000)
+    expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
+    const text = await page.evaluate(() => document.body.innerText)
+    expect(text).toContain(SHELL_HOST.name)
+    expect(text).not.toContain(UNMATCHED)
+    // Not a page fault either: a refused target is the page declining to move, not a throw.
+    expect(await page.evaluate(() => globalThis.__orcaRenderCheckFaults ?? [])).toEqual([])
+    expect(errors).toEqual([])
+    await page.close()
+  }, 60_000)
+
   it("fetches the next route's chunks on a client-side navigation", async () => {
     const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
     const { page, errors, scripts } = opened
