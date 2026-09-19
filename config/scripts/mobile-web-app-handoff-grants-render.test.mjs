@@ -135,6 +135,20 @@ function navigates(page) {
   )
 }
 
+
+/** CI diagnostic: what the document looks like a while after the click, before the assertion fails. */
+async function dumpAfterClick(label, page, errors, scripts) {
+  await page.waitForTimeout(8_000)
+  const state = await page.evaluate(() => ({
+    pathname: location.pathname,
+    href: location.href,
+    notifies: globalThis.__orcaRenderCheckNotifies ?? [],
+    text: document.body.innerText.slice(0, 400),
+    tasksControls: document.querySelectorAll('[aria-label="Tasks"]').length
+  }))
+  console.log(`[diag ${label}]`, JSON.stringify({ ...state, errors, scripts }, null, 1))
+}
+
 describeRender('the sidebar hop to tasks, under the session it was opened with', () => {
   it('hands the hop to the shell when the session cannot cover tasks', async () => {
     const opened = await openHostRoute({
@@ -164,8 +178,9 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       viewport: WIDE,
       grants: [faultGrant, 'navigate', 'storage', 'native.clipboard.write']
     })
-    const { page, errors } = opened
+    const { page, errors, scripts } = opened
     await page.getByLabel('Tasks').first().click()
+    await dumpAfterClick('covered', page, errors, scripts)
     await page.waitForFunction(() => location.pathname.endsWith('/tasks'), {
       timeout: 30_000,
       polling: 250
@@ -200,8 +215,9 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       grants: [faultGrant, 'navigate', 'storage'],
       pageRouteGrants: null
     })
-    const { page, errors } = opened
+    const { page, errors, scripts } = opened
     await page.getByLabel('Tasks').first().click()
+    await dumpAfterClick('no-pairs', page, errors, scripts)
     await page.waitForFunction(() => location.pathname.endsWith('/tasks'), {
       timeout: 30_000,
       polling: 250
