@@ -92,9 +92,13 @@ export const MOBILE_WEB_APP_SHIMS = [
  * Inline, because the shell's CSP already allows `style-src 'unsafe-inline'` for the sheet
  * react-native-web injects at runtime; a linked asset would need a second round trip before the
  * first frame and would paint the collapsed layout until it landed.
+ *
+ * Height, `overflow` and the root's flex box and nothing else, which is what the template carries:
+ * react-native-web emits `body{margin:0}` in that runtime sheet, so a copy here would only cover
+ * the frames before it lands and would make this string something to keep in step with two sources.
  */
 export const MOBILE_WEB_APP_ROOT_RESET =
-  '<style id="expo-reset">html,body{height:100%;margin:0}body{overflow:hidden}' +
+  '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
   '#root{display:flex;height:100%;flex:1}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
