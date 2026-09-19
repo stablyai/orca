@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
-import { clientFrame, flushBridge } from './bridge-host-test-fakes'
+import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
+import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
 import { BRIDGE_NATIVE_REFUSAL_CODE } from './bridge-host-errors'
 
 function request(method: string, params?: unknown): string {
@@ -137,15 +138,53 @@ describe('a native method the page asks for', () => {
     expect(refusal(bridge)?.message).toContain('the pasteboard is unavailable')
   })
 
-  it('counts against the same in-flight cap a forwarded request does', async () => {
-    const bridge = harness()
+  it('takes a slot each, so the one over the cap is refused like any other request', async () => {
+    // A handler that never settles, so every call stays in flight and the cap is what answers.
+    const bridge = harness({ serveNativeVerb: () => new Promise(() => {}) })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    for (let index = 1; index <= BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+      bridge.host.receive(
+        clientFrame({
+          type: 'request',
+          id: bridgeId(index),
+          method: 'native.clipboard.read',
+          params: { mime: 'text' }
+        })
+      )
+    }
+    expect(bridge.frames()).toEqual([expect.objectContaining({ type: 'init' })])
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS + 1),
+        method: 'native.clipboard.read',
+        params: { mime: 'text' }
+      })
+    )
+    const overCap = bridge.last()
+    expect(overCap.type === 'error' && overCap.error.message).toContain(
+      `over ${BRIDGE_MAX_PENDING_REQUESTS} requests`
+    )
+    await flushBridge()
+    expect(reachedTheDesktop(bridge)).toEqual([])
+  })
+
+  it('settles a cancelled native request the way a forwarded one settles, with no late reply', async () => {
+    const settle: { resolve: ((value: unknown) => void) | null } = { resolve: null }
+    const bridge = harness({
+      serveNativeVerb: () =>
+        new Promise((resolve) => {
+          settle.resolve = resolve
+        })
+    })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    // The id is still in flight, so a second request naming it is refused by the cap machinery
-    // rather than served twice — the seam changed none of that.
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    expect(bridge.last().type).toBe('error')
+    bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'request' }))
+    const afterCancel = bridge.frames().length
+    settle.resolve?.({ value: 'too late' })
     await flushBridge()
+    // The page moved on from this id; a reply posted now would answer an exchange it no longer has.
+    expect(bridge.frames()).toHaveLength(afterCancel)
     expect(reachedTheDesktop(bridge)).toEqual([])
   })
 
