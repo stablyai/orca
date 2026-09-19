@@ -11,6 +11,8 @@ import type { GitWorktreeInfo, Worktree } from './worktree/types'
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
+  /** Stable Orca session identity for structured rows. Absent on PTY-backed rows and old hosts. */
+  agentSessionId?: string
   parentPaneKey: string | null
   state: AgentStatusState
   workingMode?: AgentWorkingMode

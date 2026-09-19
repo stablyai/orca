@@ -6,10 +6,12 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 
 /** Canonical rows supply legacy fanout without retaining a writable pane copy. */
 export function structuredStatusLegacyEvent(
-  row: AgentStatusIpcPayload
+  row: AgentStatusIpcPayload,
+  agentSessionId?: string
 ): EnrichedAgentHookEventPayload {
   return {
     paneKey: row.paneKey,
+    ...(agentSessionId ? { agentSessionId } : {}),
     tabId: row.tabId,
     worktreeId: row.worktreeId,
     connectionId: row.connectionId,

@@ -89,8 +89,11 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     if (!committed) {
       throw new Error('Committed structured status is missing')
     }
-    const after = structuredStatusLegacyEvent(committed)
-    this.commitStatusRowMutation(priorStatus && structuredStatusLegacyEvent(priorStatus), after)
+    const after = structuredStatusLegacyEvent(committed, parsed.sessionId)
+    this.commitStatusRowMutation(
+      priorStatus && structuredStatusLegacyEvent(priorStatus, parsed.sessionId),
+      after
+    )
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(after)
   }
@@ -119,7 +122,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       if (subjects?.size === 0) {
         this.canonicalSubjectsByPane.delete(previous.status.paneKey)
       }
-      this.commitStatusRowMutation(structuredStatusLegacyEvent(previous.status), undefined)
+      this.commitStatusRowMutation(
+        structuredStatusLegacyEvent(previous.status, parsed.sessionId),
+        undefined
+      )
       this.notifyStatusChangeListeners()
       this.emitStatusDropped(previous.status.paneKey)
     }
