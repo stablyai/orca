@@ -62,4 +62,13 @@ export type FilterState = {
   alwaysShowDefaultBranch?: boolean
 }
 
-export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }
+export type Section = {
+  key: string
+  title: string
+  icon?: 'pin' | 'folder'
+  data: Worktree[]
+  /** Nested project-group indent. 0 is a top-level group. */
+  depth?: number
+  /** Header count when `data` is not the member list (project-group headers). */
+  count?: number
+}

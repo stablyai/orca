@@ -2,6 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   hostPlatformSchema,
+  hostProjectGroupListSchema,
   hostRepoCatalogSchema,
   hostScreenUnreadReplySchema,
   hostSshTargetSummariesSchema,
@@ -24,6 +25,17 @@ export const hostRepoCatalogRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('repo-catalog', hostRepoCatalogSchema)
+  })
+)
+
+/** Desktop sidebar groups. Skip on a host that predates the method. */
+export const hostProjectGroupListRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'projectGroup.host-catalog-or-skip',
+    method: 'projectGroup.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('project-group-catalog', hostProjectGroupListSchema)
   })
 )
 

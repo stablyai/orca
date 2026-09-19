@@ -11,8 +11,9 @@ export function useWorktreeResync(args: {
   connState: ConnectionState
   fetchWorktrees: (opts?: { allowDuringModal?: boolean }) => Promise<void>
   fetchRepoMetadata: (options?: { force?: boolean; queueIfInFlight?: boolean }) => Promise<void>
+  fetchProjectGroups?: (options?: { force?: boolean; queueIfInFlight?: boolean }) => Promise<void>
 }): { refreshing: boolean; onRefresh: () => Promise<void> } {
-  const { client, connState, fetchWorktrees, fetchRepoMetadata } = args
+  const { client, connState, fetchWorktrees, fetchRepoMetadata, fetchProjectGroups } = args
 
   // Why (#8498): socket-only reconnect left a stale cached snapshot after
   // background/sleep. Refetch on the transition INTO 'connected', not every poll tick.
@@ -38,10 +39,11 @@ export function useWorktreeResync(args: {
     try {
       await fetchWorktrees({ allowDuringModal: true })
       await fetchRepoMetadata({ force: true })
+      await fetchProjectGroups?.({ force: true })
     } finally {
       setRefreshing(false)
     }
-  }, [client, connState, fetchWorktrees, fetchRepoMetadata])
+  }, [client, connState, fetchWorktrees, fetchRepoMetadata, fetchProjectGroups])
 
   return { refreshing, onRefresh }
 }
