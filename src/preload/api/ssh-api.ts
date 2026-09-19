@@ -36,6 +36,7 @@ export type SshApi = {
   onStateChanged: (
     callback: (data: { targetId: string; state: SshConnectionState }) => void
   ) => () => void
+  onRelayGenerationRetired: (callback: (data: { targetId: string }) => void) => () => void
   addPortForward: (args: {
     targetId: string
     localPort: number

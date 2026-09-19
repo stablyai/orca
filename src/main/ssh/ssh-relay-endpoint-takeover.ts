@@ -1,11 +1,10 @@
 /**
  * Deciding whether a relay socket path is ours to take, and acting on the answer.
  *
- * The only destructive action available here is a SIGTERM to a relay that has been proven —
- * by argv, by socket-holder enumeration, and by a child census re-run on the host immediately
- * before the signal — to hold nothing at all. Everything else is left running.
- * Per docs/reference/ssh-execution-boundary.md, a relay we merely failed to reach is
- * `unverifiable`, and `unverifiable` never authorizes a kill or a rebind.
+ * Same-path takeover may SIGTERM only a relay proven empty (argv, sole holder, no unaccounted
+ * children). The superseded-generation sweep uses a separate command that still re-checks argv
+ * but may signal a daemon that still holds PTYs, because that generation is unreachable after
+ * an app update. A relay we merely failed to reach is `unverifiable` and never authorized.
  */
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
@@ -32,34 +31,64 @@ import type { RemoteHostPlatform } from './ssh-remote-platform'
 export type RelayHuskReapResult = 'reaped' | 'reap-unconfirmed' | 'retained-live-work'
 
 const REAP_CONFIRM_ATTEMPTS = 15
+// Relay dispose waits up to IMMEDIATE_PTY_EXIT_TIMEOUT_MS (8s) for PTY SIGKILL to land.
+const SUPERSEDED_REAP_CONFIRM_ATTEMPTS = 50
 
-/**
- * Signal one relay, re-verifying identity and emptiness inside the same command.
- *
- * The re-verification is not belt-and-braces: a client can attach and spawn a PTY between the
- * probe and the signal, and pids are reused. `MISMATCH`/`BUSY` abort without signalling.
- */
-export function reapEmptyRelayHuskCommand(pid: number, sockPath: string): string {
+function reapRelayDaemonCommand(
+  pid: number,
+  sockPath: string,
+  options?: { requireEmptyUnrecognizedChildren?: boolean; confirmAttempts?: number }
+): string {
+  const requireEmpty = options?.requireEmptyUnrecognizedChildren !== false
+  const confirmAttempts = options?.confirmAttempts ?? REAP_CONFIRM_ATTEMPTS
   return [
     `pid=${shellEscape(String(pid))}`,
     `sock=${shellEscape(sockPath)}`,
     'args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
     'case "$args" in *relay.js*"$sock"*) ;; *) printf \'MISMATCH\\n\'; exit 0 ;; esac',
-    // Why the same census as the probe: `unknown` (no pgrep) and any child this host could
-    // not account for as a relay service both land on BUSY, so nothing is signalled.
-    ...relayDaemonChildCensusShell(),
-    `[ "$${RELAY_UNRECOGNIZED_CHILD_COUNT_VAR}" = "0" ] || { printf 'BUSY\\n'; exit 0; }`,
+    ...(requireEmpty
+      ? [
+          // Why the same census as the probe: `unknown` (no pgrep) and any child this host could
+          // not account for as a relay service both land on BUSY, so nothing is signalled.
+          ...relayDaemonChildCensusShell(),
+          `[ "$${RELAY_UNRECOGNIZED_CHILD_COUNT_VAR}" = "0" ] || { printf 'BUSY\\n'; exit 0; }`
+        ]
+      : [
+          // Sole-holder was a probe-time fact. Another client can attach before this signal.
+          // Why -a: lsof ORs selectors without it and reports unrelated unix-socket holders.
+          "command -v lsof >/dev/null 2>&1 || { printf 'BUSY\\n'; exit 0; }",
+          'holder_count=$(lsof -t -a -U -- "$sock" 2>/dev/null | sort -u | wc -l | tr -d \' \')',
+          '[ "$holder_count" = "1" ] || { printf \'BUSY\\n\'; exit 0; }'
+        ]),
     // SIGTERM only: the relay's own handler disposes and unlinks. SIGKILL would leave the
     // socket inode behind and skip that shutdown path for no gain on an empty daemon.
     'kill -TERM "$pid" 2>/dev/null || true',
     'i=0',
-    `while [ $i -lt ${REAP_CONFIRM_ATTEMPTS} ]; do`,
+    `while [ $i -lt ${confirmAttempts} ]; do`,
     '  kill -0 "$pid" 2>/dev/null || { printf \'GONE\\n\'; exit 0; }',
     '  sleep 0.2',
     '  i=$((i+1))',
     'done',
     "printf 'LIVE\\n'"
   ].join('\n')
+}
+
+/**
+ * Signal one empty relay, re-verifying identity and emptiness inside the same command.
+ *
+ * The re-verification is not belt-and-braces: a client can attach and spawn a PTY between the
+ * probe and the signal, and pids are reused. `MISMATCH`/`BUSY` abort without signalling.
+ */
+export function reapEmptyRelayHuskCommand(pid: number, sockPath: string): string {
+  return reapRelayDaemonCommand(pid, sockPath)
+}
+
+/** SIGTERM a superseded generation even when it still holds PTYs. Argv is still re-checked. */
+export function reapSupersededRelayCommand(pid: number, sockPath: string): string {
+  return reapRelayDaemonCommand(pid, sockPath, {
+    requireEmptyUnrecognizedChildren: false,
+    confirmAttempts: SUPERSEDED_REAP_CONFIRM_ATTEMPTS
+  })
 }
 
 export function interpretRelayHuskReapOutput(output: string): RelayHuskReapResult {
@@ -75,6 +104,30 @@ export function interpretRelayHuskReapOutput(output: string): RelayHuskReapResul
   return 'reap-unconfirmed'
 }
 
+async function signalRelayDaemon(
+  conn: SshConnection,
+  incumbent: RelayEndpointIncumbent,
+  command: string,
+  options?: { signal?: AbortSignal }
+): Promise<RelayHuskReapResult> {
+  const holder = incumbent.holders[0]
+  if (!holder) {
+    return 'retained-live-work'
+  }
+  try {
+    const output = await execCommand(conn, command, {
+      wrapCommand: true,
+      signal: options?.signal
+    })
+    return interpretRelayHuskReapOutput(output)
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    return 'reap-unconfirmed'
+  }
+}
+
 export async function reapEmptyRelayHusk(
   conn: SshConnection,
   incumbent: RelayEndpointIncumbent,
@@ -84,19 +137,29 @@ export async function reapEmptyRelayHusk(
   if (!holder) {
     return 'retained-live-work'
   }
-  try {
-    const output = await execCommand(
-      conn,
-      reapEmptyRelayHuskCommand(holder.pid, incumbent.sockPath),
-      { wrapCommand: true, signal: options?.signal }
-    )
-    return interpretRelayHuskReapOutput(output)
-  } catch (err) {
-    if (isUnconfirmedSshCommandTermination(err)) {
-      throw err
-    }
-    return 'reap-unconfirmed'
+  return signalRelayDaemon(
+    conn,
+    incumbent,
+    reapEmptyRelayHuskCommand(holder.pid, incumbent.sockPath),
+    options
+  )
+}
+
+export async function reapSupersededRelay(
+  conn: SshConnection,
+  incumbent: RelayEndpointIncumbent,
+  options?: { signal?: AbortSignal }
+): Promise<RelayHuskReapResult> {
+  const holder = incumbent.holders[0]
+  if (!holder) {
+    return 'retained-live-work'
   }
+  return signalRelayDaemon(
+    conn,
+    incumbent,
+    reapSupersededRelayCommand(holder.pid, incumbent.sockPath),
+    options
+  )
 }
 
 /**

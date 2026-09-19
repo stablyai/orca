@@ -11,6 +11,7 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 import {
   describeRelayEndpointIncumbent,
   isReapableRelayHusk,
+  isReapableSupersededRelay,
   mayLaunchOverRelayEndpoint,
   parseRelayEndpointIncumbentProbe,
   probeRelayEndpointIncumbent,
@@ -288,6 +289,39 @@ describe('isReapableRelayHusk', () => {
   it('refuses an unverifiable endpoint however empty it looks', () => {
     expect(isReapableRelayHusk({ ...husk, verdict: 'unverifiable' })).toBe(false)
     expect(isReapableRelayHusk({ ...husk, holdersEnumerable: false })).toBe(false)
+  })
+})
+
+describe('isReapableSupersededRelay', () => {
+  const husk = parseRelayEndpointIncumbentProbe(
+    SOCK,
+    probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 0 0'])
+  )
+
+  it('accepts a sole holder even when it still has unaccounted-for children', () => {
+    expect(
+      isReapableSupersededRelay({
+        ...husk,
+        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 13, unrecognizedChildCount: 11 }]
+      })
+    ).toBe(true)
+  })
+
+  it('still refuses when another process holds the socket', () => {
+    expect(
+      isReapableSupersededRelay({
+        ...husk,
+        holders: [
+          { pid: 500, matchesRelayArgv: true, childCount: 13, unrecognizedChildCount: 11 },
+          { pid: 501, matchesRelayArgv: false, childCount: 0, unrecognizedChildCount: 0 }
+        ]
+      })
+    ).toBe(false)
+  })
+
+  it('still refuses unverifiable endpoints', () => {
+    expect(isReapableSupersededRelay({ ...husk, verdict: 'unverifiable' })).toBe(false)
+    expect(isReapableSupersededRelay({ ...husk, holdersEnumerable: false })).toBe(false)
   })
 })
 
