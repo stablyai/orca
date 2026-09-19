@@ -11,10 +11,13 @@ import { describe, expect, it } from 'vitest'
 const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
 const FLAG_KEY = 'orca:mobileWebShellEnabled'
 const DEFINITION = 'src/storage/preferences.ts'
-/** The one product reader. Both routes ask it, so the two below stay the whole census. */
+/** The one product reader. Every route asks it, so the list below stays the whole census. */
 const FLAG_HOOK = 'src/mobile-web-shell/use-mobile-web-shell-enabled.ts'
 const ROUTE = 'app/h/[hostId]/web.tsx'
 const HOST_ROUTE = 'app/h/[hostId]/index.tsx'
+const AGENT_HISTORY_ROUTE = 'app/h/[hostId]/agent-history/[worktreeId].tsx'
+/** One entry per screen the flag can switch to the page, which is what a review reads. */
+const SWITCHED_ROUTES = [HOST_ROUTE, AGENT_HISTORY_ROUTE]
 const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
 /** Every tree that ships in the app bundle, with the floor each must clear. `modules` is two files,
  *  but it is where the native view lives and so the easiest place for a second reader to hide. */
@@ -54,6 +57,7 @@ describe('who touches the hybrid shell flag', () => {
     expect(paths).toContain(FLAG_HOOK)
     expect(paths).toContain(ROUTE)
     expect(paths).toContain(HOST_ROUTE)
+    expect(paths).toContain(AGENT_HISTORY_ROUTE)
     expect(paths).toContain(DEVELOPER_ROW)
     expect(paths).toContain(SHELL_VIEW)
     const trees = Object.keys(TREES)
@@ -73,11 +77,12 @@ describe('who touches the hybrid shell flag', () => {
     )
   })
 
-  it('reaches the two routes through that hook and no others', () => {
-    // The host route is the flip switch, so the flag now decides what the main screen renders. A
-    // third route here would be a third place a dark feature could turn itself on.
+  it('reaches the switched routes through that hook and no others', () => {
+    // Each switched route is a screen the flag decides the renderer of, and one more is one more
+    // place a dark feature could turn itself on. The list grows once per domain series, in the PR
+    // that lists the route in MOBILE_WEB_PAGE_ROUTES, and never as a side effect of anything else.
     expect(filesContaining('useMobileWebShellEnabled')).toEqual(
-      [FLAG_HOOK, HOST_ROUTE, ROUTE].sort()
+      [FLAG_HOOK, ROUTE, ...SWITCHED_ROUTES].sort()
     )
   })
 
