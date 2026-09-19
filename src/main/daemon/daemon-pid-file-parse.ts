@@ -7,6 +7,9 @@ export type ParsedDaemonPid = {
   linuxStartTicks: string | null
   bootId: string | null
   spawnerExecPath: string | null
+  /** Self-detected systemd scope unit (see daemon-cgroup-scope.ts); null when the daemon ran
+   *  unscoped or predates this field. */
+  cgroupUnit: string | null
 }
 
 /**
@@ -41,6 +44,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       linuxStartTicks?: unknown
       bootId?: unknown
       spawnerExecPath?: unknown
+      cgroupUnit?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -54,7 +58,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         launchNonce: typeof parsed.launchNonce === 'string' ? parsed.launchNonce : null,
         linuxStartTicks: typeof parsed.linuxStartTicks === 'string' ? parsed.linuxStartTicks : null,
         bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null,
-        spawnerExecPath: typeof parsed.spawnerExecPath === 'string' ? parsed.spawnerExecPath : null
+        spawnerExecPath: typeof parsed.spawnerExecPath === 'string' ? parsed.spawnerExecPath : null,
+        cgroupUnit: typeof parsed.cgroupUnit === 'string' ? parsed.cgroupUnit : null
       }
     }
   } catch {
@@ -71,7 +76,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         launchNonce: null,
         linuxStartTicks: null,
         bootId: null,
-        spawnerExecPath: null
+        spawnerExecPath: null,
+        cgroupUnit: null
       }
     : null
 }

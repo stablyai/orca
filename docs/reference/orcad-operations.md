@@ -21,13 +21,36 @@ survive. The successor adopts the current endpoint and routes supported previous
 versions through legacy adapters. This makes a PID-scoped update, rollback or restart
 non-destructive to live work.
 
-Process detachment is not service isolation. A daemon forked by orcad, and every PTY it owns,
-remain in the same systemd service cgroup. `KillMode=mixed` does **not** preserve them: it
-sends the graceful stop signal only to the main process, then sends `SIGKILL` to every process
-remaining in the cgroup when the stop timeout expires. `KillMode=control-group` is destructive
-too. `KillMode=process` leaves service-owned processes unmanaged and is not a supported
-preservation mechanism. Service-restart survival requires separately supervised cgroups; the
-current deployment does not provide them.
+Process detachment is not service isolation. A daemon that orcad launches directly, and every
+PTY it owns, remain in the same systemd service cgroup. `KillMode=mixed` does **not** preserve
+them: it sends the graceful stop signal only to the main process, then sends `SIGKILL` to every
+process remaining in the cgroup the moment that main process exits — `TimeoutStopSec` never gets
+the chance to apply. `KillMode=control-group` is destructive too. `KillMode=process` leaves
+service-owned processes unmanaged and is not a supported preservation mechanism.
+
+Service-restart survival therefore requires a separately supervised cgroup, and orcad now asks
+for one: on Linux it launches the daemon through `systemd-run --user --scope`, which places the
+daemon and its PTYs in their own transient `orca-daemon-<launch-nonce>.scope` unit under the
+user slice instead of the caller's service cgroup. A stop or restart of the service unit then
+leaves that scope — and the live terminals in it — running, and the successor adopts the
+endpoint as it always has.
+
+The scope is requested only where it can work. All of these must hold:
+
+- **Linux with systemd as PID 1** (`/run/systemd/system` exists).
+- **A reachable user bus** — a connectable `bus` socket in the per-UID runtime dir
+  (`/run/user/<uid>`, or whatever `XDG_RUNTIME_DIR` points at). For a service account that is
+  not otherwise logged in, that means `loginctl enable-linger <user>`; a unit whose
+  `RuntimeDirectory=` hardening moves `XDG_RUNTIME_DIR` off the per-UID path is handled, because
+  the real per-UID path is probed first.
+- **`systemd-run` on `PATH`** and answering `--version`.
+
+Any of those missing, or a `StartTransientUnit` call that fails anyway, falls back to the
+direct launch — and in that unscoped fallback case the paragraph above still describes reality:
+the daemon shares the service cgroup and a combined-unit stop ends live terminals. Read the
+`cgroupUnit` field in the daemon health payload to tell the two cases apart on a running host;
+it is populated from `/proc/self/cgroup`, so it reports the isolation the daemon actually has
+rather than what the launcher intended.
 
 ## Bind policy
 
@@ -81,8 +104,11 @@ a live daemon makes worthwhile.
 ### Process-scoped and cgroup-wide stops
 
 The built-in remote updater performs a PID-scoped stop and keeps the daemon's install version
-pinned while it owns sessions. A combined-unit systemd stop or restart is different: it reaps
-the daemon and every live terminal after the graceful window.
+pinned while it owns sessions. A combined-unit systemd stop or restart is different: unless the
+daemon holds a durable cgroup scope of its own (see
+[Two long-lived processes, not one](#two-long-lived-processes-not-one)), it reaps the daemon and
+every live terminal after the graceful window. Treat a stop as destructive unless
+`health.terminalDaemon.cgroupUnit` names an `orca-daemon-*.scope` on that host.
 
 Before a cgroup-wide stop, obtain a fresh `orca-ide terminal list --json` result using the same OS
 account and home as the daemon. Invoke the installer's absolute launcher path so `sudo`'s
@@ -129,8 +155,10 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 
 ### orcad supervising the daemon
 
-- **Launch.** Forked detached from `daemon-entry.js` beside `orcad.js`, with its own PID
-  record, token and socket under `<data-root>/daemon`.
+- **Launch.** On Linux, through `systemd-run --user --scope` so the daemon gets its own
+  transient cgroup and survives a service-unit restart; everywhere else, and wherever that
+  scope is unavailable, forked detached. Either way it runs `daemon-entry.js` beside
+  `orcad.js` with its own PID record, token and socket under `<data-root>/daemon`.
 - **Adoption before spawn.** A daemon already answering the endpoint is adopted, not
   replaced, unless it is unhealthy, foreign, or built from a superseded bundle _and_ owns no
   live sessions. Replacing a healthy daemon kills its PTYs, so code freshness always defers
@@ -148,9 +176,10 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 
 ### Decommissioning
 
-After a PID-scoped stop, an adopted daemon stays resident so the next orcad can reattach.
-A combined-unit systemd stop kills it instead. To retire a process-scoped deployment, apply
-the census rule above, stop orcad, then stop the daemon named by `health.terminalDaemon.pid`.
+After a PID-scoped stop, an adopted daemon stays resident so the next orcad can reattach. A
+combined-unit systemd stop also leaves a scope-isolated daemon resident, but kills one that
+fell back to the service cgroup. To retire a process-scoped deployment, apply the census rule
+above, stop orcad, then stop the daemon named by `health.terminalDaemon.pid`.
 Only report it `exited` after verification on the execution host; loss of contact is
 `unverifiable`.
 
@@ -201,8 +230,10 @@ Named here so nothing reads as implemented that is not:
 - **A continuous health endpoint.** `health` is published once, in the readiness payload. A
   supervisor's periodic liveness/readiness probe needs an HTTP or RPC surface over the same
   `collectOrcadHealth()`; that surface does not exist yet.
-- **Systemd-isolated daemon supervision.** orcad and its daemon currently share one service
-  cgroup, so a combined-unit stop cannot preserve live terminals.
+- **Supervision of an unscoped fallback daemon.** When the durable `systemd-run --user --scope`
+  launch is unavailable (see [above](#two-long-lived-processes-not-one)) orcad and its daemon
+  share one service cgroup, and a combined-unit stop cannot preserve live terminals. There is
+  no mechanism that re-isolates such a daemon after the fact.
 - **libc slot.** There is no honest health value to publish until native libc detection owns
   it.
 - **`degradations[]`.** The readiness contract does not publish this collection yet.
