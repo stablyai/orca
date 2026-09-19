@@ -14,6 +14,11 @@ import type {
   OpenCodeUsageScope,
   OpenCodeUsageSnapshot
 } from '../../../../shared/opencode-usage-types'
+import type {
+  KimiUsageRange,
+  KimiUsageScope,
+  KimiUsageSnapshot
+} from '../../../../shared/kimi-usage-types'
 import type { AppState } from '../types'
 
 type UsageSnapshot = {
@@ -266,10 +271,12 @@ type OpenCodeUsageTypes = UsageProviderTypes<
   OpenCodeUsageRange,
   OpenCodeUsageSnapshot
 >
+type KimiUsageTypes = UsageProviderTypes<KimiUsageScope, KimiUsageRange, KimiUsageSnapshot>
 
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageTypes>
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
+export type KimiUsageSlice = ProviderUsageSlice<'kimi', 'Kimi', KimiUsageTypes>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
   'claude',
@@ -304,4 +311,13 @@ export const createOpenCodeUsageSlice = createUsageProviderSlice<
   initialRange: '30d',
   getApi: () => window.api.openCodeUsage,
   hasCachedData: (state) => state.hasAnyOpenCodeData
+})
+
+export const createKimiUsageSlice = createUsageProviderSlice<'kimi', 'Kimi', KimiUsageTypes>({
+  prefix: 'kimi',
+  name: 'Kimi',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: () => window.api.kimiUsage,
+  hasCachedData: (state) => state.hasAnyKimiData
 })

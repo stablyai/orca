@@ -21,13 +21,17 @@ describe('usage provider IPC handlers', () => {
     const claudeUsage = createUsage()
     const codexUsage = createUsage()
     const openCodeUsage = createUsage()
+    const kimiUsage = createUsage()
     registerUsageProviderHandlers({
       claudeUsage: claudeUsage as never,
       codexUsage: codexUsage as never,
-      openCodeUsage: openCodeUsage as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the IPC registration test uses only the explicitly mocked usage methods.
+      openCodeUsage: openCodeUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the IPC registration test uses only the explicitly mocked usage methods.
+      kimiUsage: kimiUsage as never
     })
 
-    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage']
+    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage', 'kimiUsage']
     const suffixes = Object.keys(claudeUsage)
     expect(handle.mock.calls.map(([channel]) => channel)).toEqual(
       prefixes.flatMap((prefix) => suffixes.map((suffix) => `${prefix}:${suffix}`))
@@ -42,6 +46,7 @@ describe('usage provider IPC handlers', () => {
     call('claudeUsage', 'getScanState')
     call('codexUsage', 'getScanState')
     call('openCodeUsage', 'getScanState')
+    call('kimiUsage', 'getScanState')
     call('claudeUsage', 'setEnabled', { enabled: true })
     call('claudeUsage', 'refresh')
     call('claudeUsage', 'refresh', { force: true })
@@ -54,6 +59,7 @@ describe('usage provider IPC handlers', () => {
     expect(claudeUsage.getScanState).toHaveBeenCalledWith()
     expect(codexUsage.getScanState).toHaveBeenCalledWith()
     expect(openCodeUsage.getScanState).toHaveBeenCalledWith()
+    expect(kimiUsage.getScanState).toHaveBeenCalledWith()
     expect(claudeUsage.setEnabled).toHaveBeenCalledWith(true)
     expect(claudeUsage.refresh.mock.calls).toEqual([[false], [true]])
     expect(claudeUsage.getSnapshot).toHaveBeenCalledWith('orca', '30d', 7)
