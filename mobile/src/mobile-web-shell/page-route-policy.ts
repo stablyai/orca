@@ -1,4 +1,5 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
 
 /** The manifest's route entries, as this shell reads them. */
 export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes']>[number]
@@ -11,7 +12,14 @@ export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes
  * here renders its native screen instead: an old app against a new bundle lands on a screen that
  * works rather than on a tap that does nothing.
  */
-export const MOBILE_WEB_SHELL_GRANTS = ['navigate', 'storage', 'externalLink'] as const
+export const MOBILE_WEB_SHELL_GRANTS = [
+  'navigate',
+  'storage',
+  'externalLink',
+  // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
+  // advertised without a row and a row cannot exist without being advertised.
+  ...BRIDGE_NATIVE_VERB_NAMES
+] as const
 
 export type MobileWebShellGrant = (typeof MOBILE_WEB_SHELL_GRANTS)[number]
 
