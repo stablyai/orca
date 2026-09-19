@@ -1,6 +1,7 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { OrchestrationDeepLink } from '../../shared/orchestration-deep-link'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { PreloadApi } from '../api-types'
 
@@ -28,6 +29,14 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingSkillShare: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingSkillShare'),
+  onOpenOrchestrationDeepLink: (callback: (link: OrchestrationDeepLink) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: OrchestrationDeepLink): void =>
+      callback(link)
+    ipcRenderer.on('ui:openOrchestrationDeepLink', listener)
+    return () => ipcRenderer.removeListener('ui:openOrchestrationDeepLink', listener)
+  },
+  consumePendingOrchestrationDeepLink: (): Promise<OrchestrationDeepLink | null> =>
+    ipcRenderer.invoke('ui:consumePendingOrchestrationDeepLink'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)

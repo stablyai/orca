@@ -10,6 +10,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { OrchestrationDeepLink } from '../../../../../shared/orchestration-deep-link'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -186,6 +187,9 @@ export type UISliceCore = {
   pendingSkillShareId: string | null
   openSkillShare: (shareId: string) => void
   clearPendingSkillShare: () => void
+  pendingOrchestrationDeepLink: OrchestrationDeepLink | null
+  openOrchestrationDeepLink: (link: OrchestrationDeepLink) => void
+  clearPendingOrchestrationDeepLink: () => void
   /** Set when another surface links straight to the page's shared-links view. */
   pendingSkillsSharedView: boolean
   openSkillsSharedLinks: () => void
