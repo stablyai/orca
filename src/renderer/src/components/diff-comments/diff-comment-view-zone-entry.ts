@@ -13,13 +13,32 @@ export type ZoneEntry = {
   laidOut: boolean
 }
 
+export type DraftZoneEntry = {
+  editor: monacoEditor.ICodeEditor
+  zoneId: string
+  domNode: HTMLElement
+  delegate: monacoEditor.IViewZone
+  root: Root
+  disposeMouseDownStopper: () => void
+}
+
 // Card chrome + per-line body height; used by the initial estimate and the live resize, so keep in lockstep.
 export const ZONE_CHROME_PX = 68
 export const ZONE_LINE_PX = 20
 export const ZONE_MIN_PX = 88
+export const DRAFT_ZONE_DEFAULT_HEIGHT = 152
+
+export type ResizableZoneEntry = {
+  zoneId: string
+  domNode: HTMLElement
+  delegate: monacoEditor.IViewZone
+}
 
 // Re-measure/re-layout the zone: mutate delegate.heightInPx first (Monaco's _layoutZone re-reads it) so inline edit expands without clipping.
-export function resizeDiffCommentZone(editor: monacoEditor.ICodeEditor, entry: ZoneEntry): void {
+export function resizeDiffCommentZone(
+  editor: monacoEditor.ICodeEditor,
+  entry: ResizableZoneEntry
+): void {
   const child = entry.domNode.firstElementChild
   const wrapperStyle = window.getComputedStyle(entry.domNode)
   const verticalPadding =

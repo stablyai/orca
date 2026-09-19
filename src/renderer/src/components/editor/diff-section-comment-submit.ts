@@ -1,6 +1,6 @@
 import type { DiffSection } from './diff-section-types'
 
-type DiffSectionPopoverTarget = {
+type DiffSectionCommentTarget = {
   lineNumber: number
   startLine?: number
 }
@@ -19,7 +19,7 @@ export async function submitDiffSectionComment({
   addDiffComment,
   body,
   onAddLineComment,
-  popover,
+  target,
   section,
   worktreeId
 }: {
@@ -33,14 +33,14 @@ export async function submitDiffSectionComment({
       body: string
     }
   ) => Promise<boolean>
-  popover: DiffSectionPopoverTarget
+  target: DiffSectionCommentTarget
   section: DiffSection
   worktreeId?: string
 }): Promise<boolean> {
   if (onAddLineComment) {
     return onAddLineComment(section, {
-      lineNumber: popover.lineNumber,
-      startLine: popover.startLine,
+      lineNumber: target.lineNumber,
+      startLine: target.startLine,
       body
     })
   }
@@ -53,8 +53,8 @@ export async function submitDiffSectionComment({
     worktreeId,
     filePath: section.path,
     source: 'diff',
-    startLine: popover.startLine,
-    lineNumber: popover.lineNumber,
+    startLine: target.startLine,
+    lineNumber: target.lineNumber,
     body,
     side: 'modified'
   })
