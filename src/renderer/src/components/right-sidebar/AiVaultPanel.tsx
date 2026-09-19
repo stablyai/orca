@@ -23,7 +23,8 @@ import {
 import { countAiVaultViewAdjustments } from './ai-vault-view-defaults'
 import {
   buildAiVaultProjectContext,
-  buildAiVaultSessionProjectById
+  buildAiVaultSessionProjectById,
+  sessionsForAiVaultProjectMap
 } from './ai-vault-session-projects'
 import {
   resolveAiVaultSessionResumeActions,
@@ -174,9 +175,12 @@ export default function AiVaultPanel(): React.JSX.Element {
         repos,
         worktrees: allWorktrees,
         projectHostSetupProjection,
-        sessions
+        sessions: sessionsForAiVaultProjectMap(sessions, {
+          searching,
+          historySessions: history
+        })
       }),
-    [allWorktrees, projectHostSetupProjection, repos, sessions]
+    [allWorktrees, history, projectHostSetupProjection, repos, searching, sessions]
   )
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
