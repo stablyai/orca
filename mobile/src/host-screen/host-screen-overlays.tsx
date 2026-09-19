@@ -1,7 +1,8 @@
 import { Linking, Pressable, Text, View } from 'react-native'
-import { Check, Moon } from 'lucide-react-native'
+import { Check, FolderPlus, Moon, Plus } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
-import { ActionSheetContent } from '../components/ActionSheetModal'
+import { ActionSheetContent, ActionSheetModal } from '../components/ActionSheetModal'
+import { AddProjectModal } from '../components/AddProjectModal'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
@@ -206,6 +207,35 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         destructive
         onConfirm={() => void actions.handleRemoveHost()}
         onCancel={() => state.setConfirmRemoveHost(false)}
+      />
+
+      {/* The + button's two-choice sheet, mirroring the desktop + area's two buttons.
+          closeBeforePress: iOS drops a second native modal presented while this one is
+          still dismissing, so both rows fire only after the sheet unmounted. */}
+      <ActionSheetModal
+        visible={state.showPlusActionSheet}
+        actions={[
+          {
+            label: 'New workspace',
+            icon: Plus,
+            closeBeforePress: true,
+            onPress: actions.openNewWorktreeModal
+          },
+          {
+            label: 'Add project',
+            icon: FolderPlus,
+            closeBeforePress: true,
+            onPress: actions.openAddProject
+          }
+        ]}
+        onClose={() => state.setShowPlusActionSheet(false)}
+      />
+
+      <AddProjectModal
+        visible={state.showAddProject}
+        client={client}
+        onProjectAdded={(repo) => actions.openNewWorktreeModal(repo)}
+        onClose={() => state.setShowAddProject(false)}
       />
 
       <NewWorktreeModalController

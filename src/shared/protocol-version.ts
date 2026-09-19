@@ -115,6 +115,10 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // status.worktreeCreateIdempotency carries the optional host retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why: repo.add/create/clone were desktop-only RPCs; mobile gates its Add project
+// entry on this capability so an older host (no allowlisted methods, required
+// destination/parentPath) never receives a call it would reject.
+export const REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY = 'repo.add-project-mobile.v1' as const
 // Scope of the claim: a hook that RUNS and fails cannot delete the checkout. It does not promise
 // the hook was found — an SSH host whose orca.yaml cannot be read answers "no hook" and the removal
 // proceeds, because a failed read is indistinguishable from an absent file across the relay
@@ -331,6 +335,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
