@@ -18,6 +18,51 @@ function pathnameOf(href: string): string {
 /** What became of a target, which is three answers and not two. */
 type RouteHandoffOutcome = 'local' | 'handed-off' | 'refused'
 
+/**
+ * Whether a router member declares a target as its first argument.
+ *
+ * Declares, not accepts: `() => void` is assignable to `(href: RouterHref) => void`, so a test for
+ * assignability calls `back`, `dismissAll` and `reload` target-takers and proves nothing. Reading
+ * the parameter tuple is what tells a member that was given an href from one that merely tolerates
+ * being handed one.
+ */
+type TakesHref<TMember> = TMember extends (...args: infer TArgs) => unknown
+  ? TArgs extends [RouterHref, ...unknown[]]
+    ? true
+    : false
+  : false
+
+/**
+ * Every member of the router that takes a target, derived from the router rather than listed.
+ *
+ * The spread below hands through everything this file does not name, so a member that takes an
+ * href and is not wrapped is the hole the tri-state closes reopened under another name — which is
+ * exactly how `navigate` and `prefetch` sat here unwrapped until round 2 found them. A new
+ * href-taking member in a future expo-router changes this union, and the pin below stops compiling
+ * until someone decides what the page does with it.
+ */
+type HrefTakingRouterMember = {
+  [K in keyof RouteHandoff]-?: TakesHref<RouteHandoff[K]> extends true ? K : never
+}[keyof RouteHandoff]
+
+/** The members this file replaces, which must be that set exactly. */
+export const WRAPPED_HREF_MEMBERS = [
+  'push',
+  'replace',
+  'navigate',
+  'dismissTo',
+  'prefetch'
+] as const
+
+type WrappedHrefMember = (typeof WRAPPED_HREF_MEMBERS)[number]
+
+// Both directions, so neither a member left unwrapped nor a name that is no longer the router's
+// can pass. A failure here is a compile error in a product module, which is where a pin belongs.
+type AssertExtends<TNarrow extends TWide, TWide> = TNarrow
+type PinnedMembersAreHrefTaking = AssertExtends<WrappedHrefMember, HrefTakingRouterMember>
+type HrefTakingMembersArePinned = AssertExtends<HrefTakingRouterMember, WrappedHrefMember>
+export type RouteHandoffMemberPin = [PinnedMembersAreHrefTaking, HrefTakingMembersArePinned]
+
 /** Why a target went nowhere: a shape the protocol drops, or a shell that would not take it. */
 type RouteHandoffRefusal = 'malformed-href' | 'shell-refused'
 
@@ -83,13 +128,17 @@ export function useRouteHandoff(): RouteHandoff {
 
   return useMemo<RouteHandoff>(() => {
     const report = createRefusalReporter()
+    /** Whether this document is the one that renders the target, which is the shell's answer. */
+    const servedHere = (target: string): boolean => {
+      const pathname = pathnameOf(target)
+      const pageRoutes = client.getShellSession()?.pageRoutes ?? []
+      return pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))
+    }
     const handOff = (href: RouterHref): RouteHandoffOutcome => {
       // Resolved, not stringified: the object form is `[object Object]` under `String`, and the
       // Connection-log link on a reconnecting host builds one every time it renders.
       const target = stringifyRouteHref(href)
-      const pathname = pathnameOf(target)
-      const pageRoutes = client.getShellSession()?.pageRoutes ?? []
-      if (pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))) {
+      if (servedHere(target)) {
         return 'local'
       }
       // Checked here, because `notifyNavigate` answers whether the frame left the page and not
@@ -112,6 +161,14 @@ export function useRouteHandoff(): RouteHandoff {
       push: (href) => {
         if (handOff(href) === 'local') {
           router.push(href)
+        }
+      },
+      // expo-router's own `navigate` is a push that may collapse onto an existing screen instead.
+      // Which of the two it does is a decision about this document's stack, and a target outside
+      // this document has no such stack, so it is handed over exactly as a push is.
+      navigate: (href) => {
+        if (handOff(href) === 'local') {
+          router.navigate(href)
         }
       },
       // The shell has one way to open a screen and it is a push, so a replace the page cannot keep
@@ -137,6 +194,16 @@ export function useRouteHandoff(): RouteHandoff {
       dismissTo: (href) => {
         if (handOff(href) === 'local') {
           router.dismissTo(href)
+        }
+      },
+      // The one target-taker that must never reach the shell. A prefetch is a background load, not
+      // an intent to open, and `navigate` is the only thing the shell can be told — so handing one
+      // over would push a screen nobody asked for. A route this document serves is prefetched here,
+      // which is the case the chunk split makes worth doing; every other one is dropped, without a
+      // line, because a background optimisation that did not happen is not a failure to report.
+      prefetch: (href) => {
+        if (servedHere(stringifyRouteHref(href))) {
+          router.prefetch(href)
         }
       }
     }

@@ -9,12 +9,17 @@ import {
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RouteHandoff } from './route-handoff'
+import { WRAPPED_HREF_MEMBERS } from './route-handoff.web'
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
+  navigate: vi.fn(),
   dismissTo: vi.fn(),
+  prefetch: vi.fn(),
   back: vi.fn(),
+  /** Not a target-taker, so it must arrive through the spread untouched. */
+  setParams: vi.fn(),
   /** What the page's own stack answers. One entry is what the entry's `replaceState` leaves. */
   canGoBack: vi.fn(() => false)
 }))
@@ -133,8 +138,11 @@ beforeEach(() => {
   }
   router.push.mockClear()
   router.replace.mockClear()
+  router.navigate.mockClear()
   router.dismissTo.mockClear()
+  router.prefetch.mockClear()
   router.back.mockClear()
+  router.setParams.mockClear()
   router.canGoBack.mockClear()
   router.canGoBack.mockReturnValue(false)
 })
@@ -338,5 +346,87 @@ describe('a back this document cannot serve', () => {
   it('does not throw out of a tap handler when there is nowhere to post', () => {
     const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] } })
     expect(() => handoff.back()).not.toThrow()
+  })
+})
+
+/**
+ * The members the spread hands through, which is everything this file does not name.
+ *
+ * `navigate` and `prefetch` sat here unwrapped through C5.1: both take a target, both reached
+ * expo-router directly, and `navigate` to a route outside `pageRoutes` would have pushed it into
+ * this document — the hole the tri-state exists to close, under a name nobody had looked at.
+ */
+describe('every member that takes a target', () => {
+  it('is replaced rather than handed through, all of them', () => {
+    const { handoff } = mount(INIT)
+    for (const member of WRAPPED_HREF_MEMBERS) {
+      expect(typeof handoff[member], member).toBe('function')
+      expect(handoff[member], member).not.toBe(router[member])
+    }
+  })
+
+  it('leaves a member that takes no target exactly as the router had it', () => {
+    // Without this the assertion above would pass on a hook that wrapped everything, which would
+    // be a different bug and not this one.
+    const { handoff } = mount(INIT)
+    expect(handoff.setParams).toBe(router.setParams)
+  })
+})
+
+describe('navigate, which is a push that may collapse onto an existing screen', () => {
+  it('goes to the shell for a route this document does not render', () => {
+    const { posted, handoff } = mount(INIT)
+    handoff.navigate('/h/host-a/session/wt-1')
+    expect(navigations(posted)).toEqual([
+      {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: 'navigate',
+        href: '/h/host-a/session/wt-1'
+      }
+    ])
+    expect(router.navigate).not.toHaveBeenCalled()
+  })
+
+  it('stays in this document for a route it does render', () => {
+    const { posted, handoff } = mount(INIT)
+    handoff.navigate('/h/host-b')
+    expect(navigations(posted)).toEqual([])
+    expect(router.navigate).toHaveBeenCalledWith('/h/host-b')
+  })
+
+  it('refuses rather than opening a target the shell would not take', () => {
+    const { posted, handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] } })
+    handoff.navigate('/h/host-a/session/wt-1')
+    expect(navigations(posted)).toEqual([])
+    expect(router.navigate).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Prefetch is the one target-taker that must never reach the shell.
+ *
+ * It is a background load, and the only thing the shell can be told is `navigate` — so handing one
+ * over would open a screen nobody asked for. Dropping it costs a chunk that is fetched later.
+ */
+describe('prefetch', () => {
+  it('warms a route this document renders, which is what the chunk split makes worth doing', () => {
+    const { handoff } = mount(INIT)
+    handoff.prefetch('/h/host-b')
+    expect(router.prefetch).toHaveBeenCalledWith('/h/host-b')
+  })
+
+  it('never posts a navigate for one it does not, and does not open it locally either', () => {
+    const { posted, handoff } = mount(INIT)
+    handoff.prefetch('/h/host-a/session/wt-1')
+    expect(navigations(posted)).toEqual([])
+    expect(router.prefetch).not.toHaveBeenCalled()
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('says nothing about a target it dropped, because a warm-up that did not happen is not news', () => {
+    const { handoff } = mount(INIT)
+    handoff.prefetch('/h/host-a/session/wt-1')
+    expect(warned).toEqual([])
   })
 })
