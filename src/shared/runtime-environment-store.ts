@@ -36,8 +36,11 @@ export function getEnvironmentStorePath(userDataPath: string): string {
   return join(userDataPath, ENVIRONMENTS_FILE)
 }
 
-export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[] {
-  return readEnvironmentStore(userDataPath).environments
+export function listEnvironments(
+  userDataPath: string,
+  options: { requireExisting?: boolean } = {}
+): KnownRuntimeEnvironment[] {
+  return readEnvironmentStore(userDataPath, options.requireExisting).environments
 }
 
 export function addEnvironmentFromPairingCode(
@@ -226,9 +229,12 @@ function resolveEnvironmentFromStore(
   throw new RuntimeEnvironmentStoreError('invalid_argument', `Unknown environment: ${selector}`)
 }
 
-function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
+function readEnvironmentStore(
+  userDataPath: string,
+  requireExisting = false
+): RuntimeEnvironmentStore {
   const path = getEnvironmentStorePath(userDataPath)
-  if (!existsSync(path)) {
+  if (!requireExisting && !existsSync(path)) {
     return { version: 1, environments: [] }
   }
   try {
