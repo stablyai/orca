@@ -91,11 +91,17 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       }
     }
     let ptyId: string | null
+    let paneKey: string | null
     try {
-      ptyId =
-        this.getLivePtyForHandle(terminalHandle)?.pty.ptyId ??
-        this.resolveLiveLeafForHandle(terminalHandle)?.ptyId ??
-        null
+      const runtimePty = this.getLivePtyForHandle(terminalHandle)?.pty
+      if (runtimePty) {
+        ptyId = runtimePty.ptyId
+        paneKey = runtimePty.paneKey
+      } else {
+        const leaf = this.resolveLiveLeafForHandle(terminalHandle)
+        ptyId = leaf?.ptyId ?? null
+        paneKey = ptyId ? this.getPaneKeyForTerminalHandle(terminalHandle) : null
+      }
     } catch {
       return null
     }
@@ -116,7 +122,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       ptyId,
       worktreeId: pty.worktreeId,
       processIncarnation: this.getTerminalProcessIncarnation(terminalHandle),
-      paneKey: pty.paneKey,
+      paneKey,
       launchTokenHash: pty.launchToken
         ? createHash('sha256').update(pty.launchToken).digest('hex')
         : null,
