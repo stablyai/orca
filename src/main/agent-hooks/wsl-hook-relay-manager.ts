@@ -33,31 +33,11 @@ import {
   resolveWslDefaultDistro,
   resumeWslStoppedRelays
 } from './wsl-hook-relay-state-machine'
-type DistroState = {
-  /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
-  distro: string
-  phase: 'starting' | 'running' | 'failed'
-  child?: ChildProcessWithoutNullStreams
-  mux?: SshChannelMultiplexer
-  guestHome?: string
-  codexHomePath?: string
-  guestEndpointFilePath?: string
-  opencodeOverlayDir?: string
-  opencode2OverlayDir?: string
-  piAgentDir?: string
-  ompStatusExtension?: string
-  launchKind?: 'pi' | 'omp'
-  failures: number
-  cooldownUntil: number
-  connectedAt?: number
-  restartTimer?: ReturnType<typeof setTimeout>
-  reinstallTimer?: ReturnType<typeof setTimeout>
-  lastInstallAt?: number
-}
+import type { WslRelayDistroState } from './wsl-hook-relay-state'
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
-  private states = new Map<string, DistroState>()
+  private states = new Map<string, WslRelayDistroState>()
   private stoppedByHooksOff = new Map<string, string | undefined>()
   private defaultDistro: string | null = null
   private disposed = false
@@ -71,8 +51,6 @@ export class WslHookRelayManager {
       isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
       restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
       dropState: (state) => {
-        // Why: identity-guarded — a fresh ensure() may own this key by now;
-        // deleting by key alone would orphan its live relay child.
         const key = wslHookRelayStateKey(state.distro)
         if (this.states.get(key) === state) {
           this.states.delete(key)
@@ -97,8 +75,7 @@ export class WslHookRelayManager {
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
   }
-  private stateFor(distro: string | null): DistroState | undefined {
-    // Empty key never matches a real (non-empty) distro state.
+  private stateFor(distro: string | null): WslRelayDistroState | undefined {
     return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? ''))
   }
   /** Guest endpoint path once install completes. */
@@ -188,19 +165,15 @@ export class WslHookRelayManager {
       }
       return
     }
-    // Why: restart-stable instance identity keeps the guest endpoint file at
-    // ONE path across restarts so daemon-surviving agents re-coordinate.
     const instanceKey =
       sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined) ?? `port${port}`
     if (existing) {
       this.recovery.clearTimers(existing)
     }
-    const state: DistroState = {
+    const state: WslRelayDistroState = {
       distro,
       phase: 'starting',
       failures: existing?.failures ?? 0,
-      // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
-      // crash — dropping it would blank status on panes spawned mid-relaunch.
       opencodeOverlayDir: existing?.opencodeOverlayDir,
       opencode2OverlayDir: existing?.opencode2OverlayDir,
       piAgentDir: existing?.piAgentDir,
@@ -218,8 +191,6 @@ export class WslHookRelayManager {
         bundleJsPath: bundle.jsPath,
         version: bundle.version,
         io: this.deps,
-        // Why the identity half: a hooks-off teardown drops this state and kills its child, but
-        // that kill reads as a startup failure and the retry loop would respawn an untracked relay.
         isDisposed: () => this.disposed || this.states.get(key) !== state,
         onChild: (child) => {
           state.child = child
@@ -237,8 +208,6 @@ export class WslHookRelayManager {
         connect: (transport, child) => this.connect(state, transport, child, instanceKey)
       })
     } catch (err) {
-      // Why: teardown may have already recorded this failure; don't double-
-      // count. A request-level error can leave a live child — never leak it.
       state.child?.kill()
       state.mux?.dispose()
       if (state.phase !== 'failed') {
@@ -249,7 +218,7 @@ export class WslHookRelayManager {
     }
   }
   private async connect(
-    state: DistroState,
+    state: WslRelayDistroState,
     transport: MultiplexerTransport,
     child: ChildProcessWithoutNullStreams,
     instanceKey: string
@@ -268,8 +237,6 @@ export class WslHookRelayManager {
         }
         state.mux = undefined
         const wasRunning = state.phase === 'running'
-        // Why: only a stable run forgives past failures — a connect-then-die
-        // loop must escalate, not retry every 10s.
         if (
           wasRunning &&
           state.connectedAt !== undefined &&
@@ -304,7 +271,6 @@ export class WslHookRelayManager {
     }
     state.phase = 'running'
     state.connectedAt = Date.now()
-    // still writes Codex's deferred trust after the launch path seeds config.toml.
     this.recovery.scheduleOneShotReinstall(state, REINSTALL_ONE_SHOT_DELAY_MS, () => {
       void maybeRerunWslRelayGuestInstall(this.deps, state)
     })
@@ -314,7 +280,7 @@ export class WslHookRelayManager {
    *  one failed relaunch must not end self-recovery; the timer's
    *  distro-running probe keeps this from booting stopped distros. */
   private markFailed(
-    state: DistroState,
+    state: WslRelayDistroState,
     message: string,
     options: { cooldownBaseMs: number }
   ): void {
