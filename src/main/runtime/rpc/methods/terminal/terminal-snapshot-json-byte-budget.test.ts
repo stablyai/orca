@@ -358,7 +358,7 @@ function stableRendererRuntime(): Pick<
         cols: COLUMNS,
         rows: 24,
         cwd: CWD,
-        source: 'headless' as const,
+        source: 'renderer' as const,
         oscLinks: []
       })
     )
