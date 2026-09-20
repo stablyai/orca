@@ -269,6 +269,25 @@ describe('picking', () => {
     warn.mockRestore()
   })
 
+  it('weighs a provider item before copying it, so an oversized one is never held in memory', async () => {
+    // `copyPickedMediaIntoCache` reads the whole file into memory. Weighing only the copy would
+    // mean holding a 64 MiB item to find out it is too big. Nothing is ours yet at that point, so
+    // nothing is discarded either.
+    const probe = harness({
+      openFile: () => ({ size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() }),
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [{ uri: 'content://media/external/images/media/42', mimeType: 'image/jpeg' }]
+        })
+    })
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: false })
+    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_too_large')
+    expect(probe.copied).toEqual([])
+    expect(probe.discarded).toEqual([])
+  })
+
   it('refuses an item bigger than the staging ceiling, and deletes what it picked', async () => {
     const probe = harness({
       openFile: () => ({ size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() })
@@ -472,11 +491,9 @@ describe('a provider uri the Android picker can answer', () => {
   })
 
   it('refuses a uri the copy could not adopt either, rather than minting over it', async () => {
-    // The Android hazard. Both pickers are configured to hand back a `file:` copy in this app's
-    // own cache, and the whole handle contract rests on that: `release` is a delete and the TTL
-    // sweep is a delete. A provider that answered `content://media/...` instead would mint a
-    // handle over a file this shell can neither size nor delete, and every sweep would be a
-    // silent no-op. Refused where the assumption is made.
+    // A copy that answered something this shell still cannot delete. Nothing here is ours, and
+    // the provider's own uri least of all: unlinking it is not this app's to attempt, and the
+    // failure path must leave it alone rather than sweep what it never owned.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const probe = harness({
       copyIntoCache: (uri: string) => uri,
@@ -490,6 +507,7 @@ describe('a provider uri the Android picker can answer', () => {
       probe.serve('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toThrow(/this shell does not own/)
     expect(probe.registry.liveCount()).toBe(0)
+    expect(probe.discarded).toEqual([])
     warn.mockRestore()
   })
 

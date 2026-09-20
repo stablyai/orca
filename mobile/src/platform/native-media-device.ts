@@ -21,8 +21,8 @@ import type { NativeMediaDeps } from './native-media'
  * but it is not guaranteed. Android's `MediaHandler.readExtras` answers
  * `ImagePickerAsset(type = null, uri = uri.toString())` when `toMediaType` cannot resolve a MIME,
  * which is the provider's own `content://` uri, uncopied. That file is readable through a resolver
- * and is not one this app may unlink, so a handle over it would never release; `copyPickedMediaIntoCache`
- * is what turns it into one that can.
+ * and is not one this app may unlink, so a handle over it would never release.
+ * `copyPickedMediaIntoCache` is what turns it into one that can.
  */
 export function ownsStagedMediaUri(uri: string): boolean {
   return uri.startsWith('file:')
@@ -38,8 +38,14 @@ function stagedMediaFile(extension: string): FsFile {
  *
  * Through `bytes()` rather than `copy()`: `FileSystemPath.copy` goes to `javaFile.copyRecursively`,
  * which is a `java.io.File` and has nothing to open for a provider uri, while the read path goes
- * through the unified file and does. The whole item is held in memory for the length of the copy,
- * which is bounded by the staging ceiling the caller checks right after.
+ * through the unified file and does.
+ *
+ * The whole item is held in memory for the length of the copy. The caller weighs the source
+ * against the staging ceiling before calling this, which bounds it whenever the provider reports a
+ * size — `FileSystemFile.size` routes a `content:` uri to `SAFDocumentFile.length()`, which reads
+ * the document's own length. A provider that reports none answers 0 there, and for that case
+ * nothing bounds this read but the picker's `mediaTypes: ['images']`; the copy is weighed after
+ * the fact instead, which catches the item but only once it has been held.
  */
 export function copyPickedMediaIntoCache(uri: string): string {
   const destination = stagedMediaFile('bin')

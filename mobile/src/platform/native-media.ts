@@ -24,8 +24,8 @@ import { MobileImageBase64Accumulator } from '../session/mobile-image-base64-acc
  * times the reply ceiling in raw bytes and three times it once base64 has expanded them.
  *
  * Every device call is injectable for the same reason the clipboard verb's is not: these have no
- * honest fake inside `expo-image-picker`, and the arms worth pinning — a cancel, a provider uri, an
- * item over the ceiling — are exactly the ones a simulator makes expensive.
+ * honest fake inside `expo-image-picker`, and the arms worth pinning — a cancel, a provider uri,
+ * an item over the ceiling — are exactly the ones a simulator makes expensive.
  */
 
 /** A staged file as this handler reads it: the shape `expo-file-system`'s `File` already has. */
@@ -95,25 +95,11 @@ export function createNativeMediaVerbServer(
     const owned: string[] = []
     try {
       for (const asset of assets) {
-        // The handle contract rests on the file being ours: `release` is a delete and so is the
-        // TTL sweep. Both pickers normally answer a copy in this app's cache, and Android's image
-        // library has one arm that does not — `MediaHandler.readExtras` answers the provider's own
-        // uri when the resolver cannot type the asset. The OS completed that pick, so it is copied
-        // rather than refused; refusing would lose a photo the user chose.
-        const uri = deps.ownsStagedUri(asset.uri) ? asset.uri : deps.copyIntoCache(asset.uri)
-        owned.push(uri)
-        // Still not ours: a scheme the copy could not adopt either. Fail closed here rather than
-        // let a sweep that can never delete anything look like one that did.
-        if (!deps.ownsStagedUri(uri)) {
-          throw new Error(`a picker answered a uri this shell does not own: ${asset.uri}`)
-        }
+        const uri = adopt(asset, owned)
+        // The copy's own size, which is the authoritative one: a provider that reported nothing
+        // answered 0 above, and this is the file the handle will actually be read from.
         const { size } = deps.openFile(uri)
-        if (size > MEDIA_STAGED_MAX_BYTES) {
-          throw new BridgeNativeVerbRefusedError(
-            'native_media_too_large',
-            `a picked item is ${size} bytes, over the ${MEDIA_STAGED_MAX_BYTES} this shell stages`
-          )
-        }
+        refuseOverStagingCeiling(size)
         staged.push({
           uri,
           mime: asset.mimeType ?? UNKNOWN_STAGED_MIME,
@@ -129,6 +115,44 @@ export function createNativeMediaVerbServer(
       throw error
     }
     return staged
+  }
+
+  /**
+   * The uri this shell will hold, adopting the picker's answer when it is not already ours.
+   *
+   * The handle contract rests on the file being ours: `release` is a delete and so is the TTL
+   * sweep. Both pickers normally answer a copy in this app's cache, and Android's image library has
+   * one arm that does not — `MediaHandler.readExtras` answers the provider's own uri when the
+   * resolver cannot type the asset. The OS completed that pick, so it is copied rather than
+   * refused; refusing would lose a photo the user chose.
+   */
+  function adopt(asset: PickedAsset, owned: string[]): string {
+    if (deps.ownsStagedUri(asset.uri)) {
+      owned.push(asset.uri)
+      return asset.uri
+    }
+    // Weighed before the copy, because the copy reads the whole file into memory: an oversized
+    // provider item must be refused without being held. A provider that reports no size answers 0
+    // here, which is why the copy is weighed again by the caller rather than trusted from this.
+    refuseOverStagingCeiling(deps.openFile(asset.uri).size)
+    const copy = deps.copyIntoCache(asset.uri)
+    // Still not ours: a scheme the copy could not adopt either. Fail closed rather than let a sweep
+    // that can never delete anything look like one that did — and throw before `owned` is
+    // written, because nothing here is this shell's to unlink, the provider's own uri least of all.
+    if (!deps.ownsStagedUri(copy)) {
+      throw new Error(`a picker answered a uri this shell does not own: ${asset.uri}`)
+    }
+    owned.push(copy)
+    return copy
+  }
+
+  function refuseOverStagingCeiling(size: number): void {
+    if (size > MEDIA_STAGED_MAX_BYTES) {
+      throw new BridgeNativeVerbRefusedError(
+        'native_media_too_large',
+        `a picked item is ${size} bytes, over the ${MEDIA_STAGED_MAX_BYTES} this shell stages`
+      )
+    }
   }
 
   function discardQuietly(uri: string): void {

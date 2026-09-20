@@ -9,8 +9,9 @@ import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/
  * frame cap, and two and a quarter times the reply ceiling before anything encodes it. Base64 is
  * what makes that three times the ceiling, which is a different basis and is why both are named.
  * Either way the value never crosses as a value. `pick` answers a handle the shell owns, `read`
- * moves the bytes a chunk at a time, and `release` ends it. Split from `bridge-native-verbs.ts` because these three are one contract of their own and
- * that module is the table every verb is listed in.
+ * moves the bytes a chunk at a time, and `release` ends it. Split from `bridge-native-verbs.ts`
+ * because these three are one contract of their own and that module is the table every verb is
+ * listed in.
  *
  * The verb is `read` and not `readChunk` for a reason a rename cannot be undone from: a manifest
  * grant name is held to `native(?:\.[a-z][a-z0-9]*){2,}`, and `bundled-mobile-web-bundle.ts`
@@ -30,7 +31,8 @@ export type BridgeMediaSource = (typeof BRIDGE_MEDIA_SOURCES)[number]
 /** An opaque name the shell mints. Bounded because the page echoes it back on every chunk. */
 export const BRIDGE_MEDIA_HANDLE_MAX_CHARS = 64
 
-/** `type/subtype`, as a picker reports it. Bounded, and long enough for the parameters one carries. */
+/** `type/subtype`, as a picker reports it. Bounded, and long enough for the parameters one
+ *  carries. */
 export const BRIDGE_MEDIA_MIME_MAX_CHARS = 128
 
 /**
