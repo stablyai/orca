@@ -19,7 +19,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'storage',
   'secrets',
   'events:subscribe',
-  'settings:own'
+  'settings:own',
+  'azure-devops:boards'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -40,7 +41,9 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   secrets: "Store and read secrets in the plugin's own encrypted vault",
   'events:subscribe':
     'Get notified when worktrees are created or removed and when agent status changes',
-  'settings:own': "Read and change the plugin's own settings"
+  'settings:own': "Read and change the plugin's own settings",
+  'azure-devops:boards':
+    'Read and update Azure Boards work items using your existing Azure DevOps connection'
 }
 
 /**
