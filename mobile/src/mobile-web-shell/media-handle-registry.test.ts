@@ -21,6 +21,14 @@ function refusalOf(run: () => unknown): string | null {
   throw new Error('that call was expected to refuse and did not')
 }
 
+describe('the lifetime this registry states', () => {
+  it('sweeps a staged file five minutes after the last touch', () => {
+    // A literal, because five minutes is the number the body claims and the docstring derives.
+    expect(MEDIA_HANDLE_TTL_MS).toBe(5 * 60 * 1000)
+    expect(MEDIA_HANDLE_TTL_MS).toBe(300_000)
+  })
+})
+
 describe('minting handles', () => {
   let clock = 1_000
   let deleted: string[] = []

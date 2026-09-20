@@ -5,6 +5,7 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboa
 import {
   BRIDGE_MEDIA_HANDLE_MAX_CHARS,
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
+  BRIDGE_MEDIA_MIME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
   BRIDGE_MEDIA_SOURCES,
   mediaPickParamsSchema,
@@ -16,6 +17,28 @@ import {
 } from './bridge-media-verbs'
 
 const HANDLE = 'media-1'
+
+describe('the numbers this contract states', () => {
+  /**
+   * Literals, not the constants restated: every one of these is a number a body claims and a
+   * reviewer checked, and read through its own name the assertion would hold whatever it became.
+   * The derived one is pinned by its derivation above, which is the other half of the same rule.
+   */
+  it('holds a page session to eight staged items, which is 144 MiB of cache', () => {
+    expect(BRIDGE_MEDIA_MAX_LIVE_HANDLES).toBe(8)
+    expect(BRIDGE_MEDIA_MAX_LIVE_HANDLES * CLIPBOARD_IMAGE_MAX_SOURCE_BYTES).toBe(150_994_944)
+  })
+
+  it('holds a handle to 64 characters and a mime to 128', () => {
+    expect(BRIDGE_MEDIA_HANDLE_MAX_CHARS).toBe(64)
+    expect(BRIDGE_MEDIA_MIME_MAX_CHARS).toBe(128)
+  })
+
+  it('reads a whole item in 48 chunks at the cap, which is what a device proof counts', () => {
+    expect(BRIDGE_MEDIA_READ_MAX_BYTES).toBe(393_216)
+    expect(Math.ceil(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES / BRIDGE_MEDIA_READ_MAX_BYTES)).toBe(48)
+  })
+})
 
 describe('what a pick may ask for', () => {
   it('takes each source the shell serves, single or multiple', () => {
