@@ -60,6 +60,7 @@ type Harness = {
   readonly discarded: string[]
   readonly files: Map<string, Uint8Array>
   readonly written: { uri: string; base64: string }[]
+  readonly copied: { from: string; to: string }[]
 }
 
 function harness(
@@ -68,6 +69,7 @@ function harness(
   const discarded: string[] = []
   const files = new Map<string, Uint8Array>()
   const written: { uri: string; base64: string }[] = []
+  const copied: { from: string; to: string }[] = []
   const registry = new MediaHandleRegistry({
     now: () => 1_000,
     discard: (uri) => discarded.push(uri)
@@ -95,12 +97,18 @@ function harness(
       )
       return uri
     },
+    copyIntoCache: (uri: string) => {
+      const destination = `${CACHE}/copy-${copied.length}.bin`
+      copied.push({ from: uri, to: destination })
+      files.set(destination, files.get(uri) ?? new Uint8Array())
+      return destination
+    },
     openFile: (uri) => fakeFile(files.get(uri) ?? new Uint8Array()),
     discard: (uri) => discarded.push(uri),
     ownsStagedUri: (uri: string) => uri.startsWith('file:'),
     ...overrides
   })
-  return { serve, registry, discarded, files, written }
+  return { serve, registry, discarded, files, written, copied }
 }
 
 function refusalOf(error: unknown): string | null {
@@ -391,8 +399,44 @@ describe('what the largest reply weighs', () => {
   })
 })
 
-describe('a uri this shell could not own', () => {
-  it('refuses to mint a handle over one, rather than leaking the file behind it', async () => {
+describe('a provider uri the Android picker can answer', () => {
+  it('copies it into the cache and mints the handle over the copy, bytes intact', async () => {
+    // `MediaHandler.readExtras` has a reachable arm: when the resolver cannot type the asset it
+    // answers `ImagePickerAsset(type = null, uri = uri.toString())`, the provider's own uri,
+    // uncopied. The OS completed that pick, so refusing it loses a photo the user chose.
+    const probe = harness({
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [{ uri: 'content://media/external/images/media/42', mimeType: null }]
+        })
+    })
+    probe.files.set('content://media/external/images/media/42', bytesOf(300))
+    const result = mediaPickResultSchema.parse(
+      await probe.serve('native.media.pick', { source: 'library', multiple: false })
+    )
+    const item = result.items[0]
+    expect(item).toMatchObject({ mime: 'application/octet-stream', byteLength: 300 })
+    expect(probe.copied).toEqual([
+      { from: 'content://media/external/images/media/42', to: `${CACHE}/copy-0.bin` }
+    ])
+
+    const chunk = mediaReadResultSchema.parse(
+      await probe.serve('native.media.read', {
+        handle: item?.handle ?? '',
+        offset: 0,
+        length: 300
+      })
+    )
+    const bytes = atob(chunk.base64)
+    expect([...bytes].map((char) => char.codePointAt(0))).toEqual([...bytesOf(300)])
+
+    // The copy is what release deletes. The provider's uri was never ours to unlink.
+    await probe.serve('native.media.release', { handle: item?.handle ?? '' })
+    expect(probe.discarded).toEqual([`${CACHE}/copy-0.bin`])
+  })
+
+  it('refuses a uri the copy could not adopt either, rather than minting over it', async () => {
     // The Android hazard. Both pickers are configured to hand back a `file:` copy in this app's
     // own cache, and the whole handle contract rests on that: `release` is a delete and the TTL
     // sweep is a delete. A provider that answered `content://media/...` instead would mint a
@@ -400,6 +444,7 @@ describe('a uri this shell could not own', () => {
     // silent no-op. Refused where the assumption is made.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const probe = harness({
+      copyIntoCache: (uri: string) => uri,
       launchLibrary: () =>
         Promise.resolve({
           canceled: false,

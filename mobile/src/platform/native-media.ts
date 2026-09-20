@@ -64,6 +64,8 @@ export type NativeMediaDeps = {
   readonly openFile: (uri: string) => NativeMediaFile
   /** Whether this shell can size and delete what that uri names. */
   readonly ownsStagedUri: (uri: string) => boolean
+  /** Copies what a uri names into a cache file this shell owns, and answers that file's uri. */
+  readonly copyIntoCache: (uri: string) => string
   /** Deletes one staged file. The registry owns the ones it minted; this is for the pick that
    *  was refused before a handle existed, whose files nothing else would ever sweep. */
   readonly discard: (uri: string) => void
@@ -89,17 +91,23 @@ export function createNativeMediaVerbServer(
    */
   function stage(assets: readonly PickedAsset[]): StagedMedia[] {
     const staged: StagedMedia[] = []
+    /** Only what this shell owns. A provider's own uri is never ours to unlink. */
+    const owned: string[] = []
     try {
       for (const asset of assets) {
-        // Both pickers are configured to answer a copy in this app's own cache, and the handle
-        // contract rests on it: `release` is a delete and so is the TTL sweep. A provider that
-        // answered a `content:` uri instead would mint a handle over a file this shell can neither
-        // size nor delete, and every sweep would be a silent no-op. Refused where the assumption
-        // is made rather than discovered as a cache that never empties.
-        if (!deps.ownsStagedUri(asset.uri)) {
+        // The handle contract rests on the file being ours: `release` is a delete and so is the
+        // TTL sweep. Both pickers normally answer a copy in this app's cache, and Android's image
+        // library has one arm that does not — `MediaHandler.readExtras` answers the provider's own
+        // uri when the resolver cannot type the asset. The OS completed that pick, so it is copied
+        // rather than refused; refusing would lose a photo the user chose.
+        const uri = deps.ownsStagedUri(asset.uri) ? asset.uri : deps.copyIntoCache(asset.uri)
+        owned.push(uri)
+        // Still not ours: a scheme the copy could not adopt either. Fail closed here rather than
+        // let a sweep that can never delete anything look like one that did.
+        if (!deps.ownsStagedUri(uri)) {
           throw new Error(`a picker answered a uri this shell does not own: ${asset.uri}`)
         }
-        const { size } = deps.openFile(asset.uri)
+        const { size } = deps.openFile(uri)
         if (size > MEDIA_STAGED_MAX_BYTES) {
           throw new BridgeNativeVerbRefusedError(
             'native_media_too_large',
@@ -107,7 +115,7 @@ export function createNativeMediaVerbServer(
           )
         }
         staged.push({
-          uri: asset.uri,
+          uri,
           mime: asset.mimeType ?? UNKNOWN_STAGED_MIME,
           byteLength: size,
           ...(asset.width === undefined ? {} : { width: asset.width }),
@@ -115,8 +123,8 @@ export function createNativeMediaVerbServer(
         })
       }
     } catch (error) {
-      for (const item of assets) {
-        discardQuietly(item.uri)
+      for (const uri of owned) {
+        discardQuietly(uri)
       }
       throw error
     }

@@ -10,22 +10,52 @@ import type { NativeMediaDeps } from './native-media'
  * cover.
  *
  * Separated from the server because importing `expo-image-picker` imports React Native, so a
- * module that names it cannot be driven in a unit test at all — and because these seven lines are
- * where every platform difference lives: the library permission is iOS's to grant and Android's to
- * skip on a recent enough API, and both pickers are configured here to hand back a `file:` uri in
- * this app's own cache, which is what makes deleting one the shell's business.
+ * module that names it cannot be driven in a unit test at all — and because this is where every
+ * platform difference lives: which uris a picker may answer, and which of them this shell can own.
  */
 /**
  * Whether a picked uri is one this shell can size and delete.
  *
- * The scheme is the whole test. `expo-image-picker` always copies the selected asset into this
- * app's cache, and `expo-document-picker` does the same under `copyToCacheDirectory`, so both
- * answer `file:` on iOS and Android alike. Android is where the assumption could break: a provider
- * uri (`content://media/...`) is readable through a resolver and is not a file this app may unlink,
- * so a handle over one would never release.
+ * The scheme is the whole test. The usual answer from both pickers is `file:` — the iOS photo
+ * picker copies what was selected, and `expo-document-picker` does under `copyToCacheDirectory` —
+ * but it is not guaranteed. Android's `MediaHandler.readExtras` answers
+ * `ImagePickerAsset(type = null, uri = uri.toString())` when `toMediaType` cannot resolve a MIME,
+ * which is the provider's own `content://` uri, uncopied. That file is readable through a resolver
+ * and is not one this app may unlink, so a handle over it would never release; `copyPickedMediaIntoCache`
+ * is what turns it into one that can.
  */
 export function ownsStagedMediaUri(uri: string): boolean {
   return uri.startsWith('file:')
+}
+
+/** A cache file name nothing else in this app writes, unique per staged item. */
+function stagedMediaFile(extension: string): FsFile {
+  return new FsFile(Paths.cache, `orca-media-${Date.now()}-${Math.random()}.${extension}`)
+}
+
+/**
+ * Copies what a uri names into this shell's cache and answers the copy's uri.
+ *
+ * Through `bytes()` rather than `copy()`: `FileSystemPath.copy` goes to `javaFile.copyRecursively`,
+ * which is a `java.io.File` and has nothing to open for a provider uri, while the read path goes
+ * through the unified file and does. The whole item is held in memory for the length of the copy,
+ * which is bounded by the staging ceiling the caller checks right after.
+ */
+export function copyPickedMediaIntoCache(uri: string): string {
+  const destination = stagedMediaFile('bin')
+  destination.create({ overwrite: true })
+  try {
+    destination.write(new FsFile(uri).bytesSync())
+  } catch (error) {
+    // The empty file this just created is nobody's otherwise: the caller never learns its name.
+    try {
+      destination.delete()
+    } catch {
+      // Best effort; the cache is the OS's to reclaim.
+    }
+    throw error
+  }
+  return destination.uri
 }
 
 /** Deletes one staged file. Its own export because the registry needs it before a server exists. */
@@ -49,13 +79,14 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
       DocumentPicker.getDocumentAsync({ type: '*/*', multiple, copyToCacheDirectory: true }),
     readClipboardImage: () => Clipboard.getImageAsync({ format: 'png' }),
     stageBase64: (base64) => {
-      const file = new FsFile(Paths.cache, `orca-media-${Date.now()}-${Math.random()}.png`)
+      const file = stagedMediaFile('png')
       file.create({ overwrite: true })
       file.write(base64, { encoding: 'base64' })
       return file.uri
     },
     openFile: (uri) => new FsFile(uri),
     ownsStagedUri: ownsStagedMediaUri,
+    copyIntoCache: copyPickedMediaIntoCache,
     discard: discardStagedMedia
   }
 }

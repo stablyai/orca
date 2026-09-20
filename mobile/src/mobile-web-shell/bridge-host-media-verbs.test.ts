@@ -88,6 +88,11 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
     stageBase64: () => `${CACHE}/pasted.png`,
     openFile: () => fakeFile(byteLength),
     ownsStagedUri: (uri) => uri.startsWith('file:'),
+    // The pair's fixtures all answer a `file:` uri, so this is never reached; it is here because
+    // a dep the harness leaves out is one the suite cannot say anything about.
+    copyIntoCache: (uri) => {
+      throw new Error(`nothing in this suite picks a uri needing a copy: ${uri}`)
+    },
     discard: (uri) => discarded.push(uri)
   })
   const pair = createFakeBridgePortPair({

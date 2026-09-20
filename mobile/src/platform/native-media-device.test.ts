@@ -7,7 +7,9 @@ const expo = vi.hoisted(() => ({
   getDocumentAsync: vi.fn(() => Promise.resolve({ canceled: true })),
   getImageAsync: vi.fn(() => Promise.resolve(null)),
   deleted: new Array<string>(),
-  written: new Array<{ uri: string; base64: string }>()
+  written: new Array<{ uri: string; base64: string }>(),
+  copiedBytes: new Array<{ uri: string; bytes: number[] }>(),
+  sources: new Map<string, Uint8Array>()
 }))
 
 vi.mock('expo-clipboard', () => ({ getImageAsync: expo.getImageAsync }))
@@ -24,8 +26,18 @@ vi.mock('expo-file-system', () => ({
       this.uri = parts.join('/')
     }
     create(): void {}
-    write(base64: string): void {
-      expo.written.push({ uri: this.uri, base64 })
+    write(content: string | Uint8Array): void {
+      expo.written.push({ uri: this.uri, base64: typeof content === 'string' ? content : '' })
+      if (typeof content !== 'string') {
+        expo.copiedBytes.push({ uri: this.uri, bytes: [...content] })
+      }
+    }
+    bytesSync(): Uint8Array {
+      const bytes = expo.sources.get(this.uri)
+      if (bytes === undefined) {
+        throw new Error(`nothing readable at ${this.uri}`)
+      }
+      return bytes
     }
     delete(): void {
       expo.deleted.push(this.uri)
@@ -36,6 +48,7 @@ vi.mock('expo-file-system', () => ({
 
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
 import {
+  copyPickedMediaIntoCache,
   discardStagedMedia,
   nativeMediaDeviceDeps,
   ownsStagedMediaUri
@@ -88,6 +101,25 @@ describe('how the pickers are launched', () => {
   it('reads the pasteboard as png, because that is what it re-encodes to', async () => {
     await deps().readClipboardImage()
     expect(expo.getImageAsync).toHaveBeenLastCalledWith({ format: 'png' })
+  })
+})
+
+describe('copying a provider uri into the cache', () => {
+  it('reads the source through the unified file and writes a copy this shell owns', () => {
+    const source = 'content://media/external/images/media/42'
+    expo.sources.set(source, Uint8Array.from([1, 2, 3, 4]))
+    const uri = copyPickedMediaIntoCache(source)
+    expect(ownsStagedMediaUri(uri)).toBe(true)
+    expect(uri.startsWith('file:///cache/orca-media-')).toBe(true)
+    expect(expo.copiedBytes.at(-1)).toEqual({ uri, bytes: [1, 2, 3, 4] })
+  })
+
+  it('deletes the file it created when the source could not be read', () => {
+    // The caller never learns this name, so an empty file left here is nobody's to sweep.
+    const before = expo.deleted.length
+    expect(() => copyPickedMediaIntoCache('content://media/gone')).toThrow(/nothing readable/)
+    expect(expo.deleted.length).toBe(before + 1)
+    expect(expo.deleted.at(-1)?.startsWith('file:///cache/orca-media-')).toBe(true)
   })
 })
 
