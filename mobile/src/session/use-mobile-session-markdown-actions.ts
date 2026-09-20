@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { BackHandler, Keyboard } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardWriter } from '../platform/clipboard'
 import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
@@ -23,6 +23,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     showToast,
     readMarkdownTab
   } = scope
+  const clipboard = useClipboardWriter()
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
     setMarkdownDocs((prev) => {
       const current = prev.get(tabId)
@@ -46,11 +47,11 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
       if (current?.status !== 'ready') {
         return
       }
-      await Clipboard.setStringAsync(current.localContent)
+      await clipboard.writeText(current.localContent)
       triggerSuccess()
       showToast('Copied')
     },
-    [markdownDocs, showToast]
+    [clipboard, markdownDocs, showToast]
   )
 
   const getDirtyMarkdownDrafts = useCallback(() => {

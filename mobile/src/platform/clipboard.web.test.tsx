@@ -24,13 +24,17 @@ import {
   createFakeBridgePortPair,
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import { useClipboardWriter } from './clipboard.web'
-import type { ClipboardWriter } from './clipboard'
+import { useClipboardReader, useClipboardWriter } from './clipboard.web'
+import type { ClipboardReader, ClipboardWriter } from './clipboard'
 
-const held: { writer: ClipboardWriter | null } = { writer: null }
+const held: { writer: ClipboardWriter | null; reader: ClipboardReader | null } = {
+  writer: null,
+  reader: null
+}
 
 function Screen(): null {
   held.writer = useClipboardWriter()
+  held.reader = useClipboardReader()
   return null
 }
 
@@ -54,8 +58,18 @@ async function mount(pair: BridgePortPair): Promise<ClipboardWriter> {
   return writer
 }
 
+async function mountReader(pair: BridgePortPair): Promise<ClipboardReader> {
+  await mount(pair)
+  const reader = held.reader
+  if (reader === null) {
+    throw new Error('nothing mounted')
+  }
+  return reader
+}
+
 beforeEach(() => {
   held.writer = null
+  held.reader = null
 })
 
 describe('writing the clipboard from inside the shell', () => {
@@ -89,5 +103,63 @@ describe('writing the clipboard from inside the shell', () => {
     // A rejection after a round trip and one that never left look the same to an `await`; only the
     // first would have put a request on the wire.
     expect(pair.toShell).toHaveLength(before)
+  })
+})
+
+describe('reading the clipboard from inside the shell', () => {
+  it('asks the shell for the text and never the desktop', async () => {
+    const pair = createFakeBridgePortPair()
+    const reader = await mountReader(pair)
+    const read = reader.readText()
+    await pair.flush()
+    await expect(read).resolves.toBe('pasteboard')
+    expect(pair.rpc.requests).toEqual([])
+  })
+
+  it('rejects the read on a route that was not granted it, without sending a frame', async () => {
+    const pair = createFakeBridgePortPair({ routeGrants: ['navigate', 'storage'] })
+    const reader = await mountReader(pair)
+    const before = pair.toShell.length
+    const read = reader.readText().catch((error: unknown) => error)
+    await pair.flush()
+    expect(String(await read)).toMatch(/did not grant/)
+    expect(pair.toShell).toHaveLength(before)
+  })
+
+  /**
+   * The degradation, recorded rather than implied.
+   *
+   * No shell serves an image yet — `native.clipboard.read` refuses `{ mime: 'image' }` by name and
+   * a 24 MiB base64 image cannot cross an 8 MiB reply cap — so the page answers what an empty
+   * clipboard answers and the terminal's paste takes the branch it already had. On the page an
+   * image on the clipboard pastes nothing until the media verbs land.
+   */
+  it('answers no image, without asking the shell for one', async () => {
+    const pair = createFakeBridgePortPair()
+    const reader = await mountReader(pair)
+    const before = pair.toShell.length
+    await expect(reader.readImage()).resolves.toBeNull()
+    await pair.flush()
+    expect(pair.toShell).toHaveLength(before)
+  })
+
+  /**
+   * `contents` is not a probe here and cannot be one: the shell serves no "is there text" verb, and
+   * reading to find out would raise iOS's paste-consent prompt on every mount and every foreground,
+   * which is the whole reason the phone has `hasStringAsync`. So it answers what this side knows.
+   */
+  it('reports text as possible when the read verb is granted, and never an image', async () => {
+    const pair = createFakeBridgePortPair()
+    const reader = await mountReader(pair)
+    const before = pair.toShell.length
+    await expect(reader.contents()).resolves.toEqual({ text: true, image: false })
+    await pair.flush()
+    expect(pair.toShell).toHaveLength(before)
+  })
+
+  it('reports no text at all on a route the read verb was withheld from', async () => {
+    const pair = createFakeBridgePortPair({ routeGrants: ['navigate', 'storage'] })
+    const reader = await mountReader(pair)
+    await expect(reader.contents()).resolves.toEqual({ text: false, image: false })
   })
 })
