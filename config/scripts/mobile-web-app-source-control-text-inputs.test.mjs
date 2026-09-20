@@ -20,7 +20,8 @@ import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   TEXT_INPUT_FONT_SIZE_SEAM,
-  textInputFontSizeOffenders
+  textInputFontSizeOffenders,
+  unresolvedTextInputStyles
 } from './mobile-web-app-text-input-font-size-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
@@ -87,6 +88,27 @@ describe('the size a text input declares, as the census reads it', () => {
     }
   })
 
+  it('separates a style it could not follow from one that sets no size', () => {
+    // An offender list only says every input is on the seam if every input was read. A style the
+    // walk cannot follow has to surface here rather than pass as a clean input.
+    const root = plant({
+      'src/ui/Field.tsx': [
+        "import { styles } from './field-styles'",
+        "import { missing } from 'some-package'",
+        'export const Bare = () => <TextInput style={styles.bare} />',
+        'export const Gone = () => <TextInput style={missing.input} />'
+      ].join('\n'),
+      'src/ui/field-styles.ts': 'export const styles = { bare: { padding: 8 } }'
+    })
+    try {
+      const closure = { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual([])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual(['src/ui/Field.tsx:4 (input)'])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('takes the seam as the answer, and an absent size as nothing to answer for', () => {
     // A style with no `fontSize` inherits; the floor is about the size an input declares.
     const root = plant({
@@ -119,6 +141,14 @@ describeClosure(
       const closure = await mobileWebAppRouteClosure(route)
       expect(textInputFontSizeOffenders(mobileDir, closure)).toEqual([])
     })
+
+    it.each([HUB, REVIEW])(
+      'reads every input it found, so the list above is complete: %s',
+      async (route) => {
+        const closure = await mobileWebAppRouteClosure(route)
+        expect(unresolvedTextInputStyles(mobileDir, closure)).toEqual([])
+      }
+    )
 
     it.each([HUB, REVIEW])('carries the seam, so the rule is not vacuous: %s', async (route) => {
       // Without this an empty offender list would also be what a closure reaching no text input at

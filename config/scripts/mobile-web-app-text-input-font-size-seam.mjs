@@ -57,9 +57,11 @@ function textInputStyleRefs(parsed) {
         if (!ts.isJsxAttribute(attribute) || attribute.name.getText() !== 'style') {
           continue
         }
+        // The element's line, so an unresolved ref can name where its input sits.
+        const line = parsed.getLineAndCharacterOfPosition(element.getStart(parsed)).line + 1
         const collect = (expression) => {
           if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
-            refs.push({ object: expression.expression.text, key: expression.name.text })
+            refs.push({ object: expression.expression.text, key: expression.name.text, line })
           }
           ts.forEachChild(expression, collect)
         }
@@ -131,13 +133,18 @@ function styleObjectOf(initializer) {
 }
 
 /**
- * The `fontSize` a style key resolves to, following a spread of another module's styles.
+ * What a style key resolves to, following a spread of another module's styles.
+ *
+ * Three answers, not two. `null` is "this key is nowhere I could follow", which is a hole in the
+ * walk rather than a clean input; `{ size: null }` is a key that exists and sets no size, which
+ * inherits and is nothing to answer for. Collapsing the two would let a resolution failure read as
+ * a passing input, which is how a census like this goes quietly vacuous.
  *
  * The spread matters rather than being a nicety: both screens this rule was written for reach their
  * input through `{ ...baseStyles, ...listStyles }`, so a walk that stopped at the first module
  * would find no `fontSize` and call the offence absent.
  */
-function fontSizeOf(mobileDir, file, exportName, key, seen = new Set()) {
+function resolveStyleKey(mobileDir, file, exportName, key, seen = new Set()) {
   const id = `${file}|${exportName}|${key}`
   if (seen.has(id)) {
     return null
@@ -168,12 +175,15 @@ function fontSizeOf(mobileDir, file, exportName, key, seen = new Set()) {
     for (const entry of property.initializer.properties) {
       if (ts.isPropertyAssignment(entry) && entry.name.getText() === 'fontSize') {
         return {
-          file,
-          text: entry.initializer.getText(),
-          line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1
+          size: {
+            file,
+            text: entry.initializer.getText(),
+            line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1
+          }
         }
       }
     }
+    return { size: null }
   }
   // Later spreads win in the object, so read them in reverse.
   for (const name of spreads.toReversed()) {
@@ -181,12 +191,47 @@ function fontSizeOf(mobileDir, file, exportName, key, seen = new Set()) {
     if (origin === null) {
       continue
     }
-    const hit = fontSizeOf(mobileDir, origin.file, origin.name, key, seen)
+    const hit = resolveStyleKey(mobileDir, origin.file, origin.name, key, seen)
     if (hit !== null) {
       return hit
     }
   }
   return null
+}
+
+/** Every `TextInput` style reference in a closure, with what the walk made of it. */
+function textInputStyleResolutions(mobileDir, closure) {
+  const found = []
+  for (const file of closure.local) {
+    const source = readOrNull(join(mobileDir, file))
+    if (source === null || !source.includes('TextInput')) {
+      continue
+    }
+    const parsed = parse(file, source)
+    for (const { object, key, line } of textInputStyleRefs(parsed)) {
+      const origin = originOf(mobileDir, parsed, file, object)
+      found.push({
+        at: `${file}:${line}`,
+        key,
+        resolved: origin === null ? null : resolveStyleKey(mobileDir, origin.file, origin.name, key)
+      })
+    }
+  }
+  return found
+}
+
+/**
+ * Every `TextInput` style this walk could not follow to a declaration, as `path:line`.
+ *
+ * The completeness half of the rule below: an offender list is only evidence that every input is on
+ * the seam if every input was read. A style reached through a package, a helper call or a shape
+ * this walk does not model lands here instead of passing silently.
+ */
+export function unresolvedTextInputStyles(mobileDir, closure) {
+  return textInputStyleResolutions(mobileDir, closure)
+    .filter((entry) => entry.resolved === null)
+    .map((entry) => `${entry.at} (${entry.key})`)
+    .sort()
 }
 
 /**
@@ -198,21 +243,10 @@ function fontSizeOf(mobileDir, file, exportName, key, seen = new Set()) {
  */
 export function textInputFontSizeOffenders(mobileDir, closure) {
   const offenders = new Set()
-  for (const file of closure.local) {
-    const source = readOrNull(join(mobileDir, file))
-    if (source === null || !source.includes('TextInput')) {
-      continue
-    }
-    const parsed = parse(file, source)
-    for (const { object, key } of textInputStyleRefs(parsed)) {
-      const origin = originOf(mobileDir, parsed, file, object)
-      if (origin === null) {
-        continue
-      }
-      const size = fontSizeOf(mobileDir, origin.file, origin.name, key)
-      if (size !== null && size.text !== SEAM_EXPORT) {
-        offenders.add(`${size.file}:${size.line}`)
-      }
+  for (const entry of textInputStyleResolutions(mobileDir, closure)) {
+    const size = entry.resolved?.size
+    if (size !== undefined && size !== null && size.text !== SEAM_EXPORT) {
+      offenders.add(`${size.file}:${size.line}`)
     }
   }
   return [...offenders].sort((left, right) => {
