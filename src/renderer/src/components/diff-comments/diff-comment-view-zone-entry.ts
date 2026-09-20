@@ -22,6 +22,8 @@ export type DraftZoneEntry = {
   root: Root
   draft: { lineNumber: number; startLine?: number }
   body: string
+  // A save is in flight: the body must not be carried to another card, or the note could post twice.
+  submitting: boolean
   disposeMouseDownStopper: () => void
 }
 

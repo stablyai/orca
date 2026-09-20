@@ -1,5 +1,6 @@
 import type { DiffSection } from './diff-section-types'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
 type DiffSectionCommentTarget = {
   lineNumber: number
@@ -60,7 +61,7 @@ export async function submitDiffSectionComment({
     side: 'modified'
   })
   if (!result) {
-    toast.error('Failed to save comment')
+    toast.error(translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
   }
   return Boolean(result)
 }

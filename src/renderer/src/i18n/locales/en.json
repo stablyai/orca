@@ -15008,6 +15008,7 @@
           "f1aa04b5cf": "This file",
           "8b87612461": "All unsent notes"
         },
+        "diffCommentSaveFailed": "Failed to save comment",
         "DiffSectionBody": {
           "35d6afb5be": "Binary file changed",
           "cef4cf0ff5": "Retry",

@@ -55,8 +55,9 @@ export function installDiffCommentAddNoteShortcut({
   onOpenComposer: (args: { lineNumber: number; startLine?: number; top: number }) => void
 }): () => void {
   return installEditorAddReviewNoteShortcut(editor.getContainerDomNode(), () => {
-    // Why: an open draft consumes the chord itself (DiffCommentPopover's guard); claiming it here
-    // too would remount the composer and drop what the user already typed.
+    // Why: an open draft card owns the chord (isComposerOpen reports it, and the card's own guard
+    // eats presses from its textarea); claiming it here too would re-open the card at the editor's
+    // selection and move what the user already typed.
     if (isComposerOpen()) {
       return true
     }

@@ -44,13 +44,19 @@ export function DiffCommentDraftCard({
 }: DiffCommentDraftCardProps): React.JSX.Element {
   const [body, setBody] = useState(initialBody)
   const bodyRef = useRef(body)
-  bodyRef.current = body
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const onContentResizeRef = useRef(onContentResize)
-  onContentResizeRef.current = onContentResize
+
+  useEffect(() => {
+    bodyRef.current = body
+  }, [body])
+
+  useEffect(() => {
+    onContentResizeRef.current = onContentResize
+  }, [onContentResize])
 
   const labelId = useId()
   const headerLabel =

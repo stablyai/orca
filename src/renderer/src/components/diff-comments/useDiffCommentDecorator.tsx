@@ -102,7 +102,7 @@ export function useDiffCommentDecorator({
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
 
-  const { onAddCommentClickRef } = useDiffCommentDraftZone({
+  const { onAddCommentClickRef, isDraftOpen } = useDiffCommentDraftZone({
     editor,
     monacoModelIdentity,
     onCreateComment,
@@ -172,6 +172,7 @@ export function useDiffCommentDecorator({
     setPendingCommentRange(range)
   }, [pendingLineNumber, pendingStartLine, setPendingCommentRange])
 
+  const hasDraftComposer = onCreateComment !== undefined
   useEffect(() => {
     if (!editor || !addNoteShortcutEnabled) {
       return
@@ -179,11 +180,24 @@ export function useDiffCommentDecorator({
     return installDiffCommentAddNoteShortcut({
       editor,
       commentableLineSet,
-      // A live gutter drag owns the band; opening from the stale editor selection during a drag
-      // would remount the composer before the gesture completes.
+      // An open draft card owns the chord: claiming it here would re-open the card at the editor's
+      // selection and move the user's text. The card mounts synchronously, so a second chord in the
+      // same event turn already sees it. A live gutter drag owns the band the same way; opening
+      // from the stale editor selection during a drag would remount the card mid-gesture.
       isComposerOpen: () =>
-        pendingCommentRangeRef.current !== null || overlayRef.current?.isDragging() === true,
+        isDraftOpen() ||
+        pendingCommentRangeRef.current !== null ||
+        overlayRef.current?.isDragging() === true,
       onOpenComposer: (args) => {
+        // Legacy popover callers commit composer state through React, so claim now or a same-turn
+        // repeat opens a second one; their pendingCommentTarget releases the claim on close. The
+        // inline draft card never passes one, so a claim here would never be released.
+        if (!hasDraftComposer) {
+          setPendingCommentRange({
+            startLine: args.startLine ?? args.lineNumber,
+            endLine: args.lineNumber
+          })
+        }
         onAddCommentClickRef.current(args)
       }
     })
@@ -191,7 +205,10 @@ export function useDiffCommentDecorator({
     addNoteShortcutEnabled,
     commentableLineSet,
     editor,
+    hasDraftComposer,
+    isDraftOpen,
     monacoModelIdentity,
+    onAddCommentClickRef,
     setPendingCommentRange
   ])
 
