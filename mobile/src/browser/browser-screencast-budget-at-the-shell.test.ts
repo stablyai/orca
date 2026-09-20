@@ -10,6 +10,10 @@
  * C6 ruling 2's pin. The frames are generated noise at the budgeted scale rather than a fixture
  * committed to the tree: the budget's worst case is the image JPEG compresses least, and a
  * downloaded photograph would sit a tenth of the way to it and prove nothing.
+ *
+ * Measured at this base, so a later reader can tell drift from a rewrite: the real envelope costs
+ * 303 bytes against a bound of 516, and a frame at the budgeted 901,161 pixels is a 491,132-byte
+ * image the shell posts as 655,147 bytes, 213 under the 655,360-byte cap.
  */
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from '../mobile-web-shell/bridge/bridge-caps'
