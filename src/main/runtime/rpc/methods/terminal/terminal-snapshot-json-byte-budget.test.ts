@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MOBILE_SNAPSHOT_BYTE_BUDGET } from '../../../scrollback-limits'
+import { terminalSnapshotPayloadJsonBytes } from './terminal-snapshot-payload'
 import {
   serializeBudgetedMobileSnapshot,
-  terminalSnapshotPayloadJsonBytes,
   type MobileSnapshotByteBudget
 } from './terminal-snapshot-publication'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
