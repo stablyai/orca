@@ -1688,6 +1688,7 @@
         "runOn": "Run on",
         "addProjectBeforeWorkspace": "Add a project before creating a workspace.",
         "connectProjectFirst": "Connect this project first",
+        "defaultBranchUpdateFailed": "Could not update the project default branch. Try again.",
         "connectSourceLookup": "Connect",
         "reconnectSourceLookup": "Reconnect",
         "setupHostExistingFolderTitle": "Set up {{value0}}",

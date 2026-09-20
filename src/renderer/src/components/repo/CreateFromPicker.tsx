@@ -70,6 +70,7 @@ export function CreateFromPicker({
   const [query, setQuery] = React.useState('')
   const [searchResults, setSearchResults] = React.useState<string[]>([])
   const [isSearching, setIsSearching] = React.useState(false)
+  const listId = React.useId()
   const effectiveDefault = repo?.worktreeBaseRef ?? defaultBaseRef
   const selectedValue = value || DEFAULT_VALUE
   const projectDefaultLabel = translate(
@@ -233,39 +234,46 @@ export function CreateFromPicker({
     }
   }, [repoHostId, repoRuntimeEnvironmentId, open, query, repoId])
 
-  const trigger = compact ? (
-    <button
-      type="button"
-      role="combobox"
-      aria-expanded={!readOnly && open}
-      aria-readonly={readOnly || undefined}
-      aria-label={translate(
-        'auto.components.automations.CreateFromPicker.dd3841b442',
-        'Branch from'
-      )}
-      title={
-        readOnly
-          ? translate(
-              'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
-              'Connect this project first'
-            )
-          : translate('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')
-      }
-      className={cn(
-        'inline-flex h-6 max-w-44 items-center gap-1 rounded-md border border-border bg-muted/30 px-1.5 text-[11px] text-muted-foreground',
-        readOnly
-          ? 'cursor-default opacity-70'
-          : 'cursor-pointer hover:bg-accent hover:text-foreground',
-        'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        triggerClassName
-      )}
-    >
+  const compactTriggerContent = (
+    <>
       <GitBranch className="size-3 shrink-0" aria-hidden="true" />
       <FilePathCursorTooltip path={compactLabel}>
         <span className="min-w-0 truncate font-mono">{compactLabel}</span>
       </FilePathCursorTooltip>
       {!readOnly ? <ChevronsUpDown className="size-3 shrink-0 opacity-60" /> : null}
-    </button>
+    </>
+  )
+  const trigger = compact ? (
+    readOnly ? (
+      <span
+        aria-label={`${translate('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}: ${compactLabel}`}
+        className={cn(
+          'inline-flex h-6 max-w-44 items-center gap-1 rounded-md border border-border bg-muted/30 px-1.5 text-[11px] text-muted-foreground opacity-70',
+          triggerClassName
+        )}
+      >
+        {compactTriggerContent}
+      </span>
+    ) : (
+      <button
+        type="button"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={translate(
+          'auto.components.automations.CreateFromPicker.dd3841b442',
+          'Branch from'
+        )}
+        className={cn(
+          'inline-flex h-6 max-w-44 items-center gap-1 rounded-md border border-border bg-muted/30 px-1.5 text-[11px] text-muted-foreground',
+          'cursor-pointer hover:bg-accent hover:text-foreground',
+          'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          triggerClassName
+        )}
+      >
+        {compactTriggerContent}
+      </button>
+    )
   ) : (
     <Button
       type="button"
@@ -309,7 +317,7 @@ export function CreateFromPicker({
                   'Search repo branches...'
                 )}
               />
-              <CommandList className="max-h-72">
+              <CommandList id={listId} className="max-h-72">
                 <CommandEmpty>
                   {isSearching
                     ? translate(

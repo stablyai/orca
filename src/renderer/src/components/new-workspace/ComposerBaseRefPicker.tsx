@@ -3,6 +3,8 @@ import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
 import { useAppStore } from '@/store'
 import { useRepoMap, useWorktreesForRepo } from '@/store/selectors'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
 type ComposerBaseRefPickerProps = {
   repoId: string
@@ -45,11 +47,19 @@ export function ComposerBaseRefPicker({
           readOnly
             ? undefined
             : async (nextBaseBranch) => {
-                await updateRepo(
+                const updated = await updateRepo(
                   repoId,
                   { worktreeBaseRef: nextBaseBranch },
                   repo ? { hostId: getRepoExecutionHostId(repo) } : undefined
                 )
+                if (!updated) {
+                  toast.error(
+                    translate(
+                      'auto.components.NewWorkspaceComposerCard.defaultBranchUpdateFailed',
+                      'Could not update the project default branch. Try again.'
+                    )
+                  )
+                }
               }
         }
       />
