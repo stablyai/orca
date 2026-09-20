@@ -69,7 +69,9 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   /** A picked item over what this shell stages. Its own code because a page showing "too large"
    *  and one showing "could not read that" send the user to different places. */
   'native_media_too_large',
-  /** The OS denied the library permission the pick asked for, which the user can still grant. */
+  /** A source whose OS permission was denied, which the user can still grant in Settings. No
+   *  source in this build asks for one — the library and Files pickers gate on nothing in
+   *  expo-image-picker 55.0.24 — and it is kept for the first that does. */
   'native_media_permission_denied',
   /** A `native.` method on a `subscribe`, which this seam answers on requests only. */
   'native_verb_not_a_stream'

@@ -77,7 +77,6 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
   })
   const serveMedia = createNativeMediaVerbServer({
     registry,
-    requestLibraryPermission: () => Promise.resolve({ granted: true }),
     launchLibrary: () =>
       Promise.resolve({
         canceled: false,

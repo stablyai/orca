@@ -77,7 +77,6 @@ function harness(
   })
   const serve = createNativeMediaVerbServer({
     registry,
-    requestLibraryPermission: () => Promise.resolve({ granted: true }),
     launchLibrary: () =>
       Promise.resolve({
         canceled: false,
@@ -135,13 +134,6 @@ describe('picking', () => {
       height: 3
     })
     expect(probe.registry.liveCount()).toBe(1)
-  })
-
-  it('refuses a library pick the user denied, by its own name', async () => {
-    const probe = harness({ requestLibraryPermission: () => Promise.resolve({ granted: false }) })
-    await expect(
-      probe.serve('native.media.pick', { source: 'library', multiple: false })
-    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_permission_denied')
   })
 
   it('answers no items when the user cancels, which is not a refusal', async () => {

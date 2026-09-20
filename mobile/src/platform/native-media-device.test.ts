@@ -57,9 +57,9 @@ vi.mock('expo-file-system', () => ({
 }))
 
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
+import { createNativeMediaVerbServer } from './native-media'
 import {
   copyPickedMediaIntoCache,
-  libraryPickNeedsPermission,
   discardStagedMedia,
   nativeMediaDeviceDeps,
   ownsStagedMediaUri
@@ -82,38 +82,32 @@ describe('which uris this shell owns', () => {
   })
 })
 
-describe('which platform needs the library permission', () => {
-  it('asks on iOS and nowhere else', () => {
-    // Verified against expo-image-picker 55.0.24, not recalled. Neither platform's
-    // `launchImageLibraryAsync` checks a permission — `launchCameraAsync` does, and the library
-    // arm goes straight to its contract. On Android `getMediaLibraryPermissions` is an empty array
-    // from API 33, so the request is a no-op that answers granted; below 33 it asks for the legacy
-    // storage permissions the picker never reads, and a denial would refuse a pick the OS would
-    // have completed. iOS keeps the request because the prompt inside `pick` is the shell's, which
-    // is what ruling 6 asked for.
-    expect(libraryPickNeedsPermission('ios')).toBe(true)
-    for (const platform of ['android', 'web', 'windows', 'macos']) {
-      expect(libraryPickNeedsPermission(platform), platform).toBe(false)
+describe('the library permission this shell does not ask for', () => {
+  it('calls no permission API on either platform for a library pick', async () => {
+    // Ruling 6b. Verified in expo-image-picker 55.0.24: `launchImageLibraryAsync` goes straight to
+    // its contract on Android and to `launchImagePicker(.photoLibrary)` on iOS, and only the
+    // camera arm checks anything. The prompt "inside the shell" is the OS picker's own. Asking
+    // first adds a dialog the system does not need and a denial that would refuse a pick the OS
+    // would have completed — on Android below API 33 for storage permissions the picker never
+    // reads, and on iOS for a `PHPickerViewController` that opens without authorization.
+    // Driven through the whole verb, not through `launchLibrary` alone: the request this ruling
+    // removes was made by `pick`, so a case that only called the picker would pass either way.
+    for (const platform of ['ios', 'android']) {
+      expo.platform.value = platform
+      const serve = createNativeMediaVerbServer(
+        nativeMediaDeviceDeps(new MediaHandleRegistry({ now: () => 0, discard: () => {} }))
+      )
+      await expect(
+        serve('native.media.pick', { source: 'library', multiple: false })
+      ).resolves.toEqual({ items: [] })
+      expect(expo.launchImageLibraryAsync, platform).toHaveBeenCalled()
+      expect(expo.requestMediaLibraryPermissionsAsync, platform).not.toHaveBeenCalled()
     }
-  })
-
-  it('skips the request on Android, so a denial cannot refuse a working pick', async () => {
     expo.platform.value = 'android'
-    await expect(deps().requestLibraryPermission()).resolves.toEqual({ granted: true })
-    expect(expo.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled()
   })
 
-  it('makes the request on iOS, and carries a denial back as one', async () => {
-    expo.platform.value = 'ios'
-    try {
-      await expect(deps().requestLibraryPermission()).resolves.toEqual({ granted: true })
-      expect(expo.requestMediaLibraryPermissionsAsync).toHaveBeenCalledTimes(1)
-      expo.requestMediaLibraryPermissionsAsync.mockResolvedValueOnce({ granted: false })
-      await expect(deps().requestLibraryPermission()).resolves.toEqual({ granted: false })
-    } finally {
-      expo.platform.value = 'android'
-      expo.requestMediaLibraryPermissionsAsync.mockClear()
-    }
+  it('offers no permission member at all, so no caller can reintroduce the gate', () => {
+    expect(Object.hasOwn(deps(), 'requestLibraryPermission')).toBe(false)
   })
 })
 

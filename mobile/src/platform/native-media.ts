@@ -17,15 +17,15 @@ import { MobileImageBase64Accumulator } from '../session/mobile-image-base64-acc
 /**
  * The device side of `native.media.pick`, `read` and `release`.
  *
- * The OS permission prompt runs here, inside the shell, which is the whole reason these are verbs:
- * a page served from a custom scheme has no photo library and no Files app, and a picker is the one
- * thing that cannot be handed over as a value. What crosses back is a handle — the bytes follow a
- * chunk at a time, because a picked image reaches `MEDIA_STAGED_MAX_BYTES` and that is three times
- * the reply ceiling.
+ * The OS picker opens here, inside the shell, which is the whole reason these are verbs: a page
+ * served from a custom scheme has no photo library and no Files app, and a picker is the one thing
+ * that cannot be handed over as a value. What crosses back is a handle — the bytes follow a chunk
+ * at a time, because a picked image reaches `MEDIA_STAGED_MAX_BYTES` and that is three times the
+ * reply ceiling.
  *
- * Every device call is injectable for the same reason the clipboard verb's is not: these four have
- * no honest fake inside `expo-image-picker`, and the arms worth pinning — a denied permission, a
- * cancel, an item over the ceiling — are exactly the ones a simulator makes expensive.
+ * Every device call is injectable for the same reason the clipboard verb's is not: these have no
+ * honest fake inside `expo-image-picker`, and the arms worth pinning — a cancel, a provider uri, an
+ * item over the ceiling — are exactly the ones a simulator makes expensive.
  */
 
 /** A staged file as this handler reads it: the shape `expo-file-system`'s `File` already has. */
@@ -52,7 +52,6 @@ type PickerResult = { readonly canceled: boolean; readonly assets?: readonly Pic
 
 export type NativeMediaDeps = {
   readonly registry: MediaHandleRegistry
-  readonly requestLibraryPermission: () => Promise<{ readonly granted: boolean }>
   /** `limit` is the room the registry has left; a picker that can bound its selection must. */
   readonly launchLibrary: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
   readonly launchFiles: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
@@ -172,16 +171,10 @@ export function createNativeMediaVerbServer(
       ])
     }
     if (source === 'library') {
-      // `granted` covers full and limited iOS access; only a hard denial stops the pick, and it
-      // gets a name of its own because a page showing "could not read your library" for a
-      // permission the user can grant in Settings is the wrong thing on screen.
-      const permission = await deps.requestLibraryPermission()
-      if (!permission.granted) {
-        throw new BridgeNativeVerbRefusedError(
-          'native_media_permission_denied',
-          'the photo library permission was denied on this device'
-        )
-      }
+      // No permission request first. Ruling 6b: `launchImageLibraryAsync` gates on nothing in
+      // expo-image-picker 55.0.24 on either platform, so the prompt the shell owns is the OS
+      // picker's own and asking first would only add a dialog the system does not need — plus a
+      // denial that refuses a pick the OS would have completed.
       return stage(readAssets(await deps.launchLibrary({ multiple, limit: room })))
     }
     return stage(readAssets(await deps.launchFiles({ multiple, limit: room })))

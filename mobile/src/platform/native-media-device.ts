@@ -2,7 +2,6 @@ import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
 import { File as FsFile, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
-import { Platform } from 'react-native'
 import type { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
 import type { NativeMediaDeps } from './native-media'
 
@@ -27,26 +26,6 @@ import type { NativeMediaDeps } from './native-media'
  */
 export function ownsStagedMediaUri(uri: string): boolean {
   return uri.startsWith('file:')
-}
-
-/**
- * Whether a library pick has to ask for the media-library permission first.
- *
- * Read from expo-image-picker 55.0.24 rather than from the docs. Neither platform's
- * `launchImageLibraryAsync` gates on a permission: `launchCameraAsync` calls
- * `ensureCameraPermissionsAreGranted` / `hasGrantedPermission` and the library arm goes straight
- * to its contract. On Android `getMediaLibraryPermissions` answers an empty array from API 33
- * (TIRAMISU), so the request prompts nothing and always resolves granted; below 33 it asks for
- * `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, which the system picker never reads — and
- * a denial there would refuse a pick the OS would have completed. So Android does not ask.
- *
- * iOS still does, because the prompt inside `pick` is what ruling 6 asked the shell to own and the
- * photo-library dialog is a real thing a user sees there. Noted for whoever revisits it: with
- * `allowsEditing: false` the iOS path is `launchMultiSelectPicker`, a `PHPickerViewController`,
- * which also opens without authorization — so this request is the ruling's, not the SDK's.
- */
-export function libraryPickNeedsPermission(platform: string): boolean {
-  return platform === 'ios'
 }
 
 /** A cache file name nothing else in this app writes, unique per staged item. */
@@ -87,10 +66,6 @@ export function discardStagedMedia(uri: string): void {
 export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMediaDeps {
   return {
     registry,
-    requestLibraryPermission: () =>
-      libraryPickNeedsPermission(Platform.OS)
-        ? ImagePicker.requestMediaLibraryPermissionsAsync()
-        : Promise.resolve({ granted: true }),
     // `selectionLimit` is the registry's remaining room, never 0: zero means unlimited to the OS
     // picker, and an unlimited selection is one the registry refuses after the OS has already
     // copied every asset into the cache. `pick` refuses an empty room before reaching here.
