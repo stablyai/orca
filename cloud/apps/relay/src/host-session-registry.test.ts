@@ -160,11 +160,13 @@ function createRegistry(
   const assignments = {
     activateControl,
     markMigrationTargetRegistered: vi.fn().mockResolvedValue(undefined),
-    resolve: vi.fn().mockResolvedValue({ cellId: config.cellId }),
+    resolve: vi.fn().mockResolvedValue({ cellId: config.cellId, lastHostCloseReason: null }),
     acquireActivity,
     renewControlActivity,
     renewControlActivities,
-    releaseActivity
+    releaseActivity,
+    recordHostCloseReason: vi.fn().mockResolvedValue(null),
+    clearHostCloseReason: vi.fn().mockResolvedValue(undefined)
   } as unknown as RelayAssignmentStore
   const observer = {
     recordAuth: vi.fn(),

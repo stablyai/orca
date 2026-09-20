@@ -94,10 +94,12 @@ function harness(options: { random?: () => number; now?: () => number } = {}) {
   const assignments = {
     activateControl: vi.fn().mockResolvedValue('control:production-gce-c3:1'),
     markMigrationTargetRegistered: vi.fn().mockResolvedValue(undefined),
-    resolve: vi.fn().mockResolvedValue({ cellId: config.cellId }),
+    resolve: vi.fn().mockResolvedValue({ cellId: config.cellId, lastHostCloseReason: null }),
     acquireActivity,
     renewControlActivity: vi.fn().mockResolvedValue(undefined),
-    releaseActivity
+    releaseActivity,
+    recordHostCloseReason: vi.fn().mockResolvedValue(null),
+    clearHostCloseReason: vi.fn().mockResolvedValue(undefined)
   } as unknown as RelayAssignmentStore
   const store = {
     resolveResume: vi.fn().mockResolvedValue({ userId: identity.sub }),

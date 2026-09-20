@@ -220,6 +220,11 @@ CREATE TABLE IF NOT EXISTS relay_assignments (
   pending_installs BIGINT NOT NULL,
   pending_confirmations BIGINT NOT NULL,
   migration_leases BIGINT NOT NULL,
+  -- Why the assignment row: the reason outlives the cell process that saw the close, and any
+  -- cell the host is later assigned to reads the same row. Only a known member is ever stored
+  -- and NULL means unknown, which is what every host that names no cause leaves behind.
+  last_host_close_reason TEXT,
+  last_host_close_reason_at BIGINT,
   PRIMARY KEY (user_id, relay_host_id)
 );
 
@@ -676,6 +681,18 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
      DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`,
   `ALTER TABLE relay_control_capabilities ADD COLUMN IF NOT EXISTS idle_regional_rehome BIGINT NOT NULL DEFAULT 0`,
   `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS source_generation BIGINT NOT NULL DEFAULT 0`,
+  // Nullable and without a default, so each is a catalog write rather than a table rewrite: the
+  // ACCESS EXCLUSIVE lock is held for the catalog row only, not for a scan of relay_assignments.
+  // Deferrable because holding it is not the same as getting it: relay_assignments is written
+  // continuously by the whole fleet, every instance sends this on the one boot after the deploy,
+  // and a lock timeout here would otherwise fail the boot and re-queue the same DDL behind the
+  // same writers. Nothing a boot does depends on it: both reads go through `SELECT *` and report
+  // no close reason when the columns are missing, and both writes are best effort and logged, so
+  // a deferred boot serves phones exactly as it did before these columns existed.
+  `-- schema-deferrable: relay_assignments is under continuous fleet-wide write
+   ALTER TABLE relay_assignments ADD COLUMN IF NOT EXISTS last_host_close_reason TEXT`,
+  `-- schema-deferrable: paired with the column above, and useless without it
+   ALTER TABLE relay_assignments ADD COLUMN IF NOT EXISTS last_host_close_reason_at BIGINT`,
   // Dropped, not created: see the comment on relay_assignment_activity_leases. Deferrable because
   // this is the one boot where it has to take ACCESS EXCLUSIVE on a table under continuous write,
   // and all 28 directors reach it at once; a lock timeout here must not restart the instance, which
@@ -1151,13 +1168,15 @@ async function applySchema(database: RelayDatabase): Promise<void> {
   for (const statement of SCHEMA.split(';')) {
     if (statement.trim()) await database.query(statement)
   }
-  for (const [table, column] of [
-    ['relay_control_capabilities', 'idle_regional_rehome'],
-    ['relay_region_rehome_attempts', 'source_generation']
+  for (const [table, column, type] of [
+    ['relay_control_capabilities', 'idle_regional_rehome', 'BIGINT NOT NULL DEFAULT 0'],
+    ['relay_region_rehome_attempts', 'source_generation', 'BIGINT NOT NULL DEFAULT 0'],
+    ['relay_assignments', 'last_host_close_reason', 'TEXT'],
+    ['relay_assignments', 'last_host_close_reason_at', 'BIGINT']
   ]) {
     const columns = await database.query('SELECT name FROM pragma_table_info(?)', [table])
     if (!columns.some((existing) => existing.name === column)) {
-      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} BIGINT NOT NULL DEFAULT 0`)
+      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
     }
   }
 }
