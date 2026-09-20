@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  terminalStreamJsonByteLength,
-  terminalStreamJsonByteLengthExceeds
-} from './terminal-stream-json-byte-length'
+import { terminalStreamJsonByteLength } from './terminal-stream-json-byte-length'
 
 /**
  * The scan, checked against the serializer it is standing in for.
@@ -52,28 +49,5 @@ describe('the JSON size of a terminal payload', () => {
     expect(terminalStreamJsonByteLength(screen)).toBeGreaterThan(
       Buffer.byteLength(screen, 'utf8') * 1.4
     )
-  })
-})
-
-describe('the bounded form', () => {
-  it('stops as soon as the answer is decided, and answers the same', () => {
-    const screen = '\u001b[0m'.repeat(10_000)
-    const full = terminalStreamJsonByteLength(screen)
-    expect(terminalStreamJsonByteLengthExceeds(screen, full)).toBe(false)
-    expect(terminalStreamJsonByteLengthExceeds(screen, full - 1)).toBe(true)
-  })
-
-  it('reads a bound it cannot compare against as no bound at all', () => {
-    // `Infinity` is how the callers spell "no ceiling", and a scan that stopped there would answer
-    // for a prefix rather than for the string.
-    expect(terminalStreamJsonByteLengthExceeds('anything', Number.POSITIVE_INFINITY)).toBe(false)
-    expect(terminalStreamJsonByteLength('anything', { stopAfterBytes: Number.NaN })).toBe(
-      Buffer.byteLength(JSON.stringify('anything'), 'utf8')
-    )
-  })
-
-  it('never reports a short string as over a bound it fits', () => {
-    expect(terminalStreamJsonByteLengthExceeds('', 0)).toBe(true)
-    expect(terminalStreamJsonByteLengthExceeds('', 2)).toBe(false)
   })
 })

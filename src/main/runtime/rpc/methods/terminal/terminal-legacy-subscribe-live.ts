@@ -3,6 +3,7 @@ import {
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal-stream-protocol'
 import {
+  mobileSnapshotByteBudget,
   sendMobileResizeRestream,
   sendSnapshotFrames,
   serializeStableMobileRendererSnapshot
@@ -30,7 +31,11 @@ export function activateLegacyBinarySubscription(
         const recovery = await serializeStableMobileRendererSnapshot(
           runtime,
           ptyId,
-          params.snapshotByteBudget
+          mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+            kind: 'resized',
+            displayMode: state.displayMode,
+            reason: 'pending-output-overflow'
+          })
         )
         if (state.closed) {
           return
@@ -101,7 +106,11 @@ export function activateLegacyBinarySubscription(
         state.sendFrame,
         event,
         () => !state.closed && state.resizeGeneration === eventGeneration,
-        params.snapshotByteBudget
+        mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+          kind: 'resized',
+          displayMode: event.displayMode,
+          reason: event.reason
+        })
       )
         .then((restreamed) => {
           if (state.closed || state.resizeGeneration !== eventGeneration) {

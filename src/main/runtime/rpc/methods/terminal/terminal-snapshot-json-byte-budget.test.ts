@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MOBILE_SNAPSHOT_BYTE_BUDGET } from '../../../scrollback-limits'
-import { terminalStreamJsonByteLength } from '../../../../../shared/terminal-stream-json-byte-length'
-import { serializeBudgetedMobileSnapshot } from './terminal-snapshot-publication'
+import {
+  serializeBudgetedMobileSnapshot,
+  terminalSnapshotPayloadJsonBytes,
+  type MobileSnapshotByteBudget
+} from './terminal-snapshot-publication'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { SerializedSnapshot } from './terminal-stream-types'
 
 /**
  * The first frame of a page terminal, which today ends the stream before a byte is painted.
@@ -56,15 +60,86 @@ function denseRuntime(): Pick<OrcaRuntimeService, 'serializeTerminalBuffer'> {
 }
 
 /**
- * A subscriber with a 640 KiB frame cap, which is the page's.
+ * The budget the page really sends, and the stream it is published on.
  *
- * Written here rather than imported: this host does not know the bridge and must not, because the
- * budget is a parameter and a client with a different transport has a different one. The page
- * derives its own number from `BRIDGE_MAX_MESSAGE_BYTES` and pins it there; what is checked here
- * is that this side honours whatever it is handed.
+ * Restated rather than imported: the page is a different program with a different tsconfig, and
+ * this host must not know what a bridge is — the budget is a parameter, and a client with another
+ * transport has another one. The number is pinned on the page's side in
+ * `mobile/src/session/terminal-snapshot-byte-budget.web.test.ts`, so a drift is a red line there
+ * rather than a stream that ends on a device.
  */
-const SUBSCRIBER_FRAME_CAP = 640 * 1024
-const PAGE_BUDGET = SUBSCRIBER_FRAME_CAP - 88
+const PAGE_BUDGET = 655_273
+const STREAM_ID = 7
+
+/** What the caller will publish with, which the budget needs because it builds the payload. */
+const PUBLICATION = { kind: 'scrollback', displayMode: 'auto' } as const
+
+function budget(bytes: number): MobileSnapshotByteBudget {
+  return { bytes, streamId: STREAM_ID, frame: { ...PUBLICATION } }
+}
+
+/** The payload as the host will publish it, measured the way the host measures it. */
+function publishedPayloadBytes(serialized: NonNullable<SerializedSnapshot>): number {
+  return terminalSnapshotPayloadJsonBytes(
+    {
+      ...PUBLICATION,
+      cols: serialized.cols,
+      rows: serialized.rows,
+      seq: serialized.seq,
+      cwd: serialized.cwd,
+      source: serialized.source,
+      oscLinks: serialized.oscLinks,
+      truncated: false,
+      truncatedByByteBudget: serialized.truncatedByByteBudget,
+      data: serialized.data
+    },
+    STREAM_ID
+  )
+}
+
+/** The `cwd` a real subscription carries, long enough that the metadata is not rounding error. */
+const CWD = '/srv/checkouts/a-repository/packages/a-workspace/deeply/nested/leaf'
+
+/**
+ * A runtime whose screen is sized so round one's measure lands on exactly the budget.
+ *
+ * Round one summed the escaped text and four fields. Plain ASCII escapes to its own length plus the
+ * two quotes, so the screen below makes that sum exactly `PAGE_BUDGET` — accepted, and at the first
+ * candidate, so `truncatedByByteBudget` is false and nothing says it was trimmed. What the host
+ * then publishes is that text plus `kind`, `cols`, `rows`, `requestId`, `displayMode`, `reason`,
+ * `seq`, both truncation flags, the `type` and `streamId` the client adds, the `serialized` key and
+ * the object's own braces. That is the frame the reviewer measured at 655,529 against a
+ * 655,360-byte cap.
+ */
+function exactlyAtRoundOnesBudgetRuntime(): Pick<OrcaRuntimeService, 'serializeTerminalBuffer'> {
+  const metaBytes = Buffer.byteLength(
+    JSON.stringify({
+      cwd: CWD,
+      oscLinks: [],
+      pendingEscapeTailAnsi: undefined,
+      source: 'headless'
+    }),
+    'utf8'
+  )
+  const fullLength = PAGE_BUDGET - 2 - metaBytes
+  return {
+    // Shrinks with the row count, so the trim below has something to trim; at the first candidate
+    // it is exactly the screen round one accepted.
+    serializeTerminalBuffer: vi.fn(
+      async (_ptyId: string, options?: { scrollbackRows?: number }) => ({
+        data: 'x'.repeat(
+          Math.floor((fullLength * Math.min(options?.scrollbackRows ?? 0, 1000)) / 1000)
+        ),
+        cols: COLUMNS,
+        rows: 24,
+        seq: 4_294_967_295,
+        cwd: CWD,
+        source: 'headless' as const,
+        oscLinks: []
+      })
+    )
+  }
+}
 
 describe('the mobile snapshot the page receives', () => {
   it('reproduces the defect: the raw budget lets a screen past the frame cap', async () => {
@@ -73,19 +148,56 @@ describe('the mobile snapshot the page receives', () => {
     const data = serialized?.data ?? ''
     // Under the budget the desktop applies, which is measured on the text.
     expect(Buffer.byteLength(data, 'utf8')).toBeLessThanOrEqual(MOBILE_SNAPSHOT_BYTE_BUDGET)
-    // And over the cap the bridge applies, which is measured on the frame.
-    expect(terminalStreamJsonByteLength(data)).toBeGreaterThan(SUBSCRIBER_FRAME_CAP)
+    // And over the cap the bridge applies, which is measured on the whole published payload.
+    expect(publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)).toBeGreaterThan(
+      PAGE_BUDGET
+    )
   })
 
-  it('comes back inside the frame cap when the subscriber names its budget', async () => {
+  /**
+   * The case the first round's measure could not see.
+   *
+   * It summed the text and four fields, so a snapshot it accepted at exactly the budget published
+   * 169 bytes over a 655,360-byte cap and the stream ended with `overflow` before a byte was
+   * painted. Measured here against the payload the host really builds, which is the only measure
+   * that cannot be wrong by a field.
+   */
+  it('accepts nothing whose published payload is over the budget', async () => {
     const serialized = await serializeBudgetedMobileSnapshot(
       denseRuntime(),
       'pty-1',
       true,
-      PAGE_BUDGET
+      budget(PAGE_BUDGET)
     )
     expect(serialized).not.toBeNull()
-    expect(terminalStreamJsonByteLength(serialized?.data ?? '')).toBeLessThanOrEqual(PAGE_BUDGET)
+    expect(
+      publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)
+    ).toBeLessThanOrEqual(PAGE_BUDGET)
+  })
+
+  /**
+   * The metadata is counted, not the text alone, and a long `requestId` is part of it.
+   *
+   * The reviewer's reproduction used an 8-character request id and a 24-character one, 169 and 247
+   * bytes over. A budget that ignored the publication fields answers the same for both; one that
+   * builds the payload cannot.
+   */
+  it('trims further when the publication carries more metadata', async () => {
+    const runtime = denseRuntime()
+    const [plain, withRequestId] = await Promise.all([
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, budget(PAGE_BUDGET)),
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, {
+        bytes: PAGE_BUDGET,
+        streamId: STREAM_ID,
+        frame: { ...PUBLICATION, reason: 'a-reason-of-some-length', requestId: 999_999_999 }
+      })
+    ])
+    expect(publishedPayloadBytes(plain as NonNullable<SerializedSnapshot>)).toBeLessThanOrEqual(
+      PAGE_BUDGET
+    )
+    expect(
+      publishedPayloadBytes(withRequestId as NonNullable<SerializedSnapshot>)
+    ).toBeLessThanOrEqual(PAGE_BUDGET)
   })
 
   it('says it trimmed, so the screen can tell a short scrollback from a whole one', async () => {
@@ -93,40 +205,86 @@ describe('the mobile snapshot the page receives', () => {
       denseRuntime(),
       'pty-1',
       true,
-      PAGE_BUDGET
+      budget(PAGE_BUDGET)
     )
     expect(serialized?.truncatedByByteBudget).toBe(true)
   })
 
   it('leaves a subscriber that named no budget on the raw byte rule', async () => {
-    // The compatibility half. An older page, and every socket client, sends no field and is served
-    // exactly what it was served before: the JSON size is not its transport's problem.
+    // The compatibility half. An older page, and every socket client, sends no budget and is served
+    // exactly what it was served before: the payload size is not its transport's problem.
     const runtime = denseRuntime()
     const [withoutBudget, withBudget] = await Promise.all([
       serializeBudgetedMobileSnapshot(runtime, 'pty-1', true),
-      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, PAGE_BUDGET)
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, budget(PAGE_BUDGET))
     ])
     expect(withoutBudget?.scrollbackRows).toBeGreaterThan(withBudget?.scrollbackRows ?? 0)
   })
 
-  it('counts the metadata the subscriber cannot bound, not only the text', async () => {
-    // `cwd`, the OSC-link list and the pending escape tail have no ceiling a client knows, so the
-    // page's budget leaves room for them and this side is what spends it. A budget that measured
-    // the text alone would hand back a payload that does not fit with a long path in it.
-    const runtime = denseRuntime()
-    const serialized = await serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, PAGE_BUDGET)
-    const textOnly = terminalStreamJsonByteLength(serialized?.data ?? '')
-    const withMeta =
-      textOnly +
-      Buffer.byteLength(
-        JSON.stringify({
-          cwd: serialized?.cwd,
-          oscLinks: serialized?.oscLinks,
-          pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-          source: serialized?.source
-        }),
-        'utf8'
-      )
-    expect(withMeta).toBeLessThanOrEqual(PAGE_BUDGET)
+  /**
+   * A budget smaller than the metadata alone, which is a subscriber this host cannot serve.
+   *
+   * It walks to zero scrollback and publishes the smallest screen it has rather than an empty one,
+   * with the trim flagged. The payload is still over, and that is the subscriber's own transport to
+   * answer for: C0.3 ends the stream and the page shows its stream-error state. Recorded here so
+   * the behaviour is a decision rather than something read off a stack trace later.
+   */
+  it('bottoms out at zero scrollback rather than refusing, and still says it trimmed', async () => {
+    const serialized = await serializeBudgetedMobileSnapshot(
+      denseRuntime(),
+      'pty-1',
+      true,
+      budget(16)
+    )
+    expect(serialized).not.toBeNull()
+    expect(serialized?.scrollbackRows).toBe(0)
+    expect(serialized?.truncatedByByteBudget).toBe(true)
+    expect(publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)).toBeGreaterThan(16)
+  })
+})
+
+describe('a snapshot that round one accepted at exactly the budget', () => {
+  /**
+   * The blocker, as a number rather than as a claim.
+   *
+   * This is the frame the host would post. It is over the cap by the fields a summed measure never
+   * counted, and every one of them is in the payload the client assembles.
+   */
+  it('publishes a payload over the budget when nothing trims it', async () => {
+    const runtime = exactlyAtRoundOnesBudgetRuntime()
+    const untrimmed = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    if (untrimmed === null) {
+      throw new Error('the fixture serialized nothing')
+    }
+    const published = terminalSnapshotPayloadJsonBytes(
+      {
+        ...PUBLICATION,
+        cols: untrimmed.cols,
+        rows: untrimmed.rows,
+        seq: untrimmed.seq,
+        cwd: untrimmed.cwd,
+        source: untrimmed.source,
+        oscLinks: untrimmed.oscLinks,
+        truncated: false,
+        truncatedByByteBudget: false,
+        data: untrimmed.data
+      },
+      STREAM_ID
+    )
+    expect(published).toBeGreaterThan(PAGE_BUDGET)
+  })
+
+  it('is trimmed by the measure that builds the payload, and says so', async () => {
+    const serialized = await serializeBudgetedMobileSnapshot(
+      exactlyAtRoundOnesBudgetRuntime(),
+      'pty-1',
+      true,
+      budget(PAGE_BUDGET)
+    )
+    expect(serialized).not.toBeNull()
+    expect(
+      publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)
+    ).toBeLessThanOrEqual(PAGE_BUDGET)
+    expect(serialized?.truncatedByByteBudget).toBe(true)
   })
 })

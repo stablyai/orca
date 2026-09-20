@@ -8,9 +8,9 @@
  * crosses 1.4x. A 512 KiB budgeted snapshot serializes past 640 KiB and the stream that carries it
  * ends before its first live byte.
  *
- * Scanned rather than serialized. `JSON.stringify` on a half-megabyte snapshot builds a copy of it,
- * and the trimming loop asks this question once per candidate row count; the scan reads the string
- * in place and stops as soon as the answer is decided.
+ * Scanned rather than serialized, because its caller asks per output chunk on a hot stream and a
+ * `JSON.stringify` per chunk would copy every byte the terminal prints. The desktop's snapshot
+ * budget does serialize, on purpose: it runs once per attach and must not be wrong by a field.
  */
 
 /** `\b \t \n \f \r` have two-character escapes; every other control character costs `\uXXXX`. */
@@ -32,18 +32,8 @@ const LOW_SURROGATE_END = 0xdfff
  * `\uXXXX` for every other control, and — since ES2019's well-formed JSON.stringify — `\uXXXX` for
  * a lone surrogate, which a snapshot cut mid-character can carry. A surrogate pair is one scalar
  * and four UTF-8 bytes across its two code units.
- *
- * `stopAfterBytes` ends the scan as soon as the total is past it; the number returned is then only
- * known to be at least that, which is all a caller asking "does this fit" reads.
  */
-export function terminalStreamJsonByteLength(
-  data: string,
-  options: { stopAfterBytes?: number } = {}
-): number {
-  const limit =
-    typeof options.stopAfterBytes === 'number' && Number.isFinite(options.stopAfterBytes)
-      ? options.stopAfterBytes
-      : null
+export function terminalStreamJsonByteLength(data: string): number {
   let bytes = QUOTE_BYTES
   for (let index = 0; index < data.length; index += 1) {
     const unit = data.charCodeAt(index)
@@ -69,17 +59,6 @@ export function terminalStreamJsonByteLength(
     } else {
       bytes += 3
     }
-    if (limit !== null && bytes > limit) {
-      return bytes
-    }
   }
   return bytes
-}
-
-/** Whether the snapshot's JSON form is past `maxBytes`, without measuring any further than that. */
-export function terminalStreamJsonByteLengthExceeds(data: string, maxBytes: number): boolean {
-  if (!Number.isFinite(maxBytes)) {
-    return false
-  }
-  return terminalStreamJsonByteLength(data, { stopAfterBytes: maxBytes }) > maxBytes
 }

@@ -1,4 +1,5 @@
 import {
+  mobileSnapshotByteBudget,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot,
   serializeStableMobileRendererSnapshot
@@ -49,7 +50,10 @@ export async function publishLegacyBinaryInitialSnapshot(
     runtime,
     ptyId,
     isMobile,
-    params.snapshotByteBudget
+    mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+      kind: 'scrollback',
+      displayMode: state.displayMode
+    })
   )
   if (state.closed) {
     return
@@ -103,7 +107,11 @@ export async function publishLegacyBinaryInitialSnapshot(
       const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
         runtime,
         ptyId,
-        params.snapshotByteBudget
+        mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+          kind: 'resized',
+          displayMode: state.displayMode,
+          reason: 'renderer-recovery'
+        })
       )
       if (state.closed) {
         return
@@ -136,7 +144,10 @@ export async function publishLegacyBinaryInitialSnapshot(
       runtime,
       ptyId,
       isMobile,
-      params.snapshotByteBudget
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+        kind: 'scrollback',
+        displayMode: state.displayMode
+      })
     )
     if (state.closed) {
       return
@@ -200,7 +211,10 @@ export async function publishLegacyBinaryInitialSnapshot(
       runtime,
       ptyId,
       isMobile,
-      params.snapshotByteBudget
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+        kind: 'scrollback',
+        displayMode: state.displayMode
+      })
     )
     if (state.closed) {
       return
