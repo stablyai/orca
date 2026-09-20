@@ -1,4 +1,5 @@
 import { formatAgentImagePath } from '../../../src/shared/agent-image-paste'
+import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from './mobile-clipboard-image-upload-chunk'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
   clipboardImageSaveAsTempFile,
@@ -10,7 +11,8 @@ import {
 } from './mobile-clipboard-image-operations'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
-export const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+/** Re-exported so the upload path's own importers keep one name for it. */
+export { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS }
 export const MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES = 1
 // Why: PNG bytes don't scale exactly with pixel area, so undershoot the target on

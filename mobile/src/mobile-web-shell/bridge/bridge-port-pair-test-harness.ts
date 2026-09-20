@@ -152,6 +152,23 @@ function readAll<TMessage>(
   })
 }
 
+/** One answer per row of the verb table. Adding a verb without a row here is a refusal a case
+ *  would have to read as a result shape the shell does not declare. */
+function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
+  switch (verb) {
+    case 'native.clipboard.write':
+      return { written: true }
+    case 'native.clipboard.read':
+      return { value: 'pasteboard' }
+    case 'native.media.pick':
+      return { items: [] }
+    case 'native.media.read':
+      return { base64: '', eof: true }
+    case 'native.media.release':
+      return { released: false }
+  }
+}
+
 export function createBridgePortPair<TRpc extends RpcClient>(
   options: BridgePortPairOptions<TRpc>
 ): BridgePortPair<TRpc> {
@@ -186,11 +203,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
     // The pair has no device: what a test reads here is that the host answered without forwarding.
+    // Each verb gets a shape its own row declares, so a case that calls one it did not configure
+    // reads an answer rather than `native_verb_result`, which is a shell bug's code.
     serveNativeVerb: (verb, params) =>
-      options.serveNativeVerb?.(verb, params) ??
-      Promise.resolve(
-        verb === 'native.clipboard.write' ? { written: true } : { value: 'pasteboard' }
-      ),
+      options.serveNativeVerb?.(verb, params) ?? Promise.resolve(defaultVerbAnswer(verb)),
     onNavigateBack: () => {
       // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
       backPops.push('popped')

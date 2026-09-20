@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 
-vi.mock('react', () => ({ useCallback: (callback: unknown) => callback }))
+// `useMemo` joins `useCallback` because the paste now reads the clipboard through the platform
+// seam, which is a hook. Called rather than cached: this test mounts nothing, so there is no
+// render to hold a value across.
+vi.mock('react', () => ({
+  useCallback: (callback: unknown) => callback,
+  useMemo: (factory: () => unknown) => factory()
+}))
 vi.mock('expo-clipboard', () => ({
   getStringAsync: async () => '',
   getImageAsync: async () => ({ data: 'png' })

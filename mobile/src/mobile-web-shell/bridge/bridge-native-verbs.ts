@@ -1,4 +1,12 @@
 import { z } from 'zod'
+import {
+  mediaPickParamsSchema,
+  mediaPickResultSchema,
+  mediaReadParamsSchema,
+  mediaReadResultSchema,
+  mediaReleaseParamsSchema,
+  mediaReleaseResultSchema
+} from './bridge-media-verbs'
 
 /**
  * The shell-answered request seam: what a `native.` method is, and every verb there is.
@@ -18,18 +26,25 @@ import { z } from 'zod'
 export const BRIDGE_NATIVE_METHOD_PREFIX = 'native.'
 
 /** Every verb this shell serves. The table below must cover exactly these, or it does not compile. */
-export const BRIDGE_NATIVE_VERB_NAMES = ['native.clipboard.write', 'native.clipboard.read'] as const
+export const BRIDGE_NATIVE_VERB_NAMES = [
+  'native.clipboard.write',
+  'native.clipboard.read',
+  'native.media.pick',
+  'native.media.read',
+  'native.media.release'
+] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
 
 /**
- * Broad on first addition, per the plan's rule: the shape admits an image because a later build
- * will serve one, not because this one does. `image` is refused by name, and the reason says the
- * verb is out of scope here rather than unavailable — `expo-clipboard` implements
- * `getImageAsync`/`setImageAsync`, so a reason claiming the platform cannot would mislead whoever
- * adds it.
+ * Text, and only text: an image on the pasteboard is `native.media.pick { source: 'clipboard' }`.
+ *
+ * The shape was broad on first addition so a later build could serve an image without a contract
+ * change. That build is the media verbs, and it does not serve one the way this verb would have
+ * had to — inline, against a 24 MiB base64 ceiling and an 8 MiB reply cap — so the image arm is
+ * retired here rather than left standing as a refusal pointing at nothing.
  */
-export const BRIDGE_CLIPBOARD_MIMES = ['text', 'image'] as const
+export const BRIDGE_CLIPBOARD_MIMES = ['text'] as const
 
 export type BridgeClipboardMime = (typeof BRIDGE_CLIPBOARD_MIMES)[number]
 
@@ -70,6 +85,20 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.clipboard.read': {
     params: clipboardReadParamsSchema,
     result: clipboardReadResultSchema
+  },
+  // The staged-handle trio. Their shapes live beside each other in `bridge-media-verbs.ts`: the
+  // three are one contract, and a handle is meaningless without the verb that minted it.
+  'native.media.pick': {
+    params: mediaPickParamsSchema,
+    result: mediaPickResultSchema
+  },
+  'native.media.read': {
+    params: mediaReadParamsSchema,
+    result: mediaReadResultSchema
+  },
+  'native.media.release': {
+    params: mediaReleaseParamsSchema,
+    result: mediaReleaseResultSchema
   }
 }
 

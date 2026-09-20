@@ -1,8 +1,10 @@
 /** The decision the seam makes before anything is dispatched, as a function of its inputs. */
 import { describe, expect, it } from 'vitest'
+import { BRIDGE_MEDIA_READ_MAX_BYTES } from './bridge-media-verbs'
 import {
   BRIDGE_NATIVE_METHOD_PREFIX,
   BRIDGE_NATIVE_VERB_NAMES,
+  BRIDGE_NATIVE_VERBS,
   isBridgeNativeMethod,
   readBridgeNativeVerbCall
 } from './bridge-native-verbs'
@@ -82,14 +84,87 @@ describe('reading a native verb call', () => {
     }
   })
 
-  it('takes an image on the wire, because the shape is broad and the handler is not', () => {
-    // The mime is valid here and refused by the handler: that is what lets a later build serve it
-    // without a contract change.
+  it('no longer takes an image on the clipboard verb, because a verb now serves one', () => {
+    // The broad shape was there so a later build could serve an image without a contract change.
+    // `native.media.pick { source: 'clipboard' }` is that build, and it stages the image rather
+    // than inlining it, so the clipboard verb is a text verb and says so at the wire.
     const read = readBridgeNativeVerbCall({
       method: 'native.clipboard.read',
       granted: ALL,
       params: { mime: 'image' }
     })
-    expect(read.ok).toBe(true)
+    expect(read.ok).toBe(false)
+    expect(read.ok === false && read.refusal).toBe('invalid-params')
+  })
+})
+
+describe('the media verbs on the same seam', () => {
+  it('serves all three, and each is a grant name of its own', () => {
+    expect([...BRIDGE_NATIVE_VERB_NAMES]).toEqual([
+      'native.clipboard.write',
+      'native.clipboard.read',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release'
+    ])
+  })
+
+  it('answers each verb with the params it parsed', () => {
+    expect(
+      readBridgeNativeVerbCall({
+        method: 'native.media.pick',
+        granted: ALL,
+        params: { source: 'clipboard', multiple: false }
+      })
+    ).toEqual({
+      ok: true,
+      verb: 'native.media.pick',
+      params: { source: 'clipboard', multiple: false }
+    })
+    expect(
+      readBridgeNativeVerbCall({
+        method: 'native.media.read',
+        granted: ALL,
+        params: { handle: 'media-1', offset: 0, length: 16 }
+      }).ok
+    ).toBe(true)
+    expect(
+      readBridgeNativeVerbCall({
+        method: 'native.media.release',
+        granted: ALL,
+        params: { handle: 'media-1' }
+      }).ok
+    ).toBe(true)
+  })
+
+  it('refuses a chunk longer than the upload path sends, before a file is opened', () => {
+    const read = readBridgeNativeVerbCall({
+      method: 'native.media.read',
+      granted: ALL,
+      params: { handle: 'media-1', offset: 0, length: BRIDGE_MEDIA_READ_MAX_BYTES + 1 }
+    })
+    expect(read.ok).toBe(false)
+    expect(read.ok === false && read.refusal).toBe('invalid-params')
+  })
+
+  it('refuses each media verb to a page granted only the clipboard', () => {
+    for (const method of ['native.media.pick', 'native.media.read', 'native.media.release']) {
+      const read = readBridgeNativeVerbCall({
+        method,
+        granted: ['native.clipboard.read'],
+        params: { source: 'library', multiple: false }
+      })
+      expect(read.ok, method).toBe(false)
+      expect(read.ok === false && read.refusal).toBe('ungranted')
+    }
+  })
+
+  it('declares a result for every verb, so a handler cannot answer a shape the page will not read', () => {
+    for (const verb of BRIDGE_NATIVE_VERB_NAMES) {
+      expect(BRIDGE_NATIVE_VERBS[verb].result.safeParse(undefined).success, verb).toBe(false)
+    }
+    expect(BRIDGE_NATIVE_VERBS['native.media.pick'].result.safeParse({ items: [] }).success).toBe(
+      true
+    )
   })
 })

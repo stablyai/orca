@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   implementedPageRoutes,
   matchesRoutePattern,
@@ -81,8 +82,39 @@ describe('the grants this app implements', () => {
       'externalLink',
       'screencastBinary',
       'native.clipboard.write',
-      'native.clipboard.read'
+      'native.clipboard.read',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release'
     ])
+  })
+
+  /**
+   * Every grant this shell advertises, run through the schema a desktop parses a manifest with.
+   *
+   * The schema itself, not a copy of its pattern: `bundled-mobile-web-bundle.ts` parses the whole
+   * manifest, so one grant name the pattern refuses is not a route that degrades to native — it is
+   * a bundle the phone rejects entire. A verb this shell serves and no manifest may name is a verb
+   * no route can ever be granted, which is the same as not having it.
+   */
+  it('names only grants a manifest route may actually carry', () => {
+    for (const grant of MOBILE_WEB_SHELL_GRANTS) {
+      expect(
+        MobileWebBundleRouteSchema.safeParse({ pathname: '/h/[hostId]', grants: [grant] }).success,
+        grant
+      ).toBe(true)
+    }
+  })
+
+  it('names every verb in the table there too, so the two lists cannot drift apart', () => {
+    // The grant list spreads the verb tuple today. Read both anyway: the spread is what makes them
+    // agree, and a build that stopped spreading would leave this the only thing that noticed.
+    expect(
+      MobileWebBundleRouteSchema.safeParse({
+        pathname: '/h/[hostId]',
+        grants: [...BRIDGE_NATIVE_VERB_NAMES]
+      }).success
+    ).toBe(true)
   })
 
   /** The route C7 will declare, served by a shell that has the lane. The name's shape is the host

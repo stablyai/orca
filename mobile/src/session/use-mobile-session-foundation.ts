@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
 import {
@@ -33,7 +34,7 @@ export function useMobileSessionFoundation() {
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:') // Synthetic ids have no repo scope.
   // Why: the floating sentinel has no repo/worktree, so repo-backed surfaces hide.
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
-  const router = useRouter()
+  const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
   const { client, clientId, state: connState } = useHostClient(hostId)

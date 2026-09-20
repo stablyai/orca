@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { BackHandler, Keyboard } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardWriter } from '../platform/clipboard'
 import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
@@ -23,6 +23,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     showToast,
     readMarkdownTab
   } = scope
+  const clipboard = useClipboardWriter()
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
     setMarkdownDocs((prev) => {
       const current = prev.get(tabId)
@@ -46,11 +47,20 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
       if (current?.status !== 'ready') {
         return
       }
-      await Clipboard.setStringAsync(current.localContent)
+      // Caught here because the only caller is `void copyMarkdownLocalContent(...)`: the seam
+      // rejects when the pasteboard refused the text, and an uncaught rejection would leave
+      // "Copied" as the last word on a copy that did not happen.
+      try {
+        await clipboard.writeText(current.localContent)
+      } catch {
+        triggerError()
+        showToast("Couldn't copy", 1500)
+        return
+      }
       triggerSuccess()
       showToast('Copied')
     },
-    [markdownDocs, showToast]
+    [clipboard, markdownDocs, showToast]
   )
 
   const getDirtyMarkdownDrafts = useCallback(() => {
