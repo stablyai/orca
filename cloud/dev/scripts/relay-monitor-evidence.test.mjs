@@ -242,7 +242,7 @@ test('later same-cap waves accept evidence aged by predecessor cell rolls', asyn
     await ageState(17 * 60_000)
     await assert.rejects(authorityAt('0'), /authority is incomplete or stale/)
     await assert.doesNotReject(authorityAt('1'))
-    await assert.rejects(authorityAt('4'), /wave index is invalid/)
+    await assert.rejects(authorityAt('10'), /wave index is invalid/)
     await assert.rejects(authorityAt('x'), /wave index is invalid/)
     // Both edges of one predecessor job timeout: 5min + 75min exactly.
     await ageState(80 * 60_000)
@@ -259,6 +259,11 @@ test('later same-cap waves accept evidence aged by predecessor cell rolls', asyn
     await assert.doesNotReject(authorityAt('3'))
     await ageState(230 * 60_000 + 1)
     await assert.rejects(authorityAt('3'), /authority is incomplete or stale/)
+    // The last cell of a ten-cell same-cap batch: 5min + 9 * 75min exactly.
+    await ageState(680 * 60_000)
+    await assert.doesNotReject(authorityAt('9'))
+    await ageState(680 * 60_000 + 1)
+    await assert.rejects(authorityAt('9'), /authority is incomplete or stale/)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
