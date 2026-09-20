@@ -5,6 +5,14 @@ import {
   bridgeScreencastFrameHeader,
   encodeBridgeScreencastFrame
 } from './bridge/bridge-screencast-encoder'
+import {
+  BridgeTerminalOutputBacklog,
+  drainTerminalBacklog,
+  holdsTerminalOutput,
+  terminalStreamMaxPayloadBytes,
+  type TerminalBacklogEnd,
+  type TerminalBacklogTimers
+} from './bridge-terminal-output-backlog'
 import type { BridgeBinaryEvent } from './bridge/bridge-screencast-binary'
 import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
 import type { RpcClient } from '../transport/rpc-client'
@@ -33,6 +41,20 @@ type OpenSubscription = {
   /** Binary frames this stream could not carry. Per stream, which is what tells a stream losing
    *  frames steadily from one that lost a single burst. */
   droppedFrames: number
+  /** Terminal output held while the page catches up, or null for a stream on the byte window. */
+  backlog: BridgeTerminalOutputBacklog | null
+}
+
+/** What one terminal stream's held output did, reported when the stream is retired. */
+export type BridgeTerminalBacklogReport = {
+  id: string
+  /** Frames whose bytes went out inside another one, so the page never had to read them. */
+  coalescedFrames: number
+  /** Frames this backlog handed over, which with the above is the ratio a device proof reads. */
+  deliveredFrames: number
+  peakPendingBytes: number
+  /** Which rule ended the stream, or null when it ended for a reason that is not the backlog's. */
+  ended: TerminalBacklogEnd | null
 }
 
 /** A screencast frame the shell could not deliver, as the host reports it. */
@@ -61,6 +83,10 @@ export class BridgeHostSubscriptions {
       post: (json: string) => void
       /** One call per dropped screencast frame. The host reports it and raises the total. */
       onBinaryFrameDropped: (dropped: BridgeDroppedBinaryFrame) => void
+      /** One call per retired terminal stream that ever held anything. */
+      onTerminalBacklog?: (report: BridgeTerminalBacklogReport) => void
+      /** Injected so a test drives the silence clock rather than waiting twenty seconds on it. */
+      terminalTimers?: TerminalBacklogTimers
     }
   ) {}
 
@@ -96,7 +122,16 @@ export class BridgeHostSubscriptions {
       seq: 0,
       unacked: [],
       unackedBytes: 0,
-      droppedFrames: 0
+      droppedFrames: 0,
+      backlog: holdsTerminalOutput(method)
+        ? new BridgeTerminalOutputBacklog({
+            maxPayloadBytes: terminalStreamMaxPayloadBytes(id),
+            // The page has stopped answering, which is not slowness and is the one thing a held
+            // stream cannot wait out.
+            onAckSilence: () => this.endHeldStream(id, 'ack-silence'),
+            timers: this.options.terminalTimers
+          })
+        : null
     }
     this.open.set(id, record)
     let unsubscribe: () => void
@@ -134,6 +169,8 @@ export class BridgeHostSubscriptions {
       acked += 1
     }
     record.unacked.splice(0, acked)
+    record.backlog?.noteAck()
+    this.drainBacklog(id, record)
   }
 
   /** `null` tears the stream down without telling the page, for a page that already said goodbye. */
@@ -143,6 +180,7 @@ export class BridgeHostSubscriptions {
       return
     }
     this.open.delete(id)
+    this.reportBacklog(id, record, null)
     try {
       record.unsubscribe()
     } catch {
@@ -164,6 +202,16 @@ export class BridgeHostSubscriptions {
   private deliver(id: string, payload: unknown): void {
     const record = this.open.get(id)
     if (record === undefined) {
+      return
+    }
+    const backlog = record.backlog
+    // Held before it is serialized, because the reason to hold it is that there is nowhere to put
+    // it: a terminal stream behind its window or behind its own queue takes this path, and the
+    // window rule below never sees the payload at all.
+    if (backlog !== null && (backlog.held || !this.windowHasRoom(record))) {
+      if (!backlog.hold(payload)) {
+        this.endHeldStream(id, 'pending-ceiling')
+      }
       return
     }
     const seq = record.seq + 1
@@ -218,6 +266,81 @@ export class BridgeHostSubscriptions {
     return JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'event', id, seq, binary })
   }
 
+  /** Whether this stream may send one more frame at all, ignoring how large it is. */
+  private windowHasRoom(record: OpenSubscription): boolean {
+    return (
+      record.unacked.length < BRIDGE_MAX_UNACKED_FRAMES &&
+      record.unackedBytes < BRIDGE_MAX_UNACKED_BYTES
+    )
+  }
+
+  /** The ledger's half of the drain: what one frame costs, and whether it retired the stream. */
+  private drainBacklog(id: string, record: OpenSubscription): void {
+    if (record.backlog === null) {
+      return
+    }
+    drainTerminalBacklog({
+      backlog: record.backlog,
+      maxPayloadBytes: terminalStreamMaxPayloadBytes(id),
+      windowHasRoom: () => this.windowHasRoom(record),
+      availableWindowBytes: () => BRIDGE_MAX_UNACKED_BYTES - record.unackedBytes,
+      windowEmpty: () => record.unacked.length === 0,
+      send: (payload) => {
+        const seq = record.seq + 1
+        let json: string
+        try {
+          json = JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'event', id, seq, payload })
+        } catch {
+          this.cancel(id, 'closed')
+          return 'retired'
+        }
+        this.sendEvent(id, record, seq, json, false)
+        // `sendEvent` can retire the stream under C0.3, and the record is then not the ledger's.
+        return this.open.get(id) === record ? 'sent' : 'retired'
+      }
+    })
+  }
+
+  /**
+   * The two ends a held stream has, which the page hears as the one reason the protocol carries.
+   *
+   * `overflow` rather than a new reason: the page is served by the desktop and the shell is the
+   * installed app, so a shell newer than its page is the ordinary state, and a reason the page's
+   * reader has never heard of is a frame it drops — which would leave the stream hanging instead of
+   * ending. Which of the two fired is in the log beside the counters.
+   */
+  private endHeldStream(id: string, why: TerminalBacklogEnd): void {
+    const record = this.open.get(id)
+    if (record === undefined) {
+      return
+    }
+    this.reportBacklog(id, record, why)
+    this.cancel(id, 'overflow')
+  }
+
+  /** One line per retired terminal stream that ever held anything, with the oracle in it. */
+  private reportBacklog(
+    id: string,
+    record: OpenSubscription,
+    ended: TerminalBacklogEnd | null
+  ): void {
+    const backlog = record.backlog
+    if (backlog === null) {
+      return
+    }
+    record.backlog = null
+    if (backlog.peakPendingBytes > 0) {
+      this.options.onTerminalBacklog?.({
+        id,
+        coalescedFrames: backlog.coalescedFrames,
+        deliveredFrames: backlog.deliveredFrames,
+        peakPendingBytes: backlog.peakPendingBytes,
+        ended
+      })
+    }
+    backlog.dispose()
+  }
+
   /** One rule for what a stream can carry right now, read before a screencast frame is encoded and
    *  again on the frame that was. */
   private canCarry(record: OpenSubscription, bytes: number): boolean {
@@ -254,7 +377,13 @@ export class BridgeHostSubscriptions {
     // An event is never chunked, so one over the frame cap would be refused by the page's reader
     // and leave a hole nothing reports. Over the window, or too big to carry: same verdict, because
     // both mean this frame cannot be delivered whole.
-    if (!this.canCarry(record, bytes)) {
+    //
+    // A held stream is the exception, and only to the window half. Its pacing is the backlog — the
+    // caller does not reach here unless the page has made room — so a frame that crosses the
+    // window by its own size goes out rather than killing a terminal for being one chunk wide.
+    // The cap half stands for every stream, which is C0.3.
+    const heldStream = record.backlog !== null
+    if (heldStream ? bytes > BRIDGE_MAX_MESSAGE_BYTES : !this.canCarry(record, bytes)) {
       if (binary) {
         this.dropBinaryFrame(id, record, bytes)
         return

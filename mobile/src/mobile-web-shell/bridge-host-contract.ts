@@ -1,3 +1,4 @@
+import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
@@ -48,6 +49,22 @@ export type BridgeHostDiagnostic =
    *  rather than ending the stream, so this line and the count beside it are the only evidence
    *  the frame existed. `bytes` is the whole event, which is what was measured against the cap. */
   | { kind: 'binary-frame-dropped'; id: string; bytes: number; dropped: number }
+  /**
+   * What one terminal stream's held output did, once the stream is retired.
+   *
+   * The only oracle there is for the coalescing rule: nothing crosses to the page saying how much
+   * was held or how many frames its bytes arrived inside, and `ended` is the only place the two
+   * ways a held stream dies are told apart — both reach the page as `overflow`, because a reason
+   * the page's reader has never heard of is a frame it drops.
+   */
+  | {
+      kind: 'terminal-backlog'
+      id: string
+      coalescedFrames: number
+      deliveredFrames: number
+      peakPendingBytes: number
+      ended: TerminalBacklogEnd | null
+    }
 
 export type BridgeHostOptions = {
   client: RpcClient
@@ -153,4 +170,12 @@ export type BridgeHostOptions = {
    * second and a stream that lost one look the same.
    */
   onBinaryFramesDropped?: (total: number) => void
+  /**
+   * The timer a held terminal stream arms for the page's silence, injected only by tests.
+   *
+   * A real shell uses `setTimeout`; a test that waited the silence bound out would be twenty
+   * seconds long per case, and one that shortened the constant would be checking a number nothing
+   * ships.
+   */
+  terminalTimers?: TerminalBacklogTimers
 }

@@ -19,6 +19,7 @@ import {
   type BridgeHostMessage,
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
+import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 
 export const ID = bridgeId(1)
@@ -75,6 +76,8 @@ export function harness(
     clipboardText?: string
     /** Replaces the whole verb handler, for the arm where a device call fails. */
     serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
+    /** Drives the held-stream silence clock, so a case fires it instead of waiting on it. */
+    terminalTimers?: TerminalBacklogTimers
   } = {}
 ): Harness {
   const client = options.client ?? createFakeRpcClient()
@@ -132,7 +135,8 @@ export function harness(
       options.onPageFault?.(error)
     },
     onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
-    onBinaryFramesDropped: (total) => droppedBinaryFrames.push(total)
+    onBinaryFramesDropped: (total) => droppedBinaryFrames.push(total),
+    terminalTimers: options.terminalTimers
   })
   if (options.ready === true) {
     host.receive(clientFrame({ type: 'ready' }))

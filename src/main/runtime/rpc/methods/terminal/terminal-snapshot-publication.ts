@@ -8,7 +8,7 @@ import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../../scrollback-limits'
 import { terminalStreamByteLengthExceeds } from '../../terminal-stream-byte-length'
-import { terminalStreamJsonByteLength } from '../../terminal-stream-json-byte-length'
+import { terminalStreamJsonByteLength } from '../../../../../shared/terminal-stream-json-byte-length'
 import {
   iterateTerminalStreamTextPayloads,
   requestedSnapshotScrollbackCandidates

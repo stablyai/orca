@@ -78,7 +78,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // byteLength }` cast: the preview reader checks the content and salvages the flag, so `readMarkdownTab`
 // reads `fallback.value` directly. The dictation-mode refresh is main's own body again — it forwards
 // whatever mode the reply carried, so an absent one leaves the mic as inert as main left it.
-const HEAD_CALLBACK_BODY_SHA256 = 'ceba525103ccac47df766063d58593ba083d59785f86257d849e355669ed47ae'
+// Refreshed by C7.3: the terminal subscribe now carries the snapshot byte budget its transport
+// imposes, which on a phone is nothing and inside the shell's page is the frame cap.
+const HEAD_CALLBACK_BODY_SHA256 = '28615b1608484a66e6ed1b8cc951b19e8724dd82fca996cecd9ded9bd8cd88c9'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

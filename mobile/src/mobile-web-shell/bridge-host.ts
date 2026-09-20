@@ -111,7 +111,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
       options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
       options.onBinaryFramesDropped?.(subscriptions.droppedBinaryFrames)
-    }
+    },
+    onTerminalBacklog: (report) => {
+      options.onDiagnostic?.({ kind: 'terminal-backlog', ...report })
+    },
+    terminalTimers: options.terminalTimers
   })
 
   /** `state` is the event's own value: a listener can run before the getter it mirrors is updated. */

@@ -309,6 +309,16 @@ describe('subscriptions', () => {
 })
 
 describe('backpressure', () => {
+  /**
+   * A stream on the byte window, which after C7.3 means any stream but a terminal's.
+   *
+   * Named rather than left to `subscribeFrame`'s default: that default is `terminal.subscribe`, and
+   * a terminal's output is held and coalesced rather than ending the stream. These cases are about
+   * the window itself, so they subscribe to something the window still governs; the terminal's
+   * exception has its own file, and neither should be read off the other.
+   */
+  const WINDOWED = 'session.tabs.subscribe'
+
   function fill(bridge: Harness, frames: number): void {
     for (let index = 0; index < frames; index += 1) {
       bridge.client.streams[0]?.emit({ n: index })
@@ -317,7 +327,7 @@ describe('backpressure', () => {
 
   it('sends exactly the unacked frame window and then ends with overflow', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
     fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
     expect(bridge.frames().filter((frame) => frame.type === 'event')).toHaveLength(
       BRIDGE_MAX_UNACKED_FRAMES
@@ -329,7 +339,7 @@ describe('backpressure', () => {
 
   it('reopens the window on ack', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
     fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: BRIDGE_MAX_UNACKED_FRAMES }))
     fill(bridge, 1)
@@ -340,7 +350,7 @@ describe('backpressure', () => {
 
   it('acks only up to the seq it was given', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
     fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: 1 }))
     fill(bridge, 1)
@@ -353,7 +363,7 @@ describe('backpressure', () => {
 
   it('ends on the unacked byte window well before the frame window is reached', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
     const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
     const ended = (): boolean => (bridge.posted.at(-1) ?? '').includes('"type":"end"')
     for (let index = 0; index < BRIDGE_MAX_UNACKED_FRAMES && !ended(); index += 1) {
@@ -372,7 +382,7 @@ describe('backpressure', () => {
 
   it('reopens the byte window on ack, not just the frame window', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
     const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
     // What fits under the byte window, which leaves the next frame of this size to overflow it.
     const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / (chunk.length + 128))
@@ -395,15 +405,15 @@ describe('backpressure', () => {
 
   it('ends rather than posting an event the page would refuse as oversized', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
     bridge.client.streams[0]?.emit('z'.repeat(BRIDGE_MAX_MESSAGE_BYTES))
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
   it('keeps each stream on its own window', () => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
-    bridge.host.receive(subscribeFrame(OTHER))
+    bridge.host.receive(subscribeFrame(ID, WINDOWED))
+    bridge.host.receive(subscribeFrame(OTHER, WINDOWED))
     for (let index = 0; index <= BRIDGE_MAX_UNACKED_FRAMES; index += 1) {
       bridge.client.streams[0]?.emit({ n: index })
     }
