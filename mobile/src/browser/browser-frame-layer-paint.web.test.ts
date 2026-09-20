@@ -145,7 +145,11 @@ describe('against a real react-native-web Image', () => {
   const MOUNTED_URI = 'data:image/gif;base64,bW91bnRlZA=='
   const STREAMED_URI = 'data:image/gif;base64,c3RyZWFtZWQ='
 
-  async function renderImage(): Promise<{ host: HTMLElement; unmount: () => void }> {
+  async function renderImage(): Promise<{
+    host: HTMLElement
+    rerenderWith: (uri: string) => Promise<void>
+    unmount: () => void
+  }> {
     // React 19 refuses `act` outside a test environment it has been told about.
     Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
     const container = document.createElement('div')
@@ -160,6 +164,11 @@ describe('against a real react-native-web Image', () => {
     }
     return {
       host,
+      rerenderWith: async (uri: string) => {
+        await act(async () => {
+          root.render(createElement(ReactNativeWebImage, { source: { uri } }))
+        })
+      },
       unmount: () => {
         root.unmount()
         container.remove()
@@ -193,19 +202,45 @@ describe('against a real react-native-web Image', () => {
     }
   })
 
+  /** The one RN Web renders beside the frame, for a screen reader and the image context menu. */
+  function accessibilityImageSource(host: HTMLElement): string | null {
+    const images = [...host.querySelectorAll('img')]
+    if (images.length !== 1) {
+      throw new Error(`react-native-web rendered ${images.length} images, expected exactly one`)
+    }
+    return images[0]?.getAttribute('src') ?? null
+  }
+
   /**
-   * The accessibility `<img>` RN Web renders beside the frame keeps the source it mounted with,
-   * for the life of the pane: the streaming path writes styles and never props, so nothing updates
-   * it. Recorded because it is what a screen reader and the browser's image context menu see.
+   * The streaming write never reaches the accessibility `<img>`: it is a prop of RN Web's own
+   * making, and the frame path writes styles.
    */
-  it('leaves the accessibility image on the frame it mounted with', async () => {
+  it('leaves the accessibility image alone when a frame is written imperatively', async () => {
     const { host, unmount } = await renderImage()
     try {
       updateBrowserImageSourceOnWeb(asImageRef(host), STREAMED_URI)
 
-      const images = [...host.querySelectorAll('img')]
-      expect(images).toHaveLength(1)
-      expect(images[0]?.getAttribute('src')).toBe(MOUNTED_URI)
+      expect(accessibilityImageSource(host)).toBe(MOUNTED_URI)
+    } finally {
+      unmount()
+    }
+  })
+
+  /**
+   * A render does reach it, which is what stops the case above being "for the life of the pane".
+   *
+   * RN Web derives the hidden image's `src` from the same `source` prop it paints the background
+   * from, so the pane's next render for any other reason — address focus, a dialog, the view mode,
+   * zoom — carries `renderedFrameSource` and moves it to whatever frame is newest then.
+   */
+  it('moves the accessibility image on the next render from the pane state', async () => {
+    const { host, rerenderWith, unmount } = await renderImage()
+    try {
+      updateBrowserImageSourceOnWeb(asImageRef(host), STREAMED_URI)
+
+      await rerenderWith(STREAMED_URI)
+
+      expect(accessibilityImageSource(host)).toBe(STREAMED_URI)
     } finally {
       unmount()
     }
