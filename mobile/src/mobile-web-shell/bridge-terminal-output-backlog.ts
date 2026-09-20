@@ -118,8 +118,6 @@ export class BridgeTerminalOutputBacklog {
 
   constructor(
     private readonly options: {
-      /** The escaped payload bytes one frame may carry, which the ledger derives from the cap. */
-      maxPayloadBytes: number
       /** Called once, when the page has answered nothing for the silence bound. */
       onAckSilence: () => void
       timers?: TerminalBacklogTimers
@@ -172,19 +170,23 @@ export class BridgeTerminalOutputBacklog {
   }
 
   /**
-   * The next payload to send, merged as far as `availableBytes` allows, or null for "not yet".
+   * The next payload to send, merged as far as `allowedBytes` allows, or null for "not yet".
+   *
+   * `allowedBytes` is what one payload may occupy, which the caller narrows to the smaller of the
+   * window's room and one frame; this used to narrow it to the frame a second time, which no input
+   * could reach because the only caller had already done it.
    *
    * Null when the head does not fit is a wait, not a refusal: the caller comes back on the next ack
    * with a wider window. A head that cannot fit even an empty window is handed over regardless —
    * there is no later ack that would make room, and the ledger's own cap check is what decides
    * whether a single payload that large ends the stream.
    */
-  next(availableBytes: number, windowEmpty: boolean): unknown | null {
+  next(allowedBytes: number, windowEmpty: boolean): unknown | null {
     const head = this.queue[0]
     if (head === undefined) {
       return null
     }
-    if (head.bytes > availableBytes && !windowEmpty) {
+    if (head.bytes > allowedBytes && !windowEmpty) {
       return null
     }
     this.queue.shift()
@@ -195,17 +197,16 @@ export class BridgeTerminalOutputBacklog {
       return head.payload
     }
     let chunk = head.chunk
-    // Never past what one frame carries, whatever the window allows: the ledger's cap check would
-    // end the stream on a merge this module chose to make, which is the opposite of holding it.
-    const ceiling = Math.min(availableBytes, this.options.maxPayloadBytes)
-    // Consecutive output on the same stream only: anything else in between is state the reader
-    // applies in order, and merging across it would deliver bytes out of order.
+    // Consecutive output only: anything else in between is state the reader applies in order, and
+    // merging across it would deliver bytes out of order. Nothing compares stream ids here, because
+    // a backlog belongs to one subscription and every `data` payload on it carries that
+    // subscription's single stream id; the comparison that used to be here could not fail.
     while (this.queue.length > 0) {
       const nextHeld = this.queue[0]
-      if (nextHeld.kind !== 'output' || nextHeld.streamId !== head.streamId) {
+      if (nextHeld.kind !== 'output') {
         break
       }
-      if (outputPayloadBytes(head.streamId, chunk + nextHeld.chunk) > ceiling) {
+      if (outputPayloadBytes(head.streamId, chunk + nextHeld.chunk) > allowedBytes) {
         break
       }
       this.queue.shift()

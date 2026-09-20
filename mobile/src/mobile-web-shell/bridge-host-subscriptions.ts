@@ -125,7 +125,6 @@ export class BridgeHostSubscriptions {
       droppedFrames: 0,
       backlog: holdsTerminalOutput(method)
         ? new BridgeTerminalOutputBacklog({
-            maxPayloadBytes: terminalStreamMaxPayloadBytes(id),
             // The page has stopped answering, which is not slowness and is the one thing a held
             // stream cannot wait out.
             onAckSilence: () => this.endHeldStream(id, 'ack-silence'),
