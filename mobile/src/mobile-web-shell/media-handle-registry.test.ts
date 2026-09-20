@@ -1,7 +1,10 @@
 /** Every way a staged handle ends, and every refusal a page gets for one that has. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readShellRefusalCode } from './bridge-host-errors'
-import { BRIDGE_MEDIA_MAX_LIVE_HANDLES } from './bridge/bridge-media-verbs'
+import {
+  BRIDGE_MEDIA_MAX_LIVE_HANDLES,
+  BRIDGE_MEDIA_READ_MAX_BYTES
+} from './bridge/bridge-media-verbs'
 import { MEDIA_HANDLE_TTL_MS, MediaHandleRegistry, type StagedMedia } from './media-handle-registry'
 
 const staged = (index: number, byteLength = 3000): StagedMedia => ({
@@ -111,6 +114,15 @@ describe('reading a handle', () => {
   it('reads an empty staged file once, and calls it the end', () => {
     const [item] = registry.mint([staged(1, 0)])
     expect(registry.read(item?.handle ?? '', 0, 400)).toMatchObject({ start: 0, end: 0, eof: true })
+  })
+
+  it('never hands back more than one chunk, whatever length it was asked for', () => {
+    // The wire cannot ask this — the params schema refuses it first — and the registry answers it
+    // anyway, because what it will hand a reader is its own promise and not the schema's.
+    const [item] = registry.mint([staged(1, BRIDGE_MEDIA_READ_MAX_BYTES * 3)])
+    const range = registry.read(item?.handle ?? '', 0, BRIDGE_MEDIA_READ_MAX_BYTES * 3)
+    expect(range.end).toBe(BRIDGE_MEDIA_READ_MAX_BYTES)
+    expect(range.eof).toBe(false)
   })
 
   it('refuses a read at or past the end of a file that had bytes', () => {

@@ -247,7 +247,10 @@ describe('reading chunks', () => {
     return { probe, handle: result.items[0]?.handle ?? '' }
   }
 
-  it('reads an 18 MiB item in order to eof, and the bytes come back whole', async () => {
+  it('reads a million-byte item in order to eof, and the bytes come back whole', async () => {
+    // Three chunks, which is enough to pin the ordering and the join here. The largest item a
+    // pick may stage runs in `bridge-host-media-verbs.test.ts`, where the frames are serialized
+    // and the size is the one that matters.
     const total = 1_000_000
     const { probe, handle } = await staged(total)
     const source = bytesOf(total)

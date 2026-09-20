@@ -1,5 +1,6 @@
 /** The device half: what the shell actually does with a verb the host let through. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ZodError } from 'zod'
 
 const clipboard = vi.hoisted(() => ({
   setStringAsync: vi.fn(() => Promise.resolve(true)),
@@ -50,7 +51,13 @@ describe('serving a clipboard verb', () => {
     for (const verb of ['native.clipboard.write', 'native.clipboard.read'] as const) {
       const params =
         verb === 'native.clipboard.write' ? { mime: 'image', value: 'x' } : { mime: 'image' }
-      await expect(serveNativeClipboardVerb(verb, params)).rejects.toThrow()
+      // Named, not merely thrown: the mime is out of this verb's enum, so the parse is what
+      // refuses it. A bare throw here would pass for a handler that reached the pasteboard and
+      // failed there, which is the one outcome this case exists to rule out.
+      await expect(serveNativeClipboardVerb(verb, params)).rejects.toSatisfy(
+        (error: unknown) =>
+          error instanceof ZodError && error.issues.some((issue) => issue.path[0] === 'mime')
+      )
     }
     expect(clipboard.setStringAsync).not.toHaveBeenCalled()
     expect(clipboard.getStringAsync).not.toHaveBeenCalled()

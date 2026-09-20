@@ -121,6 +121,10 @@ export class MediaHandleRegistry {
       )
     }
     record.touchedAt = this.deps.now()
+    // The chunk cap is applied here as well as at the wire, because the two bounds are different
+    // promises: `mediaReadParamsSchema` says what a page may ask for, and this says what the
+    // registry will ever hand a reader, whoever asked. Its own test calls `read` directly, which
+    // is the caller that reaches it.
     const end = Math.min(offset + Math.min(length, BRIDGE_MEDIA_READ_MAX_BYTES), record.byteLength)
     return { uri: record.uri, start: offset, end, eof: end >= record.byteLength }
   }
