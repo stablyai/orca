@@ -185,6 +185,7 @@ function Sidebar({
                 scrollOffsetRef={worktreeScrollOffsetRef}
                 scrollAnchorRef={worktreeScrollAnchorRef}
                 workspaceBoardOpen={workspaceBoardOpen}
+                onWorktreeCardClick={closeWorkspaceBoard}
                 onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
                 onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
                 onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}

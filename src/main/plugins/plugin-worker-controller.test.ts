@@ -9,6 +9,7 @@ import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginWorkerHandle } from './plugin-host-process'
 import { PluginWorkerController } from './plugin-worker-controller'
 import type { PluginWorkerFactory } from './plugin-worker-manager'
+import { PluginLogBuffer } from './plugin-log-buffer'
 
 const roots: string[] = []
 
@@ -62,6 +63,7 @@ function controller(options: {
   factory: PluginWorkerFactory
   verify: () => Promise<void>
   isApproved: () => boolean
+  logs?: PluginLogBuffer
 }): PluginWorkerController {
   return new PluginWorkerController({
     entryPath: '/host-entry.js',
@@ -72,13 +74,52 @@ function controller(options: {
     isCurrentApproved: () => options.isApproved(),
     invokeCommand: vi.fn(async () => null),
     executeHostCall: vi.fn(async () => ({ ok: true as const, value: null })),
-    log: vi.fn(),
+    log: (key) => options.logs?.capture(key) ?? vi.fn(),
     onStateChanged: vi.fn(),
     onWorkerGone: vi.fn()
   })
 }
 
 describe('PluginWorkerController activation authority', () => {
+  it('does not recreate logs or start a revision after uninstall overtakes deactivation', async () => {
+    const subjectPlugin = await plugin()
+    const logs = new PluginLogBuffer()
+    const capture = vi.spyOn(logs, 'capture')
+    let approved = true
+    let finishStop!: () => void
+    const stopped = new Promise<void>((resolve) => {
+      finishStop = resolve
+    })
+    const oldWorker = worker(['run'])
+    oldWorker.dispose.mockImplementation(() => stopped)
+    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(oldWorker)
+    const subject = controller({
+      factory,
+      verify: async () => undefined,
+      isApproved: () => approved,
+      logs
+    })
+    await subject.ensure(subjectPlugin)
+    logs.append(subjectPlugin.pluginKey, 'info', 'old installation')
+    const newRevision = {
+      ...subjectPlugin,
+      manifest: { ...subjectPlugin.manifest, version: '2.0.0' }
+    }
+    const staleActivation = subject.ensure(newRevision)
+    await vi.waitFor(() => expect(oldWorker.dispose).toHaveBeenCalledOnce())
+    approved = false
+    await subject.deactivate(subjectPlugin.pluginKey)
+    logs.clear(subjectPlugin.pluginKey)
+    const capturesBeforeStop = capture.mock.calls.length
+    finishStop()
+
+    await expect(staleActivation).rejects.toThrow('no longer approved')
+    expect(factory).toHaveBeenCalledOnce()
+    expect(capture).toHaveBeenCalledTimes(capturesBeforeStop)
+    expect(logs.get(subjectPlugin.pluginKey)).toEqual([])
+    await subject.dispose()
+  })
+
   it('does not start code after approval is revoked during integrity verification', async () => {
     const subjectPlugin = await plugin()
     let approved = true

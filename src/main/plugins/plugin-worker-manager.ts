@@ -31,7 +31,7 @@ export type PluginWorkerManagerOptions = {
     method: string,
     params: unknown
   ) => ReturnType<PluginWorkerHostCallExecutor>
-  log: (pluginKey: string, level: 'info' | 'warn' | 'error', line: string) => void
+  log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onWorkerStateChange: (pluginKey: string) => void
   onWorkerGone: (pluginKey: string) => void
 }
@@ -72,7 +72,10 @@ export class PluginWorkerManager {
     return new Map(this.knownSpecs)
   }
 
-  async ensureActive(spec: PluginWorkerSpawnSpec): Promise<PluginWorkerHandle> {
+  async ensureActive(
+    spec: PluginWorkerSpawnSpec,
+    assertApproved: () => void = () => undefined
+  ): Promise<PluginWorkerHandle> {
     if (this.disposed) {
       throw new Error('plugin workers are shut down')
     }
@@ -80,6 +83,8 @@ export class PluginWorkerManager {
       throw new Error(`plugin ${spec.pluginKey} is errored after repeated failures`)
     }
     for (;;) {
+      // Removal may finish while a stale revision waits for its worker to stop.
+      assertApproved()
       const existing = this.workers.get(spec.pluginKey)
       const pending = this.activations.get(spec.pluginKey)
       const activeSpec = existing?.spec ?? pending?.spec
@@ -131,6 +136,7 @@ export class PluginWorkerManager {
     signal: AbortSignal,
     firstRestart?: Extract<PluginRestartDecision, { restart: true }>
   ): Promise<PluginWorkerHandle> {
+    const log = this.options.log(spec.pluginKey)
     return runPluginWorkerRestartLoop({
       signal,
       firstRestart,
@@ -145,7 +151,7 @@ export class PluginWorkerManager {
           factory: this.options.workerFactory,
           executeHostCall: (method, params) =>
             this.options.executeHostCall(spec.pluginKey, method, params),
-          log: (level, line) => this.options.log(spec.pluginKey, level, line),
+          log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
           onExit: (record, code) => this.handleUnexpectedExit(spec.pluginKey, record, code)
         })
@@ -193,13 +199,12 @@ export class PluginWorkerManager {
     const decision = this.supervisor.markExited(pluginKey, { crashed: true })
     this.options.onWorkerStateChange(pluginKey)
     if (decision.restart) {
-      this.options.log(
-        pluginKey,
+      this.options.log(pluginKey)(
         'warn',
         `${context}${error ? `: ${this.errorText(error)}` : ''}; restart ${decision.attempt} in ${decision.delayMs}ms`
       )
     } else if (decision.state === 'errored') {
-      this.options.log(pluginKey, 'error', `${context}; marked errored after repeated failures`)
+      this.options.log(pluginKey)('error', `${context}; marked errored after repeated failures`)
     }
     return decision
   }
@@ -248,7 +253,7 @@ export class PluginWorkerManager {
       this.workers.delete(pluginKey)
       this.options.onWorkerGone(pluginKey)
       this.supervisor.markExited(pluginKey, { crashed: false })
-      this.options.log(pluginKey, 'info', 'worker reaped after idle period')
+      this.options.log(pluginKey)('info', 'worker reaped after idle period')
       this.options.onWorkerStateChange(pluginKey)
       const stopping = record.handle
         .dispose()
