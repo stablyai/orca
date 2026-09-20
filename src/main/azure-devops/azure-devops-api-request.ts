@@ -50,6 +50,10 @@ type AzureDevOpsAuthConfig = {
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  method?: 'GET' | 'POST' | 'PATCH'
+  body?: unknown
+  /** Azure DevOps needs `application/json-patch+json` for work item updates. */
+  contentType?: string
 }
 
 function envValue(name: string): string | null {
@@ -146,6 +150,34 @@ async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): P
   }
 }
 
+async function fetchWithApiVersionRetry(
+  baseUrl: string,
+  path: string,
+  options: AzureDevOpsRequestOptions
+): Promise<Response> {
+  const config = getAzureDevOpsAuthConfig()
+  const method = options.method ?? 'GET'
+  const hasBody = options.body !== undefined
+  const doFetch = (url: URL): Promise<Response> =>
+    fetch(url, {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(hasBody ? { 'Content-Type': options.contentType ?? 'application/json' } : {}),
+        ...authHeaders(config)
+      },
+      ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
+    })
+  const url = apiUrl(baseUrl, path, options.searchParams)
+  const response = await doFetch(url)
+  if (await shouldRetryWithPreviewApiVersion(url, response)) {
+    markAzureDevOpsPreviewApiVersionOrigin(url.origin)
+    return doFetch(apiUrl(baseUrl, path, options.searchParams))
+  }
+  return response
+}
+
 export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
@@ -155,22 +187,8 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // throws instead of collapsing to null so callers never report false not_found.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
-  const doFetch = (url: URL): Promise<Response> =>
-    fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(config)
-      },
-      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
-    })
   try {
-    const url = apiUrl(baseUrl, path, options.searchParams)
-    let response = await doFetch(url)
-    if (await shouldRetryWithPreviewApiVersion(url, response)) {
-      markAzureDevOpsPreviewApiVersionOrigin(url.origin)
-      response = await doFetch(apiUrl(baseUrl, path, options.searchParams))
-    }
+    const response = await fetchWithApiVersionRetry(baseUrl, path, options)
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
       if (throwOnFailure) {
@@ -184,6 +202,33 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       throw error
     }
     return null
+  }
+}
+
+export type AzureDevOpsResponse = { status: number; body: unknown }
+
+/**
+ * Status-preserving variant. `requestAzureDevOpsJsonAtBase` collapses every
+ * failure to null or a generic Error, which loses the distinction between a
+ * missing work item, an expired token, and a throttle. The Boards proxy needs
+ * that distinction to report the right error code.
+ */
+export async function requestAzureDevOpsResponseAtBase(
+  baseUrl: string,
+  path: string,
+  options: AzureDevOpsRequestOptions = {}
+): Promise<AzureDevOpsResponse> {
+  const response = await fetchWithApiVersionRetry(baseUrl, path, options)
+  const text = await response.text()
+  if (!text) {
+    return { status: response.status, body: null }
+  }
+  try {
+    return { status: response.status, body: JSON.parse(text) }
+  } catch {
+    // Azure DevOps returns HTML for some auth failures; keep it as a string
+    // rather than discarding the status that tells the caller what happened.
+    return { status: response.status, body: text }
   }
 }
 

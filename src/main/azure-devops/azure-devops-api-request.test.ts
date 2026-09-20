@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetAzureDevOpsPreviewApiVersionCache,
   requestAzureDevOpsJson,
-  requestAzureDevOpsJsonAtBase
+  requestAzureDevOpsJsonAtBase,
+  requestAzureDevOpsResponseAtBase
 } from './azure-devops-api-request'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 
@@ -130,5 +131,72 @@ describe('Azure DevOps API request (STA-3494)', () => {
 
     await requestAzureDevOpsJson(serverRepoRef(), '/_apis/git/repositories/my-repo')
     expect(paths).toEqual(['/rewrite/MyProject/_apis/git/repositories/my-repo'])
+  })
+})
+
+describe('non-GET requests', () => {
+  it('sends the body and content type, and retries a PATCH with -preview', async () => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+    const calls: { url: string; init: RequestInit }[] = []
+    const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
+      calls.push({ url: String(url), init })
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({ typeKey: 'VssInvalidPreviewVersionException' }), {
+          status: 400
+        })
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await requestAzureDevOpsJsonAtBase<{ id: number }>(
+      'https://ado.example/tfs/DefaultCollection',
+      '/_apis/wit/workitems/1',
+      {
+        method: 'PATCH',
+        body: [{ op: 'add', path: '/fields/System.Title', value: 'New' }],
+        contentType: 'application/json-patch+json'
+      }
+    )
+
+    expect(result).toEqual({ id: 1 })
+    expect(calls).toHaveLength(2)
+    expect(calls[0].init.method).toBe('PATCH')
+    expect(calls[0].init.headers).toMatchObject({
+      'Content-Type': 'application/json-patch+json'
+    })
+    expect(calls[1].url).toContain('api-version=7.1-preview')
+  })
+})
+
+describe('requestAzureDevOpsResponseAtBase', () => {
+  it('preserves the upstream status instead of collapsing it', async () => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ message: 'gone' }), { status: 404 }))
+    )
+
+    const result = await requestAzureDevOpsResponseAtBase(
+      'https://dev.azure.com/org',
+      '/_apis/wit/workitems/1'
+    )
+
+    expect(result).toEqual({ status: 404, body: { message: 'gone' } })
+  })
+
+  it('returns a 200 body without throwing', async () => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ count: 2 }), { status: 200 }))
+    )
+
+    const result = await requestAzureDevOpsResponseAtBase(
+      'https://dev.azure.com/org',
+      '/_apis/projects'
+    )
+
+    expect(result).toEqual({ status: 200, body: { count: 2 } })
   })
 })
