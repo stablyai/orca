@@ -28,6 +28,7 @@ import {
   installShellDouble,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
+  readBridgeWindowCaps,
   readShellCsp
 } from './mobile-web-app-render-harness.mjs'
 
@@ -42,8 +43,6 @@ const SHELL_HOST = {
   lastConnected: 1
 }
 const VIEWPORT = { width: 390, height: 844 }
-/** What the page's own budget module reads, restated here only as the double's drop threshold. */
-const FRAME_CAP_BYTES = 640 * 1024
 /** The grant C6.1 named for the binary lane, and the one the negative case withholds. */
 const BINARY_GRANT = 'screencastBinary'
 const SCREENCAST = 'browser.screencast'
@@ -113,6 +112,7 @@ let browser = null
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
+let windowCaps = null
 
 beforeAll(async () => {
   if (!bundles) {
@@ -121,6 +121,7 @@ beforeAll(async () => {
   cspHeader = await readShellCsp()
   bridgeVersion = await readBridgeProtocolVersion()
   faultGrant = await readBridgeFaultGrant()
+  windowCaps = await readBridgeWindowCaps()
   // Inside mobile/ rather than the system temp dir: the route resolves `react-native` and the
   // pane's own modules, and esbuild resolves a bare specifier from the importer upward.
   await mkdir(join(mobileDir, '.tmp'), { recursive: true })
@@ -182,7 +183,7 @@ async function openPane({ grants }) {
     pageRoutes: [ROUTE.pathname],
     replies: { 'browser.mouseClick': { ok: true } },
     streams: [SCREENCAST],
-    frameCapBytes: FRAME_CAP_BYTES
+    windowCaps
   })
   // The page reports a CSP violation as a document event; the header is the shell's own.
   await page.addInitScript(() => {
@@ -392,7 +393,7 @@ describePane('the browser pane in a page', () => {
 
       // Noise at the largest layout the clamps admit, which §1 measured at 574% of the cap.
       const huge = await encodeNoiseJpeg(view.page, { ...OVER_CAP_FRAME, seed: 5 })
-      expect(huge.length).toBeGreaterThan(FRAME_CAP_BYTES)
+      expect(huge.length).toBeGreaterThan(windowCaps.maxMessageBytes)
       expect(await emitFrame(view.page, { b64: huge, frameSeq: 2, ...OVER_CAP_FRAME })).toBe(
         'dropped'
       )
@@ -429,6 +430,34 @@ describePane('the browser pane in a page', () => {
       expect(view.consoleErrors).toEqual([])
       expect(await view.csp()).toEqual([])
       expect(view.foreignRequests).toEqual([])
+    } finally {
+      await view.context.close()
+    }
+  }, 120_000)
+
+  it('streams past the unacked window because the page acks, and drops nothing', async () => {
+    // The two `canCarry` arms the size check hides. Thirty frames of about 200 KB is roughly 6 MB
+    // through a 4 MiB window, so a page that did not ack, or a shell double that ignored the acks
+    // it sent, starts dropping partway. Nothing here is over the message cap, so a drop can only
+    // come from the window.
+    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
+    try {
+      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
+      const b64 = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 55 })
+      const cumulative = b64.length * 30
+      expect(cumulative).toBeGreaterThan(windowCaps.maxUnackedBytes)
+
+      const outcomes = []
+      for (let frameSeq = 1; frameSeq <= 30; frameSeq += 1) {
+        outcomes.push(await emitFrame(view.page, { b64, frameSeq, ...FRAME }))
+      }
+
+      expect(new Set(outcomes)).toEqual(new Set(['posted']))
+      expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckDroppedFrames)).toEqual([])
+      // And the acks are real rather than the window merely being generous.
+      const acks = await view.page.evaluate(() => globalThis.__orcaRenderCheckAcks)
+      expect(acks.length).toBeGreaterThan(0)
+      expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()
     }

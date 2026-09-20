@@ -59,6 +59,38 @@ export async function readBridgeProtocolVersion() {
   return Number(match[1])
 }
 
+/**
+ * The bridge's window caps, read from the modules that define them.
+ *
+ * The shell double below has to price a frame the way `BridgeHostSubscriptions` does, and a double
+ * carrying its own copy of these numbers is a double that goes on passing after the real host's
+ * changed. `BRIDGE_MAX_UNACKED_BYTES` is written as a product, so the reader evaluates one.
+ */
+export async function readBridgeWindowCaps() {
+  const sources = await Promise.all(
+    [
+      'mobile/src/mobile-web-shell/bridge/bridge-caps.ts',
+      'mobile/src/mobile-web-shell/bridge-host-subscriptions.ts'
+    ].map((path) => readFile(join(projectDir, path), 'utf8'))
+  )
+  const source = sources.join('\n')
+  const read = (name) => {
+    const match = new RegExp(`${name} = ([0-9*\\s]+)`).exec(source)
+    if (!match) {
+      throw new Error(`could not read ${name}`)
+    }
+    return match[1]
+      .split('*')
+      .map((part) => Number(part.trim()))
+      .reduce((product, factor) => product * factor, 1)
+  }
+  return {
+    maxMessageBytes: read('BRIDGE_MAX_MESSAGE_BYTES'),
+    maxUnackedFrames: read('BRIDGE_MAX_UNACKED_FRAMES'),
+    maxUnackedBytes: read('BRIDGE_MAX_UNACKED_BYTES')
+  }
+}
+
 /** The grant the shell offers every page, read from the same source for the same reason. */
 export async function readBridgeFaultGrant() {
   const source = await readFile(
@@ -83,6 +115,11 @@ export async function readBridgeFaultGrant() {
  * because a control that handed something to the shell and one that did nothing look the same on
  * the document.
  *
+ * It answers RPC the way a refusing host does and serves a screencast stream the way the real
+ * `BridgeHostSubscriptions` does, including its whole `canCarry` rule and the page's acks. It is
+ * not the host: it decides no domain behaviour, and every reply a screen sees is one a check
+ * named.
+ *
  * Serialized as a page init script, so it takes plain data and closes over nothing.
  */
 export function installShellDouble({
@@ -97,7 +134,7 @@ export function installShellDouble({
   pageRoutes = null,
   replies,
   streams = [],
-  frameCapBytes = 0
+  windowCaps = null
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -115,6 +152,9 @@ export function installShellDouble({
   // Binary events this double refused to post because they exceeded the frame cap, which is the
   // shell's drop rule reproduced where the page can watch it survive one.
   globalThis.__orcaRenderCheckDroppedFrames = []
+  // Every ack seq the page posted, in order. Without this a stream that never acked and one that
+  // acked every frame look the same from the page's side.
+  globalThis.__orcaRenderCheckAcks = []
   const openStreams = new Map()
   const channel = {
     postMessage: (json) => {
@@ -172,7 +212,25 @@ export function installShellDouble({
         })
         // Accepted by saying nothing, exactly as the real host does: a subscription is open until
         // an `error` or an `end` closes it, and the first thing the page hears is an event.
-        openStreams.set(frame.id, { seq: 0 })
+        openStreams.set(frame.id, { seq: 0, unacked: [], unackedBytes: 0 })
+        return
+      }
+      if (frame.type === 'ack') {
+        // The page's ack is what reopens the window, so a double that ignored it would drop
+        // frames the real host carries. Read exactly as `BridgeHostSubscriptions.ack` reads it.
+        const stream = openStreams.get(frame.id)
+        if (stream) {
+          let acked = 0
+          for (const pending of stream.unacked) {
+            if (pending.seq > frame.seq) {
+              break
+            }
+            stream.unackedBytes -= pending.bytes
+            acked += 1
+          }
+          stream.unacked.splice(0, acked)
+          globalThis.__orcaRenderCheckAcks.push(frame.seq)
+        }
         return
       }
       if (frame.type === 'cancel') {
@@ -209,9 +267,14 @@ export function installShellDouble({
   /**
    * One screencast frame from the shell, priced the way `BridgeHostSubscriptions` prices it.
    *
-   * The cap check is here rather than in the caller because it is the behaviour under test: an
-   * event the shell cannot post is dropped, the stream stays open, and the next frame paints. A
-   * double that posted it anyway would prove the page decodes a frame no shell could send.
+   * All three arms of the host's `canCarry`, not just the size one: a frame over the message cap,
+   * a window already holding the most frames it may, and a window whose bytes this frame would
+   * push past the limit. Dropping is the behaviour under test — the event goes nowhere, the
+   * stream stays open, and the next frame paints — so a double that posted an uncarriable frame
+   * would prove the page decodes something no shell could have sent.
+   *
+   * The window only stays open because the page acks, which the `ack` arm above consumes. That is
+   * what makes a long stream a real test of both rather than of neither.
    */
   globalThis.__orcaRenderCheckEmitBinary = (id, binary) => {
     const stream = openStreams.get(id)
@@ -220,11 +283,19 @@ export function installShellDouble({
     }
     const seq = stream.seq + 1
     const json = JSON.stringify({ v: version, type: 'event', id, seq, binary })
-    if (frameCapBytes > 0 && new TextEncoder().encode(json).length > frameCapBytes) {
+    const bytes = new TextEncoder().encode(json).length
+    const carries =
+      windowCaps === null ||
+      (bytes <= windowCaps.maxMessageBytes &&
+        stream.unacked.length < windowCaps.maxUnackedFrames &&
+        stream.unackedBytes + bytes <= windowCaps.maxUnackedBytes)
+    if (!carries) {
       globalThis.__orcaRenderCheckDroppedFrames.push(binary.frameSeq)
       return 'dropped'
     }
     stream.seq = seq
+    stream.unacked.push({ seq, bytes })
+    stream.unackedBytes += bytes
     channel.onmessage?.({ data: json })
     return 'posted'
   }
