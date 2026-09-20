@@ -53,7 +53,9 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   'native_verb_params',
   /** A result the verb does not declare, refused before it reaches the page. */
   'native_verb_result',
-  /** A shape the table admits and this build does not serve, such as an image mime. */
+  /** A shape the table admits and the shell does not serve. No verb in this build raises it — the
+   *  image mime that did is retired into `native.media.pick` — and it stays in the vocabulary
+   *  because a shell older than the page still answers with it. */
   'native_verb_out_of_scope',
   /** The handler failed on this device. Its own message stays here; only the code crosses. */
   'native_verb_failed',

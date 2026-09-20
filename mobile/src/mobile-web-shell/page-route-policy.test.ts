@@ -81,7 +81,10 @@ describe('the grants this app implements', () => {
       'externalLink',
       'screencastBinary',
       'native.clipboard.write',
-      'native.clipboard.read'
+      'native.clipboard.read',
+      'native.media.pick',
+      'native.media.readChunk',
+      'native.media.release'
     ])
   })
 
