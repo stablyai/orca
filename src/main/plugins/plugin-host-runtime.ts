@@ -117,7 +117,8 @@ export function createPluginWorkerRuntime(
       }
     }
     await activate(orca)
-    send({ type: 'ready', commands: [...commandHandlers.keys()] })
+    // Task source registration isn't wired into this runtime yet; always empty until that lands.
+    send({ type: 'ready', commands: [...commandHandlers.keys()], taskSources: [] })
   }
 
   return {
