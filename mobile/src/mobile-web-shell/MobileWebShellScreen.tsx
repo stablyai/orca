@@ -20,7 +20,7 @@ import {
 } from './mobile-web-shell-dev-facts'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
-import { serveNativeClipboardVerb } from '../platform/native-clipboard'
+import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -159,6 +159,9 @@ export function MobileWebShellScreen({
   } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } =
     usePageHostSnapshot(hostId)
+  // Declared before the bridge so the handler it is handed already belongs to this session: the
+  // media verbs hold staged files, and a registry born after the host would outlive the page.
+  const serveNativeVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
   const bridge = useMobileWebShellBridge({
     hostId,
     route,
@@ -199,7 +202,7 @@ export function MobileWebShellScreen({
       router.push(href)
     },
     // Answered on this device and never forwarded; the host holds it to the verb table first.
-    serveNativeVerb: serveNativeClipboardVerb,
+    serveNativeVerb,
     // Straight to the system handler. The envelope allowlisted the scheme before this ran, so the
     // only failure left is a device with nothing registered for it — a `mailto:` on a phone with no
     // mail account. Reported rather than swallowed: nothing crosses back for a notify, so this is

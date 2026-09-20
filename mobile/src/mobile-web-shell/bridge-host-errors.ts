@@ -66,6 +66,11 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   'native_media_range',
   /** A pick that would leave this session holding more staged items than it may. */
   'native_media_handle_cap',
+  /** A picked item over what this shell stages. Its own code because a page showing "too large"
+   *  and one showing "could not read that" send the user to different places. */
+  'native_media_too_large',
+  /** The OS denied the library permission the pick asked for, which the user can still grant. */
+  'native_media_permission_denied',
   /** A `native.` method on a `subscribe`, which this seam answers on requests only. */
   'native_verb_not_a_stream'
 ] as const

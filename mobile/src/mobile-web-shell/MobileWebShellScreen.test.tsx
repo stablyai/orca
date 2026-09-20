@@ -79,6 +79,18 @@ vi.mock('expo-clipboard', () => ({
   setStringAsync: () => Promise.resolve(true),
   getStringAsync: () => Promise.resolve('')
 }))
+vi.mock('expo-document-picker', () => ({ getDocumentAsync: () => Promise.resolve(null) }))
+vi.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
+  requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
+}))
+vi.mock('expo-file-system', () => ({
+  File: class {
+    readonly size = 0
+    delete(): void {}
+  },
+  Paths: { cache: 'file:///cache' }
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
 }))
