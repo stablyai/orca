@@ -59,6 +59,13 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   'native_verb_out_of_scope',
   /** The handler failed on this device. Its own message stays here; only the code crosses. */
   'native_verb_failed',
+  /** A staged media handle this session does not hold: never minted, released, or swept by the
+   *  TTL. One code for all three, because which it was is a fact about another page's pick. */
+  'native_media_handle_unknown',
+  /** A chunk read starting at or past the end of a staged item that had bytes. */
+  'native_media_range',
+  /** A pick that would leave this session holding more staged items than it may. */
+  'native_media_handle_cap',
   /** A `native.` method on a `subscribe`, which this seam answers on requests only. */
   'native_verb_not_a_stream'
 ] as const
