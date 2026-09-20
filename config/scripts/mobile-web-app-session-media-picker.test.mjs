@@ -103,6 +103,14 @@ describe('the rule that reads a module for a picker', () => {
       "import * as Clipboard from 'expo-clipboard'\nconst pasteboard = Clipboard\nconst again = pasteboard\nconst { getImageAsync } = again\nexport const r = getImageAsync",
     'element-access.ts':
       "import * as Clipboard from 'expo-clipboard'\nexport const r = () => Clipboard['getImageAsync']({ format: 'png' })",
+    'template-access.ts':
+      "import * as Clipboard from 'expo-clipboard'\nexport const r = () => Clipboard[`getImageAsync`]({ format: 'png' })",
+    // A key held in a variable is not read: its value is not at the call site, and a census
+    // reporting a line nobody can act on is one the next reader learns to ignore. The variable is
+    // named after the method and holds a different one, so a rule that read the identifier's text
+    // instead of a literal's would report a call that reads text.
+    'computed-access.ts':
+      "import * as Clipboard from 'expo-clipboard'\nconst getImageAsync = 'getStringAsync'\nexport const r = () => Clipboard[getImageAsync]()",
     // Deliberately back to front: the alias `first` reads from `second`, which is only learned
     // further down. Valid at run time, because the destructure is inside a function the module
     // body has finished before anything calls. A walk that learned aliases in source order would
@@ -136,7 +144,8 @@ describe('the rule that reads a module for a picker', () => {
         'src/re-export.ts:1',
         'src/renamed-image-read.ts:1',
         'src/reverse-order-alias.ts:3',
-        'src/side-effect.ts:1'
+        'src/side-effect.ts:1',
+        'src/template-access.ts:2'
       ])
     } finally {
       rmSync(scratch, { recursive: true, force: true })

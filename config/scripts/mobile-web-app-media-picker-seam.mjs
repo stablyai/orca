@@ -142,9 +142,12 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
     /**
      * `Clipboard.getImageAsync` and `Clipboard['getImageAsync']` are the same call.
      *
-     * Element access with a string literal is the spelling a minifier and a bundler both produce
-     * and the one a reader reaches for to get around a rule about dots. A computed key is not read:
-     * its value is not in the source, and guessing would report a line nobody can act on.
+     * Element access with a literal key is the spelling a minifier and a bundler both produce and
+     * the one a reader reaches for to get around a rule about dots. Quoted or backticked: a
+     * template with no substitution is a string literal with a different quote, and reading only
+     * one of the two would leave the other as the way around this rule. A key with a substitution
+     * or an identifier in it is not read, because its value is not in the source and guessing would
+     * report a line nobody can act on.
      */
     const readsImageOffAlias = (node) => {
       if (!ts.isIdentifier(node.expression) || !clipboardAliases.has(node.expression.text)) {
@@ -153,10 +156,11 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
       if (ts.isPropertyAccessExpression(node)) {
         return node.name.text === CLIPBOARD_IMAGE_READ
       }
+      const key = node.argumentExpression
       return (
-        node.argumentExpression !== undefined &&
-        ts.isStringLiteral(node.argumentExpression) &&
-        node.argumentExpression.text === CLIPBOARD_IMAGE_READ
+        key !== undefined &&
+        (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)) &&
+        key.text === CLIPBOARD_IMAGE_READ
       )
     }
 

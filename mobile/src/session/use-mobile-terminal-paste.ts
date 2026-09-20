@@ -150,7 +150,6 @@ export function useMobileTerminalPaste({
   }, [
     activeHandle,
     agent,
-    clipboard,
     activeHandleRef,
     activeSessionTabTypeRef,
     canSend,

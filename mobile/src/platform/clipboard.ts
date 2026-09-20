@@ -46,11 +46,18 @@ export type ClipboardContents = { text: boolean; image: boolean }
 export type ClipboardImage = { data: string; size: { width: number; height: number } }
 
 /**
- * Reading the device clipboard, which is three calls on a phone and one verb on the web.
+ * Reading the device clipboard, which is three calls on a phone and two verbs on the web.
+ *
+ * This seam owns the pasteboard on both platforms; the media seam beside it owns the pickers only.
+ * On the page `readText` is `native.clipboard.read`, and `readImage` is
+ * `native.media.pick { source: 'clipboard' }` followed by the chunked read behind it, because
+ * `native.clipboard.read` admits only `text` and a 24 MiB base64 image cannot cross an 8 MiB reply
+ * cap. Both answer the shapes a phone answers, so the terminal's paste and the upload path below it
+ * do not know which half of the app they are running in.
  *
  * `readImage` answers null for "nothing there", which is what `getImageAsync` answers and what the
- * terminal's paste already branches on — so the page's lack of an image verb degrades into the
- * path that was always there rather than into a new error.
+ * terminal's paste already branches on. Every other outcome rejects: a refused pick and an empty
+ * pasteboard lead a caller to different screens.
  */
 export type ClipboardReader = {
   readText: () => Promise<string>
