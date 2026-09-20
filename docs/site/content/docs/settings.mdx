@@ -157,7 +157,8 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 
 - **Plugin system** — Settings → Plugins. Turn the system on, then review and enable each plugin individually. Nothing runs until you consent.
 - **Marketplaces** — add a git marketplace source, browse plugins, preview capabilities (panels, commands, language packs, VM recipes), install, update, or roll back.
-- Plugin workers always run on this computer; SSH workspace actions still route through Orca.
+- Plugin panels and commands follow the selected workspace's Orca runtime. For a paired remote server, install, consent to, and enable the plugin on that server; its worker stays there and its panel appears on the connected desktop. Local workspaces and direct SSH workspaces keep using this computer's plugins.
+- Remote plugin catalogs and open panels refresh 10 seconds after each completed request while the window is visible, and on focus. A disconnected or unsupported server does not fall back to local plugins. Marketplace installation, permission management, language packs, and VM recipes in desktop Settings remain local.
 - Capability and API shapes may change; treat third-party plugins as untrusted software.
 
 ## Experimental

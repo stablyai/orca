@@ -38,6 +38,11 @@ vi.mock('./plugin-panel-watchdog', () => ({
   }
 }))
 
+vi.mock('@/runtime/runtime-plugin-client', () => ({
+  readRuntimePluginPanel: vi.fn(),
+  runtimePluginPanelAction: vi.fn()
+}))
+import { readRuntimePluginPanel, runtimePluginPanelAction } from '@/runtime/runtime-plugin-client'
 import PluginPanel from './PluginPanel'
 
 ;(
@@ -354,4 +359,53 @@ describe('PluginPanel', () => {
     expect(readPanelEntryMock).not.toHaveBeenCalled()
     expect(container.textContent).toContain('This plugin panel is no longer available.')
   })
+})
+
+it('remounts same-ID panels across hosts and rejects an old host reply', async () => {
+  let resolveOld: (value: { html: string; sessionToken: string }) => void = () => {}
+  vi.mocked(readRuntimePluginPanel)
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve
+      })
+    )
+    .mockResolvedValueOnce({ html: '<h1>Server B</h1>', sessionToken: REFRESHED_SESSION_TOKEN })
+  usePluginPanelsMock.mockReturnValue([{ ...dashboardPanel, runtimeEnvironmentId: 'a' }])
+  await renderPanel(dashboardPanel.tabKey)
+  usePluginPanelsMock.mockReturnValue([{ ...dashboardPanel, runtimeEnvironmentId: 'b' }])
+  await renderPanel(dashboardPanel.tabKey)
+  await act(async () => {
+    resolveOld({ html: '<h1>Server A</h1>', sessionToken: SESSION_TOKEN })
+  })
+  expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toContain('Server B')
+  expect(container.querySelector('iframe')?.getAttribute('srcdoc')).not.toContain('Server A')
+  expect(readPanelEntryMock).not.toHaveBeenCalled()
+})
+
+it('relays panel actions with the remote session and never through local IPC', async () => {
+  vi.mocked(readRuntimePluginPanel).mockResolvedValue({
+    html: '<h1>Remote</h1>',
+    sessionToken: SESSION_TOKEN
+  })
+  vi.mocked(runtimePluginPanelAction).mockResolvedValue({ ok: true, value: null })
+  usePluginPanelsMock.mockReturnValue([{ ...dashboardPanel, runtimeEnvironmentId: 'server-a' }])
+  await renderPanel(dashboardPanel.tabKey)
+  const iframe = container.querySelector('iframe')
+  const event = new MessageEvent('message', {
+    data: {
+      type: 'orca-panel-action',
+      requestId: 'remote-request',
+      action: 'workspace.readContext'
+    }
+  })
+  Object.defineProperty(event, 'source', { value: iframe?.contentWindow })
+  await act(async () => {
+    window.dispatchEvent(event)
+  })
+  expect(runtimePluginPanelAction).toHaveBeenCalledWith('server-a', {
+    sessionToken: SESSION_TOKEN,
+    action: 'workspace.readContext',
+    params: undefined
+  })
+  expect(panelActionMock).not.toHaveBeenCalled()
 })
