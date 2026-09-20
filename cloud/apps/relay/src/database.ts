@@ -992,7 +992,7 @@ async function waitForPostgresRetry(random: () => number = Math.random): Promise
   await new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
-class PostgresDatabase implements RelayDatabase {
+export class PostgresDatabase implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private readonly pressure: PostgresPoolPressure
   private readonly holds = new CellInventoryHoldSamples()
