@@ -62,8 +62,9 @@ const NARROWEST_JSON_DOUBLE_CHARS = 1
  * predict: the metadata object is a loose one, so a shell may send keys this list has never heard
  * of, and web view mode's frame is a letterboxed desktop viewport the page cannot size.
  *
- * Pinning this against C6.1's real encoder belongs to C6.5, once the encoder and this are both on
- * main; until then the bound is checked against a serialized envelope of the same shape.
+ * `browser-screencast-budget-at-the-shell.test.ts` is what makes this evidence rather than an
+ * assumption checked against a copy of itself: it reconstructs this number, to the byte, from a
+ * frame the real encoder produced and the real host serialized.
  */
 export function binaryEventEnvelopeBytes(): number {
   const skeleton = JSON.stringify({
