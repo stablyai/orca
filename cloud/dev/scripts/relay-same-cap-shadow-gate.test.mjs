@@ -7,6 +7,7 @@ import {
 } from './relay-same-cap-shadow-gate.mjs'
 import {
   ENTRY_LIMIT,
+  SHADOW_GATE_THRESHOLDS,
   SUB_WINDOW_MINUTES,
   combineVerdict,
   countByMinute,
@@ -28,13 +29,17 @@ const ARGV = [
   '--project-id', 'onorca-cloud',
   '--director-service', 'orca-cloud-relay',
   '--drain-started-at', '2026-09-20T20:00:00Z',
-  '--apply-completed-at', '2026-09-20T20:17:00Z',
+  '--apply-started-at', '2026-09-20T20:15:00Z',
+  '--apply-completed-at', '2026-09-20T20:19:30Z',
   '--verify-ended-at', '2026-09-20T20:30:00Z',
   '--output-file', '/tmp/shadow.json'
 ]
 
 function minuteOfTimestamps(minute, count) {
-  return Array.from({ length: count }, (_, index) => `${minute}:${String(index % 60).padStart(2, '0')}Z`)
+  return Array.from(
+    { length: count },
+    (_, index) => `${minute}:${String(index % 60).padStart(2, '0')}Z`
+  )
 }
 
 test('binds every gcloud input to a pinned pattern and to one cell', () => {
@@ -47,20 +52,20 @@ test('binds every gcloud input to a pinned pattern and to one cell', () => {
   // Host and cell id must name the same cell, or the serving check reads a neighbour.
   assert.throws(() => parseShadowGateArguments(ARGV.with(3, 'c29.relay.onorca.dev')))
   // A run with nowhere to write its verdict is not a report-only run, it is a silent one.
-  assert.throws(() => parseShadowGateArguments(ARGV.slice(0, 14)))
+  assert.throws(() => parseShadowGateArguments(ARGV.slice(0, 16)))
 })
 
 test('the window runs from drain start to verify end, with named fallbacks', () => {
   const full = resolveWindow({
     drainStartedAt: '2026-09-20T20:00:00Z',
-    applyCompletedAt: '2026-09-20T20:17:00Z',
+    applyStartedAt: '2026-09-20T20:15:00Z',
     verifyEndedAt: '2026-09-20T20:30:00Z'
   })
   assert.equal(formatTimestamp(full.startedAt), '2026-09-20T20:00:00Z')
   assert.equal(full.startedFrom, 'drain')
   // A resumed rollback never drains, so the apply stands in for the start.
   assert.equal(resolveWindow({
-    applyCompletedAt: '2026-09-20T20:17:00Z',
+    applyStartedAt: '2026-09-20T20:15:00Z',
     verifyEndedAt: '2026-09-20T20:30:00Z'
   }).startedFrom, 'apply')
   assert.equal(formatTimestamp(resolveWindow({
@@ -89,7 +94,9 @@ test('reads are split into sub-windows no longer than the truncation bound', () 
 })
 
 test('a sub-window that came back at the entry limit is truncated, never a count', () => {
-  const truncated = countByMinute([{ timestamps: minuteOfTimestamps('2026-09-19T15:34', ENTRY_LIMIT) }])
+  const truncated = countByMinute([
+    { timestamps: minuteOfTimestamps('2026-09-19T15:34', ENTRY_LIMIT) }
+  ])
   assert.equal(truncated.truncated, true)
   const failed = countByMinute([{ failed: true, timestamps: [] }])
   assert.equal(failed.truncated, true)
@@ -98,7 +105,12 @@ test('a sub-window that came back at the entry limit is truncated, never a count
     { timestamps: minuteOfTimestamps('2026-09-19T15:33', 278) }
   ])
   assert.deepEqual(
-    { peak: counted.peak, peakMinute: counted.peakMinute, total: counted.total, truncated: counted.truncated },
+    {
+      peak: counted.peak,
+      peakMinute: counted.peakMinute,
+      total: counted.total,
+      truncated: counted.truncated
+    },
     { peak: 4722, peakMinute: '2026-09-19T15:34', total: 5000, truncated: false }
   )
 })
@@ -132,17 +144,17 @@ test('director 503s are judged against the busier baseline, not a fixed rate', (
   }).status, 'unverified')
 })
 
-test('the cell has to announce its listener after the apply and stay up', () => {
+test('the cell has to announce its listener and stay up across the whole apply', () => {
   assert.equal(judgeCellServing({
     listeningAt: '2026-09-20T20:18:27Z',
-    crashesAfterBoot: 0
+    crashesSinceApply: 0
   }).status, 'pass')
   assert.equal(judgeCellServing({ listeningAt: null }).status, 'would-block')
   // A resumed rollback restarts nothing, so there is no boot to find and silence proves nothing.
   assert.equal(judgeCellServing({ listeningAt: null, expectBoot: false }).status, 'unverified')
   assert.equal(judgeCellServing({
     listeningAt: '2026-09-20T20:18:27Z',
-    crashesAfterBoot: 1
+    crashesSinceApply: 1
   }).status, 'would-block')
   assert.equal(judgeCellServing({
     listeningAt: null,
@@ -155,13 +167,21 @@ test('pool pressure blocks only when it persists across consecutive samples', ()
   const burst = judgePool({
     label: 'production-gce-c27',
     // The single-sample waiters=71 that a literal rule called an outage.
-    samples: [{ databasePoolWaitersMax: 12 }, { databasePoolWaitersMax: 71 }, { databasePoolWaitersMax: 9 }]
+    samples: [
+      { databasePoolWaitersMax: 12 },
+      { databasePoolWaitersMax: 71 },
+      { databasePoolWaitersMax: 9 }
+    ]
   })
   assert.equal(burst.status, 'warn')
   assert.equal(burst.consecutiveSamplesOverWaitersThreshold, 1)
   assert.equal(judgePool({
     label: 'production-gce-c28',
-    samples: [{ databasePoolWaitersMax: 148 }, { databasePoolWaitersMax: 125 }, { databasePoolWaitersMax: 154 }]
+    samples: [
+      { databasePoolWaitersMax: 148 },
+      { databasePoolWaitersMax: 125 },
+      { databasePoolWaitersMax: 154 }
+    ]
   }).status, 'would-block')
   assert.equal(judgePool({
     label: 'production-gce-c28',
@@ -177,6 +197,12 @@ test('pool pressure blocks only when it persists across consecutive samples', ()
     label: 'production-gce-c29',
     samples: [{ databasePoolWaitersMax: 1 }],
     failed: true
+  }).status, 'unverified')
+  // A truncated sample run has holes, and a hole reads to the run rule as a recovery.
+  assert.equal(judgePool({
+    label: 'production-gce-c29',
+    samples: [{ databasePoolWaitersMax: 1 }],
+    truncated: true
   }).status, 'unverified')
 })
 
@@ -197,53 +223,83 @@ test('the verdict is the worst check, and an unverified read never reads as PASS
   )
 })
 
-// The gcloud seam, driven by the exact entry shapes production returned for the c28 roll on
-// 2026-09-20: the crash at 20:18:10Z and the listener at 20:18:27Z on instance 5031087219978409220.
-function productionLikeGcloud(overrides = {}) {
+const C28_INSTANCE = '5031087219978409220'
+
+// Runtime-metrics samples at the 30 s cadence production emits them at, unless a case needs
+// enough of them inside one sub-window to reach the read's limit.
+function metricSamples({ cellId, from, count, payload = {}, intervalMs = 30_000 }) {
+  return Array.from({ length: count }, (_, index) => ({
+    matches: ['orca_relay_runtime_metrics', `jsonPayload.cellId="${cellId}"`],
+    timestamp: new Date(Date.parse(from) + index * intervalMs).toISOString(),
+    payload: {
+      totalConnections: 857,
+      databasePoolWaitersMax: 4,
+      databasePoolWaiting: 1,
+      sqlFailuresDelta: 0,
+      reconnectsDelta: 0,
+      ...payload
+    }
+  }))
+}
+
+// The exact entry shapes production returned for c28 on 2026-09-20: the crash at 20:18:10Z and
+// the listener at 20:18:27Z, both on instance 5031087219978409220.
+function productionLikeEntries() {
+  return [
+    {
+      matches: ['listening on https://c28.relay.onorca.dev'],
+      timestamp: '2026-09-20T20:18:27.470301969Z',
+      instanceId: C28_INSTANCE
+    },
+    ...metricSamples({ cellId: 'production-gce-c28', from: '2026-09-20T20:20:00Z', count: 20 }),
+    ...metricSamples({ cellId: 'production-gce-c27', from: '2026-09-20T20:20:00Z', count: 20 }),
+    ...metricSamples({ cellId: 'production-gce-c29', from: '2026-09-20T20:20:00Z', count: 20 })
+  ]
+}
+
+/**
+ * A gcloud seam that honours the filter it is given: its timestamp bounds, its instance-id scope,
+ * the `--limit`, and the newest-first order. A fake that ignored the bounds would let a
+ * wrongly-bounded query pass, which is exactly the bug class these tests exist to catch.
+ */
+function gcloudSeam(entries = productionLikeEntries()) {
   const calls = []
   return {
     calls,
     retryDelayMs: 0,
-    runGcloud: async (args) => {
+    runGcloud: async (args, options) => {
       const filter = args[2]
-      calls.push(filter)
-      for (const [needle, entries] of Object.entries(overrides)) {
-        if (filter.includes(needle)) return { stdout: JSON.stringify(entries) }
+      const limit = Number(args[args.indexOf('--limit') + 1])
+      calls.push({ filter, limit, options })
+      const startedAt = Date.parse(/timestamp>="([^"]+)"/.exec(filter)[1])
+      const endedAt = Date.parse(/timestamp<"([^"]+)"/.exec(filter)[1])
+      const instanceId = /resource\.labels\.instance_id="([^"]+)"/.exec(filter)?.[1]
+      const matched = entries.filter((entry) => {
+        const at = Date.parse(entry.timestamp)
+        if (at < startedAt || at >= endedAt) return false
+        if (instanceId && entry.instanceId !== instanceId) return false
+        return entry.matches.every((needle) => filter.includes(needle))
+      })
+      matched.sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
+      return {
+        stdout: JSON.stringify(matched.slice(0, limit).map((entry) => ({
+          timestamp: entry.timestamp,
+          ...(entry.instanceId ? { resource: { labels: { instance_id: entry.instanceId } } } : {}),
+          ...(entry.payload ? { jsonPayload: entry.payload } : {})
+        })))
       }
-      if (filter.includes('listening on https://c28.relay.onorca.dev')) {
-        return {
-          stdout: JSON.stringify([
-            { timestamp: '2026-09-20T20:18:27.470301969Z', resource: { labels: { instance_id: '5031087219978409220' } } }
-          ])
-        }
-      }
-      if (filter.includes('throw er')) return { stdout: '[]' }
-      if (filter.includes('orca_relay_runtime_metrics')) {
-        return {
-          stdout: JSON.stringify([{
-            timestamp: '2026-09-20T20:25:57Z',
-            jsonPayload: {
-              totalConnections: 857,
-              databasePoolWaitersMax: 4,
-              databasePoolWaiting: 1,
-              sqlFailuresDelta: 0,
-              reconnectsDelta: 0
-            }
-          }])
-        }
-      }
-      return { stdout: '[]' }
     }
   }
 }
 
 test('a healthy roll reads as PASS and names the instance it proved serving', async () => {
-  const seam = productionLikeGcloud()
+  const seam = gcloudSeam()
   const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
   assert.equal(report.verdict, 'PASS')
   assert.equal(report.reportOnly, true)
-  assert.equal(report.cellInstanceId, '5031087219978409220')
+  assert.equal(report.cellInstanceId, C28_INSTANCE)
   assert.equal(report.window.startedFrom, 'drain')
+  assert.equal(report.window.applyCompletedAt, '2026-09-20T20:19:30Z')
   assert.deepEqual(Object.keys(report.checks).sort(), [
     'cellPool',
     'cellServing',
@@ -253,28 +309,87 @@ test('a healthy roll reads as PASS and names the instance it proved serving', as
     'fleetPool:production-gce-c29'
   ])
   // Every read carries explicit bounds: --freshness does not bind on these logs.
-  for (const filter of seam.calls) assert.match(filter, /timestamp>="[^"]+" AND timestamp<"[^"]+"/)
+  for (const { filter } of seam.calls) {
+    assert.match(filter, /timestamp>="[^"]+" AND timestamp<"[^"]+"/)
+  }
   // Cell text lives in jsonPayload.message; a textPayload filter matches nothing and says so.
-  assert.equal(seam.calls.some((filter) => filter.includes('textPayload')), false)
+  assert.equal(seam.calls.some(({ filter }) => filter.includes('textPayload')), false)
   assert.match(renderStepSummary(report), /Shadow health gate \(report only\): PASS/)
 })
 
-test('a crash after the new boot reads as WOULD_BLOCK without failing the run', async () => {
-  const seam = productionLikeGcloud({
-    'throw er': [{ timestamp: '2026-09-20T20:18:10.651702662Z' }]
-  })
+// The listener lands while the MIG is still converging, so a boot search opening at the apply's
+// completion finds nothing and calls a healthy roll a failure.
+test('the boot search opens at the apply start, not at its completion', async () => {
+  const seam = gcloudSeam()
   const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
+  assert.equal(report.checks.cellServing.status, 'pass')
+  assert.equal(report.checks.cellServing.listeningAt, '2026-09-20T20:18:27.470301969Z')
+  const listenerRead = seam.calls.find(({ filter }) => filter.includes('listening on https://'))
+  assert.match(listenerRead.filter, /timestamp>="2026-09-20T20:15:00Z"/)
+  // The listener at 20:18:27 sits after the apply start and before its completion at 20:19:30,
+  // so a completion-bounded search would have missed it entirely.
+  assert.ok(Date.parse('2026-09-20T20:18:27.470301969Z') < Date.parse('2026-09-20T20:19:30Z'))
+})
+
+// A crash-restart loop ends with a listener announcement that looks like a clean boot. Counting
+// crashes only after the last announcement erases the loop that produced it.
+test('a crash before the final listener still counts against the roll', async () => {
+  const seam = gcloudSeam([
+    ...productionLikeEntries(),
+    {
+      matches: ['throw er'],
+      timestamp: '2026-09-20T20:18:10.651702662Z',
+      instanceId: C28_INSTANCE
+    }
+  ])
+  const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
+  assert.equal(report.checks.cellServing.crashesSinceApply, 1)
+  assert.equal(report.checks.cellServing.status, 'would-block')
   assert.equal(report.verdict, 'WOULD_BLOCK')
-  assert.equal(report.checks.cellServing.crashesAfterBoot, 1)
-  // Crashes are scoped by instance_id, the only cell label these entries carry.
-  assert.ok(seam.calls.some((filter) => filter.includes('resource.labels.instance_id="5031087219978409220"')))
+  const crashRead = seam.calls.find(({ filter }) => filter.includes('throw er'))
+  // Bounded at the apply start, and still scoped to the instance the listener identified.
+  assert.match(crashRead.filter, /timestamp>="2026-09-20T20:15:00Z"/)
+  assert.match(crashRead.filter, new RegExp(`resource\\.labels\\.instance_id="${C28_INSTANCE}"`))
+})
+
+test('a crash on a neighbouring instance is not charged to this cell', async () => {
+  const seam = gcloudSeam([
+    ...productionLikeEntries(),
+    { matches: ['throw er'], timestamp: '2026-09-20T20:18:10Z', instanceId: '9999999999999999999' }
+  ])
+  const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
+  assert.equal(report.checks.cellServing.crashesSinceApply, 0)
+  assert.equal(report.checks.cellServing.status, 'pass')
+})
+
+// A sample run returned at the read's limit has holes, and the consecutive-sample rule reads a
+// hole as a recovery, so it must not be judged as though it were complete.
+test('a runtime-metrics read at its limit is unverified, not a calm cell', async () => {
+  const seam = gcloudSeam([
+    ...productionLikeEntries(),
+    // 600 samples packed into the first sub-window, past the 500-entry read limit.
+    ...metricSamples({
+      cellId: 'production-gce-c28',
+      from: '2026-09-20T20:00:00Z',
+      count: 600,
+      intervalMs: 500,
+      payload: { databasePoolWaitersMax: 1 }
+    })
+  ])
+  const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
+  assert.equal(report.checks.cellPool.status, 'unverified')
+  assert.equal(report.checks.cellPool.truncated, true)
+  // The neighbours were read normally, so only the truncated cell is unverified.
+  assert.equal(report.checks['fleetPool:production-gce-c27'].status, 'pass')
+  assert.equal(report.verdict, 'WARN')
 })
 
 test('a resume, which restarts nothing, does not read a missing boot as a failure', async () => {
-  const resumed = ARGV.with(9, '').with(11, '')
-  const report = await evaluateShadowGate(parseShadowGateArguments(resumed), {
-    ...productionLikeGcloud({ 'listening on https://c28.relay.onorca.dev': [] })
-  })
+  const resumed = ARGV.with(9, '').with(11, '').with(13, '')
+  const seam = gcloudSeam(productionLikeEntries().filter(
+    (entry) => !entry.matches[0].startsWith('listening')
+  ))
+  const report = await evaluateShadowGate(parseShadowGateArguments(resumed), seam)
   assert.equal(report.window.startedFrom, 'fallback')
   assert.equal(report.checks.cellServing.status, 'unverified')
   assert.equal(report.verdict, 'WARN')
@@ -288,6 +403,24 @@ test('a gcloud read that never completes is unverified, not a crashed gate', asy
   assert.equal(report.verdict, 'WARN')
   assert.equal(report.checks.director503.status, 'unverified')
   assert.equal(report.checks.cellServing.status, 'unverified')
+})
+
+// continue-on-error bounds the job's outcome but not its clock; an unbounded read could spend the
+// rollout's remaining minutes before the job's own timeout noticed.
+test('every read is given a bounded timeout, and a timed-out read is just a failed read', async () => {
+  const seam = gcloudSeam()
+  await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
+  assert.ok(seam.calls.length > 0)
+  for (const { options } of seam.calls) {
+    assert.equal(options.timeoutMs, SHADOW_GATE_THRESHOLDS.readTimeoutMs)
+    assert.ok(options.timeoutMs > 0 && options.timeoutMs <= 120_000)
+  }
+  const timedOut = await evaluateShadowGate(parseShadowGateArguments(ARGV), {
+    retryDelayMs: 0,
+    runGcloud: async () => { throw Object.assign(new Error('ETIMEDOUT'), { killed: true }) }
+  })
+  assert.equal(timedOut.checks.director503.status, 'unverified')
+  assert.equal(timedOut.verdict, 'WARN')
 })
 
 test('the job runs the gate report-only, after verification, and uploads its artifact', () => {
@@ -305,6 +438,7 @@ test('the job runs the gate report-only, after verification, and uploads its art
   // stamps reach the script through the environment rather than being expanded into its shell.
   for (const [step, output] of [
     ['drain', 'drain-started-at'],
+    ['apply', 'apply-started-at'],
     ['apply', 'apply-completed-at'],
     ['verify-target', 'verify-ended-at']
   ]) {
@@ -312,6 +446,16 @@ test('the job runs the gate report-only, after verification, and uploads its art
     assert.match(gate, new RegExp(`\\$\\{\\{ steps\\.${step}\\.outputs\\.${output} \\}\\}`))
     assert.match(gate, new RegExp(`--${output} "\\$\\{[A-Z_]+\\}"`))
   }
+  // The apply-start stamp has to precede the operation that can restart the instance, or the
+  // listener it bounds the search by has already happened.
+  const applyStep = workflow.slice(
+    workflow.indexOf('- name: Apply only the selected same-cap template and MIG'),
+    workflow.indexOf('- id: post-auth')
+  )
+  assert.ok(
+    applyStep.indexOf('apply-started-at=') < applyStep.indexOf('terraform -chdir=infra/terraform apply'),
+    'apply-started-at must be stamped before terraform apply'
+  )
   // Verification has to have happened first, or the gate judges a cell nothing checked, and the
   // restore too, so reading logs never holds the cell out of admission for longer than today.
   for (const earlier of [

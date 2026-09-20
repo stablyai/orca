@@ -15,6 +15,7 @@ import {
   BASELINE_OFFSET_HOURS,
   ENTRY_LIMIT,
   FLEET_POOL_CELL_IDS,
+  SHADOW_GATE_THRESHOLDS,
   combineVerdict,
   countByMinute,
   formatTimestamp,
@@ -37,6 +38,7 @@ const SERVICE_NAME = /^[a-z][a-z0-9-]{0,62}$/
 
 const READ_ATTEMPTS = 3
 const READ_RETRY_DELAY_MS = 5000
+const READ_TIMEOUT_MS = SHADOW_GATE_THRESHOLDS.readTimeoutMs
 // json(timestamp) over a busy minute is a few hundred KB; leave room for the widest sub-window.
 const READ_MAX_BUFFER_BYTES = 256 * 1024 * 1024
 
@@ -57,6 +59,9 @@ export function parseShadowGateArguments(argv) {
     projectId: required('project-id', PROJECT_ID),
     directorService: required('director-service', SERVICE_NAME),
     drainStartedAt: values.get('drain-started-at') || '',
+    // The listener lands while the MIG is still converging, so the boot search has to open at the
+    // apply's start; a bound taken at its completion is already past the announcement it looks for.
+    applyStartedAt: values.get('apply-started-at') || '',
     applyCompletedAt: values.get('apply-completed-at') || '',
     verifyEndedAt: values.get('verify-ended-at') || '',
     outputFile: values.get('output-file') || '',
@@ -88,7 +93,7 @@ async function readLogEntries(reader, { filter, projection, limit = ENTRY_LIMIT 
   let lastError
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
     try {
-      const { stdout } = await reader.runGcloud(args)
+      const { stdout } = await reader.runGcloud(args, { timeoutMs: reader.readTimeoutMs })
       return { entries: JSON.parse(stdout || '[]'), failed: false }
     } catch (error) {
       lastError = error
@@ -145,11 +150,11 @@ async function readDirector503(reader, { config, window }) {
  * because instance_id is stable across a container restart and is the only cell label these
  * entries carry.
  */
-async function readCellServing(reader, { config, window, bootAfter, expectBoot }) {
+async function readCellServing(reader, { config, window, searchFrom, expectBoot }) {
   const listening = await readLogEntries(reader, {
     filter: `${CELL_LOG_SCOPE}`
       + ` AND jsonPayload.message:"listening on https://${config.cellHost}"`
-      + ` AND ${timestampBounds({ startedAt: bootAfter, endedAt: window.endedAt })}`,
+      + ` AND ${timestampBounds({ startedAt: searchFrom, endedAt: window.endedAt })}`,
     projection: 'json(timestamp,resource.labels.instance_id)',
     limit: 50
   })
@@ -165,14 +170,14 @@ async function readCellServing(reader, { config, window, bootAfter, expectBoot }
     filter: `${CELL_LOG_SCOPE}`
       + ` AND jsonPayload.message:"throw er"`
       + ` AND resource.labels.instance_id="${boot.resource.labels.instance_id}"`
-      + ` AND ${timestampBounds({ startedAt: new Date(boot.timestamp), endedAt: window.endedAt })}`,
+      + ` AND ${timestampBounds({ startedAt: searchFrom, endedAt: window.endedAt })}`,
     projection: 'json(timestamp)',
     limit: 100
   })
   return {
     serving: judgeCellServing({
       listeningAt: boot.timestamp,
-      crashesAfterBoot: crashes.entries.length,
+      crashesSinceApply: crashes.entries.length,
       read: crashes,
       expectBoot
     }),
@@ -194,6 +199,10 @@ async function readRuntimeMetrics(reader, { cellId, window }) {
     .join(',')})`
   const samples = []
   let failed = false
+  let truncated = false
+  // Samples land every 30 s, so a 10-minute sub-window holds ~20. A read that comes back at this
+  // many is not a calm sub-window, it is a truncated one, and its gaps read as recoveries.
+  const limit = 500
   for (const subWindow of splitWindow(window)) {
     const read = await readLogEntries(reader, {
       filter: `${CELL_LOG_SCOPE}`
@@ -201,14 +210,15 @@ async function readRuntimeMetrics(reader, { cellId, window }) {
         + ` AND jsonPayload.cellId="${cellId}"`
         + ` AND ${timestampBounds(subWindow)}`,
       projection,
-      // Samples land every 30 s, so a 10-minute sub-window holds ~20; anything near this many
-      // means the shape changed and the read is no longer the one these thresholds were set on.
-      limit: 500
+      limit
     })
     if (read.failed) failed = true
-    for (const entry of read.entries) samples.push({ timestamp: entry.timestamp, ...entry.jsonPayload })
+    if (read.entries.length >= limit) truncated = true
+    for (const entry of read.entries) {
+      samples.push({ timestamp: entry.timestamp, ...entry.jsonPayload })
+    }
   }
-  return { samples, failed }
+  return { samples, failed, truncated }
 }
 
 async function readCloudSqlFatal(reader, { window }) {
@@ -219,11 +229,16 @@ async function readCloudSqlFatal(reader, { window }) {
   return judgeCloudSqlFatal({ count: counts.total, truncated: counts.truncated })
 }
 
-export async function evaluateShadowGate(config, { runGcloud, retryDelayMs = READ_RETRY_DELAY_MS }) {
-  const reader = { runGcloud, retryDelayMs, projectId: config.projectId }
+export async function evaluateShadowGate(config, {
+  runGcloud,
+  retryDelayMs = READ_RETRY_DELAY_MS,
+  readTimeoutMs = READ_TIMEOUT_MS
+}) {
+  const reader = { runGcloud, retryDelayMs, readTimeoutMs, projectId: config.projectId }
   const window = resolveWindow(config)
-  const bootAfter = config.applyCompletedAt
-    ? new Date(Date.parse(config.applyCompletedAt))
+  // Everything this roll's instance logged, from the moment the apply could first restart it.
+  const searchFrom = config.applyStartedAt
+    ? new Date(Date.parse(config.applyStartedAt))
     : window.startedAt
   // Serialised on purpose: a burst of concurrent reads is what earns a Logging 429, and a 429 is
   // the one failure that comes back as a short answer rather than an error.
@@ -233,7 +248,7 @@ export async function evaluateShadowGate(config, { runGcloud, retryDelayMs = REA
   const cell = await readCellServing(reader, {
     config,
     window,
-    bootAfter,
+    searchFrom,
     expectBoot: window.startedFrom !== 'fallback'
   })
   const cloudSql = await readCloudSqlFatal(reader, { window })
@@ -257,7 +272,10 @@ export async function evaluateShadowGate(config, { runGcloud, retryDelayMs = REA
     window: {
       startedAt: formatTimestamp(window.startedAt),
       endedAt: formatTimestamp(window.endedAt),
-      startedFrom: window.startedFrom
+      startedFrom: window.startedFrom,
+      // Recorded, not judged: an operator comparing verdicts needs to see how long the apply took
+      // next to when the cell actually came back.
+      applyCompletedAt: config.applyCompletedAt || null
     },
     verdict: combineVerdict(checks),
     checks
@@ -267,7 +285,13 @@ export async function evaluateShadowGate(config, { runGcloud, retryDelayMs = REA
 async function main() {
   const config = parseShadowGateArguments(process.argv.slice(2))
   const report = await evaluateShadowGate(config, {
-    runGcloud: (args) => execFileAsync('gcloud', args, { maxBuffer: READ_MAX_BUFFER_BYTES })
+    // `timeout` makes Node kill the child itself; continue-on-error bounds the job's outcome but
+    // not its clock, and a stalled read would otherwise spend the rollout's remaining minutes.
+    runGcloud: (args, { timeoutMs }) => execFileAsync('gcloud', args, {
+      maxBuffer: READ_MAX_BUFFER_BYTES,
+      timeout: timeoutMs,
+      killSignal: 'SIGKILL'
+    })
   })
   await writeFile(config.outputFile, `${JSON.stringify(report, null, 2)}\n`)
   if (config.summaryFile) await appendFile(config.summaryFile, renderStepSummary(report))

@@ -670,6 +670,10 @@ jobs:
               --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
               "${POOL_ARGUMENTS[@]}")"
           echo "${PLAN_REVIEW}"
+          # Stamped before the apply, not after it: the new container announces its listener while
+          # the MIG is still converging, so a bound taken at the end of this step is already past
+          # the announcement the shadow gate looks for.
+          echo "apply-started-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
           terraform -chdir=infra/terraform apply -auto-approve \
             "${RUNNER_TEMP}/relay-same-cap.tfplan"
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -688,7 +692,8 @@ jobs:
             gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
               --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
           fi
-          # The new container boots behind this; the gate looks for its listener after this instant.
+          # Recorded for the operator comparing verdicts; the gate's boot search opens at the
+          # apply-started-at stamp above, not here.
           echo "apply-completed-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: post-auth
@@ -818,6 +823,7 @@ jobs:
         continue-on-error: true
         env:
           DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}
+          APPLY_STARTED_AT: ${{ steps.apply.outputs.apply-started-at }}
           APPLY_COMPLETED_AT: ${{ steps.apply.outputs.apply-completed-at }}
           VERIFY_ENDED_AT: ${{ steps.verify-target.outputs.verify-ended-at }}
           SHADOW_GATE_DIRECTORY: ${{ runner.temp }}/relay-same-cap-shadow-gate
@@ -830,6 +836,7 @@ jobs:
             --project-id "${GCP_PROJECT_ID}" \
             --director-service orca-cloud-relay \
             --drain-started-at "${DRAIN_STARTED_AT}" \
+            --apply-started-at "${APPLY_STARTED_AT}" \
             --apply-completed-at "${APPLY_COMPLETED_AT}" \
             --verify-ended-at "${VERIFY_ENDED_AT}" \
             --summary-file "${GITHUB_STEP_SUMMARY}" \

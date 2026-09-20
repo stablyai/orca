@@ -35,7 +35,9 @@ export const SHADOW_GATE_THRESHOLDS = {
   cloudSqlFatal: { warnAbove: 0, blockAbove: 20 },
   // With no drain timestamp (a resumed rollback skips the drain) the window still has to start
   // somewhere; this is how far back of the verify end it reaches instead.
-  fallbackWindowMinutes: 30
+  fallbackWindowMinutes: 30,
+  // A read that stalls must not be allowed to spend the job's remaining minutes.
+  readTimeoutMs: 60_000
 }
 
 const MINUTE_MS = 60_000
@@ -53,16 +55,16 @@ export function formatTimestamp(date) {
 
 /**
  * The window a cell's roll is judged over: its drain start to its verify end. A resumed rollback
- * never drains, so the apply completion, then a fixed lookback, stands in for the start.
+ * never drains, so the apply start, then a fixed lookback, stands in for it.
  */
 export function resolveWindow({
   drainStartedAt,
-  applyCompletedAt,
+  applyStartedAt,
   verifyEndedAt,
   fallbackMinutes = SHADOW_GATE_THRESHOLDS.fallbackWindowMinutes
 }) {
   const endedAt = parseTimestamp(verifyEndedAt, 'verify end')
-  const start = drainStartedAt || applyCompletedAt
+  const start = drainStartedAt || applyStartedAt
   const startedAt = start
     ? parseTimestamp(start, 'window start')
     : new Date(endedAt.getTime() - fallbackMinutes * MINUTE_MS)
@@ -152,22 +154,24 @@ export function judgeDirector503({ observed, baselines }) {
 }
 
 /**
- * The cell's own container: it has to have announced its listener after the apply, and it must not
- * have crashed since. A crash before that announcement is the boot the wave replaced.
+ * The cell's own container: it has to have announced its listener since the apply began, and it
+ * must not have crashed anywhere in that span. Counting crashes only after the *last* listener
+ * would erase a crash-restart loop, whose later announcement looks like a clean boot; the MIG
+ * recreates the instance, so everything on this instance id since the apply belongs to this roll.
  *
  * A missing announcement only means a failure where a restart was expected. A resumed rollback
  * deliberately restarts nothing, so there is no boot for this oracle to observe and its silence
  * says nothing either way.
  */
-export function judgeCellServing({ listeningAt, crashesAfterBoot, read, expectBoot = true }) {
+export function judgeCellServing({ listeningAt, crashesSinceApply, read, expectBoot = true }) {
   const detail = {
     listeningAt: listeningAt ?? null,
-    crashesAfterBoot: crashesAfterBoot ?? 0,
+    crashesSinceApply: crashesSinceApply ?? 0,
     expectBoot
   }
   if (read?.failed) return { status: 'unverified', ...detail }
   if (!listeningAt) return { status: expectBoot ? 'would-block' : 'unverified', ...detail }
-  if (detail.crashesAfterBoot > 0) return { status: 'would-block', ...detail }
+  if (detail.crashesSinceApply > 0) return { status: 'would-block', ...detail }
   return { status: 'pass', ...detail }
 }
 
@@ -176,7 +180,7 @@ export function judgeCellServing({ listeningAt, crashesAfterBoot, read, expectBo
  * persist across consecutive samples, which is what separates it from the one-sample false
  * positives a literal rule produced this week.
  */
-export function judgePool({ label, samples, failed = false }) {
+export function judgePool({ label, samples, failed = false, truncated = false }) {
   const { waitersMax, waitersConsecutiveSamples, sqlFailuresDelta } = SHADOW_GATE_THRESHOLDS.pool
   const waiters = samples.map((sample) => sample.databasePoolWaitersMax ?? 0)
   const failures = samples.map((sample) => sample.sqlFailuresDelta ?? 0)
@@ -191,9 +195,11 @@ export function judgePool({ label, samples, failed = false }) {
     databasePoolWaitingMax: Math.max(0, ...samples.map((sample) => sample.databasePoolWaiting ?? 0)),
     waitersThreshold: waitersMax,
     consecutiveSamplesThreshold: waitersConsecutiveSamples,
-    sqlFailuresDeltaThreshold: sqlFailuresDelta
+    sqlFailuresDeltaThreshold: sqlFailuresDelta,
+    truncated
   }
-  if (failed || samples.length === 0) return { status: 'unverified', ...detail }
+  // A truncated sample run has holes, and the consecutive-sample rule reads a hole as a recovery.
+  if (failed || truncated || samples.length === 0) return { status: 'unverified', ...detail }
   if (
     detail.consecutiveSamplesOverWaitersThreshold >= waitersConsecutiveSamples
     || detail.sqlFailuresDeltaMax > sqlFailuresDelta
