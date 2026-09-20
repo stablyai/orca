@@ -271,7 +271,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       <AddProjectModal
         visible={state.showAddProject}
         client={client}
-        onProjectAdded={(repo) => actions.openNewWorktreeModal(repo)}
+        onProjectAdded={(repo) => void actions.handleProjectAdded(repo)}
         onClose={() => state.setShowAddProject(false)}
       />
 
