@@ -1,7 +1,12 @@
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { getActiveWorktreeId, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import {
+  ensureTerminalVisible,
+  getActiveWorktreeId,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './helpers/store'
 import { createTerminalTabFromMenu } from './helpers/terminal-tab-menu'
 import {
   execInTerminal,
@@ -62,6 +67,15 @@ test('creates a worktree, keeps its terminal isolated, and switches back @golden
     await expect(
       orcaPage.locator(`[role="option"][data-worktree-id="${originalWorktreeId}"]`)
     ).toHaveAttribute('aria-current', 'page', { timeout: 20_000 })
+    // Why: sidebar aria-current can land before the store/terminal remount.
+    // Mac release goldens then wait 30s on a child tab whose PaneManager is gone.
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), {
+        timeout: 20_000,
+        message: 'store did not activate the original worktree after sidebar click'
+      })
+      .toBe(originalWorktreeId)
+    await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     expect(await waitForActivePanePtyId(orcaPage, 30_000)).toBe(parentPtyId)
   } finally {

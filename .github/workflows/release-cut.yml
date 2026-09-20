@@ -850,7 +850,8 @@ jobs:
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
             tests/e2e/golden-source-control-open-diff.spec.ts \
-            tests/e2e/golden-terminal-file-link.spec.ts
+            tests/e2e/golden-terminal-file-link.spec.ts \
+            tests/e2e/golden-worktree-create-switch.spec.ts
 
       - name: Install native build tools
         if: runner.os == 'Linux'
