@@ -438,6 +438,31 @@ describe('CommentMarkdown link click handler', () => {
     ])
   })
 
+  it('linkifies complete relative line-range references', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CommentMarkdown
+          variant="document"
+          content="Open fakesnow/cursor.py:447-464."
+          onLinkClick={vi.fn()}
+          linkifyFilePaths
+        />
+      )
+    })
+
+    const anchor = container.querySelector<HTMLAnchorElement>('a')
+    expect(anchor?.textContent).toBe('fakesnow/cursor.py:447-464')
+    expect(routeNativeChatHref(anchor?.getAttribute('href'))).toEqual({
+      kind: 'file',
+      pathText: 'fakesnow/cursor.py:447-464',
+      line: null
+    })
+  })
+
   it('links complete Unicode paths and extensions that begin with a digit', () => {
     container = document.createElement('div')
     document.body.appendChild(container)

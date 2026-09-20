@@ -169,7 +169,7 @@ export const URL_TAP_WEBVIEW_JS = `
     return { line: line, column: column };
   }
   function parseFilePathTrailingLineTarget(filePath) {
-    var match = /^(.*?)(?::(\\d+))(?::(\\d+))?$/.exec(filePath);
+    var match = /^(.*?)(?::(\\d+)(?:-\\d+)?)(?::(\\d+))?$/.exec(filePath);
     if (!match || !match[1] || match[1].charAt(match[1].length - 1) === '/' || match[1].charAt(match[1].length - 1) === '\\\\') return null;
     var line = parseInt(match[2], 10);
     var column = match[3] ? parseInt(match[3], 10) : null;

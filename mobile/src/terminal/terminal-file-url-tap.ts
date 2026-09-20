@@ -82,7 +82,7 @@ function parseFileUrlLineHash(hash: string): { line: number; column: number | nu
 }
 
 function parseFilePathTrailingLineTarget(filePath: string): TappedFilePath | null {
-  const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(filePath)
+  const match = /^(.*?)(?::(\d+)(?:-\d+)?)(?::(\d+))?$/.exec(filePath)
   if (!match || !match[1] || match[1].endsWith('/') || match[1].endsWith('\\')) {
     return null
   }

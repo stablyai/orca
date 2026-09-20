@@ -9,18 +9,18 @@
 // import RN modules.
 //
 // Matches both slash-bearing paths AND bare filenames with an extension
-// (README.md, src/index.ts:5) — like desktop, we propose candidates and let the
+// (README.md, src/index.ts:5, src/index.ts:5-9) — like desktop, we propose candidates and let the
 // host's files.resolveTerminalPath existence check reject non-files. Agents
 // often print a bare filename (the markdown link target is consumed, leaving
 // only the label text), so requiring a slash would miss the common case.
 export const TERMINAL_PATH_TAP_JS = String.raw`
-	  var FILE_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-\/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g;
-	  var SPACED_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|\`\r\n]+(?::\d+)?(?::\d+)?/g;
+	  var FILE_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-\/%+@\\()[\]]*(?::\d+(?:-\d+)?)?(?::\d+)?/g;
+	  var SPACED_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|\`\r\n]+(?::\d+(?:-\d+)?)?(?::\d+)?/g;
 	  var PATH_LEADING_TRIM = { '(': 1, '[': 1, '{': 1, '"': 1, "'": 1 };
 	  var PATH_TRAILING_TRIM = { ')': 1, ']': 1, '}': 1, '"': 1, "'": 1, ',': 1, ';': 1, '.': 1 };
 
 	  function parsePathLineCol(value) {
-    var m = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value);
+    var m = /^(.*?)(?::(\d+)(?:-\d+)?)?(?::(\d+))?$/.exec(value);
     if (!m) return null;
     var pathText = m[1];
     var last = pathText.charAt(pathText.length - 1);
@@ -53,7 +53,7 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
 	    // A line-end extension token only extends the span when the added segment
 	    // is path-like (contains a separator) — prose must not be swallowed.
 	    var selected = null;
-	    var extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g;
+    var extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+(?:-\d+)?)?(?::\d+)?(?=\s+|$)/g;
 	    var match;
 	    while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
 	      var end = match.index + match[0].length;
@@ -82,7 +82,7 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
 	    var range = trimSpacedPathTrailingProse({ text: text, startIndex: 0, endIndex: text.length });
 	    if (!range) return false;
 	    var trimmed = range.text.replace(/\s+$/, '');
-	    return /\s/.test(trimmed) && /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?$/.test(trimmed);
+    return /\s/.test(trimmed) && /\.[A-Za-z0-9_+-]+(?::\d+(?:-\d+)?)?(?::\d+)?$/.test(trimmed);
 	  }
 
 	  function matchSpacedFilePathAtColumn(lineText, col) {

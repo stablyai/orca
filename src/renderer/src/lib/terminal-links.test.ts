@@ -216,6 +216,21 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('keeps a line-range suffix in the link and opens at its start', () => {
+      const [link] = extractTerminalFileLinks('fakesnow/cursor.py:447-464')
+      expect(link).toMatchObject({
+        pathText: 'fakesnow/cursor.py',
+        line: 447,
+        column: null,
+        displayText: 'fakesnow/cursor.py:447-464'
+      })
+      expect(resolveTerminalFileLink(link, '/repo')).toEqual({
+        absolutePath: '/repo/fakesnow/cursor.py',
+        line: 447,
+        column: null
+      })
+    })
+
     it('handles large spaced path lists without quadratic overlap scans', () => {
       const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
 
