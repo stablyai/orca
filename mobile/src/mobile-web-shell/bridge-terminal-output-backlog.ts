@@ -1,6 +1,6 @@
 import { terminalStreamJsonByteLength } from '../../../src/shared/terminal-stream-json-byte-length'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION } from './bridge/bridge-envelope'
+import { BRIDGE_PROTOCOL_VERSION, bridgeEventEnvelopeBytes } from './bridge/bridge-envelope'
 
 /**
  * What the shell does with terminal output the page has not caught up with.
@@ -167,7 +167,7 @@ export class BridgeTerminalOutputBacklog {
       this.queue.push({ kind: 'output', streamId: output.streamId, chunk: output.chunk, bytes })
       this.add(bytes)
     }
-    this.armSilence()
+    this.syncSilence()
     return this.pending <= TERMINAL_STREAM_MAX_PENDING_BYTES
   }
 
@@ -191,6 +191,7 @@ export class BridgeTerminalOutputBacklog {
     this.take(head.bytes)
     this.frames += 1
     if (head.kind === 'other') {
+      this.syncSilence()
       return head.payload
     }
     let chunk = head.chunk
@@ -212,15 +213,14 @@ export class BridgeTerminalOutputBacklog {
       chunk += nextHeld.chunk
       this.merged += 1
     }
+    this.syncSilence()
     return { type: 'data', streamId: head.streamId, chunk }
   }
 
   /** The page answered, so the silence clock starts again from here. */
   noteAck(): void {
     this.clearSilence()
-    if (this.queue.length > 0) {
-      this.armSilence()
-    }
+    this.syncSilence()
   }
 
   dispose(): void {
@@ -236,6 +236,22 @@ export class BridgeTerminalOutputBacklog {
 
   private take(bytes: number): void {
     this.pending = Math.max(0, this.pending - bytes)
+  }
+
+  /**
+   * Armed exactly while something is pending, checked after every change to the queue.
+   *
+   * The invariant is "armed implies waiting on the page", and the first round broke it in one
+   * direction only: an ack re-armed the clock and the drain that followed emptied the queue without
+   * clearing it, so a terminal that had delivered everything and gone quiet died on `overflow`
+   * twenty seconds later. A rule that only arms is a rule that only ever kills more.
+   */
+  private syncSilence(): void {
+    if (this.queue.length === 0) {
+      this.clearSilence()
+      return
+    }
+    this.armSilence()
   }
 
   private armSilence(): void {
@@ -267,14 +283,7 @@ export class BridgeTerminalOutputBacklog {
  * bytes exists to avoid. `seq` at its widest and the real id, because both are in every frame.
  */
 export function terminalStreamMaxPayloadBytes(id: string): number {
-  const envelope = JSON.stringify({
-    v: BRIDGE_PROTOCOL_VERSION,
-    type: 'event',
-    id,
-    seq: Number.MAX_SAFE_INTEGER,
-    payload: 0
-  }).length
-  return BRIDGE_MAX_MESSAGE_BYTES - envelope
+  return BRIDGE_MAX_MESSAGE_BYTES - bridgeEventEnvelopeBytes(id)
 }
 
 /**
