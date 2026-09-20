@@ -710,6 +710,10 @@ jobs:
       # one `pr-code-change-scope.mjs` fires this job on, so naming a test into the family is all
       # it takes to have it run. Quoted because these are vitest filename filters, matched as
       # substrings against the discovered files, and the shell must not touch them.
+      #
+      # Cost: 18 files in 25-30s wall, of which the frame-budget sweep is 2.5s. That sweep encodes
+      # 111 noise JPEGs in Chromium, so it is the one step here whose cost grows with its viewport
+      # set; adding rows to that set is a decision about this job's runtime.
       - name: Builder, override census and render checks
         env:
           ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
