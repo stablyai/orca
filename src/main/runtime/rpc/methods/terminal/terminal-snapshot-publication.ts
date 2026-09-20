@@ -164,8 +164,11 @@ function overMobileSnapshotBudget(
     : mobileSnapshotPayloadJsonBytes(data, serialized) > snapshotByteBudget
 }
 
+/** Narrowed to the one method this reads, so a caller can hand it a buffer source and nothing else. */
+type TerminalBufferSource = Pick<OrcaRuntimeService, 'serializeTerminalBuffer'>
+
 export async function serializeBudgetedMobileSnapshot(
-  runtime: OrcaRuntimeService,
+  runtime: TerminalBufferSource,
   ptyId: string,
   isMobile: boolean,
   snapshotByteBudget?: number

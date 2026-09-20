@@ -39,18 +39,20 @@ function colourDenseScreen(rows: number): string {
  * Rows rather than a fixed string: the serializer walks [1000, 500, 250, 100, 25, 0] and a stub
  * that answered the same payload every time would prove the loop terminates and nothing else.
  */
-function denseRuntime(): OrcaRuntimeService {
+function denseRuntime(): Pick<OrcaRuntimeService, 'serializeTerminalBuffer'> {
   return {
-    serializeTerminalBuffer: vi.fn(async (_ptyId: string, options: { scrollbackRows: number }) => ({
-      data: colourDenseScreen(Math.max(options.scrollbackRows, 24)),
-      cols: COLUMNS,
-      rows: 24,
-      cwd: '/Users/someone/code/a-repository/packages/a-workspace',
-      source: 'headless' as const,
-      oscLinks: []
-    }))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the serializer under test calls exactly one runtime method, and a full service would be an invented surface.
-  } as unknown as OrcaRuntimeService
+    serializeTerminalBuffer: vi.fn(
+      async (_ptyId: string, options?: { scrollbackRows?: number }) => ({
+        data: colourDenseScreen(Math.max(options?.scrollbackRows ?? 0, 24)),
+        cols: COLUMNS,
+        rows: 24,
+        // A long path, because it is one of the fields the subscriber cannot bound from its own side.
+        cwd: '/srv/checkouts/a-repository/packages/a-workspace/deeply/nested/leaf',
+        source: 'headless' as const,
+        oscLinks: []
+      })
+    )
+  }
 }
 
 /**
