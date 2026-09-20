@@ -90,7 +90,11 @@ describe('a binary frame crosses as the event the page decodes', () => {
     expect(event).toMatchObject({ v: 1, type: 'event', id: ID, seq: 1 })
     const binary = 'binary' in event ? event.binary : null
     expect(binary).not.toBeNull()
-    expect(binary === null ? null : decodeBridgeScreencastFrame(binary)).toEqual(frame(41, IMAGE))
+    // The decoded frame carries the wire's own base64 beside the bytes (C6.2's data-URI reuse).
+    expect(binary === null ? null : decodeBridgeScreencastFrame(binary)).toEqual({
+      ...frame(41, IMAGE),
+      b64: binary?.b64
+    })
   })
 
   /** One ledger, not two: the page acks by the event seq, so a binary frame that restarted or
