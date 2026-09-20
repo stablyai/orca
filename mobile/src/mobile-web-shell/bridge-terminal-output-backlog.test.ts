@@ -122,7 +122,8 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
     }
     readFrames += 1
     lastReadSeq = frame.seq
-    const payload = frame.payload
+    // A binary event carries no `payload` at all, so the arm is narrowed rather than reached into.
+    const payload = 'payload' in frame ? frame.payload : null
     let applied = 0
     if (payload !== null && typeof payload === 'object' && 'chunk' in payload) {
       const chunk = payload.chunk
