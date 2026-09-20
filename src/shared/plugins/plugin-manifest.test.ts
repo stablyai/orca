@@ -88,3 +88,55 @@ describe('pluginManifestSchema boundaries', () => {
     ).toBe(false)
   })
 })
+
+describe('taskSources contribution', () => {
+  it('accepts a task source when the plugin has a worker entry', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [{ id: 'azure-boards', title: 'Azure Boards', icon: 'kanban' }]
+        }
+      })
+    )
+
+    expect(result).toMatchObject({ ok: true })
+  })
+
+  it('rejects duplicate task source ids', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [
+            { id: 'boards', title: 'One' },
+            { id: 'boards', title: 'Two' }
+          ]
+        }
+      })
+    )
+
+    expect(result.ok).toBe(false)
+  })
+
+  it('rejects a task source without a worker entry', () => {
+    const result = parsePluginManifest(
+      manifest({
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [{ id: 'boards', title: 'Boards' }]
+        }
+      })
+    )
+
+    expect(result.ok).toBe(false)
+  })
+})

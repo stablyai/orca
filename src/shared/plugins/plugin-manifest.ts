@@ -33,6 +33,7 @@ const SEMVER_RE =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 export const PLUGIN_PANEL_LIMIT = 64
 export const PLUGIN_COMMAND_LIMIT = 256
+export const PLUGIN_TASK_SOURCE_LIMIT = 16
 
 // Why: v0 supports only the ">=x.y.z" form. A closed grammar keeps the gate
 // predictable; richer ranges can be added without breaking old manifests.
@@ -56,6 +57,15 @@ const commandContributionSchema = z.object({
   context: z.enum(['global', 'worktree']).optional(),
   /** Built-in action aliases remain declarative and do not activate a worker. */
   action: pluginCommandIdSchema.optional()
+})
+
+/** A task source contributes entries to the Tasks list. The worker supplies
+ *  data; core renders it, so no entry point is declared here. */
+const taskSourceContributionSchema = z.object({
+  id: pluginIdSchema,
+  title: z.string().min(1).max(256),
+  /** Lucide icon name rendered in the Tasks source bar. */
+  icon: z.string().min(1).max(64).optional()
 })
 
 /** Domain events a plugin can subscribe to in v0. Closed set: server-side
@@ -98,6 +108,10 @@ export const pluginManifestSchema = z
       .object({
         panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
         commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
+        taskSources: z
+          .array(taskSourceContributionSchema)
+          .max(PLUGIN_TASK_SOURCE_LIMIT)
+          .default([]),
         events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
         languagePacks: z
           .array(pluginLanguagePackContributionSchema)
@@ -120,6 +134,7 @@ export const pluginManifestSchema = z
       .default(() => ({
         panels: [],
         commands: [],
+        taskSources: [],
         events: [],
         languagePacks: [],
         keybindings: [],
@@ -133,6 +148,7 @@ export const pluginManifestSchema = z
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>
 export type PluginCommandContribution = z.infer<typeof commandContributionSchema>
+export type PluginTaskSourceContribution = z.infer<typeof taskSourceContributionSchema>
 export type PluginEventContribution = z.infer<typeof eventContributionSchema>
 
 export {
