@@ -11,6 +11,7 @@ import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TaskProviderLogo } from './TaskProviderLogo'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 type Props = {
   composer: MobileComposerSource
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     color: colors.textPrimary
   },
   disabled: {

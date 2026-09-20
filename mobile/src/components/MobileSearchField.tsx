@@ -9,7 +9,8 @@ import {
   type TextInputProps
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 // Why: toolbar/list chrome paints and settles after the open tap; native
 // autoFocus alone often fails to raise the soft keyboard on iOS/Android.
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     // Why: Android TextInput draws extra vertical padding that misaligns the
     // icon/clear chip unless we zero it out.
     includeFontPadding: false,

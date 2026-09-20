@@ -153,8 +153,9 @@ describe('the keyboard the browser reports', () => {
   it('answers 0 for a keyboard raised while the page is zoomed, which is the accepted loss', async () => {
     // The ruling's own case: scale 2 *and* a viewport shrunk well past what the zoom alone
     // explains. Nothing in the geometry separates the keyboard's share from the zoom's, so the
-    // seam declines rather than guessing, and the page's `maximum-scale=1` is what keeps this off
-    // the ordinary focus path.
+    // seam declines rather than guessing. What keeps this off the ordinary focus path is the
+    // input floor — every text input in the two page closures clears 16px on the web, so a focus
+    // does not zoom and a scale other than 1 means a user pinched.
     await mount()
     await act(async () => viewport?.zoomTo(2))
     await act(async () => viewport?.resizeTo(232))
