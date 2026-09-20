@@ -229,10 +229,27 @@ describe('reading the clipboard from inside the shell', () => {
     // Per grant, not on the pair: the two halves of the paste are granted separately and a screen
     // told its clipboard was empty would never enable the button for either.
     const pair = createFakeBridgePortPair({
-      routeGrants: ['navigate', 'storage', 'native.media.pick', 'native.media.read']
+      routeGrants: [
+        'navigate',
+        'storage',
+        'native.media.pick',
+        'native.media.read',
+        'native.media.release'
+      ]
     })
     const reader = await mountReader(pair)
     await expect(reader.contents()).resolves.toEqual({ text: false, image: true })
+  })
+
+  it('reports no image on a route that can pick and read but not release', async () => {
+    // All three or none. Every image read releases what it picked, and a shell that never takes a
+    // handle back holds the staged file to the five-minute TTL — eight pastes and the next pick is
+    // refused at the cap, with the failed release swallowed on the way there by design.
+    const pair = createFakeBridgePortPair({
+      routeGrants: ['navigate', 'storage', 'native.media.pick', 'native.media.read']
+    })
+    const reader = await mountReader(pair)
+    await expect(reader.contents()).resolves.toEqual({ text: false, image: false })
   })
 
   /**

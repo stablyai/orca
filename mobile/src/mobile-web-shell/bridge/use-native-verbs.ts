@@ -44,10 +44,16 @@ export type NativeVerbs = {
   canWriteClipboardText: boolean
   canReadClipboardText: boolean
   /**
-   * Whether the shell serves the media verbs, which is the page's only route to an image.
+   * Whether the shell serves all three media verbs, which is the page's only route to an image.
    *
-   * Read by `contents()` on the clipboard seam, which answers without probing: a route that was
-   * granted the pick may have an image on the pasteboard, and one that was not never can.
+   * All three, not the two a read needs. Every caller releases what it picked, and a shell that
+   * granted `pick` and `read` but not `release` would take the handles and never give them back:
+   * the release rejects, the cleanup swallows it by design, and the staged files stay live to the
+   * five-minute TTL — eight pastes and the next pick is refused at the cap. A route missing one
+   * verb has no working image path, so this says so up front rather than after four of them.
+   *
+   * Read by `contents()` on the clipboard seam, which answers without probing: a route granted all
+   * three may have an image on the pasteboard, and one that is not never can.
    */
   canPickMedia: boolean
   writeClipboardText: (value: string) => Promise<boolean>
@@ -183,7 +189,8 @@ export function useNativeVerbs(): NativeVerbs {
       granted: canWriteClipboardText && canReadClipboardText,
       canWriteClipboardText,
       canReadClipboardText,
-      canPickMedia: has('native.media.pick') && has('native.media.read'),
+      canPickMedia:
+        has('native.media.pick') && has('native.media.read') && has('native.media.release'),
       writeClipboardText: async (value) =>
         (await call('native.clipboard.write', { mime, value }, clipboardWriteResultSchema)).written,
       readClipboardText: async () =>

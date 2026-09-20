@@ -117,6 +117,16 @@ describe('the rule that reads a module for a picker', () => {
     // never reach `first`, and this is the fixture that says so.
     'reverse-order-alias.ts':
       "import * as Clipboard from 'expo-clipboard'\nexport function read() {\n  const { getImageAsync } = first\n  return getImageAsync\n}\nconst first = second\nconst second = Clipboard",
+    // Reached through `import()`, which the bundler resolves into the closure exactly as a static
+    // import: the same two modules, the same offence, a form the static scan cannot see.
+    'dynamic-clipboard.ts':
+      "export async function r() {\n  const Clipboard = await import('expo-clipboard')\n  return Clipboard.getImageAsync({ format: 'png' })\n}",
+    'dynamic-destructured.ts':
+      "export async function r() {\n  const { getImageAsync } = await import('expo-clipboard')\n  return getImageAsync({ format: 'png' })\n}",
+    'dynamic-picker.ts':
+      "export async function r() {\n  return await import('expo-image-picker')\n}",
+    'dynamic-clipboard-text.ts':
+      "export async function r() {\n  const Clipboard = await import('expo-clipboard')\n  return Clipboard.getStringAsync()\n}",
     'clipboard-text.ts':
       "import * as Clipboard from 'expo-clipboard'\nexport const r = () => Clipboard.getStringAsync()",
     'destructured-text.ts':
@@ -138,6 +148,9 @@ describe('the rule that reads a module for a picker', () => {
         'src/destructured-renamed.ts:2',
         'src/destructured.ts:2',
         'src/documents.ts:1',
+        'src/dynamic-clipboard.ts:3',
+        'src/dynamic-destructured.ts:2',
+        'src/dynamic-picker.ts:2',
         'src/element-access.ts:2',
         'src/namespace-picker.ts:1',
         'src/re-destructured.ts:4',

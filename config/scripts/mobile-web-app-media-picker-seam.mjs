@@ -115,6 +115,53 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
     }
   }
 
+  /**
+   * The same two modules reached through `import()`, which the static scan above cannot see.
+   *
+   * A dynamic import with a literal specifier is a module the bundler resolves and puts in the
+   * closure exactly as a static one, so a picker behind `await import('expo-image-picker')` takes
+   * the page down the same way. `await` and parentheses are unwrapped because they are punctuation
+   * around the call rather than a different call; a specifier that is not a literal is left alone,
+   * for the reason a computed key is.
+   */
+  const dynamicImportOf = (node) => {
+    let value = node
+    while (ts.isAwaitExpression(value) || ts.isParenthesizedExpression(value)) {
+      value = value.expression
+    }
+    if (
+      !ts.isCallExpression(value) ||
+      value.expression.kind !== ts.SyntaxKind.ImportKeyword ||
+      value.arguments.length === 0
+    ) {
+      return null
+    }
+    const [specifier] = value.arguments
+    return ts.isStringLiteral(specifier) ? specifier.text : null
+  }
+
+  const seedDynamic = (node) => {
+    if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+      const specifier = dynamicImportOf(node.initializer)
+      if (specifier === CLIPBOARD_MODULE) {
+        if (ts.isIdentifier(node.name)) {
+          clipboardAliases.add(node.name.text)
+        } else if (ts.isObjectBindingPattern(node.name) && namesImageRead(node.name.elements)) {
+          sites.push(lineOf(node))
+        }
+      }
+    }
+    // The picker modules need no alias: reaching one at all is the offence, wherever it lands.
+    if (ts.isCallExpression(node)) {
+      const specifier = dynamicImportOf(node)
+      if (specifier !== null && NATIVE_PICKER_MODULES.includes(specifier)) {
+        sites.push(lineOf(node))
+      }
+    }
+    ts.forEachChild(node, seedDynamic)
+  }
+  ts.forEachChild(parsed, seedDynamic)
+
   if (clipboardAliases.size > 0) {
     /**
      * Every further name the module is reachable under, to a fixpoint.
