@@ -47,8 +47,7 @@ class FakeSocket extends EventEmitter {
 
 function connect() {
   const onStreamDisconnected = vi.fn()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the connection path only
-  // reaches flush/clear/replaceStream on the batcher and log() on the log.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the connection path only reaches flush/clear/replaceStream on the batcher.
   const streamDataBatcher = {
     flush: vi.fn(),
     clear: vi.fn(),
@@ -79,8 +78,7 @@ function connect() {
   })
   const control = new FakeSocket()
   const stream = new FakeSocket()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: accept() uses only the
-  // EventEmitter surface plus write/end/destroy, all implemented by FakeSocket.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: accept() uses only the EventEmitter surface plus write/end/destroy, all implemented by FakeSocket.
   connections.accept(control as unknown as Socket)
   control.hello('control')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.

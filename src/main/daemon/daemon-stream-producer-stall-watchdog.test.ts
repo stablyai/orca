@@ -35,17 +35,13 @@ function createStallableSocket() {
       complete()
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the batcher only uses
-  // write/writableLength/destroyed, all implemented above.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the batcher only uses write/writableLength/destroyed, all implemented above.
   return { socket: socket as unknown as Socket, written, drain }
 }
 
 function droppedChars(written: readonly string[]): number {
   return written.reduce((total, line) => {
-    const message = JSON.parse(line) as {
-      event?: string
-      payload?: { droppedChars?: number }
-    }
+    const message: { event?: string; payload?: { droppedChars?: number } } = JSON.parse(line)
     return message.event === 'dataGap' ? total + (message.payload?.droppedChars ?? 0) : total
   }, 0)
 }
