@@ -612,7 +612,8 @@
         "tailscale": "Tailscale address",
         "lan": "Private LAN address",
         "public": "Public address",
-        "custom": "Custom hostname"
+        "custom": "Custom hostname",
+        "tailcat": "Tailcat tunnel"
       },
       "ensure": {
         "simulator": {
