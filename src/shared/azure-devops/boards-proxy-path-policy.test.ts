@@ -43,21 +43,20 @@ describe('checkBoardsProxyRequest', () => {
     })
   })
 
-  it('refuses a caller-supplied api-version in any casing', () => {
+  it.each([
+    ['api-version', '5.0'],
+    ['API-Version', '5.0'],
+    ['api-version ', '5.0'],
+    [' api-version', '5.0'],
+    ['api-version\t', '5.0']
+  ])('refuses a caller-supplied %j query key', (key, value) => {
     expect(
       checkBoardsProxyRequest({
         method: 'GET',
         path: '/_apis/projects',
-        query: { 'api-version': '5.0' }
+        query: { [key]: value }
       })
-    ).toMatchObject({ code: 'validation' })
-    expect(
-      checkBoardsProxyRequest({
-        method: 'GET',
-        path: '/_apis/projects',
-        query: { 'API-Version': '5.0' }
-      })
-    ).toMatchObject({ code: 'validation' })
+    ).toEqual({ code: 'validation', message: 'api-version is chosen by the host' })
   })
 
   it('refuses a path that does not start with a separator', () => {

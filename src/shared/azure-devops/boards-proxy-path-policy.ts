@@ -58,7 +58,8 @@ export function checkBoardsProxyRequest(input: {
   }
 
   for (const key of Object.keys(input.query ?? {})) {
-    if (key.toLowerCase() === 'api-version') {
+    // Trimmed so a padded key (e.g. server-side name trimming) cannot slip past as a distinct parameter.
+    if (key.trim().toLowerCase() === 'api-version') {
       return { code: 'validation', message: 'api-version is chosen by the host' }
     }
   }
