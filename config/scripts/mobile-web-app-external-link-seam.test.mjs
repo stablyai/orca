@@ -59,6 +59,40 @@ describe('where the seam predicate says a module reaches Linking', () => {
     ).toEqual([3])
   })
 
+  it('names an import that renames Linking, which reading the binding alone missed', () => {
+    // `import { Linking as NativeLinking }` is the same import spelled differently; the imported
+    // name lives in `propertyName` when a specifier renames it, and only in `name` when it does
+    // not. Reading `name` alone let `NativeLinking.openURL` through the census entirely.
+    expect(
+      reactNativeLinkingSites(
+        "import { Linking as NativeLinking } from 'react-native'\nNativeLinking.openURL(u)\n"
+      )
+    ).toEqual([1])
+  })
+
+  it('leaves alone a local binding that is only spelled Linking', () => {
+    // The other half of reading `propertyName`: this module imports `View`, so naming it would be
+    // a red line with nothing to fix at the end of it.
+    expect(
+      reactNativeLinkingSites("import { View as Linking } from 'react-native'\nLinking.foo()\n")
+    ).toEqual([])
+  })
+
+  it('reads a default import as the namespace it is, which the interop here allows', () => {
+    // `import RN from 'react-native'` typechecks here, so it is a binding the whole namespace
+    // hangs off and a call through it is as invisible to a named-import rule as an alias was.
+    expect(
+      reactNativeLinkingSites("import RN from 'react-native'\nRN.Linking.openURL(u)\n")
+    ).toEqual([2])
+  })
+
+  it('leaves alone an alias that is imported and never reaches Linking', () => {
+    // An import of react-native is not the offence; reaching `Linking` through it is.
+    expect(reactNativeLinkingSites("import * as RN from 'react-native'\nRN.Platform.OS\n")).toEqual(
+      []
+    )
+  })
+
   it('ignores the name inside a comment, which text matching cannot', () => {
     // A module that talks about the rule is not breaking it, and a census that names a comment is
     // one whose red list the next reader learns to skip.

@@ -21,10 +21,15 @@ export const EXTERNAL_LINK_SEAM = 'src/platform/external-link.web.ts'
  * is one the next reader learns to ignore. The parser also settles the quote styles for free.
  *
  * A named import reports the import statement, once however many times the module calls through
- * it, because the import is the thing the rule is about and the thing that has to go. A namespace
- * import reports its uses instead, there being no single line to name — `import * as RN from
- * 'react-native'` is not itself an offence — and every alias is read, because a module may import
- * the namespace twice and call on either.
+ * it, because the import is the thing the rule is about and the thing that has to go. The imported
+ * name is what counts, not the local one: `import { Linking as NativeLinking }` is the same import
+ * spelled differently, and reading only the binding let it through.
+ *
+ * A namespace import reports its uses instead, there being no single line to name — `import * as RN
+ * from 'react-native'` is not itself an offence — and every alias is read, because a module may
+ * import the namespace twice and call on either. A default import is read the same way: this
+ * project's interop settings accept `import RN from 'react-native'` (checked with tsc), so it is a
+ * binding the whole namespace hangs off exactly as `* as RN` is.
  *
  * Lines rather than a boolean because a red census that names `path:line` is read once, and one
  * that names a file is grepped for. The boolean below is derived from this, so there is one rule.
@@ -48,7 +53,14 @@ export function reactNativeLinkingSites(source) {
     ) {
       continue
     }
-    const bindings = statement.importClause?.namedBindings
+    const clause = statement.importClause
+    if (clause === undefined) {
+      continue
+    }
+    if (clause.name !== undefined) {
+      aliases.add(clause.name.text)
+    }
+    const bindings = clause.namedBindings
     if (bindings === undefined) {
       continue
     }
@@ -56,7 +68,10 @@ export function reactNativeLinkingSites(source) {
       aliases.add(bindings.name.text)
       continue
     }
-    if (bindings.elements.some((element) => element.name.text === 'Linking')) {
+    // `propertyName` is the imported name when the import renames it, `name` when it does not.
+    if (
+      bindings.elements.some((element) => (element.propertyName ?? element.name).text === 'Linking')
+    ) {
       sites.push(lineOf(statement))
     }
   }
