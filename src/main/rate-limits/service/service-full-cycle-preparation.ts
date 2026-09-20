@@ -1,7 +1,10 @@
 import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
+import { fetchCursorRateLimits } from '../cursor-fetcher'
+import { fetchOpenRouterRateLimits } from '../openrouter-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
+import { readCursorAuthSession } from '../cursor-auth'
 import { readGrokAuthSession } from '../grok-auth'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
@@ -39,6 +42,12 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>
   ]
   grokResultPromise: Promise<
+    { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
+  >
+  cursorResultPromise: Promise<
+    { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
+  >
+  openrouterResultPromise: Promise<
     { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
   >
 }
@@ -86,6 +95,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    // Why: same reasoning as Grok above — keep this sync auth-file probe on
+    // fetch cycles rather than in the hot getState() path.
+    const cursorAuthReadResult = readCursorAuthSession()
+    this.cursorAuthConfigured = cursorAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -121,7 +134,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      openrouter: this.withFetchingStatus(previousState.openrouter, 'openrouter')
     })
 
     const missingWslCodexHome =
@@ -130,6 +145,22 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       signal,
       authReadResult: grokAuthReadResult
     }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    // Why: settled separately from the results tuple, as Grok is — the tuple is
+    // a fixed arity every destructure depends on, and one HTTP read does not
+    // justify widening it across the cycle.
+    const cursorResultPromise = fetchCursorRateLimits({
+      signal,
+      authReadResult: cursorAuthReadResult
+    }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    // Why: the key store reads a small encrypted file; keep it off getState()'s
+    // hot path by resolving it inside the fetch cycle like the others.
+    const openrouterResultPromise = fetchOpenRouterRateLimits({ signal }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
@@ -202,7 +233,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise,
+      openrouterResultPromise
     }
   }
 }

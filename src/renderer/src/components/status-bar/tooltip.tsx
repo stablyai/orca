@@ -4,7 +4,14 @@ import {
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import {
+  ClaudeIcon,
+  GeminiIcon,
+  MiniMaxIcon,
+  OpenAIIcon,
+  OpenCodeGoIcon,
+  OpenRouterIcon
+} from './icons'
 import { translate } from '@/i18n/i18n'
 import {
   getProviderDisplayName,
@@ -96,6 +103,12 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
+  }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
+  }
+  if (provider === 'openrouter') {
+    return <OpenRouterIcon size={13} />
   }
   return <ClaudeIcon size={13} />
 }

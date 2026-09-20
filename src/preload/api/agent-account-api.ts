@@ -77,6 +77,14 @@ export type MinimaxCredentialsApi = {
   clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
 }
 
+export type OpenRouterCredentialsApi = {
+  // Why: only an API key — OpenRouter has no cookie lane, so 'configured'
+  // mirrors apiKeyConfigured rather than OR-ing two sources.
+  getStatus: () => Promise<{ configured: boolean; apiKeyConfigured: boolean }>
+  saveApiKey: (key: string) => Promise<{ apiKeyConfigured: boolean }>
+  clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
+}
+
 export type CodexConfigSyncApi = {
   status: () => Promise<CodexConfigSyncStatus>
 }

@@ -18,6 +18,8 @@ export type UsageProviderSettings = Pick<
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
+  openrouterApiKeyConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -29,6 +31,8 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor: ProviderRateLimits | null | undefined
+  openrouter: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -79,7 +83,9 @@ export function hasUsageProviderSettings(
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true ||
+    settings?.openrouterApiKeyConfigured === true
   )
 }
 
@@ -113,6 +119,12 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
+  }
+  if (providerId === 'openrouter') {
+    return settings.openrouterApiKeyConfigured === true
   }
   return false
 }
@@ -167,7 +179,9 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.cursor) ||
+    isProviderSnapshotPending(providers.openrouter)
   ) {
     return false
   }

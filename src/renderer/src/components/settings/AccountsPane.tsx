@@ -19,6 +19,7 @@ import {
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsOpenRouterSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
@@ -36,6 +37,7 @@ import {
 } from './provider-account-visibility'
 import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { OpenRouterAccountsSection } from './OpenRouterAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -377,6 +379,9 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsOpenRouterSearchEntries()) ? (
+      <OpenRouterAccountsSection key="openrouter" />
     ) : null
   ].filter(Boolean)
 
