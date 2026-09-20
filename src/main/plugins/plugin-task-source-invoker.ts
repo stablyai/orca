@@ -2,13 +2,10 @@ import type { z } from 'zod'
 import {
   pluginTaskSourceResultSchema,
   type PluginTaskSourceErrorCode,
-  type PluginTaskSourceMethod
+  type PluginTaskSourceMethod,
+  type PluginTaskSourceResult
 } from '../../shared/plugins/plugin-task-source-contract'
 import type { PluginTaskSourceRegistry } from './plugin-task-source-registry'
-
-export type PluginTaskSourceResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; code: PluginTaskSourceErrorCode; message: string }
 
 export type InvokePluginTaskSourceInput<T extends z.ZodTypeAny> = {
   registry: PluginTaskSourceRegistry
@@ -34,7 +31,7 @@ function failure(
 
 export async function invokePluginTaskSourceMethod<T extends z.ZodTypeAny>(
   input: InvokePluginTaskSourceInput<T>
-): Promise<z.infer<ReturnType<typeof pluginTaskSourceResultSchema<T>>>> {
+): Promise<PluginTaskSourceResult<z.infer<T>>> {
   const registration = input.registry.find(input.pluginKey, input.sourceId)
   if (!registration) {
     return failure('not_found', `no task source ${input.sourceId} for plugin ${input.pluginKey}`)

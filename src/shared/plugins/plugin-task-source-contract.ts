@@ -31,12 +31,20 @@ export const pluginTaskSourceErrorSchema = z.object({
   message: z.string().max(4096)
 })
 
+export type PluginTaskSourceResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: PluginTaskSourceErrorCode; message: string }
+
 /** One envelope for every method, so a caller can never read a failure as data. */
-export function pluginTaskSourceResultSchema<T extends z.ZodTypeAny>(data: T) {
-  return z.discriminatedUnion('ok', [
+export function pluginTaskSourceResultSchema<T extends z.ZodTypeAny>(
+  data: T
+): z.ZodType<PluginTaskSourceResult<z.infer<T>>> {
+  const union = z.discriminatedUnion('ok', [
     z.object({ ok: z.literal(true), data }),
     pluginTaskSourceErrorSchema
   ])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the union's runtime shape is exactly PluginTaskSourceResult<T>; Zod v4's discriminatedUnion generic cannot be proven assignable to the named union (TS2322), so the cast only names what the schema already validates.
+  return union as unknown as z.ZodType<PluginTaskSourceResult<z.infer<T>>>
 }
 
 export const pluginTaskScopeSchema = z.object({
