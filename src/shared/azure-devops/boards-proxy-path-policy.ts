@@ -38,6 +38,29 @@ function boardsNamespace(path: string): BoardsNamespace | null {
   return null
 }
 
+// Run against the raw path AND its decoded form, so an encoded spelling of any
+// of these cannot pass a guard that only reads the raw string.
+function checkPathShape(candidate: string): BoardsProxyRejection | null {
+  // The URL parser strips TAB, LF and CR before parsing, so a control character
+  // splits a dot segment past the substring guards below.
+  // oxlint-disable-next-line no-control-regex -- control characters ARE what this rejects
+  if (/[\u0000-\u001f\u007f]/.test(candidate)) {
+    return { code: 'validation', message: 'path must not contain control characters' }
+  }
+  if (candidate.includes('..') || candidate.includes('\\')) {
+    return { code: 'validation', message: 'path must not contain traversal segments' }
+  }
+  if (candidate.includes(':')) {
+    return { code: 'validation', message: 'path must not contain a scheme or authority' }
+  }
+  return null
+}
+
+function lastSegment(path: string): string {
+  const segments = path.split('/').filter((segment) => segment.length > 0)
+  return segments.at(-1) ?? ''
+}
+
 export function checkBoardsProxyRequest(input: {
   method: string
   path: string
@@ -49,48 +72,61 @@ export function checkBoardsProxyRequest(input: {
   }
 
   const path = input.path
-  // First: the URL parser strips TAB, LF and CR before parsing, so a control
-  // character splits a dot segment past every substring guard below.
-  // oxlint-disable-next-line no-control-regex -- control characters ARE what this rejects
-  if (/[\u0000-\u001f\u007f]/.test(path)) {
-    return { code: 'validation', message: 'path must not contain control characters' }
-  }
   if (!path.startsWith('/') || path.startsWith('//')) {
     return { code: 'validation', message: 'path must be origin-relative' }
   }
-  // Any percent-encoding is refused: the decoded form is compared against the
-  // raw path, never matched, so an encoded separator or dot segment cannot
-  // reach the allowlist.
+  // Guard order is load-bearing: the tests pin each input to the guard that
+  // rejects it, so reordering these checks changes which message a caller sees.
+  const rawShape = checkPathShape(path)
+  if (rawShape !== null) {
+    return rawShape
+  }
+  // A query smuggled through the path carries parameters this module never
+  // reviews ($top, $expand). api-version is not among them: apiUrl() re-sets it
+  // after parsing, so a path-borne one is overwritten rather than honoured.
+  if (path.includes('?') || path.includes('#')) {
+    return { code: 'validation', message: 'path must not contain a query or fragment' }
+  }
+  // Percent-encoding is allowed because work item type names are addressed by
+  // name and have no GUID form: "User Story" is only reachable as User%20Story.
+  // Encoded separators and dot segments are caught by re-running the shape
+  // guards on the decoded form and by the parsed-pathname equality below.
   let decoded: string
   try {
     decoded = decodeURIComponent(path)
   } catch {
     return { code: 'validation', message: 'path is not valid percent-encoding' }
   }
-  if (decoded !== path) {
-    return { code: 'validation', message: 'path must not be percent-encoded' }
+  // A surviving '%' means the caller encoded an encoding: %252e%252e decodes to
+  // %2e%2e, which the guards below would then read as harmless literal text.
+  if (decoded.includes('%')) {
+    return { code: 'validation', message: 'path must not be double percent-encoded' }
   }
-  if (path.includes('..') || path.includes('\\')) {
-    return { code: 'validation', message: 'path must not contain traversal segments' }
+  const decodedShape = checkPathShape(decoded)
+  if (decodedShape !== null) {
+    return decodedShape
   }
-  if (path.includes(':')) {
-    return { code: 'validation', message: 'path must not contain a scheme or authority' }
-  }
-  // A query smuggled through the path bypasses the api-version guard below,
-  // which only inspects input.query.
-  if (path.includes('?') || path.includes('#')) {
-    return { code: 'validation', message: 'path must not contain a query or fragment' }
-  }
-  // Guard order is load-bearing: the tests pin each input to the guard that
-  // rejects it, so reordering these checks changes which message a caller sees.
   const namespace = boardsNamespace(path)
-  if (namespace === null) {
+  // The decoded form is matched too: an encoded slash would otherwise widen the
+  // single project segment into a path of its own (/a%2Fb/_apis/wit/...).
+  if (namespace === null || boardsNamespace(decoded) === null) {
     return { code: 'forbidden', message: 'path is outside the Boards scope' }
   }
+  // $batch takes a list of {method, uri, body} sub-requests in its body, none of
+  // which reach this module. Checked on the decoded form so %24batch cannot
+  // spell it. Plain '$' stays legal: /_apis/wit/workitems/$Bug creates a work item.
+  if (lastSegment(decoded).toLowerCase() === '$batch') {
+    return {
+      code: 'forbidden',
+      message: 'batch requests are not permitted because their sub-request URIs are not reviewable'
+    }
+  }
   // The guards above see the raw string; the URL parser normalizes before the
-  // request is made. Re-test the parsed pathname so the two can never disagree.
+  // request is made. Re-test the parsed pathname so the two can never disagree:
+  // '/./' collapses, and a raw space or non-ASCII byte gets escaped. It is also
+  // a second net under every encoded dot segment, which collapses here too.
   const normalized = new URL(path, 'https://orca.invalid').pathname
-  if (normalized !== path || boardsNamespace(normalized) === null) {
+  if (normalized !== path) {
     return { code: 'forbidden', message: 'path is outside the Boards scope' }
   }
   if (!NAMESPACE_METHODS[namespace].some((allowed) => allowed === method)) {
