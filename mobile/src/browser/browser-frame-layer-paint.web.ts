@@ -8,7 +8,18 @@ import type { BrowserFrameDisplayHandlers } from './browser-frame-layer-paint'
  *
  * The double buffer survives the move intact. RN Web renders an `<Image>` as a host element whose
  * first child carries the `background-image`, and a `<View>` as one element, so a frame is still
- * one style write per layer and the pane still never re-renders while it streams.
+ * one style write per layer, and the frame path itself adds no render at any rate.
+ *
+ * It does not follow that the pane never re-renders while it streams. A render from any of its
+ * other state — address focus, a dialog, the view mode, zoom — repaints both layers from
+ * `renderedFrameSource` in `MobileBrowserPane`, which reads `frameUriRef.current`, so both end up
+ * on the newest frame whether or not it has decoded and whichever one was visible. Native has the
+ * same clobber for the same reason, through `setNativeProps`. The next streamed frame restores the
+ * buffering; until then a render can show a frame early.
+ *
+ * One thing the imperative path never touches: the accessibility `<img>` RN Web renders beside the
+ * frame is a prop, not a style, so it keeps the source it mounted with for the life of the pane.
+ * That is what a screen reader and the browser's image context menu see.
  */
 function elementOf(node: Image | View | null): HTMLElement | null {
   return node instanceof HTMLElement ? node : null

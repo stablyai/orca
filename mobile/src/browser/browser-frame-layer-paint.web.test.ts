@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { createRequire } from 'node:module'
+import { act, createElement, type ComponentType } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { Image, View } from 'react-native'
 import {
@@ -115,6 +118,96 @@ describe('the web siblings', () => {
       await vi.waitFor(() => expect(onUndecodable).toHaveBeenCalledTimes(1))
     } finally {
       window.Image = realImage
+    }
+  })
+})
+
+/**
+ * The same write against the component it is written for, rather than against a shape this file
+ * built to match it.
+ *
+ * `updateBrowserImageSource` paints the host's first element child because that is where RN Web
+ * puts the frame today. Every other test here hands it a `div > div` of its own making, so an RN
+ * Web release that reorders the host's children — it also renders an accessibility `<img>` in
+ * there — would keep all of them green and paint nothing on screen. This one asks RN Web which
+ * element it painted and then checks the write lands on that one.
+ */
+describe('against a real react-native-web Image', () => {
+  /**
+   * Loaded through `createRequire` rather than imported: react-native-web ships no type
+   * declarations, so a bare import is an implicit `any` and drops this file out of the
+   * tests-typecheck ratchet. `require` is typed as returning `any` at its own signature, so the
+   * one prop this renders with can be declared here instead of asserted.
+   */
+  const { Image: ReactNativeWebImage }: { Image: ComponentType<{ source: { uri: string } }> } =
+    createRequire(import.meta.url)('react-native-web')
+
+  const MOUNTED_URI = 'data:image/gif;base64,bW91bnRlZA=='
+  const STREAMED_URI = 'data:image/gif;base64,c3RyZWFtZWQ='
+
+  async function renderImage(): Promise<{ host: HTMLElement; unmount: () => void }> {
+    // React 19 refuses `act` outside a test environment it has been told about.
+    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ReactNativeWebImage, { source: { uri: MOUNTED_URI } }))
+    })
+    const host = container.firstElementChild
+    if (!(host instanceof HTMLElement)) {
+      throw new Error('react-native-web rendered no host element')
+    }
+    return {
+      host,
+      unmount: () => {
+        root.unmount()
+        container.remove()
+      }
+    }
+  }
+
+  /** The child RN Web put the frame on, found by the frame rather than by its position. */
+  function paintedChild(host: HTMLElement): HTMLElement {
+    const painted = [...host.children].filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.style.backgroundImage.includes(MOUNTED_URI)
+    )
+    const [only, ...rest] = painted
+    if (only === undefined || rest.length > 0) {
+      throw new Error(`react-native-web painted ${painted.length} children, expected exactly one`)
+    }
+    return only
+  }
+
+  it('writes the frame onto the element react-native-web paints it on', async () => {
+    const { host, unmount } = await renderImage()
+    try {
+      const painted = paintedChild(host)
+
+      updateBrowserImageSourceOnWeb(asImageRef(host), STREAMED_URI)
+
+      expect(painted.style.backgroundImage).toBe(`url("${STREAMED_URI}")`)
+    } finally {
+      unmount()
+    }
+  })
+
+  /**
+   * The accessibility `<img>` RN Web renders beside the frame keeps the source it mounted with,
+   * for the life of the pane: the streaming path writes styles and never props, so nothing updates
+   * it. Recorded because it is what a screen reader and the browser's image context menu see.
+   */
+  it('leaves the accessibility image on the frame it mounted with', async () => {
+    const { host, unmount } = await renderImage()
+    try {
+      updateBrowserImageSourceOnWeb(asImageRef(host), STREAMED_URI)
+
+      const images = [...host.querySelectorAll('img')]
+      expect(images).toHaveLength(1)
+      expect(images[0]?.getAttribute('src')).toBe(MOUNTED_URI)
+    } finally {
+      unmount()
     }
   })
 })
