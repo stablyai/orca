@@ -131,10 +131,19 @@ export function createNativeMediaVerbServer(
       owned.push(asset.uri)
       return asset.uri
     }
-    // Weighed before the copy, because the copy reads the whole file into memory: an oversized
-    // provider item must be refused without being held. A provider that reports no size answers 0
-    // here, which is why the copy is weighed again by the caller rather than trusted from this.
-    refuseOverStagingCeiling(deps.openFile(asset.uri).size)
+    // Weighed before the copy, because the copy reads the whole file into memory and there is no
+    // bounded read to fall back on: `File.open()`, `readableStream()` and `writableStream()` all
+    // reach `javaFile`, which throws outright for a content uri, so `bytesSync()` is the only read
+    // that works for one and it is all or nothing.
+    //
+    // `SAFDocumentFile.length()` answers 0 when the provider reports no size, which is
+    // indistinguishable from an empty file — and an empty pick is nothing to stage either way. So
+    // an item this shell cannot weigh is refused rather than materialized at an unknown size.
+    const weighed = deps.openFile(asset.uri).size
+    if (weighed <= 0) {
+      throw new Error(`a picked item could not be weighed before reading it: ${asset.uri}`)
+    }
+    refuseOverStagingCeiling(weighed)
     const copy = deps.copyIntoCache(asset.uri)
     // Still not ours: a scheme the copy could not adopt either. Fail closed rather than let a sweep
     // that can never delete anything look like one that did — and throw before `owned` is
@@ -194,14 +203,32 @@ export function createNativeMediaVerbServer(
         }
       ])
     }
+    /**
+     * What a picker answered, held to the room before a byte of it is staged.
+     *
+     * The library picker is bounded by its own `selectionLimit`, but `getDocumentAsync` takes no
+     * limit at all, so the room `pick` hands it is advisory and a user may return more than the
+     * registry will hold. Counted here because `mint` refuses the whole pick, and by the time it
+     * runs every asset has already been copied into the cache for nothing.
+     */
+    function withinRoom(assets: readonly PickedAsset[]): readonly PickedAsset[] {
+      if (assets.length > room) {
+        throw new BridgeNativeVerbRefusedError(
+          'native_media_handle_cap',
+          `that pick answered ${assets.length} items and this page has room for ${room}`
+        )
+      }
+      return assets
+    }
+
     if (source === 'library') {
       // No permission request first. Ruling 6b: `launchImageLibraryAsync` gates on nothing in
       // expo-image-picker 55.0.24 on either platform, so the prompt the shell owns is the OS
       // picker's own and asking first would only add a dialog the system does not need — plus a
       // denial that refuses a pick the OS would have completed.
-      return stage(readAssets(await deps.launchLibrary({ multiple, limit: room })))
+      return stage(withinRoom(readAssets(await deps.launchLibrary({ multiple, limit: room }))))
     }
-    return stage(readAssets(await deps.launchFiles({ multiple, limit: room })))
+    return stage(withinRoom(readAssets(await deps.launchFiles({ multiple, limit: room }))))
   }
 
   /**

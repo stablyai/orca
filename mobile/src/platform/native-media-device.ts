@@ -40,12 +40,15 @@ function stagedMediaFile(extension: string): FsFile {
  * which is a `java.io.File` and has nothing to open for a provider uri, while the read path goes
  * through the unified file and does.
  *
- * The whole item is held in memory for the length of the copy. The caller weighs the source
- * against the staging ceiling before calling this, which bounds it whenever the provider reports a
- * size — `FileSystemFile.size` routes a `content:` uri to `SAFDocumentFile.length()`, which reads
- * the document's own length. A provider that reports none answers 0 there, and for that case
- * nothing bounds this read but the picker's `mediaTypes: ['images']`; the copy is weighed after
- * the fact instead, which catches the item but only once it has been held.
+ * The whole item is held in memory for the length of the copy, and the caller is what bounds it:
+ * it weighs the source against the staging ceiling first, and refuses outright anything it cannot
+ * weigh. `FileSystemFile.size` routes a `content:` uri to `SAFDocumentFile.length()`, which reads
+ * the document's own length; a provider reporting none answers 0, and that is the refusal.
+ *
+ * There is no bounded read to offer instead. `open()`, `readableStream()` and `writableStream()`
+ * all reach `FileSystemPath.javaFile`, which throws `This method cannot be used with content URIs`
+ * outright, so `bytesSync()` through the unified file is the only read a provider uri has and it
+ * is all or nothing. Weighing first is the bound, not a convenience.
  */
 export function copyPickedMediaIntoCache(uri: string): string {
   const destination = stagedMediaFile('bin')

@@ -288,6 +288,55 @@ describe('picking', () => {
     expect(probe.discarded).toEqual([])
   })
 
+  it('refuses a provider item it cannot weigh, rather than reading an unknown number of bytes', async () => {
+    // `SAFDocumentFile.length()` answers 0 when the provider reports no size, and there is no
+    // bounded read to fall back on: `File.open()`, `readableStream()` and `writableStream()` all
+    // go through `javaFile`, which throws outright for a content uri, so `bytesSync()` is the only
+    // read that works and it is all or nothing. An item this shell cannot weigh is not copied.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const probe = harness({
+      openFile: () => ({ size: 0, open: () => fakeFile(new Uint8Array()).open() }),
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [{ uri: 'content://media/external/images/media/42', mimeType: 'image/jpeg' }]
+        })
+    })
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: false })
+    ).rejects.toThrow(/could not be weighed/)
+    expect(probe.copied).toEqual([])
+    expect(probe.discarded).toEqual([])
+    warn.mockRestore()
+  })
+
+  it('refuses a Files result over the room before it stages any of it', async () => {
+    // `getDocumentAsync` takes no selection limit, so the room `pick` hands it is advisory and the
+    // user can return more than the registry will hold. Counted before staging: otherwise every
+    // asset is copied into the cache and `mint` refuses the lot afterwards.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const probe = harness({
+      launchFiles: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1 }, (_, index) => ({
+            uri: `${CACHE}/doc-${index}.pdf`,
+            mimeType: 'application/pdf'
+          }))
+        })
+    })
+    for (let index = 0; index <= BRIDGE_MEDIA_MAX_LIVE_HANDLES; index += 1) {
+      probe.files.set(`${CACHE}/doc-${index}.pdf`, bytesOf(4))
+    }
+    await expect(
+      probe.serve('native.media.pick', { source: 'files', multiple: true })
+    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_cap')
+    expect(probe.registry.liveCount()).toBe(0)
+    // Nothing of ours existed to sweep: the picker's own copies are its business.
+    expect(probe.discarded).toEqual([])
+    warn.mockRestore()
+  })
+
   it('refuses an item bigger than the staging ceiling, and deletes what it picked', async () => {
     const probe = harness({
       openFile: () => ({ size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() })
@@ -503,6 +552,8 @@ describe('a provider uri the Android picker can answer', () => {
           assets: [{ uri: 'content://media/external/images/media/42', mimeType: 'image/jpeg' }]
         })
     })
+    // Weighable, so the ownership guard is what fires rather than the pre-read weigh above it.
+    probe.files.set('content://media/external/images/media/42', bytesOf(64))
     await expect(
       probe.serve('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toThrow(/this shell does not own/)
