@@ -53,8 +53,9 @@ type PickerResult = { readonly canceled: boolean; readonly assets?: readonly Pic
 export type NativeMediaDeps = {
   readonly registry: MediaHandleRegistry
   readonly requestLibraryPermission: () => Promise<{ readonly granted: boolean }>
-  readonly launchLibrary: (options: { multiple: boolean }) => Promise<PickerResult>
-  readonly launchFiles: (options: { multiple: boolean }) => Promise<PickerResult>
+  /** `limit` is the room the registry has left; a picker that can bound its selection must. */
+  readonly launchLibrary: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
+  readonly launchFiles: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
   readonly readClipboardImage: () => Promise<{
     readonly data: string
     readonly size?: { readonly width: number; readonly height: number }
@@ -142,6 +143,17 @@ export function createNativeMediaVerbServer(
   }
 
   async function pickFrom(source: BridgeMediaSource, multiple: boolean): Promise<StagedMedia[]> {
+    // Before the picker, not after it. `mint` refuses a pick that would pass the cap, and by then
+    // the OS has copied every selected asset into the cache: a user who chose nine photos would
+    // wait through all of it to be told none were taken. The same number bounds the selection
+    // below, so the reachable way to be refused here is a page that never released what it holds.
+    const room = deps.registry.remainingCapacity()
+    if (room <= 0) {
+      throw new BridgeNativeVerbRefusedError(
+        'native_media_handle_cap',
+        'this page is holding every staged item it may; release one before picking again'
+      )
+    }
     if (source === 'clipboard') {
       const image = await deps.readClipboardImage()
       if (image === null) {
@@ -170,9 +182,9 @@ export function createNativeMediaVerbServer(
           'the photo library permission was denied on this device'
         )
       }
-      return stage(readAssets(await deps.launchLibrary({ multiple })))
+      return stage(readAssets(await deps.launchLibrary({ multiple, limit: room })))
     }
-    return stage(readAssets(await deps.launchFiles({ multiple })))
+    return stage(readAssets(await deps.launchFiles({ multiple, limit: room })))
   }
 
   /**

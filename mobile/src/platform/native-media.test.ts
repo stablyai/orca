@@ -7,6 +7,7 @@ import {
   utf8ByteLength
 } from '../mobile-web-shell/bridge/bridge-caps'
 import {
+  BRIDGE_MEDIA_MAX_LIVE_HANDLES,
   BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaPickResultSchema,
   mediaReadResultSchema
@@ -232,6 +233,48 @@ describe('picking', () => {
     await expect(
       probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
     ).resolves.toEqual({ items: [] })
+  })
+
+  it('offers the picker only the room the registry has left', async () => {
+    const limits: (number | undefined)[] = []
+    const probe = harness({
+      launchLibrary: (options: { multiple: boolean; limit: number }) => {
+        limits.push(options.limit)
+        return Promise.resolve({ canceled: true })
+      }
+    })
+    await probe.serve('native.media.pick', { source: 'library', multiple: true })
+    expect(limits).toEqual([BRIDGE_MEDIA_MAX_LIVE_HANDLES])
+
+    probe.files.set(`${CACHE}/held.png`, bytesOf(4))
+    probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
+    probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
+    await probe.serve('native.media.pick', { source: 'library', multiple: true })
+    expect(limits).toEqual([BRIDGE_MEDIA_MAX_LIVE_HANDLES, BRIDGE_MEDIA_MAX_LIVE_HANDLES - 2])
+  })
+
+  it('refuses a pick up front when nothing is left, before the OS copies a byte', async () => {
+    // Without this the OS copies every selected asset into the cache and the registry then
+    // refuses the whole pick, so the user waits through a multi-select for nothing.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const launches: number[] = []
+    const probe = harness({
+      launchLibrary: () => {
+        launches.push(1)
+        return Promise.resolve({ canceled: true })
+      }
+    })
+    probe.files.set(`${CACHE}/held.png`, bytesOf(4))
+    for (let index = 0; index < BRIDGE_MEDIA_MAX_LIVE_HANDLES; index += 1) {
+      probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
+    }
+    for (const source of ['library', 'files', 'clipboard'] as const) {
+      await expect(probe.serve('native.media.pick', { source, multiple: true })).rejects.toSatisfy(
+        (error) => refusalOf(error) === 'native_media_handle_cap'
+      )
+    }
+    expect(launches).toEqual([])
+    warn.mockRestore()
   })
 
   it('refuses an item bigger than the staging ceiling, and deletes what it picked', async () => {

@@ -2,7 +2,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const expo = vi.hoisted(() => ({
-  launchImageLibraryAsync: vi.fn(() => Promise.resolve({ canceled: true })),
+  launchImageLibraryAsync: vi.fn((_options: Record<string, unknown>) =>
+    Promise.resolve({ canceled: true })
+  ),
   requestMediaLibraryPermissionsAsync: vi.fn(() => Promise.resolve({ granted: true })),
   getDocumentAsync: vi.fn(() => Promise.resolve({ canceled: true })),
   getImageAsync: vi.fn(() => Promise.resolve(null)),
@@ -73,7 +75,7 @@ describe('which uris this shell owns', () => {
 
 describe('how the pickers are launched', () => {
   it('asks the library for images the shell can own, single and multiple', async () => {
-    await deps().launchLibrary({ multiple: false })
+    await deps().launchLibrary({ multiple: false, limit: 8 })
     expect(expo.launchImageLibraryAsync).toHaveBeenLastCalledWith(
       expect.objectContaining({
         mediaTypes: ['images'],
@@ -81,16 +83,25 @@ describe('how the pickers are launched', () => {
         allowsMultipleSelection: false
       })
     )
-    await deps().launchLibrary({ multiple: true })
-    expect(expo.launchImageLibraryAsync).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowsMultipleSelection: true, selectionLimit: 0 })
-    )
+    // No selection limit on a single pick: the OS returns one asset and `0` would mean unlimited.
+    expect(expo.launchImageLibraryAsync.mock.lastCall?.[0]).not.toHaveProperty('selectionLimit')
+  })
+
+  it('bounds a multi-select to the room it was given, never to unlimited', async () => {
+    // `selectionLimit: 0` is unlimited to the OS picker, which is the shape that lets a user wait
+    // through a nine-photo copy to be refused by the registry afterwards.
+    for (const limit of [8, 3, 1]) {
+      await deps().launchLibrary({ multiple: true, limit })
+      expect(expo.launchImageLibraryAsync).toHaveBeenLastCalledWith(
+        expect.objectContaining({ allowsMultipleSelection: true, selectionLimit: limit })
+      )
+    }
   })
 
   it('asks the document picker to copy into the cache, which is what makes the uri ownable', async () => {
     // Without this the picker hands back the provider's own uri on Android and the handle it
     // backs can never be released.
-    await deps().launchFiles({ multiple: true })
+    await deps().launchFiles({ multiple: true, limit: 8 })
     expect(expo.getDocumentAsync).toHaveBeenLastCalledWith({
       type: '*/*',
       multiple: true,

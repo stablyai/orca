@@ -72,6 +72,11 @@ export class MediaHandleRegistry {
     return this.live.size
   }
 
+  /** How many more items this session may hold. What a picker should be allowed to return. */
+  remainingCapacity(): number {
+    return BRIDGE_MEDIA_MAX_LIVE_HANDLES - this.liveCount()
+  }
+
   /**
    * Names each staged file, or refuses the pick whole and discards what it staged.
    *

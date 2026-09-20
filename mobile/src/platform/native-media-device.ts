@@ -67,14 +67,19 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
   return {
     registry,
     requestLibraryPermission: () => ImagePicker.requestMediaLibraryPermissionsAsync(),
-    launchLibrary: ({ multiple }) =>
+    // `selectionLimit` is the registry's remaining room, never 0: zero means unlimited to the OS
+    // picker, and an unlimited selection is one the registry refuses after the OS has already
+    // copied every asset into the cache. `pick` refuses an empty room before reaching here.
+    launchLibrary: ({ multiple, limit }) =>
       ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         base64: false,
         allowsMultipleSelection: multiple,
-        ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
+        ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
         quality: 1
       }),
+    // `getDocumentAsync` takes no selection limit, so the room is only the up-front refusal here;
+    // a multi-select past it is still refused by `mint`, which is the bound that cannot be skipped.
     launchFiles: ({ multiple }) =>
       DocumentPicker.getDocumentAsync({ type: '*/*', multiple, copyToCacheDirectory: true }),
     readClipboardImage: () => Clipboard.getImageAsync({ format: 'png' }),
