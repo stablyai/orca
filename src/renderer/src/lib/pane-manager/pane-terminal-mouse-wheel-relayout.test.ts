@@ -77,18 +77,11 @@ function openMouseReportingTerminal(): Terminal {
 describe('terminal mouse wheel handling after relayout', () => {
   beforeEach(() => {
     // happy-dom has no canvas text metrics; xterm measures glyphs on open().
-    const canvasContext: Pick<CanvasRenderingContext2D, 'measureText'> & {
-      fontBoundingBoxAscent: number
-      fontBoundingBoxDescent: number
-    } = {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       measureText: () => ({ width: 10 }),
       fontBoundingBoxAscent: 8,
       fontBoundingBoxDescent: 2
-    }
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: happy-dom canvas 2d is a text-metrics stub; xterm only reads measureText/font bounding boxes on open.
-      canvasContext as CanvasRenderingContext2D
-    )
+    } as unknown as CanvasRenderingContext2D)
   })
 
   afterEach(() => {

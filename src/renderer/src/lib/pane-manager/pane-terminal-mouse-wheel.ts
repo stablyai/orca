@@ -38,7 +38,7 @@ type TerminalMouseWheelRefreshCore = {
   }
 }
 
-type TerminalMouseWheelRefreshTarget = {
+type TerminalMouseWheelRefreshTarget = Terminal & {
   _core?: TerminalMouseWheelRefreshCore
 }
 
