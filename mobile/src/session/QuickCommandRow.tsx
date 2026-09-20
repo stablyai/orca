@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
+import { triggerError } from '../platform/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -74,6 +75,9 @@ export function QuickCommandRow({
       }
       setFeedback({ body, status: 'copied' })
     } catch {
+      // The row says so on its own control rather than in a toast; the buzz is the part a thumb
+      // resting on the button it just pressed can notice without looking.
+      triggerError()
       if (!mountedRef.current) {
         return
       }
