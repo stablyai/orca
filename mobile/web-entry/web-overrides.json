@@ -26,6 +26,10 @@
       "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
     },
     {
+      "file": "src/platform/text-input-font-size.web.ts",
+      "reason": "iOS zooms the page on focus of any text input under 16px and does not zoom back out, which leaves the document at a scale other than 1 for a whole typing session. keyboard-occlusion.web.ts reads a scale other than 1 as 'not a keyboard' on purpose, because geometry cannot separate a zoom from a keyboard, so the commit bar and the note composer would never lift on the platform they were written for. The web file raises the app's 14px body size to that floor; the native file is the body size, so a phone renders exactly what it rendered before. maximum-scale=1 on the viewport meta was the other fix and was rejected: Android WebView honours it and it would take deliberate pinch zoom away from low-vision users."
+    },
+    {
       "file": "src/platform/haptics.web.ts",
       "reason": "expo-haptics has a web build that fakes an iOS haptic by appending a hidden <label><input type=\"checkbox\" switch> to document.head, clicking it and removing it, once per call. C1.9 traced a long press that never fired on the worktree list to that stray click, and the file explorer calls triggerSelection on every row tap. The page has no haptics instead; the bundle test reads the shipped bytes for the shim."
     },

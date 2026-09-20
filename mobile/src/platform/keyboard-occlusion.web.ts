@@ -20,10 +20,15 @@ import { useEffect, useState } from 'react'
  *
  * A pinch zoom is not a keyboard, and geometry alone cannot tell them apart: a 2x zoom shrinks the
  * visual viewport by exactly as much as a half-screen keyboard. So a `scale` other than 1 answers
- * 0. That is only affordable because the page sets `maximum-scale=1`: iOS auto-zooms on focus of
- * any input under 16px and this app's are 14px, so without it every focus would arrive zoomed and
- * this guard would answer 0 for the one flow the seam exists for. With it, a scale other than 1 is
- * a deliberate pinch, and a keyboard raised during one is the rare case that costs.
+ * 0, and what makes that affordable is that the ordinary typing path never gets there. iOS zooms
+ * on focus of any input under 16px and does not zoom back out, so on a 14px input every focus
+ * would arrive zoomed and this guard would refuse the one flow the seam exists for. The fix is at
+ * the input rather than here: `text-input-font-size.web.ts` raises both consumers to the floor, so
+ * a scale other than 1 means a user pinched, and a keyboard raised during one is the rare case
+ * that costs. `maximum-scale=1` on the viewport meta would have done it too and was rejected —
+ * Android WebView honours it, so it would have taken pinch zoom from low-vision users to fix a
+ * problem only iOS has.
+ *
  * `scale` is read defensively because older WebViews do not implement it, and treating its absence
  * as zoomed would answer 0 for every keyboard on them.
  *
