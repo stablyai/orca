@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
+import { useHostProjectAddedHandoff, usePlusActionSheet } from './host-project-admission-actions'
 import { REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-runtime-capabilities'
 import type { MobileWorkspaceRepo } from '../../components/new-worktree-modal-types'
 import { floatingWorkspaceSessionPath } from '../../session/floating-workspace'
@@ -35,7 +36,7 @@ export function useHostWorktreeActions(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
-  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<void>
+  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<Worktree[] | undefined>
   forgetHostClient: ReturnType<typeof useForgetHostClient>
   hostCapabilities: readonly string[]
   hostId: string | undefined
@@ -105,21 +106,12 @@ export function useHostWorktreeActions(args: {
   // Why: hosts without the add-project capability never list it, so the + goes straight
   // to the create form there — a one-row sheet would be an extra tap for nothing.
   const addProjectSupported = hostCapabilities.includes(REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY)
-
-  const openPlusActionSheet = useCallback(() => {
-    if (addProjectSupported) {
-      setShowPlusActionSheet(true)
-      return
-    }
-    openNewWorktreeModal()
-  }, [addProjectSupported, openNewWorktreeModal, setShowPlusActionSheet])
-
-  const openAddProject = useCallback(() => {
-    if (addProjectSupported) {
-      setShowAddProject(true)
-    }
-  }, [addProjectSupported, setShowAddProject])
-
+  const { openAddProject, openPlusActionSheet } = usePlusActionSheet({
+    addProjectSupported,
+    openNewWorktreeModal,
+    setShowAddProject,
+    setShowPlusActionSheet
+  })
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -314,6 +306,8 @@ export function useHostWorktreeActions(args: {
     ]
   )
 
+  const handleProjectAdded = useHostProjectAddedHandoff({ fetchWorktrees, openWorktreeSession })
+
   const openFloatingWorkspace = useCallback(() => {
     // The floating sentinel has no worktree record to activate; tabs.list hydrates its host-owned tabs.
     navigateFromHostList(floatingWorkspaceSessionPath(hostId))
@@ -321,6 +315,7 @@ export function useHostWorktreeActions(args: {
 
   return {
     ...worktreeDelete,
+    handleProjectAdded,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
