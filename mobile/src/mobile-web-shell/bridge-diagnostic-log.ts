@@ -5,11 +5,15 @@ import type { BridgeHostDiagnostic } from './bridge-host'
  *
  * The kind on its own for everything the host reports once per cause. Not for a refused `notify`:
  * a page that was told nothing and a page reaching past what it was told are different faults, and
- * the first would otherwise bury the second for the life of the host.
+ * the first would otherwise bury the second for the life of the host. Not for a backlog either: a
+ * shell holds one stream per open terminal, and under the kind alone only the first ever reported.
  */
 function diagnosticKey(diagnostic: BridgeHostDiagnostic): string {
-  return diagnostic.kind === 'notify-refused' || diagnostic.kind === 'navigate-back-refused'
-    ? `${diagnostic.kind}:${diagnostic.why}`
+  if (diagnostic.kind === 'notify-refused' || diagnostic.kind === 'navigate-back-refused') {
+    return `${diagnostic.kind}:${diagnostic.why}`
+  }
+  return diagnostic.kind === 'terminal-backlog'
+    ? `${diagnostic.kind}:${diagnostic.id}`
     : diagnostic.kind
 }
 
@@ -84,6 +88,19 @@ export function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnos
         id: diagnostic.id,
         bytes: diagnostic.bytes,
         dropped: diagnostic.dropped
+      })
+      return
+    }
+    if (diagnostic.kind === 'terminal-backlog') {
+      // All five, because the rule is only readable in their ratio: frames coalesced against frames
+      // delivered is what the holding bought, the peak is what it cost, and `ended` is the only
+      // place the two ways a held stream dies are told apart — both reach the page as `overflow`.
+      console.warn('[web-shell-bridge] a held terminal stream was retired', {
+        id: diagnostic.id,
+        coalescedFrames: diagnostic.coalescedFrames,
+        deliveredFrames: diagnostic.deliveredFrames,
+        peakPendingBytes: diagnostic.peakPendingBytes,
+        ended: diagnostic.ended
       })
       return
     }

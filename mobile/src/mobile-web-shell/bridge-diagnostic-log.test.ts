@@ -67,4 +67,60 @@ describe('the bridge diagnostic log', () => {
     expect(lines()[1]).toContain('no view')
     expect(lines()[2]).toContain('the listener threw')
   })
+
+  /**
+   * The backlog report, which is the only oracle the coalescing rule has.
+   *
+   * Nothing crosses to the page saying how much was held, and both ways a held stream dies reach it
+   * as `overflow`, because a reason its reader has never heard of is a frame it drops. So the four
+   * numbers and `ended` are the whole evidence, and without a branch of its own the report fell
+   * through to the "a view outlived its host" warn with every field discarded.
+   */
+  it('reports what a held terminal stream did, rather than calling it an outlived view', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-1',
+      coalescedFrames: 9,
+      deliveredFrames: 4,
+      peakPendingBytes: 131_072,
+      ended: 'ack-silence'
+    })
+    expect(lines()[0]).not.toContain('outlived')
+    for (const part of ['stream-1', '9', '4', '131072', 'ack-silence']) {
+      expect(lines()[0]).toContain(part)
+    }
+  })
+
+  it('keeps one line per stream, so a second terminal is not buried by the first', () => {
+    // Keyed by kind alone, one backlog per host was reported and every other stream was silent —
+    // which is the case the report exists for, since a shell holds a stream per open terminal.
+    const report = createBridgeDiagnosticReporter()
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-1',
+      coalescedFrames: 1,
+      deliveredFrames: 1,
+      peakPendingBytes: 10,
+      ended: null
+    })
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-2',
+      coalescedFrames: 2,
+      deliveredFrames: 2,
+      peakPendingBytes: 20,
+      ended: 'pending-ceiling'
+    })
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-1',
+      coalescedFrames: 3,
+      deliveredFrames: 3,
+      peakPendingBytes: 30,
+      ended: null
+    })
+    expect(lines()).toHaveLength(2)
+    expect(lines()[1]).toContain('stream-2')
+  })
 })
