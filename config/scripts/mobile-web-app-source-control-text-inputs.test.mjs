@@ -30,6 +30,12 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 const HUB = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
 
+/** The seam module itself, which a fixture needs on disk for an import of it to resolve. */
+const SEAM_SOURCE = {
+  'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 14'
+}
+const SEAM_IMPORT = "import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'"
+
 /** A scratch module tree, so a planted offender never lands in the tree other censuses walk. */
 function plant(files) {
   const root = mkdtempSync(join(tmpdir(), 'orca-text-input-census-'))
@@ -117,17 +123,146 @@ describe('the size a text input declares, as the census reads it', () => {
         'export const Field = () => <TextInput style={styles.input} />',
         'export const Other = () => <TextInput style={styles.bare} />'
       ].join('\n'),
+      // Imported, not merely spelled: the rule reads the binding now, so a fixture that wrote the
+      // name without importing it from the seam would be an offender like any other shadow.
       'src/ui/field-styles.ts': [
+        SEAM_IMPORT,
         'export const styles = {',
         '  input: { fontSize: TEXT_INPUT_FONT_SIZE },',
         '  bare: { padding: 8 }',
         '}'
-      ].join('\n')
+      ].join('\n'),
+      ...SEAM_SOURCE
     })
     try {
       expect(
         textInputFontSizeOffenders(root, { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] })
       ).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads an inline style literal in place rather than losing it', () => {
+    // `style={{ fontSize: 14 }}` names no style key, so a walk that only followed `styles.key`
+    // recorded nothing at all for it: neither an offender nor a hole.
+    const root = plant({
+      'src/ui/Inline.tsx': [
+        'export const Sized = () => <TextInput style={{ fontSize: 14 }} />',
+        'export const Bare = () => <TextInput style={{ padding: 8 }} />'
+      ].join('\n')
+    })
+    try {
+      const closure = { local: ['src/ui/Inline.tsx'] }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Inline.tsx:1'])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads an inline literal beside a style key, and the condition between them', () => {
+    // `[styles.input, disabled && styles.disabled]` is the shape this tree actually uses, so the
+    // members of an array — and the right of an `&&` — have to be followed, not walked as a blob.
+    const root = plant({
+      'src/ui/Mixed.tsx': [
+        "import { styles } from './mixed-styles'",
+        'export const Mixed = () => (',
+        '  <TextInput style={[styles.input, disabled && styles.disabled, { fontSize: 14 }]} />',
+        ')'
+      ].join('\n'),
+      'src/ui/mixed-styles.ts': [
+        SEAM_IMPORT,
+        'export const styles = {',
+        '  input: { fontSize: TEXT_INPUT_FONT_SIZE },',
+        '  disabled: { opacity: 0.5 }',
+        '}'
+      ].join('\n'),
+      ...SEAM_SOURCE
+    })
+    try {
+      const closure = {
+        local: ['src/ui/Mixed.tsx', 'src/ui/mixed-styles.ts', ...Object.keys(SEAM_SOURCE)]
+      }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Mixed.tsx:3'])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('names a style shape it cannot follow rather than dropping it', () => {
+    const root = plant({
+      'src/ui/Called.tsx': 'export const Called = () => <TextInput style={makeStyle()} />'
+    })
+    try {
+      expect(unresolvedTextInputStyles(root, { local: ['src/ui/Called.tsx'] })).toEqual([
+        'src/ui/Called.tsx:1 (makeStyle())'
+      ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('lets a later spread beat a direct key, as the runtime object does', () => {
+    // `{ input: safe, ...legacy }` is `legacy.input` at runtime. Answering the direct key first
+    // read the safe one and called the override clean.
+    const root = plant({
+      'src/ui/Order.tsx': [
+        "import { styles } from './order-styles'",
+        'export const Order = () => <TextInput style={styles.input} />'
+      ].join('\n'),
+      'src/ui/order-styles.ts': [
+        SEAM_IMPORT,
+        "import { legacy } from './legacy-styles'",
+        'export const styles = { input: { fontSize: TEXT_INPUT_FONT_SIZE }, ...legacy }'
+      ].join('\n'),
+      'src/ui/legacy-styles.ts': 'export const legacy = { input: { fontSize: 14 } }',
+      ...SEAM_SOURCE
+    })
+    try {
+      expect(
+        textInputFontSizeOffenders(root, {
+          local: [
+            'src/ui/Order.tsx',
+            'src/ui/order-styles.ts',
+            'src/ui/legacy-styles.ts',
+            ...Object.keys(SEAM_SOURCE)
+          ]
+        })
+      ).toEqual(['src/ui/legacy-styles.ts:1'])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['a local constant wearing the name', 'const TEXT_INPUT_FONT_SIZE = 14'],
+    ['an import of the name from elsewhere', "import { TEXT_INPUT_FONT_SIZE } from './elsewhere'"]
+  ])('reads the seam as a binding, not a spelling: %s', (_label, preamble) => {
+    const root = plant({
+      'src/ui/Shadow.tsx': [
+        "import { styles } from './shadow-styles'",
+        'export const Shadow = () => <TextInput style={styles.input} />'
+      ].join('\n'),
+      'src/ui/shadow-styles.ts': [
+        preamble,
+        'export const styles = { input: { fontSize: TEXT_INPUT_FONT_SIZE } }'
+      ].join('\n'),
+      'src/ui/elsewhere.ts': 'export const TEXT_INPUT_FONT_SIZE = 14',
+      ...SEAM_SOURCE
+    })
+    try {
+      expect(
+        textInputFontSizeOffenders(root, {
+          local: [
+            'src/ui/Shadow.tsx',
+            'src/ui/shadow-styles.ts',
+            'src/ui/elsewhere.ts',
+            ...Object.keys(SEAM_SOURCE)
+          ]
+        })
+      ).toEqual(['src/ui/shadow-styles.ts:2'])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
