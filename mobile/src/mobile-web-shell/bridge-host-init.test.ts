@@ -46,7 +46,7 @@ describe('init and state', () => {
           'native.clipboard.write',
           'native.clipboard.read',
           'native.media.pick',
-          'native.media.readChunk',
+          'native.media.read',
           'native.media.release'
         ]
       },

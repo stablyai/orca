@@ -1,7 +1,7 @@
 import { BridgeNativeVerbRefusedError } from './bridge-host-errors'
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
-  BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES,
+  BRIDGE_MEDIA_READ_MAX_BYTES,
   type BridgeMediaItem
 } from './bridge/bridge-media-verbs'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
@@ -10,7 +10,7 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-
  * How long a staged file survives with nothing reading it.
  *
  * The read itself is nowhere near this. The largest item a pick may stage is
- * `CLIPBOARD_IMAGE_MAX_SOURCE_BYTES`, which at `BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES` a chunk is
+ * `CLIPBOARD_IMAGE_MAX_SOURCE_BYTES`, which at `BRIDGE_MEDIA_READ_MAX_BYTES` a chunk is
  * 48 round trips over a `postMessage` that measures in fractions of a millisecond. The TTL is not
  * sized for that: it is sized for the page that picked and then stopped — the user who backgrounded
  * the app mid-composer, the document that faulted before its first chunk — where nothing will ever
@@ -33,7 +33,7 @@ export type StagedMedia = {
   readonly height?: number
 }
 
-/** The byte range one `readChunk` covers, and whether it is the last. */
+/** The byte range one `read` covers, and whether it is the last. */
 export type MediaChunkRange = {
   readonly uri: string
   readonly start: number
@@ -121,10 +121,7 @@ export class MediaHandleRegistry {
       )
     }
     record.touchedAt = this.deps.now()
-    const end = Math.min(
-      offset + Math.min(length, BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES),
-      record.byteLength
-    )
+    const end = Math.min(offset + Math.min(length, BRIDGE_MEDIA_READ_MAX_BYTES), record.byteLength)
     return { uri: record.uri, start: offset, end, eof: end >= record.byteLength }
   }
 

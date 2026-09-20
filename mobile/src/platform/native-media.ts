@@ -1,7 +1,7 @@
 import {
-  BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES,
+  BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaPickParamsSchema,
-  mediaReadChunkParamsSchema,
+  mediaReadParamsSchema,
   mediaReleaseParamsSchema,
   type BridgeMediaSource
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
@@ -15,7 +15,7 @@ import {
 import { MobileImageBase64Accumulator } from '../session/mobile-image-base64-accumulator'
 
 /**
- * The device side of `native.media.pick`, `readChunk` and `release`.
+ * The device side of `native.media.pick`, `read` and `release`.
  *
  * The OS permission prompt runs here, inside the shell, which is the whole reason these are verbs:
  * a page served from a custom scheme has no photo library and no Files app, and a picker is the one
@@ -181,7 +181,7 @@ export function createNativeMediaVerbServer(
       const accumulator = new MobileImageBase64Accumulator()
       let read = start
       while (read < end) {
-        const bytes = handle.readBytes(Math.min(BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES, end - read))
+        const bytes = handle.readBytes(Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, end - read))
         if (bytes.byteLength === 0) {
           break
         }
@@ -199,8 +199,8 @@ export function createNativeMediaVerbServer(
       const { source, multiple } = mediaPickParamsSchema.parse(params)
       return { items: deps.registry.mint(await pickFrom(source, multiple)) }
     }
-    if (verb === 'native.media.readChunk') {
-      const { handle, offset, length } = mediaReadChunkParamsSchema.parse(params)
+    if (verb === 'native.media.read') {
+      const { handle, offset, length } = mediaReadParamsSchema.parse(params)
       const range = deps.registry.read(handle, offset, length)
       return { base64: readRange(range.uri, range.start, range.end), eof: range.eof }
     }

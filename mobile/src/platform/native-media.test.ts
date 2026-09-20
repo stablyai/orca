@@ -7,9 +7,9 @@ import {
   utf8ByteLength
 } from '../mobile-web-shell/bridge/bridge-caps'
 import {
-  BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES,
+  BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaPickResultSchema,
-  mediaReadChunkResultSchema
+  mediaReadResultSchema
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
 import { readShellRefusalCode } from '../mobile-web-shell/bridge-host-errors'
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
@@ -201,11 +201,11 @@ describe('reading chunks', () => {
     let offset = 0
     let reads = 0
     for (;;) {
-      const chunk = mediaReadChunkResultSchema.parse(
-        await probe.serve('native.media.readChunk', {
+      const chunk = mediaReadResultSchema.parse(
+        await probe.serve('native.media.read', {
           handle,
           offset,
-          length: BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES
+          length: BRIDGE_MEDIA_READ_MAX_BYTES
         })
       )
       reads += 1
@@ -218,7 +218,7 @@ describe('reading chunks', () => {
         break
       }
     }
-    expect(reads).toBe(Math.ceil(total / BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES))
+    expect(reads).toBe(Math.ceil(total / BRIDGE_MEDIA_READ_MAX_BYTES))
     expect(collected).toEqual([...source])
   })
 
@@ -228,14 +228,14 @@ describe('reading chunks', () => {
       released: true
     })
     await expect(
-      probe.serve('native.media.readChunk', { handle, offset: 0, length: 16 })
+      probe.serve('native.media.read', { handle, offset: 0, length: 16 })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_unknown')
   })
 
   it('refuses a read that starts past the end', async () => {
     const { probe, handle } = await staged(64)
     await expect(
-      probe.serve('native.media.readChunk', { handle, offset: 64, length: 16 })
+      probe.serve('native.media.read', { handle, offset: 64, length: 16 })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_range')
   })
 })

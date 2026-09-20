@@ -5,12 +5,12 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboa
 import {
   BRIDGE_MEDIA_HANDLE_MAX_CHARS,
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
-  BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES,
+  BRIDGE_MEDIA_READ_MAX_BYTES,
   BRIDGE_MEDIA_SOURCES,
   mediaPickParamsSchema,
   mediaPickResultSchema,
-  mediaReadChunkParamsSchema,
-  mediaReadChunkResultSchema,
+  mediaReadParamsSchema,
+  mediaReadResultSchema,
   mediaReleaseParamsSchema,
   mediaReleaseResultSchema
 } from './bridge-media-verbs'
@@ -83,17 +83,15 @@ describe('what a chunk read may ask for', () => {
   it('derives its byte length from the upload path, never from a second number', () => {
     // Whole base64 groups of the chunk the upload path already sends: four characters per three
     // bytes, so a read of this many bytes encodes to exactly the char budget and never past it.
-    expect(BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES).toBe(
+    expect(BRIDGE_MEDIA_READ_MAX_BYTES).toBe(
       Math.floor(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS / 4) * 3
     )
   })
 
   it('takes a read at the cap and refuses one past it', () => {
-    const at = { handle: HANDLE, offset: 0, length: BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES }
-    expect(mediaReadChunkParamsSchema.safeParse(at).success).toBe(true)
-    expect(mediaReadChunkParamsSchema.safeParse({ ...at, length: at.length + 1 }).success).toBe(
-      false
-    )
+    const at = { handle: HANDLE, offset: 0, length: BRIDGE_MEDIA_READ_MAX_BYTES }
+    expect(mediaReadParamsSchema.safeParse(at).success).toBe(true)
+    expect(mediaReadParamsSchema.safeParse({ ...at, length: at.length + 1 }).success).toBe(false)
   })
 
   it('refuses a read that names nothing a file has', () => {
@@ -106,20 +104,16 @@ describe('what a chunk read may ask for', () => {
       { handle: HANDLE, offset: 0 },
       { handle: HANDLE, offset: 0, length: 16, encoding: 'hex' }
     ]) {
-      expect(mediaReadChunkParamsSchema.safeParse(params).success, JSON.stringify(params)).toBe(
-        false
-      )
+      expect(mediaReadParamsSchema.safeParse(params).success, JSON.stringify(params)).toBe(false)
     }
   })
 
   it('holds the answer to the base64 the chunk cap allows', () => {
     const base64 = 'a'.repeat(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
-    expect(mediaReadChunkResultSchema.safeParse({ base64, eof: false }).success).toBe(true)
-    expect(mediaReadChunkResultSchema.safeParse({ base64: `${base64}a`, eof: true }).success).toBe(
-      false
-    )
-    expect(mediaReadChunkResultSchema.safeParse({ base64: '', eof: true }).success).toBe(true)
-    expect(mediaReadChunkResultSchema.safeParse({ base64: '!!', eof: true }).success).toBe(false)
+    expect(mediaReadResultSchema.safeParse({ base64, eof: false }).success).toBe(true)
+    expect(mediaReadResultSchema.safeParse({ base64: `${base64}a`, eof: true }).success).toBe(false)
+    expect(mediaReadResultSchema.safeParse({ base64: '', eof: true }).success).toBe(true)
+    expect(mediaReadResultSchema.safeParse({ base64: '!!', eof: true }).success).toBe(false)
   })
 })
 

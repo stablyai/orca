@@ -2,8 +2,8 @@ import { z } from 'zod'
 import {
   mediaPickParamsSchema,
   mediaPickResultSchema,
-  mediaReadChunkParamsSchema,
-  mediaReadChunkResultSchema,
+  mediaReadParamsSchema,
+  mediaReadResultSchema,
   mediaReleaseParamsSchema,
   mediaReleaseResultSchema
 } from './bridge-media-verbs'
@@ -30,7 +30,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.write',
   'native.clipboard.read',
   'native.media.pick',
-  'native.media.readChunk',
+  'native.media.read',
   'native.media.release'
 ] as const
 
@@ -92,9 +92,9 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: mediaPickParamsSchema,
     result: mediaPickResultSchema
   },
-  'native.media.readChunk': {
-    params: mediaReadChunkParamsSchema,
-    result: mediaReadChunkResultSchema
+  'native.media.read': {
+    params: mediaReadParamsSchema,
+    result: mediaReadResultSchema
   },
   'native.media.release': {
     params: mediaReleaseParamsSchema,

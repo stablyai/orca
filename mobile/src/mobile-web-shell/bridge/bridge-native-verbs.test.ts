@@ -1,6 +1,6 @@
 /** The decision the seam makes before anything is dispatched, as a function of its inputs. */
 import { describe, expect, it } from 'vitest'
-import { BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES } from './bridge-media-verbs'
+import { BRIDGE_MEDIA_READ_MAX_BYTES } from './bridge-media-verbs'
 import {
   BRIDGE_NATIVE_METHOD_PREFIX,
   BRIDGE_NATIVE_VERB_NAMES,
@@ -104,7 +104,7 @@ describe('the media verbs on the same seam', () => {
       'native.clipboard.write',
       'native.clipboard.read',
       'native.media.pick',
-      'native.media.readChunk',
+      'native.media.read',
       'native.media.release'
     ])
   })
@@ -123,7 +123,7 @@ describe('the media verbs on the same seam', () => {
     })
     expect(
       readBridgeNativeVerbCall({
-        method: 'native.media.readChunk',
+        method: 'native.media.read',
         granted: ALL,
         params: { handle: 'media-1', offset: 0, length: 16 }
       }).ok
@@ -139,16 +139,16 @@ describe('the media verbs on the same seam', () => {
 
   it('refuses a chunk longer than the upload path sends, before a file is opened', () => {
     const read = readBridgeNativeVerbCall({
-      method: 'native.media.readChunk',
+      method: 'native.media.read',
       granted: ALL,
-      params: { handle: 'media-1', offset: 0, length: BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES + 1 }
+      params: { handle: 'media-1', offset: 0, length: BRIDGE_MEDIA_READ_MAX_BYTES + 1 }
     })
     expect(read.ok).toBe(false)
     expect(read.ok === false && read.refusal).toBe('invalid-params')
   })
 
   it('refuses each media verb to a page granted only the clipboard', () => {
-    for (const method of ['native.media.pick', 'native.media.readChunk', 'native.media.release']) {
+    for (const method of ['native.media.pick', 'native.media.read', 'native.media.release']) {
       const read = readBridgeNativeVerbCall({
         method,
         granted: ['native.clipboard.read'],

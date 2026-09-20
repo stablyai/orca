@@ -162,7 +162,7 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
       return { value: 'pasteboard' }
     case 'native.media.pick':
       return { items: [] }
-    case 'native.media.readChunk':
+    case 'native.media.read':
       return { base64: '', eof: true }
     case 'native.media.release':
       return { released: false }

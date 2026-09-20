@@ -3,13 +3,18 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboa
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/mobile-clipboard-image-upload-chunk'
 
 /**
- * The wire shapes of `native.media.pick`, `native.media.readChunk` and `native.media.release`.
+ * The wire shapes of `native.media.pick`, `native.media.read` and `native.media.release`.
  *
  * A picked image is up to `CLIPBOARD_IMAGE_MAX_SOURCE_BYTES` of raw bytes, which is three times the
  * reply ceiling and twenty-eight times the frame cap, so the value never crosses as a value. `pick`
- * answers a handle the shell owns, `readChunk` moves the bytes a chunk at a time, and `release`
- * ends it. Split from `bridge-native-verbs.ts` because these three are one contract of their own
- * and that module is the table every verb is listed in.
+ * answers a handle the shell owns, `read` moves the bytes a chunk at a time, and `release` ends
+ * it. Split from `bridge-native-verbs.ts` because these three are one contract of their own and
+ * that module is the table every verb is listed in.
+ *
+ * The verb is `read` and not `readChunk` for a reason a rename cannot be undone from: a manifest
+ * grant name is held to `native(?:\.[a-z][a-z0-9]*){2,}`, and `bundled-mobile-web-bundle.ts`
+ * parses the manifest whole, so one camel-cased segment is not a route that falls back to native —
+ * it is a bundle the phone refuses entire.
  */
 
 /**
@@ -38,14 +43,14 @@ export const BRIDGE_MEDIA_MIME_MAX_CHARS = 128
 export const BRIDGE_MEDIA_MAX_LIVE_HANDLES = 8
 
 /**
- * The bytes one `readChunk` may ask for, derived from the chunk the upload path already sends.
+ * The bytes one `read` may ask for, derived from the chunk the upload path already sends.
  *
  * Whole base64 groups of `MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS`: four characters encode
  * three bytes, so a read of this many bytes is exactly that many characters and never one more.
  * Derived rather than written down beside it, because two numbers that must agree are one that
  * drifts.
  */
-export const BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES =
+export const BRIDGE_MEDIA_READ_MAX_BYTES =
   Math.floor(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS / 4) * 3
 
 const MIME_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i
@@ -84,10 +89,10 @@ export const mediaPickResultSchema = z.strictObject({
   items: z.array(mediaItemSchema).max(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
 })
 
-export const mediaReadChunkParamsSchema = z.strictObject({
+export const mediaReadParamsSchema = z.strictObject({
   handle: handleSchema,
   offset: byteOffsetSchema,
-  length: z.number().int().min(1).max(BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES)
+  length: z.number().int().min(1).max(BRIDGE_MEDIA_READ_MAX_BYTES)
 })
 
 /**
@@ -95,7 +100,7 @@ export const mediaReadChunkParamsSchema = z.strictObject({
  * ended from a chunk cap it hit, and a reader that guesses stops one chunk early on exactly the
  * files whose length is a multiple of the cap.
  */
-export const mediaReadChunkResultSchema = z.strictObject({
+export const mediaReadResultSchema = z.strictObject({
   base64: z.string().max(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS).regex(BASE64_PATTERN),
   eof: z.boolean()
 })

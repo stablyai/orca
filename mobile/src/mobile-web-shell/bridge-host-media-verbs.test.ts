@@ -10,9 +10,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
-  BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES,
+  BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaPickResultSchema,
-  mediaReadChunkResultSchema
+  mediaReadResultSchema
 } from './bridge/bridge-media-verbs'
 import {
   createFakeBridgePortPair,
@@ -126,12 +126,12 @@ describe('a granted page moving a picked image across the bridge', () => {
     let firstByte: number | null = null
     let lastByte: number | null = null
     for (;;) {
-      const chunk = mediaReadChunkResultSchema.parse(
+      const chunk = mediaReadResultSchema.parse(
         (
-          await probe.pair.client.callNativeVerb('native.media.readChunk', {
+          await probe.pair.client.callNativeVerb('native.media.read', {
             handle,
             offset,
-            length: BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES
+            length: BRIDGE_MEDIA_READ_MAX_BYTES
           })
         ).result
       )
@@ -148,7 +148,7 @@ describe('a granted page moving a picked image across the bridge', () => {
     // Every byte, in order, and no chunk skipped: the count is the file's own length and the
     // ends are the fixture's, which a reader that dropped or reordered a chunk would not have.
     expect(decodedBytes).toBe(FIXTURE_BYTES)
-    expect(chunks).toBe(Math.ceil(FIXTURE_BYTES / BRIDGE_MEDIA_READ_CHUNK_MAX_BYTES))
+    expect(chunks).toBe(Math.ceil(FIXTURE_BYTES / BRIDGE_MEDIA_READ_MAX_BYTES))
     expect(firstByte).toBe(fixtureByte(0))
     expect(lastByte).toBe(fixtureByte(FIXTURE_BYTES - 1))
     // Not one frame of this crossed as a forwarded request: a `native.` method never reaches the
@@ -198,7 +198,7 @@ describe('a handle the page no longer has', () => {
     const handle = await pickedHandle(probe)
     await probe.pair.client.callNativeVerb('native.media.release', { handle })
     await expect(
-      probe.pair.client.callNativeVerb('native.media.readChunk', { handle, offset: 0, length: 16 })
+      probe.pair.client.callNativeVerb('native.media.read', { handle, offset: 0, length: 16 })
     ).rejects.toMatchObject({ code: 'native_media_handle_unknown' })
   })
 
@@ -209,7 +209,7 @@ describe('a handle the page no longer has', () => {
     expect(probe.discarded).toEqual([])
     probe.advance(MEDIA_HANDLE_TTL_MS + 1)
     await expect(
-      probe.pair.client.callNativeVerb('native.media.readChunk', { handle, offset: 0, length: 16 })
+      probe.pair.client.callNativeVerb('native.media.read', { handle, offset: 0, length: 16 })
     ).rejects.toMatchObject({ code: 'native_media_handle_unknown' })
     expect(probe.discarded).toEqual([`${CACHE}/picked.png`])
   })
@@ -219,7 +219,7 @@ describe('a handle the page no longer has', () => {
     await ready(probe.pair)
     const handle = await pickedHandle(probe)
     await expect(
-      probe.pair.client.callNativeVerb('native.media.readChunk', {
+      probe.pair.client.callNativeVerb('native.media.read', {
         handle,
         offset: 4096,
         length: 16
@@ -250,7 +250,7 @@ describe('the pair every other suite gets by default', () => {
     await ready(pair)
     for (const [verb, params] of [
       ['native.media.pick', { source: 'library', multiple: false }],
-      ['native.media.readChunk', { handle: 'media-1', offset: 0, length: 16 }],
+      ['native.media.read', { handle: 'media-1', offset: 0, length: 16 }],
       ['native.media.release', { handle: 'media-1' }]
     ] as const) {
       const reply = await pair.client.callNativeVerb(verb, params)
