@@ -222,6 +222,21 @@ describe('reading chunks', () => {
     expect(collected).toEqual([...source])
   })
 
+  it('answers exactly the bytes a short read asked for, at the offset it asked for', async () => {
+    // The only case that separates the range from the cap. Every other read here asks for a whole
+    // chunk, so a handler that ignored `length` and read to the end of the file would pass them
+    // all: the file is shorter than one chunk, and the fake clamps at its own size.
+    const { probe, handle } = await staged(1000)
+    const source = bytesOf(1000)
+    const chunk = mediaReadResultSchema.parse(
+      await probe.serve('native.media.read', { handle, offset: 400, length: 16 })
+    )
+    const bytes = atob(chunk.base64)
+    expect(bytes.length).toBe(16)
+    expect(chunk.eof).toBe(false)
+    expect([...bytes].map((char) => char.codePointAt(0))).toEqual([...source.subarray(400, 416)])
+  })
+
   it('refuses a read for a handle the page released', async () => {
     const { probe, handle } = await staged(64)
     await expect(probe.serve('native.media.release', { handle })).resolves.toEqual({
