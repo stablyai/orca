@@ -12,6 +12,14 @@ import {
   type RateLimitState,
   toErrorMessage
 } from './service-types'
+import type { CodexRateLimitResetOutcome } from '../../../shared/rate-limit-types'
+
+const CODEX_RESET_REFRESH_RETRIES = 3
+const CODEX_RESET_REFRESH_DELAY_MS = 250
+
+function waitForCodexResetRefresh(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, CODEX_RESET_REFRESH_DELAY_MS))
+}
 
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
   protected resolveCodexHome(target?: CodexAccountSelectionTarget): {
@@ -77,27 +85,48 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected async fetchCodexResetResultState(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null,
-    stateBeforeReset: RateLimitState
+    stateBeforeReset: RateLimitState,
+    outcome: CodexRateLimitResetOutcome
   ): Promise<RateLimitState> {
-    const controller = this.beginFetchCycle()
-    let fresh: ProviderRateLimits
-    try {
-      fresh = await fetchCodexRateLimits({
-        codexHomePath,
-        allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-        signal: controller.signal
-      })
-    } catch (error) {
-      fresh = {
-        provider: 'codex',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: toErrorMessage(error),
-        status: 'error'
+    let fresh: ProviderRateLimits = stateBeforeReset.codex ?? {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: null,
+      status: 'fetching'
+    }
+    for (
+      let attempt = 0;
+      attempt <= (outcome === 'reset' ? CODEX_RESET_REFRESH_RETRIES : 0);
+      attempt += 1
+    ) {
+      if (attempt > 0) {
+        await waitForCodexResetRefresh()
       }
-    } finally {
-      this.finishFetchCycle(controller)
+      const controller = this.beginFetchCycle()
+      try {
+        fresh = await fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+          signal: controller.signal
+        })
+      } catch (error) {
+        fresh = {
+          provider: 'codex',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: toErrorMessage(error),
+          status: 'error'
+        }
+      } finally {
+        this.finishFetchCycle(controller)
+      }
+      const resetVisible = fresh.status === 'ok' && (fresh.session?.usedPercent ?? 0) <= 0
+      if (outcome !== 'reset' || resetVisible) {
+        break
+      }
     }
 
     const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
