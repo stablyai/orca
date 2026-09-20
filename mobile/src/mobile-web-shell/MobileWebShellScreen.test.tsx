@@ -32,6 +32,13 @@ const SNAPSHOT = vi.hoisted(() => ({
   host: { id: 'host-1', name: 'Host One', endpoint: 'ws://host-1', lastConnected: 3 }
 }))
 
+const DEFAULT_ROUTE_GRANTS = vi.hoisted((): readonly string[] => [
+  'navigate',
+  'storage',
+  'externalLink',
+  'native.clipboard.write'
+])
+
 const dependencies = vi.hoisted((): ScreenDependencies => {
   // Before the module under test is imported, so its `__DEV__` guard is on and the developer facts
   // are reachable at all — they are the one thing here that must never grow a secret.
@@ -49,7 +56,7 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     canGoBack: true,
     pathname: '/h/host-1',
     pageRoutes: ['/h/[hostId]'],
-    routeGrants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write'],
+    routeGrants: DEFAULT_ROUTE_GRANTS,
     lifecycle: [],
     viewRenders: 0,
     state: { kind: 'checking' },
@@ -218,23 +225,30 @@ function textOf(tree: ReactTestRenderer): string {
 
 afterEach(unmountRenderedScreens)
 
-describe('the hybrid shell screen', () => {
-  beforeEach(() => {
-    dependencies.retry.mockReset()
-    dependencies.reportShellFailure.mockReset()
-    dependencies.reportDocumentLoaded.mockReset()
-    dependencies.reportPageReady.mockReset()
-    dependencies.snapshotUnreadable = false
-    dependencies.storageRefreshes = 0
-    dependencies.lifecycle.length = 0
-    dependencies.client = null
-    dependencies.back.mockReset()
-    dependencies.openUrl.mockReset()
-    dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
-    dependencies.canGoBack = true
-    dependencies.pathname = '/h/host-1'
-  })
+/**
+ * File-level, not per describe: every block here shares one mutable `dependencies`, so a reset
+ * scoped to one of them leaves whatever the others set. `routeGrants` is reset for that reason —
+ * a case that grants the screencast lane would otherwise hand it to every case that follows.
+ */
+beforeEach(() => {
+  dependencies.retry.mockReset()
+  dependencies.reportShellFailure.mockReset()
+  dependencies.reportDocumentLoaded.mockReset()
+  dependencies.reportPageReady.mockReset()
+  dependencies.snapshotUnreadable = false
+  dependencies.storageRefreshes = 0
+  dependencies.lifecycle.length = 0
+  dependencies.viewRenders = 0
+  dependencies.client = null
+  dependencies.routeGrants = DEFAULT_ROUTE_GRANTS
+  dependencies.back.mockReset()
+  dependencies.openUrl.mockReset()
+  dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
+  dependencies.canGoBack = true
+  dependencies.pathname = '/h/host-1'
+})
 
+describe('the hybrid shell screen', () => {
   it('renders the update wall for a bundle verdict, with no shell view', async () => {
     const tree = await render({
       kind: 'wall',
@@ -592,5 +606,21 @@ describe('the dropped-frame count on the dev facts line', () => {
     } finally {
       Object.assign(globalThis, { __DEV__: true })
     }
+  })
+})
+
+/**
+ * Last in the file on purpose: it is the case the block above would have poisoned.
+ *
+ * Those cases grant the screencast lane and install a client, and before the shared setup reset
+ * them both, whatever ran next inherited a route granted a lane it never asked for. Deleting the
+ * reset fails here and nowhere else, because nothing else runs after a case that mutates them.
+ */
+describe('what one case mutates does not reach the next', () => {
+  it('starts from the shared route grants and no client', () => {
+    expect({ grants: dependencies.routeGrants, client: dependencies.client }).toEqual({
+      grants: DEFAULT_ROUTE_GRANTS,
+      client: null
+    })
   })
 })

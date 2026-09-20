@@ -11,14 +11,33 @@ import type { BridgeBinaryEvent } from './bridge-screencast-binary'
  * anything.
  */
 export function encodeBridgeScreencastFrame(frame: BrowserScreencastFrame): BridgeBinaryEvent {
+  return { ...bridgeScreencastFrameHeader(frame), b64: encodeBase64(frame.image) }
+}
+
+/**
+ * The same event with no image, which is what the frame costs before the image is added to it.
+ *
+ * Base64 is ASCII, so JSON escapes none of it: the encoded frame is this serialized plus exactly
+ * `bridgeScreencastBase64Length(image)` more bytes. That is what lets the shell price a frame
+ * before paying a base64 pass over one it may not be able to send.
+ *
+ * `encodeBridgeScreencastFrame` is built from this rather than beside it, so the shape measured and
+ * the shape sent cannot drift.
+ */
+export function bridgeScreencastFrameHeader(frame: BrowserScreencastFrame): BridgeBinaryEvent {
   return {
-    b64: encodeBase64(frame.image),
+    b64: '',
     format: frame.format,
     // The screencast's own counter. The event frame's `seq` is the bridge's backpressure ordinal,
     // and sending that one would renumber every frame the page reports.
     frameSeq: frame.seq,
     metadata: frame.metadata
   }
+}
+
+/** What `encodeBase64` will return for an image this long, without encoding it. */
+export function bridgeScreencastBase64Length(imageByteLength: number): number {
+  return Math.ceil(imageByteLength / 3) * 4
 }
 
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'

@@ -6,16 +6,36 @@
  * matters is that the frame a native listener would have been handed is the frame the page
  * reconstructs, and a shape assertion here could agree with itself while disagreeing with the page.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
 } from '../transport/browser-screencast-protocol'
+/** The real encoder, wrapped so a case can count the passes it makes over an image. Wrapped rather
+ *  than replaced: every other case here reads a frame back through the page's own decoder. */
+const encodes = vi.hoisted(() => ({ count: 0 }))
+vi.mock('./bridge/bridge-screencast-encoder', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./bridge/bridge-screencast-encoder')>()
+  return {
+    ...actual,
+    encodeBridgeScreencastFrame: (
+      frame: Parameters<typeof actual.encodeBridgeScreencastFrame>[0]
+    ) => {
+      encodes.count += 1
+      return actual.encodeBridgeScreencastFrame(frame)
+    }
+  }
+})
+
 import { decodeBridgeScreencastFrame } from './bridge/bridge-screencast-binary'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge/bridge-caps'
 import { BRIDGE_MAX_UNACKED_FRAMES } from './bridge-host-subscriptions'
 import { clientFrame } from './bridge-host-test-fakes'
 import { harness, ID, OTHER } from './bridge-host-test-harness'
+
+beforeEach(() => {
+  encodes.count = 0
+})
 
 const SCREENCAST = 'browser.screencast'
 
@@ -257,5 +277,59 @@ describe('the binary lane is served only to a route granted it', () => {
     }
     expect(nativeOf(granted)).toContain('screencastBinary')
     expect(nativeOf(ungranted)).not.toContain('screencastBinary')
+  })
+})
+
+/**
+ * What a stalled page costs the shell.
+ *
+ * The encode is a base64 pass over the whole image, and the window says whether the frame can be
+ * posted at all — so deciding after encoding makes a page that has stopped acking pay for every
+ * frame the shell then throws away. The size is knowable without encoding: base64 is ASCII, so JSON
+ * escapes none of it and the frame is its envelope plus exactly the image's encoded length.
+ */
+describe('a frame the window cannot carry is never encoded', () => {
+  function openBinary(): ReturnType<typeof harness> {
+    const bridge = harness({ ready: true })
+    bridge.host.receive(screencastSubscribe(ID, true))
+    return bridge
+  }
+
+  it('encodes nothing once the unacked window is full, and still counts the drops', () => {
+    const bridge = openBinary()
+    for (let index = 0; index < BRIDGE_MAX_UNACKED_FRAMES; index += 1) {
+      bridge.client.streams[0]?.emitBinary?.(frame(index, IMAGE))
+    }
+    expect(encodes.count).toBe(BRIDGE_MAX_UNACKED_FRAMES)
+    encodes.count = 0
+    for (let index = 0; index < 10; index += 1) {
+      bridge.client.streams[0]?.emitBinary?.(frame(1000 + index, IMAGE))
+    }
+    expect({ encodes: encodes.count, dropped: bridge.droppedBinaryFrames.length }).toEqual({
+      encodes: 0,
+      dropped: 10
+    })
+  })
+
+  it('encodes nothing for a frame that cannot fit the envelope at any size', () => {
+    const bridge = openBinary()
+    bridge.client.streams[0]?.emitBinary?.(frame(1, new Uint8Array(500_000)))
+    expect({ encodes: encodes.count, dropped: bridge.droppedBinaryFrames }).toEqual({
+      encodes: 0,
+      dropped: [1]
+    })
+  })
+
+  it('still encodes the frames it can carry', () => {
+    const bridge = openBinary()
+    bridge.client.streams[0]?.emitBinary?.(frame(1, IMAGE))
+    bridge.client.streams[0]?.emitBinary?.(frame(2, IMAGE))
+    expect({
+      encodes: encodes.count,
+      events: bridge.frames().filter((m) => m.type === 'event').length
+    }).toEqual({
+      encodes: 2,
+      events: 2
+    })
   })
 })

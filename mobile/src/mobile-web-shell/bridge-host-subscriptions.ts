@@ -1,6 +1,11 @@
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge-envelope'
-import { encodeBridgeScreencastFrame } from './bridge/bridge-screencast-encoder'
+import {
+  bridgeScreencastBase64Length,
+  bridgeScreencastFrameHeader,
+  encodeBridgeScreencastFrame
+} from './bridge/bridge-screencast-encoder'
+import type { BridgeBinaryEvent } from './bridge/bridge-screencast-binary'
 import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -188,19 +193,45 @@ export class BridgeHostSubscriptions {
       return
     }
     const seq = record.seq + 1
+    // Priced before it is encoded, and exactly: the header serialized plus the image's base64
+    // length is the whole frame, because base64 is ASCII and JSON escapes none of it. Encoding
+    // first would make a page that has stopped acking pay a full pass over every image the shell
+    // then throws away — ten 300 KB frames against a closed window is 3 MB encoded and nothing
+    // sent.
+    const bytes =
+      utf8ByteLength(this.binaryEventJson(id, seq, bridgeScreencastFrameHeader(frame))) +
+      bridgeScreencastBase64Length(frame.image.byteLength)
+    if (!this.canCarry(record, bytes)) {
+      this.dropBinaryFrame(id, record, bytes)
+      return
+    }
     this.sendEvent(
       id,
       record,
       seq,
-      JSON.stringify({
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'event',
-        id,
-        seq,
-        binary: encodeBridgeScreencastFrame(frame)
-      }),
+      this.binaryEventJson(id, seq, encodeBridgeScreencastFrame(frame)),
       true
     )
+  }
+
+  private binaryEventJson(id: string, seq: number, binary: BridgeBinaryEvent): string {
+    return JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'event', id, seq, binary })
+  }
+
+  /** One rule for what a stream can carry right now, read before a screencast frame is encoded and
+   *  again on the frame that was. */
+  private canCarry(record: OpenSubscription, bytes: number): boolean {
+    return (
+      bytes <= BRIDGE_MAX_MESSAGE_BYTES &&
+      record.unacked.length < BRIDGE_MAX_UNACKED_FRAMES &&
+      record.unackedBytes + bytes <= BRIDGE_MAX_UNACKED_BYTES
+    )
+  }
+
+  private dropBinaryFrame(id: string, record: OpenSubscription, bytes: number): void {
+    record.droppedFrames += 1
+    this.droppedTotal += 1
+    this.options.onBinaryFrameDropped({ id, bytes, droppedOnStream: record.droppedFrames })
   }
 
   /**
@@ -223,15 +254,9 @@ export class BridgeHostSubscriptions {
     // An event is never chunked, so one over the frame cap would be refused by the page's reader
     // and leave a hole nothing reports. Over the window, or too big to carry: same verdict, because
     // both mean this frame cannot be delivered whole.
-    if (
-      bytes > BRIDGE_MAX_MESSAGE_BYTES ||
-      record.unacked.length >= BRIDGE_MAX_UNACKED_FRAMES ||
-      record.unackedBytes + bytes > BRIDGE_MAX_UNACKED_BYTES
-    ) {
+    if (!this.canCarry(record, bytes)) {
       if (binary) {
-        record.droppedFrames += 1
-        this.droppedTotal += 1
-        this.options.onBinaryFrameDropped({ id, bytes, droppedOnStream: record.droppedFrames })
+        this.dropBinaryFrame(id, record, bytes)
         return
       }
       this.cancel(id, 'overflow')
