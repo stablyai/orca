@@ -44,8 +44,9 @@ export const PLUGIN_COMMAND_EXTENSION_POINT = definePluginExtensionPoint<PluginW
 
 /** A contributed task source whose implementation lives in the plugin's
  *  worker. `call` proxies one contract method; the worker activates lazily.
- *  The host validates and scrubs before resolving, so `call` never rejects
- *  and never resolves a shape the method's schema rejects. */
+ *  The host validates and scrubs before resolving — but only for a `method`
+ *  in PLUGIN_TASK_SOURCE_METHODS; a caller taking it from outside TypeScript's
+ *  control (e.g. off the wire) must validate it against that set first. */
 export type PluginTaskSourceProxy = {
   readonly sourceId: string
   call(

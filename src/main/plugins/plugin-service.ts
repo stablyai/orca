@@ -261,6 +261,8 @@ export class PluginService {
     return invokePluginWorkerCommand(this.workerInvocation, { pluginKey, commandId, args })
   }
 
+  /** Unvalidated worker data, unscrubbed rejections. The sanctioned entry
+   *  point is the PLUGIN_TASK_SOURCE_EXTENSION_POINT proxy, not this. */
   invokeTaskSource(
     pluginKey: string,
     sourceId: string,
