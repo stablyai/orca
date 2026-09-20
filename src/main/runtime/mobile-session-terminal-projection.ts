@@ -1,4 +1,7 @@
-import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileTerminalTheme
+} from '../../shared/runtime-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
@@ -11,7 +14,8 @@ import {
 export function buildHeadlessMobileSessionTerminalTabs(
   worktreeId: string,
   persistedTabs: readonly TerminalTab[],
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  terminalTheme?: RuntimeMobileTerminalTheme
 ): RuntimeMobileSessionTerminalTab[] {
   return [...persistedTabs]
     .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
@@ -37,6 +41,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
             leafId,
             title,
             ...(ptyId ? { ptyId } : {}),
+            ...(terminalTheme ? { terminalTheme } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
             ...(layout ? { parentLayout: cloneTerminalLayoutSnapshot(layout) } : {}),

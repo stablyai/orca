@@ -16,6 +16,7 @@ import {
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
 } from './mobile-session-layout-projection'
+import { resolveHostMobileTerminalTheme } from './resolve-host-mobile-terminal-theme'
 
 export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
   protected async createRuntimeOwnedMobileSessionTerminal(
@@ -91,6 +92,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       livePty.pty.ptyId,
       existingSurface?.parentLayout
     )
+    const terminalTheme = resolveHostMobileTerminalTheme(this.store?.getSettings?.())
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -99,6 +101,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ptyId: livePty.pty.ptyId,
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
+      ...(terminalTheme ? { terminalTheme } : {}),
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
