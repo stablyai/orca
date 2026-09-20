@@ -122,6 +122,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Trae subcommand or flag — `--` stops both in its Cobra parser.
     argvPromptSeparator: '--'
   },
+  zcode: {
+    detectCmd: 'zcode',
+    // Why: unknown positionals exit with `Unknown command` (no argv prompt form), so
+    // launch the bare TUI and paste the prompt once the composer is up.
+    promptInjectionMode: 'stdin-after-start'
+  },
   opencode: {
     detectCmd: 'opencode',
     promptInjectionMode: 'flag-prompt',

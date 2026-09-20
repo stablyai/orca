@@ -144,6 +144,23 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("traecli -- 'help me name this config'")
   })
 
+  it('launches ZCode bare and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'zcode',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'zcode',
+      launchCommand: 'zcode',
+      expectedProcess: 'zcode',
+      followupPrompt: 'Summarize the failing tests',
+      launchConfig: emptyLaunchConfig('zcode')
+    })
+  })
+
   it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
     expect(
       buildAgentStartupPlan({

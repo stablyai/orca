@@ -37,4 +37,5 @@ export type TuiAgent =
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
+  | 'zcode' // ZCode CLI
   | 'prime-agent' // Prime Agent (Prime Intellect)

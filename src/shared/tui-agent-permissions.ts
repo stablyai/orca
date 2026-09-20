@@ -29,6 +29,8 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   devin: '--permission-mode bypass',
   ante: '--yolo',
   trae: '--yolo',
+  // Why: `--mode yolo` is ZCode's permission-bypass flag (`zcode --help`).
+  zcode: '--mode yolo',
   droid: '--auto high'
 }
 
