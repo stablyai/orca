@@ -133,7 +133,8 @@ function noiseDocument({ viewportMeta }: { viewportMeta: boolean }): string {
  * What does guard the measurement is the document's viewport meta, without which the page lays out
  * at Chromium's 980 px default, the canvas is scaled into the frame and the noise averages away.
  * That is not left to this comment: the floor assertion in the sweep below is what catches it, and
- * `a page without the viewport meta reads far under the floor` is what proves the floor catches it.
+ * `reads far under the floor without the viewport meta, which is what the floor guards` is what
+ * proves the floor catches it.
  *
  * The quality is read, not retyped: at 90 every budgeted viewport posts over the cap.
  */

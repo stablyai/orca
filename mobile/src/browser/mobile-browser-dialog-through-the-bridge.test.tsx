@@ -246,6 +246,38 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     expect(findButton(pane.renderer, 'Cancel').props.disabled).toBe(false)
   })
 
+  it('stamps the failure on the dialog that was answered, never on the one that replaced it', async () => {
+    const pane = await openPaneOverTheBridge()
+    await act(async () => {
+      pane.page.start()
+      await pane.flush()
+    })
+    expect(cardMessages(pane.renderer)).toContain('first')
+
+    pressButton(pane.renderer, 'OK')
+    await pane.flush()
+    const answeringFirst = pane.rpc.requests.at(-1)
+
+    // The page moves on without the pane hearing about it: the alert was settled and the confirm
+    // raised, but the reply to that first answer is still out there.
+    await act(async () => {
+      pane.page.answer(true)
+      await pane.flush()
+    })
+    expect(cardMessages(pane.renderer)).toContain('second')
+
+    // Now it times out. It belongs to the alert, which is gone, so the confirm must not wear it.
+    await act(async () => {
+      answeringFirst?.reject(new Error('timed out after 5000ms'))
+      await pane.flush()
+    })
+
+    expect(cardMessages(pane.renderer)).toContain('second')
+    expect(cardMessages(pane.renderer)).not.toContain('That answer did not reach the page.')
+    expect(findButton(pane.renderer, 'OK').props.disabled).toBe(false)
+    expect(findButton(pane.renderer, 'Cancel').props.disabled).toBe(false)
+  })
+
   it('answers the confirm with Cancel', async () => {
     const pane = await openPaneOverTheBridge()
     await act(async () => {
