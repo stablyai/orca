@@ -223,6 +223,21 @@ test('the verdict is the worst check, and an unverified read never reads as PASS
   )
 })
 
+// The step that owns each stamp, so a stamp's presence is judged where it has to be written.
+const STAMP_STEPS = {
+  drain: '- name: Reversibly isolate and drain only the selected cell',
+  apply: '- name: Apply only the selected same-cap template and MIG',
+  'verify-target': '- name: Verify new incarnation, exact image, protocol, and durable safety'
+}
+
+// One step's own lines: from its marker to the next sibling step at the same indent.
+function stepBody(workflow, marker) {
+  const start = workflow.indexOf(marker)
+  assert.notEqual(start, -1, `the job no longer has a step named ${marker}`)
+  const next = workflow.indexOf('\n      - ', start + marker.length)
+  return workflow.slice(start, next === -1 ? undefined : next)
+}
+
 const C28_INSTANCE = '5031087219978409220'
 
 // Runtime-metrics samples at the 30 s cadence production emits them at, unless a case needs
@@ -442,20 +457,25 @@ test('the job runs the gate report-only, after verification, and uploads its art
     ['apply', 'apply-completed-at'],
     ['verify-target', 'verify-ended-at']
   ]) {
-    assert.match(workflow, new RegExp(`${output}=\\$\\(date -u \\+%FT%TZ\\)`))
+    // Scoped to the step that owns the stamp: a stamp written anywhere else in the job would
+    // still satisfy a whole-file match while recording the wrong instant.
+    assert.match(
+      stepBody(workflow, STAMP_STEPS[step]),
+      new RegExp(`${output}=\\$\\(date -u \\+%FT%TZ\\)`),
+      `${output} must be stamped inside the ${step} step`
+    )
     assert.match(gate, new RegExp(`\\$\\{\\{ steps\\.${step}\\.outputs\\.${output} \\}\\}`))
     assert.match(gate, new RegExp(`--${output} "\\$\\{[A-Z_]+\\}"`))
   }
   // The apply-start stamp has to precede the operation that can restart the instance, or the
-  // listener it bounds the search by has already happened.
-  const applyStep = workflow.slice(
-    workflow.indexOf('- name: Apply only the selected same-cap template and MIG'),
-    workflow.indexOf('- id: post-auth')
-  )
-  assert.ok(
-    applyStep.indexOf('apply-started-at=') < applyStep.indexOf('terraform -chdir=infra/terraform apply'),
-    'apply-started-at must be stamped before terraform apply'
-  )
+  // listener it bounds the search by has already happened. Presence is asserted before order,
+  // because indexOf answers -1 for an absent stamp and -1 precedes everything.
+  const applyStep = stepBody(workflow, STAMP_STEPS.apply)
+  const stampedAt = applyStep.indexOf('apply-started-at=')
+  const appliedAt = applyStep.indexOf('terraform -chdir=infra/terraform apply')
+  assert.notEqual(stampedAt, -1, 'the apply step does not stamp apply-started-at at all')
+  assert.notEqual(appliedAt, -1, 'the apply step no longer runs terraform apply')
+  assert.ok(stampedAt < appliedAt, 'apply-started-at must be stamped before terraform apply')
   // Verification has to have happened first, or the gate judges a cell nothing checked, and the
   // restore too, so reading logs never holds the cell out of admission for longer than today.
   for (const earlier of [
