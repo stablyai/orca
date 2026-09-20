@@ -6,7 +6,7 @@ import {
   getTotalScale,
   updateTransform
 } from './viewport-transform'
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 
 export function getCellHeight() {
   if (!scope.term || !scope.term._core) {
@@ -61,16 +61,15 @@ export function adjustRowsForViewport() {}
 // scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
-let fitRetryToken = 0
 export function applyFitScale(reason: string) {
   if (!scope.term || !scope.term.element) {
     return
   }
-  const token = ++fitRetryToken
+  const token = ++scope.fitRetryToken
   let attempts = 0
   let lastScrollWidth = -1
   function attempt() {
-    if (token !== fitRetryToken) {
+    if (token !== scope.fitRetryToken) {
       return
     }
     if (!scope.term || !scope.term.element) {
@@ -99,9 +98,9 @@ export function applyFitScale(reason: string) {
       commitFitScale(reason, attempts, 'timeout')
       return
     }
-    requestAnimationFrame(attempt)
+    scheduleDocumentFrame(attempt)
   }
-  requestAnimationFrame(attempt)
+  scheduleDocumentFrame(attempt)
 }
 
 export function commitFitScale(reason: string, attempts: number, gate: string) {
@@ -143,4 +142,12 @@ export function commitFitScale(reason: string, attempts: number, gate: string) {
     })
   }
   repositionOverlay()
+}
+
+/**
+ * Ruling 21: the retry loop is abandoned by bumping the token it compares itself against, which is
+ * how it already abandons a superseded attempt.
+ */
+export function stopFitScale() {
+  scope.fitRetryToken++
 }

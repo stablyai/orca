@@ -128,13 +128,17 @@ describe('release draft workflow contract', () => {
 
     expect(electronBuilderConfig.publish.releaseType).toBe('draft')
     expect(cutCheckout.with['fetch-tags']).toBe(true)
+    expect(linuxDraftStep.shell).toBe('bash')
     expect(linuxDraftStep.run).toContain('assert-github-release-is-draft.mjs')
+    expect(linuxDraftStep.run).toContain('needs.cut.outputs.tag')
     expect(publishRelease.run).toContain('gh release edit')
     expect(publishRelease.run).toContain('--draft=false')
     expect(macSteps.indexOf(abortParentStep)).toBeLessThan(macSteps.indexOf(macPublishStep))
     expect(abortParentStep.env.PARENT_RUN).toBe('${{ inputs.release_run_id }}')
     expect(abortParentStep.run).toContain('refusing to publish mac artifacts')
+    expect(macDraftStep.shell).toBe('bash')
     expect(macDraftStep.run).toContain('assert-github-release-is-draft.mjs')
+    expect(macDraftStep.run).toContain('inputs.tag')
     expect(macPublishStep.with.command).toContain('-c.publish.releaseType=draft')
 
     const linuxCommands = releaseWorkflow.jobs.build.strategy.matrix.include

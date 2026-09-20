@@ -1,7 +1,8 @@
 import { Script } from 'node:vm'
 import { parse } from 'acorn'
 import { describe, expect, it, vi } from 'vitest'
-import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
+import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
+import { XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { documentScopePreamble } from './document/generated-document-region.test-support'
 import { XTERM_HTML } from './terminal-webview-html'
 
@@ -75,6 +76,7 @@ scope.term = term;
 scope.terminalGeneration = terminalGeneration;
 scope.terminalThemeInput = terminalThemeInput;
 ${terminalHtmlSource.slice(recoveryStart, recoveryEnd)}
+startWebglRecovery();
 attachWebglAddon(true);`).runInNewContext(context)
   return {
     addons,
@@ -169,7 +171,8 @@ describe('terminal WebView bundled engine', () => {
     // old surface visible meanwhile), so the fatal default and the init-catch must
     // key off `everReady` — otherwise a transient reflow error blanks a live
     // terminal behind the fatal overlay. The latch stays set for the document.
-    expect(terminalHtmlSource).toContain('scope.everReady = false;')
+    // Ruling 21: the latch's initial value is in the scope factory, not in a parse-time write.
+    expect(terminalHtmlSource).toContain('everReady: false,')
     expect(terminalHtmlSource).toContain('scope.everReady = true;')
     expect(terminalHtmlSource).toContain('fatal === void 0 ? !scope.everReady : !!fatal')
     expect(terminalHtmlSource).toContain('msg.type === "init" && !scope.everReady')

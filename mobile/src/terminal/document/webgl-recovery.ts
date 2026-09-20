@@ -2,15 +2,6 @@ import { flog } from './viewport-transform'
 import { applyTerminalTheme } from './terminal-theme'
 import { scope, type TerminalDocumentWebglAddon } from './document-scope'
 
-/** xterm's WebGL addon constructor, as the engine bundle puts it on `window`. */
-type WebglAddonGlobal = { WebglAddon?: new () => TerminalDocumentWebglAddon }
-
-declare global {
-  interface Window {
-    WebglAddon?: WebglAddonGlobal
-  }
-}
-
 export function refreshTerminalSurface() {
   if (!scope.term) {
     return
@@ -29,12 +20,17 @@ export function cancelWebglContextRecovery() {
 }
 
 export function attachWebglAddon(allowRecovery: boolean) {
-  if (!scope.term || !window.WebglAddon || !window.WebglAddon.WebglAddon) {
+  if (!scope.term) {
     return false
   }
   let addon: TerminalDocumentWebglAddon | null = null
   try {
-    addon = new window.WebglAddon.WebglAddon()
+    addon = scope.createWebglAddon()
+    // Why: no addon is the DOM renderer, which is a fallback rather than a failure; the
+    // catch below is for an engine that has one and threw building it.
+    if (!addon) {
+      return false
+    }
     scope.webglAddon = addon
     if (addon.onContextLoss) {
       addon.onContextLoss(function () {
@@ -89,7 +85,7 @@ export function attachWebglAddon(allowRecovery: boolean) {
   }
 }
 
-document.addEventListener('visibilitychange', function () {
+function onDocumentVisibilityChange() {
   if (document.visibilityState !== 'visible') {
     return
   }
@@ -102,4 +98,13 @@ document.addEventListener('visibilitychange', function () {
     }
   } catch {}
   refreshTerminalSurface()
-})
+}
+
+export function startWebglRecovery() {
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange)
+}
+
+export function stopWebglRecovery() {
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
+  cancelWebglContextRecovery()
+}

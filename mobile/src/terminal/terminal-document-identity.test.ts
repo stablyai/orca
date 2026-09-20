@@ -6,7 +6,8 @@ import {
   TERMINAL_DOCUMENT_FIXTURE_PATH,
   terminalDocumentFixture
 } from '../../scripts/build-terminal-document-fixture.mjs'
-import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
+import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
+import { XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { XTERM_HTML } from './terminal-webview-html'
 
 /**
@@ -23,6 +24,11 @@ import { XTERM_HTML } from './terminal-webview-html'
  * kept the document it had. Regenerate the fixture with
  * `node scripts/build-terminal-document-fixture.mjs` only when the emitted document was meant to
  * change; the diff in that commit is the evidence, and reviewing it is the point.
+ *
+ * It is also the only standing pin on the document now. `terminal-document-flip.test.ts` compared
+ * the modules against the pre-flip script and held exactly while no module changed, so it was the
+ * proof of the flip rather than a fence; the first lane that had to change a module retired it.
+ * A golden that moves without its diff listed in the commit message is a blocking finding.
  */
 const fixture = readFileSync(TERMINAL_DOCUMENT_FIXTURE_PATH, 'utf8')
 

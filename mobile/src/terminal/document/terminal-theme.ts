@@ -164,8 +164,7 @@ export function applyTerminalTheme(input: TerminalDocumentThemeMessage) {
   scope.terminalThemeInput = input
   scope.terminalTheme = normalizeTerminalTheme(input)
   const background = scope.terminalTheme.background || terminalBackgroundFallback
-  document.documentElement.style.background = background
-  document.body.style.background = background
+  scope.paintDocumentBackground(background)
   // Why prefer the published value: the desktop user may have lowered or disabled the floor (#10754);
   // an older host omits the field and the luminance gate stays authoritative.
   const publishedFloor = normalizeTerminalContrastOverride(

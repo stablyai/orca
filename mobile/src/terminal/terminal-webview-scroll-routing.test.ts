@@ -6,6 +6,8 @@ import { XTERM_HTML } from './terminal-webview-html'
 // generated document. Concatenated so assertions resolve regardless of file.
 const source =
   readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./use-terminal-webview-controller.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-ready-promises.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
   XTERM_HTML
 const sessionSource = readFileSync(
@@ -31,7 +33,7 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('maps a downward pull at the bottom to older scrollback rows', () => {
-    expect(source).toContain('const deltaY = ts.lastY - y;')
+    expect(source).toContain('const deltaY = scope.touchGesture.lastY - y;')
     expect(source).toContain('scope.smoothScrollOffsetY -= deltaY;')
     expect(source).toContain(
       'const lines = Math.trunc(-scope.smoothScrollOffsetY / effectiveCellH);'
@@ -69,7 +71,9 @@ describe('TerminalWebView scroll routing', () => {
     expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
       momentumBlock.indexOf('if (!applyNormalBufferScrollDelta(delta))')
     )
-    expect(momentumBlock).toContain('routeScrollLines(lines, ts.lastX, ts.lastY);')
+    expect(momentumBlock).toContain(
+      'routeScrollLines(lines, scope.touchGesture.lastX, scope.touchGesture.lastY);'
+    )
   })
 
   it('does not rubber-band normal scroll at scrollback edges', () => {
@@ -88,14 +92,14 @@ describe('TerminalWebView scroll routing', () => {
       '{ capture: true, passive: false }'
     )
     expect(touchMoveBlock).toContain('if (enqueueNormalBufferScrollDelta(deltaY))')
-    expect(touchMoveBlock).toContain('ts.velY = 0;')
+    expect(touchMoveBlock).toContain('scope.touchGesture.velY = 0;')
 
     const momentumBlock = sliceBetween(
       'let momentumStep = function()',
       'if (Math.abs(vel) > MIN_VEL)'
     )
     expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(delta))')
-    expect(momentumBlock).toContain('ts.momentumId = null;')
+    expect(momentumBlock).toContain('scope.touchGesture.momentumId = null;')
   })
 
   it('coalesces normal touch scroll row commits onto animation frames', () => {
@@ -105,7 +109,9 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(enqueueBlock).toContain('scope.pendingNormalScrollDeltaY += deltaY;')
     expect(enqueueBlock).toContain('if (scope.normalScrollFrameId !== null) {')
-    expect(enqueueBlock).toContain('scope.normalScrollFrameId = requestAnimationFrame(function()')
+    // Ruling 21: every document frame goes through the scope's registry so dispose can take it
+    // back; the id is still held here, which is what the reset below cancels.
+    expect(enqueueBlock).toContain('scope.normalScrollFrameId = scheduleDocumentFrame(function()')
     expect(enqueueBlock).toContain('applyNormalBufferScrollDelta(delta)')
 
     const resetBlock = sliceBetween(
@@ -137,13 +143,15 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('clears WebView await timers when the real response wins', () => {
-    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom()')
+    // C7.5 moved both promises into `terminal-webview-ready-promises.ts`, which both components
+    // reach through the controller; the two blocks are the same code in their new home.
+    const measureBlock = sliceBetween('function measure(', 'function resolveMeasure')
     expect(measureBlock).toContain('clearTimeout(timeout)')
-    expect(measureBlock).toContain('measureResolveRef.current === finish')
+    expect(measureBlock).toContain('measureResolve === finish')
 
-    const readyBlock = sliceBetween('async awaitReady()', '})')
+    const readyBlock = sliceBetween('async function awaitReady()', 'function measure(')
     expect(readyBlock).toContain('clearTimeout(timeout)')
-    expect(readyBlock).toContain('void p.finally')
+    expect(readyBlock).toContain('void pending.finally')
   })
 
   it('hides xterm scrollbars and drives the mobile scroll indicator from committed rows', () => {
@@ -175,7 +183,7 @@ describe('TerminalWebView scroll routing', () => {
 
   it('smooths velocity samples and uses lower friction for mobile momentum', () => {
     expect(source).toContain('function updateTouchVelocity(deltaY, dt)')
-    expect(source).toContain('ts.velY * 0.55 + instantVelocity * 0.45')
+    expect(source).toContain('scope.touchGesture.velY * 0.55 + instantVelocity * 0.45')
     expect(source).toContain('const FRICTION = 0.972;')
     expect(source).toContain('const MIN_VEL = 0.012;')
   })
@@ -215,17 +223,14 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('if (mouseTrackingMode === "x10") {\n      return press;')
     expect(source).toContain('if (col > 126 || row > 126) {\n      return "";')
 
-    const touchEndBlock = sliceBetween(
-      'document.addEventListener(\n    "touchend"',
-      '{ capture: true, passive: true }'
-    )
+    const touchEndBlock = sliceBetween('function onDocumentTouchEnd(e)', '\n  function ')
     expect(touchEndBlock).toContain(
       'notifyTerminalSurfaceTap(scope.tapCandidate.x, scope.tapCandidate.y, true)'
     )
 
     const tapHandlerBlock = sliceBetween(
       'function notifyTerminalSurfaceTap(originX, originY, focusKeyboard)',
-      'document.addEventListener(\n    "touchstart"'
+      'function onDocumentTouchStart(e)'
     )
     expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
       tapHandlerBlock.indexOf('urlAtViewportPoint')

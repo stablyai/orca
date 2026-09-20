@@ -7,11 +7,7 @@ import {
 } from './document-constants'
 import { notify } from './host-notify'
 import { fontPxForScale } from './text-scaling'
-import {
-  scope,
-  type TerminalDocumentTerminal,
-  type TerminalDocumentWebglAddon
-} from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import { applyFitScale } from './fit-scale'
 import {
   isAltScreenActive,
@@ -27,13 +23,6 @@ import { attachTermObservers } from './term-observers'
 import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
-
-declare global {
-  interface Window {
-    Unicode11Addon?: { Unicode11Addon: new () => TerminalDocumentWebglAddon }
-  }
-  const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
-}
 
 export function init(
   cols: number,
@@ -95,7 +84,7 @@ export function init(
   const nextSurface = surfaceSwap.nextSurface
 
   applyTerminalTheme(nextTheme)
-  scope.term = new Terminal({
+  scope.term = scope.createTerminal({
     cols: cols || 80,
     rows: rows || 24,
     theme: scope.terminalTheme,
@@ -121,12 +110,13 @@ export function init(
   scope.pendingTerm = nextTerm
   scope.term.open(scope.surface!)
   attachWebglAddon(true)
-  if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) {
-    try {
-      scope.term.loadAddon(new window.Unicode11Addon.Unicode11Addon())
+  try {
+    const unicodeAddon = scope.createUnicode11Addon()
+    if (unicodeAddon) {
+      scope.term.loadAddon(unicodeAddon)
       scope.term.unicode.activeVersion = '11'
-    } catch {}
-  }
+    }
+  } catch {}
   if (typeof replayData === 'string' && replayData.length > 0) {
     // Why no trailing reset: the snapshot pen belongs to the live host TUI receiving later output.
     enqueueWrite(scope.ESC + '[0m' + replayData)
@@ -138,7 +128,7 @@ export function init(
   attachTermObservers()
   attachTerminalQueryReplyBridge(scope.term, gen)
 
-  requestAnimationFrame(function () {
+  scheduleDocumentFrame(function () {
     if (gen !== scope.terminalGeneration) {
       return
     }
@@ -199,3 +189,11 @@ export function resize(cols: number, rows: number) {
 }
 
 // reflow(): see reflow.ts.
+
+/**
+ * Ruling 21: init's own frames carry the generation they were scheduled under, so bumping it is
+ * what abandons them — the same guard a re-init already uses against its predecessor.
+ */
+export function stopTerminalInit() {
+  scope.terminalGeneration++
+}

@@ -30,7 +30,9 @@ const FRESHNESS_RETRY_INTERVAL_MS = 15_000
 const MONITOR_EVIDENCE_MAX_AGE_MS = 10 * 60_000
 // Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
 const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
-const WAVE_INDEX_PATTERN = /^[0-3]$/
+// Widest any wave chain declares (same-cap's cell_1..cell_10); each job workflow
+// pins its own narrower range.
+const WAVE_INDEX_PATTERN = /^[0-9]$/
 // 2 for a general cell's isolate-and-restore wave, 0 for a migration-only cell's no-op pair.
 const SELECTOR_WAVE_DELTA_PATTERN = /^[02]$/
 

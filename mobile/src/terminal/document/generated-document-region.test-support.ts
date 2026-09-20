@@ -3,8 +3,10 @@ import { emitTerminalDocumentModule } from '../../../scripts/build-terminal-docu
 import { XTERM_HTML } from '../terminal-webview-html'
 
 const SCOPE_OPEN = '(function() {\n'
-// The first statement the document runs once the scope object exists.
-const FIRST_STATEMENT_AFTER_SCOPE = '  scope.surface = document.getElementById'
+// The first declaration the document makes once the scope object exists. Ruling 20 left the
+// modules below with no top-level statements at all, so the anchor is a declaration rather than
+// the surface read that used to open them.
+const FIRST_STATEMENT_AFTER_SCOPE = '  function startRuntimeConstants() {'
 
 /**
  * The scope object the document opens with. Every block below it reads and writes document state

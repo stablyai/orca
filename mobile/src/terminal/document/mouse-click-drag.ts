@@ -20,8 +20,6 @@ export type TerminalMouseGesture = {
   dismissedSelection: boolean
 }
 
-let mouseGesture: TerminalMouseGesture | null = null
-
 // One report per transition, built with the same encoding ladder as
 // buildMouseClickInput: SGR pixels (1016) > SGR (1006) > default. Returns ''
 // when the mode does not report this transition (x10 has no release, only
@@ -81,8 +79,8 @@ export function mouseReportCellKey(clientX: number, clientY: number) {
 }
 
 export function abandonMouseGesture() {
-  const gesture = mouseGesture
-  mouseGesture = null
+  const gesture = scope.mouseGesture
+  scope.mouseGesture = null
   if (!gesture) {
     return
   }
@@ -141,7 +139,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
       }
       // Why: a pointerup lost outside the WebView must not leave the previous
       // gesture latched (tracking press with no release) when the next one lands.
-      if (mouseGesture) {
+      if (scope.mouseGesture) {
         abandonMouseGesture()
       }
       // Why: mouse pointers have no implicit capture; without it a drag that
@@ -151,7 +149,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
           targetSurface.setPointerCapture(e.pointerId)
         }
       } catch {}
-      mouseGesture = {
+      scope.mouseGesture = {
         startX: e.clientX,
         startY: e.clientY,
         lastX: e.clientX,
@@ -165,7 +163,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
         // Why: touch parity — pressing outside the pill dismisses the current
         // selection; the same press may still start a new drag selection.
         cancelSelect()
-        mouseGesture.dismissedSelection = true
+        scope.mouseGesture.dismissedSelection = true
       }
     },
     true
@@ -174,7 +172,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
   targetSurface.addEventListener(
     'pointermove',
     function (e) {
-      const gesture = mouseGesture
+      const gesture = scope.mouseGesture
       if (e.pointerType !== 'mouse' || !gesture || gesture.mode === 'cancelled') {
         return
       }
@@ -220,11 +218,11 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
   targetSurface.addEventListener(
     'pointerup',
     function (e) {
-      const gesture = mouseGesture
+      const gesture = scope.mouseGesture
       if (e.pointerType !== 'mouse' || !gesture || e.button !== 0) {
         return
       }
-      mouseGesture = null
+      scope.mouseGesture = null
       if (gesture.mode === 'cancelled' || !scope.term) {
         return
       }
@@ -274,7 +272,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
   targetSurface.addEventListener(
     'touchstart',
     function () {
-      if (mouseGesture) {
+      if (scope.mouseGesture) {
         abandonMouseGesture()
       }
     },
