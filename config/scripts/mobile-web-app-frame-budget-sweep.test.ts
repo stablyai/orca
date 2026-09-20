@@ -66,12 +66,6 @@ function sweep() {
 const VIEWPORT_WIDTHS = [320, 360, 390, 393, 412, 430, 480, 600, 768, 834, 1024, 1280, 1400]
 const VIEWPORT_HEIGHTS = [480, 640, 712, 720, 800, 896, 932, 1024, 1180, 1366, 1600]
 
-/**
- * What the sweep measured on 2026-09-20 across the 111 viewports the budget fits, rounded up at
- * the fifth decimal: 0.55351. The constant carries a stated margin above it, and that margin is
- * what an encoder drift is allowed to spend; the assertion below is against the constant, not this
- * number, so a drift inside the margin does not fail a budget that still holds.
- */
 type Viewport = { width: number; height: number }
 
 const VIEWPORTS: Viewport[] = VIEWPORT_WIDTHS.flatMap((width) =>
@@ -238,8 +232,10 @@ describeSweep('the frame budget across the viewport range', () => {
     }
 
     expect(overCap).toEqual([])
-    // And the constant is above every cost that sweep just measured, with the margin stated in its
-    // docstring. Without this the assertion above passes by the budget being merely generous.
+    // And the constant is above every cost that sweep just measured. Against the constant, not the
+    // 0.55351 measured on 2026-09-20 that its docstring records: the margin above that is what an
+    // encoder drift may spend, and a drift inside it is not a budget failure. Without this the
+    // assertion above passes by the budget being merely generous.
     expect(worstBytesPerPixel).toBeLessThanOrEqual(sweep().WORST_CASE_JPEG_BYTES_PER_PIXEL)
     // The low end too, so a sweep that silently stopped encoding real images is visible: every
     // frame here is noise, and noise never compresses to a tenth of a byte per pixel.
