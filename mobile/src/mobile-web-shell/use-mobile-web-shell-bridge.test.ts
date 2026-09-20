@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
+import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -45,6 +46,8 @@ type Probe = {
   externalLinks: string[]
   backPops: number
   storageWrites: { key: string; value: string | null }[]
+  /** The running total after each dropped screencast frame, as the screen receives it. */
+  droppedBinaryFrames: number[]
 }
 
 /** What the page cannot read for itself, as the screen hands it over. */
@@ -123,7 +126,13 @@ function Harness(props: {
     // Built inline on every render, as a caller writes it: the host is not rebuilt for it.
     route: { pathname: '/h/host-1' },
     pageRoutes: ['/h/[hostId]'],
-    routeGrants: ['navigate', 'storage', 'externalLink', ...BRIDGE_NATIVE_VERB_NAMES],
+    routeGrants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      BRIDGE_SCREENCAST_BINARY_GRANT,
+      ...BRIDGE_NATIVE_VERB_NAMES
+    ],
     onNavigate: (href) => props.probe.navigations.push(href),
     onExternalLink: (url) => props.probe.externalLinks.push(url),
     serveNativeVerb: () => Promise.resolve({ value: 'pasteboard' }),
@@ -138,6 +147,7 @@ function Harness(props: {
     // absorb: rebuilding the host here would settle every pending request on each render.
     onPageFault: (error) => props.faults.push(error),
     onRouteRefused: () => {},
+    onBinaryFramesDropped: (total) => props.probe.droppedBinaryFrames.push(total),
     onPageReady: () => {
       props.readies.push(
         props.session.kind === 'ready' ? props.session.sessionId : props.session.kind
@@ -187,6 +197,7 @@ async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
     navigations: [],
     externalLinks: [],
     backPops: 0,
+    droppedBinaryFrames: [],
     storageWrites: []
   }
   const faults: BridgeErrorCapture[] = []
@@ -391,6 +402,71 @@ describe('teardown', () => {
     expect(fakeClient().requests).toEqual([])
   })
 
+  /** The one thing a dropped frame leaves behind on a device, so the hook carrying it to the
+   *  screen is the whole of that evidence path. */
+  it('carries the dropped-frame total from the host to the screen', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(
+      clientFrame({
+        type: 'subscribe',
+        id: ID,
+        method: 'browser.screencast',
+        params: {},
+        wantsBinary: true
+      })
+    )
+    const oversized = {
+      opcode: 1 as const,
+      seq: 1,
+      format: 'jpeg' as const,
+      metadata: {},
+      image: new Uint8Array(500_000)
+    }
+    await act(async () => {
+      fakeClient().streams[0]?.emitBinary?.(oversized)
+      fakeClient().streams[0]?.emitBinary?.({ ...oversized, seq: 2 })
+    })
+    // The leading 0 is the host announcing a fresh count as it is built; then one per drop.
+    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1, 2])
+    // Dropped, not ended: the stream is still the shell's to serve.
+    expect(fakeClient().streams[0]?.unsubscribes).toBe(0)
+  })
+
+  /**
+   * The count belongs to the host, so it has to go when the host does.
+   *
+   * Without this the screen keeps the retired host's number and the next drop reports the new
+   * host's first, so the line reads lower than it did a moment ago — which is worse than starting
+   * over, because a number that falls looks like frames coming back.
+   */
+  it('resets the dropped-frame total when the host is rebuilt', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(
+      clientFrame({
+        type: 'subscribe',
+        id: ID,
+        method: 'browser.screencast',
+        params: {},
+        wantsBinary: true
+      })
+    )
+    await act(async () => {
+      fakeClient().streams[0]?.emitBinary?.({
+        opcode: 1 as const,
+        seq: 1,
+        format: 'jpeg' as const,
+        metadata: {},
+        image: new Uint8Array(500_000)
+      })
+    })
+    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1])
+    await mounted.update(readyState('session-two'))
+    // Zero again on the rebuild, before the new host has dropped anything of its own.
+    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1, 0])
+  })
+
   it('disposes on unmount and settles what was in flight as delivery-unknown', async () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
@@ -464,6 +540,7 @@ describe('the callbacks a render passes', () => {
       navigations: [],
       externalLinks: [],
       backPops: 0,
+      droppedBinaryFrames: [],
       storageWrites: []
     }
     // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
@@ -524,6 +601,7 @@ describe('client changes', () => {
       navigations: [],
       externalLinks: [],
       backPops: 0,
+      droppedBinaryFrames: [],
       storageWrites: []
     }
     const render = (deliver: readonly string[]): ReactElement =>

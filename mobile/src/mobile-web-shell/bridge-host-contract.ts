@@ -40,6 +40,14 @@ export type BridgeHostDiagnostic =
   /** The shell asked this host to open a screen the protocol does not allow. The host serves no
    *  session at all in that state: an `init` the page refuses is worse than no `init`. */
   | { kind: 'route-refused'; issue: string }
+  /** A page subscribed with `wantsBinary` on a session whose route was never granted the lane.
+   *  Local only: the subscription proceeds and its JSON events cross, so nothing crosses back and
+   *  this line is the only thing that can say why the frames never became binary. */
+  | { kind: 'binary-lane-refused'; id: string }
+  /** A screencast frame that would not fit the envelope or the stream's unacked window. Dropped
+   *  rather than ending the stream, so this line and the count beside it are the only evidence
+   *  the frame existed. `bytes` is the whole event, which is what was measured against the cap. */
+  | { kind: 'binary-frame-dropped'; id: string; bytes: number; dropped: number }
 
 export type BridgeHostOptions = {
   client: RpcClient
@@ -137,4 +145,12 @@ export type BridgeHostOptions = {
    */
   onRouteRefused: (issue: string) => void
   onDiagnostic?: (diagnostic: BridgeHostDiagnostic) => void
+  /**
+   * Every screencast frame this host has dropped, after each one.
+   *
+   * A total and not an event, because what reads it is a surface that shows a number: the
+   * diagnostic beside it is held to one line per host, so without this a stream losing a frame a
+   * second and a stream that lost one look the same.
+   */
+  onBinaryFramesDropped?: (total: number) => void
 }

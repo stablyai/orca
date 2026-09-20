@@ -1,14 +1,10 @@
 import type { ConnectionState, RpcResponse } from '../transport/types'
-import {
-  BridgeCapExceededError,
-  BridgeNativeVerbRefusedError,
-  BridgeReplyUndeliverableError
-} from './bridge-host-errors'
-import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
+import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
-import { BRIDGE_MAX_SUBSCRIPTIONS, readBridgeExternalLinkUrl } from './bridge/bridge-caps'
+import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
+import { readBridgeExternalLinkUrl } from './bridge/bridge-caps'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
@@ -30,7 +26,6 @@ import type { BridgeHostOptions } from './bridge-host-contract'
 // Re-exported so a caller reaches the host and what it reports through one module.
 export type { BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
 
-type SubscribeMessage = Extract<BridgeClientMessage, { type: 'subscribe' }>
 type NotifyMessage = Extract<BridgeClientMessage, { type: 'notify' }>
 
 export type BridgeHost = {
@@ -110,7 +105,14 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     send({ v: BRIDGE_PROTOCOL_VERSION, type: 'error', id, error: captureBridgeError(error) })
   }
 
-  const subscriptions = new BridgeHostSubscriptions({ client, post: sendJson })
+  const subscriptions = new BridgeHostSubscriptions({
+    client,
+    post: sendJson,
+    onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
+      options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
+      options.onBinaryFramesDropped?.(subscriptions.droppedBinaryFrames)
+    }
+  })
 
   /** `state` is the event's own value: a listener can run before the getter it mirrors is updated. */
   function snapshot(state?: ConnectionState): BridgeConnectionSnapshot {
@@ -177,39 +179,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     })
   })
 
-  // `wantsBinary` is read by the contract and acted on in C6, which owns the screencast encoder and
-  // the measurement that earns it. Until then every stream crosses as JSON.
-  function handleSubscribe(message: SubscribeMessage): void {
-    const { id } = message
-    // Collision first: both refusals settle the same exchange, and an id already in flight is the
-    // truer cause — answering the fence there would kill a live request while naming the method.
-    if (requests.has(id) || subscriptions.has(id)) {
-      sendError(id, new BridgeCapExceededError('that id is already in flight'))
-      return
-    }
-    // The fence is about the method name, not the frame kind: a `native.` verb is answered here or
-    // not at all, and a stream is another door to the same client. Still before any slot is taken,
-    // so nothing about this frame reaches the desktop.
-    if (isBridgeNativeMethod(message.method)) {
-      sendError(
-        id,
-        new BridgeNativeVerbRefusedError(
-          'native_verb_not_a_stream',
-          `${message.method} is not a stream this shell serves`
-        )
-      )
-      return
-    }
-    if (subscriptions.size >= BRIDGE_MAX_SUBSCRIPTIONS) {
-      sendError(id, new BridgeCapExceededError(`over ${BRIDGE_MAX_SUBSCRIPTIONS} subscriptions`))
-      return
-    }
-    try {
-      subscriptions.start(id, message.method, message.params)
-    } catch (error) {
-      sendError(id, error)
-    }
-  }
+  const streamFrames = createBridgeHostStreamFrames({
+    requests,
+    subscriptions,
+    sendError,
+    granted,
+    report: (diagnostic) => options.onDiagnostic?.(diagnostic)
+  })
 
   /** The client's own work runs inside these calls, and a throw from one would otherwise escape into
    *  the native event handler that delivered the page's frame. Nothing is owed to the page here. */
@@ -337,18 +313,18 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         requests.open(message)
         return
       case 'subscribe':
-        handleSubscribe(message)
+        streamFrames.open(message)
         return
       case 'cancel': {
         if (message.target === 'subscription') {
-          subscriptions.cancel(message.id, 'unsubscribed')
+          streamFrames.cancel(message.id)
           return
         }
         requests.cancel(message.id)
         return
       }
       case 'ack':
-        subscriptions.ack(message.id, message.seq)
+        streamFrames.ack(message.id, message.seq)
         return
       case 'notify':
         forwardNotify(message)

@@ -42,6 +42,7 @@ describe('init and state', () => {
           'navigate',
           'storage',
           'externalLink',
+          'screencastBinary',
           'native.clipboard.write',
           'native.clipboard.read'
         ]

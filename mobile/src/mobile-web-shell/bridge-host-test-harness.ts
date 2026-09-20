@@ -29,6 +29,8 @@ export type Harness = {
   client: FakeRpcClient
   posted: string[]
   diagnostics: BridgeHostDiagnostic[]
+  /** The running total after each dropped screencast frame, which is what the dev facts render. */
+  droppedBinaryFrames: number[]
   navigations: string[]
   /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
@@ -86,6 +88,7 @@ export function harness(
   let pageReadies = 0
   const routeRefusals: string[] = []
   const pageFaults: BridgeErrorCapture[] = []
+  const droppedBinaryFrames: number[] = []
   const host = createBridgeHost({
     client,
     post: (json) => {
@@ -128,7 +131,8 @@ export function harness(
       pageFaults.push(error)
       options.onPageFault?.(error)
     },
-    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic)
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    onBinaryFramesDropped: (total) => droppedBinaryFrames.push(total)
   })
   if (options.ready === true) {
     host.receive(clientFrame({ type: 'ready' }))
@@ -148,6 +152,7 @@ export function harness(
     client,
     posted,
     diagnostics,
+    droppedBinaryFrames,
     navigations,
     externalLinks,
     clipboardWrites,

@@ -1,6 +1,7 @@
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
 import {
@@ -75,10 +76,21 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     // Why: ConPTY can split a submit repaint's closing chunk past the 150ms window, so treat a keystroke-opened frame as latency-sensitive to drain it fast (~16-32ms) not the 1s coalesce fallback.
     const synchronizedFrameLatencySensitive =
       synchronizedForegroundOutput && session.synchronizedForegroundFrameInteractive
+    const presentInteractiveSynchronizedFrame =
+      synchronizedForegroundOutput && session.synchronizedForegroundInteractivePresentPending
+    if (presentInteractiveSynchronizedFrame) {
+      session.synchronizedForegroundInteractivePresentPending = false
+    }
     session.synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
     session.synchronizedForegroundMarkerTail = synchronizedForegroundScan?.markerTail ?? ''
     const startupWrite =
       opts?.liveStartupBatch && data.length > 0 ? session.startupTiming?.firstWrite() : undefined
+    const onParsed = presentInteractiveSynchronizedFrame
+      ? () => {
+          startupWrite?.onParsed()
+          forceFullViewportPresent(session.pane.terminal)
+        }
+      : startupWrite?.onParsed
     writeTerminalOutput(session.pane.terminal, data, {
       foreground: foregroundOutput,
       beforeWrite: startupWrite
@@ -87,7 +99,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
             startupWrite.beforeWrite()
           }
         : session.beforeTerminalOutputWrite,
-      ...(startupWrite ? { onParsed: startupWrite.onParsed } : {}),
+      ...(onParsed ? { onParsed } : {}),
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
       onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,

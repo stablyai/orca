@@ -150,6 +150,15 @@ describe('the page routes a manifest declares', () => {
     }
   })
 
+  /** The first plain grant added since this pattern was written, and the reason its name has no
+   *  dot: one segment under `native` is refused as a malformed verb, so a capability that is not a
+   *  verb has to be a single token. */
+  it('takes the binary screencast lane, and refuses the spelling that looks like a verb', () => {
+    expect(withRoutes([{ pathname: '/h', grants: ['screencastBinary'] }])).toBe(true)
+    expect(withRoutes([{ pathname: '/h', grants: ['native.screencast'] }])).toBe(false)
+    expect(withRoutes([{ pathname: '/h', grants: ['browser.screencast'] }])).toBe(false)
+  })
+
   it('refuses a route carrying a field the contract does not declare', () => {
     expect(withRoutes([{ pathname: '/h', grants: [], screen: 'x' }])).toBe(false)
   })

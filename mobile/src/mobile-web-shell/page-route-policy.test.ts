@@ -79,9 +79,47 @@ describe('the grants this app implements', () => {
       'navigate',
       'storage',
       'externalLink',
+      'screencastBinary',
       'native.clipboard.write',
       'native.clipboard.read'
     ])
+  })
+
+  /** The route C7 will declare, served by a shell that has the lane. The name's shape is the host
+   *  contract's rule and is pinned there, beside the pattern that decides it. */
+  it('serves a route that needs the screencast lane', () => {
+    expect(
+      implementedPageRoutes([
+        { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'screencastBinary'] }
+      ])
+    ).toEqual(['/h/[hostId]/session/[worktreeId]'])
+  })
+
+  /**
+   * The half the host cannot see, and the reason it does not have to.
+   *
+   * A session's list is a route's declared grants narrowed to what this shell implements, so a
+   * grant the shell lacks never reaches the host at all: granted-but-unimplemented and
+   * never-granted arrive there as the same absence, and the host's own rule reads one case.
+   * `bridge-host-screencast.test.ts` pins what it does with it.
+   */
+  it('drops a grant the route declared and this shell does not implement', () => {
+    const routes = [
+      { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'aGrantFromTheFuture'] }
+    ]
+    expect(grantsForRoute(routes, '/h/host-1/session/wt-1')).toEqual(['navigate'])
+    expect(implementedPageRoutes(routes)).toEqual([])
+  })
+
+  it('resolves the screencast lane for a route that declares it', () => {
+    expect(
+      grantsForRoute(
+        [
+          { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'screencastBinary'] }
+        ],
+        '/h/host-1/session/wt-1'
+      )
+    ).toEqual(['navigate', 'screencastBinary'])
   })
 })
 

@@ -1,5 +1,6 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
+import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 
 /** The manifest's route entries, as this shell reads them. */
 export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes']>[number]
@@ -16,6 +17,9 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   'navigate',
   'storage',
   'externalLink',
+  // The screencast's binary frames, encoded into `event.binary` for a page that subscribed with
+  // `wantsBinary`. Named where the rule that reads it lives, so the two cannot drift.
+  BRIDGE_SCREENCAST_BINARY_GRANT,
   // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
   // advertised without a row and a row cannot exist without being advertised.
   ...BRIDGE_NATIVE_VERB_NAMES
