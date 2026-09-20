@@ -3,11 +3,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parsePluginManifest } from '../../shared/plugins/plugin-manifest'
 import { pluginTaskPageSchema } from '../../shared/plugins/plugin-task-source-contract'
-import { PluginTaskSourceRegistry } from './plugin-task-source-registry'
 import { invokePluginTaskSourceMethod } from './plugin-task-source-invoker'
 import { createPluginWorkerRuntime } from './plugin-host-runtime'
 import type { PluginWorkerChildMessage } from '../../shared/plugins/plugin-host-protocol'
-import type { DiscoveredPlugin } from './plugin-discovery'
 
 const ROOT = join(__dirname, '../../../examples/plugins/task-source-demo')
 
@@ -30,24 +28,7 @@ describe('task source end to end', () => {
       grantedCapabilities: []
     })
 
-    const raw = JSON.parse(readFileSync(join(ROOT, 'orca-plugin.json'), 'utf8'))
-    const registry = new PluginTaskSourceRegistry()
-    registry.reconcile(
-      [
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the
-        // registry reads only pluginKey, contributes.taskSources, and the error
-        // key (via isInvalidDiscoveredPlugin).
-        {
-          pluginKey: 'orca-samples.task-source-demo',
-          rootDir: ROOT,
-          manifest: raw
-        } as unknown as DiscoveredPlugin
-      ],
-      () => true
-    )
-
     const result = await invokePluginTaskSourceMethod({
-      registry,
       callWorker: async (request) => {
         await runtime.handleMessage({
           type: 'invokeTaskSource',

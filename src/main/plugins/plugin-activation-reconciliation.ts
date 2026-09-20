@@ -10,13 +10,6 @@ import type { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginWorkerController } from './plugin-worker-controller'
 
-/**
- * Brings content packs, workers and housekeeping in line with what consent
- * currently allows — either after re-reading the plugin directories, or from
- * the discovery already in hand. Owns the content-pack readiness flag because
- * both passes invalidate it while they run.
- */
-
 export type PluginActivationReconciliationOptions = {
   options: PluginServiceOptions
   contentVerifier: PluginContentVerifier
@@ -32,6 +25,12 @@ export type PluginActivationReconciliationOptions = {
   requestRefresh: () => void
 }
 
+/**
+ * Brings content packs, workers and housekeeping in line with what consent
+ * currently allows — either after re-reading the plugin directories, or from
+ * the discovery already in hand. Owns the content-pack readiness flag because
+ * both passes invalidate it while they run.
+ */
 export class PluginActivationReconciliation {
   private contentPacksReady = false
 

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 import { BOARDS_PROXY_METHODS } from '../azure-devops/boards-proxy-path-policy'
+import { PLUGIN_TASK_SOURCE_ERROR_CODES } from './plugin-task-source-contract'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -107,7 +108,9 @@ const azureDevOpsBoardsRequestParams = z
   .strict()
 const azureDevOpsBoardsRequestResult = z.object({
   status: z.number().int(),
-  body: z.unknown()
+  body: z.unknown(),
+  /** Host classification of `status`, so a plugin never has to guess; null on success. */
+  code: z.enum(PLUGIN_TASK_SOURCE_ERROR_CODES).nullable()
 })
 
 export type PluginHostMethodSpec = {

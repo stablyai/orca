@@ -54,7 +54,9 @@ function createServices(): PluginHostServices {
       set: vi.fn().mockReturnValue({ ok: true })
     },
     subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events),
-    azureDevOpsBoardsRequest: vi.fn().mockResolvedValue({ status: 200, body: { count: 0 } })
+    azureDevOpsBoardsRequest: vi
+      .fn()
+      .mockResolvedValue({ status: 200, body: { count: 0 }, code: null })
   }
 }
 

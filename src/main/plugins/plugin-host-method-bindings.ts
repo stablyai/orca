@@ -7,6 +7,7 @@ import {
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginTaskSourceErrorCode } from '../../shared/plugins/plugin-task-source-contract'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -52,7 +53,7 @@ export type PluginHostServices = {
     path: string
     query?: Record<string, string>
     body?: unknown
-  }): Promise<{ status: number; body: unknown }>
+  }): Promise<{ status: number; body: unknown; code: PluginTaskSourceErrorCode | null }>
 }
 
 export type BoundPluginHostMethod = {
@@ -175,8 +176,7 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     return { subscribed: services.subscribeEvents(pluginId, events) }
   }),
   definePluginMethod('azureDevOps.boardsRequest', async (params, { services }) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the
-    // host API spec validates params against azureDevOpsBoardsRequestParams first.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host API spec validates params against azureDevOpsBoardsRequestParams before this handler runs.
     const request = params as {
       method: string
       path: string

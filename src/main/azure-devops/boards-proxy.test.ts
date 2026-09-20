@@ -12,7 +12,7 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result).toMatchObject({ status: 412 })
+    expect(result).toMatchObject({ status: 412, code: 'not_configured' })
   })
 
   it('reports not_configured when a base url is set but no credentials are configured', async () => {
@@ -25,7 +25,7 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result.status).toBe(412)
+    expect(result).toMatchObject({ status: 412, code: 'not_configured' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -37,7 +37,7 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result.status).toBe(412)
+    expect(result).toMatchObject({ status: 412, code: 'not_configured' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -51,7 +51,7 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result.status).toBe(412)
+    expect(result).toMatchObject({ status: 412, code: 'not_configured' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -63,7 +63,7 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result.status).toBe(412)
+    expect(result).toMatchObject({ status: 412, code: 'not_configured' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -102,7 +102,7 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result).toEqual({ status: 200, body: { count: 1 } })
+    expect(result).toEqual({ status: 200, body: { count: 1 }, code: null })
     expect(JSON.stringify(result)).not.toContain('super-secret-pat')
     expect(JSON.stringify(result).toLowerCase()).not.toContain('authorization')
     expect(JSON.stringify(result)).not.toContain(
@@ -112,9 +112,11 @@ describe('executeBoardsProxyRequest', () => {
 
   it.each([
     [401, 'unauthorized'],
-    [404, 'a missing work item'],
-    [429, 'a throttle']
-  ])('passes status %i through so the plugin can report %s', async (status) => {
+    [404, 'not_found'],
+    [429, 'rate_limited'],
+    [409, 'conflict'],
+    [418, 'unavailable']
+  ] as const)('classifies upstream status %i as %s', async (status, code) => {
     vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/org')
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     vi.stubGlobal(
@@ -127,7 +129,31 @@ describe('executeBoardsProxyRequest', () => {
       path: '/_apis/wit/workitems/1'
     })
 
-    expect(result.status).toBe(status)
+    expect(result).toMatchObject({ status, code })
+  })
+
+  it('classifies a refused path as forbidden without any fetch', async () => {
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/org')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+
+    const result = await executeBoardsProxyRequest({
+      method: 'GET',
+      path: '/_apis/git/repositories'
+    })
+
+    expect(result).toMatchObject({ status: 403, code: 'forbidden' })
+  })
+
+  it('classifies a rejected request shape as validation', async () => {
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/org')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+
+    const result = await executeBoardsProxyRequest({
+      method: 'GET',
+      path: '../_apis/wit/workitems/1'
+    })
+
+    expect(result).toMatchObject({ status: 400, code: 'validation' })
   })
 
   it('reports a failed upstream call as unavailable rather than empty data', async () => {
@@ -142,6 +168,10 @@ describe('executeBoardsProxyRequest', () => {
 
     const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
-    expect(result).toEqual({ status: 503, body: { message: 'Azure DevOps request failed' } })
+    expect(result).toEqual({
+      status: 503,
+      body: { message: 'Azure DevOps request failed' },
+      code: 'unavailable'
+    })
   })
 })

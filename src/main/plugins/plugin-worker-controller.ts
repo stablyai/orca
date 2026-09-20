@@ -6,7 +6,11 @@ import {
   PLUGIN_TASK_SOURCE_EXTENSION_POINT,
   type PluginExtensionRegistry
 } from '../../shared/plugins/plugin-extension-registry'
-import type { PluginTaskSourceMethod } from '../../shared/plugins/plugin-task-source-contract'
+import {
+  PLUGIN_TASK_SOURCE_RESULT_SCHEMAS,
+  type PluginTaskSourceMethod
+} from '../../shared/plugins/plugin-task-source-contract'
+import { invokePluginTaskSourceMethod } from './plugin-task-source-invoker'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { resolveContainedPluginArtifact } from './plugin-artifact-validation'
 import type { PluginContentVerifier } from './plugin-content-integrity'
@@ -192,8 +196,23 @@ export class PluginWorkerController {
         plugin.pluginKey,
         {
           sourceId,
+          // Never the raw worker value: the host owns validation and scrubbing
+          // so no consumer of the extension point has to repeat them.
           call: (method, params) =>
-            this.options.invokeTaskSource(plugin.pluginKey, sourceId, method, params)
+            invokePluginTaskSourceMethod({
+              callWorker: (request) =>
+                this.options.invokeTaskSource(
+                  request.pluginKey,
+                  request.sourceId,
+                  request.method,
+                  request.params
+                ),
+              pluginKey: plugin.pluginKey,
+              sourceId,
+              method,
+              params,
+              resultSchema: PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method]
+            })
         },
         sourceId
       )

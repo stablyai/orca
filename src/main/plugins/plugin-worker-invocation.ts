@@ -1,12 +1,12 @@
-import type { PluginTaskSourceMethod } from '../../shared/plugins/plugin-task-source-contract'
-import type { ValidDiscoveredPlugin } from './plugin-discovery'
-import type { PluginWorkerHandle } from './plugin-host-process'
-
 /**
  * Entry point from core into a plugin worker's contributions. Every call
  * passes two gates before code runs: the manifest must declare the
  * contribution, and the worker must have registered a handler for it.
  */
+
+import type { PluginTaskSourceMethod } from '../../shared/plugins/plugin-task-source-contract'
+import type { ValidDiscoveredPlugin } from './plugin-discovery'
+import type { PluginWorkerHandle } from './plugin-host-process'
 
 export type PluginWorkerInvocationHost = {
   /** Null when the plugin is unknown, invalid, or not cleared to run code. */

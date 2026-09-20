@@ -1,4 +1,6 @@
 import { checkBoardsProxyRequest } from '../../shared/azure-devops/boards-proxy-path-policy'
+import { classifyBoardsProxyStatus } from '../../shared/azure-devops/boards-proxy-status-classification'
+import type { PluginTaskSourceErrorCode } from '../../shared/plugins/plugin-task-source-contract'
 import {
   azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
@@ -23,11 +25,20 @@ export type BoardsProxyRequest = {
 export type BoardsProxyResponse = {
   status: number
   body: unknown
+  /** Host classification of `status`; null on success. */
+  code: PluginTaskSourceErrorCode | null
 }
 
 export async function executeBoardsProxyRequest(
   request: BoardsProxyRequest
 ): Promise<BoardsProxyResponse> {
+  const response = await resolveBoardsProxyResponse(request)
+  return { ...response, code: classifyBoardsProxyStatus(response.status) }
+}
+
+async function resolveBoardsProxyResponse(
+  request: BoardsProxyRequest
+): Promise<Omit<BoardsProxyResponse, 'code'>> {
   const rejection = checkBoardsProxyRequest(request)
   if (rejection) {
     return {

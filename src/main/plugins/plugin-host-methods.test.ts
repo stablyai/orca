@@ -30,7 +30,7 @@ function createServices(
       set: vi.fn().mockReturnValue({ ok: true })
     },
     subscribeEvents: vi.fn().mockReturnValue([]),
-    azureDevOpsBoardsRequest: vi.fn().mockResolvedValue({ status: 200, body: null })
+    azureDevOpsBoardsRequest: vi.fn().mockResolvedValue({ status: 200, body: null, code: null })
   }
 }
 
@@ -299,7 +299,7 @@ describe('azureDevOps.boardsRequest', () => {
     const services = createServices()
     services.azureDevOpsBoardsRequest = vi
       .fn()
-      .mockResolvedValue({ status: 200, body: { count: 1 } })
+      .mockResolvedValue({ status: 200, body: { count: 1 }, code: null })
 
     const outcome = await executePluginHostCall({
       pluginId: 'acme.boards',
@@ -313,14 +313,17 @@ describe('azureDevOps.boardsRequest', () => {
       audit: { record: vi.fn().mockResolvedValue(undefined) }
     })
 
-    expect(outcome).toMatchObject({ ok: true, value: { status: 200, body: { count: 1 } } })
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: { status: 200, body: { count: 1 }, code: null }
+    })
   })
 
   it('records the HTTP method and path in the audit summary, not a content-free entry', async () => {
     const services = createServices()
     services.azureDevOpsBoardsRequest = vi
       .fn()
-      .mockResolvedValue({ status: 200, body: { count: 1 } })
+      .mockResolvedValue({ status: 200, body: { count: 1 }, code: null })
     const record = vi.fn().mockResolvedValue(undefined)
 
     await executePluginHostCall({

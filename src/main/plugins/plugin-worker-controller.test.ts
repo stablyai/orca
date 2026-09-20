@@ -283,6 +283,77 @@ describe('PluginWorkerController task source extension point', () => {
     await subject.dispose()
   })
 
+  it.each([
+    ['listItems', { items: 'not-an-array' }],
+    ['getItem', { items: [], nextCursor: null }]
+  ] as const)('answers unavailable when the worker violates the %s schema', async (method, data) => {
+    const registry = createPluginExtensionRegistry()
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run'], ['boards'])),
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry,
+      invokeTaskSource: vi.fn(async () => ({ ok: true, data }))
+    })
+    await subject.ensure(await plugin(['boards']))
+
+    const proxy = registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, 'orca-samples.demo', 'boards')
+
+    await expect(proxy?.call(method, {})).resolves.toMatchObject({
+      ok: false,
+      code: 'unavailable'
+    })
+    await subject.dispose()
+  })
+
+  it('scrubs a worker rejection instead of letting the stack reach the caller', async () => {
+    const registry = createPluginExtensionRegistry()
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run'], ['boards'])),
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry,
+      invokeTaskSource: vi.fn(async () => {
+        throw new Error('at handler (/plugins/acme.boards/main.js:42:9)')
+      })
+    })
+    await subject.ensure(await plugin(['boards']))
+
+    const proxy = registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, 'orca-samples.demo', 'boards')
+    const result = await proxy?.call('listItems', {})
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unavailable',
+      message: 'task source boards is unavailable'
+    })
+    expect(JSON.stringify(result)).not.toContain('main.js')
+    await subject.dispose()
+  })
+
+  it('resolves the validated envelope when the worker honours the schema', async () => {
+    const registry = createPluginExtensionRegistry()
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run'], ['boards'])),
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry,
+      invokeTaskSource: vi.fn(async () => ({
+        ok: true,
+        data: { items: [], nextCursor: null }
+      }))
+    })
+    await subject.ensure(await plugin(['boards']))
+
+    const proxy = registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, 'orca-samples.demo', 'boards')
+
+    await expect(proxy?.call('listItems', {})).resolves.toEqual({
+      ok: true,
+      data: { items: [], nextCursor: null }
+    })
+    await subject.dispose()
+  })
+
   it('drops the proxies when the plugin is deactivated', async () => {
     const subjectPlugin = await plugin(['boards'])
     const registry = createPluginExtensionRegistry()

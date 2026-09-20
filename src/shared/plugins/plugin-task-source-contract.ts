@@ -144,6 +144,21 @@ export const PLUGIN_TASK_SOURCE_METHODS = [
 ] as const
 
 export type PluginTaskSourceMethod = (typeof PLUGIN_TASK_SOURCE_METHODS)[number]
+
+/** What each method's `data` must be. A new method without an entry here is a
+ *  compile error, so no call can reach a consumer unvalidated. */
+export const PLUGIN_TASK_SOURCE_RESULT_SCHEMAS: Record<PluginTaskSourceMethod, z.ZodTypeAny> = {
+  status: pluginTaskSourceStatusSchema,
+  listScopes: z.array(pluginTaskScopeSchema),
+  listItems: pluginTaskPageSchema,
+  getItem: pluginTaskItemSchema,
+  listComments: z.array(pluginTaskCommentSchema),
+  addComment: pluginTaskCommentSchema,
+  listTransitions: z.array(pluginTaskTransitionSchema),
+  listAssignees: z.array(pluginTaskIdentitySchema),
+  applyPatch: pluginTaskItemSchema
+}
+
 export type PluginTaskScope = z.infer<typeof pluginTaskScopeSchema>
 export type PluginTaskIdentity = z.infer<typeof pluginTaskIdentitySchema>
 export type PluginTaskItem = z.infer<typeof pluginTaskItemSchema>

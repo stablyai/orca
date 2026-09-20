@@ -3,7 +3,8 @@ import {
   pluginTaskItemSchema,
   pluginTaskSourceResultSchema,
   pluginTaskSourceStatusSchema,
-  PLUGIN_TASK_SOURCE_METHODS
+  PLUGIN_TASK_SOURCE_METHODS,
+  PLUGIN_TASK_SOURCE_RESULT_SCHEMAS
 } from './plugin-task-source-contract'
 
 describe('plugin task source contract', () => {
@@ -65,5 +66,33 @@ describe('plugin task source contract', () => {
       'listAssignees',
       'applyPatch'
     ])
+  })
+
+  it('gives every method a result schema, so no call can go unvalidated', () => {
+    for (const method of PLUGIN_TASK_SOURCE_METHODS) {
+      expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method]).toBeDefined()
+    }
+    expect(Object.keys(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS).sort()).toEqual(
+      [...PLUGIN_TASK_SOURCE_METHODS].sort()
+    )
+  })
+
+  it.each([
+    ['listItems', { items: [], nextCursor: null }, { items: 'not-an-array' }],
+    ['listScopes', [{ id: 'proj', name: 'Project' }], { id: 'proj' }],
+    ['listTransitions', [{ id: '2', name: 'Active' }], [{ id: '2' }]],
+    ['listAssignees', [{ id: 'ada', displayName: 'Ada' }], [{ id: 'ada' }]]
+  ] as const)('binds %s to a schema that rejects the wrong shape', (method, valid, invalid) => {
+    const schema = PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method]
+
+    expect(schema.safeParse(valid).success).toBe(true)
+    expect(schema.safeParse(invalid).success).toBe(false)
+  })
+
+  it('binds getItem and applyPatch to the item schema, not a page', () => {
+    const page = { items: [], nextCursor: null }
+
+    expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.getItem.safeParse(page).success).toBe(false)
+    expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.applyPatch.safeParse(page).success).toBe(false)
   })
 })

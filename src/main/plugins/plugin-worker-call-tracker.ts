@@ -5,18 +5,26 @@
  * ids never collide and neither can settle the other's promise.
  */
 
+import type { z } from 'zod'
+import type {
+  pluginWorkerCommandResultSchema,
+  pluginWorkerTaskSourceResultSchema
+} from '../../shared/plugins/plugin-host-protocol'
+
 type PendingCall = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
 }
 
-export type PluginWorkerCallReply = {
-  callId: number
-  ok: boolean
-  value?: unknown
-  error?: string
-}
+// Distributes over the union so a field added to either protocol schema shows
+// up here instead of being silently dropped.
+type WithoutMessageType<T> = T extends unknown ? Omit<T, 'type'> : never
+
+export type PluginWorkerCallReply = WithoutMessageType<
+  | z.infer<typeof pluginWorkerCommandResultSchema>
+  | z.infer<typeof pluginWorkerTaskSourceResultSchema>
+>
 
 export type PluginWorkerCallTrackerOptions = {
   /** Prefixes timeout and teardown messages, e.g. `[plugin:acme.demo]`. */

@@ -37,7 +37,7 @@ describe('task source extension point', () => {
     registry.register(
       PLUGIN_TASK_SOURCE_EXTENSION_POINT,
       'acme.boards',
-      { sourceId: 'azure-boards', call: async () => null },
+      { sourceId: 'azure-boards', call: async () => ({ ok: true as const, data: null }) },
       'azure-boards'
     )
 
