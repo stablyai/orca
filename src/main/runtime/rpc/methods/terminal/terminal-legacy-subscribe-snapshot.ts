@@ -45,7 +45,12 @@ export async function publishLegacyBinaryInitialSnapshot(
   }
 
   let read = await runtime.readTerminal(params.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+  let serialized = await serializeBudgetedMobileSnapshot(
+    runtime,
+    ptyId,
+    isMobile,
+    params.snapshotByteBudget
+  )
   if (state.closed) {
     return
   }
@@ -95,7 +100,11 @@ export async function publishLegacyBinaryInitialSnapshot(
     }
     if (rendererReady) {
       read = await runtime.readTerminal(params.terminal)
-      const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+      const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
+        runtime,
+        ptyId,
+        params.snapshotByteBudget
+      )
       if (state.closed) {
         return
       }
@@ -123,7 +132,12 @@ export async function publishLegacyBinaryInitialSnapshot(
     state.pendingOutputBytes = 0
     state.pendingOutputOverflowed = false
     read = await runtime.readTerminal(params.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    serialized = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      isMobile,
+      params.snapshotByteBudget
+    )
     if (state.closed) {
       return
     }
@@ -182,7 +196,12 @@ export async function publishLegacyBinaryInitialSnapshot(
   while (state.pendingOutputOverflowed && recoveryAttempts < 2) {
     state.pendingOutputOverflowed = false
     recoveryAttempts += 1
-    const recovery = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    const recovery = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      isMobile,
+      params.snapshotByteBudget
+    )
     if (state.closed) {
       return
     }

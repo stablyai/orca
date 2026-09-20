@@ -8,6 +8,7 @@ import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../../scrollback-limits'
 import { terminalStreamByteLengthExceeds } from '../../terminal-stream-byte-length'
+import { terminalStreamJsonByteLength } from '../../terminal-stream-json-byte-length'
 import {
   iterateTerminalStreamTextPayloads,
   requestedSnapshotScrollbackCandidates
@@ -120,10 +121,54 @@ export function sendSnapshotFrames(
   return { bytes, chunks, published }
 }
 
+/**
+ * What the subscriber's scrollback event spends on this snapshot: the text as JSON, plus the
+ * variable-width metadata that rides beside it in the same payload.
+ *
+ * The fixed fields are not counted here and are not this side's to count. The subscriber derives
+ * its budget by subtracting its own envelope, which bounds everything of fixed width; what it
+ * cannot bound is a path, a partial escape tail and a list with one entry per hyperlink on the
+ * screen, because none of those has a ceiling the client knows. Those are exactly the fields this
+ * host is holding while it decides how much scrollback to send.
+ */
+type SnapshotVariableMeta = Pick<
+  NonNullable<SerializedSnapshot>,
+  'cwd' | 'oscLinks' | 'pendingEscapeTailAnsi' | 'source'
+>
+
+function mobileSnapshotPayloadJsonBytes(data: string, serialized: SnapshotVariableMeta): number {
+  const variableMeta = JSON.stringify({
+    cwd: serialized.cwd,
+    oscLinks: serialized.oscLinks,
+    pendingEscapeTailAnsi: serialized.pendingEscapeTailAnsi,
+    source: serialized.source
+  })
+  return terminalStreamJsonByteLength(data) + Buffer.byteLength(variableMeta, 'utf8')
+}
+
+/**
+ * Whether this snapshot is over whichever budget the subscriber is owed.
+ *
+ * Two budgets, not one scaled: a subscriber with a frame cap sends `snapshotByteBudget` and is
+ * measured on the JSON it will receive, and everyone else keeps the raw-text budget this host has
+ * always applied. Reading the JSON size for a socket subscriber would shrink a screen that was
+ * never at risk, and reading the raw size for the page is the defect this parameter exists for.
+ */
+function overMobileSnapshotBudget(
+  data: string,
+  serialized: SnapshotVariableMeta,
+  snapshotByteBudget: number | undefined
+): boolean {
+  return snapshotByteBudget === undefined
+    ? terminalStreamByteLengthExceeds(data, MOBILE_SNAPSHOT_BYTE_BUDGET)
+    : mobileSnapshotPayloadJsonBytes(data, serialized) > snapshotByteBudget
+}
+
 export async function serializeBudgetedMobileSnapshot(
   runtime: OrcaRuntimeService,
   ptyId: string,
-  isMobile: boolean
+  isMobile: boolean,
+  snapshotByteBudget?: number
 ): Promise<SerializedSnapshot> {
   if (isTerminalSnapshotForcedUnavailable()) {
     return null
@@ -146,7 +191,7 @@ export async function serializeBudgetedMobileSnapshot(
       return null
     }
     const data = (serialized.scrollbackAnsi ?? '') + serialized.data
-    const overByteBudget = terminalStreamByteLengthExceeds(data, MOBILE_SNAPSHOT_BYTE_BUDGET)
+    const overByteBudget = overMobileSnapshotBudget(data, serialized, snapshotByteBudget)
     if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
@@ -161,7 +206,8 @@ export async function serializeBudgetedMobileSnapshot(
 
 export async function serializeStableMobileRendererSnapshot(
   runtime: OrcaRuntimeService,
-  ptyId: string
+  ptyId: string,
+  snapshotByteBudget?: number
 ): Promise<SerializedSnapshot> {
   const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
   let candidateIndex = 0
@@ -180,10 +226,7 @@ export async function serializeStableMobileRendererSnapshot(
     if (!serialized) {
       return null
     }
-    const overByteBudget = terminalStreamByteLengthExceeds(
-      serialized.data,
-      MOBILE_SNAPSHOT_BYTE_BUDGET
-    )
+    const overByteBudget = overMobileSnapshotBudget(serialized.data, serialized, snapshotByteBudget)
     if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
@@ -202,13 +245,14 @@ export async function sendMobileResizeRestream(
   ptyId: string,
   sendFrame: (opcode: TerminalStreamOpcode, payload?: Uint8Array<ArrayBufferLike>) => void,
   event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number },
-  shouldSend?: () => boolean
+  shouldSend?: () => boolean,
+  snapshotByteBudget?: number
 ): Promise<boolean> {
   // Why: only a true geometry reflow rewraps scrollback; a dimensionless mode-change would re-send the whole buffer for nothing.
   if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
     return false
   }
-  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
+  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true, snapshotByteBudget)
   if (!serialized) {
     return false
   }

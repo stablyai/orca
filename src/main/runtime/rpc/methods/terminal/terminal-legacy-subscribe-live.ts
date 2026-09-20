@@ -27,7 +27,11 @@ export function activateLegacyBinarySubscription(
           return
         }
         state.outputBatcher?.flush()
-        const recovery = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+        const recovery = await serializeStableMobileRendererSnapshot(
+          runtime,
+          ptyId,
+          params.snapshotByteBudget
+        )
         if (state.closed) {
           return
         }
@@ -96,7 +100,8 @@ export function activateLegacyBinarySubscription(
         ptyId,
         state.sendFrame,
         event,
-        () => !state.closed && state.resizeGeneration === eventGeneration
+        () => !state.closed && state.resizeGeneration === eventGeneration,
+        params.snapshotByteBudget
       )
         .then((restreamed) => {
           if (state.closed || state.resizeGeneration !== eventGeneration) {
