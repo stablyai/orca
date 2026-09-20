@@ -137,6 +137,26 @@ export type MobileSnapshotByteBudget = {
 /** `JSON.stringify` writes `false` in five bytes and `true` in four, so `false` is the bound. */
 const WIDEST_BOOLEAN = false
 
+type MobileDisplayMode = ReturnType<OrcaRuntimeService['getMobileDisplayMode']>
+
+/** Every mode the runtime can answer; the type below is what keeps this list complete. */
+const DISPLAY_MODES = ['auto', 'desktop'] as const satisfies readonly MobileDisplayMode[]
+
+/** Empty only while every mode is listed above, which is what makes the constant compile. */
+type UnlistedDisplayMode = Exclude<MobileDisplayMode, (typeof DISPLAY_MODES)[number]>
+
+/**
+ * The longest mode rather than the one the caller handed over.
+ *
+ * The subscribe flow re-reads the mode from the runtime between serializing the snapshot and
+ * sending the frame, so no caller can tell the budget which one the publication will carry. Taken
+ * at its widest for the same reason `seq` and `requestId` are: a mode measured at `auto` and
+ * published as `desktop` is three bytes the approving number never counted. Resolving to `never`
+ * when a mode is added is the point — a new one has to be weighed here, not discovered on a phone.
+ */
+const WIDEST_DISPLAY_MODE: [UnlistedDisplayMode] extends [never] ? string : never =
+  DISPLAY_MODES.reduce((widest, mode) => (mode.length > widest.length ? mode : widest))
+
 /**
  * The publication this snapshot would produce, at its widest where the answer is not yet known.
  *
@@ -153,6 +173,7 @@ function budgetedPublication(
 ): SnapshotFrameOptions {
   return {
     ...budget.frame,
+    displayMode: WIDEST_DISPLAY_MODE,
     requestId: budget.frame.requestId ?? Number.MAX_SAFE_INTEGER,
     seq: budget.frame.seq ?? serialized.seq ?? Number.MAX_SAFE_INTEGER,
     truncated: WIDEST_BOOLEAN,
@@ -337,6 +358,12 @@ export async function sendMobileResizeRestream(
  * Built at each publication site rather than once per subscription, because the fields it carries
  * are that publication's: an initial scrollback and a resize re-stream write different `kind`s and
  * `reason`s, and a budget measured against the wrong one is the sum this replaced.
+ *
+ * The rule the callers follow, because writing the fields out twice is how they drifted the first
+ * time: the `frame` handed here is the same object the publication spreads, never a second literal
+ * that agrees with it today. Anything the caller cannot know yet stays out of it and is taken at
+ * its widest by the measure — `seq`, `requestId`, both truncation flags, and `displayMode`, which
+ * the subscribe flow re-reads after the snapshot is serialized.
  */
 export function mobileSnapshotByteBudget(
   bytes: number | undefined,

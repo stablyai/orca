@@ -4,16 +4,17 @@ import type { SnapshotFrameOptions } from './terminal-stream-types'
  * The shape of a snapshot on the wire, and what it costs a client that reads it as one payload.
  *
  * Split from the publication so the budget and the sender read one description of the frame. They
- * used not to: the budget summed the fields somebody remembered and shipped a payload 173 bytes
- * over a 640 KiB cap while calling it budgeted.
+ * used not to: the budget summed the fields somebody remembered and shipped a payload 169 bytes
+ * over the 655,360-byte cap while calling it budgeted, on a frame carrying an 8-character request
+ * id. The overshoot grows with that id: a 24-character one is 247 bytes over.
  */
 
 /**
  * The metadata a SnapshotStart frame carries, built in one place.
  *
  * Extracted so the budget below measures the object this really sends rather than a list of the
- * fields somebody remembered. A sum over a remembered list is what shipped a payload 169 bytes over
- * a 655,360-byte cap while calling it budgeted: it counted the text and four fields and forgot
+ * fields somebody remembered. A sum over a remembered list is what shipped those 169 bytes: it
+ * counted the text and four fields and forgot
  * `kind`, `cols`, `rows`, `requestId`, `displayMode`, `reason`, `seq`, both truncation flags and
  * the `serialized` key itself. A field added here is now paid for by both readers at once.
  */

@@ -383,3 +383,68 @@ describe('the renderer snapshot the page receives', () => {
     expect(serialized?.data.length).toBeGreaterThan(0)
   })
 })
+
+/**
+ * The fields the caller decides, which the budget must not read more narrowly than the publication.
+ *
+ * Every one of these was measured at one value and published at another. `kind` and `reason` drifted
+ * because the two objects were written out twice, five lines apart; `displayMode` drifts because
+ * the subscribe flow re-reads it from the runtime after the snapshot is serialized and before the
+ * frame is sent, so the budget cannot know it at all. Under-measuring any of them is the same
+ * defect as the summed field list: the frame goes out larger than the number that approved it.
+ */
+describe('the publication fields the budget has to assume', () => {
+  /** The widest a payload built from these options can be, as the host measures it. */
+  function measured(frame: MobileSnapshotByteBudget['frame'], data: string): number {
+    return terminalSnapshotPayloadJsonBytes(
+      {
+        ...frame,
+        requestId: Number.MAX_SAFE_INTEGER,
+        seq: Number.MAX_SAFE_INTEGER,
+        truncated: false,
+        truncatedByByteBudget: false,
+        cols: COLUMNS,
+        rows: 24,
+        cwd: CWD,
+        source: 'headless',
+        oscLinks: [],
+        data
+      },
+      STREAM_ID
+    )
+  }
+
+  /** A screen of a fixed size at every candidate, so the budget below is the whole of the margin. */
+  function fixedScreenRuntime(data: string): Pick<OrcaRuntimeService, 'serializeTerminalBuffer'> {
+    return {
+      serializeTerminalBuffer: vi.fn(async () => ({
+        data,
+        cols: COLUMNS,
+        rows: 24,
+        cwd: CWD,
+        source: 'headless' as const,
+        oscLinks: []
+      }))
+    }
+  }
+
+  it('covers a publication that carries the wider display mode', async () => {
+    // `getMobileDisplayMode` answers `'auto' | 'desktop'`, and the subscribe flow re-reads it
+    // between serializing the snapshot and sending the frame, so the budget cannot know which it
+    // will be. Budgeted at exactly the `'auto'` measure, the `'desktop'` frame is three bytes
+    // longer than the number that approved it, and no trimming is left to absorb them: this is the
+    // margin, not a fixture with room in it.
+    const data = 'x'.repeat(4096)
+    const serialized = await serializeBudgetedMobileSnapshot(
+      fixedScreenRuntime(data),
+      'pty-1',
+      true,
+      {
+        bytes: measured({ kind: 'scrollback', displayMode: 'auto' }, data),
+        streamId: STREAM_ID,
+        frame: { kind: 'scrollback', displayMode: 'auto' }
+      }
+    )
+    expect(required(serialized).data).toBe('')
+  })
+})

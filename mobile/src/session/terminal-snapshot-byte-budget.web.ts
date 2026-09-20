@@ -17,7 +17,8 @@ import { bridgeEventEnvelopeBytes } from '../mobile-web-shell/bridge/bridge-even
  *
  * Everything inside `payload` is the desktop's to count, and it counts it by building the payload
  * it will publish rather than by summing the fields it remembers — which is what let a snapshot
- * accepted at exactly this budget arrive 169 bytes over the cap.
+ * accepted at exactly this budget arrive 169 bytes over the cap, on a frame carrying an
+ * 8-character request id; a 24-character one is 247 over.
  */
 export function mobileTerminalSnapshotByteBudget(): number | undefined {
   return BRIDGE_MAX_MESSAGE_BYTES - bridgeEventEnvelopeBytes()
