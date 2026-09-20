@@ -1,3 +1,5 @@
+import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
+
 // Mirror of daemon's `DaemonSessionInfo` (src/main/daemon/types.ts); not imported — preload can't depend on main-only protocol types.
 export type PtyManagementSession = {
   sessionId: string
@@ -16,6 +18,13 @@ export type PtyManagementSession = {
 // Automation grants silently stop applying until the daemon is restarted (STA-3491).
 export type PtyManagementMacTccAttributionHealth = 'intact' | 'severed' | 'unknown'
 
+// Mirror of main's `DaemonReplacementDeferral`: why the app kept a daemon it wanted to replace.
+export type PtyManagementDaemonReplacementDeferral = {
+  reason: DaemonReplaceReason
+  liveSessionCount: number | null
+  observedAtMs: number
+}
+
 export type PtyManagementApi = {
   // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
@@ -26,5 +35,8 @@ export type PtyManagementApi = {
   }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
-  macTccAttribution: () => Promise<{ health: PtyManagementMacTccAttributionHealth }>
+  macTccAttribution: () => Promise<{
+    health: PtyManagementMacTccAttributionHealth
+    deferredReplacement?: PtyManagementDaemonReplacementDeferral | null
+  }>
 }

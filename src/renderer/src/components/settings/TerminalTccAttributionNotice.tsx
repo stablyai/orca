@@ -6,6 +6,14 @@ import { translate } from '@/i18n/i18n'
 
 export const MANAGE_SESSIONS_SECTION_ID = 'terminal-manage-sessions'
 
+type MacTccAttributionSeveredState = {
+  severed: boolean
+  /** Live sessions the app declined to kill when it wanted to replace the daemon; null when unknown. */
+  preservedSessionCount: number | null
+}
+
+const HEALTHY_STATE: MacTccAttributionSeveredState = { severed: false, preservedSessionCount: null }
+
 /**
  * Why this exists: macOS pins the TCC "responsible process" of the detached terminal
  * daemon to the app binary that forked it. Once that binary is deleted (packaged
@@ -13,15 +21,25 @@ export const MANAGE_SESSIONS_SECTION_ID = 'terminal-manage-sessions'
  * covering every daemon-hosted terminal (osascript -25211) with no OS-side signal —
  * so the remedy has to be surfaced here, next to the permissions it breaks (STA-3491).
  */
-export function useMacTccAttributionSevered(refreshRevision = 0): boolean {
-  const [severed, setSevered] = useState(false)
+export function useMacTccAttributionSevered(refreshRevision = 0): MacTccAttributionSeveredState {
+  const [state, setState] = useState<MacTccAttributionSeveredState>(HEALTHY_STATE)
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const { health } = await window.api.pty.management.macTccAttribution()
-      setSevered(health === 'severed')
+      const { health, deferredReplacement } = await window.api.pty.management.macTccAttribution()
+      setState(
+        health === 'severed'
+          ? {
+              severed: true,
+              preservedSessionCount:
+                deferredReplacement?.reason === 'severed_tcc_attribution'
+                  ? deferredReplacement.liveSessionCount
+                  : null
+            }
+          : HEALTHY_STATE
+      )
     } catch {
-      setSevered(false)
+      setState(HEALTHY_STATE)
     }
   }, [])
 
@@ -35,7 +53,7 @@ export function useMacTccAttributionSevered(refreshRevision = 0): boolean {
     return () => window.removeEventListener('focus', onFocus)
   }, [refresh, refreshRevision])
 
-  return severed
+  return state
 }
 
 export function TerminalTccAttributionNotice(props: {
@@ -44,7 +62,7 @@ export function TerminalTccAttributionNotice(props: {
   /** Increment after a daemon replacement attempt so the remedy state is re-checked. */
   refreshRevision?: number
 }): React.JSX.Element | null {
-  const severed = useMacTccAttributionSevered(props.refreshRevision)
+  const { severed, preservedSessionCount } = useMacTccAttributionSevered(props.refreshRevision)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
@@ -81,9 +99,18 @@ export function TerminalTccAttributionNotice(props: {
           <p className="text-xs leading-snug">
             {translate(
               'auto.components.settings.TerminalTccAttributionNotice.body',
-              'The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.'
+              'The terminal daemon is running from an Orca install that an update has since replaced, so macOS can’t attribute its commands to Orca. Its terminals are silently denied Documents, Desktop and Downloads, Local Network, and Accessibility and Automation grants (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.'
             )}
           </p>
+          {preservedSessionCount !== null && preservedSessionCount > 0 && (
+            <p className="text-xs leading-snug">
+              {translate(
+                'auto.components.settings.TerminalTccAttributionNotice.preservedSessions',
+                'Orca did not restart it automatically because it still owns live terminal sessions ({{value0}}).',
+                { value0: preservedSessionCount }
+              )}
+            </p>
+          )}
         </div>
       </div>
       {props.showManageSessionsButton !== false && (

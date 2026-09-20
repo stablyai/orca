@@ -4,6 +4,10 @@ import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
+import {
+  clearDaemonReplacementDeferral,
+  recordDaemonReplacementDeferral
+} from './daemon-replacement-deferral'
 import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
@@ -139,6 +143,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] macOS system resolver unavailable - preserving daemon because live session state could not be verified'
           : `[daemon] macOS system resolver unavailable - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
+      recordDaemonReplacementDeferral('unhealthy_resolver', daemonLiveSessionCount)
       return
     }
 
@@ -194,6 +199,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] Packaged daemon is stale - preserving it because live session state could not be verified'
           : `[daemon] Packaged daemon is stale - preserving it because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
+      recordDaemonReplacementDeferral('stale_bundle', daemonLiveSessionCount)
       return
     }
 
@@ -234,6 +240,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] macOS TCC attribution severed - preserving daemon because live session state could not be verified'
           : `[daemon] macOS TCC attribution severed - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}; restart from Manage Sessions when ready`
       )
+      recordDaemonReplacementDeferral('severed_tcc_attribution', daemonLiveSessionCount)
       return
     }
 
@@ -272,6 +279,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.removeEventListener = null
     this.client.disconnect()
     const releaseAdoptionLease = await this.respawnFn!(reason)
+    clearDaemonReplacementDeferral()
     if (this.respawnAdoptionClosed) {
       // Why: app teardown may win mid-respawn; a late result must not reinstall a lease nobody owns.
       releaseAdoptionLease?.()

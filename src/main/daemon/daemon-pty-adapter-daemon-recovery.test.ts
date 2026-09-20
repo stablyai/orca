@@ -7,6 +7,10 @@ import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import type { DaemonFileLog } from './daemon-file-log'
+import {
+  clearDaemonReplacementDeferral,
+  getDaemonReplacementDeferral
+} from './daemon-replacement-deferral'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import {
   createMockSubprocess,
@@ -81,6 +85,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     getMacDaemonTccAttributionHealthMock.mockResolvedValue('unknown')
     isDaemonStaleForCurrentBundleMock.mockReset()
     isDaemonStaleForCurrentBundleMock.mockResolvedValue(false)
+    clearDaemonReplacementDeferral()
   })
 
   afterEach(async () => {
@@ -693,6 +698,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       expect(respawnFn).not.toHaveBeenCalled()
       expect(next.id).toBeDefined()
+      // #20007: a declined replacement must be visible, not a console.warn nobody reads.
+      expect(getDaemonReplacementDeferral()).toMatchObject({
+        reason: 'severed_tcc_attribution',
+        liveSessionCount: 1
+      })
 
       respawnAdapter.dispose()
     })
@@ -756,6 +766,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(respawnFn).toHaveBeenCalledTimes(1)
       expect(respawnFn).toHaveBeenCalledWith('severed_tcc_attribution')
       expect(replacement.id).toBeDefined()
+      expect(getDaemonReplacementDeferral()).toBeNull()
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()

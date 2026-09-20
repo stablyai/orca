@@ -11764,8 +11764,9 @@
           "permissionDenied": "Microphone access is blocked. Grant it in your system settings, then try again."
         },
         "TerminalTccAttributionNotice": {
-          "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
+          "body": "The terminal daemon is running from an Orca install that an update has since replaced, so macOS can’t attribute its commands to Orca. Its terminals are silently denied Documents, Desktop and Downloads, Local Network, and Accessibility and Automation grants (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
           "openManageSessions": "Open Manage Sessions",
+          "preservedSessions": "Orca did not restart it automatically because it still owns live terminal sessions ({{value0}}).",
           "title": "macOS permission grants aren’t reaching terminals"
         },
         "artifacts": {

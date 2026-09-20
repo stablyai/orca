@@ -11156,8 +11156,9 @@
           "allowAccess": "Autoriser l'accès"
         },
         "TerminalTccAttributionNotice": {
-          "body": "Le daemon du terminal a été démarré par une installation d'Orca qui n'existe plus, donc macOS ne peut pas attribuer ses commandes à Orca — les autorisations Accessibilité et Automatisation sont ignorées silencieusement (osascript échoue avec l'erreur -25211). Redémarrer le daemon corrige le problème ; les sessions de terminal en cours seront fermées.",
+          "body": "Le daemon du terminal s'exécute depuis une installation d'Orca qu'une mise à jour a remplacée depuis, donc macOS ne peut pas attribuer ses commandes à Orca. Ses terminaux se voient refuser silencieusement l'accès à Documents, Bureau et Téléchargements, au réseau local, ainsi que les autorisations Accessibilité et Automatisation (osascript échoue avec l'erreur -25211). Redémarrer le daemon corrige le problème ; les sessions de terminal en cours seront fermées.",
           "openManageSessions": "Ouvrir Gérer les sessions",
+          "preservedSessions": "Orca ne l'a pas redémarré automatiquement car il possède encore des sessions de terminal actives ({{value0}}).",
           "title": "Les autorisations macOS n'arrivent pas aux terminaux"
         },
         "artifacts": {
