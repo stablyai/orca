@@ -13,9 +13,14 @@
  * In `config/scripts` rather than the mobile suite for that reason — this is where a browser is
  * available — and it drives the mobile modules directly, so the budget, the scale and the host are
  * all the real ones.
+ *
+ * Named into the `mobile-web-app-` family so two things hold without anyone remembering them: the
+ * `mobile_web_app` job's filter picks it up, and `pr-code-change-scope.mjs` fires that job when
+ * this file changes. Both key off that prefix.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, type Browser, type Page } from 'playwright-core'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   budgetedMobileViewDeviceScaleFactor,
   mobileBrowserFrameAreaBudget,
@@ -50,7 +55,19 @@ const VIEWPORTS: Viewport[] = VIEWPORT_WIDTHS.flatMap((width) =>
 let browser: Browser | null = null
 let page: Page | null = null
 
+/**
+ * Skipped where the bundling tests skip, which is the sharded `test` job.
+ *
+ * Not because this needs react-native-web — it does not — but because that job has no browser to
+ * launch, and this is the flag that tells the two jobs apart. In the `mobile_web_app` job the
+ * required-env check turns a missing install into a failure, so it cannot skip there silently.
+ */
+const describeSweep = mobileWebAppDependenciesPresent() ? describe : describe.skip
+
 beforeAll(async () => {
+  if (!mobileWebAppDependenciesPresent()) {
+    return
+  }
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browser = await chromium.launch({
     headless: true,
@@ -136,7 +153,13 @@ function postThroughShell(
     })
   )
   const before = bridge.posted.length
-  bridge.client.streams[0]?.emitBinary?.(screencastFrame(image, frame))
+  // Same reason as the sibling pin: a subscribe that opened no binary lane would read here as a
+  // dropped frame, and this sweep's whole verdict is which frames were dropped.
+  const emitBinary = bridge.client.streams[0]?.emitBinary
+  if (emitBinary === null || emitBinary === undefined) {
+    throw new Error('the subscribe opened no binary stream')
+  }
+  emitBinary(screencastFrame(image, frame))
   if (bridge.posted.length === before) {
     return null
   }
@@ -163,7 +186,7 @@ function budgetedFrame(viewport: Viewport) {
  */
 const withinBudget = (viewport: Viewport) => budgetedFrame(viewport).scale > 1
 
-describe('the frame budget across the viewport range', () => {
+describeSweep('the frame budget across the viewport range', () => {
   it('keeps every viewport it budgets for inside one bridge message', async () => {
     const overCap: string[] = []
     let worstBytesPerPixel = 0

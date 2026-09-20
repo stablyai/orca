@@ -96,7 +96,13 @@ function postedFrame(image: Uint8Array): { bytes: number; envelope: number; post
     })
   )
   const before = bridge.posted.length
-  bridge.client.streams[0]?.emitBinary?.(screencastFrame(image))
+  // Loudly, because the optional chain below would otherwise turn a subscribe that opened no
+  // binary lane into zero posts, which is what a dropped frame looks like.
+  const emitBinary = bridge.client.streams[0]?.emitBinary
+  if (emitBinary === null || emitBinary === undefined) {
+    throw new Error('the subscribe opened no binary stream')
+  }
+  emitBinary(screencastFrame(image))
   const json = bridge.posted.at(-1) ?? ''
   const posts = bridge.posted.length - before
   const event = posts === 0 ? null : bridge.last()
