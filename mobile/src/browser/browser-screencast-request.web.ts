@@ -19,12 +19,21 @@ export type {
 /**
  * The bytes one pixel of this pane's JPEG costs at its worst.
  *
- * Measured on this lane's fixtures at quality 72: uniform random noise, which is the image JPEG
- * compresses least and the ceiling every real page sits under, encoded at 0.545 bytes per pixel.
- * Photographic content measured near a tenth of that. The number is the worst case rather than a
- * typical one because it is the one a budget has to survive.
+ * Uniform random noise at quality 72, which is the image JPEG compresses least and the ceiling
+ * every real page sits under; photographic content measures near a tenth of it.
+ *
+ * Swept 2026-09-20 over 143 viewports — widths 320 to 1400 and heights 480 to 1600 — each encoded
+ * by Chromium at the scale `budgetedMobileViewDeviceScaleFactor` picks for it. Across the 111 the
+ * budget fits, the measured cost ranged from 0.54470 to 0.55351 bytes per pixel. This is that
+ * maximum plus a margin of 0.00649, about 1.2%, for the encoder version it was not swept on.
+ *
+ * It was 0.545 before that sweep, taken from one 2400x2160 frame. A single large frame is the
+ * cheapest per pixel in the whole range, so the number it gave was under 90 of those 143 viewports
+ * and the budget it produced posted a frame over the cap on a phone. A worst case measured at one
+ * point is not a worst case; `mobile-browser-frame-budget-sweep.test.ts` is what holds this one to
+ * the whole range, and re-running it is how this number is changed.
  */
-export const WORST_CASE_JPEG_BYTES_PER_PIXEL = 0.545
+export const WORST_CASE_JPEG_BYTES_PER_PIXEL = 0.56
 
 /** Base64 carries three bytes in four characters, and a character is one UTF-8 byte here. */
 export const BASE64_BYTES_PER_CHARACTER = 3 / 4

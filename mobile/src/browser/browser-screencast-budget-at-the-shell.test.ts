@@ -12,8 +12,9 @@
  * downloaded photograph would sit a tenth of the way to it and prove nothing.
  *
  * Measured at this base, so a later reader can tell drift from a rewrite: the real envelope costs
- * 303 bytes against a bound of 516, and a frame at the budgeted 901,161 pixels is a 491,132-byte
- * image the shell posts as 655,147 bytes, 213 under the 655,360-byte cap.
+ * 303 bytes against a bound of 516, and a frame at the budgeted area is an image the shell posts
+ * just under the 655,360-byte cap. The area itself moved when the worst case was swept properly,
+ * so the figures are derived here rather than written down.
  */
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from '../mobile-web-shell/bridge/bridge-caps'
@@ -142,6 +143,16 @@ describe('the envelope bound against a real posted frame', () => {
   })
 })
 
+/**
+ * The arithmetic between the budget and the cap, and nothing about what a JPEG really costs.
+ *
+ * Every case here feeds `noise(area * WORST_CASE_JPEG_BYTES_PER_PIXEL)` — a byte count the constant
+ * itself produced — so they cannot falsify the constant, only the expansion and the drop rule
+ * around it. Said plainly because the earlier version of this block read as if it validated the
+ * worst case: it did not, and the constant it agreed with was wrong by enough to post a phone's
+ * frame over the cap. `config/scripts/mobile-browser-frame-budget-sweep.test.ts` is what encodes
+ * real Chromium JPEGs across the viewport range and holds the constant to them.
+ */
 describe('a frame at exactly the budgeted area', () => {
   /** The image the budget says the mobile view's worst case produces, to the byte. */
   const BUDGETED_IMAGE_BYTES = Math.floor(
