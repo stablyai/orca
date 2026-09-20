@@ -111,8 +111,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
 // first, then `worktree.activate` twice, `session.tabs.createTerminal` and
 // `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
-// spelled at the call site. One literal more in C7.2: the Markdown copy action's "Couldn't copy",
-// the toast the other copy paths already showed when a write was refused.
+// spelled at the call site. Two literals more across C7.2, both of them the toast a refused write
+// now shows: "Couldn't copy path" when the sheets moved onto the clipboard seam, taking the count
+// from 532 to 533, and "Couldn't copy" when the Markdown copy action gained the failure branch the
+// other copy paths already had, taking it to 534.
 const HEAD_RUNTIME_STRING_SHA256 =
   'ce4c68956cec3b49aaf785e99bc2d7efd3eafeb4fdac6ce116cd854546c045f4'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'

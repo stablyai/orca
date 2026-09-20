@@ -129,10 +129,11 @@ describe('reading the clipboard from inside the shell', () => {
   /**
    * The degradation, recorded rather than implied.
    *
-   * No shell serves an image yet — `native.clipboard.read` refuses `{ mime: 'image' }` by name and
-   * a 24 MiB base64 image cannot cross an 8 MiB reply cap — so the page answers what an empty
-   * clipboard answers and the terminal's paste takes the branch it already had. On the page an
-   * image on the clipboard pastes nothing until the media verbs land.
+   * No shell reads an image for the page yet — `native.clipboard.read` admits only `text`, so an
+   * image mime is `invalid-params` rather than a refusal of its own, and a 24 MiB base64 image
+   * cannot cross an 8 MiB reply cap. The pasteboard's image is `native.media.pick
+   * { source: 'clipboard' }`, landed in C7.4 and unwired until C7.6. So the page answers what an
+   * empty clipboard answers and the terminal's paste takes the branch it already had.
    */
   it('answers no image, without asking the shell for one', async () => {
     const pair = createFakeBridgePortPair()
