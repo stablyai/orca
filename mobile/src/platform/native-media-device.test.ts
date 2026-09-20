@@ -11,9 +11,17 @@ const expo = vi.hoisted(() => ({
   deleted: new Array<string>(),
   written: new Array<{ uri: string; base64: string }>(),
   copiedBytes: new Array<{ uri: string; bytes: number[] }>(),
-  sources: new Map<string, Uint8Array>()
+  sources: new Map<string, Uint8Array>(),
+  platform: { value: 'android' }
 }))
 
+vi.mock('react-native', () => ({
+  Platform: {
+    get OS(): string {
+      return expo.platform.value
+    }
+  }
+}))
 vi.mock('expo-clipboard', () => ({ getImageAsync: expo.getImageAsync }))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: expo.getDocumentAsync }))
 vi.mock('expo-image-picker', () => ({
@@ -51,6 +59,7 @@ vi.mock('expo-file-system', () => ({
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
 import {
   copyPickedMediaIntoCache,
+  libraryPickNeedsPermission,
   discardStagedMedia,
   nativeMediaDeviceDeps,
   ownsStagedMediaUri
@@ -69,6 +78,41 @@ describe('which uris this shell owns', () => {
       ''
     ]) {
       expect(ownsStagedMediaUri(uri), uri).toBe(false)
+    }
+  })
+})
+
+describe('which platform needs the library permission', () => {
+  it('asks on iOS and nowhere else', () => {
+    // Verified against expo-image-picker 55.0.24, not recalled. Neither platform's
+    // `launchImageLibraryAsync` checks a permission — `launchCameraAsync` does, and the library
+    // arm goes straight to its contract. On Android `getMediaLibraryPermissions` is an empty array
+    // from API 33, so the request is a no-op that answers granted; below 33 it asks for the legacy
+    // storage permissions the picker never reads, and a denial would refuse a pick the OS would
+    // have completed. iOS keeps the request because the prompt inside `pick` is the shell's, which
+    // is what ruling 6 asked for.
+    expect(libraryPickNeedsPermission('ios')).toBe(true)
+    for (const platform of ['android', 'web', 'windows', 'macos']) {
+      expect(libraryPickNeedsPermission(platform), platform).toBe(false)
+    }
+  })
+
+  it('skips the request on Android, so a denial cannot refuse a working pick', async () => {
+    expo.platform.value = 'android'
+    await expect(deps().requestLibraryPermission()).resolves.toEqual({ granted: true })
+    expect(expo.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled()
+  })
+
+  it('makes the request on iOS, and carries a denial back as one', async () => {
+    expo.platform.value = 'ios'
+    try {
+      await expect(deps().requestLibraryPermission()).resolves.toEqual({ granted: true })
+      expect(expo.requestMediaLibraryPermissionsAsync).toHaveBeenCalledTimes(1)
+      expo.requestMediaLibraryPermissionsAsync.mockResolvedValueOnce({ granted: false })
+      await expect(deps().requestLibraryPermission()).resolves.toEqual({ granted: false })
+    } finally {
+      expo.platform.value = 'android'
+      expo.requestMediaLibraryPermissionsAsync.mockClear()
     }
   })
 })
