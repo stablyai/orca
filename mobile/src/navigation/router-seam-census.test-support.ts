@@ -59,3 +59,47 @@ export function callsRouteHandoff(source: ts.SourceFile): boolean {
   ts.forEachChild(source, visit)
   return found
 }
+
+/**
+ * Every value name a module imports from expo-router, so a domain can say which ones it allows.
+ *
+ * The two landed censuses answer "no value import at all", which is the right rule for a domain
+ * whose only reach into expo-router is a router. The session domain's is not: eight of its hooks
+ * take `useFocusEffect` and two take `useLocalSearchParams`, neither of which can navigate, and a
+ * blanket rule there would have to be turned off rather than narrowed.
+ *
+ * Names rather than a boolean for `useRouter`, because the hazard is the category and not the one
+ * spelling of it: `import { router }` is expo-router's module singleton and navigates from anywhere,
+ * and a rule written against `useRouter` alone would have read it as clean.
+ *
+ * The imported name, not the local one: `import { useRouter as useAppRouter }` is the same import.
+ */
+export function expoRouterValueImports(source: ts.SourceFile): string[] {
+  const names = new Set<string>()
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly === true) {
+      continue
+    }
+    const specifier = statement.moduleSpecifier
+    if (!ts.isStringLiteral(specifier) || specifier.text !== 'expo-router') {
+      continue
+    }
+    const bindings = statement.importClause?.namedBindings
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if (element.isTypeOnly) {
+          continue
+        }
+        names.add((element.propertyName ?? element.name).text)
+      }
+    }
+    // A default or namespace import hands the whole module over under one name, router included.
+    if (statement.importClause?.name !== undefined) {
+      names.add('default')
+    }
+    if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      names.add('*')
+    }
+  }
+  return [...names].sort()
+}
