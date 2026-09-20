@@ -158,7 +158,6 @@ async function openPane({ grants }) {
   const context = await browser.newContext({ viewport: VIEWPORT })
   const page = await context.newPage()
   const consoleErrors = []
-  const violations = []
   const foreignRequests = []
   page.on('console', (message) => {
     if (message.type() === 'error') {
@@ -201,14 +200,8 @@ async function openPane({ grants }) {
     page,
     context,
     consoleErrors,
-    violations,
     foreignRequests,
-    csp: () => page.evaluate(() => globalThis.__orcaRenderCheckCsp),
-    /** Every violation but the one the bundle already reports on any route: see ZOD_JIT_PROBE. */
-    newCsp: async () =>
-      (await page.evaluate(() => globalThis.__orcaRenderCheckCsp)).filter(
-        (violation) => violation.blockedUri !== 'eval'
-      )
+    csp: () => page.evaluate(() => globalThis.__orcaRenderCheckCsp)
   }
 }
 
@@ -303,26 +296,24 @@ const waitForPaint = (page, count) =>
     { timeout: 15_000 }
   )
 
-/**
- * The one CSP violation this bundle already makes, on any route, before the pane is involved.
- *
- * Zod 4 feature-detects its compiled path by constructing `new Function('')` and treating a throw
- * as "no JIT here". Under the shell's `script-src 'self'` the construction throws, Zod catches it
- * and takes the interpreted path, so the page is correct — but the browser has already filed a
- * violation report by then, on every page load. Recorded rather than fixed: it is not the pane's,
- * and a check that asserted no violations at all would fail on it and say nothing about the frame
- * path, which is what this file is for.
- */
-const ZOD_JIT_PROBE = { directive: 'script-src', blockedUri: 'eval' }
-
 describePane('the browser pane in a page', () => {
-  it('reports only the Zod JIT probe, which the page survives', async () => {
+  /**
+   * Zero, which it was not until `page-zod-jitless.ts` landed.
+   *
+   * Zod decided whether it could compile by constructing `new Function('')`, which the shell's
+   * `script-src 'self'` reports even though Zod catches the throw — once on load and again on
+   * first paint. This file filtered those out by `blockedURI === 'eval'` for one round, which
+   * would also have hidden a real one, so the filter is gone and the cause is fixed instead.
+   */
+  it('files no CSP violation at all, through load and first paint', async () => {
     const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
     try {
       await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      // Named, so a second `eval` from anywhere else is visible as a count rather than hidden by
-      // the filter every other case uses.
-      expect(await view.csp()).toEqual([ZOD_JIT_PROBE])
+      const b64 = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 33 })
+      await emitFrame(view.page, { b64, frameSeq: 1, ...FRAME })
+      await waitForPaint(view.page, 1)
+
+      expect(await view.csp()).toEqual([])
       expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()
@@ -349,7 +340,7 @@ describePane('the browser pane in a page', () => {
       expect(layers.length).toBeGreaterThan(0)
       expect(layers.filter((layer) => layer.opacity === '1')).toHaveLength(1)
       expect(view.consoleErrors).toEqual([])
-      expect(await view.newCsp()).toEqual([])
+      expect(await view.csp()).toEqual([])
       expect(view.foreignRequests).toEqual([])
     } finally {
       await view.context.close()
@@ -384,7 +375,7 @@ describePane('the browser pane in a page', () => {
       expect(visible).toHaveLength(1)
       expect(visible[0].digest).not.toBe(before.find((l) => l.opacity === '1')?.digest)
       expect(view.consoleErrors).toEqual([])
-      expect(await view.newCsp()).toEqual([])
+      expect(await view.csp()).toEqual([])
     } finally {
       await view.context.close()
     }
@@ -436,7 +427,7 @@ describePane('the browser pane in a page', () => {
       )
       expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckSubscribes)).toEqual([])
       expect(view.consoleErrors).toEqual([])
-      expect(await view.newCsp()).toEqual([])
+      expect(await view.csp()).toEqual([])
       expect(view.foreignRequests).toEqual([])
     } finally {
       await view.context.close()

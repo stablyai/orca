@@ -55,6 +55,13 @@ export const MOBILE_WEB_APP_SHIMS = [
     appliesTo: (options) => options.banner?.js?.includes('globalThis.process ??=') === true
   },
   {
+    // Zod probes for a usable JIT with `new Function('')`, which the shell's CSP reports even
+    // though Zod catches the throw and runs interpreted. Turned off before any module, because a
+    // schema constructed at module scope reaches the probe before our own code can run.
+    name: 'zod-jitless-banner',
+    appliesTo: (options) => options.banner?.js?.includes('__zod_globalConfig') === true
+  },
+  {
     // lucide-react-native@1.14.0's barrel re-exports LucideProvider from a context.mjs that does
     // not export it. Metro's loose CJS interop tolerates it; esbuild's strict ESM does not.
     // Web-build only: patching the package would change what the shipped native app consumes.
@@ -110,6 +117,27 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'bridge',
   'page-async-storage.ts'
 )
+
+/**
+ * Zod's compiled path, off before any module runs.
+ *
+ * Zod decides whether it may compile by constructing `new Function('')` and reading the throw as
+ * "no JIT here". Under the shell's `script-src 'self'` that throw is exactly what happens, Zod
+ * catches it and takes the interpreted path — but the browser files a `securitypolicyviolation`
+ * report first, and it does so on every page load. Zod's own source gates the probe on `jitless`
+ * for this case, so nothing here is a workaround.
+ *
+ * In the banner rather than a module that calls `z.config`, because a module cannot win the race.
+ * `$ZodObject` reads `allowsEval` when a schema is *constructed*, not parsed, so the first
+ * module-scope `z.object(...)` in the bundle fires the probe — and esbuild evaluates the chunk
+ * holding zod and its callers before the chunk holding any module of ours that imports zod. An
+ * entry import placed first was measured losing that race; the banner runs before every module.
+ *
+ * `globalConfig` is `globalThis.__zod_globalConfig`, which zod adopts with `??=` rather than
+ * replacing, so setting the flag on it here is what zod itself reads.
+ */
+const ZOD_JITLESS_BANNER =
+  'globalThis.__zod_globalConfig ??= {}; globalThis.__zod_globalConfig.jitless = true;'
 
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
@@ -210,7 +238,7 @@ export function mobileWebAppBuildOptions(routes) {
     // script would resolve against the route instead.
     publicPath: '/assets',
     banner: {
-      js: "globalThis.process ??= { env: { NODE_ENV: 'production', EXPO_OS: 'web' }, platform: 'web', version: '', nextTick: (fn) => setTimeout(fn, 0) };"
+      js: `globalThis.process ??= { env: { NODE_ENV: 'production', EXPO_OS: 'web' }, platform: 'web', version: '', nextTick: (fn) => setTimeout(fn, 0) };${ZOD_JITLESS_BANNER}`
     },
     define: {
       global: 'globalThis',
