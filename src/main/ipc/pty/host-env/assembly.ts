@@ -145,17 +145,6 @@ export function buildPtyHostEnv(
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
-      if (wslLaunchKind === 'pi') {
-        const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
-        if (guestPiDir) {
-          baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
-        }
-      } else if (wslLaunchKind === 'omp') {
-        const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
-        if (guestOmpExtension) {
-          baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
-        }
-      }
       // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
       const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
       if (opencodeOverlayDir) {
@@ -235,6 +224,21 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+  }
+
+  if (opts.isWsl && opts.agentStatusHooksEnabled) {
+    const distro = opts.wslDistro ?? null
+    if (explicitPiAgentKind === 'pi') {
+      const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
+      if (guestPiDir) {
+        baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
+      }
+    } else if (explicitPiAgentKind === 'omp') {
+      const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
+      if (guestOmpExtension) {
+        baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
+      }
+    }
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.

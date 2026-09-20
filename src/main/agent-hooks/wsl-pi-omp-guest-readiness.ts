@@ -29,15 +29,21 @@ export async function awaitExplicitPiOmpGuestReadiness(args: {
   }
   const distro = args.distro ?? null
   const manager = args.manager ?? wslHookRelayManager
-  manager.ensureForDistro(distro, args.codexHomePath, kind)
-  const deadline = Date.now() + (args.timeoutMs ?? 10_000)
-  while (Date.now() < deadline) {
-    const endpointReady = manager.getGuestEndpointFilePath(distro)
-    const agentReady = manager.getGuestAgentPath(distro, kind)
-    if (endpointReady && agentReady) {
-      return true
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25))
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      manager
+        .ensureForDistro(distro, args.codexHomePath, kind)
+        .then(() =>
+          Boolean(
+            manager.getGuestEndpointFilePath(distro) && manager.getGuestAgentPath(distro, kind)
+          )
+        ),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), args.timeoutMs ?? 10_000)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
   }
-  return false
 }

@@ -62,15 +62,15 @@ export class WslHookRelayManager {
     this.deps.managedHookSettings = resolve
   }
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
-  ensureForDistro(
+  async ensureForDistro(
     distro: string | null,
     codexHomePath?: string | null,
     launchKind?: 'pi' | 'omp'
-  ): void {
+  ): Promise<void> {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
-    void this.ensureInternal(distro, codexHomePath ?? undefined, launchKind).catch((err) => {
+    await this.ensureInternal(distro, codexHomePath ?? undefined, launchKind).catch((err) => {
       const detail = err instanceof Error ? err.message : String(err)
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
@@ -133,8 +133,8 @@ export class WslHookRelayManager {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
     }
     if (existing) {
-      if (launchKind && existing.launchKind !== launchKind) {
-        existing.launchKind = launchKind
+      if (launchKind && !existing.launchKinds.has(launchKind)) {
+        existing.launchKinds.add(launchKind)
         existing.lastInstallAt = 0
       }
       if (
@@ -145,10 +145,11 @@ export class WslHookRelayManager {
         existing.lastInstallAt = 0
       }
       if (existing.phase === 'running') {
-        void maybeRerunWslRelayGuestInstall(this.deps, existing)
+        await maybeRerunWslRelayGuestInstall(this.deps, existing)
         return
       }
       if (existing.phase !== 'failed' || Date.now() < existing.cooldownUntil) {
+        await existing.startup
         return
       }
     }
@@ -178,36 +179,34 @@ export class WslHookRelayManager {
       opencode2OverlayDir: existing?.opencode2OverlayDir,
       piAgentDir: existing?.piAgentDir,
       ompStatusExtension: existing?.ompStatusExtension,
-      launchKind,
+      launchKinds: new Set(existing?.launchKinds ?? (launchKind ? [launchKind] : [])),
       codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0
     }
     this.states.set(key, state)
     const env = buildWslRelaySpawnEnv(coords, bundle.version, instanceKey)
-    try {
-      await launchWslRelayWithInstall({
-        distro: state.distro,
-        env,
-        bundleJsPath: bundle.jsPath,
-        version: bundle.version,
-        io: this.deps,
-        isDisposed: () => this.disposed || this.states.get(key) !== state,
-        onChild: (child) => {
-          state.child = child
-        },
-        onNoNode: () =>
-          this.markFailed(
-            state,
-            `no node >= 18 found in distro '${state.distro}'; agent hooks stay degraded there`,
-            { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
-          ),
-        onFailure: (message) =>
-          this.markFailed(state, message, {
-            cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
-          }),
-        connect: (transport, child) => this.connect(state, transport, child, instanceKey)
-      })
-    } catch (err) {
+    state.startup = launchWslRelayWithInstall({
+      distro: state.distro,
+      env,
+      bundleJsPath: bundle.jsPath,
+      version: bundle.version,
+      io: this.deps,
+      isDisposed: () => this.disposed || this.states.get(key) !== state,
+      onChild: (child) => {
+        state.child = child
+      },
+      onNoNode: () =>
+        this.markFailed(
+          state,
+          `no node >= 18 found in distro '${state.distro}'; agent hooks stay degraded there`,
+          { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
+        ),
+      onFailure: (message) =>
+        this.markFailed(state, message, {
+          cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
+        }),
+      connect: (transport, child) => this.connect(state, transport, child, instanceKey)
+    }).catch((err) => {
       state.child?.kill()
       state.mux?.dispose()
       if (state.phase !== 'failed') {
@@ -215,7 +214,8 @@ export class WslHookRelayManager {
           cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
         })
       }
-    }
+    })
+    await state.startup
   }
   private async connect(
     state: WslRelayDistroState,

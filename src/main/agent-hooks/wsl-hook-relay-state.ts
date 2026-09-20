@@ -12,7 +12,9 @@ export type WslRelayDistroState = {
   opencode2OverlayDir?: string
   piAgentDir?: string
   ompStatusExtension?: string
-  launchKind?: 'pi' | 'omp'
+  launchKinds: Set<'pi' | 'omp'>
+  startup?: Promise<void>
+  installation?: Promise<void>
   failures: number
   cooldownUntil: number
   connectedAt?: number
