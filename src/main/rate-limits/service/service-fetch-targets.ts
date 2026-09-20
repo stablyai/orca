@@ -21,6 +21,25 @@ function waitForCodexResetRefresh(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, CODEX_RESET_REFRESH_DELAY_MS))
 }
 
+function codexResetUsageVisible(
+  fresh: ProviderRateLimits,
+  previous: ProviderRateLimits | null
+): boolean {
+  if (fresh.status !== 'ok') {
+    return false
+  }
+  if (!previous) {
+    return (fresh.session?.usedPercent ?? 0) <= 0 && (fresh.weekly?.usedPercent ?? 0) <= 0
+  }
+  const sessionImproved =
+    fresh.session !== null &&
+    (previous.session === null || fresh.session.usedPercent < previous.session.usedPercent)
+  const weeklyImproved =
+    fresh.weekly !== null &&
+    (previous.weekly === null || fresh.weekly.usedPercent < previous.weekly.usedPercent)
+  return sessionImproved || weeklyImproved
+}
+
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
   protected resolveCodexHome(target?: CodexAccountSelectionTarget): {
     skip: boolean
@@ -123,8 +142,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       } finally {
         this.finishFetchCycle(controller)
       }
-      const resetVisible = fresh.status === 'ok' && (fresh.session?.usedPercent ?? 0) <= 0
-      if (outcome !== 'reset' || resetVisible) {
+      if (outcome !== 'reset' || codexResetUsageVisible(fresh, stateBeforeReset.codex)) {
         break
       }
     }

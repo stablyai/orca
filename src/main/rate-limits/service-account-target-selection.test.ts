@@ -164,6 +164,32 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })
 
+  it('retries when a weekly-only quota is still stale after reset', async () => {
+    const service = new RateLimitService()
+    service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/codex-home' }))
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce({
+        ...okProvider('codex', 0, Date.now()),
+        session: null,
+        weekly: { ...okProvider('codex', 100, Date.now()).session! }
+      })
+      .mockResolvedValueOnce({
+        ...okProvider('codex', 0, Date.now()),
+        session: null,
+        weekly: { ...okProvider('codex', 0, Date.now()).session! }
+      })
+
+    const result = await service.consumeCodexRateLimitResetCredit({
+      idempotencyKey: '66666666-6666-4666-8666-666666666666',
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/codex-home'
+    })
+
+    expect(result.state.codex?.weekly?.usedPercent).toBe(0)
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
   it('returns a refreshed scoped state without overwriting a target selected during reset', async () => {
     const service = new RateLimitService()
     const idempotencyKey = '22222222-2222-4222-8222-222222222222'
