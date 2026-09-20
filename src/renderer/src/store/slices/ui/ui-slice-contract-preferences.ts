@@ -20,6 +20,7 @@ import type { CustomPet } from '../../../../../shared/pet-types'
 import type { ReleaseChannel } from '../../../../../shared/release-channel'
 import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageChipParts } from '../../../../../shared/status-bar-usage-chip-format'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 
@@ -106,6 +107,12 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  statusBarUsageBarsVisible: boolean
+  setStatusBarUsageBarsVisible: (visible: boolean) => void
+  statusBarUsageChipDisplayWord: boolean
+  statusBarUsageChipTightDuration: boolean
+  statusBarUsageChipWindowLabel: boolean
+  setStatusBarUsageChipParts: (parts: Partial<StatusBarUsageChipParts>) => void
 }
 
 export type UISliceSurfaces = {

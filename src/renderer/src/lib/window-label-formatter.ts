@@ -1,4 +1,7 @@
-import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
+import {
+  formatResetDuration,
+  formatResetDurationTight
+} from '../../../shared/rate-limit-reset-format'
 
 /**
  * Returns a short human-readable label for a usage window duration.
@@ -39,13 +42,19 @@ export function formatWindowLabel(windowMinutes: number): string {
  * so the same Codex session looked out of sync (#8378). Prefer remaining
  * duration when resetsAt is known; fall back to the fixed window size only
  * when no reset timestamp is available.
+ *
+ * `tight` drops the separator ("3h54m"): the popup has room for it, a chip in
+ * the compact format does not. The caller decides, so the long-standing
+ * labelled format keeps rendering "3h 54m".
  */
 export function formatRateLimitWindowChipLabel(
   window: { windowMinutes: number; resetsAt: number | null },
-  now: number = Date.now()
+  now: number = Date.now(),
+  options: { tight?: boolean } = {}
 ): string {
   if (window.resetsAt != null) {
-    return formatResetDuration(window.resetsAt - now)
+    const remainingMs = window.resetsAt - now
+    return options.tight ? formatResetDurationTight(remainingMs) : formatResetDuration(remainingMs)
   }
   return formatWindowLabel(window.windowMinutes)
 }

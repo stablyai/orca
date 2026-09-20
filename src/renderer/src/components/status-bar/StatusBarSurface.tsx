@@ -85,6 +85,9 @@ export function StatusBarSurface({
     showResourceUsage,
     showSsh,
     statusBarUsageMode,
+    statusBarUsageBarsVisible,
+    setStatusBarUsageBarsVisible,
+    statusBarUsageChipParts,
     usageMenuFocusHandoff,
     usageMenuOpen,
     usagePercentageDisplay
@@ -141,6 +144,8 @@ export function StatusBarSurface({
                         compact={compact}
                         display={usagePercentageDisplay}
                         mode={statusBarUsageMode}
+                        barsVisible={statusBarUsageBarsVisible}
+                        chipFormat={statusBarUsageChipParts}
                       />
                     )
                   )}
@@ -163,6 +168,8 @@ export function StatusBarSurface({
                   display={usagePercentageDisplay}
                   statusBarUsageMode={statusBarUsageMode}
                   onStatusBarUsageModeChange={setStatusBarUsageMode}
+                  statusBarUsageBarsVisible={statusBarUsageBarsVisible}
+                  onStatusBarUsageBarsVisibleChange={setStatusBarUsageBarsVisible}
                   isRefreshing={isRefreshing || anyFetching}
                   onRefresh={handleRefresh}
                   onOpenProvider={handleOpenProviderAccounts}

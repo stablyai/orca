@@ -124,6 +124,12 @@ export type PersistedUIState = {
   usagePercentageDisplay?: UsagePercentageDisplay
   /** Client-side footer presentation; verbose preserves the pre-roster all-window default. */
   statusBarUsageMode?: StatusBarUsageMode
+  /** Client-side footer presentation; the bar is redundant with the percentage when width is tight. */
+  statusBarUsageBarsVisible?: boolean
+  /** Client-side footer presentation; which parts a usage chip spells out. */
+  statusBarUsageChipDisplayWord?: boolean
+  statusBarUsageChipTightDuration?: boolean
+  statusBarUsageChipWindowLabel?: boolean
   dismissedUpdateVersion: string | null
   /** Version when the sign-out notice was seen or dismissed; any value suppresses future appearances. */
   dismissedUnexpectedSignoutVersion?: string | null

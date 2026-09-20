@@ -1,7 +1,11 @@
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
+import {
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSwitch
+} from '@/components/settings/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
@@ -191,6 +195,8 @@ export function UsageRosterPanel({
   providers,
   display,
   statusBarUsageMode,
+  statusBarUsageBarsVisible,
+  onStatusBarUsageBarsVisibleChange,
   onStatusBarUsageModeChange,
   isRefreshing,
   onRefresh,
@@ -204,6 +210,8 @@ export function UsageRosterPanel({
   providers: ProviderRateLimits[]
   display: UsagePercentageDisplay
   statusBarUsageMode: StatusBarUsageMode
+  statusBarUsageBarsVisible: boolean
+  onStatusBarUsageBarsVisibleChange: (visible: boolean) => void
   onStatusBarUsageModeChange: (mode: StatusBarUsageMode) => void
   isRefreshing: boolean
   onRefresh: () => void
@@ -284,6 +292,28 @@ export function UsageRosterPanel({
             }
           ]}
         />
+        {/* Why: sits under the density picker because it only qualifies
+            Detailed — Compact has never drawn a bar. Hidden in Compact rather
+            than shown disabled, so the popover does not advertise a control
+            that cannot do anything in the current mode. */}
+        {statusBarUsageMode === 'verbose' ? (
+          <SettingsRow
+            className="pt-2"
+            labelId="status-bar-usage-bars-label"
+            label={
+              <span className="text-xs">
+                {translate('auto.components.status.bar.UsageRosterPanel.usageBars', 'Usage bars')}
+              </span>
+            }
+            control={
+              <SettingsSwitch
+                checked={statusBarUsageBarsVisible}
+                onChange={() => onStatusBarUsageBarsVisibleChange(!statusBarUsageBarsVisible)}
+                ariaLabelledBy="status-bar-usage-bars-label"
+              />
+            }
+          />
+        ) : null}
       </div>
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
