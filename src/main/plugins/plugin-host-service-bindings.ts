@@ -7,6 +7,7 @@ import {
   describeAgentSessionPtyWriteRefusal,
   isAgentSessionPtyWriteRefusedError
 } from '../../shared/agent-session-pty-write-admission'
+import { executeBoardsProxyRequest } from '../azure-devops/boards-proxy'
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
@@ -94,6 +95,7 @@ export function bindPluginHostServices(input: {
       set: (key, itemKey, value) =>
         new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
     },
-    subscribeEvents
+    subscribeEvents,
+    azureDevOpsBoardsRequest: (request) => executeBoardsProxyRequest(request)
   }
 }

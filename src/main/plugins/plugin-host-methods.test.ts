@@ -6,7 +6,9 @@ import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-hos
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
 import { AgentSessionPtyWriteRefusedError } from '../../shared/agent-session-pty-write-admission'
 
-function createServices(storageSet: PluginHostServices['storage']['set']): PluginHostServices {
+function createServices(
+  storageSet: PluginHostServices['storage']['set'] = vi.fn().mockReturnValue({ ok: true })
+): PluginHostServices {
   return {
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
@@ -27,7 +29,8 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
       getAll: vi.fn().mockReturnValue({}),
       set: vi.fn().mockReturnValue({ ok: true })
     },
-    subscribeEvents: vi.fn().mockReturnValue([])
+    subscribeEvents: vi.fn().mockReturnValue([]),
+    azureDevOpsBoardsRequest: vi.fn().mockResolvedValue({ status: 200, body: null })
   }
 }
 
@@ -262,5 +265,54 @@ describe('terminal.sendText under a refusing agent-session lease', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('azureDevOps.boardsRequest', () => {
+  it('is denied without the capability', async () => {
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsRequest',
+      params: { method: 'GET', path: '/_apis/projects' },
+      viaPanel: false,
+      grantedCapabilities: ['storage'],
+      services: createServices()
+    })
+
+    expect(outcome).toMatchObject({ ok: false, code: 'capability_denied' })
+  })
+
+  it('is not reachable from a sandboxed panel', async () => {
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsRequest',
+      params: { method: 'GET', path: '/_apis/projects' },
+      viaPanel: true,
+      grantedCapabilities: ['azure-devops:boards'],
+      services: createServices()
+    })
+
+    expect(outcome).toMatchObject({ ok: false, code: 'panel_forbidden' })
+  })
+
+  it('delegates to the proxy when granted', async () => {
+    const services = createServices()
+    services.azureDevOpsBoardsRequest = vi
+      .fn()
+      .mockResolvedValue({ status: 200, body: { count: 1 } })
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsRequest',
+      params: { method: 'GET', path: '/_apis/projects' },
+      viaPanel: false,
+      grantedCapabilities: ['azure-devops:boards'],
+      services,
+      // azureDevOps.boardsRequest is a mutation (writes are in scope), so the
+      // gate requires an audit sink before it will invoke the handler.
+      audit: { record: vi.fn().mockResolvedValue(undefined) }
+    })
+
+    expect(outcome).toMatchObject({ ok: true, value: { status: 200, body: { count: 1 } } })
   })
 })

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
+import { BOARDS_PROXY_METHODS } from '../azure-devops/boards-proxy-path-policy'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -21,6 +22,7 @@ export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
 export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
 export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
+export const PLUGIN_BOARDS_PATH_MAX_LENGTH = 2048
 
 const workspaceReadContextParams = z.object({}).strict().optional()
 const workspaceReadContextResult = z
@@ -94,6 +96,19 @@ const eventsSubscribeParams = z.object({
   events: z.array(z.enum(PLUGIN_EVENT_NAMES)).min(1).max(PLUGIN_EVENT_NAMES.length)
 })
 const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
+
+const azureDevOpsBoardsRequestParams = z
+  .object({
+    method: z.enum(BOARDS_PROXY_METHODS),
+    path: z.string().min(1).max(PLUGIN_BOARDS_PATH_MAX_LENGTH),
+    query: z.record(z.string().max(256), z.string().max(2048)).optional(),
+    body: z.unknown().optional()
+  })
+  .strict()
+const azureDevOpsBoardsRequestResult = z.object({
+  status: z.number().int(),
+  body: z.unknown()
+})
 
 export type PluginHostMethodSpec = {
   name: string
@@ -249,6 +264,17 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
+  }),
+  spec({
+    name: 'azureDevOps.boardsRequest',
+    since: '1.0',
+    scope: 'desktop',
+    capability: 'azure-devops:boards',
+    mutation: true,
+    // Panels have no network scope by design; this stays worker-only.
+    panel: false,
+    params: azureDevOpsBoardsRequestParams,
+    result: azureDevOpsBoardsRequestResult
   })
 ]
 

@@ -47,6 +47,12 @@ export type PluginHostServices = {
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
+  azureDevOpsBoardsRequest(request: {
+    method: string
+    path: string
+    query?: Record<string, string>
+    body?: unknown
+  }): Promise<{ status: number; body: unknown }>
 }
 
 export type BoundPluginHostMethod = {
@@ -167,6 +173,17 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
     const { events } = params as { events: PluginEventName[] }
     return { subscribed: services.subscribeEvents(pluginId, events) }
+  }),
+  definePluginMethod('azureDevOps.boardsRequest', async (params, { services }) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the
+    // host API spec validates params against azureDevOpsBoardsRequestParams first.
+    const request = params as {
+      method: string
+      path: string
+      query?: Record<string, string>
+      body?: unknown
+    }
+    return services.azureDevOpsBoardsRequest(request)
   })
 ])
 
