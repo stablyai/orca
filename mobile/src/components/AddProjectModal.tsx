@@ -33,7 +33,7 @@ function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
 /**
  * The Add project sheet from the + action sheet: the desktop Add project start steps minus
  * the SSH row, then one form per row. A successful add closes the sheet and hands the repo
- * to `onProjectAdded` — from `onAfterClose`, so the New workspace modal it opens is
+ * to `onProjectAdded` — from `onAfterClose`, so the default-checkout session it opens is
  * presented only after this sheet's native window unmounted.
  */
 export function AddProjectModal({

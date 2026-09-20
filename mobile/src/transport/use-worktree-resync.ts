@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Worktree } from '../worktree/workspace-list-sections'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
 
 export function useWorktreeResync(args: {
   client: RpcClient | null
   connState: ConnectionState
-  fetchWorktrees: (opts?: { allowDuringModal?: boolean }) => Promise<void>
+  fetchWorktrees: (opts?: { allowDuringModal?: boolean }) => Promise<Worktree[] | undefined>
   fetchRepoMetadata: (options?: { force?: boolean; queueIfInFlight?: boolean }) => Promise<void>
 }): { refreshing: boolean; onRefresh: () => Promise<void> } {
   const { client, connState, fetchWorktrees, fetchRepoMetadata } = args

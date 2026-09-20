@@ -48,19 +48,28 @@ export function clientEventStreamMountAdapters(
       >('mobile/src/worktree/host-worktree-refresh.ts').startHostWorktreeRefresh
       const counts = { fetchWorktrees: 0, fetchRepoMetadata: 0 }
       let stop: (() => void) | null = null
-      // Keep absent options distinct from empty objects; record counts because ordering/options are already captured on the wire.
-      const fetching = (fetch: 'fetchWorktrees' | 'fetchRepoMetadata') => (options?: unknown) => {
-        counts[fetch]++
-        effect(fetch, { options })
-        return Promise.resolve()
-      }
+      // The effect carries the options as handed over, so an absent one stays distinct from an
+      // empty object. State counts instead of restating that list: the order and the options are
+      // already observed once, and a second copy would cost bytes and add no signal.
+      const recordFetch =
+        (fetch: 'fetchWorktrees' | 'fetchRepoMetadata') => (options?: unknown) => {
+          counts[fetch]++
+          effect(fetch, { options })
+        }
       return {
         action(name) {
           if (name === 'start') {
             stop = startHostWorktreeRefresh({
               client,
-              fetchWorktrees: fetching('fetchWorktrees'),
-              fetchRepoMetadata: fetching('fetchRepoMetadata'),
+              // The recorder has no catalog to return; undefined is the "no list" the
+              // refresh path tolerates, and the recording is the observable anyway.
+              fetchWorktrees: async (options?: unknown) => {
+                recordFetch('fetchWorktrees')(options)
+                return undefined
+              },
+              fetchRepoMetadata: async (options?: unknown) => {
+                recordFetch('fetchRepoMetadata')(options)
+              },
               syncViewSettings: () => Promise.resolve(),
               appState: {
                 currentState: 'active',

@@ -784,7 +784,15 @@ describe('NewWorktreeModal project targets', () => {
       }
       return new Promise(() => {})
     })
-    const client = { sendRequest } as unknown as RpcClient
+    // Why onStateChange: upstream's create-capability hook subscribes on mount; it never
+    // fires here, which is exactly the always-connected world this test assumes.
+    const client = {
+      sendRequest,
+      onStateChange: () => () => {},
+      getLastConnectedAt: () => 0,
+      getGeneration: () => 0,
+      getState: () => 'connected'
+    } as unknown as RpcClient
 
     await act(async () => {
       renderer = create(
@@ -793,6 +801,7 @@ describe('NewWorktreeModal project targets', () => {
           client,
           hostId: 'host-added',
           preselectedRepo: added,
+          openExternalUrl: () => {},
           onCreated: () => {},
           onClose: () => {}
         })

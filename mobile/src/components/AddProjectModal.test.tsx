@@ -24,7 +24,7 @@ vi.mock(
       }
     )
 )
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import { AddProjectModal } from './AddProjectModal'
