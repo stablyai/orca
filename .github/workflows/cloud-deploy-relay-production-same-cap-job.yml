@@ -537,9 +537,12 @@ jobs:
 
       - name: Reversibly isolate and drain only the selected cell
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
+        id: drain
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
         run: |
+          # Opens the window the report-only shadow health gate below judges this cell over.
+          echo "drain-started-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
           # A cell isolated by a failed canary is already migration-only, so
           # isolate is a no-op there that does not advance the selector; the
@@ -637,6 +640,7 @@ jobs:
 
       - name: Apply only the selected same-cap template and MIG
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
+        id: apply
         shell: bash
         env:
           CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
@@ -684,6 +688,8 @@ jobs:
             gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
               --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
           fi
+          # The new container boots behind this; the gate looks for its listener after this instant.
+          echo "apply-completed-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: post-auth
         if: ${{ inputs.mode != 'verify' }}
@@ -697,6 +703,7 @@ jobs:
 
       - name: Verify new incarnation, exact image, protocol, and durable safety
         if: ${{ inputs.mode != 'verify' }}
+        id: verify-target
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |
@@ -748,6 +755,7 @@ jobs:
             --expected-general-cells "${ISOLATED_GENERAL_CELLS}" \
             --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
             | jq -e '.control.enabled == false' >/dev/null
+          echo "verify-ended-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - name: Prove exact per-host trust and idempotent no-neighbor behavior
         if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol != '0') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol != '0')) }}
@@ -793,6 +801,50 @@ jobs:
             --expected-general-cells "${RESTORED_GENERAL_CELLS}" \
             --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
             | jq -e '.control.enabled == false' >/dev/null
+
+      # Report only: this evaluates the oracles an operator reads by hand after a cell and records
+      # what it would have called, so its verdicts can be compared with the operator's over a full
+      # roll before it is ever allowed to block. Two independent guarantees keep it inert: the
+      # script exits 0 on every verdict, and continue-on-error keeps even a crash off the job's
+      # outcome. The failsafe below therefore cannot fire on anything this step observes.
+      #
+      # It runs after the restore, not before it, for two reasons: the cell goes back into
+      # admission on exactly today's schedule rather than waiting out a minute of log reads, and
+      # the window it judges has closed by then, so Cloud Logging's ingestion lag is behind it.
+      # These are fleet oracles anyway; when this does gate, what it gates is the next cell.
+      - name: Shadow health gate (report only)
+        id: shadow-gate
+        if: ${{ inputs.mode != 'verify' }}
+        continue-on-error: true
+        env:
+          DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}
+          APPLY_COMPLETED_AT: ${{ steps.apply.outputs.apply-completed-at }}
+          VERIFY_ENDED_AT: ${{ steps.verify-target.outputs.verify-ended-at }}
+          SHADOW_GATE_DIRECTORY: ${{ runner.temp }}/relay-same-cap-shadow-gate
+          SHADOW_GATE_NAME: relay-same-cap-shadow-gate-${{ inputs.target-cell-id }}-${{ github.run_id }}.json
+        run: |
+          mkdir -p "${SHADOW_GATE_DIRECTORY}"
+          node dev/scripts/relay-same-cap-shadow-gate.mjs \
+            --cell-id "${TARGET_CELL_ID}" \
+            --cell-host "${TARGET_HOSTNAME}.relay.onorca.dev" \
+            --project-id "${GCP_PROJECT_ID}" \
+            --director-service orca-cloud-relay \
+            --drain-started-at "${DRAIN_STARTED_AT}" \
+            --apply-completed-at "${APPLY_COMPLETED_AT}" \
+            --verify-ended-at "${VERIFY_ENDED_AT}" \
+            --summary-file "${GITHUB_STEP_SUMMARY}" \
+            --output-file "${SHADOW_GATE_DIRECTORY}/${SHADOW_GATE_NAME}"
+
+      - name: Publish the shadow health gate verdict
+        if: ${{ inputs.mode != 'verify' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-same-cap-shadow-gate-${{ inputs.target-cell-id }}-${{ github.run_id }}.json
+          path: ${{ runner.temp }}/relay-same-cap-shadow-gate
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
 
       - id: cleanup-auth
         if: ${{ failure() && inputs.mode != 'verify' }}
