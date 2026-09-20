@@ -79,6 +79,112 @@ describe('startPluginWorker', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
+  it('exposes the task sources the worker announced when it became ready', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [], taskSources: ['boards', 'issues'] })
+
+    const handle = await pending
+
+    expect(handle.taskSources).toEqual(['boards', 'issues'])
+  })
+
+  it('reports no task sources for a worker that announced none', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: ['run'] })
+
+    const handle = await pending
+
+    expect(handle.taskSources).toEqual([])
+  })
+
+  it('routes a task source call to the worker and resolves with its result', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [], taskSources: ['boards'] })
+    const handle = await pending
+
+    const call = handle.invokeTaskSource('boards', 'listItems', { limit: 2 })
+
+    expect(child.send).toHaveBeenLastCalledWith({
+      type: 'invokeTaskSource',
+      callId: 0,
+      sourceId: 'boards',
+      method: 'listItems',
+      params: { limit: 2 }
+    })
+    expect(handle.inFlightCount()).toBe(1)
+    child.emit('message', {
+      type: 'taskSourceResult',
+      callId: 0,
+      ok: true,
+      value: { ok: true, data: { items: [], nextCursor: null } }
+    })
+    await expect(call).resolves.toEqual({ ok: true, data: { items: [], nextCursor: null } })
+    expect(handle.inFlightCount()).toBe(0)
+  })
+
+  it('answers each concurrent task source call from the source it addressed', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [], taskSources: ['boards', 'issues'] })
+    const handle = await pending
+
+    const boards = handle.invokeTaskSource('boards', 'status')
+    const issues = handle.invokeTaskSource('issues', 'status')
+
+    const sent = child.send.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'invokeTaskSource')
+    expect(sent.map((message) => message.sourceId)).toEqual(['boards', 'issues'])
+    // The worker answers out of order, so only the sourceId that went out with
+    // each call can decide which promise gets which answer.
+    child.emit('message', {
+      type: 'taskSourceResult',
+      callId: sent[1].callId,
+      ok: true,
+      value: 'issue-status'
+    })
+    child.emit('message', {
+      type: 'taskSourceResult',
+      callId: sent[0].callId,
+      ok: true,
+      value: 'board-status'
+    })
+    await expect(boards).resolves.toBe('board-status')
+    await expect(issues).resolves.toBe('issue-status')
+  })
+
+  it('rejects a task source call the worker reports as failed', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [], taskSources: ['boards'] })
+    const handle = await pending
+
+    const call = handle.invokeTaskSource('boards', 'status')
+    child.emit('message', {
+      type: 'taskSourceResult',
+      callId: 0,
+      ok: false,
+      error: 'boards is offline'
+    })
+
+    await expect(call).rejects.toThrow('boards is offline')
+  })
+
+  it('rejects in-flight task source calls when the worker exits', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [], taskSources: ['boards'] })
+    const handle = await pending
+
+    const call = handle.invokeTaskSource('boards', 'status')
+    child.emit('exit', 1)
+
+    await expect(call).rejects.toThrow('exited before responding')
+  })
+
   it('counts delivered events as in flight until their acknowledgement', async () => {
     const child = new FakeChild()
     const pending = start(child)

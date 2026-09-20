@@ -2,12 +2,19 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createPluginExtensionRegistry } from '../../shared/plugins/plugin-extension-registry'
+import {
+  createPluginExtensionRegistry,
+  PLUGIN_TASK_SOURCE_EXTENSION_POINT,
+  type PluginExtensionRegistry
+} from '../../shared/plugins/plugin-extension-registry'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import type { PluginContentVerifier } from './plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginWorkerHandle } from './plugin-host-process'
-import { PluginWorkerController } from './plugin-worker-controller'
+import {
+  PluginWorkerController,
+  type PluginWorkerControllerOptions
+} from './plugin-worker-controller'
 import type { PluginWorkerFactory } from './plugin-worker-manager'
 import { PluginLogBuffer } from './plugin-log-buffer'
 
@@ -17,7 +24,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-async function plugin(): Promise<ValidDiscoveredPlugin> {
+async function plugin(taskSourceIds: string[] = []): Promise<ValidDiscoveredPlugin> {
   const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-worker-controller-'))
   roots.push(rootDir)
   await writeFile(join(rootDir, 'main.mjs'), 'export default function activate() {}')
@@ -36,7 +43,8 @@ async function plugin(): Promise<ValidDiscoveredPlugin> {
       contributes: {
         panels: [],
         commands: [{ id: 'run', title: 'Run' }],
-        events: []
+        events: [],
+        taskSources: taskSourceIds.map((id) => ({ id, title: `Title ${id}` }))
       },
       capabilities: []
     }),
@@ -46,10 +54,15 @@ async function plugin(): Promise<ValidDiscoveredPlugin> {
   }
 }
 
-function worker(commands: string[]): PluginWorkerHandle & { dispose: ReturnType<typeof vi.fn> } {
+function worker(
+  commands: string[],
+  taskSources: string[] = []
+): PluginWorkerHandle & { dispose: ReturnType<typeof vi.fn> } {
   return {
     commands,
+    taskSources,
     invokeCommand: vi.fn(async () => null),
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,
@@ -64,15 +77,18 @@ function controller(options: {
   verify: () => Promise<void>
   isApproved: () => boolean
   logs?: PluginLogBuffer
+  registry?: PluginExtensionRegistry
+  invokeTaskSource?: PluginWorkerControllerOptions['invokeTaskSource']
 }): PluginWorkerController {
   return new PluginWorkerController({
     entryPath: '/host-entry.js',
     workerFactory: options.factory,
-    registry: createPluginExtensionRegistry(),
+    registry: options.registry ?? createPluginExtensionRegistry(),
     contentVerifier: { verify: options.verify } as unknown as PluginContentVerifier,
     capabilities: () => (options.isApproved() ? [] : null),
     isCurrentApproved: () => options.isApproved(),
     invokeCommand: vi.fn(async () => null),
+    invokeTaskSource: options.invokeTaskSource ?? vi.fn(async () => null),
     executeHostCall: vi.fn(async () => ({ ok: true as const, value: null })),
     log: (key) => options.logs?.capture(key) ?? vi.fn(),
     onStateChanged: vi.fn(),
@@ -202,6 +218,85 @@ describe('PluginWorkerController activation authority', () => {
       'registered undeclared command tasks'
     )
     expect(startedWorker.dispose).toHaveBeenCalledOnce()
+    await subject.dispose()
+  })
+
+  it('rejects and stops workers that register undeclared task sources', async () => {
+    const subjectPlugin = await plugin(['boards'])
+    const startedWorker = worker(['run'], ['boards', 'smuggled'])
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(startedWorker),
+      verify: async () => undefined,
+      isApproved: () => true
+    })
+
+    await expect(subject.ensure(subjectPlugin)).rejects.toThrow(
+      'registered undeclared task source smuggled'
+    )
+    expect(startedWorker.dispose).toHaveBeenCalledOnce()
+    await subject.dispose()
+  })
+
+  it('activates a worker whose task sources are all declared', async () => {
+    const subjectPlugin = await plugin(['boards'])
+    const startedWorker = worker(['run'], ['boards'])
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(startedWorker),
+      verify: async () => undefined,
+      isApproved: () => true
+    })
+
+    await expect(subject.ensure(subjectPlugin)).resolves.toBe(startedWorker)
+    expect(startedWorker.dispose).not.toHaveBeenCalled()
+    expect(subject.activationError(subjectPlugin.pluginKey)).toBeNull()
+    await subject.dispose()
+  })
+})
+
+describe('PluginWorkerController task source extension point', () => {
+  it('registers one proxy per source, addressable by plugin and provider id', async () => {
+    const subjectPlugin = await plugin(['boards', 'issues'])
+    const registry = createPluginExtensionRegistry()
+    const invokeTaskSource = vi.fn(async () => ({ ok: true, data: null }))
+    const subject = controller({
+      factory: vi
+        .fn<PluginWorkerFactory>()
+        .mockResolvedValue(worker(['run'], ['boards', 'issues'])),
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry,
+      invokeTaskSource
+    })
+    await subject.ensure(subjectPlugin)
+
+    const issues = registry.resolve(
+      PLUGIN_TASK_SOURCE_EXTENSION_POINT,
+      subjectPlugin.pluginKey,
+      'issues'
+    )
+    await issues?.call('listItems', { limit: 1 })
+
+    expect(issues?.sourceId).toBe('issues')
+    expect(invokeTaskSource).toHaveBeenCalledWith(subjectPlugin.pluginKey, 'issues', 'listItems', {
+      limit: 1
+    })
+    await subject.dispose()
+  })
+
+  it('drops the proxies when the plugin is deactivated', async () => {
+    const subjectPlugin = await plugin(['boards'])
+    const registry = createPluginExtensionRegistry()
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run'], ['boards'])),
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry
+    })
+    await subject.ensure(subjectPlugin)
+
+    await subject.deactivate(subjectPlugin.pluginKey)
+
+    expect(registry.resolveAll(PLUGIN_TASK_SOURCE_EXTENSION_POINT)).toEqual([])
     await subject.dispose()
   })
 })
