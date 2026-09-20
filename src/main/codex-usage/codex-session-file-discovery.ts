@@ -138,8 +138,11 @@ async function getCodexSessionFileAliasKey(filePath: string): Promise<string> {
 
 async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   try {
-    const fileStat = await stat(filePath)
-    if (fileStat.ino !== 0) {
+    // Windows file IDs are 64-bit. Reading them as JavaScript numbers can
+    // round distinct files to the same value, causing usage files to be
+    // incorrectly deduplicated on large Codex histories.
+    const fileStat = await stat(filePath, { bigint: true })
+    if (fileStat.ino !== 0n) {
       return `${fileStat.dev}:${fileStat.ino}`
     }
   } catch {}
