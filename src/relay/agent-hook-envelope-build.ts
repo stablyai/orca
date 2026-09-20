@@ -41,11 +41,19 @@ export function buildRelayHookEnvelope(
   }
 }
 
+export function hookBodyPaneKey(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null || !('paneKey' in body)) {
+    return null
+  }
+  const value = body.paneKey
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
 export function hookBodyEnv(body: unknown): string | undefined {
-  if (typeof body !== 'object' || body === null) {
+  if (typeof body !== 'object' || body === null || !('env' in body)) {
     return undefined
   }
-  const v = (body as Record<string, unknown>).env
+  const v = body.env
   if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
     return undefined
   }
@@ -53,10 +61,10 @@ export function hookBodyEnv(body: unknown): string | undefined {
 }
 
 export function hookBodyVersion(body: unknown): string | undefined {
-  if (typeof body !== 'object' || body === null) {
+  if (typeof body !== 'object' || body === null || !('version' in body)) {
     return undefined
   }
-  const v = (body as Record<string, unknown>).version
+  const v = body.version
   if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
     return undefined
   }

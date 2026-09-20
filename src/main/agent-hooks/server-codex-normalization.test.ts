@@ -193,8 +193,8 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('SessionStart clears cached tool state from a prior session', () => {
-    // Seed a Stop snapshot with an assistant message.
+  it('SessionStart clears cached tool state without reporting working', () => {
+    // Why: SessionStart is an idle TUI/resume boundary, not an active turn.
     _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -205,11 +205,18 @@ describe('Codex hook normalization', () => {
     )
     const result = _internals.normalizeHookPayload(
       'codex',
-      buildBody({ hook_event_name: 'SessionStart' }),
+      buildBody({ hook_event_name: 'SessionStart', session_id: 'codex-session-next' }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.lastAssistantMessage).toBeUndefined()
+    const prompted = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'next turn' }),
+      'production'
+    )
+    expect(result).toBeNull()
+    expect(prompted?.payload.state).toBe('working')
+    expect(prompted?.payload.lastAssistantMessage).toBeUndefined()
+    expect(prompted?.providerSession).toEqual({ key: 'session_id', id: 'codex-session-next' })
   })
 
   it('SessionStart clears the cached prompt from a prior session until a new prompt arrives', () => {
@@ -223,10 +230,15 @@ describe('Codex hook normalization', () => {
     )
     const result = _internals.normalizeHookPayload(
       'codex',
-      buildBody({ hook_event_name: 'SessionStart' }),
+      buildBody({ hook_event_name: 'SessionStart', session_id: 'codex-session-fresh' }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.prompt).toBe('')
+    const prompted = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'fresh prompt' }),
+      'production'
+    )
+    expect(result).toBeNull()
+    expect(prompted?.payload.prompt).toBe('fresh prompt')
   })
 })

@@ -13,6 +13,7 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
 import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
+import { hookBodyPaneKey } from './server-status-identity'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
@@ -95,6 +96,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
         trackEmptyPaneKeyHook(hookBody)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
+        const paneKey = hookBodyPaneKey(aliasedBody)
+        const previousStatus = paneKey ? this.state.lastStatusByPaneKey.get(paneKey) : undefined
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
@@ -134,6 +137,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
             this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
           }
+        } else if (paneKey && previousStatus && !this.state.lastStatusByPaneKey.has(paneKey)) {
+          this.clearStatusForSessionStart(paneKey, previousStatus)
         }
         res.writeHead(204)
         res.end()

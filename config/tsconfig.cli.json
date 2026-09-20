@@ -54,6 +54,7 @@
     "../src/main/codex/codex-hook-local-install.ts",
     "../src/main/codex/codex-hook-local-maintenance.ts",
     "../src/main/codex/codex-hook-remote-install.ts",
+    "../src/main/codex/codex-hook-remote-user-trust-moves.ts",
     "../src/main/codex/codex-hook-script.ts",
     "../src/main/codex/codex-hook-service-implementation.ts",
     "../src/main/codex/codex-hook-status.ts",

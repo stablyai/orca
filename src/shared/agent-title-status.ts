@@ -34,6 +34,14 @@ import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
+// Why: Codex permission titles omit the agent name, so the fixed native prefix
+// is the only reliable title-only signal for its waiting state.
+export const CODEX_NATIVE_ACTION_REQUIRED_TITLE_RE = /^\[\s*[!.]\s*\]\s*Action Required\b/i
+
+export function isCodexNativeActionRequiredTitle(title: string): boolean {
+  return CODEX_NATIVE_ACTION_REQUIRED_TITLE_RE.test(title)
+}
+
 /**
  * Strip working-status indicators so stale exit titles stop reporting working.
  */
@@ -196,6 +204,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   const piStateStatus = getPiStateTitleStatus(title)
   if (piStateStatus) {
     return piStateStatus
+  }
+
+  if (isCodexNativeActionRequiredTitle(title)) {
+    return 'permission'
   }
 
   if (title.includes(GEMINI_PERMISSION)) {
