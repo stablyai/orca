@@ -432,9 +432,11 @@ terminal before running the command. This prevents a destructive command from
 silently answering for a different host than intended.
 
 A missing grant produces `runtime_access_not_found` and a nonzero exit. A storage
-failure also exits nonzero; do not treat it as successful revocation. List again
-after resolving the failure. Repeating a successful revoke reports not found.
-If the registry failed to load, both commands report that grants are unknown;
+failure also exits nonzero; do not treat it as successful revocation. Unexpected
+errors return a generic `runtime_error`; details go to host diagnostics when
+tracing is enabled. List again after resolving the failure. Repeating a successful
+revoke reports not found. If the registry failed to load, both commands return
+`runtime_access_unavailable` and report that grants are unknown;
 they do not treat a failed read as an empty list. Repair the underlying storage
 problem and restart the server before trying again. If an older running server
 reports `method_not_found`, update and restart it to use these commands.

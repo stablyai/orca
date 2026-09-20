@@ -26,7 +26,12 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   protected override readonly runtimeAccess: RpcContext['runtimeAccess'] = {
     list: () => {
       if (!this.deviceRegistry || this.deviceRegistry.hasLoadError) {
-        throw new Error('Device registry unavailable or unreadable; grants unknown')
+        throw Object.assign(
+          new Error('Device registry unavailable or unreadable; grants unknown'),
+          {
+            code: 'runtime_access_unavailable'
+          }
+        )
       }
       return this.deviceRegistry
         .listDevices()
@@ -36,8 +41,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     },
     revoke: (deviceId) => {
       if (!this.deviceRegistry || this.deviceRegistry.hasLoadError) {
-        throw new Error(
-          'Device registry unavailable or unreadable; grants unknown, revocation not confirmed'
+        throw Object.assign(
+          new Error(
+            'Device registry unavailable or unreadable; grants unknown, revocation not confirmed'
+          ),
+          { code: 'runtime_access_unavailable' }
         )
       }
       return this.revokeRuntimeAccess(deviceId)

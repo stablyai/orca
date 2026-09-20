@@ -248,11 +248,14 @@ describe('local runtime access administration', () => {
     const registry = server.getDeviceRegistry()!
     const device = registry.addDevice('Retained', 'runtime')
     vi.spyOn(secureFile, 'writeSecureJsonFile').mockImplementation(() => {
-      throw new Error('fixture disk full')
+      throw new Error('ENOSPC: fixture disk full at /fixture/private/device-registry.json')
     })
     expect(await request('runtimeAccess.revoke', { deviceId: device.deviceId })).toMatchObject({
       ok: false,
-      error: { code: 'runtime_error' }
+      error: {
+        code: 'runtime_error',
+        message: 'Unexpected runtime error.'
+      }
     })
     expect(registry.validateToken(device.token)).not.toBeNull()
   })

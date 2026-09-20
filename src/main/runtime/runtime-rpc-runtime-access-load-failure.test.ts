@@ -46,7 +46,10 @@ describe('runtime access when the registry cannot be loaded', () => {
             })
           ).toMatchObject({
             ok: false,
-            error: { code: 'runtime_error', message: expect.stringContaining('grants unknown') }
+            error: {
+              code: 'runtime_access_unavailable',
+              message: expect.stringContaining('grants unknown')
+            }
           })
         }
         expect(readFileSync(registryPath, 'utf8')).toBe(contents)
