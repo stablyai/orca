@@ -1,5 +1,6 @@
 import { checkBoardsProxyRequest } from '../../shared/azure-devops/boards-proxy-path-policy'
 import {
+  azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
   normalizeAzureDevOpsApiBaseUrl,
   requestAzureDevOpsResponseAtBase
@@ -35,37 +36,50 @@ export async function executeBoardsProxyRequest(
     }
   }
 
-  const configured = getAzureDevOpsAuthConfig().apiBaseUrl
-  if (!configured) {
+  const config = getAzureDevOpsAuthConfig()
+  if (!config.apiBaseUrl) {
     return {
       status: 412,
       body: { message: 'Azure DevOps is not configured for this execution host' }
     }
   }
+  if (!azureDevOpsTokenConfigured(config)) {
+    return {
+      status: 412,
+      body: {
+        message: 'Azure DevOps is not configured for this execution host: no credentials are set'
+      }
+    }
+  }
+
+  const normalized = normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl)
+  try {
+    new URL(normalized)
+  } catch {
+    return {
+      status: 412,
+      body: {
+        message: `Azure DevOps is not configured for this execution host: the base URL "${normalized}" is invalid`
+      }
+    }
+  }
 
   try {
-    // requestAzureDevOpsJsonAtBase collapses every failure to null or a generic
-    // Error; that would make 401/404/429 indistinguishable to the plugin.
-    return await requestAzureDevOpsResponseAtBase(
-      normalizeAzureDevOpsApiBaseUrl(configured),
-      request.path,
-      {
-        ...(request.query ? { searchParams: request.query } : {}),
-        ...(request.method === 'GET'
-          ? {}
-          : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checkBoardsProxyRequest above already narrowed method to GET/POST/PATCH, and this branch excludes GET.
-            { method: request.method as 'POST' | 'PATCH' }),
-        ...(request.body === undefined ? {} : { body: request.body }),
-        ...(request.method === 'PATCH' ? { contentType: 'application/json-patch+json' } : {})
-      }
-    )
-  } catch (error) {
-    // requestAzureDevOpsResponseAtBase has no try/catch of its own: only a
-    // transport failure (network down, timeout) reaches here, never an HTTP
-    // error status, so this is never mistaken for an empty result.
+    return await requestAzureDevOpsResponseAtBase(normalized, request.path, {
+      ...(request.query ? { searchParams: request.query } : {}),
+      ...(request.method === 'POST' || request.method === 'PATCH'
+        ? { method: request.method }
+        : {}),
+      ...(request.body === undefined ? {} : { body: request.body }),
+      ...(request.method === 'PATCH' ? { contentType: 'application/json-patch+json' } : {})
+    })
+  } catch {
+    // requestAzureDevOpsResponseAtBase has no try/catch of its own, so a
+    // rejection here comes from the fetch call (network failure, timeout,
+    // abort); an HTTP error status resolves normally instead of throwing.
     return {
       status: 503,
-      body: { message: error instanceof Error ? error.message : String(error) }
+      body: { message: 'Azure DevOps request failed' }
     }
   }
 }
