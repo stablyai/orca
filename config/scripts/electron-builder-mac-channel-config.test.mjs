@@ -80,7 +80,7 @@ describe('electron-builder mac channel config', () => {
     })
     expect(electronBuilderConfig.publish).toMatchObject({
       repo: 'orca',
-      releaseType: 'release'
+      releaseType: 'draft'
     })
   })
 

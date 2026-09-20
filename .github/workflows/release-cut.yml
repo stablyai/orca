@@ -107,6 +107,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Why: version math recovers unpublished tags; checkout's default
+          # fetch-tags:false hides them, so a patch cut recreates vX.Y.Z and
+          # `git push` overwrites the existing tag.
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -2193,36 +2197,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify release remains draft after artifact upload
-        # Why: the build matrix must never be the actor that exposes a partial
-        # release. If an uploader or GitHub transition flips draft early, fail
-        # this platform leg and leave the diagnostic monitor artifact behind.
-        shell: bash
+        # Why: electron-builder `--publish always` can create a public release
+        # as soon as this platform uploads. Re-draft immediately, then fail, so
+        # /releases/latest never keeps serving a missing Windows exe.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: |
-          set -euo pipefail
-          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
-          # Why: release upload must validate the draft before it is publicly visible.
-          draft="$(jq -e -r --arg tag "$TAG" '
-            map(select(.tag_name == $tag))
-            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
-          ' <<<"$releases_json")" || {
-            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
-            exit 1
-          }
-          if [[ "$draft" != "true" ]]; then
-            echo "::error::Release $TAG was published during the ${{ matrix.platform }} artifact upload."
-            exit 1
-          fi
+        run: node config/scripts/assert-github-release-is-draft.mjs "$TAG"
 
-      # Why post-publish for Linux: electron-builder packs and uploads in a
-      # single `--publish always` invocation, so there is no cheap insertion
-      # point between pack and upload without splitting those steps. Running
-      # verify last still blocks the bad release: the binary is uploaded to the
-      # draft, but a failed matrix job blocks `publish-release` from flipping
-      # the release from draft → published, so users never see it. A human then
-      # deletes the draft and re-cuts.
+      # Why post-pack for Linux: electron-builder packs and uploads in one
+      # `--publish always` invocation. The previous step re-drafts if that
+      # upload flipped the GitHub release public; this telemetry check still
+      # blocks `publish-release` from undrafting a bad binary.
       #
       # Why this guards against: a misconfigured CI run where
       # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
