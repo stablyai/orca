@@ -215,16 +215,22 @@ describe('Back controls in the screens the page serves', () => {
  *
  * This describe is what the rows replace: once they are in `PAGE_SERVED_SCREENS`, `CONTROLS`
  * covers these trees and the cases below become a second reading of the same thing.
+ *
+ * The modules, with their trees derived, for the reason the table above gives per screen: a tree
+ * holds more than one Back, so presence asserted over the tree lets one answer for another.
+ * `src/components` has two, and the review header's could have been renamed into a dismiss with
+ * `CustomKeyModal`'s standing in for it.
  */
-const ARRIVING_TREES = ['src/components', 'src/source-control']
+const ARRIVING_SCREENS = [
+  'src/source-control/MobileSourceControlHeader.tsx',
+  'src/components/MobileDiffReviewHeader.tsx'
+]
+const ARRIVING_TREES = [...new Set(ARRIVING_SCREENS.map(screenTree))]
 const ARRIVING = ARRIVING_TREES.flatMap((tree) => backControlsUnder(tree))
 
 describe('Back controls in the trees a registered route will add', () => {
-  it('finds a control in each of them, so the rules below cannot pass vacuously', () => {
-    // Per tree, as the block above asserts per screen module: a count over the union lets one tree
-    // answer for the other, so `src/source-control` could lose its only Back to a rename and the
-    // rules below would still read `src/components` and pass.
-    expect(ARRIVING_TREES.filter((tree) => backControlsUnder(tree).length === 0)).toEqual([])
+  it('finds a control in each arriving screen, so the rules below cannot pass vacuously', () => {
+    expect(ARRIVING_SCREENS.filter((screen) => backControlsIn(screen).length === 0)).toEqual([])
   })
 
   it('gives every one of them the button role', () => {
