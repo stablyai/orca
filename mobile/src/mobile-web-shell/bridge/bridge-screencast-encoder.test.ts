@@ -44,12 +44,15 @@ describe('the shell encodes a screencast frame the page can decode', () => {
       frameOf(Uint8Array.of(1, 2, 3), { format: 'png', seq: 77, metadata })
     )
     expect(event).toEqual({ b64: expect.any(String), format: 'png', frameSeq: 77, metadata })
+    // `b64` rides on the decoded frame so the page's data URI can reuse it (C6.2); exact, so a
+    // re-encode on either side cannot hide behind a wildcard.
     expect(decodeBridgeScreencastFrame(event)).toEqual({
       opcode: BrowserScreencastOpcode.Frame,
       seq: 77,
       format: 'png',
       metadata,
-      image: Uint8Array.of(1, 2, 3)
+      image: Uint8Array.of(1, 2, 3),
+      b64: 'AQID'
     })
   })
 
