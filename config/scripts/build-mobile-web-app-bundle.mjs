@@ -341,26 +341,39 @@ const isScriptOutput = (path) => path.endsWith('.js')
 /**
  * Every source module one page route reaches, as the builder itself resolves them.
  *
- * One definition of "what a page contains", read from `metafile.inputs` — the modules the route
- * pulls in — rather than from `entryStaticClosure`, which walks emitted chunks and answers what a
- * browser must download. Both entry points are needed: `app/h/_layout.tsx` wraps every route under
- * it, and its imports are part of the page as surely as the route module's.
+ * Both entry points are needed: `app/h/_layout.tsx` wraps every route under it, and its imports are
+ * part of the page as surely as the route module's.
+ */
+export async function mobileWebAppRouteClosure(routeModule) {
+  return await mobileWebAppModuleClosure(['app/h/_layout', routeModule])
+}
+
+/**
+ * The same closure for any entry modules, which a route plus the layout is one case of.
  *
- * `splitting: false` and a per-name output are required for a two-entry build; with the defaults
+ * One definition of "what a page contains", read from `metafile.inputs` — the modules the entries
+ * pull in — rather than from `entryStaticClosure`, which walks emitted chunks and answers what a
+ * browser must download.
+ *
+ * A component a route mounts rather than one the router registers — `MobileBrowserPane` is the
+ * first with a pin of its own — has a closure to certify and no route to name it by. Pass it alone
+ * to read what it reaches on its own, or beside `app/h/_layout` to read what it adds to a page.
+ *
+ * `splitting: false` and a per-name output are required for a multi-entry build; with the defaults
  * esbuild fails on two outputs claiming `dist/entry.js`.
  *
  * Note for anyone comparing this with a parity pin: `c1-page-closure.ts`, and the closures C2.6,
  * C5.2 and C3.2 generate, derive theirs by the C1.6 method inside the mobile suite. The two are
  * not the same computation, and a divergence between them is a finding rather than noise.
  */
-export async function mobileWebAppRouteClosure(routeModule) {
+export async function mobileWebAppModuleClosure(entryModules) {
   const base = mobileWebAppBuildOptions(MOBILE_WEB_PAGE_ROUTES)
   const result = await esbuild.build({
     ...base,
     // Extensionless, so `resolveExtensions` picks the same file the bundle ships: a route with a
     // `.web.tsx` sibling resolves to that one, and naming the `.tsx` path explicitly would measure
     // the native switch no browser ever loads.
-    entryPoints: ['app/h/_layout', routeModule.replace(/\.tsx?$/, '')],
+    entryPoints: entryModules.map((entry) => entry.replace(/\.tsx?$/, '')),
     splitting: false,
     entryNames: '[name]',
     plugins: base.plugins.filter((plugin) => plugin.name !== ROUTE_MANIFEST_PLUGIN_NAME),
