@@ -3,6 +3,7 @@ import { MOBILE_SNAPSHOT_BYTE_BUDGET } from '../../../scrollback-limits'
 import { terminalSnapshotPayloadJsonBytes } from './terminal-snapshot-payload'
 import {
   serializeBudgetedMobileSnapshot,
+  serializeStableMobileRendererSnapshot,
   type MobileSnapshotByteBudget
 } from './terminal-snapshot-publication'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -149,6 +150,25 @@ function exactlyAtRoundOnesBudgetRuntime(): Pick<OrcaRuntimeService, 'serializeT
   }
 }
 
+/**
+ * A runtime no candidate can trim under the raw rule, so the zero-row screen is over it too.
+ *
+ * The same size at every candidate on purpose: what these cases separate is what the loop does
+ * when trimming has run out, and a fixture that shrinks would never reach that state.
+ */
+function alwaysOversizeRuntime(): Pick<OrcaRuntimeService, 'serializeTerminalBuffer'> {
+  return {
+    serializeTerminalBuffer: vi.fn(async () => ({
+      data: 'x'.repeat(MOBILE_SNAPSHOT_BYTE_BUDGET + 1024),
+      cols: COLUMNS,
+      rows: 24,
+      cwd: CWD,
+      source: 'headless' as const,
+      oscLinks: []
+    }))
+  }
+}
+
 describe('the mobile snapshot the page receives', () => {
   it('reproduces the defect: the raw budget lets a screen past the frame cap', async () => {
     const serialized = await serializeBudgetedMobileSnapshot(denseRuntime(), 'pty-1', true)
@@ -222,24 +242,57 @@ describe('the mobile snapshot the page receives', () => {
   })
 
   /**
-   * A budget smaller than the metadata alone, which is a subscriber this host cannot serve.
+   * The zero-row candidate a budget still cannot fit, which is where the loop used to give up.
    *
-   * It walks to zero scrollback and publishes the smallest screen it has rather than an empty one,
-   * with the trim flagged. The payload is still over, and that is the subscriber's own transport to
-   * answer for: C0.3 ends the stream and the page shows its stream-error state. Recorded here so
-   * the behaviour is a decision rather than something read off a stack trace later.
+   * Zero scrollback is not a small screen: a wide colour-dense viewport still carries its 24 live
+   * rows, and the loop published that candidate whatever it measured. A capped subscriber then got
+   * one frame over its cap, ended the stream on `overflow` and painted nothing — the one outcome
+   * worse than a blank terminal, because live output would have repainted a blank one in a
+   * keystroke and there is no recovery from a stream that never opened.
+   *
+   * Ruling 15: publish it with the text emptied and the trim flagged. The stream opens, the page
+   * knows the screen it holds is not the screen the host had, and the next byte of output fixes it.
    */
-  it('bottoms out at zero scrollback rather than refusing, and still says it trimmed', async () => {
+  it('empties the text of a zero-row candidate it cannot fit, rather than posting it over', async () => {
+    const serialized = await serializeBudgetedMobileSnapshot(
+      denseRuntime(),
+      'pty-1',
+      true,
+      budget(4096)
+    )
+    expect(serialized?.scrollbackRows).toBe(0)
+    expect(serialized?.data).toBe('')
+    expect(serialized?.truncatedByByteBudget).toBe(true)
+    expect(publishedPayloadBytes(required(serialized))).toBeLessThanOrEqual(4096)
+  })
+
+  /**
+   * The floor, which is the metadata the frame must carry however little the subscriber allows.
+   *
+   * A budget under it is a subscriber this host cannot serve, and there is nothing further to give
+   * up: the text is already gone. Recorded so the behaviour is a decision rather than something
+   * read off a stack trace, and so "never an over-budget frame" is read with the one exception it
+   * has rather than as a promise the host cannot keep.
+   */
+  it('cannot go below the metadata the frame carries, and keeps the text empty there', async () => {
     const serialized = await serializeBudgetedMobileSnapshot(
       denseRuntime(),
       'pty-1',
       true,
       budget(16)
     )
-    expect(serialized).not.toBeNull()
     expect(serialized?.scrollbackRows).toBe(0)
+    expect(serialized?.data).toBe('')
     expect(serialized?.truncatedByByteBudget).toBe(true)
     expect(publishedPayloadBytes(required(serialized))).toBeGreaterThan(16)
+  })
+
+  it('still sends an unbudgeted subscriber the screen it has always been sent', async () => {
+    // The other half of ruling 15, and the compatibility one: the raw rule keeps its fallback, so
+    // an older page and every socket client get the oversize screen rather than an empty frame.
+    const serialized = await serializeBudgetedMobileSnapshot(alwaysOversizeRuntime(), 'pty-1', true)
+    expect(serialized?.data.length).toBeGreaterThan(MOBILE_SNAPSHOT_BYTE_BUDGET)
+    expect(serialized?.truncatedByByteBudget).toBe(true)
   })
 })
 
@@ -283,5 +336,50 @@ describe('a snapshot that round one accepted at exactly the budget', () => {
     expect(serialized).not.toBeNull()
     expect(publishedPayloadBytes(required(serialized))).toBeLessThanOrEqual(PAGE_BUDGET)
     expect(serialized?.truncatedByByteBudget).toBe(true)
+  })
+})
+
+/**
+ * The other loop, which serves the renderer snapshot and retries when output moved under it.
+ *
+ * Its own case because it is a second copy of the same walk toward zero scrollback, reached by a
+ * different caller, and ruling 15 is a property of the walk rather than of either caller. A stable
+ * sequence on purpose: what is under test is the last candidate, not the retry.
+ */
+function stableRendererRuntime(): Pick<
+  OrcaRuntimeService,
+  'getPtyOutputSequence' | 'serializeRendererTerminalBuffer'
+> {
+  return {
+    getPtyOutputSequence: vi.fn(() => 11),
+    serializeRendererTerminalBuffer: vi.fn(
+      async (_ptyId: string, options?: { scrollbackRows?: number }) => ({
+        data: colourDenseScreen(Math.max(options?.scrollbackRows ?? 0, 24)),
+        cols: COLUMNS,
+        rows: 24,
+        cwd: CWD,
+        source: 'headless' as const,
+        oscLinks: []
+      })
+    )
+  }
+}
+
+describe('the renderer snapshot the page receives', () => {
+  it('empties the text of a zero-row candidate it cannot fit', async () => {
+    const serialized = await serializeStableMobileRendererSnapshot(
+      stableRendererRuntime(),
+      'pty-1',
+      budget(4096)
+    )
+    expect(serialized?.scrollbackRows).toBe(0)
+    expect(serialized?.data).toBe('')
+    expect(serialized?.truncatedByByteBudget).toBe(true)
+    expect(publishedPayloadBytes(required(serialized))).toBeLessThanOrEqual(4096)
+  })
+
+  it('leaves an unbudgeted subscriber its screen', async () => {
+    const serialized = await serializeStableMobileRendererSnapshot(stableRendererRuntime(), 'pty-1')
+    expect(serialized?.data.length).toBeGreaterThan(0)
   })
 })

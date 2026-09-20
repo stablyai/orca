@@ -192,6 +192,30 @@ function overMobileSnapshotBudget(
       ) > budget.bytes
 }
 
+/**
+ * The candidate a trimming loop publishes once it has nothing left to trim.
+ *
+ * Zero scrollback still carries the live rows, so the last candidate can be over a small cap. A
+ * budgeted subscriber gets that frame with its text emptied rather than one byte over (ruling 15):
+ * an open stream repaints on the next output, an `overflow` close does not reopen. A subscriber on
+ * the raw rule keeps the screen it has always been sent. Below the metadata alone there is nothing
+ * further to give up, and the frame goes out empty and still over.
+ */
+function publishedCandidate<T extends SnapshotVariableMeta & { cols: number; rows: number }>(
+  serialized: T,
+  data: string,
+  rows: number,
+  overByteBudget: boolean,
+  budget: MobileSnapshotByteBudget | undefined
+) {
+  return {
+    ...serialized,
+    data: overByteBudget && budget !== undefined ? '' : data,
+    scrollbackRows: rows,
+    truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
+  }
+}
+
 export async function serializeBudgetedMobileSnapshot(
   runtime: TerminalBufferSource,
   ptyId: string,
@@ -221,19 +245,20 @@ export async function serializeBudgetedMobileSnapshot(
     const data = (serialized.scrollbackAnsi ?? '') + serialized.data
     const overByteBudget = overMobileSnapshotBudget(data, serialized, snapshotByteBudget)
     if (!overByteBudget || rows === 0) {
-      return {
-        ...serialized,
-        data,
-        scrollbackRows: rows,
-        truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
-      }
+      return publishedCandidate(serialized, data, rows, overByteBudget, snapshotByteBudget)
     }
   }
   return null
 }
 
+/** Narrowed to what the retry loop reads, so a stable-snapshot case needs no whole runtime. */
+type RendererBufferSource = Pick<
+  OrcaRuntimeService,
+  'getPtyOutputSequence' | 'serializeRendererTerminalBuffer'
+>
+
 export async function serializeStableMobileRendererSnapshot(
-  runtime: OrcaRuntimeService,
+  runtime: RendererBufferSource,
   ptyId: string,
   snapshotByteBudget?: MobileSnapshotByteBudget
 ): Promise<SerializedSnapshot> {
@@ -256,11 +281,13 @@ export async function serializeStableMobileRendererSnapshot(
     }
     const overByteBudget = overMobileSnapshotBudget(serialized.data, serialized, snapshotByteBudget)
     if (!overByteBudget || rows === 0) {
-      return {
-        ...serialized,
-        scrollbackRows: rows,
-        truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
-      }
+      return publishedCandidate(
+        serialized,
+        serialized.data,
+        rows,
+        overByteBudget,
+        snapshotByteBudget
+      )
     }
     candidateIndex += 1
   }
