@@ -1,3 +1,4 @@
+import { afterNativeChatCommandSent } from './native-chat-command-completion'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
@@ -58,9 +59,12 @@ export function useNativeChatPickerCommandDispatch(args: {
         return
       }
       trackPendingSend(
-        agent === 'codex'
-          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-          : sendNativeChatMessage(target.settings, target.ptyId, text)
+        afterNativeChatCommandSent(
+          agent === 'codex'
+            ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
+            : sendNativeChatMessage(target.settings, target.ptyId, text),
+          () => sessionOptionsSurface?.recordOutgoingCommand(text)
+        )
       )
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
       // Why: picker dispatch is a catalog-verified command send; it must leave
@@ -68,7 +72,6 @@ export function useNativeChatPickerCommandDispatch(args: {
       // disarming attachments, or a stale image rides the next prompt.
       emitNativeChatSendClassified({ agent, outcome: 'command' })
       onSlashCommand?.(text)
-      sessionOptionsSurface?.recordOutgoingCommand(text)
       emitNativeChatMessageSent({
         agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'

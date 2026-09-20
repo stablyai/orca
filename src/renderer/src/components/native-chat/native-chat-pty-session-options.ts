@@ -207,7 +207,10 @@ export function createNativeChatPtySessionOptions(
       if (result.changed) {
         publish()
       }
-      if (result.opensAgentPicker) {
+      if (
+        result.opensAgentPicker ||
+        ((args.agent === 'codex' || args.agent === 'claude') && command.trim() === '/resume')
+      ) {
         args.onAgentPicker?.()
       }
     },
