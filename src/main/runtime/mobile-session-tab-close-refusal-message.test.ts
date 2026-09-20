@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import type { RuntimeMobileSessionTabCloseResult } from '../../shared/runtime-session-contracts'
 import { describeMobileSessionTabCloseRefusal } from './mobile-session-tab-close-refusal-message'
 
 const REASONS = [
@@ -20,7 +21,10 @@ it('falls back for a missing reason and for a reason only a newer host knows', (
   const fallback = 'The host declined to close this terminal tab, so the tab was kept open.'
   expect(describeMobileSessionTabCloseRefusal(undefined)).toBe(fallback)
   // Why: remote wire skew — a newer host may answer with a reason this build has no text for.
-  expect(describeMobileSessionTabCloseRefusal('reason-from-the-future' as never)).toBe(fallback)
+  const fromNewerHost: RuntimeMobileSessionTabCloseResult = JSON.parse(
+    '{"closed":true,"refused":true,"refusalReason":"reason-from-the-future"}'
+  )
+  expect(describeMobileSessionTabCloseRefusal(fromNewerHost.refusalReason)).toBe(fallback)
 })
 
 it('avoids the substrings the Sleep-workspace toast reclassifies as an unreachable host', () => {

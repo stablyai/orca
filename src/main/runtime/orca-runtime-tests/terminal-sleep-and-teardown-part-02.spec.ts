@@ -5,6 +5,7 @@ import {
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
+import { refusedMobileSessionTabClose } from '../mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -620,12 +621,9 @@ describe('OrcaRuntimeService', () => {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
     })
-    vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue({
-      closed: true,
-      refused: true,
-      refusalReason: 'stale-terminal',
-      snapshotRepublished: true
-    } as never)
+    vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue(
+      refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
+    )
 
     // Why: this message is what the Sleep-workspace toast and `orca terminal close --all` print.
     await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
