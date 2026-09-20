@@ -75,6 +75,15 @@ orca serve --port 6768 --pairing-address 100.64.1.20 --json
 
 `orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`.
 
+List and revoke runtime pairing grants directly on the server, under the same OS account and user-data directory as Orca:
+
+```bash
+orca runtime-access list --json
+orca runtime-access revoke --device <deviceId> --json
+```
+
+The list includes unused links without exposing credentials. Revoking a grant disconnects everyone sharing it and prevents reconnection after restart. Other grants and mobile pairings remain intact. Remote selectors and forwarded SSH/WSL CLI commands are rejected; run in a host terminal, inside the server's container if applicable.
+
 ## Repos
 
 ```bash

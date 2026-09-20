@@ -67,11 +67,16 @@ export class DeviceRegistry {
   private devices: DeviceEntry[] = []
   /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
   private registryUnreadable = false
+  private loadFailed = false
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
     this.load()
+  }
+
+  get hasLoadError(): boolean {
+    return this.loadFailed
   }
 
   addDevice(
@@ -331,6 +336,7 @@ export class DeviceRegistry {
       }))
       this.registryUnreadable = false
     } catch (error) {
+      this.loadFailed = true
       // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
       // denied would erase every paired device's bearer token, and the write would succeed.
       this.registryUnreadable = isUnreadableError(error)
