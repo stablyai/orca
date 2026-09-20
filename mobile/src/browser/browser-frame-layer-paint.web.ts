@@ -17,9 +17,11 @@ import type { BrowserFrameDisplayHandlers } from './browser-frame-layer-paint'
  * same clobber for the same reason, through `setNativeProps`. The next streamed frame restores the
  * buffering; until then a render can show a frame early.
  *
- * One thing the imperative path never touches: the accessibility `<img>` RN Web renders beside the
- * frame is a prop, not a style, so it keeps the source it mounted with for the life of the pane.
- * That is what a screen reader and the browser's image context menu see.
+ * The accessibility `<img>` RN Web renders beside the frame follows the same rule, because it is a
+ * prop rather than a style: the streaming writes never touch it, and a render from the pane's other
+ * state moves it, since RN Web derives its `src` from the same `source` the background comes from.
+ * So it holds the frame the pane last rendered with, not the one on screen. That is what a screen
+ * reader and the browser's image context menu see.
  */
 function elementOf(node: Image | View | null): HTMLElement | null {
   return node instanceof HTMLElement ? node : null
