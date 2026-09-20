@@ -184,10 +184,11 @@ jobs:
         # Why: re-draft immediately if electron-builder flipped the GitHub
         # release public, then fail. Checking without restoring leaves
         # /releases/latest serving a missing Windows exe.
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-        run: node config/scripts/assert-github-release-is-draft.mjs "$TAG"
+        run: node config/scripts/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
 
       # Why post-publish for macOS: electron-builder packs and uploads in a
       # single `--publish always` invocation, so there is no cheap insertion

@@ -1,5 +1,10 @@
 import { scope } from './document-scope'
 
+// Declared beside the seam that hands it out, and re-exported here because this is where the
+// document's readers have always named it.
+export type { TerminalEngineError } from './document-host-seams'
+import type { TerminalEngineError } from './document-host-seams'
+
 /**
  * The postMessage bridge to the host, and the engine error reporting that rides on it.
  *
@@ -14,13 +19,8 @@ declare global {
 }
 
 export function notify(msg: Record<string, unknown>) {
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify(msg))
-  }
+  scope.postToHost(msg)
 }
-
-/** What a thrown value can be here: an Error-shaped object, a string, or nothing. */
-export type TerminalEngineError = string | null | undefined | { message?: unknown }
 
 export function engineErrorText(err: TerminalEngineError) {
   if (!err) {
@@ -44,15 +44,13 @@ export function chromeVersionText() {
   return match ? 'Chrome ' + match[1] : 'Chrome version unknown'
 }
 
-let nonFatalErrorNotifies = 0
-
 export function reportEngineError(context: string, err: TerminalEngineError, fatal?: unknown) {
   const isFatal = fatal === undefined ? !scope.everReady : !!fatal
   if (!isFatal) {
     // Why: a constructed-but-degraded engine can throw per frame; cap
     // non-fatal notifies so RN isn't flooded. Fatal reports always emit.
-    nonFatalErrorNotifies++
-    if (nonFatalErrorNotifies > 5) {
+    scope.nonFatalErrorNotifies++
+    if (scope.nonFatalErrorNotifies > 5) {
       return
     }
   }
@@ -72,15 +70,24 @@ export function reportEngineError(context: string, err: TerminalEngineError, fat
   })
 }
 
-window.onerror = function (
-  msg: string | (Event & { message?: unknown }),
-  source,
-  line,
-  column,
-  err?: TerminalEngineError
-) {
-  if (window.__engineErrors.length < 20) {
-    window.__engineErrors.push(String(msg))
+export function startHostNotify() {
+  scope.uninstallErrorReporter = scope.installErrorReporter(function (
+    msg: string | (Event & { message?: unknown }),
+    source,
+    line,
+    column,
+    err?: TerminalEngineError
+  ) {
+    if (window.__engineErrors.length < 20) {
+      window.__engineErrors.push(String(msg))
+    }
+    reportEngineError('terminal runtime error', err || msg)
+  })
+}
+
+export function stopHostNotify() {
+  if (scope.uninstallErrorReporter) {
+    scope.uninstallErrorReporter()
+    scope.uninstallErrorReporter = null
   }
-  reportEngineError('terminal runtime error', err || msg)
 }

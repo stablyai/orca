@@ -242,9 +242,16 @@ describe('relay incident live preflight', () => {
     await expect(runIncidentLivePreflight(
       ['--state-file', agedState(235 * 60_000 + 1), '--wave-index', '3'], deps
     )).rejects.toThrow('monitor evidence is incomplete or stale')
-    // The wave index is a strict single-use 0-3 argument.
+    // The last cell of a ten-cell same-cap batch: 10min + 9 * 75min exactly.
     await expect(runIncidentLivePreflight(
-      ['--state-file', stateFile(), '--wave-index', '4'], deps
+      ['--state-file', agedState(685 * 60_000), '--wave-index', '9'], deps
+    )).resolves.toBeUndefined()
+    await expect(runIncidentLivePreflight(
+      ['--state-file', agedState(685 * 60_000 + 1), '--wave-index', '9'], deps
+    )).rejects.toThrow('monitor evidence is incomplete or stale')
+    // The wave index is a strict single-use 0-9 argument.
+    await expect(runIncidentLivePreflight(
+      ['--state-file', stateFile(), '--wave-index', '10'], deps
     )).rejects.toThrow('usage:')
     await expect(runIncidentLivePreflight(
       ['--state-file', stateFile(), '--wave-index', ''], deps

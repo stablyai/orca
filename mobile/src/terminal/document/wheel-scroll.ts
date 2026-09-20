@@ -8,8 +8,6 @@ import {
 } from './normal-buffer-smooth-scroll'
 import { scope } from './document-scope'
 
-scope.wheelAccumDeltaY = 0
-
 export function wheelEventPixelDeltaY(e: WheelEvent) {
   const delta = e.deltaY
   if (typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) {

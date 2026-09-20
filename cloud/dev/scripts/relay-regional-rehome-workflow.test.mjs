@@ -139,9 +139,10 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   // The wrapper validates the override before anything runs, passes it to every
   // cell, seals it into the canary artifact, and prints it in the run summary.
   assert.match(wrapper, /--gate-override-reason "\$\{GATE_OVERRIDE_REASON\}" \\\n {12}--gate-override-confirmation "\$\{GATE_OVERRIDE_CONFIRMATION\}"\)/)
+  // One per cell job in the serial cell_1..cell_10 chain.
   assert.equal(
     wrapper.match(/gate-override-confirmation: \$\{\{ inputs\.gate-override-confirmation \}\}/g).length,
-    4
+    10
   )
   assert.match(wrapper, /Aggregate monitor gate overridden \(break-glass\)/)
   assert.match(wrapper, /ACTOR: \$\{\{ github\.actor \}\}/)
@@ -163,12 +164,12 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   ]) {
     const body = readFileSync(fileURLToPath(new URL(source, import.meta.url)), 'utf8')
     assert.match(body, /WAVE_PREDECESSOR_TIMEOUT_MS = 75 \* 60_000/)
-    assert.match(body, /\^\[0-3\]\$/)
+    assert.match(body, /\^\[0-9\]\$/)
   }
   // Aged-evidence replay via job re-runs is fenced: mutations are
   // single-dispatch, so a failed cell needs a fresh gate and monitor run.
   assert.match(job, /test "\$\{GITHUB_RUN_ATTEMPT\}" = 1/)
-  for (const index of [0, 1, 2, 3]) {
+  for (const index of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     assert.match(wrapper, new RegExp(`wave-index: '${index}'`))
   }
   assert.doesNotMatch(job, /EFFECTIVE_SELECTOR_GENERATION \+ 1\)/)

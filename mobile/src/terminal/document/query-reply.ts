@@ -18,20 +18,16 @@ export type QueryReplyTerminal = {
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
 }
 
-// Written from four places, all of them here, so it is this module's state rather than the
-// document's and stays a local.
-let terminalDataRepliesEnabled = false
-
 export function resetTerminalDataReplyAuthority() {
-  terminalDataRepliesEnabled = false
+  scope.terminalDataRepliesEnabled = false
 }
 
 export function resumeTerminalDataReplyAuthority() {
-  terminalDataRepliesEnabled = true
+  scope.terminalDataRepliesEnabled = true
 }
 
 export function forwardTerminalDataReply(data: string) {
-  if (terminalDataRepliesEnabled) {
+  if (scope.terminalDataRepliesEnabled) {
     notify({ type: 'terminal-data', bytes: data })
   }
 }
@@ -39,7 +35,7 @@ export function forwardTerminalDataReply(data: string) {
 export function enqueueTerminalDataReplyBoundary(gen: number) {
   enqueueWriteBoundary(function () {
     if (gen === scope.terminalGeneration) {
-      terminalDataRepliesEnabled = true
+      scope.terminalDataRepliesEnabled = true
     }
   })
 }

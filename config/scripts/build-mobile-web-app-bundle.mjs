@@ -394,10 +394,13 @@ export async function mobileWebAppRouteClosure(routeModule) {
  * C5.2 and C3.2 generate, derive theirs by the C1.6 method inside the mobile suite. The two are
  * not the same computation, and a divergence between them is a finding rather than noise.
  */
-export async function mobileWebAppModuleClosure(entryModules) {
+export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } = {}) {
   const base = mobileWebAppBuildOptions(MOBILE_WEB_PAGE_ROUTES)
   const result = await esbuild.build({
     ...base,
+    // A census that plants a module to show the walk would report it needs a tree of its own; the
+    // real ones never pass this and keep measuring `mobile/`.
+    ...(absWorkingDir ? { absWorkingDir } : {}),
     // Extensionless, so `resolveExtensions` picks the same file the bundle ships: a route with a
     // `.web.tsx` sibling resolves to that one, and naming the `.tsx` path explicitly would measure
     // the native switch no browser ever loads.

@@ -91,7 +91,9 @@ export async function restorePublishedDesktopReleasesToDraft({
 }
 
 async function main() {
-  const tag = process.argv[2]
+  // Why env TAG: the Windows release-cut matrix uses pwsh, which does not
+  // expand bash-style "$TAG" in argv. The step still exports TAG.
+  const tag = process.argv[2] || process.env.TAG
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
   const restored = await restorePublishedDesktopReleasesToDraft({

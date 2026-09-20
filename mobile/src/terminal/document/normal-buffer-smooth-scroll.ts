@@ -1,6 +1,6 @@
 import { getCellHeight } from './fit-scale'
 import { getTotalScale, updateScrollIndicator } from './viewport-transform'
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 
 export function clampNormalScrollLines(lines: number) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active || lines === 0) {
@@ -77,7 +77,7 @@ export function enqueueNormalBufferScrollDelta(deltaY: number) {
   // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
   // deltas into one xterm row-scroll per frame instead of repainting from
   // the input event stream.
-  scope.normalScrollFrameId = requestAnimationFrame(function () {
+  scope.normalScrollFrameId = scheduleDocumentFrame(function () {
     scope.normalScrollFrameId = null
     const delta = scope.pendingNormalScrollDeltaY
     scope.pendingNormalScrollDeltaY = 0
@@ -99,4 +99,9 @@ export function resetSmoothScrollOffset() {
   }
   scope.smoothScrollOffsetY = 0
   updateScrollIndicator(false)
+}
+
+/** Ruling 21: the smooth-scroll frame, which would otherwise scroll the next mount's buffer. */
+export function stopNormalBufferSmoothScroll() {
+  resetSmoothScrollOffset()
 }

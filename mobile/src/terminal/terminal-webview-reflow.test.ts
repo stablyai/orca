@@ -9,7 +9,11 @@ import { XTERM_HTML } from './terminal-webview-html'
 const reflowSource = await generatedDocumentModule('reflow')
 // Use the assembled document so the test covers what the WebView actually runs.
 const htmlSource = XTERM_HTML
-const handleSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+// The handle is built by the controller both components share, which is where the wiring is read.
+const handleSource = readFileSync(
+  new URL('./use-terminal-webview-controller.ts', import.meta.url),
+  'utf8'
+)
 
 function reflowFnBody(): string {
   const start = reflowSource.indexOf('function reflow(cols, rows) {')
@@ -49,7 +53,8 @@ describe('terminal WebView reflow', () => {
   })
 
   it('does not locally resize hidden WebViews to a one-column grid', () => {
-    expect(htmlSource).toContain('scope.MIN_FIT_COLS = 20;')
+    // Ruling 21: the floor's value is in the scope factory, not in a parse-time write.
+    expect(htmlSource).toContain('MIN_FIT_COLS: 20,')
     expect(htmlSource).toContain('if (cols < scope.MIN_FIT_COLS) {')
     expect(htmlSource).toContain('flog("measure-skip-small-width"')
     expect(htmlSource).toContain('notify({ type: "measure-result", cols: null, rows: null });')
@@ -77,7 +82,9 @@ describe('terminal WebView reflow', () => {
       // between them; if its IIFE-time code threw, the listener below would
       // never bind and reflow messages would silently no-op.
       const reflowAt = XTERM_HTML.indexOf('function reflow(cols, rows) {')
-      const dispatchAt = XTERM_HTML.indexOf('const dispatch = {\n    mode: "idle"')
+      // Ruling 21 moved the dispatcher's latch onto the scope, so the dispatcher is located by
+      // its own first handler rather than by the object it used to declare.
+      const dispatchAt = XTERM_HTML.indexOf('function onDocumentTouchStart(e) {')
       const listenerAt = XTERM_HTML.indexOf('window.addEventListener("message"')
       expect(reflowAt).toBeGreaterThanOrEqual(0)
       expect(dispatchAt).toBeGreaterThan(reflowAt)

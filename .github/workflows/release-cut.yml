@@ -2223,10 +2223,13 @@ jobs:
         # Why: electron-builder `--publish always` can create a public release
         # as soon as this platform uploads. Re-draft immediately, then fail, so
         # /releases/latest never keeps serving a missing Windows exe.
+        # Why bash: the Windows matrix defaults to pwsh, which does not expand
+        # "$TAG" into argv.
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/assert-github-release-is-draft.mjs "$TAG"
+        run: node config/scripts/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
 
       # Why post-pack for Linux: electron-builder packs and uploads in one
       # `--publish always` invocation. The previous step re-drafts if that

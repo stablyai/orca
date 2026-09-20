@@ -24,6 +24,12 @@ import { importTypeScriptModule } from './import-typescript-module.mjs'
 const mobileRoot = path.resolve(import.meta.dirname, '..')
 const entry = path.join(mobileRoot, 'src', 'terminal', 'terminal-webview-html.ts')
 const enginePath = path.join(mobileRoot, 'src', 'terminal', 'terminal-webview-engine.generated.ts')
+const engineCssPath = path.join(
+  mobileRoot,
+  'src',
+  'terminal',
+  'terminal-webview-engine-css.generated.ts'
+)
 
 export const TERMINAL_DOCUMENT_FIXTURE_PATH = path.join(
   mobileRoot,
@@ -62,9 +68,10 @@ export function terminalDocumentFixture(document, engineJs, engineCss) {
 }
 
 async function main() {
-  const [{ XTERM_HTML }, { XTERM_ENGINE_JS, XTERM_ENGINE_CSS }] = await Promise.all([
+  const [{ XTERM_HTML }, { XTERM_ENGINE_JS }, { XTERM_ENGINE_CSS }] = await Promise.all([
     importTypeScriptModule(entry),
-    importTypeScriptModule(enginePath)
+    importTypeScriptModule(enginePath),
+    importTypeScriptModule(engineCssPath)
   ])
   const fixture = terminalDocumentFixture(XTERM_HTML, XTERM_ENGINE_JS, XTERM_ENGINE_CSS)
   await writeFile(TERMINAL_DOCUMENT_FIXTURE_PATH, fixture)

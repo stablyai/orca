@@ -1,4 +1,4 @@
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import { applyFitScale } from './fit-scale'
 import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
@@ -49,7 +49,12 @@ export function measureFitDimensions(containerHeightPx: unknown, retriesLeft?: n
   }
   if (notReady || cellWidth <= 0 || cellHeight <= 0) {
     if (retriesLeft > 0) {
-      requestAnimationFrame(function () {
+      // Ruling 21: a retry that outlives its mount would answer the next mount's measure.
+      const gen = scope.terminalGeneration
+      scheduleDocumentFrame(function () {
+        if (gen !== scope.terminalGeneration) {
+          return
+        }
         measureFitDimensions(containerHeightPx, retriesLeft - 1)
       })
       return

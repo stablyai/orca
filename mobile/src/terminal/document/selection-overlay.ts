@@ -139,3 +139,8 @@ export function handleDragMove(handle: string, clientX: number, clientY: number)
 }
 
 // Latching document-level touch dispatcher: see tap-dispatch.ts.
+
+/** Ruling 21: the edge-scroll interval, which outlives the selection that started it. */
+export function stopSelectionOverlay() {
+  stopEdgeScroll()
+}

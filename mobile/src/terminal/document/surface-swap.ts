@@ -9,31 +9,24 @@ export type TerminalSurfaceSwap = {
   nextSurface: HTMLElement
 }
 
-// Why: phone-fit startup can issue several init() calls before xterm finishes
-// replaying. Track the last painted surface separately from its replacement.
-let committedTerm: TerminalDocumentTerminal | null = null
-let committedSurface = scope.surface
-scope.pendingTerm = null
-let pendingSurface: HTMLElement | null = null
-
 export function beginTerminalSurfaceSwap() {
   // Why: a superseded hidden replacement must not remain between the last
   // painted surface and the newest one, or the newest commits below the viewport.
-  if (pendingSurface) {
+  if (scope.pendingSurface) {
     try {
-      pendingSurface.remove()
+      scope.pendingSurface.remove()
     } catch {}
     if (scope.pendingTerm) {
       try {
         scope.pendingTerm.dispose()
       } catch {}
     }
-    pendingSurface = null
+    scope.pendingSurface = null
     scope.pendingTerm = null
   }
   const swap = {
-    oldTerm: committedTerm,
-    oldSurface: committedSurface,
+    oldTerm: scope.committedTerm,
+    oldSurface: scope.committedSurface,
     nextSurface: document.createElement('div')
   }
   disposeTermObservers()
@@ -44,7 +37,7 @@ export function beginTerminalSurfaceSwap() {
   swap.nextSurface.style.top = '0'
   document.getElementById('terminal-container')!.appendChild(swap.nextSurface)
   scope.surface = swap.nextSurface
-  pendingSurface = swap.nextSurface
+  scope.pendingSurface = swap.nextSurface
   attachSurfaceEventHandlers(scope.surface)
   swap.oldSurface!.removeAttribute('id')
   return swap
@@ -62,8 +55,15 @@ export function commitTerminalSurfaceSwap(
   if (swap.oldTerm) {
     swap.oldTerm.dispose()
   }
-  committedTerm = nextTerm
-  committedSurface = swap.nextSurface
+  scope.committedTerm = nextTerm
+  scope.committedSurface = swap.nextSurface
   scope.pendingTerm = null
-  pendingSurface = null
+  scope.pendingSurface = null
+}
+
+// Why: phone-fit startup can issue several init() calls before xterm finishes replaying, so the
+// last painted surface is tracked apart from its replacement — on the scope (ruling 21), because
+// the page mounts this module more than once and a second mount must not inherit the first's.
+export function startSurfaceSwap() {
+  scope.committedSurface = scope.surface
 }

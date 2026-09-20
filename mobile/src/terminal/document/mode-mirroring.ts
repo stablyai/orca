@@ -37,10 +37,3 @@ export function emitModesIfChanged() {
     })
   }
 }
-scope.lastEmittedModes = {
-  bracketedPasteMode: false,
-  altScreen: false,
-  mouseTrackingMode: 'none',
-  sgrMouseMode: false,
-  sgrMousePixelsMode: false
-}

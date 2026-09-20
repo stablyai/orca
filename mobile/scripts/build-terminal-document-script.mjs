@@ -3,8 +3,12 @@ import path from 'node:path'
 import * as esbuild from 'esbuild'
 import { importTypeScriptModule } from './import-typescript-module.mjs'
 import {
+  TERMINAL_DOCUMENT_HOST_SEAMS_MODULE,
   TERMINAL_DOCUMENT_MODULE_ORDER,
-  TERMINAL_DOCUMENT_SCOPE_MODULE
+  TERMINAL_DOCUMENT_RESET_CALL,
+  TERMINAL_DOCUMENT_SCOPE_MODULE,
+  terminalDocumentStartFunctionName,
+  terminalDocumentStopFunctionName
 } from './terminal-document-module-order.mjs'
 
 /**
@@ -159,18 +163,59 @@ export const TERMINAL_DOCUMENT_SCRIPT_PATH = path.join(
 )
 
 /**
+ * The start functions the emitted document calls, in module order (ruling 20).
+ *
+ * Presence is read from the source rather than listed here: a module that has no top-level effect
+ * exports no start function, and one that grows an effect is reached the moment it does. The
+ * declaration is matched on its own line because that is how esbuild's TypeScript prints it and
+ * how every module in this directory writes it.
+ */
+export async function terminalDocumentStartCalls(moduleNames) {
+  return await declaredFunctions(moduleNames, terminalDocumentStartFunctionName)
+}
+
+/** The stop functions, in module order. The page runs them in reverse; the WebView never stops. */
+export async function terminalDocumentStopCalls(moduleNames) {
+  return await declaredFunctions(moduleNames, terminalDocumentStopFunctionName)
+}
+
+async function declaredFunctions(moduleNames, nameFor) {
+  const found = []
+  for (const name of moduleNames) {
+    const source = await readFile(path.join(documentDirectory, `${name}.ts`), 'utf8')
+    const declared = nameFor(name)
+    if (new RegExp(`^export function ${declared}\\(\\) \\{$`, 'm').test(source)) {
+      found.push(declared)
+    }
+  }
+  return found
+}
+
+/**
  * The document's whole script: every module in the order the document had, inside the one function
- * scope it has always been.
+ * scope it has always been, and then the one call sequence that starts them.
  */
 export async function buildTerminalDocumentScript() {
   const emitted = []
   // The scope object goes first: every module below reads it, and the document is one function
   // scope, so it has to exist before any of them run. It is the only part of the emitted script
-  // the hand-written document did not have.
-  for (const name of [TERMINAL_DOCUMENT_SCOPE_MODULE, ...TERMINAL_DOCUMENT_MODULE_ORDER]) {
+  // the hand-written document did not have, and the host seams come ahead of it because its
+  // defaults are those six functions.
+  const order = [
+    TERMINAL_DOCUMENT_HOST_SEAMS_MODULE,
+    TERMINAL_DOCUMENT_SCOPE_MODULE,
+    ...TERMINAL_DOCUMENT_MODULE_ORDER
+  ]
+  for (const name of order) {
     emitted.push(await emitTerminalDocumentModule(path.join(documentDirectory, `${name}.ts`)))
   }
-  return `(function() {\n${emitted.join('\n')}\n})();`
+  // Rulings 20 and 21: the modules above only declare. The scope's reset comes first, so the
+  // state every module reads is the state a fresh parse has; then every element read, listener
+  // and reporter install runs, once here and per mount on the page, in the order both hosts share.
+  const calls = [TERMINAL_DOCUMENT_RESET_CALL, ...(await terminalDocumentStartCalls(order))].map(
+    (name) => `${INDENT}${name}();`
+  )
+  return `(function() {\n${emitted.join('\n')}\n${calls.join('\n')}\n})();`
 }
 
 async function main() {
