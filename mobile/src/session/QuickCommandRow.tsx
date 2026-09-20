@@ -75,12 +75,14 @@ export function QuickCommandRow({
       }
       setFeedback({ body, status: 'copied' })
     } catch {
-      // The row says so on its own control rather than in a toast; the buzz is the part a thumb
-      // resting on the button it just pressed can notice without looking.
-      triggerError()
+      // The guard first: a row unmounted before the refusal arrives has nothing to explain a buzz
+      // with, and the feedback it would set is read by a component that is gone.
       if (!mountedRef.current) {
         return
       }
+      // The row says so on its own control rather than in a toast; the buzz is the part a thumb
+      // resting on the button it just pressed can notice without looking.
+      triggerError()
       setFeedback({ body, status: 'failed' })
     }
     if (copyResetTimerRef.current) {

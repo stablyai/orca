@@ -87,18 +87,20 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     return button
   }
 
+  function rowProps() {
+    return {
+      command: COMMAND,
+      first: true,
+      onLaunch: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      disabled: false
+    }
+  }
+
   async function mountAndCopy(): Promise<void> {
     await act(async () => {
-      renderer = create(
-        createElement(QuickCommandRow, {
-          command: COMMAND,
-          first: true,
-          onLaunch: vi.fn(),
-          onEdit: vi.fn(),
-          onDelete: vi.fn(),
-          disabled: false
-        })
-      )
+      renderer = create(createElement(QuickCommandRow, rowProps()))
     })
     await act(async () => {
       copyButton().props.onPress()
@@ -110,6 +112,30 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     await mountAndCopy()
     expect(copyButton().props.accessibilityLabel).toBe("Couldn't copy")
     expect(haptics.notificationAsync).toHaveBeenCalledWith('error')
+  })
+
+  it('emits nothing at all when the row is gone before the refusal arrives', async () => {
+    // A copy pressed on a row that then scrolls out of the list, or a sheet closed over it. The
+    // rejection still arrives, and a buzz with no row to explain it is feedback for nothing.
+    let refuse: ((error: Error) => void) | undefined
+    clipboard.setStringAsync.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          refuse = reject
+        })
+    )
+    await act(async () => {
+      renderer = create(createElement(QuickCommandRow, rowProps()))
+    })
+    await act(async () => {
+      copyButton().props.onPress()
+    })
+    act(() => renderer?.unmount())
+    renderer = null
+    await act(async () => {
+      refuse?.(new Error('pasteboard refused'))
+    })
+    expect(haptics.notificationAsync).not.toHaveBeenCalled()
   })
 
   it('shows the copied label and no error buzz when the write lands', async () => {
