@@ -19,11 +19,17 @@ import { createNativeMediaVerbServer, type NativeMediaFile } from './native-medi
 
 const CACHE = 'file:///cache'
 
+/** Every handle the read path opened, and whether it was closed. A file handle a shell leaks is
+ *  invisible on a fake and a file descriptor on a phone. */
+const handles: { closed: boolean }[] = []
+
 function fakeFile(bytes: Uint8Array): NativeMediaFile {
   return {
     size: bytes.byteLength,
     open: () => {
       let cursor = 0
+      const ledger = { closed: false }
+      handles.push(ledger)
       return {
         get offset() {
           return cursor
@@ -36,7 +42,9 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
           cursor += slice.byteLength
           return slice
         },
-        close: () => {}
+        close: () => {
+          ledger.closed = true
+        }
       }
     }
   }
@@ -100,6 +108,7 @@ function refusalOf(error: unknown): string | null {
 }
 
 beforeEach(() => {
+  handles.length = 0
   vi.restoreAllMocks()
 })
 
@@ -163,6 +172,51 @@ describe('picking', () => {
       width: 2,
       height: 2
     })
+  })
+
+  it('strips the data-url prefix the pasteboard puts in front of its base64', async () => {
+    // `getImageAsync` answers `data:image/png;base64,...`, which is what an `<Image>` source wants
+    // and not what a file wants. Staged unstripped, every byte of the file is shifted by the
+    // prefix and the page decodes a corrupt image with no error anywhere.
+    const probe = harness({
+      readClipboardImage: () =>
+        Promise.resolve({ data: `data:image/png;base64,${btoa('pasted-bytes')}` })
+    })
+    await probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
+    expect(probe.written).toEqual([{ uri: `${CACHE}/staged-0.png`, base64: btoa('pasted-bytes') }])
+  })
+
+  it('names a picker that reported no type, rather than answering an empty mime', async () => {
+    // An empty string is not a mime the result schema takes, so the alternative to this floor is
+    // `native_verb_result` — a shell bug's code for a document picker doing what it may do.
+    const probe = harness({
+      launchFiles: () => Promise.resolve({ canceled: false, assets: [{ uri: `${CACHE}/doc.pdf` }] })
+    })
+    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(3))
+    const result = mediaPickResultSchema.parse(
+      await probe.serve('native.media.pick', { source: 'files', multiple: false })
+    )
+    expect(result.items[0]).toMatchObject({ mime: 'application/octet-stream', byteLength: 3 })
+  })
+
+  it('reads the cancel off the flag, not off an absent asset list', async () => {
+    // Both pickers answer `assets: null` when they answer `canceled: true` today, so a handler
+    // keyed on the list alone passes every fixture in this file. The flag is the contract; a
+    // picker version that started sending the half-selected list with it would otherwise stage it.
+    for (const source of ['library', 'files'] as const) {
+      const probe = harness({
+        launchLibrary: () =>
+          Promise.resolve({ canceled: true, assets: [{ uri: `${CACHE}/lib.png` }] }),
+        launchFiles: () =>
+          Promise.resolve({ canceled: true, assets: [{ uri: `${CACHE}/doc.pdf` }] })
+      })
+      probe.files.set(`${CACHE}/lib.png`, bytesOf(2))
+      probe.files.set(`${CACHE}/doc.pdf`, bytesOf(2))
+      await expect(probe.serve('native.media.pick', { source, multiple: true })).resolves.toEqual({
+        items: []
+      })
+      expect(probe.registry.liveCount(), source).toBe(0)
+    }
   })
 
   it('answers no items for an empty pasteboard', async () => {
@@ -235,6 +289,44 @@ describe('reading chunks', () => {
     expect(bytes.length).toBe(16)
     expect(chunk.eof).toBe(false)
     expect([...bytes].map((char) => char.codePointAt(0))).toEqual([...source.subarray(400, 416)])
+  })
+
+  it('closes the file handle it opened, on the way out and on the way through a throw', async () => {
+    const { probe, handle } = await staged(64)
+    await probe.serve('native.media.read', { handle, offset: 0, length: 16 })
+    expect(handles).toHaveLength(1)
+    expect(handles[0]?.closed).toBe(true)
+
+    const failing = harness({
+      openFile: () => ({
+        size: 64,
+        open: () => {
+          const ledger = { closed: false }
+          handles.push(ledger)
+          return {
+            offset: 0,
+            readBytes: (): Uint8Array => {
+              throw new Error('the device stopped reading')
+            },
+            close: () => {
+              ledger.closed = true
+            }
+          }
+        }
+      })
+    })
+    failing.files.set(`${CACHE}/lib.png`, bytesOf(64))
+    const picked = mediaPickResultSchema.parse(
+      await failing.serve('native.media.pick', { source: 'library', multiple: false })
+    )
+    await expect(
+      failing.serve('native.media.read', {
+        handle: picked.items[0]?.handle ?? '',
+        offset: 0,
+        length: 16
+      })
+    ).rejects.toThrow(/stopped reading/)
+    expect(handles.at(-1)?.closed).toBe(true)
   })
 
   it('refuses a read for a handle the page released', async () => {
