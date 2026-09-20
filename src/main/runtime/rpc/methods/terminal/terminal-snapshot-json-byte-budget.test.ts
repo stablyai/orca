@@ -78,6 +78,14 @@ function budget(bytes: number): MobileSnapshotByteBudget {
   return { bytes, streamId: STREAM_ID, frame: { ...PUBLICATION } }
 }
 
+/** Narrowed rather than asserted: a fixture that serialized nothing is a broken case, not a null. */
+function required<T>(value: T | null): T {
+  if (value === null) {
+    throw new Error('the fixture serialized nothing')
+  }
+  return value
+}
+
 /** The payload as the host will publish it, measured the way the host measures it. */
 function publishedPayloadBytes(serialized: NonNullable<SerializedSnapshot>): number {
   return terminalSnapshotPayloadJsonBytes(
@@ -149,9 +157,7 @@ describe('the mobile snapshot the page receives', () => {
     // Under the budget the desktop applies, which is measured on the text.
     expect(Buffer.byteLength(data, 'utf8')).toBeLessThanOrEqual(MOBILE_SNAPSHOT_BYTE_BUDGET)
     // And over the cap the bridge applies, which is measured on the whole published payload.
-    expect(publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)).toBeGreaterThan(
-      PAGE_BUDGET
-    )
+    expect(publishedPayloadBytes(required(serialized))).toBeGreaterThan(PAGE_BUDGET)
   })
 
   /**
@@ -170,9 +176,7 @@ describe('the mobile snapshot the page receives', () => {
       budget(PAGE_BUDGET)
     )
     expect(serialized).not.toBeNull()
-    expect(
-      publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)
-    ).toBeLessThanOrEqual(PAGE_BUDGET)
+    expect(publishedPayloadBytes(required(serialized))).toBeLessThanOrEqual(PAGE_BUDGET)
   })
 
   /**
@@ -192,12 +196,8 @@ describe('the mobile snapshot the page receives', () => {
         frame: { ...PUBLICATION, reason: 'a-reason-of-some-length', requestId: 999_999_999 }
       })
     ])
-    expect(publishedPayloadBytes(plain as NonNullable<SerializedSnapshot>)).toBeLessThanOrEqual(
-      PAGE_BUDGET
-    )
-    expect(
-      publishedPayloadBytes(withRequestId as NonNullable<SerializedSnapshot>)
-    ).toBeLessThanOrEqual(PAGE_BUDGET)
+    expect(publishedPayloadBytes(required(plain))).toBeLessThanOrEqual(PAGE_BUDGET)
+    expect(publishedPayloadBytes(required(withRequestId))).toBeLessThanOrEqual(PAGE_BUDGET)
   })
 
   it('says it trimmed, so the screen can tell a short scrollback from a whole one', async () => {
@@ -239,7 +239,7 @@ describe('the mobile snapshot the page receives', () => {
     expect(serialized).not.toBeNull()
     expect(serialized?.scrollbackRows).toBe(0)
     expect(serialized?.truncatedByByteBudget).toBe(true)
-    expect(publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)).toBeGreaterThan(16)
+    expect(publishedPayloadBytes(required(serialized))).toBeGreaterThan(16)
   })
 })
 
@@ -252,10 +252,9 @@ describe('a snapshot that round one accepted at exactly the budget', () => {
    */
   it('publishes a payload over the budget when nothing trims it', async () => {
     const runtime = exactlyAtRoundOnesBudgetRuntime()
-    const untrimmed = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
-    if (untrimmed === null) {
-      throw new Error('the fixture serialized nothing')
-    }
+    const untrimmed = required(
+      await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    )
     const published = terminalSnapshotPayloadJsonBytes(
       {
         ...PUBLICATION,
@@ -282,9 +281,7 @@ describe('a snapshot that round one accepted at exactly the budget', () => {
       budget(PAGE_BUDGET)
     )
     expect(serialized).not.toBeNull()
-    expect(
-      publishedPayloadBytes(serialized as NonNullable<SerializedSnapshot>)
-    ).toBeLessThanOrEqual(PAGE_BUDGET)
+    expect(publishedPayloadBytes(required(serialized))).toBeLessThanOrEqual(PAGE_BUDGET)
     expect(serialized?.truncatedByByteBudget).toBe(true)
   })
 })
