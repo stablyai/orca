@@ -47,7 +47,16 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
       if (current?.status !== 'ready') {
         return
       }
-      await clipboard.writeText(current.localContent)
+      // Caught here because the only caller is `void copyMarkdownLocalContent(...)`: the seam
+      // rejects when the pasteboard refused the text, and an uncaught rejection would leave
+      // "Copied" as the last word on a copy that did not happen.
+      try {
+        await clipboard.writeText(current.localContent)
+      } catch {
+        triggerError()
+        showToast("Couldn't copy", 1500)
+        return
+      }
       triggerSuccess()
       showToast('Copied')
     },

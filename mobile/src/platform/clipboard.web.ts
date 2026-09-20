@@ -43,6 +43,9 @@ export function useClipboardWriter(): ClipboardWriter {
  * reason `hasStringAsync` exists. So it answers what this side actually knows: a shell that granted
  * the read verb may have text, and no shell has an image. The paste button is enabled on a maybe
  * and the read is what settles it, which is the same order a phone runs when the probe throws.
+ *
+ * The read grant specifically, not both: a route granted only `native.clipboard.read` can paste,
+ * and answering on the pair would tell it its clipboard is empty.
  */
 export function useClipboardReader(): ClipboardReader {
   const verbs = useNativeVerbs()
@@ -51,7 +54,8 @@ export function useClipboardReader(): ClipboardReader {
     () => ({
       readText: async () => await verbs.readClipboardText(),
       readImage: async () => await Promise.resolve(null),
-      contents: async () => await Promise.resolve({ text: verbs.granted, image: false })
+      contents: async () =>
+        await Promise.resolve({ text: verbs.canReadClipboardText, image: false })
     }),
     [verbs]
   )

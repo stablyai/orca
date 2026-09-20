@@ -62,9 +62,11 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-// Refreshed by C7.2: five clipboard hooks joined the expanded route — a writer in the diff-note,
-// Markdown and selection actions, a reader in the selection and attachment probes and in the
-// terminal's paste — and the copy-path sheet gained the failure toast the other two copies had.
+// Refreshed by C7.2: five clipboard hooks joined the expanded route, which is the whole of the +5 —
+// a writer in the diff-note, Markdown and selection actions, a reader in the selection actions and
+// the attachment probe. The screen's other four clipboard sites (the terminal's paste, the sheets,
+// the quick-command row, the diff-review send) sit outside the walk from `SessionScreen` and so do
+// not move this pin. The copy-path sheet also gained the failure toast the other two copies had.
 const HEAD_MAIN_HOOK_SHA256 = '6d309ebdf13ecf21e4b42fb29de9db586a3c9835ead43015a5261b67bf18b8f6'
 const HEAD_HOOK_BINDING_SHA256 = '9041e8a74efdacc6099933bac11fb624aff46c99648746cf5504bf320ec431c5'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -81,7 +83,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // byteLength }` cast: the preview reader checks the content and salvages the flag, so `readMarkdownTab`
 // reads `fallback.value` directly. The dictation-mode refresh is main's own body again — it forwards
 // whatever mode the reply carried, so an absent one leaves the mic as inert as main left it.
-const HEAD_CALLBACK_BODY_SHA256 = 'aabe79d84ea7d34ec8284f9093c72b6058ca368b836a4e2ac9bd4d8ac3c39e1d'
+const HEAD_CALLBACK_BODY_SHA256 = 'a5cad68712a53a2d5fb5514ecd391adb5bc7621d3542ac895ec65a383ac1810f'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -109,9 +111,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
 // first, then `worktree.activate` twice, `session.tabs.createTerminal` and
 // `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
-// spelled at the call site.
+// spelled at the call site. One literal more in C7.2: the Markdown copy action's "Couldn't copy",
+// the toast the other copy paths already showed when a write was refused.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '4aa2f809329f0a432ff6a76481d28c7dbdacdea6152e96cdc0cd1776396a2681'
+  'ce4c68956cec3b49aaf785e99bc2d7efd3eafeb4fdac6ce116cd854546c045f4'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
@@ -549,7 +552,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(533)
+    expect(strings).toHaveLength(534)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

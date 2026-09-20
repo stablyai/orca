@@ -162,4 +162,27 @@ describe('reading the clipboard from inside the shell', () => {
     const reader = await mountReader(pair)
     await expect(reader.contents()).resolves.toEqual({ text: false, image: false })
   })
+
+  /**
+   * The read grant on its own is enough to paste, so it is the grant this answers on.
+   *
+   * Asking whether both clipboard verbs are granted is the right question for a screen that copies
+   * and pastes and the wrong one here: a route granted only the read would have been told its
+   * clipboard was empty, and its paste button would never enable.
+   */
+  it('reports text as possible on a route granted the read but not the write', async () => {
+    const pair = createFakeBridgePortPair({
+      routeGrants: ['navigate', 'storage', 'native.clipboard.read']
+    })
+    const reader = await mountReader(pair)
+    await expect(reader.contents()).resolves.toEqual({ text: true, image: false })
+    // And the write still refuses, so the pair really is asymmetric rather than both granted.
+    const writer = held.writer
+    if (writer === null) {
+      throw new Error('nothing mounted')
+    }
+    const written = writer.writeText('x').catch((error: unknown) => error)
+    await pair.flush()
+    expect(String(await written)).toMatch(/did not grant/)
+  })
 })
