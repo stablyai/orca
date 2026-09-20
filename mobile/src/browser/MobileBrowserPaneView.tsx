@@ -13,11 +13,11 @@ import {
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
-import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+import { MobileAccessoryKeyBar } from '../components/keyboard-accessory/MobileAccessoryKeyBar'
 import {
-  MobileBrowserPointerModifiers,
+  buildBrowserKeyboardDescriptors,
   type BrowserPointerModifier
-} from './MobileBrowserPointerModifiers'
+} from './browser-keyboard-descriptors'
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 import { buttonColor, type FrameLayer } from './mobile-browser-frame-state'
@@ -285,14 +285,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        <MobileBrowserPointerModifiers
+        <MobileAccessoryKeyBar
           disabled={controlsDisabled}
-          selectedModifiers={pointerModifiers}
-          onToggle={togglePointerModifier}
-        />
-        <MobileBrowserKeyRow
-          disabled={controlsDisabled}
-          onKeypress={(key) => void sendKeypress(key)}
+          keys={buildBrowserKeyboardDescriptors({
+            selectedModifiers: pointerModifiers,
+            onToggleModifier: togglePointerModifier,
+            onKeypress: (key) => void sendKeypress(key)
+          })}
         />
         <View style={styles.inputRow}>
           <TextInput

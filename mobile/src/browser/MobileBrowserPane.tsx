@@ -7,7 +7,7 @@ import type {
   BrowserScreencastFrameMetadata
 } from '../transport/browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserPointerModifier } from './browser-keyboard-descriptors'
 import {
   getInitialMobileBrowserViewMode,
   saveMobileBrowserViewMode

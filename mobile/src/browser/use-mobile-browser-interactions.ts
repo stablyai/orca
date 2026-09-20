@@ -19,7 +19,7 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserPointerModifier } from './browser-keyboard-descriptors'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 
