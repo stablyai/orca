@@ -4,7 +4,8 @@ import type { DiscoveredPlugin } from './plugin-discovery'
 
 function plugin(pluginKey: string, sourceIds: string[]): DiscoveredPlugin {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the
-  // registry reads only pluginKey and contributes.taskSources from a discovered plugin.
+  // registry reads only pluginKey, contributes.taskSources, and the error key
+  // (via isInvalidDiscoveredPlugin) from a discovered plugin.
   return {
     pluginKey,
     rootDir: `/plugins/${pluginKey}`,

@@ -315,4 +315,26 @@ describe('azureDevOps.boardsRequest', () => {
 
     expect(outcome).toMatchObject({ ok: true, value: { status: 200, body: { count: 1 } } })
   })
+
+  it('records the HTTP method and path in the audit summary, not a content-free entry', async () => {
+    const services = createServices()
+    services.azureDevOpsBoardsRequest = vi
+      .fn()
+      .mockResolvedValue({ status: 200, body: { count: 1 } })
+    const record = vi.fn().mockResolvedValue(undefined)
+
+    await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsRequest',
+      params: { method: 'PATCH', path: '/_apis/wit/workitems/42' },
+      viaPanel: false,
+      grantedCapabilities: ['azure-devops:boards'],
+      services,
+      audit: { record }
+    })
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: 'PATCH /_apis/wit/workitems/42' })
+    )
+  })
 })

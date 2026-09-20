@@ -53,13 +53,17 @@ export async function executeBoardsProxyRequest(
   }
 
   const normalized = normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl)
+  let scheme: string
   try {
-    new URL(normalized)
+    scheme = new URL(normalized).protocol
   } catch {
+    scheme = ''
+  }
+  if (scheme !== 'https:' && scheme !== 'http:') {
     return {
       status: 412,
       body: {
-        message: `Azure DevOps is not configured for this execution host: the base URL "${normalized}" is invalid`
+        message: 'Azure DevOps is not configured for this execution host: the base URL is invalid'
       }
     }
   }

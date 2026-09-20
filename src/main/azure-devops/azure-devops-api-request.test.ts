@@ -166,6 +166,13 @@ describe('non-GET requests', () => {
       'Content-Type': 'application/json-patch+json'
     })
     expect(calls[1].url).toContain('api-version=7.1-preview')
+    // The retry must still carry the original method and payload, not a bare
+    // GET-shaped follow-up that happens to hit the right URL.
+    expect(calls[1].init.method).toBe('PATCH')
+    expect(calls[1].init.body).toBe(calls[0].init.body)
+    expect(calls[1].init.body).toBe(
+      JSON.stringify([{ op: 'add', path: '/fields/System.Title', value: 'New' }])
+    )
   })
 })
 

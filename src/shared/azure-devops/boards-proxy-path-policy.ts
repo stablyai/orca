@@ -56,19 +56,24 @@ function checkPathShape(candidate: string): BoardsProxyRejection | null {
   return null
 }
 
-function lastSegment(path: string): string {
-  const segments = path.split('/').filter((segment) => segment.length > 0)
-  return segments.at(-1) ?? ''
+function segments(path: string): string[] {
+  return path.split('/').filter((segment) => segment.length > 0)
 }
 
 export function checkBoardsProxyRequest(input: {
   method: string
   path: string
   query?: Record<string, string>
+  body?: unknown
 }): BoardsProxyRejection | null {
   const method = input.method
   if (!isProxyMethod(method)) {
     return { code: 'forbidden', message: `method ${method} is not permitted` }
+  }
+  // fetch() rejects synchronously when a GET carries a body, which would
+  // otherwise surface as an opaque 503 further down the pipeline.
+  if (method === 'GET' && input.body !== undefined) {
+    return { code: 'validation', message: 'GET requests must not carry a body' }
   }
 
   const path = input.path
@@ -113,9 +118,11 @@ export function checkBoardsProxyRequest(input: {
     return { code: 'forbidden', message: 'path is outside the Boards scope' }
   }
   // $batch takes a list of {method, uri, body} sub-requests in its body, none of
-  // which reach this module. Checked on the decoded form so %24batch cannot
-  // spell it. Plain '$' stays legal: /_apis/wit/workitems/$Bug creates a work item.
-  if (lastSegment(decoded).toLowerCase() === '$batch') {
+  // which reach this module. Checked on every decoded segment, not just the
+  // last, so /_apis/wit/$batch/x cannot smuggle it past the guard. Checked on
+  // the decoded form so %24batch cannot spell it. Plain '$' stays legal:
+  // /_apis/wit/workitems/$Bug creates a work item.
+  if (segments(decoded).some((segment) => segment.toLowerCase() === '$batch')) {
     return {
       code: 'forbidden',
       message: 'batch requests are not permitted because their sub-request URIs are not reviewable'

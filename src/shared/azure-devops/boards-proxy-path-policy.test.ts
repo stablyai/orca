@@ -19,6 +19,12 @@ describe('checkBoardsProxyRequest', () => {
     })
   })
 
+  it('refuses a GET carrying a body as a caller error, not an opaque failure', () => {
+    expect(
+      checkBoardsProxyRequest({ method: 'GET', path: '/_apis/projects', body: { a: 1 } })
+    ).toEqual({ code: 'validation', message: 'GET requests must not carry a body' })
+  })
+
   it('refuses DELETE', () => {
     expect(
       checkBoardsProxyRequest({ method: 'DELETE', path: '/_apis/wit/workitems/1' })
@@ -105,6 +111,7 @@ describe('checkBoardsProxyRequest', () => {
     ['POST', '/p/_apis/wit/$BATCH'],
     ['POST', '/_apis/wit/%24batch'],
     ['POST', '/_apis/wit/$batch/'],
+    ['POST', '/_apis/wit/$batch/x'],
     ['GET', '/_apis/wit/$batch']
   ])('refuses %s %j', (method, path) => {
     expect(checkBoardsProxyRequest({ method, path })).toEqual({

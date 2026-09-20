@@ -9,7 +9,8 @@ function registryWithBoards(): PluginTaskSourceRegistry {
   registry.reconcile(
     [
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the
-      // registry reads only pluginKey and contributes.taskSources.
+      // registry reads only pluginKey, contributes.taskSources, and the error
+      // key (via isInvalidDiscoveredPlugin).
       {
         pluginKey: 'acme.boards',
         rootDir: '/plugins/acme.boards',
@@ -70,6 +71,23 @@ describe('invokePluginTaskSourceMethod', () => {
     })
 
     expect(result).toMatchObject({ ok: false, code: 'unavailable' })
+  })
+
+  it('does not surface the worker error string in the user-facing envelope', async () => {
+    const result = await invokePluginTaskSourceMethod({
+      registry: registryWithBoards(),
+      callWorker: async () => {
+        throw new Error('at Object.<anonymous> (/plugins/acme.boards/main.js:42:9)')
+      },
+      pluginKey: 'acme.boards',
+      sourceId: 'azure-boards',
+      method: 'listItems',
+      params: {},
+      resultSchema: pluginTaskPageSchema
+    })
+
+    expect(result).toMatchObject({ ok: false, code: 'unavailable' })
+    expect('message' in result && result.message).not.toContain('main.js')
   })
 
   it('maps a malformed worker payload to unavailable', async () => {

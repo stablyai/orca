@@ -16,6 +16,13 @@ describe('task source protocol messages', () => {
     })
 
     expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data).toMatchObject({
+      type: 'invokeTaskSource',
+      callId: 0,
+      sourceId: 'azure-boards',
+      method: 'listItems',
+      params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+    })
   })
 
   it('rejects a method outside the closed task source method set', () => {
@@ -37,6 +44,7 @@ describe('task source protocol messages', () => {
     })
 
     expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.taskSources).toEqual(['azure-boards'])
   })
 
   it('accepts a task source result from the worker', () => {
@@ -48,5 +56,9 @@ describe('task source protocol messages', () => {
     })
 
     expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.value).toEqual({
+      ok: true,
+      data: { items: [], nextCursor: null }
+    })
   })
 })

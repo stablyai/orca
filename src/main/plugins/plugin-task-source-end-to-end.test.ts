@@ -35,7 +35,8 @@ describe('task source end to end', () => {
     registry.reconcile(
       [
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the
-        // registry reads only pluginKey and contributes.taskSources.
+        // registry reads only pluginKey, contributes.taskSources, and the error
+        // key (via isInvalidDiscoveredPlugin).
         {
           pluginKey: 'orca-samples.task-source-demo',
           rootDir: ROOT,

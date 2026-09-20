@@ -45,9 +45,11 @@ export async function invokePluginTaskSourceMethod<T extends z.ZodTypeAny>(
       method: input.method,
       params: input.params
     })
-  } catch (error) {
+  } catch {
     // Loss of contact with a worker is never evidence of an empty result.
-    return failure('unavailable', error instanceof Error ? error.message : String(error))
+    // The worker's raw error string (built from error.stack ?? error.message)
+    // is not user-facing: it can carry a third-party plugin's stack trace.
+    return failure('unavailable', `task source ${input.sourceId} is unavailable`)
   }
 
   const parsed = pluginTaskSourceResultSchema(input.resultSchema).safeParse(raw)

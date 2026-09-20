@@ -41,6 +41,42 @@ describe('executeBoardsProxyRequest', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('reports not_configured, not 503, for an on-prem base with the scheme omitted', async () => {
+    // 'ado.example.com:8443/...' parses as protocol 'ado.example.com:', which
+    // `new URL()` accepts without throwing.
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'ado.example.com:8443/tfs/MyCollection')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
+
+    expect(result.status).toBe(412)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('reports not_configured for a data: base URL', async () => {
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'data:text/plain,hello')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
+
+    expect(result.status).toBe(412)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not echo the base URL in the not_configured message', async () => {
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'ado.example.com:8443/tfs/MyCollection')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+    vi.stubGlobal('fetch', vi.fn())
+
+    const result = await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
+
+    expect(JSON.stringify(result)).not.toContain('ado.example.com')
+  })
+
   it('refuses a path outside the Boards scope before any fetch', async () => {
     vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/org')
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
