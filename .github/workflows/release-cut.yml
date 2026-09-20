@@ -107,6 +107,12 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Why: GITHUB_TOKEN can never hold `workflow` scope, so GitHub has to
+          # decide server-side that a new tag ref touches no workflow file. With
+          # >26k refs that check times out and fails closed. A scoped token skips
+          # it. Falls back to GITHUB_TOKEN so forks and un-provisioned repos are
+          # unchanged; push-release-ref.mjs covers that case.
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -768,16 +774,8 @@ jobs:
         env:
           PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if [[ "$PUSH_MAIN" == "true" ]]; then
-            # Fast-forward main to include the version-bump commit.
-            git push origin "HEAD:refs/heads/main"
-            git push origin "$TAG"
-          else
-            # Off-main release — only the tag is published; main is untouched.
-            git push origin "$TAG"
-          fi
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: node config/scripts/push-release-ref.mjs
 
       - name: Release E2E signal summary
         if: always()
