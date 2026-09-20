@@ -59,6 +59,54 @@ export async function readBridgeProtocolVersion() {
   return Number(match[1])
 }
 
+/**
+ * The bridge's window caps, read from the modules that define them.
+ *
+ * The shell double below has to price a frame the way `BridgeHostSubscriptions` does, and a double
+ * carrying its own copy of these numbers is a double that goes on passing after the real host's
+ * changed. `BRIDGE_MAX_UNACKED_BYTES` is written as a product, so the reader evaluates one.
+ */
+export async function readBridgeWindowCaps() {
+  const sources = await Promise.all(
+    [
+      'mobile/src/mobile-web-shell/bridge/bridge-caps.ts',
+      'mobile/src/mobile-web-shell/bridge-host-subscriptions.ts'
+    ].map((path) => readFile(join(projectDir, path), 'utf8'))
+  )
+  const source = sources.join('\n')
+  const read = (name) => {
+    const match = new RegExp(`${name} = ([0-9*\\s]+)`).exec(source)
+    if (!match) {
+      throw new Error(`could not read ${name}`)
+    }
+    return match[1]
+      .split('*')
+      .map((part) => Number(part.trim()))
+      .reduce((product, factor) => product * factor, 1)
+  }
+  return {
+    maxMessageBytes: read('BRIDGE_MAX_MESSAGE_BYTES'),
+    maxUnackedFrames: read('BRIDGE_MAX_UNACKED_FRAMES'),
+    maxUnackedBytes: read('BRIDGE_MAX_UNACKED_BYTES')
+  }
+}
+
+/**
+ * The JPEG quality the pane asks Chromium for, read from the module that sends it. A test that
+ * encoded its fixtures at a retyped quality would certify the budget at a number nothing ships.
+ */
+export async function readBrowserFrameQuality() {
+  const source = await readFile(
+    join(projectDir, 'mobile/src/browser/browser-screencast-request-parameters.ts'),
+    'utf8'
+  )
+  const match = /BROWSER_FRAME_QUALITY = (\d+)/.exec(source)
+  if (!match) {
+    throw new Error('could not read BROWSER_FRAME_QUALITY')
+  }
+  return Number(match[1]) / 100
+}
+
 /** The grant the shell offers every page, read from the same source for the same reason. */
 export async function readBridgeFaultGrant() {
   const source = await readFile(
@@ -83,6 +131,11 @@ export async function readBridgeFaultGrant() {
  * because a control that handed something to the shell and one that did nothing look the same on
  * the document.
  *
+ * It answers RPC the way a refusing host does and serves a screencast stream the way the real
+ * `BridgeHostSubscriptions` does, including its whole `canCarry` rule and the page's acks. It is
+ * not the host: it decides no domain behaviour, and every reply a screen sees is one a check
+ * named.
+ *
  * Serialized as a page init script, so it takes plain data and closes over nothing.
  */
 export function installShellDouble({
@@ -95,7 +148,9 @@ export function installShellDouble({
   faultGrant,
   grants,
   pageRoutes = null,
-  replies
+  replies,
+  streams = [],
+  windowCaps = null
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -104,6 +159,19 @@ export function installShellDouble({
   // something to the shell and a control that did nothing look identical on the document; this is
   // the only thing that tells them apart.
   globalThis.__orcaRenderCheckNotifies = []
+  // Every request the page issued, whole and in order, so a check can say which verb a gesture
+  // produced and with what geometry rather than only that something was sent.
+  globalThis.__orcaRenderCheckRequests = []
+  // The subscriptions the double accepted, with the `wantsBinary` each one asked for: the negative
+  // case is "the page did not ask", which no assertion on the frames can see.
+  globalThis.__orcaRenderCheckSubscribes = []
+  // Binary events this double refused to post because they exceeded the frame cap, which is the
+  // shell's drop rule reproduced where the page can watch it survive one.
+  globalThis.__orcaRenderCheckDroppedFrames = []
+  // Every ack seq the page posted, in order. Without this a stream that never acked and one that
+  // acked every frame look the same from the page's side.
+  globalThis.__orcaRenderCheckAcks = []
+  const openStreams = new Map()
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)
@@ -151,6 +219,43 @@ export function installShellDouble({
       // The result the caller named for this method, carried in the envelope a real host uses.
       // Anything unnamed still takes the refusal below, so a screen only ever sees data a test
       // asked for.
+      if (frame.type === 'subscribe' && streams.includes(frame.method)) {
+        globalThis.__orcaRenderCheckSubscribes.push({
+          id: frame.id,
+          method: frame.method,
+          params: frame.params,
+          wantsBinary: frame.wantsBinary === true
+        })
+        // Accepted by saying nothing, exactly as the real host does: a subscription is open until
+        // an `error` or an `end` closes it, and the first thing the page hears is an event.
+        openStreams.set(frame.id, { seq: 0, unacked: [], unackedBytes: 0 })
+        return
+      }
+      if (frame.type === 'ack') {
+        // The page's ack is what reopens the window, so a double that ignored it would drop
+        // frames the real host carries. Read exactly as `BridgeHostSubscriptions.ack` reads it.
+        const stream = openStreams.get(frame.id)
+        if (stream) {
+          let acked = 0
+          for (const pending of stream.unacked) {
+            if (pending.seq > frame.seq) {
+              break
+            }
+            stream.unackedBytes -= pending.bytes
+            acked += 1
+          }
+          stream.unacked.splice(0, acked)
+          globalThis.__orcaRenderCheckAcks.push(frame.seq)
+        }
+        return
+      }
+      if (frame.type === 'cancel') {
+        openStreams.delete(frame.id)
+        return
+      }
+      if (frame.type === 'request') {
+        globalThis.__orcaRenderCheckRequests.push({ method: frame.method, params: frame.params })
+      }
       if (frame.type === 'request' && replies && Object.hasOwn(replies, frame.method)) {
         answer({
           v: version,
@@ -174,6 +279,41 @@ export function installShellDouble({
       }
     },
     onmessage: null
+  }
+  /**
+   * One screencast frame from the shell, priced the way `BridgeHostSubscriptions` prices it.
+   *
+   * All three arms of the host's `canCarry`, not just the size one: a frame over the message cap,
+   * a window already holding the most frames it may, and a window whose bytes this frame would
+   * push past the limit. Dropping is the behaviour under test — the event goes nowhere, the
+   * stream stays open, and the next frame paints — so a double that posted an uncarriable frame
+   * would prove the page decodes something no shell could have sent.
+   *
+   * The window only stays open because the page acks, which the `ack` arm above consumes. That is
+   * what makes a long stream a real test of both rather than of neither.
+   */
+  globalThis.__orcaRenderCheckEmitBinary = (id, binary) => {
+    const stream = openStreams.get(id)
+    if (!stream) {
+      return 'no-stream'
+    }
+    const seq = stream.seq + 1
+    const json = JSON.stringify({ v: version, type: 'event', id, seq, binary })
+    const bytes = new TextEncoder().encode(json).length
+    const carries =
+      windowCaps === null ||
+      (bytes <= windowCaps.maxMessageBytes &&
+        stream.unacked.length < windowCaps.maxUnackedFrames &&
+        stream.unackedBytes + bytes <= windowCaps.maxUnackedBytes)
+    if (!carries) {
+      globalThis.__orcaRenderCheckDroppedFrames.push(binary.frameSeq)
+      return 'dropped'
+    }
+    stream.seq = seq
+    stream.unacked.push({ seq, bytes })
+    stream.unackedBytes += bytes
+    channel.onmessage?.({ data: json })
+    return 'posted'
   }
   globalThis.orcaBridge = channel
 }

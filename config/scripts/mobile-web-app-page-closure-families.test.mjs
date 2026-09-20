@@ -9,7 +9,10 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
+import {
+  mobileWebAppModuleClosure,
+  mobileWebAppRouteClosure
+} from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { pageClosureFamilies, pinnedFamilyNames } from './mobile-web-app-page-closure-families.mjs'
 
@@ -26,6 +29,8 @@ const PIN_TABLES = [
   'mobile/src/test-support/bridged-parity/c2-work-item-closure-families.ts',
   'mobile/src/test-support/bridged-parity/c2-task-source-closure-families.ts'
 ]
+const C6_PIN_TABLE = 'mobile/src/test-support/bridged-parity/c6-browser-closure-families.ts'
+
 const FILES_PIN_TABLES = [
   C1_TABLE,
   'mobile/src/test-support/bridged-parity/c3-explorer-closure-families.ts',
@@ -125,5 +130,33 @@ describeClosure('the files page closures', () => {
     expect(explorerFamilies).not.toContain('files.preview-load')
     expect(previewFamilies).toContain('files.preview-load')
     expect(previewFamilies).not.toContain('files.explorer-screen')
+  }, 120_000)
+})
+
+describeClosure('the browser pane closure', () => {
+  /** The pane is mounted by a route, not registered as one, so its closure is read from the module
+   *  itself. C7 composes this half with the session route and censuses the route the usual way. */
+  const PANE = 'src/browser/MobileBrowserPane'
+
+  it('reaches exactly the golden families its pin table commits, on its own', async () => {
+    const closure = await mobileWebAppModuleClosure([PANE])
+    await expectClosureFamilies(closure.local, [C6_PIN_TABLE])
+  }, 60_000)
+
+  it('adds exactly those families to a page, and no other', async () => {
+    // The pin is a half: alone it would also pass if the pane dragged in a family C1 already pins
+    // and the table happened to list it. This reads the difference the pane makes to the layout.
+    const scenarios = JSON.parse(read('mobile/rpc-foundation/pilot-scenarios.json')).scenarios
+    const [layout, withPane] = await Promise.all([
+      mobileWebAppModuleClosure(['app/h/_layout']),
+      mobileWebAppModuleClosure(['app/h/_layout', PANE])
+    ])
+    const layoutFamilies = pageClosureFamilies(layout.local, scenarios)
+    const added = pageClosureFamilies(withPane.local, scenarios).filter(
+      (family) => !layoutFamilies.includes(family)
+    )
+    expect(added).toEqual(pinnedFamilyNames(read(C6_PIN_TABLE)).sort())
+    // And that the layout is the C1 control it is everywhere else, so the difference above is real.
+    expect(layoutFamilies).toEqual(pinnedFamilyNames(read(C1_TABLE)).sort())
   }, 120_000)
 })

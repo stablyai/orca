@@ -18,6 +18,7 @@ import {
   type BridgedParityEvidence
 } from '../bridged-parity/divergence-classes'
 import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
+import { C6_BROWSER_CLOSURE_FAMILIES } from '../bridged-parity/c6-browser-closure-families'
 import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
 import { C1_PAGE_CLOSURE } from '../bridged-parity/c1-page-closure'
 import { C3_PAGE_CLOSURE } from '../bridged-parity/c3-page-closure'
@@ -398,6 +399,23 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       expect({ closure: pageClosureDrift(C2_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
       expect(pageClosureRunTotals(C2_PAGE_CLOSURE, observed)).toEqual(
         pageClosureTotals(C2_PAGE_CLOSURE)
+      )
+    })
+
+    /**
+     * The browser pane's half, checked the same way and for the same reason the composed tables are.
+     *
+     * A half rather than a page closure because C6 registers no route — C7 composes this beside
+     * C1's — but a table nothing reads is not a pin, so the run is held to it here from the series
+     * that derived it rather than from the one that will inherit it.
+     */
+    it('gives every golden the C6 browser closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C6', C6_BROWSER_CLOSURE_FAMILIES, observed))
+      expect({ closure: pageClosureDrift(C6_BROWSER_CLOSURE_FAMILIES, observed) }).toEqual({
+        closure: []
+      })
+      expect(pageClosureRunTotals(C6_BROWSER_CLOSURE_FAMILIES, observed)).toEqual(
+        pageClosureTotals(C6_BROWSER_CLOSURE_FAMILIES)
       )
     })
 

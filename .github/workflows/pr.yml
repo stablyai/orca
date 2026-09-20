@@ -704,21 +704,23 @@ jobs:
       # The bundling tests skip themselves where mobile dependencies are absent, which is how they
       # stay green in the sharded `test` job. This is the job that installs them, so here a missing
       # install has to fail rather than skip everything the job exists to run.
+      # Why a prefix and not a file list: the list this replaces had gone stale twice without
+      # anyone noticing, because a census whose closure block skips without the env flag below is
+      # green in the sharded `test` job whether or not it ever runs here. The prefix is the same
+      # one `pr-code-change-scope.mjs` fires this job on, so naming a test into the family is all
+      # it takes to have it run. Quoted because these are vitest filename filters, matched as
+      # substrings against the discovered files, and the shell must not touch them.
+      #
+      # Cost: 18 files in 25-30s wall, of which the frame-budget sweep is 2.5s. That sweep encodes
+      # 111 noise JPEGs in Chromium, so it is the one step here whose cost grows with its viewport
+      # set; adding rows to that set is a decision about this job's runtime.
       - name: Builder, override census and render checks
         env:
           ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
-            config/scripts/build-mobile-web-app-bundle.test.mjs \
-            config/scripts/mobile-web-app-web-overrides.test.mjs \
-            config/scripts/mobile-web-app-render.test.mjs \
-            config/scripts/mobile-web-app-drawer-render.test.mjs \
-            config/scripts/mobile-web-app-agent-history-render.test.mjs \
-            config/scripts/mobile-web-app-tasks-render.test.mjs \
-            config/scripts/mobile-web-app-tasks-external-links.test.mjs \
-            config/scripts/mobile-web-app-files-external-links.test.mjs \
-            config/scripts/mobile-web-app-files-render.test.mjs \
-            config/scripts/mobile-web-app-page-closure-families.test.mjs
+            'config/scripts/mobile-web-app-' \
+            'config/scripts/build-mobile-web-app-bundle.test.mjs'
 
   cross-version-wire:
     name: cross-version wire compatibility
