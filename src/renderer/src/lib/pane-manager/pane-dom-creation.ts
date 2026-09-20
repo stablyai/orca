@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { TerminalOscLinkRetirementAddon } from '../../../../shared/terminal-osc-link-retirement'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
@@ -45,6 +46,7 @@ export function createPaneDOM(
   }
 
   const terminal = new Terminal(terminalOpts)
+  terminal.loadAddon(new TerminalOscLinkRetirementAddon())
   // Why: a synchronous throw inside any link provider's provideLinks (notably
   // xterm web-links' LinkComputer raising RangeError on a pathological wrapped
   // line) escapes to window.onerror and gets the renderer killed. Guard every

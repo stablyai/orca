@@ -128,6 +128,7 @@ describe('terminal WebView bundled engine', () => {
 
     expect(window).toMatchObject({
       Terminal: expect.any(Function),
+      TerminalOscLinkRetirementAddon: expect.any(Function),
       Unicode11Addon: { Unicode11Addon: expect.any(Function) },
       WebglAddon: { WebglAddon: expect.any(Function) }
     })
