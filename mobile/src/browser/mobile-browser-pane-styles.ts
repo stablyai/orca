@@ -103,6 +103,9 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.sm
   },
+  dialogButtonDisabled: {
+    opacity: 0.5
+  },
   dialogError: {
     color: colors.statusRed,
     fontSize: typography.metaSize,

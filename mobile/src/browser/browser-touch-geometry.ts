@@ -105,6 +105,42 @@ export function mapScreenToBrowserPoint(
   }
 }
 
+/** A scroll the page should receive, in its own CSS pixels, the way a wheel reports one. */
+export type BrowserWheelDelta = { dx: number; dy: number }
+
+/**
+ * What one point of screen is worth in the page's own CSS pixels, or null when it cannot be read.
+ *
+ * Three factors, and every screen-space quantity the pane sends needs all three: the frame's fit
+ * into the pane, the pinch zoom on top of it, and the page scale the frame was painted at. A
+ * consumer that composes two of them is off by the third, which is how the wheel came to deliver
+ * 41% of the requested scroll on a page with no viewport meta.
+ */
+export function browserScreenToPageCssScale(
+  geometry: BrowserFrameGeometry | null,
+  zoomScale: number
+): number | null {
+  const scale = geometry === null ? zoomScale : geometry.scale * zoomScale * geometry.pageScale
+  return Number.isFinite(scale) && scale > 0 ? scale : null
+}
+
+/** A screen-space gesture delta as the page's own CSS pixels, inverted the way a wheel reports it. */
+export function browserWheelDeltaFromScreen(
+  screenDx: number,
+  screenDy: number,
+  geometry: BrowserFrameGeometry | null,
+  zoomScale: number
+): BrowserWheelDelta {
+  const scale = browserScreenToPageCssScale(geometry, zoomScale) ?? 1
+  return { dx: roundedWheelDelta(-screenDx / scale), dy: roundedWheelDelta(-screenDy / scale) }
+}
+
+/** `Math.round` answers -0 for an axis that moved nothing; the wheel carries a plain zero. */
+function roundedWheelDelta(value: number): number {
+  const rounded = Math.round(value)
+  return rounded === 0 ? 0 : rounded
+}
+
 export function computeBrowserTouchClickRadiusCss(
   layout: BrowserTouchLayout | null,
   metadata: BrowserScreencastFrameMetadata | null,
@@ -112,8 +148,8 @@ export function computeBrowserTouchClickRadiusCss(
   touchRadiusDip: number
 ): number {
   const geometry = computeBrowserFrameGeometry(layout, metadata)
-  const scale = geometry ? geometry.scale * zoom.scale * geometry.pageScale : 1
-  if (!Number.isFinite(scale) || scale <= 0) {
+  const scale = browserScreenToPageCssScale(geometry, zoom.scale)
+  if (scale === null) {
     return 10
   }
   // Why: phone taps are finger-sized while CDP clicks are pixel exact. Convert a

@@ -97,13 +97,18 @@ function cardMessages(renderer: ReactTestRenderer): string[] {
     .filter((child): child is string => typeof child === 'string')
 }
 
-function pressButton(renderer: ReactTestRenderer, label: string): void {
+function findButton(renderer: ReactTestRenderer, label: string): ReactTestInstance {
   const button = nodesOfType(renderer.root, 'Pressable').find((node) =>
     nodesOfType(node, 'Text').some((text) => text.props.children === label)
   )
   if (!button) {
     throw new Error(`no ${label} button on screen`)
   }
+  return button
+}
+
+function pressButton(renderer: ReactTestRenderer, label: string): void {
+  const button = findButton(renderer, label)
   act(() => {
     button.props.onPress()
   })
@@ -217,6 +222,28 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     await pane.answerFromTheHost(true)
     expect(cardMessages(pane.renderer)).toContain('second')
     expect(cardMessages(pane.renderer)).not.toContain('That answer did not reach the page.')
+  })
+
+  it('kills the card buttons while an answer is in flight, so a double tap sends one', async () => {
+    const pane = await openPaneOverTheBridge()
+    await act(async () => {
+      pane.page.start()
+      await pane.flush()
+    })
+
+    pressButton(pane.renderer, 'OK')
+    await pane.flush()
+    const inFlight = pane.rpc.requests.length
+    // The host takes one answer per dialog: a second would be refused, or would settle the page's
+    // next dialog unseen. The button is what stops the second tap from ever being sent.
+    expect(findButton(pane.renderer, 'OK').props.disabled).toBe(true)
+
+    await pane.answerFromTheHost(true)
+    expect(pane.rpc.requests.length).toBe(inFlight)
+    // The next dialog arrives with live buttons of its own.
+    expect(cardMessages(pane.renderer)).toContain('second')
+    expect(findButton(pane.renderer, 'OK').props.disabled).toBe(false)
+    expect(findButton(pane.renderer, 'Cancel').props.disabled).toBe(false)
   })
 
   it('answers the confirm with Cancel', async () => {

@@ -154,33 +154,16 @@ async function screencastNoiseJpegBytes(
     deviceScaleFactor: 1,
     mobile: true
   })
-  await sheet.evaluate(
-    ({ width, height, seed }) => {
-      const canvas = document.getElementById('noise')
-      if (!(canvas instanceof HTMLCanvasElement)) {
-        throw new Error('no noise canvas')
-      }
-      canvas.width = width
-      canvas.height = height
-      canvas.style.width = `${width}px`
-      canvas.style.height = `${height}px`
-      const context = canvas.getContext('2d')
-      if (context === null) {
-        throw new Error('no 2d context')
-      }
-      const image = context.createImageData(width, height)
-      let state = seed >>> 0
-      for (let index = 0; index < image.data.length; index += 4) {
-        state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0
-        image.data[index] = (state >>> 24) & 0xff
-        image.data[index + 1] = (state >>> 16) & 0xff
-        image.data[index + 2] = (state >>> 8) & 0xff
-        image.data[index + 3] = 255
-      }
-      context.putImageData(image, 0, 0)
-    },
-    { ...frame, seed }
-  )
+  await sheet.evaluate(({ width, height }) => {
+    const canvas = document.getElementById('noise')
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      throw new Error('no noise canvas')
+    }
+    canvas.width = width
+    canvas.height = height
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+  }, frame)
 
   const sizes: number[] = []
   const onFrame = (event: { data: string; sessionId: number }): void => {
@@ -188,6 +171,7 @@ async function screencastNoiseJpegBytes(
     void session.send('Page.screencastFrameAck', { sessionId: event.sessionId }).catch(() => {})
   }
   session.on('Page.screencastFrame', onFrame)
+  let painted = 0
   try {
     await session.send('Page.startScreencast', {
       format: 'jpeg',
@@ -196,24 +180,55 @@ async function screencastNoiseJpegBytes(
       maxHeight: frame.height,
       everyNthFrame: 1
     })
-    // Two frames, nudged by a repaint: the first can be the surface as it was before the canvas
-    // landed. The largest is the one carrying the noise — a stale or blank frame is a fraction of
-    // its size, so taking the maximum needs no guess about which arrived when.
+    // The noise is painted after the screencast is running, and through this same CDP session, so
+    // the reply orders it against the frame events. Two animation frames are awaited inside it, so
+    // when it resolves the paint has been committed to the compositor and every later capture
+    // carries it. `painted` is how many frames had already arrived by then; only what comes after
+    // is a frame of the noise, which is what makes this a measurement of the canvas rather than of
+    // whatever the surface held when the capture began.
+    await session.send('Runtime.evaluate', {
+      awaitPromise: true,
+      expression: `(async () => {
+        const canvas = document.getElementById('noise')
+        const context = canvas.getContext('2d')
+        const image = context.createImageData(canvas.width, canvas.height)
+        let state = ${seed >>> 0}
+        for (let index = 0; index < image.data.length; index += 4) {
+          state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+          image.data[index] = (state >>> 24) & 0xff
+          image.data[index + 1] = (state >>> 16) & 0xff
+          image.data[index + 2] = (state >>> 8) & 0xff
+          image.data[index + 3] = 255
+        }
+        context.putImageData(image, 0, 0)
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      })()`
+    })
+    painted = sizes.length
+
+    // Nudged until a frame lands after that commit. A capture already in flight can still be the
+    // old surface, so two are taken and the larger is used: a blank frame is a fraction of a noise
+    // frame, so the maximum over the post-commit frames is the noise one whichever order they came.
     const deadline = Date.now() + 20_000
-    for (let nudge = 0; sizes.length < 2 && Date.now() < deadline; nudge += 1) {
-      await sheet.evaluate((n: number) => {
-        document.documentElement.style.background = n % 2 === 0 ? '#000' : '#111'
-      }, nudge)
+    for (let nudge = 0; sizes.length - painted < 2 && Date.now() < deadline; nudge += 1) {
+      await session.send('Runtime.evaluate', {
+        expression: `document.documentElement.style.background = ${nudge % 2 === 0 ? "'#000'" : "'#111'"}`
+      })
       await sheet.waitForTimeout(80)
     }
   } finally {
     await session.send('Page.stopScreencast').catch(() => {})
     session.off('Page.screencastFrame', onFrame)
   }
-  if (sizes.length === 0) {
-    throw new Error(`no screencast frame for ${frame.width}x${frame.height}`)
+  const afterPaint = sizes.slice(painted)
+  if (afterPaint.length === 0) {
+    // Never fall back to a frame from before the paint: that is the understatement this exists to
+    // rule out, and a silent one would look like a cheaper encoder.
+    throw new Error(
+      `no screencast frame after the noise was committed for ${frame.width}x${frame.height}`
+    )
   }
-  return Math.max(...sizes)
+  return Math.max(...afterPaint)
 }
 
 function screencastFrame(image: Uint8Array, frame: { width: number; height: number }) {

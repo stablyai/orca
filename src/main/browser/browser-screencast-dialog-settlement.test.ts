@@ -29,6 +29,12 @@ function openDialog(
   webContents.debugger.emit('message', {}, 'Page.javascriptDialogOpening', { type, message })
 }
 
+/** `sendDebuggerCommand` issues on a microtask, so a call is visible a turn after the caller ran. */
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 function dialogCalls(webContents: ReturnType<typeof createMockScreencastWebContents>): unknown[][] {
   return webContents.debugger.sendCommand.mock.calls.filter(
     (call) => call[0] === 'Page.handleJavaScriptDialog'
@@ -91,6 +97,65 @@ describe('the browser screencast settles the dialog it reported', () => {
 
     session.stop()
     await session.done
+  })
+
+  it('sends one command for two answers to the same dialog', async () => {
+    const webContents = createMockScreencastWebContents()
+    const session = await startBrowserScreencast(webContents as never, {
+      ...OPTIONS,
+      onFrame: vi.fn()
+    })
+
+    openDialog(webContents, 'confirm', 'twice?')
+    const [first, second] = await Promise.all([
+      session.settleDialog(true),
+      session.settleDialog(true)
+    ])
+
+    await flushMicrotasks()
+    expect([first, second]).toEqual([true, true])
+    // Two taps on a slow link are two calls. Chromium takes one answer per dialog: the second
+    // command is refused, or settles the page's next dialog unseen.
+    expect(dialogCalls(webContents)).toEqual([['Page.handleJavaScriptDialog', { accept: true }]])
+
+    session.stop()
+    await session.done
+  })
+
+  it("keeps a failed answer from clearing the next dialog's armed one", async () => {
+    const webContents = createMockScreencastWebContents()
+    const answers: { reject: (error: Error) => void }[] = []
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method !== 'Page.handleJavaScriptDialog') {
+        return {}
+      }
+      return new Promise((_resolve, reject) => {
+        answers.push({ reject })
+      })
+    })
+    const session = await startBrowserScreencast(webContents as never, {
+      ...OPTIONS,
+      onFrame: vi.fn()
+    })
+
+    openDialog(webContents, 'confirm', 'A')
+    const answeringA = session.settleDialog(true)
+    webContents.debugger.emit('message', {}, 'Page.javascriptDialogClosed', {})
+    openDialog(webContents, 'confirm', 'B')
+    const answeringB = session.settleDialog(true)
+    await flushMicrotasks()
+    expect(dialogCalls(webContents)).toHaveLength(2)
+
+    // A's command fails after B has armed its own. If that cleared the slot, the next caller on B
+    // would send a third command against a dialog that already has an answer on the way.
+    answers[0]?.reject(new Error('No dialog is showing'))
+    await expect(answeringA).rejects.toThrow('No dialog is showing')
+    void session.settleDialog(true)
+    await flushMicrotasks()
+    expect(dialogCalls(webContents)).toHaveLength(2)
+
+    answers[1]?.reject(new Error('stop'))
+    await expect(answeringB).rejects.toThrow('stop')
   })
 
   it('dismisses a dialog still open when the stream stops, so no later session inherits it', async () => {

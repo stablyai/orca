@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  browserWheelDeltaFromScreen,
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
   computeBrowserTouchClickRadiusCss,
@@ -134,6 +135,34 @@ describe('browser touch geometry', () => {
     expect(
       computeBrowserTouchClickRadiusCss(layout, { ...metadata, pageScaleFactor: 1 }, NO_ZOOM, 14)
     ).toBe(14)
+  })
+
+  it('scrolls the page by the page scale, not by the frame fit alone', () => {
+    const layout = { width: 402, height: 593 }
+    const geometry = computeBrowserFrameGeometry(layout, NO_VIEWPORT_META)
+
+    // A 100 point flick up. The frame fits the pane one to one, so the only factor left is the
+    // page scale: 100 screen points span 100 / 0.41 CSS pixels of a page laid out at 980.
+    const delta = browserWheelDeltaFromScreen(0, 100, geometry, 1)
+
+    expect(delta.dy).toBe(-244)
+    expect(delta.dx).toBe(0)
+    // What it sent before: the screen delta itself, 41% of the scroll asked for.
+    expect(delta.dy).not.toBe(-100)
+  })
+
+  it('leaves a web view scroll and a pinched one where they were', () => {
+    const layout = { width: 402, height: 593 }
+    const unscaled = computeBrowserFrameGeometry(layout, {
+      deviceWidth: 402,
+      deviceHeight: 593,
+      pageScaleFactor: 1
+    })
+
+    expect(browserWheelDeltaFromScreen(0, 100, unscaled, 1)).toEqual({ dx: 0, dy: -100 })
+    // A pinch to 2x halves what a screen point is worth, on top of whatever the page scale is.
+    expect(browserWheelDeltaFromScreen(0, 100, unscaled, 2)).toEqual({ dx: 0, dy: -50 })
+    expect(browserWheelDeltaFromScreen(-40, 0, null, 1)).toEqual({ dx: 40, dy: 0 })
   })
 
   it('rejects page-level touch coordinates instead of mixing coordinate spaces', () => {

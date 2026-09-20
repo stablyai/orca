@@ -267,9 +267,11 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
               <View style={styles.dialogActions}>
                 {dialog.dialogType !== 'alert' ? (
                   <Pressable
+                    disabled={dialog.pending !== undefined}
                     style={({ pressed }) => [
                       styles.dialogButton,
-                      pressed && styles.dialogButtonPressed
+                      pressed && styles.dialogButtonPressed,
+                      dialog.pending !== undefined && styles.dialogButtonDisabled
                     ]}
                     onPress={() => void sendDialogCommand('browser.dialogDismiss')}
                   >
@@ -277,10 +279,12 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
                   </Pressable>
                 ) : null}
                 <Pressable
+                  disabled={dialog.pending !== undefined}
                   style={({ pressed }) => [
                     styles.dialogButton,
                     styles.dialogButtonPrimary,
-                    pressed && styles.dialogButtonPressed
+                    pressed && styles.dialogButtonPressed,
+                    dialog.pending !== undefined && styles.dialogButtonDisabled
                   ]}
                   onPress={() => void sendDialogCommand('browser.dialogAccept')}
                 >

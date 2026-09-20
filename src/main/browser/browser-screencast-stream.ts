@@ -37,6 +37,12 @@ export async function startBrowserScreencast(
   // The dialog this stream reported and has not seen closed. Only this session may answer it, so
   // it is settled before the stream goes away rather than carried to one that cannot.
   let dialogOpen = false
+  // The one answer in flight for that dialog, and which dialog it belongs to. Chromium takes a
+  // single `Page.handleJavaScriptDialog` per dialog: a second one is refused, or worse settles the
+  // next dialog unseen if the page has already raised it. A double tap on a slow link is exactly
+  // that, so duplicate callers get this promise instead of a second command.
+  let dialogSettlement: Promise<boolean> | null = null
+  let dialogGeneration = 0
   let resolveDone!: () => void
   // Serializes viewport and frame-budget changes against the snapshot capture they trigger.
   let pendingUpdate = Promise.resolve()
@@ -70,6 +76,9 @@ export async function startBrowserScreencast(
     bumpSnapshotGeneration: snapshotCapture.bumpGeneration,
     setDialogOpen: (open: boolean) => {
       dialogOpen = open
+      // A new dialog is a new answer, and a closed one leaves nothing to answer.
+      dialogGeneration += 1
+      dialogSettlement = null
     }
   })
 
@@ -88,6 +97,7 @@ export async function startBrowserScreencast(
     }
     closed = true
     dialogOpen = false
+    dialogSettlement = null
     snapshotCapture.clearNavigationCaptureTimer()
     framePacer.clearPending()
     dbg.removeListener('message', handleMessage as never)
@@ -122,15 +132,29 @@ export async function startBrowserScreencast(
   }
 
   return {
-    settleDialog: async (accept: boolean, promptText?: string) => {
+    settleDialog: (accept: boolean, promptText?: string) => {
       if (!dialogOpen) {
-        return false
+        return Promise.resolve(false)
       }
-      await sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', {
+      if (dialogSettlement !== null) {
+        return dialogSettlement
+      }
+      const generation = dialogGeneration
+      const settlement = sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', {
         accept,
         ...(promptText === undefined ? {} : { promptText })
       })
-      return true
+        .then(() => true)
+        .catch((error: unknown) => {
+          // Only this dialog's own slot: by the time a failure lands the page may have raised the
+          // next one and armed its answer, and clearing that would let a second command through.
+          if (dialogGeneration === generation) {
+            dialogSettlement = null
+          }
+          throw error
+        })
+      dialogSettlement = settlement
+      return settlement
     },
     updateViewport: (viewport: BrowserScreencastViewport) => {
       pendingUpdate = pendingUpdate
@@ -182,9 +206,13 @@ export async function startBrowserScreencast(
           // `cdp-debugger-events.ts`.
           if (dialogOpen) {
             dialogOpen = false
-            await sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', {
-              accept: false
-            }).catch(() => {})
+            const pending = dialogSettlement
+            dialogSettlement = null
+            // An answer already on its way settles it; a second command here would be the
+            // duplicate this session refuses to send anywhere else.
+            await (
+              pending ?? sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', { accept: false })
+            ).catch(() => {})
           }
           await sendDebuggerCommand(dbg, 'Page.stopScreencast').catch(() => {})
           if (deviceMetrics.isOverridden()) {

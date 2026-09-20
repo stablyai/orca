@@ -14,6 +14,7 @@ import {
 } from './mobile-browser-command-operations'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
 import {
+  browserWheelDeltaFromScreen,
   computeBrowserFrameGeometry,
   computeBrowserTouchClickRadiusCss,
   mapScreenToBrowserPoint,
@@ -71,6 +72,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   } = args
 
   const pendingWheelCommandRef = useRef<PendingWheelCommand | null>(null)
+  const dialogAnswerTokenRef = useRef(0)
 
   const wheelCommandInFlightRef = useRef(false)
 
@@ -179,13 +181,8 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
       if (!client || !base) {
         return
       }
-      const currentLayout = layoutRef.current
-      const geometry = computeBrowserFrameGeometry(currentLayout, frameMetadataRef.current)
-      const localZoom = zoomRef.current.scale
-      const scale = (geometry?.scale ?? 1) * localZoom
-      const cssDx = screenDx / scale
-      const cssDy = screenDy / scale
-      const delta = { dx: Math.round(-cssDx), dy: Math.round(-cssDy) }
+      const geometry = computeBrowserFrameGeometry(layoutRef.current, frameMetadataRef.current)
+      const delta = browserWheelDeltaFromScreen(screenDx, screenDy, geometry, zoomRef.current.scale)
       if (Math.abs(delta.dx) < 1 && Math.abs(delta.dy) < 1) {
         return
       }
@@ -251,18 +248,27 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   const sendDialogCommand = useCallback(
     async (method: 'browser.dialogAccept' | 'browser.dialogDismiss') => {
       const command = method === 'browser.dialogAccept' ? browserDialogAccept : browserDialogDismiss
+      // The token marks which answer this is. The host takes one per dialog, so the card's buttons
+      // go dead while it is in flight, and only the answer that armed the card may write to it:
+      // a reply that lands after the page raised its next dialog belongs to neither.
+      const token = (dialogAnswerTokenRef.current += 1)
+      setDialog((current) =>
+        current === null ? null : { ...current, error: undefined, pending: token }
+      )
       const result = await sendBrowserRequest(
         async (rpc, page, options) => command.interpret(await command.request(rpc, page, options)),
         { suppressError: true, timeoutMs: 5_000 }
       )
-      if (result !== null) {
-        return
-      }
       // A refused or timed-out answer leaves the page blocked on the same dialog, so the card
-      // stays and says so rather than looking like a button that does nothing. The updater is what
-      // keeps a late failure from reopening a card the page has since closed.
+      // stays and says so rather than looking like a button that does nothing.
       setDialog((current) =>
-        current === null ? null : { ...current, error: 'That answer did not reach the page.' }
+        current === null || current.pending !== token
+          ? current
+          : {
+              ...current,
+              pending: undefined,
+              ...(result === null ? { error: 'That answer did not reach the page.' } : {})
+            }
       )
     },
     [sendBrowserRequest]
