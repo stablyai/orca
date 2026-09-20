@@ -13,7 +13,10 @@ export async function awaitExplicitPiOmpGuestReadiness(args: {
   launchAgent?: TuiAgent
   launchCommand?: string
   timeoutMs?: number
-  manager?: Pick<WslHookRelayManager, 'ensureForDistro' | 'getGuestEndpointFilePath'>
+  manager?: Pick<
+    WslHookRelayManager,
+    'ensureForDistro' | 'getGuestEndpointFilePath' | 'getGuestAgentPath'
+  >
 }): Promise<boolean> {
   if (!args.isWsl) {
     return true
@@ -26,10 +29,12 @@ export async function awaitExplicitPiOmpGuestReadiness(args: {
   }
   const distro = args.distro ?? null
   const manager = args.manager ?? wslHookRelayManager
-  manager.ensureForDistro(distro, args.codexHomePath)
+  manager.ensureForDistro(distro, args.codexHomePath, kind)
   const deadline = Date.now() + (args.timeoutMs ?? 10_000)
   while (Date.now() < deadline) {
-    if (manager.getGuestEndpointFilePath(distro)) {
+    const endpointReady = manager.getGuestEndpointFilePath(distro)
+    const agentReady = manager.getGuestAgentPath(distro, kind)
+    if (endpointReady && agentReady) {
       return true
     }
     await new Promise((resolve) => setTimeout(resolve, 25))

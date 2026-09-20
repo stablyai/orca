@@ -27,7 +27,10 @@ type GuestInstallState = {
   codexHomePath?: string
   opencodeOverlayDir?: string
   opencode2OverlayDir?: string
+  piAgentDir?: string
+  ompStatusExtension?: string
   lastInstallAt?: number
+  launchKind?: 'pi' | 'omp'
 }
 
 export async function runWslRelayGuestInstall(
@@ -49,12 +52,14 @@ export async function runWslRelayGuestInstall(
   })
   // Why: ship OpenCode's status plugin and record the guest overlay dir the
   // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
-  const overlay = await requestGuestOpenCodeOverlayDir(mux, deps, state.distro)
+  const overlay = await requestGuestOpenCodeOverlayDir(mux, deps, state.distro, state.launchKind)
   if (state.mux === mux && overlay.kind !== 'unavailable') {
     // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
     // present but plugin-less, and advertising it would hide the user's own config.
     state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
     state.opencode2OverlayDir = overlay.kind === 'dir' ? overlay.dir2 : undefined
+    state.piAgentDir = overlay.kind === 'dir' ? overlay.piDir : undefined
+    state.ompStatusExtension = overlay.kind === 'dir' ? overlay.ompDir : undefined
   }
 }
 

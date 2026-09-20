@@ -21,7 +21,7 @@ export type InstallPluginsResult = {
     omp: boolean
     primeAgent: boolean
   }
-  overlayDirs: { opencode?: string; opencode2?: string }
+  overlayDirs: { opencode?: string; opencode2?: string; pi?: string; omp?: string }
 }
 
 export type InstallPluginsHandler = (params: Record<string, unknown>) => InstallPluginsResult
@@ -64,6 +64,10 @@ export function createInstallPluginsHandler(
       primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     let opencodeDir: string | undefined
+    const launchKind =
+      params.launchKind === 'pi' || params.launchKind === 'omp' ? params.launchKind : undefined
+    let piDir: string | undefined
+    let ompDir: string | undefined
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
@@ -112,6 +116,21 @@ export function createInstallPluginsHandler(
             : null
       }
     }
+    // Materialize only the explicitly requested agent. Bare shells must not create
+    // ~/.pi/agent or ~/.omp/agent (#10196).
+    if (launchKind === 'pi' || launchKind === 'omp') {
+      const source = launchKind === 'pi' ? pi : omp
+      if (typeof source === 'string') {
+        const result = pluginOverlay.materializePi(`wsl-${launchKind}`, undefined, launchKind, {
+          materializeDefaultHome: true
+        })
+        if (launchKind === 'pi') {
+          piDir = result?.sourceAgentDir
+        } else {
+          ompDir = result?.statusExtensionPath
+        }
+      }
+    }
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
@@ -122,7 +141,9 @@ export function createInstallPluginsHandler(
       },
       overlayDirs: {
         ...(opencodeDir ? { opencode: opencodeDir } : {}),
-        ...(opencode2Dir ? { opencode2: opencode2Dir } : {})
+        ...(opencode2Dir ? { opencode2: opencode2Dir } : {}),
+        ...(piDir ? { pi: piDir } : {}),
+        ...(ompDir ? { omp: ompDir } : {})
       }
     }
   }

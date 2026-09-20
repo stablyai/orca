@@ -203,7 +203,12 @@ describe('WslHookRelayManager', () => {
     if (registerInstallPlugins) {
       harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
         installed: { opencode: true, opencode2: true, pi: false, omp: false },
-        overlayDirs: { opencode: opencodeOverlayDir, opencode2: opencode2OverlayDir }
+        overlayDirs: {
+          opencode: opencodeOverlayDir,
+          opencode2: opencode2OverlayDir,
+          pi: `${home}/.pi/agent`,
+          omp: `${home}/.omp/agent/extensions/orca-agent-status.ts`
+        }
       }))
     }
     return harness.transport

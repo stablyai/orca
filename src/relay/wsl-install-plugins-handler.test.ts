@@ -43,6 +43,20 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
+  it('materializes the requested Pi extension in the guest home', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst-pi'
+      })
+      const source = '// @orca-managed-pi-extension\nexport default {}\n'
+      const res = install({ piExtensionSource: source, launchKind: 'pi' })
+      expect(res.overlayDirs.pi).toBe(join(home, '.pi', 'agent'))
+      const extension = join(home, '.pi', 'agent', 'extensions', 'orca-agent-status.ts')
+      expect(readFileSync(extension, 'utf8')).toContain(source)
+    })
+  })
+
   it('writes the OpenCode 2 plugin to its separate overlay', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {

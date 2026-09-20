@@ -8,7 +8,6 @@ import {
   defaultWslHookRelayDeps,
   isWslHookRelayAllowed,
   FAILURE_COOLDOWN_BASE_MS,
-  FAILURE_COOLDOWN_MAX_MS,
   NO_NODE_COOLDOWN_MS,
   REINSTALL_ONE_SHOT_DELAY_MS,
   RUNNING_TEARDOWN_COOLDOWN_MS,
@@ -29,8 +28,11 @@ import {
   recordManagedWslCodexHome,
   wslRuntimeHomePathsEqual
 } from '../codex/managed-wsl-codex-home-registry'
-import { resolveWslHookDefaultDistro } from './wsl-hook-default-distro'
-import { resumeStoppedWslHookRelays } from './wsl-hook-relay-resume'
+import {
+  markWslRelayFailed,
+  resolveWslDefaultDistro,
+  resumeWslStoppedRelays
+} from './wsl-hook-relay-state-machine'
 type DistroState = {
   /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
   distro: string
@@ -40,7 +42,11 @@ type DistroState = {
   guestHome?: string
   codexHomePath?: string
   guestEndpointFilePath?: string
-  opencodeOverlayDir?: string; opencode2OverlayDir?: string
+  opencodeOverlayDir?: string
+  opencode2OverlayDir?: string
+  piAgentDir?: string
+  ompStatusExtension?: string
+  launchKind?: 'pi' | 'omp'
   failures: number
   cooldownUntil: number
   connectedAt?: number
@@ -78,11 +84,15 @@ export class WslHookRelayManager {
     this.deps.managedHookSettings = resolve
   }
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
-  ensureForDistro(distro: string | null, codexHomePath?: string | null): void {
+  ensureForDistro(
+    distro: string | null,
+    codexHomePath?: string | null,
+    launchKind?: 'pi' | 'omp'
+  ): void {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
-    void this.ensureInternal(distro, codexHomePath ?? undefined).catch((err) => {
+    void this.ensureInternal(distro, codexHomePath ?? undefined, launchKind).catch((err) => {
       const detail = err instanceof Error ? err.message : String(err)
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
@@ -97,10 +107,18 @@ export class WslHookRelayManager {
       ? (this.stateFor(distro)?.guestEndpointFilePath ?? null)
       : null
   }
-
-  getOpenCodeOverlayDir(distro: string | null, agent: 'opencode' | 'opencode2' = 'opencode'): string | null {
+  getOpenCodeOverlayDir(
+    distro: string | null,
+    agent: 'opencode' | 'opencode2' = 'opencode'
+  ): string | null {
     const state = this.stateFor(distro)
-    return agent === 'opencode2' ? (state?.opencode2OverlayDir ?? null) : (state?.opencodeOverlayDir ?? null)
+    return agent === 'opencode2'
+      ? (state?.opencode2OverlayDir ?? null)
+      : (state?.opencodeOverlayDir ?? null)
+  }
+  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp'): string | null {
+    const state = this.stateFor(distro)
+    return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
   }
   /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
    *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
@@ -119,15 +137,14 @@ export class WslHookRelayManager {
   /** Restarts what a hooks-off teardown stopped. Skips distros the user has since shut
    *  down: `wsl -d` BOOTS a stopped distro, and nothing in it is waiting on status. */
   resumeStoppedRelays(): void {
-    resumeStoppedWslHookRelays(
-      this.stoppedByHooksOff,
-      this.deps.isDistroRunning,
-      (distro, codexHomePath) => this.ensureForDistro(distro, codexHomePath)
+    resumeWslStoppedRelays(this.stoppedByHooksOff, this.deps.isDistroRunning, (distro, home) =>
+      this.ensureForDistro(distro, home)
     )
   }
   private async ensureInternal(
     requestedDistro: string | null,
-    requestedCodexHomePath?: string
+    requestedCodexHomePath?: string,
+    launchKind?: 'pi' | 'omp'
   ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
     if (!distro || this.disposed) {
@@ -139,6 +156,10 @@ export class WslHookRelayManager {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
     }
     if (existing) {
+      if (launchKind && existing.launchKind !== launchKind) {
+        existing.launchKind = launchKind
+        existing.lastInstallAt = 0
+      }
       if (
         requestedCodexHomePath &&
         !wslRuntimeHomePathsEqual(existing.codexHomePath, requestedCodexHomePath)
@@ -180,7 +201,11 @@ export class WslHookRelayManager {
       failures: existing?.failures ?? 0,
       // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
       // crash — dropping it would blank status on panes spawned mid-relaunch.
-      opencodeOverlayDir: existing?.opencodeOverlayDir, opencode2OverlayDir: existing?.opencode2OverlayDir,
+      opencodeOverlayDir: existing?.opencodeOverlayDir,
+      opencode2OverlayDir: existing?.opencode2OverlayDir,
+      piAgentDir: existing?.piAgentDir,
+      ompStatusExtension: existing?.ompStatusExtension,
+      launchKind,
       codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0
     }
@@ -293,25 +318,12 @@ export class WslHookRelayManager {
     message: string,
     options: { cooldownBaseMs: number }
   ): void {
-    state.phase = 'failed'
-    state.failures++
-    state.child = undefined
-    state.mux = undefined
-    if (state.reinstallTimer) {
-      clearTimeout(state.reinstallTimer)
-      state.reinstallTimer = undefined
-    }
-    state.cooldownUntil =
-      Date.now() + Math.min(options.cooldownBaseMs * state.failures, FAILURE_COOLDOWN_MAX_MS)
-    this.deps.warn(`[agent-hooks] WSL hook relay (${state.distro}): ${message}`)
-    this.recovery.scheduleRestart(state)
+    markWslRelayFailed(state, message, options, this.deps, this.recovery)
   }
   private async resolveDefaultDistro(): Promise<string | null> {
-    this.defaultDistro = await resolveWslHookDefaultDistro(
-      this.defaultDistro,
-      this.deps.listDistros
-    )
-    return this.defaultDistro
+    const distro = await resolveWslDefaultDistro(this.defaultDistro, this.deps.listDistros)
+    this.defaultDistro = distro
+    return distro
   }
 }
 export const wslHookRelayManager = new WslHookRelayManager()

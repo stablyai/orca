@@ -136,10 +136,25 @@ export function buildPtyHostEnv(
     if (opts.isWsl === true) {
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
-      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath)
+      const wslLaunchKind =
+        explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
+          ? explicitPiAgentKind
+          : undefined
+      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
+      }
+      if (wslLaunchKind === 'pi') {
+        const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
+        if (guestPiDir) {
+          baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
+        }
+      } else if (wslLaunchKind === 'omp') {
+        const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
+        if (guestOmpExtension) {
+          baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
+        }
       }
       // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
       const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
