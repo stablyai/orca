@@ -9,6 +9,9 @@ const device = vi.hoisted(() => ({
   deleted: new Array<string>()
 }))
 
+// Reaching the real module imports React Native, which this test has no runtime for. The device
+// half's own platform arms are `native-media-device.test.ts`; here the OS only has to be one.
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-clipboard', () => ({
   setStringAsync: () => Promise.resolve(true),
   getStringAsync: device.clipboard.getStringAsync,
