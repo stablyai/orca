@@ -220,8 +220,11 @@ const ARRIVING_TREES = ['src/components', 'src/source-control']
 const ARRIVING = ARRIVING_TREES.flatMap((tree) => backControlsUnder(tree))
 
 describe('Back controls in the trees a registered route will add', () => {
-  it('finds controls in them, so the rules below cannot pass vacuously', () => {
-    expect(ARRIVING.length).toBeGreaterThan(0)
+  it('finds a control in each of them, so the rules below cannot pass vacuously', () => {
+    // Per tree, as the block above asserts per screen module: a count over the union lets one tree
+    // answer for the other, so `src/source-control` could lose its only Back to a rename and the
+    // rules below would still read `src/components` and pass.
+    expect(ARRIVING_TREES.filter((tree) => backControlsUnder(tree).length === 0)).toEqual([])
   })
 
   it('gives every one of them the button role', () => {

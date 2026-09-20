@@ -85,6 +85,7 @@ export function MobileSourceControlHeader({
         onPress={onRefresh}
         disabled={ioBusy}
         hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel="Refresh source control"
       >
         <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
