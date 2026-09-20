@@ -1,11 +1,13 @@
 /**
  * A folder workspace whose project group mixes local and SSH repos resolves to an
  * ambiguous connection. That ambiguity is catalog state, not an error: the graph-sync
- * hydration sweep must skip that workspace instead of throwing, because the throw
- * wedges syncWindowGraph before its callbacks drain and the renderer startup chain
- * then never reaches hydrationSucceeded (all terminal surfaces stay unmounted).
+ * hydration sweep keeps the workspace hydratable via the recorded connection instead
+ * of throwing, because the throw wedges syncWindowGraph before its callbacks drain
+ * and the renderer startup chain then never reaches hydrationSucceeded (all terminal
+ * surfaces stay unmounted).
  */
 import { describe, expect, it } from 'vitest'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -31,12 +33,23 @@ const SSH_REPO = {
 
 // Mirrors the persisted shape that produced the wedge: a LOCAL folder workspace
 // (no connectionId) inside a group whose repos mix local and SSH connections.
-const FOLDER_WORKSPACE = {
+const FOLDER_WORKSPACE: FolderWorkspace = {
   id: 'folder-ws-1',
-  folderPath: '/Users/dev/work/local-project',
   projectGroupId: 'group-mixed',
+  name: 'local-project',
+  folderPath: '/Users/dev/work/local-project',
   connectionId: null,
-  executionHostId: null
+  executionHostId: null,
+  creatorProvenance: { kind: 'host' },
+  linkedTask: null,
+  comment: '',
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 1,
+  createdAt: 1,
+  updatedAt: 1
 }
 const FOLDER_WT = 'folder:folder-ws-1'
 
@@ -48,7 +61,8 @@ function makeStore(options: MakeStoreOptions = {}) {
     updateRepo: () => undefined,
     getAllWorktreeMeta: () => ({}),
     getGitHubCache: () => ({ pr: {}, issue: {} }),
-    setWorktreeMeta: () => undefined,
+    setWorktreeMeta: (_worktreeId: string, meta: unknown) => meta,
+    getWorktreeMeta: () => undefined,
     getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
     addRetiredWorktreeName: () => {},
     mergeRetiredWorktreeNames: () => false,
@@ -131,38 +145,31 @@ function syncGraph(runtime: OrcaRuntimeService): void {
 }
 
 function getHydrationTargets(runtime: OrcaRuntimeService): Map<string, unknown> {
-  return (
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected hydration-target map to observe what the sweep recorded.
-    (
-      runtime as unknown as {
-        getWorkspaceSessionHydrationTargets: (b: boolean) => Map<string, unknown>
-      }
-    ).getWorkspaceSessionHydrationTargets(false)
-  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected hydration-target map to observe what the sweep recorded.
+  const accessor = runtime as unknown as {
+    getWorkspaceSessionHydrationTargets: (b: boolean) => Map<string, unknown>
+  }
+  return accessor.getWorkspaceSessionHydrationTargets(false)
 }
 
 function resolveFolderConnectionId(
   runtime: OrcaRuntimeService,
   workspace: Partial<FolderWorkspace>
 ): string | null {
-  return (
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected connection resolver with a minimal workspace record.
-    (
-      runtime as unknown as {
-        resolveFolderWorkspaceConnectionId: (
-          this: OrcaRuntimeService,
-          workspace: Partial<FolderWorkspace>
-        ) => string | null
-      }
-    ).resolveFolderWorkspaceConnectionId.call(runtime, workspace)
-  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected connection resolver with a minimal workspace record.
+  const resolver = runtime as unknown as {
+    resolveFolderWorkspaceConnectionId: (
+      this: OrcaRuntimeService,
+      workspace: Partial<FolderWorkspace>
+    ) => string | null
+  }
+  return resolver.resolveFolderWorkspaceConnectionId.call(runtime, workspace)
 }
 
 function graphSyncCallbacksOf(runtime: OrcaRuntimeService): (() => void)[] {
-  return (
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the internal callback queue startup waiters block on.
-    (runtime as unknown as { graphSyncCallbacks: (() => void)[] }).graphSyncCallbacks
-  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the internal callback queue startup waiters block on.
+  const internals = runtime as unknown as { graphSyncCallbacks: (() => void)[] }
+  return internals.graphSyncCallbacks
 }
 
 describe('workspace-session hydration with ambiguous folder connections', () => {
@@ -210,5 +217,25 @@ describe('workspace-session hydration with ambiguous folder connections', () => 
     })
     syncGraph(runtime)
     expect(callbackDrained).toBe(true)
+  })
+
+  it('resolves known file targets for folder workspaces without a ReferenceError', async () => {
+    // Guards the file-target loop: a folder workspace in the store must resolve
+    // through helpers that actually exist in this module graph.
+    const runtime = makeRuntime()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected file-target resolver to exercise the folder-workspace loop.
+    const resolver = runtime as unknown as {
+      resolveKnownWorkspaceFileTarget: (
+        this: OrcaRuntimeService,
+        absolutePath: string,
+        executionHostId: typeof LOCAL_EXECUTION_HOST_ID
+      ) => Promise<unknown>
+    }
+    const result = await resolver.resolveKnownWorkspaceFileTarget.call(
+      runtime,
+      '/Users/dev/work/local-project/README.md',
+      LOCAL_EXECUTION_HOST_ID
+    )
+    expect(result === null || typeof result === 'object').toBe(true)
   })
 })
