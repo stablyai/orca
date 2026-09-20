@@ -47,10 +47,16 @@ function hasFailureBranch(call: ts.CallExpression): boolean {
     }
     // `clipboard.writeText(x).then(...).catch(...)`: the handler is further along this same chain,
     // and `parent.expression === node` is what keeps it to this chain rather than any nearby catch.
+    // Called, with something to call: `.catch` read as a property registers nothing, and `.catch()`
+    // with no argument swallows the rejection while the caller goes on to say the write landed.
     if (
       ts.isPropertyAccessExpression(parent) &&
       parent.expression === node &&
-      parent.name.text === CATCH_METHOD
+      parent.name.text === CATCH_METHOD &&
+      parent.parent !== undefined &&
+      ts.isCallExpression(parent.parent) &&
+      parent.parent.expression === parent &&
+      parent.parent.arguments.length > 0
     ) {
       return true
     }
@@ -183,6 +189,32 @@ describe('the failure branch the census will accept', () => {
           } catch {
             await clipboard.writeText(text)
           }
+        }
+      `)
+    ).toBe(true)
+  })
+
+  it('refuses a `.catch` that is read rather than called', () => {
+    // `clipboard.writeText(text).catch` is the handler's name, not a handler. It registers nothing,
+    // and the rejection goes exactly where it would have gone with no `catch` written at all.
+    expect(
+      reports(`
+        function copy(clipboard: Clipboard, text: string) {
+          const retry = clipboard.writeText(text).catch
+          return retry
+        }
+      `)
+    ).toBe(true)
+  })
+
+  it('refuses a `.catch()` with nothing to handle the rejection', () => {
+    // Called, so the promise is handled in the sense that nothing is reported — and the user is
+    // told a write landed when it did not, which is the failure this rule is written against.
+    expect(
+      reports(`
+        function copy(clipboard: Clipboard, text: string) {
+          clipboard.writeText(text).catch()
+          showToast('Copied')
         }
       `)
     ).toBe(true)
